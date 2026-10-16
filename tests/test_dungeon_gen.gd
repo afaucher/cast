@@ -14,6 +14,7 @@ func setup() -> void:
 		total_ms += ms
 		worst_ms = maxf(worst_ms, ms)
 		_check_map(m, s, s <= 2)
+		_check_corridor_width(m, s)
 	print("dungeon gen: avg %.0f ms, worst %.0f ms over %d seeds" % [total_ms / SEEDS.size(), worst_ms, SEEDS.size()])
 	check(worst_ms < 1000.0, "generation under 1s (worst %.0f ms)" % worst_ms)
 
@@ -167,6 +168,24 @@ func _check_map(m: HexMap, s: int, deep: bool) -> void:
 
 
 ## Size of the void component containing v, counting at most `limit`.
+## Corridors are two wide except for rare special cases: most corridor cells have
+## at least 3 walkable neighbours (a one-wide hall's cells have only 2).
+func _check_corridor_width(m: HexMap, s: int) -> void:
+	var total := 0
+	var wide := 0
+	for c: Vector2i in m.cells:
+		if m.cells[c].tag != "corridor":
+			continue
+		total += 1
+		var k := 0
+		for d in Hex.DIRS:
+			if m.is_walkable_cell(c + d):
+				k += 1
+		if k >= 3:
+			wide += 1
+	check(total > 0 and float(wide) / total >= 0.75, "seed %d: corridors mostly two wide (%d of %d cells)" % [s, wide, total])
+
+
 func _void_size(m: HexMap, v: Vector2i, limit: int) -> int:
 	var seen := {v: true}
 	var queue: Array[Vector2i] = [v]

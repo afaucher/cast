@@ -6,7 +6,8 @@ extends RefCounted
 ##  1. Scatter 6-9 hex-blob rooms (round, lobed or bitten shapes) keeping a gap between them.
 ##  2. Prim spanning tree over the room centers, then assign base levels by walking the tree
 ##     (random deltas, clamped 0..8).
-##  3. Carve each tree link (plus 1-2 extra loops) with a turn-penalised A*. Height along the
+##  3. Carve each tree link (plus 1-2 extra loops) with a turn-penalised A*, two cells wide
+##     (one-wide only for the climb shortcut and at most one short chokepoint). Height along the
 ##     corridor is a list of events: +-1 terraces, STAIRS cells (rise <= 4, chained) on straight
 ##     stretches, and on one loop a +-2 climb, which makes it a shortcut that needs climbing.
 ##  4. Decorate rooms: platforms (+1), ziggurats (+1..+3 tiers), climbable ledges (+2),
@@ -21,6 +22,8 @@ const MAX_BASE_LEVEL := 8
 const KEY_OFF := 128
 const KEY_W := 256
 const PIT_MARK := -999
+const NARROW_CHANCE := 0.3      ## per eligible link, until one narrow chokepoint exists
+const NARROW_MAX_LEN := 7       ## only short links may be one hex wide
 
 enum Ev { TERRACE, CLIMB, STAIRS }
 enum Feature { PLATFORM, ZIGGURAT, LEDGE, PILLAR, PIT }
@@ -102,6 +105,7 @@ class Builder:
 	var climb_features := 0
 	var start: Vector2i = Vector2i.ZERO
 	var exit_cell: Vector2i = Vector2i.ZERO
+	var narrow_used := false
 
 	func _init(s: int, params: Dictionary) -> void:
 		rng.seed = s
@@ -437,21 +441,15 @@ class Builder:
 				map.set_cell(c, st.level)
 			map.get_cell(c).tag = "corridor"
 			corr_cells[c] = true
-		# widen to two cells on straight, non-stair stretches
-		if rng.randf() < 0.45:
-			for i in range(1, n + 1):
-				var near_stairs := false
-				for k in range(maxi(1, i - 1), mini(n, i + 1) + 1):
-					if steps[k - 1].stairs:
-						near_stairs = true
-				if near_stairs:
-					continue
-				var d := Hex.dir_to(S[i], S[i + 1])
-				var side: Vector2i = S[i] + Hex.DIRS[posmod(d + 1, 6)]
-				if _penalty(side, ai, bi) < 0:
-					continue
-				map.set_cell(side, steps[i - 1].level).tag = "corridor"
-				corr_cells[side] = true
+		# Corridors are two wide: a parallel lane beside the routed path, stairs
+		# included (each lane gets its own matching staircase). One-wide passages
+		# are reserved for special cases: the climb shortcut and one short chokepoint.
+		var narrow := shortcut
+		if not shortcut and not narrow_used and n <= NARROW_MAX_LEN and rng.randf() < NARROW_CHANCE:
+			narrow = true
+			narrow_used = true
+		if not narrow:
+			_widen(S, steps, ai, bi)
 		for c in corr_cells:
 			corr_buffer[c] = true
 			for d in Hex.DIRS:
@@ -467,6 +465,37 @@ class Builder:
 		if shortcut:
 			climb_features += 1
 		return true
+
+	## Add the second lane: for each path cell S[i], its neighbor one turn to the
+	## left of the travel direction, at the same height. A stairs cell's twin is
+	## only added when the lane cells before and after it exist too, so a twin
+	## staircase never dead-ends into a wall.
+	func _widen(S: Array[Vector2i], steps: Array, ai: int, bi: int) -> void:
+		var n := S.size() - 2
+		var side := {}   # i -> side cell, for cells whose side is free
+		for i in range(1, n + 1):
+			var d := Hex.dir_to(S[i], S[i + 1])
+			var c: Vector2i = S[i] + Hex.DIRS[posmod(d + 1, 6)]
+			if _penalty(c, ai, bi) >= 0 and not corr_cells.has(c):
+				side[i] = c
+		for i in range(1, n + 1):
+			if not side.has(i):
+				continue
+			var st: Step = steps[i - 1]
+			var c: Vector2i = side[i]
+			if st.stairs:
+				# Lane neighbours along the stairs: before (or room a) and after (or room b).
+				# (cells are processed in order, so a skipped earlier twin is simply absent)
+				var before_ok := i == 1 or (side.has(i - 1) and corr_cells.has(side[i - 1]))
+				var after_ok := i == n or side.has(i + 1)
+				if not (before_ok and after_ok):
+					continue
+				map.set_stairs(c, st.level, st.dir, st.rise)
+				stairs_count += 1
+			else:
+				map.set_cell(c, st.level)
+			map.get_cell(c).tag = "corridor"
+			corr_cells[c] = true
 
 	func _straight(S: Array[Vector2i], i: int) -> bool:
 		return Hex.dir_to(S[i - 1], S[i]) == Hex.dir_to(S[i], S[i + 1])
