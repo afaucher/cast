@@ -228,3 +228,47 @@ anyone outside the team plays. **P2** = later.
   - whether players volunteer "what's up there?"
 - **P1** At least 5 testers, including one non-native speaker and one noisy setup (a
   laptop mic, no headphones).
+
+## 14. Heroes and characters (see characters.md)
+
+- **P1** A `HeroDef` data resource with per-hero stats (HP, speed, radius, climb factor,
+  shove weight), melee and secondary parameters, color and rig. `HeroFactory` spawns by
+  hero id.
+- **P1** Shove physics on the hex grid:
+  - `Actor.knockback` plus a forced-movement tick that skips AI and input;
+  - `HexMap.shove_check` (a rise of 2+ stops the shove with a wall slam; any drop is
+    allowed);
+  - a gravity fall state with fall damage beyond 3 levels;
+  - void ring-out for monsters and fish-out for heroes;
+  - monster stagger;
+  - a leash fix so shoved monsters don't reset and heal.
+
+  A teammate-caused shove or fall never downs anyone.
+- **P1** Pebble's Bowl: a piercing, terrain-riding boulder that shoves both teams (0 damage
+  to allies). The reticle turns hazard-yellow when its path crosses a teammate.
+- **P1** Dagna's Spin: a tap for a 360° spin, a hold for a whirl of up to 2.5 s, then
+  dizziness. Plus the Hammer smash.
+- **P1** Larkin's arrows (tap, plus a hold-to-draw piercing shot) and shooting while
+  climbing. Sir Rattles' shield (hold to block projectiles in a front arc, tap to bash and
+  interrupt).
+- **P1** Movement quirks:
+  - Heavy: no +2 climbs, unshovable;
+  - Stout: half shove, slow climb;
+  - Light: fast climb, 3-hex shove;
+  - Hollow: 6-level drops, falls apart on landing.
+
+  AI-ally pathing must respect each one.
+- **P1** `HeroRig`: rigid-part puppets with named animations (`play(&"melee")`), plus a
+  shared toon-ramp and inverted-hull outline material. A placeholder art pass on Sir
+  Rattles first, then the other three heroes, in code-built primitives.
+- **P1** Generator: a no-climb way back (stairs) from every one-way drop, so the brute and
+  Pebble are never stranded.
+- **P2** A one-day KayKit comparison spike: a pack model next to a primitive hero at the
+  default zoom.
+- **P2** Dagna's wall-breaker (cracked secret walls glint and break in one swing) and
+  Pebble's Leg-up (allies use a still Pebble as a step).
+- **P2** Spell "signature twists" per hero. Loadouts stay open, and corn never gets a twist.
+- **P2** Vertical-slice models: rigid-part low-poly in Blender, toon-shaded, on one
+  proportion template. AI images for concept sheets only.
+- **P2** The stretch hero Gulp (frog, tongue pull) and end-screen stats such as "Teammates
+  bowled".

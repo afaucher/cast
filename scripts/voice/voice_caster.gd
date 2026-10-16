@@ -64,6 +64,11 @@ var persist_settings := true
 var voice_log: VoiceLog = VoiceLog.new()
 ## Human-readable state for the UI ("listening", "speech model missing ...").
 var status := "not started"
+## A final this soon after a short spell-less final is matched joined to it.
+const JOIN_GAP := 0.45
+const JOIN_MAX_WORDS := 2
+## Keeps room noise and keyboard clicks away from the recognizer (see SpeechGate).
+var gate := SpeechGate.new()
 
 var _inc: Incantation
 var _spells := PackedStringArray()
@@ -82,6 +87,9 @@ var _audio_driven := false
 var _last_voice_clock := -1e9
 var _utt_events: Array = []
 var _last_text := ""
+var _utt_start := -1.0            ## clock of the current utterance's first hypothesis
+var _frag_text := ""              ## last final if it cast nothing and was short (may be half a word)
+var _frag_end := -1e9
 var _last_cast: Dictionary = {}
 var _typed := false
 var last_heard_typed := false
@@ -143,7 +151,7 @@ func is_ready() -> bool:
 func get_level() -> float:
 	if _listener == null:
 		return 0.0
-	return float(_listener.get_level())
+	return gate.level
 
 
 ## Debug / tests / typed console: act as if `text` had been heard as a complete
@@ -182,6 +190,14 @@ func set_trigger_word(word: String, persist: bool = true) -> Dictionary:
 	return v
 
 
+## Quietest level (dBFS) that counts as the player's voice; raise it to ignore
+## background speech from a TV or speakers.
+func set_min_voice_db(value: float, persist: bool = true) -> void:
+	gate.min_voice_db = clampf(value, -70.0, -10.0)
+	if persist and persist_settings:
+		VoiceSettings.save_settings({"min_voice_db": gate.min_voice_db}, settings_path)
+
+
 func get_strictness() -> String:
 	return str(tuning.get("strictness", "loose"))
 
@@ -216,7 +232,9 @@ func push_samples(samples: PackedFloat32Array, sample_rate: int) -> void:
 	if _listener == null or samples.is_empty():
 		return
 	_advance(samples.size(), sample_rate)
-	_listener.push_samples(samples, sample_rate)
+	var speech := gate.process(samples, sample_rate)
+	if not speech.is_empty():
+		_listener.push_samples(speech, sample_rate)
 
 
 ## End of input (tests): flush pending speech through the recognizer.
@@ -227,12 +245,15 @@ func flush() -> void:
 
 ## Drop queued audio and the half-heard utterance; forget a pending trigger.
 func reset() -> void:
+	gate.reset()
 	if _listener != null:
 		_listener.reset()
 	_ensure_incantation()
 	_inc.reset()
 	_utt_events.clear()
 	_last_text = ""
+	_frag_text = ""
+	_utt_start = -1.0
 
 
 ## Deliver recognizer events now (normally automatic from _process). Tests that
@@ -283,7 +304,9 @@ func _process(delta: float) -> void:
 		if n > 0:
 			var rate := int(AudioServer.get_mix_rate())
 			_advance(n, rate)
-			_listener.push_frames(_capture.get_buffer(n), rate)
+			var speech := gate.process_frames(_capture.get_buffer(n), rate)
+			if not speech.is_empty():
+				_listener.push_samples(speech, rate)
 	_ensure_incantation()
 	_dispatch(_inc.tick(clock()), false)
 	_update_voice_activity()
@@ -308,6 +331,7 @@ func _apply_saved_settings() -> void:
 		tuning["trigger"] = v["word"] if bool(v["ok"]) else "cast"
 	if not tuning.has("strictness"):
 		tuning["strictness"] = s["strictness"]
+	gate.min_voice_db = float(s["min_voice_db"])
 
 
 func _ensure_incantation() -> void:
@@ -330,12 +354,43 @@ func _on_hypothesis(text: String, is_final: bool, _detail: Array) -> void:
 	_ensure_incantation()
 	_typed = false
 	last_heard_typed = false
+	if _utt_start < 0.0:
+		_utt_start = clock()
 	if text != _last_text or is_final:
 		heard.emit(text, is_final)
 	_last_text = "" if is_final else text
-	_dispatch(_inc.feed(text, is_final, clock()), true)
+	var feed_text := text
+	if is_final and _frag_text != "" and _utt_start - _frag_end <= JOIN_GAP and not _starts_with_known_word(text):
+		# The recognizer sometimes ends an utterance mid-word ("COR" + "N",
+		# "CA" + "STE HEAL"). Rejoin a short, spell-less fragment with what follows.
+		feed_text = _frag_text + text
+	_dispatch(_inc.feed(feed_text, is_final, clock()), true)
 	if is_final:
-		_finish_utterance(text)
+		var cast_now := false
+		for ev in _utt_events:
+			if ev["kind"] == "cast":
+				cast_now = true
+		var words := feed_text.split(" ", false).size()
+		_frag_text = feed_text if not cast_now and words <= JOIN_MAX_WORDS else ""
+		_frag_end = clock()
+		_utt_start = -1.0
+		_finish_utterance(feed_text)
+
+
+## True when the utterance already begins with the trigger or a spell word, so
+## it is a fresh phrase rather than the tail of a split word.
+func _starts_with_known_word(text: String) -> bool:
+	var first := text.strip_edges().get_slice(" ", 0).to_lower()
+	if first == "":
+		return false
+	var cfg := _inc.config()
+	var trig: Dictionary = (cfg["triggers"] as Dictionary).get(_inc.trigger_word(), {})
+	if trig.has(first) or first == _inc.trigger_word():
+		return true
+	for id in (cfg["spells"] as Dictionary):
+		if (cfg["spells"][id] as Dictionary).has(first):
+			return true
+	return false
 
 
 ## in_utterance: events belong to the utterance being heard (logged with it);

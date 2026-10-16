@@ -27,7 +27,7 @@ static var _pron_loaded := false
 
 
 static func defaults() -> Dictionary:
-	return {"trigger_word": "cast", "strictness": "loose"}
+	return {"trigger_word": "cast", "strictness": "loose", "min_voice_db": SpeechGate.DEFAULT_MIN_VOICE_DB}
 
 
 static func load_settings(path: String = DEFAULT_PATH) -> Dictionary:
@@ -42,6 +42,7 @@ static func load_settings(path: String = DEFAULT_PATH) -> Dictionary:
 		out["trigger_word"] = "cast"
 	if not Incantation.STRICTNESS.has(str(out["strictness"])):
 		out["strictness"] = "loose"
+	out["min_voice_db"] = clampf(float(out["min_voice_db"]), -70.0, -10.0)
 	return out
 
 

@@ -25,7 +25,12 @@ All of them land where you aim, so to heal a friend you point at them, and you d
 
 **Voice settings** are in the debug panel. The trigger word is "cast" by default; the other
 choices are magic, pickle, conjure, invoke, summon, presto, or a custom word. Strictness is
-strict, loose (the default) or chaos. Accidental casts are a feature. Every utterance is
+strict, loose (the default) or chaos. Accidental casts are a feature.
+
+A speech gate only lets audio through to the recognizer while someone is speaking, so typing and
+fan noise never reach it. If a TV, speakers or voice chat still show up as "heard" text,
+raise the **min voice** slider in the panel. Set it between the "last voice peak" of your
+own voice and the background (the yellow line on the mic graph). Every utterance is
 logged to `%APPDATA%\Godot\app_userdata\Cast\voice_log.csv`.
 
 ## Develop

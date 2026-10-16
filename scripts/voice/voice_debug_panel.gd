@@ -66,6 +66,10 @@ var _log_box: RichTextLabel
 var _sections: VBoxContainer
 var _stats: Label
 var _interactive: Array = []
+var _gate_slider: HSlider
+var _gate_value: Label
+var _gate_info: Label
+var _syncing_gate := false
 
 var _transcript_rows: Array = []
 var _n_casts := 0
@@ -191,6 +195,31 @@ func _build() -> void:
 	_custom_edit.text_submitted.connect(_on_custom_submitted)
 	_custom_row.add_child(_custom_edit)
 	_interactive.append(_custom_edit)
+	# Voice level gate: frames quieter than this never reach the recognizer.
+	var gate_row := HBoxContainer.new()
+	gate_row.add_theme_constant_override("separation", 6)
+	root.add_child(gate_row)
+	gate_row.add_child(_label("min voice", 12, C_DIM))
+	_gate_slider = HSlider.new()
+	_gate_slider.min_value = -70.0
+	_gate_slider.max_value = -10.0
+	_gate_slider.step = 1.0
+	_gate_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_gate_slider.custom_minimum_size = Vector2(0, 20)
+	_gate_slider.tooltip_text = "Raise until background speech (TV, speakers) stops showing up, but your own voice still opens the gate."
+	_gate_slider.value_changed.connect(func(v: float) -> void:
+		_gate_value.text = "%d dB" % roundi(v)
+		if caster != null and not _syncing_gate:
+			caster.set_min_voice_db(v))
+	gate_row.add_child(_gate_slider)
+	_gate_value = _label("", 12, C_TEXT)
+	_gate_value.custom_minimum_size = Vector2(52, 0)
+	gate_row.add_child(_gate_value)
+	_interactive.append(_gate_slider)
+	_gate_info = _label("", 11, C_DIM)
+	_gate_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(_gate_info)
+
 	_trigger_note = _label("", 11, C_WARN)
 	_trigger_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_trigger_note.visible = false
@@ -420,8 +449,13 @@ func _refresh_status() -> void:
 func _process(_delta: float) -> void:
 	if not visible or caster == null:
 		return
+	_gate_info.text = caster.gate.describe()
+	if not _gate_slider.has_focus() and absf(_gate_slider.value - caster.gate.min_voice_db) > 0.5:
+		_syncing_gate = true
+		_gate_slider.value = caster.gate.min_voice_db
+		_syncing_gate = false
 	_level_hist = _level_hist.slice(1)
-	_level_hist.append(caster.get_level())
+	_level_hist.append(_db_to_unit(caster.gate.level_db))
 	_voice_hist = _voice_hist.slice(1)
 	_voice_hist.append(1 if _voice else 0)
 	_scope.queue_redraw()
@@ -440,6 +474,17 @@ func _draw_scope() -> void:
 		var h: float = clampf(_level_hist[i], 0.0, 1.0) * s.y
 		var col: Color = KIND_COLORS["exact"] if _voice_hist[i] else C_DIM
 		_scope.draw_rect(Rect2(i * dx, s.y - h, maxf(dx - 1.0, 1.0), h), col)
+	if caster != null:
+		# dB scale: the min-voice threshold (yellow) and the learned noise floor (grey).
+		var ty := s.y * (1.0 - _db_to_unit(caster.gate.min_voice_db))
+		_scope.draw_line(Vector2(0, ty), Vector2(s.x, ty), Color(C_WARN, 0.9), 1.0)
+		var fy := s.y * (1.0 - _db_to_unit(SpeechGate.db(caster.gate.noise_floor)))
+		_scope.draw_line(Vector2(0, fy), Vector2(s.x, fy), Color(C_DIM, 0.6), 1.0)
+
+
+## Level graph scale: -70 dBFS at the bottom, -10 dBFS at the top.
+static func _db_to_unit(v: float) -> float:
+	return clampf((v + 70.0) / 60.0, 0.0, 1.0)
 
 
 # --- caster events -------------------------------------------------------------------

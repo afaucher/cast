@@ -157,7 +157,7 @@ const TUNING := {
 	"spells": {
 		"heal": {
 			"heal": 1.0, "heel": 1.0, "he'll": 1.0, "heals": 0.9, "healing": 0.85,
-			"healer": 0.8, "eel": 0.8, "hail": 0.7, "hill": 0.6,
+			"healer": 0.8, "eel": 0.8, "hail": 0.7, "hill": 0.6, "ill": 0.6,
 		},
 		"fireball": {
 			"fireball": 1.0, "fire ball": 1.0, "fireballs": 0.9, "fire balls": 0.9,
