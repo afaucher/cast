@@ -46,6 +46,12 @@ var _shield_bubble: MeshInstance3D
 var _swing_tween: Tween
 var _visual_yaw := 0.0
 
+## Opt-in replacement for the capsule/hat/weapon body (e.g. a PebbleModel). Set it before the
+## hero enters the tree (HeroFactory.spawn_hero(..., model)). The model faces local -Z; if it has
+## attack_swing() / cast_pose() / set_downed(bool) / ui_height they are used. Stats, radius and AI
+## are untouched. Null = the prototype look.
+var visual_override: Node3D = null
+
 
 func _init() -> void:
 	team = GameWorld.TEAM_HEROES
@@ -132,6 +138,8 @@ func _on_death() -> void:
 	if _name_label:
 		_name_label.visible = false
 	_set_armor_visuals(false)
+	if visual_override != null and visual_override.has_method("set_downed"):
+		visual_override.call("set_downed", true)
 	if _visual:
 		var tw := create_tween()
 		tw.set_parallel(true)
@@ -149,6 +157,49 @@ func _build_visuals() -> void:
 	var skin := Fx.solid_material(Color(0.96, 0.78, 0.62), 0.7)
 	var dark := Fx.solid_material(hero_color.darkened(0.45), 0.7)
 
+	var top := 1.95   # top of the figure; the bar, name and shield icon float above it
+	if visual_override != null:
+		_visual.add_child(visual_override)
+		_weapon = Node3D.new()   # inert stand-in so the swing / cast tweens have something to drive
+		_visual.add_child(_weapon)
+		if "ui_height" in visual_override:
+			top = float(visual_override.get("ui_height"))
+	else:
+		_build_default_body(skin, dark)
+	var ui_scale := top / 1.95
+
+	_bar = HpBar.new()
+	_bar.position = Vector3(0, top + 0.4, 0)
+	add_child(_bar)
+	if not is_player and display_name != "":
+		_name_label = Label3D.new()
+		_name_label.text = display_name
+		_name_label.font_size = 40
+		_name_label.pixel_size = 0.008
+		_name_label.outline_size = 8
+		_name_label.modulate = hero_color.lightened(0.45)
+		_name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_name_label.no_depth_test = true
+		_name_label.position = Vector3(0, top + 0.65, 0)
+		add_child(_name_label)
+
+	# Armor buff visuals (hidden until the "armor" modifier is active).
+	_shield_icon = Sprite3D.new()
+	_shield_icon.texture = Fx.shield_texture()
+	_shield_icon.pixel_size = 0.012
+	_shield_icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_shield_icon.no_depth_test = true
+	_shield_icon.shaded = false
+	_shield_icon.position = Vector3(-0.68 * ui_scale, top + 0.4, 0)
+	_shield_icon.visible = false
+	add_child(_shield_icon)
+	_shield_bubble = _add_mesh(self, _sphere(0.8 * ui_scale), Fx.glow_material(Color(0.3, 0.55, 1.0, 0.16)), Vector3(0, 0.9 * ui_scale, 0))
+	_shield_bubble.set_meta("no_flash", true)
+	_shield_bubble.visible = false
+
+
+## The prototype look: capsule body, skin head, facing nose, pointy hat and a sword / staff.
+func _build_default_body(skin: Material, dark: Material) -> void:
 	_add_mesh(_visual, _capsule(0.32, 1.2), _body_mat, Vector3(0, 0.6, 0))
 	_add_mesh(_visual, _sphere(0.25), skin, Vector3(0, 1.42, 0))
 	# Facing nose (points to local -Z, which Hero yaws toward `facing`).
@@ -182,35 +233,6 @@ func _build_visuals() -> void:
 		var guard := BoxMesh.new()
 		guard.size = Vector3(0.3, 0.06, 0.07)
 		_add_mesh(_weapon, guard, Fx.solid_material(Color(0.7, 0.55, 0.2)), Vector3(0, 0, -0.14))
-
-	_bar = HpBar.new()
-	_bar.position = Vector3(0, 2.35, 0)
-	add_child(_bar)
-	if not is_player and display_name != "":
-		_name_label = Label3D.new()
-		_name_label.text = display_name
-		_name_label.font_size = 40
-		_name_label.pixel_size = 0.008
-		_name_label.outline_size = 8
-		_name_label.modulate = hero_color.lightened(0.45)
-		_name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_name_label.no_depth_test = true
-		_name_label.position = Vector3(0, 2.6, 0)
-		add_child(_name_label)
-
-	# Armor buff visuals (hidden until the "armor" modifier is active).
-	_shield_icon = Sprite3D.new()
-	_shield_icon.texture = Fx.shield_texture()
-	_shield_icon.pixel_size = 0.012
-	_shield_icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_shield_icon.no_depth_test = true
-	_shield_icon.shaded = false
-	_shield_icon.position = Vector3(-0.68, 2.35, 0)
-	_shield_icon.visible = false
-	add_child(_shield_icon)
-	_shield_bubble = _add_mesh(self, _sphere(0.8), Fx.glow_material(Color(0.3, 0.55, 1.0, 0.16)), Vector3(0, 0.9, 0))
-	_shield_bubble.set_meta("no_flash", true)
-	_shield_bubble.visible = false
 
 
 func _add_mesh(parent: Node3D, mesh: Mesh, mat: Material, pos: Vector3) -> MeshInstance3D:
@@ -265,6 +287,8 @@ func _refresh_bar() -> void:
 
 
 func _swing_pose() -> void:
+	if visual_override != null and visual_override.has_method("attack_swing"):
+		visual_override.call("attack_swing")
 	if _weapon == null:
 		return
 	if _swing_tween and _swing_tween.is_valid():
@@ -287,6 +311,8 @@ func _shoot_pose() -> void:
 
 
 func _cast_pose() -> void:
+	if visual_override != null and visual_override.has_method("cast_pose"):
+		visual_override.call("cast_pose")
 	if _weapon == null:
 		return
 	if _swing_tween and _swing_tween.is_valid():

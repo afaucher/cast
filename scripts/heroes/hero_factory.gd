@@ -5,8 +5,10 @@ extends RefCounted
 
 
 ## Spawn a hero standing on `cell` (needs GameWorld.begin() to have been called).
-static func spawn_hero(cell: Vector2i, hero_name: String, color: Color, weapon: String = "sword") -> Hero:
+## `model` optionally replaces the prototype body (see Hero.visual_override).
+static func spawn_hero(cell: Vector2i, hero_name: String, color: Color, weapon: String = "sword", model: Node3D = null) -> Hero:
 	var h := Hero.new()
+	h.visual_override = model
 	h.display_name = hero_name
 	h.hero_color = color
 	h.weapon_kind = weapon

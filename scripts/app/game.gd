@@ -10,6 +10,7 @@ extends Node3D
 ##   --no-mic            don't open the mic / load the model (typed casts only)
 ##   --shot <png>        save a screenshot after --shot-after game seconds (default 3) and quit
 ##   --autocast <id>     cast a spell once, 1 s in (for screenshots)
+##   --pebble            ally Brom uses the faceted low-poly PebbleModel (look-dev comparison)
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
 const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn"]
@@ -72,6 +73,7 @@ func _parse_args() -> void:
 			"--shot": opts["shot"] = nxt
 			"--shot-after": opts["shot_after"] = float(nxt)
 			"--autocast": opts["autocast"] = nxt
+			"--pebble": opts["pebble"] = true
 	if _seed < 0:
 		_seed = int(opts.get("seed", randi() % 100000))
 	if _spells.is_empty() and opts.has("spells"):
@@ -108,7 +110,8 @@ func _build_world() -> void:
 	var none: Array[String] = []
 	controller = HeroFactory.make_player(player, none)
 	var spots := _free_cells_near(start, 2)
-	var brom := HeroFactory.spawn_hero(spots[0], "Brom", Color(0.85, 0.5, 0.25), "sword")
+	var brom_model: Node3D = PebbleModel.new() if opts.get("pebble", false) else null
+	var brom := HeroFactory.spawn_hero(spots[0], "Brom", Color(0.85, 0.5, 0.25), "sword", brom_model)
 	HeroFactory.make_ally(brom, player, false, 2.4)
 	var wren := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Wren", Color(0.7, 0.4, 0.85), "staff")
 	HeroFactory.make_ally(wren, player, true, 3.9)
