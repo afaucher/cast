@@ -60,14 +60,25 @@ anyone outside the team plays. **P2** = later.
 
 - **P0** Per-utterance logging to a CSV in `user://`: heard text, partials, match type,
   M/F/C, power, tier, and onset → event and end → event latency.
-- **P0** An F2 "that was wrong" key, plus opt-in mic recording so matcher rules can be
-  replayed offline (the replay tool from Hero-Reader's speech evaluation).
+- **P2** Opt-in mic recording, so matcher rules can be replayed offline (the replay tool
+  from Hero-Reader's speech evaluation). Only if passive logs aren't enough.
 - **P0** Dedupe the same spell from the same player within 1.5 s (Zipformer double fires
   are 7–10%).
-- **P0** Rule 1, "spoken, not mentioned" (a short utterance or a "cast" prefix), plus the
-  hair-trigger whitelist for corn.
-- **P0** Measure the chatter false-cast rate: 10 minutes of think-aloud play, and a second
-  person talking in the room.
+- **P0** The three strictness modes (strict, loose by default, chaos), the customizable
+  trigger word (default "cast"), and the hair-trigger list for loose mode (corn,
+  including sound-alikes such as "corner").
+- **P0** Accidental-cast handling:
+  - label a cast as accidental when strict mode would have rejected it. This is a
+    heuristic built from the trigger's position, the pause before it, whether a trigger
+    was said, the match kind and the word count;
+  - show an "ACCIDENTAL: <name>" callout;
+  - the label grants no mechanical advantage, because a cooldown discount is exploitable
+    by phrasing casts casually;
+  - data is passive only: the label and its signals go to `user://voice_log.csv`, with no
+    player effort;
+  - accidental friendly fire can't down anyone.
+- **P0** Read accidental casts per minute in each mode straight from the log, and ask
+  "funny or annoying?" after the session.
 - **P1** Check whether the sherpa-onnx result exposes per-token probabilities and
   timestamps. If it does, wire up C (clarity) and F (fluency); otherwise keep C = 1.
 - **P1** Sweep hotword score 1.5 / 2 / 3 against the *chatter false-cast rate*, not just
@@ -103,7 +114,7 @@ anyone outside the team plays. **P2** = later.
 - **P1** Perfect riders for the four POC spells: a burn patch, an overheal shield, an
   armor pulse, and a corn kernel scatter.
 - **P1** Funny Fizzles (smoke puffs now, the chicken backfire later).
-- **P2** Height-aware spells: falling objects (corn, meteor, anvil) hit harder downhill,
+- **P2** Height-aware spells: falling objects (meteor, anvil) hit harder downhill,
   tempest pushes enemies off ledges, quake raises or lowers a hex, and cheese rolls
   downhill.
 
@@ -177,7 +188,9 @@ anyone outside the team plays. **P2** = later.
     voice fatigue, each on a 1–7 scale.
 - **P0** Combat go/no-go thresholds (voice-mechanic.md §7):
   - at least 90% of intended casts recognized;
-  - at most 1 accidental cast per 10 minutes;
+  - in loose mode, about 1 true accident every 2–4 minutes, with laughs outnumbering
+    groans at least 3:1 and no run-ending accidents;
+  - at most 1 phantom cast per 10 minutes;
   - **at least 60% of casts by voice when keys are available**.
 - **P0** Exploration metrics:
   - share of optional areas and secrets found;

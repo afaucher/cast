@@ -1,13 +1,14 @@
 # Pitch: Contract Sorcery
 
-*This develops "Short Order Sorcery" (game-pitch.md #3) using the user's twist. It keeps the
-two pillars: **exploration** of a procedural hex world with verticality, and **combat
-through spoken spells.***
+*This builds on the user's premise: contract sorcerers sent on dangerous jobs, such as
+clearing demons from rich people's survival bunkers or retrieving treasure. It keeps the two
+pillars: **exploration** of a procedural hex world with verticality, and **combat through
+spoken spells.***
 
 ## Hook
 
-**Gig-economy sorcerers take dangerous jobs in rich people's survival bunkers: clearing
-out demons, recovering treasure, and charging for every hour.**
+**Gig sorcerers take dangerous jobs in billionaires' survival bunkers: clearing out demons,
+recovering treasure, and billing for every hour.**
 
 The working name for the company is **Hex & Sons Contract Sorcery**: hex tiles, hexes, and
 a family firm with no actual sons. The player squad is "the crew," so the alternative is
@@ -16,21 +17,22 @@ a family firm with no actual sons. The player squad is "the crew," so the altern
 ## Tone
 
 - **Workplace comedy over real danger.** The demons are lethal, and the paperwork is the
-  joke.
-  - It's a heist crew crossed with a restaurant kitchen line.
+  joke. It plays like a heist crew run through a gig app.
   - Fights are tight and loud; the debrief is deadpan.
 - **Satire targets:** prepper billionaires (absurd bunkers, absurd fears) and the gig
-  platform (tickets, star ratings, deductions).
-  - The crew are the sympathetic ones: skilled workers doing a dumb job well.
-- **Clients never appear in person.** They exist only in tickets, voicemails, the house
+  platform (job cards, star ratings, deductions).
+  - The crew are the sympathetic ones: skilled tradespeople doing a ridiculous job well.
+- **Clients never appear in person.** They exist only in job cards, voicemails, the house
   AI, and the bunker itself. The bunker *is* the joke.
 
-## Why shouting spells works here
+## Why spoken spells work here
 
-- Sorcery is a trade, and a trade has a kitchen line's call-outs.
-- The dispatcher's platform turns shouted orders into spells. "**Fire** heal!" means start
-  that order now, which is exactly what "fire" means on a real kitchen line.
-- A clean call gets a clean plate. A mumbled order gets a sad one: that's the fumble.
+- Sorcery is a licensed trade.
+- Every crew member wears a **dispatch rig**: a headset tied into the platform, which
+  listens on an open channel and turns a clean spoken call into a licensed spell.
+- **Fumbles:** a garbled call is a garbled job. The platform half-delivers and logs it.
+- **Unison casts:** the crew calling together counts as a "team authorization," so the
+  platform delivers more.
 
 ## Art direction
 
@@ -46,8 +48,10 @@ a family firm with no actual sons. The player squad is "the crew," so the altern
 - **Contractor hazard-stripe tape is the visual language for every telegraph.** The
   brute's slam ring, turret arcs and no-go zones all use it. One yellow-black pattern
   means "danger," and it reads instantly in an isometric camera.
-- **Price tags:** valuables carry a faint tag icon, so you can see what corn is about to
-  cost you.
+- **Crew look:** high-vis vests over robes, with tool belts holding wands and a headset
+  each. Each crew member gets one team color.
+- **Price tags:** valuables carry a faint price-tag icon, so you can see what an AoE spell
+  is about to cost you.
 
 ---
 
@@ -61,7 +65,7 @@ the existing hex rules:
 | Hydroponics terraces | Stepped +1 levels | Easy verticality, sight lines, ambushes |
 | Sunken infinity pool | A pit (one-way drop of 3) | A commitment drop; the exit is the service stair |
 | Bouldering wall in the home gym | A +2 climb chain | A climb route to a ledge stash |
-| Wine vault | A low, cramped level | No-fire zone condition; priceless breakables |
+| Wine vault | A low, cramped level | Priceless breakables, often under a "no AoE" condition |
 | Panic room | A sealed room with turrets | Its control panel sits on a +2 ledge outside |
 | Gallery | Flat, open | Safes behind art (breakable walls) |
 | Atrium with helipad stairs | The tallest stair stack | A vantage crown, and the extraction point |
@@ -77,76 +81,86 @@ Getting to it is the level.
 | **Retrieval** | Recover a named item from a vault or safe | The vault is seen first, then routed to | Light combat, guarded chokepoints |
 | **Evacuation** | Get the client's pet or heir out alive | The escort **can't climb**, so you must find a stair route | Defensive; protect a slow walker |
 | **Repossession** | Reclaim listed assets for a creditor | Assets are scattered; how much you pocket is up to you | The house security is hostile |
-| **Pre-sale inspection** | Visit and photograph N rooms and crowns | You're paid on map coverage | Sparse but surprising |
-| **Demolition** | Destroy marked fixtures | Fixtures are hidden in side areas | **Damages count in your favor**: the corn contract |
+| **Pre-sale inspection** | Visit and log N rooms and crowns | You're paid on map coverage | Sparse but surprising |
+| **Demolition** | Destroy marked fixtures | Fixtures are hidden in side areas | **Damages count in your favor** |
 
 ---
 
 ## Voice grammar in this fiction
 
-Kitchen lingo layered over the base grammar in voice-mechanic.md:
+Keep the neutral base grammar from voice-mechanic.md, and add a few *crew-level dispatch
+calls* on top:
+- **Base grammar:** trigger word + spell. The trigger is customizable, and the default is
+  "cast".
+- **Strictness modes:** strict, loose (the default) and chaos, as described in
+  voice-mechanic.md §3.
+- **Fiction:** accidental casts fit this world well. The dispatch rig is always listening,
+  and the invoice itemizes every "ACCIDENTAL" line.
 
 | Call | Meaning | Notes |
 |---|---|---|
-| bare spell word ("heal") | Cast, under "spoken, not mentioned" | Unchanged |
-| **fire** + spell ("fire heal") | Cast now; the override keyword, replacing "cast" | See the speech recognition check below |
-| **eighty-six** | Team ultimate: wipe the room | Needs a full ticket meter, **or** 2+ crew in unison |
-| **corn** ("the house special") | Corn bomb | Hair-trigger, as before |
-| **yes chef** | The answer in call and response | Leader: "Brace!" Crew: "Yes chef!" Everyone who answers gets armor |
-| **on the fly** | The "quick" modifier | Three words, robust; low chatter risk outside a kitchen |
-| **behind** | A dash through an ally (later spell) | Hair-trigger, deliberately |
+| **cast** + spell ("cast heal") | The default trigger word | In strict mode only at the start of the utterance; in loose mode anywhere. See below |
+| bare spell word ("heal") | Casts only in chaos mode (or inside push-to-cast) | |
+| spell + **callsign** ("heal Fox") | Targeted ally spell | Crew callsigns from the curated list (Fox, Bear, Crow, Moss, Ember, Pike) |
+| **Brace** … **Copy** | Call and response | One crew member calls "Brace!", and everyone who answers "Copy!" within 2 s gets armor |
+| **evict** | Team ultimate: wipe the room | Needs a full job meter, **or** 2+ crew in unison |
 
 ### Speech recognition check
 
-**"fire" as the cast keyword:**
-- **Short:** one syllable, and short words are unreliable *in isolation*. Here it's
-  always followed by a spell word, and if "fire" is missed, the spell still casts as a
-  bare word. Graceful.
-- **Matcher:** under the extra-only sound-alike rule, "fires" and "fired" are accepted,
-  while "hire", "tire", "five" and "fine" are rejected (sound swaps, not extra sounds).
-- **The real problem is chatter.** "Fire" is one of the most common words in action-game
-  talk: "on fire", "cease fire", "fire at the archer", "fire in the hole".
-  - The old "cast" override worked *mid-sentence*, so "he's on fire, heal him" would
-    hear "fire heal" and cast.
-  - **Rule:** "fire" counts as the keyword only if it **starts the utterance or follows a
-    pause of at least 0.3 s**, *and* a spell word follows within 0.3 s. Both checks use
-    token timestamps.
-  - That fixes "on fire, heal him" but keeps "...[pause] fire heal!" working.
-- **Spell-name collision:** "fire fireball" is a tongue-twister, and the keyword is a
-  prefix of the spell.
-  - On the menu, fireball becomes **"flambé"**, with "fireball" still accepted as an
-    alias.
-  - Flambé is a rare word, so it needs a recognition test. If it fails, fall back to
-    "inferno".
+**"cast" (the keyword):**
+- **Short:** one syllable, but it's always followed by a spell word, which gives it
+  context. If "cast" is missed, the cast is a Miss: free, with no cooldown spent.
+- **Matcher:** under the extra-only sound-alike rule, "casts" is accepted, while "cash",
+  "past" and "last" are rejected (sound swaps, not extra sounds).
+- **"Cash" is the realistic mishearing in a game about payouts.** It causes a free Miss.
+- **Chatter:** "cast" is the game's own name, so players say "did you cast heal?".
+  - In **strict** mode that doesn't cast, because the trigger isn't at the start of the
+    utterance or after a pause.
+  - In **loose** mode it does. That's an accidental heal, flagged and billed on the
+    invoice.
+  - Crews who want fewer accidents can switch their trigger to a rarer word, such as
+    "invoke" or "conjure" (see voice-mechanic.md §1).
 
-**"eighty-six":**
-- It comes out of the recognizer as two number words, "EIGHTY SIX": four syllables,
-  distinctive.
-- It needs a phrase entry in the hotword list and the matcher.
-- **Chatter risk:** low, except when players read numbers aloud ("eighty-six gold").
-  Requiring a full meter or a unison call makes accidents nearly impossible.
-- **Near-misses:** "eighteen", "sixty-six" and "eighty sticks".
+**"copy":**
+- Two syllables, so robust.
+- "Copies" is accepted; "coffee" is rejected.
+- It is common in chatter ("copy that"), but it only counts **inside a 2 s window after a
+  teammate's "Brace!"**. An accidental "copy" just gives armor, so the risk is negligible.
 
-**"Corner!", the real kitchen call:**
-- It matches corn under the extra-only rule (corn plus one extra sound).
-- So **a crew that talks like a real kitchen drops corn on itself.**
-- Keep it. It's the best accidental joke in the game, and it costs only the damages.
+**"brace":**
+- One syllable, and the near-misses "race", "brave" and "breeze" are sound swaps, which
+  are rejected.
+- It's rare in chatter. It follows the same strictness mode as spells.
 
-**"Yes chef":** two words and robust. It's chatter-prone *only* in this fiction, which is
-the point.
+**"evict":**
+- Two syllables, distinctive, and rare in conversation.
+- "Evicts" is accepted, but "evicted" adds two sounds and is not.
+- **Risk:** it's an uncommon word for the model, which may split or misspell it, so it
+  needs a recognition test. Fallback: "purge".
+- Gated by a full meter or unison, so accidental casts are near zero.
+
+**Words to keep out of the grammar:**
+- "**clear**" ("room clear!" is constant in action-game chatter), "**go**", "**fire**",
+  "**mark**" (a common first name).
+- "**pay**" and "**cash**", which this fiction makes chatter-heavy.
 
 ---
 
 ## How the POC's four spells map in
 
-| POC spell | Menu name | Spoken word | Flavor |
-|---|---|---|---|
-| heal | Staff Meal | heal | A green steam burst; heals the caster and nearby crew |
-| fireball | Flambé | fireball (later "flambé") | A thrown pan of burning brandy |
-| armor | Hazard Zone | armor | A ring of hazard tape on the hexes; crew inside take less damage |
-| corn | The House Special | corn | A catering drone drops a cart-sized buttered cob. **Itemized on your invoice** |
+The spoken words and the code stay unchanged. Only the FX are re-skinned.
 
-No code changes are needed. These are display names and FX only.
+| POC spell | FX in this fiction |
+|---|---|
+| heal | A green pulse from the dispatch rig; heals the caster and nearby crew |
+| fireball | A thrown fireball |
+| armor | A ring of hazard tape on the hexes; crew inside take less damage |
+| corn | Unchanged. A corn bomb drops from the sky and hurts everyone in the blast |
+
+**Property damage (a mechanic):**
+- AoE spells (fireball, corn, and later meteor) break priced objects.
+- Damages are deducted from the fee, **capped at 50%**.
+- Demolition contracts flip them into a bonus.
 
 ---
 
@@ -154,74 +168,70 @@ No code changes are needed. These are display names and FX only.
 
 | Enemy | POC role | Behavior | Notes |
 |---|---|---|---|
-| **Manifested Imps** | Swarmer | Demons a wellness guru summoned while "manifesting abundance". Fast packs | They **chant affirmations** and buff each other while chanting; interrupt with AoE |
+| **Manifested Imps** | Swarmer | Demons a wellness guru summoned while "manifesting abundance." Fast packs | They **chant** and buff each other while chanting; interrupt with AoE |
 | **Panic-Room Turret** | Archer | Stationary, with a hazard-tape firing arc; prefers high mounts | Disabled at its control panel, which is always on a +2 ledge (a climb puzzle) |
-| **Security Drone** | Archer | Kites and hovers over pits; ignores heights | Tempest or AoE from above |
+| **Security Drone** | Archer | Kites and hovers over pits; ignores heights | AoE from above, or knock it into walls |
 | **Biohacked Bodyguard** | Brute | Slow, telegraphed slam, can't climb | Climbing is your escape; he takes the stairs |
-| **Feral Garden Peacocks** | Grunt or swarmer | A screaming pack from the hydroponics level | Their screams **drown out casts**: while one screams nearby, only Perfect casts land at full power |
-| **The Concierge** (rogue house AI) | Voice enemy | Lives in the walls and speakers | "Sorry, I didn't catch that": it **echoes your last order to the house**, so your heal heals the demons. Destroy its speaker nodes |
+| **Feral Garden Peacocks** | Grunt or swarmer | A screaming pack from the hydroponics level | Their screams **jam the dispatch channel**: while one screams nearby, only Perfect casts land at full power |
+| **The Concierge** (rogue house AI) | Voice enemy | Lives in the walls and speakers | "Sorry, I didn't catch that." It **echoes your last spell to the house**, so your heal heals the demons. Destroy its speaker nodes |
 | **Grandma** | Voice enemy (Listener) | Asleep in the east wing | Voice activity nearby wakes her; awake, she's an unkillable elite. "Don't wake Grandma" is a contract condition |
-| **Rival Crew** ("Spellr") | Elite casters | A cheaper rival gig crew racing you for the loot | They shout their spells in subtitles; a well-timed corn stops them |
+| **Rival Crew** (the "Spellr" app) | Elite casters | A cheaper rival gig crew racing you for the loot | They shout their spells in subtitles; interrupt them mid-cast |
 
 ---
 
 ## Run and meta loop
 
-1. **Ticket board.** The dispatcher offers 3 contracts, each with a client rating,
+1. **Job board.** The dispatch app offers 3 contracts, each with a client rating,
    conditions, fee and bonus.
 2. **Drop-in.** The crew's van pulls up, and the run starts at the service entrance.
 3. **The run.** Explore down, fight, hit the objective, and extract (helipad or service
    elevator).
-4. **Invoice.** A single receipt screen, 10 seconds long and funny:
+4. **Invoice.** A single 10-second receipt screen:
    - fee and bonuses (secrets found, time, conditions met);
-   - **minus damages**, for every priced object your spells destroyed;
+   - **minus damages**;
    - minus audit findings, if the client audits your pockets.
 5. **Review.** The client rates you 1–5 stars, with a one-line review.
 
 **Pocketing:** any valuable can be pocketed with one button. The audit chance rises with
-how many you took. Pocketed items sell for credits *or* are what unlock new spells (see
-below).
+how many you took. Pocketed loot sells for credits.
 
 **Meta progression:**
 - **Reputation** (average stars) unlocks richer clients. The client ladder: tech founder,
   then hedge-fund manager, then oligarch, then a space billionaire's orbital bunker.
-- **New spells are certifications** bought at the guild, paid for with fees and pocketed
-  loot.
-- **Crew perks:** van upgrades, a better dispatcher, and lower audit odds.
-
-**Damages make corn cost something:**
-- Friendly-fire corn on a $4M sculpture comes out of your fee.
-- Damages are **capped at 50% of the fee**, so they bite but never ruin a run.
-- Demolition contracts flip them into a bonus.
+- **New spells are licenses** bought from the guild with fees and loot. Learning a spell
+  word means speaking it once at the licensing terminal, which doubles as a calibration
+  sample.
+- **Crew perks:** van upgrades, a better dispatch rig (for example, a wider unison
+  window), and lower audit odds.
 
 ---
 
-## Three sample tickets
+## Three sample job cards
 
 ```
-TICKET #0412 · EXTERMINATION · Client ★★★★☆
+JOB #0412 · EXTERMINATION · Client ★★★★☆
 SITE: "Serenity Silo" · 7 levels · hydroponics, wine vault, infinity pool
-ORDER: 86 all manifested entities. Destroy nests (est. 3).
-CONDITIONS: Don't wake Grandma (L4 east wing). No fire spells in the cellar.
+JOB: Clear all manifested entities. Destroy nests (est. 3).
+CONDITIONS: Don't wake Grandma (L4 east wing). No AoE in the wine vault.
 FEE $18,000 · BONUS +$4,000 under 12:00
-NOTE FROM CLIENT: the peacocks are not ours. Do not engage the peacocks.
+CLIENT NOTE: the peacocks are not ours. Do not engage the peacocks.
 ```
 
 ```
-TICKET #0419 · RETRIEVAL · Client ★★☆☆☆ ("slow last time")
+JOB #0419 · RETRIEVAL · Client ★★☆☆☆ ("slow last time")
 SITE: "Bastion 9" · gallery, panic room, helipad
-ORDER: Recover 1x heirloom egg from the safe behind the "blue painting."
-CONDITIONS: Painting is worth more than the egg. Painting is behind the safe? Unclear.
+JOB: Recover 1x heirloom egg from the safe behind the "blue painting."
+CONDITIONS: Painting is worth more than the egg.
 FEE $26,000 · BONUS +$6,000 zero damages
-DISPATCH: house AI is "being weird." Bring earplugs.
+DISPATCH: house AI is "being weird." Expect interference.
 ```
 
 ```
-TICKET #0423 · EVACUATION · Client ★★★★★
+JOB #0423 · EVACUATION · Client ★★★★★
 SITE: "The Ark (Lake House)" · 5 levels · flooded lower deck
-ORDER: Extract 1x Pomeranian ("Duchess"). Duchess does not climb.
+JOB: Extract 1x Pomeranian ("Duchess"). Duchess does not climb.
 CONDITIONS: Duchess must not see violence. (Dispatch: ignore this.)
-FEE $40,000 · Bonus scales with Duchess's mood on arrival
+FEE $40,000 · BONUS scales with Duchess's mood on arrival
 ```
 
 ---
@@ -229,31 +239,28 @@ FEE $40,000 · Bonus scales with Duchess's mood on arrival
 ## Risks
 
 - **The satire wears thin.**
-  - Keep the jokes *systemic* (receipts, conditions, the Concierge, corn damages) rather
-    than written gags that repeat.
+  - Keep the jokes *systemic* (invoices, conditions, the Concierge, Grandma) rather than
+    written gags that repeat.
   - Rotate client archetypes by reputation tier.
   - Keep the clients off-screen.
-  - Write a small pool of tickets with procedural conditions so they stay fresh.
+  - Use a small pool of job cards with procedural conditions.
 - **The business loop fights the action.**
   - If damages make players timid, the combat dies. The 50% cap, Demolition contracts and
-    loud, funny destruction FX all push the other way.
+    loud destruction FX all push the other way.
   - No inventory management mid-run: pocketing is one button, and all the accounting
     happens on the invoice screen.
 - **Tone versus "Diablo-style".** It's lighter than the brief's reference. The danger has
   to stay real: lethal demons, tense extractions, and Grandma.
-- **Kitchen lingo collides with chatter.** "Fire", "corner" and "behind" are all common.
-  The rules above handle "fire", and "corner" and "behind" are deliberate. **The POC must
-  measure the false-cast rate with this grammar on.**
+- **Chatter and dispatch calls.** "Cast" and "copy" are common words. The pause rule and
+  the response window handle them. **The POC must measure the false-cast rate with this
+  grammar on.**
 - **Exploration motive.** It's strong, because every contract type sends you through the
   bunker for a different reason. Watch that Pre-sale inspection doesn't turn into a
   checklist.
 
 ## Verdict
 
-Contract Sorcery fixes Short Order's two weaknesses:
-- **Exploration motive:** bunkers have verticality, secrets and vantage points built in.
-- **Shelf life:** it's a contract loop with escalating clients, not a single gag.
-
-It also gives corn a real cost through the damages line. It is the strongest *comedy*
-option and a real rival to Warcry. **Prototype both tones with the same POC.** The
+This is the strongest *structure* of all the pitches: contract types give each run a
+different reason to explore, and the job/invoice/reputation loop is built into the
+fiction. It's a real rival to Warcry. **Prototype both tones with the same POC.** The
 setting-neutral art rule and the POC's four spells carry over unchanged.

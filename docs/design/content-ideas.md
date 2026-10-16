@@ -12,7 +12,8 @@ first pillar, exploration (see exploration.md).
 - **Risky:** one syllable, a common onset swap ("zap" next to "sap", "tap", "cap"), a
   homophone of a common word ("heal" / "he'll"), or a word that's constantly said in
   gaming chatter ("just", "go", "wait").
-- **Chatter-prone on purpose:** the hair-trigger spells (voice-mechanic.md, Rule 2).
+- **Chatter-prone on purpose:** the hair-trigger spells, which fire on any mention in loose mode
+  (voice-mechanic.md §3).
 - **Never put two risky look-alikes in one player's loadout.** For example, don't give one
   player both "frost" and "fireball" unless calibration shows they separate cleanly.
 
@@ -20,10 +21,10 @@ The four POC words, rated:
 
 | Word | Rating | Notes |
 |---|---|---|
-| heal | Risky | Homophone "he'll"; sound-alikes "heel", "hill", "deal". Rule 1 (spoken, not mentioned) carries it |
+| heal | Risky | Homophone "he'll"; sound-alikes "heel", "hill", "deal". The trigger word carries it in strict and loose mode; in chaos, "he'll" heals, which is fine |
 | fireball | Good | |
 | armor | Good | |
-| corn | Risky | "Corner" matches (one extra sound); "core", "horn" and "born" are near. That makes it perfect for a hair-trigger joke |
+| corn | Risky | "Corner" matches (one extra sound); "core", "horn" and "born" are near. Shipped as a hair-trigger, so those collisions are deliberate |
 
 ---
 
@@ -48,22 +49,20 @@ The four POC words, rated:
 | 15 | **bubble** | A bubble shield on the target ally that absorbs one hit | Good | |
 | 16 | **quake** | Raises or lowers the cursor hex by 1 level, which makes new climb paths or traps the brute | OK | Interacts with the terrain heights. Good for the split word "earth + quake" |
 | *Joke* | | | | |
-| 17 | **corn** (POC) | A corn bomb from the sky; hair-trigger, aimed at the speaker when merely mentioned | Risky | The legend itself |
+| 17 | **corn** (POC) | A corn bomb from the sky; hair-trigger, aimed at the speaker when merely mentioned; hurts everyone in the blast | Risky | See the POC table above |
 | 18 | **cheese** | A giant cheese wheel that **rolls downhill along the hex heights**, flattening everything | OK | "Cheese" vs "these" and "keys"; uses the terrain system for comedy |
 | 19 | **duck** | Everyone dodges *and* a rubber duck drops (it squeaks and taunts); hair-trigger | Chatter | Yelling "duck!" as a warning works both ways |
 | 20 | **banana** | A peel on a hex; enemies slip and slide 2 hexes, off ledges if possible | Good | Hero-Reader's Zipformer once invented "BANANA" from chatter at a high hotword score. Watch it |
 | 21 | **anvil** | A cartoon anvil falls after a beat on the cursor; massive single-target damage | Good | |
 | 22 | **chicken** | Polymorphs one enemy into a chicken for 4 s. On a Fizzle, *you* become the chicken | OK | Fumble-as-joke done right: failure is funny, not just weak |
 
-**Corn upgrades:**
-- **Popcorn:** the split word "pop + corn" makes 6 small popping explosions.
-- **Cornfield:** "corn + field" makes a carpet-bomb line.
-- **Unicorn:** a late-game legendary in which a corn-horned unicorn charges in a line. It's
-  should be safe from the corn trigger, since it isn't one sound from "corn" and doesn't
-  start with "corn's" first sound. Verify that streaming partials never emit a bare
-  "corn" mid-word.
-- **Corn from above:** corn deals bonus damage to targets standing lower than the impact
-  point. Players who reach high ground learn to rain corn down on a pit.
+**Corn split words** (two players, voice-mechanic.md §4):
+- **pop + corn:** 6 small explosions scattered around the target.
+- **corn + field:** a carpet-bomb line of corn bombs.
+
+**ASR note:** any future spell containing "corn" (for example "unicorn") must be tested to
+check that streaming partials never emit a bare "corn" mid-word. That would set off the
+corn hair-trigger.
 
 **Modifier words** (progression unlocks, see voice-mechanic.md):
 - Good: **big**, **twin**, **quick**.
@@ -79,7 +78,7 @@ Six interact with the voice mechanic. Four exercise the terrain and combat.
 | Enemy | Behavior | Voice interaction | Counterplay |
 |---|---|---|---|
 | **Hush Moth** | A flying caster that drifts to the densest hero group | Its dust cloud (2 hex radius) **mutes** casting inside it; the heard-word display comes out as "…" | Melee or ranged it down, or step out of the cloud. Keyboard casts work in the cloud at half power, so it isn't a hard lockout |
-| **Echo** | A fragile mimic that stays at range | **Repeats your last spell word 2 s later, for the enemies**: your heal heals them, your fireball hits you | Kill it in the window, or cast a harmless word ("corn") to overwrite its echo |
+| **Echo** | A fragile mimic that stays at range | **Repeats your last spell word 2 s later, for the enemies**: your heal heals them, your fireball hits you | Kill it in the window, or cast a cheap low-impact spell to overwrite its echo |
 | **Word Thief** (magpie) | Fast, grabs and flees | On hit, **steals one spell word**: that slot is greyed out and the Thief casts it badly (Shaky) | Chase and kill it to get the word back. A natural chase for the climb and stair terrain |
 | **Loudmouth** | A tank that grows | **Grows stronger with team mic volume**: louder means more armor and size | Whisper. Teaches the volume signal; play it in short rooms only, to avoid annoying people |
 | **The Listener** | A blind brute | Moves toward **whoever is speaking**, using voice activity | Talk to pull it, and stay quiet to lose it. Talking becomes a kiting tool |

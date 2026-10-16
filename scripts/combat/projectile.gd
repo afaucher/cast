@@ -36,6 +36,11 @@ static func fire(shooter: Actor, from: Vector3, dir: Vector3, dmg: float, spd: f
 
 
 func _ready() -> void:
+	# Deferred so callers can set color/size right after fire().
+	_build_visual.call_deferred()
+
+
+func _build_visual() -> void:
 	var mi := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
 	sphere.radius = size

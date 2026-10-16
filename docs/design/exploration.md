@@ -31,7 +31,7 @@ tax:
 - **Exposure:** while climbing, a hero can't attack and takes +25% damage from ranged
   attacks. Archers punish careless climbs.
 - **High ground pays:** ranged attacks and spells from 2 or more levels above the target
-  deal +15%. Falling-object spells like corn and meteor hit harder on targets below the
+  deal +15%. Falling-object spells like meteor and anvil hit harder on targets below the
   caster.
 - **Climb chains:** a sequence of 2-level steps up a cliff face is a mini-route. Put a
   reward at the top so the slow climb feels earned.
@@ -95,7 +95,7 @@ Spells stay mainly about combat. These are small extras that cost little:
   words needed) sends a short pulse that outlines the walls of the current room through
   the fog. It also **wakes sleeping enemies nearby.** That's the risk.
 - **"Mark" by voice:** saying "mark" while pointing places a ping. It is gated by the
-  "spoken, not mentioned" rule (see voice-mechanic.md), and push-to-cast players get it
+  same strictness mode as spells (see voice-mechanic.md §3), and push-to-cast players get it
   for free.
 - **Silent rooms:** areas where any voice activity wakes enemies, so sneaking means the
   team going quiet. This is the one place where *not* speaking is a mechanic.

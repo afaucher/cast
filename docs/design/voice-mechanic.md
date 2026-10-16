@@ -34,8 +34,8 @@ confidence).
 
 | Grammar | Example | Pros | Cons |
 |---|---|---|---|
-| Bare word | "fireball" | Fastest, most magical | Collides with chatter ("use fireball on him") |
-| Verb prefix | "cast fireball" | Strong chatter protection | +250 ms of speech and gets repetitive; "cast" vs "past" vs "cash" |
+| Bare word | "fireball" | Fastest, most magical | Collides with chatter ("use fireball on him"). Only casts in chaos mode |
+| Trigger word + spell | "cast fireball" | Tunable chatter behavior (§3), and the trigger's partial starts the wind-up early | +250–400 ms of speech; gets repetitive |
 | Multi-word incantation | "great fireball", "ignis magna" | Power scales with effort | Slower; more ways to fumble |
 | Modifier words | "big fireball", "twin fireball", "quick heal" | Expressive and learnable | Needs a modifier vocabulary that is robust to ASR |
 | Direction by voice | "fireball left" | | **Avoid.** "Left" is ambiguous in isometric view, and the mouse is better at aiming |
@@ -43,10 +43,17 @@ confidence).
 
 ### Recommendation
 
-1. **Base form: the bare spell word, as its own short utterance.** "Fireball." Aim always
-   comes from the mouse or stick.
-2. **The "cast" prefix is always allowed** and overrides chatter filtering. "...so cast
-   fireball" works mid-sentence.
+1. **Base form: trigger word + spell.** "Cast fireball." Aim always comes from the mouse
+   or stick.
+   - **The trigger word is customizable**: see the table below. The default is "cast".
+   - Where the trigger may appear in a sentence depends on the **strictness mode**
+     (strict, loose or chaos; §3).
+   - In chaos mode, and for hair-trigger spells such as corn in loose mode, the bare
+     spell word is enough.
+   - **Latency bonus:** the trigger word's partial result starts the generic wind-up
+     before the spell word is even spoken.
+2. **The trigger word must be followed by a spell within 0.3 s**, checked with token
+   timestamps. A trigger word with nothing after it does nothing.
 3. **Modifiers go before the noun and are unlocked by progression.** "Big" means more
    power, a slower wind-up and a longer cooldown. "Quick" means a smaller effect and an
    instant release. "Twin" splits the spell in two. Order is fixed:
@@ -63,6 +70,29 @@ confidence).
 
 **Cast time is speaking time.** Longer phrases are stronger and also slower and riskier.
 That trade-off is the skill curve, and we get it for free.
+
+### Trigger word options
+
+Each player picks a trigger word in settings or in the calibration scene.
+
+| Trigger | Syllables | ASR risk | Chatter collisions | Notes |
+|---|---|---|---|---|
+| **cast** (default) | 1 | "casts" is accepted; "cash", "past" and "last" are rejected, but "cash" is a common mishearing | **High**: it's the game's name ("did you cast heal?") | Short and fast. The most accidents in loose mode |
+| **magic** | 2 | Low | Medium: "magic damage", "magic armor" | Fantasy-game talk will set it off, which is fun in loose mode |
+| **pickle** | 2 | Low; "nickel" and "tickle" are rejected | **Very low** | The fewest accidents for a short word, and funny on its own |
+| **conjure** | 2 | Low; "conjured" is accepted (one extra sound) | Low | Solid all-rounder |
+| **invoke** | 2 | Low; "evoke" is near | Low | Solid all-rounder |
+| **summon** | 2 | **Risky**: "someone" is "summon" plus one sound, so it matches under the extra-only rule | **High**: "someone heal me" casts heal | A comedy pick for loose-mode groups |
+| **presto** | 2 | Low; the model may split it ("pressed to") | Very low | Needs a recognition test |
+| **abracadabra** | 5 | **Very robust** | Almost none | Slow: about +500 ms of speaking per cast. For players who want zero accidents |
+| *custom word* | | Unknown | Unknown | See below |
+
+**Custom trigger words:**
+- The word needs a pronunciation generated for the matcher. Hotword biasing already
+  handles arbitrary text.
+- At entry, reject a word that is within one sound of any spell word or callsign.
+- Warn if it is within one sound of the 500 most common chat words.
+- Have the player say it 3 times to confirm it's recognized.
 
 ---
 
@@ -127,49 +157,96 @@ content-ideas.md).
 
 ---
 
-## 3. Voice chat vs casting
+## 3. Voice chat and accidental casting
 
-### The problem
+**Accidental casts fit the theme. They're a feature to tune, not a bug to eliminate.**
+- Players talk constantly; conversation runs at roughly 15 utterances a minute.
+- Spell words and trigger words *will* turn up in that chatter.
+- The game's job is to decide **how often a careless sentence becomes magic**, and to make
+  sure that when it does, it's funny or tense rather than run-ruining.
 
-- Players talk constantly. Conversation runs at roughly 15 utterances a minute.
-- Hotword biasing pulls mumbles toward spell words.
-- If even 0.5% of chatter utterances become a spell, that is one accidental cast every
-  ~13 minutes. That's tolerable for corn and terrible for a 30-second-cooldown meteor.
-  **The POC must measure this rate.**
+### Strictness modes
 
-### Rule 1: spoken, not mentioned
+The host picks the mode in the lobby, and it shows on the HUD. Any player may set
+themselves *stricter* than the lobby, but never looser.
 
-A spell fires only when it is *used*, not *talked about*:
-- the utterance starts with "cast", **or**
-- the spell phrase *is* the utterance, allowing at most one extra word ("heal!", "heal
-  me", "fireball now").
+| Mode | What casts | Accidents | For |
+|---|---|---|---|
+| **Strict** | The utterance **starts with** the trigger word (or the trigger follows a pause of at least 0.3 s), with a spell right after it | Rare | Focused runs, streamers, noisy rooms |
+| **Loose** (default) | The trigger word **anywhere** in a sentence, followed by a spell. **Corn fires on any mention**, including sound-alikes such as "corner". The other hair-trigger spells (duck, over here, hurry) do too | Regular, and part of the fun | Most groups |
+| **Chaos** | **Any spell word anywhere** casts, with or without a trigger | Constant | Party nights |
 
-"I'll save my fireball for the brute" is a long utterance with the spell word buried in it,
-so nothing fires. "He'll be fine" has "he'll", a homophone of "heal", as one of three
-words, so nothing fires. This uses the endpointed final result, which we wait for anyway.
+**Strict is "spoken, not mentioned."** A spell fires only when it is *used*, not *talked
+about*:
+- "...[pause] cast fireball!" casts.
+- "I'll save my fireball for the brute" doesn't: no trigger, and the spell word is buried
+  in the sentence.
+- "Did you cast heal?" doesn't either, because the trigger isn't at the start or after a
+  pause.
+- "He'll be fine" doesn't, because "he'll" is only a homophone of "heal" and there's no
+  trigger.
 
-### Rule 2: hair-trigger spells (deliberate accidents)
+This uses the endpointed final result and token timestamps, which we have anyway.
 
-Some spells ignore Rule 1 and fire on *any* mention:
-- **Corn.** If you say "corn" anywhere, in any sentence, it drops, aimed at *the speaker*.
-  Talking about the corn spell is how you learn this.
-- Others: "duck" (everyone ducks *and* a rubber duck appears), "over here" (a taunt), and
-  "hurry" (a haste speed boost).
+**Loose in practice:**
+- "We should cast armor before the brute gets here" places armor *now*, at the speaker's
+  cursor. Probably on cooldown when the brute arrives.
+- "He's in the corner!" drops corn on the speaker.
 
-Accidents are fun when the spell is cheap and funny or does what you probably meant
-anyway. They're miserable when they burn a big cooldown. **Never hair-trigger anything
-with a cooldown over ~10 s.**
+**Chaos in practice:** "I'm saving my fireball" throws a fireball, and everybody learns to
+talk in euphemisms within five minutes.
 
-Note "corner": under extra-only it's corn plus one extra sound, so "he's in the corner!"
-drops corn. Keep it. That's a feature.
+**Hotword biasing adds a background rate in every mode.** The model can turn mumbles into
+spell words that were never said. If 0.5% of utterances do that, it's one phantom cast
+every ~13 minutes. Measure it separately from *true* accidents (a real word said
+carelessly), because only the true ones are the feature.
 
-### Rule 3: push-to-talk modes
+### Why accidents are good: co-op comedy and tension
 
-| Mode | How it works | Who it's for |
+- **Blame comedy.** Every accidental cast names its speaker: "ACCIDENTAL: Fox". The team
+  knows exactly whose careless sentence dropped corn on the healer.
+- **Baiting.** Teammates will try to trick each other into saying "corner" or the trigger
+  word. That's emergent co-op play that costs us nothing to build.
+- **Speech discipline as a skill.** In a boss fight, the team starts choosing its words.
+  Players invent euphemisms like "the C-word" or "the yellow vegetable", and an
+  in-group vocabulary forming is the clearest sign the mechanic works.
+- **Tension.** In loose mode, a teammate explaining a plan can burn the spell the plan
+  needed. "Don't say it, don't say it" before a big pull is the kind of moment worth
+  designing for.
+
+### What keeps it fun instead of frustrating
+
+1. **The "accidental" label grants nothing.** We can't know intent; "accidental" is a
+   heuristic about how the sentence was put together. It looks at where the trigger
+   falls, whether there was a pause before it, whether a trigger was said at all, exact
+   vs sound-alike matches, and the utterance length. If the label cut cooldowns,
+   players would learn to mumble "uh, cast heal" mid-sentence to cast cheaper. So
+   accidental casts follow the normal rules. Casual phrasing already costs a little
+   power through fumble scoring (extra words, no clean start), and the label only drives
+   the callout and the stats. Data collection is passive: every utterance and its
+   label signals go to `user://voice_log.csv`, with no player effort. Phantom casts (the
+   recognizer inventing a word) can't be told apart from real ones in the POC; that's
+   accepted.
+2. **Nothing run-ending.**
+   - Accidental friendly fire, including corn, can't down a player; it leaves them at
+     1 HP at worst.
+   - Team ultimates and consumables need a strict-form cast in *every* mode.
+   - An accidental cast never opens a boss arena or triggers an objective.
+3. **Visible and attributed.** A big "ACCIDENTAL!" callout with the speaker's name and a
+   distinct sting, so the moment gets *seen* and becomes a story rather than a mystery
+   ("why did armor go off?").
+4. **Short hair-trigger list.** Only spells with cooldowns of about 10 s or less, and
+   effects that are funny or that you probably meant anyway, fire on any mention.
+5. **An easy way out.** Strict mode and push-to-cast are one menu away. A careful trigger
+   word ("pickle", "abracadabra") gets most of strict's calm while staying in loose mode.
+
+### Push-to-talk options (combine with any mode)
+
+| Option | How it works | For |
 |---|---|---|
-| **Open mic** (default) | Rules 1–2 apply | Most groups |
-| **Push-to-cast** | Hold a key or mouse thumb button. Only speech while held can cast, and Rule 1 is off (everything said is an attempt) | Noisy rooms, streamers, high-difficulty runs |
-| **Push-to-chat** | Hold a key to talk without casting | Players who chat a lot and cast a lot |
+| **Open mic** (default) | The strictness mode decides what casts | Most groups |
+| **Push-to-cast** | Hold a key or mouse thumb button. Only speech while held can cast, and inside the hold the bare spell word is enough | Noisy rooms, streamers, players who want zero accidents |
+| **Push-to-chat** | Hold a key to talk without casting | Loose and chaos groups who sometimes need to plan safely |
 
 
 ### Crosstalk: shared rooms and shared mics
@@ -284,21 +361,19 @@ drops corn. Keep it. That's a feature.
 - onset → event and end → event latency;
 - whether the hero knew the spell, and the cooldown state.
 
-**Session data:**
-- Record mic audio with consent so matcher rules can be replayed offline, like
-  Hero-Reader's `replay_matcher.py`.
-- A **"that was wrong" key (F2)**: the tester taps it after a miss or a false cast. This
-  provides ground truth cheaply.
+**Passive only.** Testers do nothing extra: no hotkeys, no review screens, no recordings,
+no observer coding. The automatic log (`user://voice_log.csv`) and the debug panel's
+transcript are the whole data set. Anything else is a quick post-session chat.
 
-| Question | Metric | Go threshold |
+| Question | Metric (from the log unless noted) | Go threshold |
 |---|---|---|
-| Does it understand me? | Intended casts recognized (from F2 + audio review) | ≥ 90% |
-| Does chatter misfire? | Accidental non-hair-trigger casts per 10 min of talking (tester thinks aloud, or a second person in the room) | ≤ 1 |
-| Does it feel fast? | "Felt laggy" rating; onset → effect p90 | ≤ 1.2 s; rating ≥ 5/7 |
-| Is fumbling legible? | After a Shaky cast, can the tester say why? | ≥ 70% correct |
-| **Is voice actually fun?** | Share of casts by voice when keys 1/2 are equally available, after 20 minutes | **≥ 60%** |
-| Does corn land? | Laughs or unprompted "corn" casts per session (observer tally) | Any. If nobody laughs, the timing or FX is wrong |
-| Is it sustainable? | Voice fatigue rating after 30 minutes; casts per minute | No hoarseness; ≤ 10/min |
+| Does it understand me? | Fizzles + no-spell finals that contain a spell-ish word, per cast attempt | ≤ 10% |
+| How often do accidents happen? | Casts labelled **accidental** per minute, per strictness mode | Loose: about 1 every 2–4 minutes |
+| Are accidents fun? | Post-session question: "were the accidental casts funny or annoying?" | Mostly funny |
+| Which mode do groups want? | Which mode and trigger word they leave selected | Loose is kept, or a tie |
+| Does it feel fast? | Voice-end → cast latency p90 from the log; "felt laggy?" asked afterwards | ≤ 1.2 s |
+| **Is voice actually fun?** | Share of casts by voice vs keys 1/2 (both logged) after 20 minutes | **≥ 60%** |
+| Is it sustainable? | Casts per minute | ≤ 10/min |
 
 The most important number is **voice share when keys are available.** If players drift to
 the keyboard, the mechanic isn't earning its friction, no matter how accurate the
