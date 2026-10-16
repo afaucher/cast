@@ -1,0 +1,112 @@
+# Cast: exploration on the hex-height terrain
+
+Exploration is the first pillar; combat through spoken spells is the second. This doc covers
+what makes walking around the procedural hex world rewarding by itself. It uses the
+terrain rules that already exist:
+- a rise of 1 level walks;
+- a rise of 2 is a slow climb;
+- a rise of 3 or more is blocked;
+- a drop of more than 3 is blocked;
+- stairs bridge big gaps, and missing cells are void.
+
+## The key asymmetry: one-way ledges
+
+You can **drop** 3 levels but you can't **climb** 3. That gives every 3-level edge a
+direction:
+- Dropping off a 3-level ledge is a **commitment.** You're in the lower area until you
+  find stairs or a 2-climb route back up.
+- The generator can use this on purpose:
+  - **Pit rooms:** easy to drop into, with the way out somewhere inside.
+  - **Shortcut ledges:** a drop that loops back to the start of a floor, Dark Souls-style.
+    Once found, it makes backtracking quick.
+- The HUD should mark a 3-level edge the first time a player hovers it: "You can't climb
+  back up here."
+
+## Climbing as a traversal skill
+
+Climbing (a rise of 2) is slow on purpose. Make that slowness a decision rather than a
+tax:
+- **Escape route:** the brute can't climb, and grunts climb slowly. A climbable step is a
+  safe spot, and the brute walks around to the nearest stairs.
+- **Exposure:** while climbing, a hero can't attack and takes +25% damage from ranged
+  attacks. Archers punish careless climbs.
+- **High ground pays:** ranged attacks and spells from 2 or more levels above the target
+  deal +15%. Falling-object spells like corn and meteor hit harder on targets below the
+  caster.
+- **Climb chains:** a sequence of 2-level steps up a cliff face is a mini-route. Put a
+  reward at the top so the slow climb feels earned.
+
+## Vantage points
+
+- **Height reveals the map.** Fog of war clears in a radius that grows with the cell's
+  height above its surroundings: about +2 hexes per level, using `line_of_sight`.
+- **Every region has at least one crown**, a high cell the generator guarantees. Reaching
+  it reveals the surrounding rooms and **glints** any secret within range: a loose wall,
+  a hidden stair, a ledge cache.
+- Vantage points double as **combat positions** to defend: the archer's favorite cells,
+  and a place to stand when a swarmer pack arrives.
+
+## Secrets
+
+| Secret | How you reach it | Signal that it exists |
+|---|---|---|
+| Ledge cache | A 2-climb chain, or a drop from above | A glint seen from a vantage point |
+| Hidden stair | A breakable wall section; melee it | A crack decal; dust falling on approach |
+| Undercroft | One-way drop into a pit room; stairs out on the far side | A dark hole visible from above |
+| Bridge-out | A long bridge across void to an island | Visible from the start, so the hard part is finding the stairs onto it |
+| Sealed shrine | A door that opens to a unison cast (optional voice use, below) | A shrine glow behind a barrier |
+
+Rule of thumb: **every secret is visible before it is reachable.** The fun is working out
+the route.
+
+## Risk and reward side areas
+
+- **Elite rooms** off the main path: one elite plus a guaranteed spell-word or gear drop.
+  They're marked on the map once spotted, so taking the detour is a choice.
+- **Collapse rooms:** the floor lowers one level every few seconds after the loot is
+  taken. You have to get out before it reaches a one-way drop.
+- **Brute gauntlets:** a plateau the brute can't reach, holding treasure, surrounded by
+  low ground the brute patrols. Climbing is the only safe way in.
+- **Overflow loot:** side areas give the *exploration* rewards (new spell words, gear,
+  shortcuts), while the main path gives the *progression* rewards (the exit, checkpoints).
+  Skipping side areas is allowed but leaves you weaker.
+
+## Co-op exploration
+
+- **Split up, with a soft leash.** Players can range apart about 2 rooms freely. Beyond
+  that, the split-off player's spell cooldowns slow by 25%; in fiction terms, the group's
+  shared power weakens. No hard tether.
+- **Voice callouts are the core co-op exploration tool.** Players are already on voice:
+  "Stairs over here!", "There's a chest on the ledge, I can't get up", "Brute's coming,
+  climb!". Support it with:
+  - a **ping key** that drops a world marker and shows the player's name over it;
+  - a minimap showing teammates' positions and the vantage points they've climbed.
+- **Shared reveal:** fog of war cleared by one player clears for everyone, so a scout
+  climbing a crown is a team action.
+- **Split-route rooms:** two pressure plates on different levels, or two levers on either
+  side of a gap. Someone has to take the climb route while someone else takes the stairs.
+
+## Non-combat voice uses (light, optional)
+
+Spells stay mainly about combat. These are small extras that cost little:
+- **Unison doors:** a sealed shrine opens when 2 or more players cast *any* spell in
+  unison at it. It's practice for combat chorus casts.
+- **Shout to scout:** a loud, sustained shout (using voice activity and mic level, with no
+  words needed) sends a short pulse that outlines the walls of the current room through
+  the fog. It also **wakes sleeping enemies nearby.** That's the risk.
+- **"Mark" by voice:** saying "mark" while pointing places a ping. It is gated by the
+  "spoken, not mentioned" rule (see voice-mechanic.md), and push-to-cast players get it
+  for free.
+- **Silent rooms:** areas where any voice activity wakes enemies, so sneaking means the
+  team going quiet. This is the one place where *not* speaking is a mechanic.
+
+## What the generator needs
+
+- Tag regions so every region gets at least one crown.
+- Spread one-way drops and loops evenly through a floor.
+- Place secrets with an approach route checked by `find_path`, with climbing allowed,
+  and make sure each secret is visible from at least one vantage point.
+- Check that every one-way drop has a way back up (stairs or a climb route), so a hero
+  can never get stuck.
+- Keep at least one walkable route into each region with no climbing, so the brute
+  always has a long way round and climbing stays an escape, not a hiding place.
