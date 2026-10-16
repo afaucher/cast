@@ -28,6 +28,11 @@ func _run_test(test_name: String) -> void:
 		get_tree().quit(2)
 		return
 	var script: GDScript = load(path)
+	if script == null or not script.can_instantiate():
+		push_error("Test failed to load (parse error?): " + path)
+		print(">>> [TEST FAILED] %s <<<" % test_name)
+		get_tree().quit(3)
+		return
 	var t: Node = script.new()
 	t.name = test_name
 	get_tree().root.add_child.call_deferred(t)

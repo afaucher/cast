@@ -65,7 +65,7 @@ func setup() -> void:
 	await frames(2)
 	eq(rig.camera.projection, Camera3D.PROJECTION_ORTHOGONAL, "orthographic")
 	near(rig.rotation_degrees.y, 45.0, 0.01, "yaw 45")
-	near(rig.camera.rotation_degrees.x, -55.0, 0.01, "pitch -55")
+	near(rig.camera.rotation_degrees.x, CameraRig.PITCH_DEG, 0.01, "pitch")
 	rig.snap()
 	near(rig.global_position.x, hero.global_position.x, 0.01, "snap to target")
 	hero.global_position = Vector3(5, 0, 0)

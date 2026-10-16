@@ -100,7 +100,7 @@ func setup() -> void:
 			z.queue_free()
 	await frames(2)
 	var weak_tank := _hero(Vector3(-5.0, 0, 0))
-	SpellBook.cast("armor", weak_tank, 0.05, Vector3.ZERO)
+	SpellBook.cast("armor", weak_tank, 0.05, weak_tank.global_position)  # point at your own feet
 	await frames(30)
 	check(weak_tank.has_modifier("armor"), "weak armor applies")
 	await frames(int(SpellBook.armor_duration(0.05) * 60.0) + 40)

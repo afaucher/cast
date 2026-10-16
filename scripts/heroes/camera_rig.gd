@@ -4,9 +4,9 @@ extends Node3D
 ## `target`, mouse-wheel zoom, and a little screen shake (Fx.shake).
 
 const YAW_DEG := 45.0
-const PITCH_DEG := -55.0
+const PITCH_DEG := -62.0   ## steep enough that wall rims hide little
 const DISTANCE := 60.0
-const SIZE_DEFAULT := 20.0
+const SIZE_DEFAULT := 24.0
 const SIZE_MIN := 10.0
 const SIZE_MAX := 36.0
 const ZOOM_FACTOR := 1.1
@@ -16,6 +16,7 @@ const SHAKE_DECAY := 2.2
 const SHAKE_MAX_OFFSET := 0.5
 
 var target: Node3D = null
+var right_inset_px := 0.0   ## screen pixels covered on the right (debug panel); keeps the target centered in the rest
 var camera: Camera3D
 var _trauma := 0.0
 var _zoom_target := SIZE_DEFAULT
@@ -44,11 +45,17 @@ func _process(delta: float) -> void:
 	if _trauma > 0.0:
 		_trauma = maxf(0.0, _trauma - SHAKE_DECAY * delta)
 		var k := _trauma * _trauma * SHAKE_MAX_OFFSET
-		camera.h_offset = randf_range(-k, k)
+		camera.h_offset = _inset_offset() + randf_range(-k, k)
 		camera.v_offset = randf_range(-k, k)
 	else:
-		camera.h_offset = 0.0
+		camera.h_offset = _inset_offset()
 		camera.v_offset = 0.0
+
+
+## World units to slide the view so the target sits in the middle of the uncovered area.
+func _inset_offset() -> float:
+	var vh := float(get_viewport().get_visible_rect().size.y)
+	return 0.0 if vh <= 0.0 else right_inset_px * 0.5 * camera.size / vh
 
 
 ## Jump straight to the target (no easing), e.g. on level start.

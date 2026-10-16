@@ -1,5 +1,8 @@
 # Cast: setting pitches
 
+> **North star:** [`north-star.md`](north-star.md). "Overcooked with magic": chaotic co-op
+> where a well-oiled team consistently does well.
+
 > **Full pitch available:** **Contract Sorcery** is developed in
 > [`pitch-contract-sorcery.md`](pitch-contract-sorcery.md). Gig sorcerers are sent on
 > dangerous contracts: clearing demons out of billionaires' survival bunkers and

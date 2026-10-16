@@ -61,12 +61,14 @@ func setup() -> void:
 	await _clear()
 	GameWorld.begin(_flat_map(), root)
 
-	# --- Fireball explodes at max range with no obstacle: a dummy off the path near the end of the range is hit by splash.
+	# --- Fireball explodes at the aim point when nothing is in the way (not beyond it).
 	caster = _hero(Vector3(-8, 0, 0))
-	var end_dummy := _dummy(Vector3(-8.0 + SpellBook.FIREBALL_RANGE, 0, 1.2))
+	var at_aim := _dummy(Vector3(0, 0, 1.2))
+	var beyond := _dummy(Vector3(6, 0, 0))
 	SpellBook.cast("fireball", caster, 1.0, Vector3.ZERO)
 	await frames(120)
-	check(end_dummy.hp < end_dummy.max_hp, "fireball bursts at max range")
+	check(at_aim.hp < at_aim.max_hp, "fireball bursts at the aim point")
+	near(beyond.hp, beyond.max_hp, 0.01, "fireball does not fly past the aim point")
 	await _clear()
 
 	# --- Fireball power scaling: damage and radius both grow.
@@ -86,7 +88,7 @@ func setup() -> void:
 
 	# --- Corn: nothing before the delay, then EVERYONE in the radius takes damage.
 	caster = _hero(Vector3.ZERO)
-	var ally := _hero(Vector3(2.5, 0, 0.5))
+	var ally := _hero(Vector3(2.5, 0, 1.5))   # 1.5 from the aim: inside the blast, outside the ally snap
 	var mob := _dummy(Vector3(2.5, 0, -0.5))
 	var distant := _dummy(Vector3(-5.0, 0, 0))
 	var safe_ally := _hero(Vector3(0, 0, 7.5))
@@ -105,15 +107,35 @@ func setup() -> void:
 	near(safe_ally.hp, safe_ally.max_hp, 0.01, "corn spares far heroes")
 	await _clear()
 
-	# --- Corn range clamp: aiming far away lands 10 units out, not at the cursor.
+	# --- Spell range clamp: aiming far away lands SPELL_RANGE out (the ranged bolt's reach).
 	caster = _hero(Vector3.ZERO)
-	var at_clamp := _dummy(Vector3(SpellBook.CORN_MAX_RANGE, 0, 0))
+	var at_clamp := _dummy(Vector3(SpellBook.SPELL_RANGE, 0, 0))
 	var at_cursor := _dummy(Vector3(-1.0, 0, 8.0))
 	# Aim along +X far beyond range (still inside the map? the aim is off-map; clamp comes first).
 	SpellBook.cast("corn", caster, 1.0, Vector3(40.0, 0, 0))
 	await frames(int(CornStrike.DELAY * 60.0) + 12)
-	check(at_clamp.hp < at_clamp.max_hp, "corn clamped to ~10 range")
+	check(at_clamp.hp < at_clamp.max_hp, "corn clamped to spell range")
 	near(at_cursor.hp, at_cursor.max_hp, 0.01, "corn did not land elsewhere")
+	await _clear()
+
+	# --- Pointing at a teammate targets them: corn aimed near an ally lands ON the ally.
+	caster = _hero(Vector3.ZERO)
+	var pal := _hero(Vector3(6.0, 0, 0))
+	var bystander := _dummy(Vector3(3.0, 0, 0))
+	SpellBook.cast("corn", caster, 1.0, Vector3(5.2, 0, 0.6))
+	await frames(int(CornStrike.DELAY * 60.0) + 12)
+	check(pal.hp < pal.max_hp, "corn aimed at a teammate snaps onto them (don't say the wrong spell!)")
+	near(bystander.hp, bystander.max_hp, 0.01, "snap moved the strike away from the raw aim")
+	await _clear()
+
+	# --- Heal lands where you point: an ally far away is healed, the caster is not.
+	caster = _hero(Vector3.ZERO)
+	var hurt := _hero(Vector3(8.0, 0, 0))
+	caster.apply_damage(30.0)
+	hurt.apply_damage(30.0)
+	SpellBook.cast("heal", caster, 1.0, hurt.global_position)
+	check(hurt.hp > hurt.max_hp - 30.0, "heal aimed at a far ally heals them")
+	near(caster.hp, caster.max_hp - 30.0, 0.01, "heal aimed away does not heal the caster")
 	await _clear()
 
 	# --- Corn power scaling.

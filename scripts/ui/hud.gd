@@ -111,6 +111,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # --- Public API -------------------------------------------------------------------------
 
+## Keep the HUD clear of a side panel docked on the right (0 = full width).
+func set_right_inset(px: float) -> void:
+	_root.offset_right = -px
+
+
 ## Add a full-screen Control (e.g. the SpellPicker) on top of the HUD.
 func add_overlay(c: Control) -> void:
 	_root.add_child(c)
@@ -390,6 +395,8 @@ class SpellCard extends Control:
 			var s := "%.1f" % left
 			var fs := 34
 			var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-			draw_string_outline(font, Vector2(c.x - w * 0.5, c.y + fs * 0.35), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, 0.9))
-			draw_string(font, Vector2(c.x - w * 0.5, c.y + fs * 0.35), s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
+			# Bottom-right corner, clear of the name and incantation text.
+			var at := Vector2(size.x - w - 14.0, size.y - 12.0)
+			draw_string_outline(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, 0.9))
+			draw_string(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
 		draw_rect(rect, Color(col.r, col.g, col.b, 0.7), false, 2.0)

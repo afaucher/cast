@@ -1,5 +1,8 @@
 # Cast: the voice mechanic
 
+> **North star:** [`north-star.md`](north-star.md). "Overcooked with magic": chaotic co-op
+> where a well-oiled team consistently does well.
+
 This doc covers pillar 2, combat through spoken spells: how speaking a spell turns into
 power. Pillar 1, exploration, is in `exploration.md`. Voice has only a few light
 exploration uses there; spells are mainly for fighting.
@@ -58,11 +61,17 @@ confidence).
    power, a slower wind-up and a longer cooldown. "Quick" means a smaller effect and an
    instant release. "Twin" splits the spell in two. Order is fixed:
    `[modifier] spell [target]`.
-4. **Targets come after the noun, ally spells only:** "heal Fox", "armor me", "heal all".
+4. **Targeting is by aim first** (already implemented).
+   - Every spell lands where the caster aims, and the aim snaps onto a teammate within
+     about 1.3 units.
+   - So healing a friend means pointing at them, and casting corn at them hurts them.
+   - Voice targets are an optional later layer, after the noun and for ally spells only:
+     "heal Fox", "armor me", "heal all".
    - Players pick **callsigns from a curated list** (Fox, Bear, Crow, Moss, Ember, Pike)
      instead of using real names or gamertags. Every name is phonetically distinct from
      every spell word and from the others.
-   - With no target, the spell picks the most-hurt ally in range.
+   - With no voice target, the aim point decides. There is no auto-targeting, because
+     pointing at the right teammate is part of the skill (see north-star.md).
 5. **Rule: no spell word may be a prefix of another** ("fire" and "fireball" can't both be
    spells). Streaming partials commit the wind-up early (see Latency), so a prefix would
    commit the wrong spell. Compound *halves* are the one deliberate exception, and they are
@@ -131,7 +140,7 @@ power = clamp(M × F × C, 0, 1)
 **Missing words degrade instead of failing:**
 - If a modifier isn't recognized, the base spell still casts at full M. "Big fireball"
   heard as "fireball" gives a plain fireball.
-- If the target isn't recognized, the spell falls back to auto-targeting.
+- If a voice target isn't recognized, the spell lands at the aim point.
 
 ### Tiers
 

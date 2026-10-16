@@ -143,19 +143,40 @@ anyone outside the team plays. **P2** = later.
 
 # Cross-cutting
 
-## 8. HUD and UX
+## 8. Results and scoring (see north-star.md)
+
+- **P1** A per-contract score and 1–3 stars:
+  - the objective is the base score;
+  - time vs par gives a bonus or a deduction;
+  - deductions for damage taken, friendly fire and accidental casts;
+  - a bonus for secrets found.
+- **P1** The generator computes **par** from the critical-path length and the enemy
+  budget, so the star thresholds stay fair across seeds.
+- **P1** Track friendly fire and accidental casts per player (needed for both scoring and
+  the end screen).
+- **P1** Downs cost time to revive but never fail a contract by themselves. Make sure no
+  single accident can wipe the team.
+- **P2** An end-screen highlights reel: "Most accidental casts", "Friendly fire dealt",
+  "Fastest revive" and "Best unison".
+- **P2** Tune the thresholds from playtests. Target: a coordinated team gets 2 stars every
+  time, and a well-oiled one gets 3.
+
+## 9. HUD and UX
 
 - **P0** A voice debug panel on F1: level meter, last partial, last final result, and the
   power breakdown.
 - **P1** Spell slots that show their spoken word in large type, with cooldowns.
+- **P1** Aim-snap feedback. When the aim snaps onto a teammate (within ~1.3 units),
+  outline them in your team color. Make the reticle warn (red) when the spell you're
+  winding up would hurt the teammate you're aiming at.
 - **P1** A tutorial room that covers climbing, stairs, one-way drops, and saying each spell
   with Perfect vs Shaky shown side by side.
 - **P1** First-run screen: recommend headphones, pick a push-to-talk mode, and set the
   fluency toggle.
 - **P2** A post-run report: secrets found, crowns climbed, best spell, fumbles, and the
-  corn count.
+  corn count. Merge it into the results screen in §8.
 
-## 9. Networking and co-op (after the POC proves fun solo)
+## 10. Networking and co-op (after the POC proves fun solo)
 
 - **P1** Host-authoritative casts: the client sends `(spell, power, onset_time, level)`,
   and the host resolves dedupe, crosstalk and unison.
@@ -163,7 +184,7 @@ anyone outside the team plays. **P2** = later.
 - **P1** In-game Steam voice, so we have the playback reference for echo handling.
 - **P2** Split words and chorus casts. Couch mode with separate spell sets on a shared mic.
 
-## 10. Accessibility
+## 11. Accessibility
 
 - **P1** Rebindable spell words chosen from pre-vetted alternates, a friendly-matching
   option, and a fluency-scoring toggle.
@@ -171,15 +192,23 @@ anyone outside the team plays. **P2** = later.
   traversal fiddly.
 - **P2** Free-text custom words, and models and word lists per language.
 
-## 11. Art direction
+## 12. Art direction (target look in north-star.md §5)
 
-- **P1** A setting-neutral prototype art pass (see game-pitch.md):
-  - grey stone floors with light tops and dark sides;
-  - team-color rims on heroes;
-  - spells as the only saturated colors.
-- **P2** Pick the setting after the first playtest. Warcry is the frontrunner.
+- **P1** A hex-edge emissive floor shader. It's the cheapest high-impact change, and it
+  makes height steps readable.
+- **P1** The lighting split: a warm key light and warm ambient, spells as cool cyan and
+  violet emissive, and `WorldEnvironment` glow.
+- **P1** Team-color rims on heroes. Spells stay the only cool, saturated colors.
+- **P2** Toon ramp shading (2–3 bands) with outlines: inverted-hull on actors and a
+  screen-space edge pass for the level.
+- **P2** Warm luxury-interior materials (wood, marble, brass, concrete) to replace the grey
+  prototype palette.
+- **P2** Stylized silhouettes: grinning imps, a scrappy contractor crew with improvised
+  gear, and a popcorn-burst FX for corn's explosion.
+- **P2** Lock the setting after the first playtest. The concept art points to Contract
+  Sorcery; Warcry is the alternative.
 
-## 12. Playtest protocol
+## 13. Playtest protocol
 
 - **P0** A 30-minute script:
   - 5 minutes of tutorial;

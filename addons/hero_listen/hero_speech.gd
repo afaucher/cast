@@ -6,13 +6,15 @@ extends RefCounted
 ## exported game (res:// in a .pck / APK) are first copied to user://models.
 ## In the editor, res:// paths are used directly.
 
-## Same short names as stt-eval/engines.py so benchmark results map 1:1.
-## The first entry is the default (see docs/stt-evaluation.md for why).
-## zipformer-hot at hotword score 2 won on real (adult) voice; it stays
-## provisional until the kid recordings are in. To switch back, move
-## parakeet-110m-hot to the top.
-## Every preset uses the "extra-only" sound-alike rule unless it sets
-## "sound_alike" ("no-onset" or the looser "any").
+## Trimmed for Cast: only the preset whose model files were copied into
+## res://models. (Hero-Reader also lists parakeet-110m-hot, zipformer20m,
+## nemo80 and moonshine2-tiny; copy their model dirs and presets back from
+## ../Hero-Reader/godot/addons/hero_listen/hero_speech.gd to use them.)
+## The first entry is the default. Same short name as stt-eval/engines.py.
+## zipformer-hot at hotword score 2 won on real (adult) voice in Hero-Reader.
+## The matcher's sound-alike rule is "extra-only" unless a preset sets
+## "sound_alike" ("no-onset" or the looser "any"). VoiceCaster does its own
+## matching on the hypothesis text, so that rule only affects word_heard.
 const PRESETS := {
 	"zipformer-hot": {
 		"hotwords_score": 2.0, "beam": 8,
@@ -21,33 +23,6 @@ const PRESETS := {
 		"encoder": "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
 		"decoder": "decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
 		"joiner": "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
-		"tokens": "tokens.txt",
-	},
-	"parakeet-110m-hot": {
-		"kind": "vad_offline", "family": "transducer", "hotwords": true,
-		"hotwords_score": 1.5, "beam": 8, "model_type": "nemo_transducer",
-		"dir": "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8",
-		"encoder": "encoder.int8.onnx", "decoder": "decoder.int8.onnx",
-		"joiner": "joiner.int8.onnx", "tokens": "tokens.txt",
-	},
-	"zipformer20m": {
-		"kind": "streaming", "hotwords": false,
-		"dir": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17",
-		"encoder": "encoder-epoch-99-avg-1.int8.onnx",
-		"decoder": "decoder-epoch-99-avg-1.int8.onnx",
-		"joiner": "joiner-epoch-99-avg-1.int8.onnx",
-		"tokens": "tokens.txt",
-	},
-	"nemo80": {
-		"kind": "streaming", "hotwords": false, "model_type": "nemo_transducer",
-		"dir": "sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8",
-		"encoder": "encoder.int8.onnx", "decoder": "decoder.int8.onnx",
-		"joiner": "joiner.int8.onnx", "tokens": "tokens.txt",
-	},
-	"moonshine2-tiny": {
-		"kind": "vad_offline", "family": "moonshine_v2",
-		"dir": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
-		"encoder": "encoder_model.ort", "decoder": "decoder_model_merged.ort",
 		"tokens": "tokens.txt",
 	},
 }

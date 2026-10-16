@@ -8,15 +8,15 @@ extends RefCounted
 const SPELLS := {
 	"heal": {
 		"name": "Heal", "cooldown": 8.0, "color": Color(0.35, 0.95, 0.5),
-		"desc": "Restores health to every ally around you.", "word": "heal",
+		"desc": "Heals every ally where you aim. Point at a friend, or at your feet.", "word": "heal",
 	},
 	"fireball": {
 		"name": "Fireball", "cooldown": 5.0, "color": Color(1.0, 0.55, 0.15),
-		"desc": "Hurls a fireball that explodes on impact. Monsters only.", "word": "fireball",
+		"desc": "A fireball that explodes where you aim (or on the first thing it hits). Monsters only.", "word": "fireball",
 	},
 	"armor": {
 		"name": "Armor", "cooldown": 14.0, "color": Color(0.35, 0.6, 1.0),
-		"desc": "A shielding zone: allies inside take much less damage.", "word": "armor",
+		"desc": "A shielding zone where you aim: allies inside take much less damage.", "word": "armor",
 	},
 	"corn": {
 		"name": "Corn", "cooldown": 12.0, "color": Color(1.0, 0.9, 0.25),
@@ -24,8 +24,11 @@ const SPELLS := {
 	},
 }
 
+# --- Targeting: every spell lands where the player aims, like the ranged bolt.
+const SPELL_RANGE := Hero.BOLT_RANGE  ## same reach as the ranged attack
+const ALLY_SNAP := 1.3                ## aim this close to a hero snaps onto them
 # --- Heal
-const HEAL_RADIUS := 4.0
+const HEAL_RADIUS := 3.0
 const HEAL_BASE := 35.0
 # --- Fireball
 const FIREBALL_SPEED := 11.0
@@ -39,7 +42,6 @@ const ARMOR_MULT_STRONG := 0.4     ## damage multiplier at power 1
 const ARMOR_DURATION_BASE := 5.0
 const ARMOR_DURATION_POWER := 5.0
 # --- Corn
-const CORN_MAX_RANGE := 10.0
 
 const MIN_POWER := 0.05
 
@@ -97,16 +99,51 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 	power = clampf(power, MIN_POWER, 1.0)
 	if GameWorld.flat_distance(aim, caster.global_position) > 0.05:
 		caster.face_point(aim)
+	var target := resolve_target(caster, aim)
 	match id:
 		"heal":
-			_cast_heal(caster, power)
+			_cast_heal(caster, power, target)
 		"fireball":
-			_cast_fireball(caster, power, aim)
+			_cast_fireball(caster, power, target)
 		"armor":
-			_cast_armor(caster, power)
+			_cast_armor(caster, power, target)
 		"corn":
-			_cast_corn(caster, power, aim)
+			_cast_corn(caster, power, target)
 	return true
+
+
+## Where a spell aimed at `aim` lands: clamped to SPELL_RANGE, snapped onto a hero
+## standing near the aim point (so pointing at a teammate targets them), and pulled
+## back toward the caster until it is over real ground. Y is the ground height.
+static func resolve_target(caster: Actor, aim: Vector3) -> Vector3:
+	var from := caster.global_position
+	var hero := snap_hero(aim)
+	if hero != null:
+		aim = hero.global_position
+	var d := aim - from
+	d.y = 0.0
+	if d.length() > SPELL_RANGE:
+		d = d.normalized() * SPELL_RANGE
+	var target := from + d
+	var map := GameWorld.map
+	var steps := 0
+	while map != null and is_nan(map.ground_height(target)) and steps < 40:
+		target = from + (target - from) * 0.9
+		steps += 1
+	target.y = from.y if map == null or is_nan(map.ground_height(target)) else map.ground_height(target)
+	return target
+
+
+## The living hero nearest to `aim` within ALLY_SNAP, or null.
+static func snap_hero(aim: Vector3) -> Actor:
+	var best: Actor = null
+	var best_d := ALLY_SNAP
+	for a in GameWorld.team_actors(GameWorld.TEAM_HEROES):
+		var d := GameWorld.flat_distance(a.global_position, aim)
+		if d <= best_d:
+			best = a
+			best_d = d
+	return best
 
 
 ## A sad little puff for a spell that went wrong (mumbled, wrong, etc.).
@@ -122,10 +159,9 @@ static func heal_amount(power: float) -> float:
 	return HEAL_BASE * (0.4 + 0.6 * clampf(power, MIN_POWER, 1.0))
 
 
-static func _cast_heal(caster: Actor, power: float) -> void:
+static func _cast_heal(caster: Actor, power: float, pos: Vector3) -> void:
 	var col := color_of("heal")
 	var amount := heal_amount(power)
-	var pos := caster.global_position
 	for a in GameWorld.actors_in_radius(pos, HEAL_RADIUS, caster.team):
 		var got := a.heal(amount)
 		if got > 0.5:
@@ -153,6 +189,8 @@ static func fireball_damage(power: float) -> float:
 static func _cast_fireball(caster: Actor, power: float, aim: Vector3) -> void:
 	var dir := aim - caster.global_position
 	dir.y = 0.0
+	# Explodes at the aim point unless it hits something first.
+	var reach := clampf(dir.length(), 1.0, SPELL_RANGE)
 	if dir.length() < 0.05:
 		dir = caster.facing
 	dir = dir.normalized()
@@ -169,7 +207,7 @@ static func _cast_fireball(caster: Actor, power: float, aim: Vector3) -> void:
 		Fx.explosion(pos, radius, col)
 	var size := 0.22 + 0.12 * power
 	# damage 0 on the direct hit: all damage comes from the explosion (monsters only).
-	var p := Fx.make_projectile(caster, Combat.chest(caster) + dir * 0.6, dir, 0.0, FIREBALL_SPEED, FIREBALL_RANGE, col, size, on_hit)
+	var p := Fx.make_projectile(caster, Combat.chest(caster) + dir * 0.6, dir, 0.0, FIREBALL_SPEED, reach, col, size, on_hit)
 	var light := OmniLight3D.new()
 	light.light_color = col
 	light.light_energy = 3.0
@@ -215,11 +253,11 @@ static func armor_duration(power: float) -> float:
 	return ARMOR_DURATION_BASE + ARMOR_DURATION_POWER * clampf(power, MIN_POWER, 1.0)
 
 
-static func _cast_armor(caster: Actor, power: float) -> void:
+static func _cast_armor(caster: Actor, power: float, pos: Vector3) -> void:
 	var zone := ArmorZone.new()
 	zone.team = caster.team
 	zone.power = clampf(power, MIN_POWER, 1.0)
-	GameWorld.spawn(zone, caster.global_position)
+	GameWorld.spawn(zone, pos)
 
 
 # --- Corn ---------------------------------------------------------------------------------
@@ -228,24 +266,7 @@ static func corn_damage(power: float) -> float:
 	return CornStrike.DAMAGE * clampf(power, MIN_POWER, 1.0)
 
 
-static func _cast_corn(caster: Actor, power: float, aim: Vector3) -> void:
-	var from := caster.global_position
-	var d := aim - from
-	d.y = 0.0
-	if d.length() < 0.05:
-		d = caster.facing * 4.0
-	if d.length() > CORN_MAX_RANGE:
-		d = d.normalized() * CORN_MAX_RANGE
-	var target := from + d
-	# Pull the target back toward the caster until it is over real ground.
-	var steps := 0
-	while GameWorld.map != null and is_nan(GameWorld.map.ground_height(target)) and steps < 40:
-		target = from + (target - from) * 0.9
-		steps += 1
-	if GameWorld.map != null and not is_nan(GameWorld.map.ground_height(target)):
-		target.y = GameWorld.map.ground_height(target)
-	else:
-		target.y = from.y
+static func _cast_corn(caster: Actor, power: float, target: Vector3) -> void:
 	var strike := CornStrike.new()
 	strike.power = clampf(power, MIN_POWER, 1.0)
 	strike.source_team = caster.team
