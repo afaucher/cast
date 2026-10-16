@@ -14,6 +14,7 @@ var no_walls := false
 var focus_arg := ""   # "q,r", "stairs" (Nth: stairs2), "start" or "exit"
 var map: HexMap
 var view: HexMapView
+var pools: Node3D
 var cam: Camera3D
 var label: Label
 var _frames := 0
@@ -40,33 +41,7 @@ func _ready() -> void:
 
 
 func _setup_world() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.04, 0.045, 0.06)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.68, 0.82)
-	env.ambient_light_energy = 0.38
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 2.0
-	env.glow_enabled = true
-	env.glow_intensity = 0.6
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-
-	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.96, 0.88)
-	sun.light_energy = 0.85
-	sun.shadow_enabled = true
-	sun.shadow_bias = 0.04
-	sun.shadow_normal_bias = 1.0
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.directional_shadow_max_distance = 220.0
-	add_child(sun)
-	# light travels toward -x, -y, -z-ish so the faces turned to the camera get two different brightnesses
-	sun.look_at_from_position(Vector3(40, 80, 55), Vector3.ZERO)
+	DungeonLook.apply(self)
 
 	cam = Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -99,6 +74,9 @@ func _regenerate() -> void:
 	view = HexMapView.new()
 	add_child(view)
 	view.build(shown)
+	if pools != null:
+		pools.queue_free()
+	pools = DungeonLook.add_pools(self, shown)
 	var t2 := Time.get_ticks_usec()
 	label.text = "seed %d | gen %.0f ms | view %.0f ms | %d cells, %d tris   [R] new seed  [wheel] zoom  [WASD] pan" % [
 		seed_value, (t1 - t0) / 1000.0, (t2 - t1) / 1000.0, map.cells.size(), view.stats.get("triangles", 0)]

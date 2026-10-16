@@ -96,23 +96,7 @@ func _build_world() -> void:
 	add_child(view)
 	view.build(map)
 
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.06, 0.06, 0.09)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.68, 0.85)
-	env.ambient_light_energy = 0.5
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, -30, 0)
-	sun.light_energy = 1.0
-	sun.light_color = Color(1.0, 0.95, 0.85)
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 70.0
-	add_child(sun)
+	DungeonLook.apply(self, map)
 
 	var exits := map.cells_with_tag("exit")
 	if not exits.is_empty():
