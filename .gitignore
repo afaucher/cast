@@ -1,0 +1,12 @@
+# Godot
+.godot/
+*.tmp
+# Third-party binaries/models/data copied from ../Hero-Reader (see README) -- never committed
+addons/hero_listen/bin/*
+!addons/hero_listen/bin/.gitkeep
+models/
+data/pron_dict.txt
+# Generated
+test_logs/
+tests/voice_clips/
+build/
