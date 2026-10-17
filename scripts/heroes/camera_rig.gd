@@ -4,7 +4,7 @@ extends Node3D
 ## `target`, mouse-wheel zoom, and a little screen shake (Fx.shake).
 
 const YAW_DEG := 45.0
-const PITCH_DEG := -62.0   ## steep enough that wall rims hide little
+const PITCH_DEG := -56.0   ## lower than straight-down so characters read upright; walls still hide little
 const DISTANCE := 60.0
 const SIZE_DEFAULT := 24.0
 const SIZE_MIN := 10.0

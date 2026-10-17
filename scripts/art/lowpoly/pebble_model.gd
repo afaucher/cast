@@ -14,7 +14,7 @@ extends Node3D
 
 ## Rest pitch of the arms (radians, positive swings the hanging arm forward): puts the fists in front
 ## of the hips so they show from above and from the game camera.
-const ARM_FWD := 0.30
+const ARM_FWD := 0.0          ## arms hang straight down so he reads upright from the steep game camera
 
 ## The model is built at ~2.4 units; this scales it up so Pebble is ~1.35x the prototype hero.
 const MODEL_SCALE := 1.1
@@ -104,7 +104,7 @@ func _build() -> void:
 	for s in [-1, 1]:
 		var side := "l" if s < 0 else "r"
 		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(0.78 * s, 0.66, 0.0))
-		arm.rotation = Vector3(ARM_FWD, 0.0, deg_to_rad(9.0 * s))   # hangs a touch out and forward
+		arm.rotation = Vector3(ARM_FWD, 0.0, deg_to_rad(13.0 * s))   # hangs down at his sides, splayed clear of the belly
 		_add_part("glove_" + side, _glove_soup(s), arm, Vector3(0.12 * s, -1.28, -0.02))
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(0.27 * s, 0.9, 0.0))
 
