@@ -52,6 +52,7 @@ var walk_bob := 0.05              ## visual bounce amplitude while walking
 var walk_freq := 9.0
 var windup_scale := 0.12          ## visual swell at full windup (primitive bodies)
 var model_windup_scale := 0.06    ## the same for a faceted model (its own windup pose does the rest)
+var employee_chance := 0.3        ## contracts: odds per retarget roll of going for a closer Employee (0 = never)
 
 # --- State ----------------------------------------------------------------------------
 var state: int = State.IDLE
@@ -245,6 +246,7 @@ func _tick_attack(delta: float) -> void:
 	if _windup_left <= 0.0:
 		_end_windup()
 		_strike()
+		_strike_employee()
 		_next_attack_time = GameWorld.time + attack_cooldown
 		_strike_t = 1.0
 		if model != null:
@@ -353,6 +355,8 @@ func _validate_target(delta: float) -> bool:
 	_retarget_t -= delta
 	if _retarget_t <= 0.0:
 		_retarget_t = RETARGET_INTERVAL
+		if _consider_employee():
+			return true
 		var cur_d := GameWorld.flat_distance(global_position, target.global_position)
 		if cur_d > 3.0:
 			var t2 := _nearest_hero(aggro_range * 1.5, false)
@@ -372,6 +376,62 @@ func _begin_return() -> void:
 	_path.clear()
 	_path_goal = Vector2i(1 << 30, 1 << 30)
 	_repath_t = 0.0
+
+
+# --- Employees (contracts) ----------------------------------------------------------------------
+# Employees are neutral actors in group "employees" (duck-typed here on purpose: no Employee reference).
+
+## On a retarget roll (`employee_chance`), switch to the nearest employee if it is inside aggro range and
+## closer than every living hero; keep it while it stays the closest thing. True = the target was settled
+## here and the usual hero retargeting is skipped.
+func _consider_employee() -> bool:
+	if employee_chance <= 0.0:
+		return false
+	var hero_d := INF
+	for h in heroes():
+		if is_instance_valid(h) and not h.dead:
+			hero_d = minf(hero_d, GameWorld.flat_distance(global_position, h.global_position))
+	if target != null and target.team == GameWorld.TEAM_NEUTRAL:
+		var cur_d := GameWorld.flat_distance(global_position, target.global_position)
+		return _target_alive() and target.is_in_group("employees") and cur_d < hero_d
+	if randf() >= employee_chance:
+		return false
+	var best: Actor = null
+	var best_d := minf(aggro_range, hero_d)
+	for n in get_tree().get_nodes_in_group("employees"):
+		var e := n as Actor
+		if e == null or e.dead:
+			continue
+		var d := GameWorld.flat_distance(global_position, e.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	if best == null:
+		return false
+	target = best
+	_path.clear()
+	_path_goal = Vector2i(1 << 30, 1 << 30)
+	return true
+
+
+## The strike hits heroes only (other_team), so when the target is an employee deliver the blow to it
+## directly: melee kinds need it inside reach, ranged kinds (attack_start_range > 4) need a clear shot.
+func _strike_employee() -> void:
+	if not _target_alive() or target.team != GameWorld.TEAM_NEUTRAL or not target.is_in_group("employees"):
+		return
+	if absf(target.global_position.y - global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
+		return
+	var d := GameWorld.flat_distance(global_position, target.global_position)
+	if attack_start_range > 4.0:
+		if not _can_strike_target():
+			return
+	elif d > maxf(attack_reach, attack_start_range) + target.radius:
+		return
+	var away := target.global_position - global_position
+	away.y = 0.0
+	target.apply_damage(attack_damage, self)
+	if attack_start_range <= 4.0 and not target.dead:
+		target.shove(away, MELEE_SHOVE, self)
 
 
 # --- Navigation ---------------------------------------------------------------------------
