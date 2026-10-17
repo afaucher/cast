@@ -107,4 +107,5 @@ everyone), **tentacles** (neon tentacles burst from the floor and shove everythi
   - `environment.md`: bunkers, lairs, set dressing, grime.
   - `voice-mechanic.md`: grammar, accidents, the speech gate.
   - `exploration.md`: terrain, climbing, secrets.
+  - `networking.md`: the online co-op plan (owner authority) and how it handles lag.
   - `poc-backlog.md`: what's next.

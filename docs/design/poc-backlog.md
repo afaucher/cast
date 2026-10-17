@@ -178,8 +178,13 @@ anyone outside the team plays. **P2** = later.
 
 ## 10. Networking and co-op (after the POC proves fun solo)
 
-- **P1** Host-authoritative casts: the client sends `(spell, power, onset_time, level)`,
-  and the host resolves dedupe, crosstalk and unison.
+The architecture and lag plan are in [`networking.md`](networking.md): each machine owns its own
+hero, the host owns monsters, and cross-owner hits and shoves travel as messages.
+
+- **P0** The day-one infrastructure from `networking.md`: Steam peer settings, packed snapshots,
+  clock sync, the interpolation buffer, a two-way lossy link in tests, and telemetry.
+- **P1** Casts: the caster sends `(spell, power, target, onset_tick)`, and the host resolves
+  dedupe, crosstalk and unison.
 - **P1** Clock sync for comparing onset times across machines.
 - **P1** In-game Steam voice, so we have the playback reference for echo handling.
 - **P2** Split words and chorus casts. Couch mode with separate spell sets on a shared mic.
