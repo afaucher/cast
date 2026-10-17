@@ -27,6 +27,8 @@ signal voice_activity(active: bool)
 signal heard(text: String, final: bool)
 ## One per cast. Keys: spell, power, heard, accidental, accidental_score, why,
 ## signals, gap, cast_q, spell_q, penalty, latency_ms (-1 when typed), typed.
+## latency_ms is audio time from the true end of the voice (SpeechGate.voice_end_sample, raw input)
+## to the cast; ~150 ms with the gate's flush on voice end (see SpeechGate).
 signal cast_detail(info: Dictionary)
 ## A cast swallowed by the repeat lockout (same spell within ~1 s).
 signal ignored(spell_id: String, heard_text: String, reason: String)
@@ -91,7 +93,8 @@ var _applied_saved := false
 # fast a test feeds a WAV.
 var _clock_t := 0.0
 var _audio_driven := false
-var _last_voice_clock := -1e9
+var _last_voice_clock := -1e9   ## clock() at the true end of the latest voice (SpeechGate.voice_end_sample)
+var _seen_voice_end := -1
 var _utt_events: Array = []
 var _last_text := ""
 var _utt_start := -1.0            ## clock of the current utterance's first hypothesis
@@ -240,6 +243,7 @@ func push_samples(samples: PackedFloat32Array, sample_rate: int) -> void:
 		return
 	_advance(samples.size(), sample_rate)
 	var speech := gate.process(samples, sample_rate)
+	_note_voice_end(sample_rate)
 	if not speech.is_empty():
 		_listener.push_samples(speech, sample_rate)
 
@@ -472,12 +476,22 @@ static func _signals_text(ev: Dictionary) -> String:
 		int(float(ev.get("latency_ms", -1.0)))]
 
 
+## latency_ms is measured from the TRUE end of voice: the gate's raw (undelayed) last voiced frame,
+## mapped onto the audio clock. (It used to be the last frame WordListener.is_hearing_voice() was true,
+## which runs ~230 ms late: the gate's 80 ms delay plus its 150 ms hold.)
+func _note_voice_end(rate: int) -> void:
+	if gate.voice_end_sample < 0 or gate.voice_end_sample == _seen_voice_end:
+		return
+	_seen_voice_end = gate.voice_end_sample
+	_last_voice_clock = _clock_t - float(gate.samples_in - gate.voice_end_sample) / float(maxi(rate, 1))
+
+
 func _update_voice_activity() -> void:
 	if _listener == null:
 		return
 	var active: bool = _listener.is_hearing_voice()
-	if active:
-		_last_voice_clock = clock()
+	if active and not gate.enabled:
+		_last_voice_clock = clock()   # no gate: fall back to the recognizer's own voice tracker
 	if active != _voice_active:
 		_voice_active = active
 		voice_activity.emit(active)
@@ -508,6 +522,7 @@ func _pump_mic() -> bool:
 		var rate := int(AudioServer.get_input_mix_rate())
 		_advance(n, rate)
 		var speech := gate.process_frames(AudioServer.get_input_frames(n), rate)
+		_note_voice_end(rate)
 		if not speech.is_empty():
 			_listener.push_samples(speech, rate)
 		_last_frames_ms = now

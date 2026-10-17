@@ -21,11 +21,14 @@ func setup() -> void:
 	check(not g.is_stale, "unique live audio is not stale")
 	eq(g.repeated_frames, 0, "no repeats in live audio")
 	check(g.opens > 3, "live speech opens the gate (%d)" % g.opens)
+	check(g.flushes >= 3, "word ends are flushed (%d), and the padding is never taken for a repeat" % g.flushes)
+	var flushes_live := g.flushes
 
 	# Ring replay, aligned with the live frames: caught after ~0.2 s of replayed words (the replay
 	# may start in a gap, so allow 1.5 s), nothing loud gets out after.
 	var ring := live.slice(live.size() - RING)
 	var out := _feed(g, ring.slice(0, RATE * 3 / 2))
+	check(g.flushes <= flushes_live + 1, "replayed words start no voice spans to flush (%d new)" % (g.flushes - flushes_live))
 	check(g.is_stale, "replay flagged stale within 1.5 s")
 	out = _feed(g, ring.slice(RATE * 3 / 2))
 	check(_peak_db(out) < -60.0, "replayed audio does not reach the recognizer (peak %.0f dB)" % _peak_db(out))

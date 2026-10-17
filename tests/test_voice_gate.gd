@@ -67,7 +67,60 @@ func setup() -> void:
 	g.process(_hiss(1.2, 0.0005, rng), RATE)
 	check(g.last_peak_db > -30.0 and g.last_peak_db < -15.0, "last voice peak is reported (%.1f dB)" % g.last_peak_db)
 
-	# 7. Disabled gate is a pass-through.
+	# 7. Flush on voice end: ~FLUSH_QUIET_SEC after the voice stops, the delay line and FLUSH_PAD_SEC
+	#    of comfort noise come out at once; later output is dropped until it is paid back.
+	g = SpeechGate.new()
+	g.process(_hiss(1.0, 0.0005, rng), RATE)
+	var before := g.samples_in
+	out = g.process(_voiced(0.5, 0.15, rng), RATE)
+	eq(g.flushes, 0, "no flush while speaking")
+	var end_at := g.samples_in
+	check(absi(g.voice_end_sample - end_at) <= int(0.04 * RATE), "voice end found at the end of the word (%d ms off)" % [
+		(g.voice_end_sample - end_at) * 1000 / RATE])
+	var tail := g.process(_hiss(0.15, 0.0005, rng), RATE)
+	eq(g.flushes, 1, "flushed after the quiet")
+	var pad := int(SpeechGate.FLUSH_PAD_SEC * RATE)
+	check(tail.size() >= pad, "the flush hands out the pad at once (%d samples for 0.15 s in)" % tail.size())
+	var total := out.size() + tail.size()
+	total += g.process(_hiss(2.0, 0.0005, rng), RATE).size()
+	eq(total, g.samples_in - before, "the pad is paid back while it stays quiet (stream stays real-time)")
+
+	# 8. A pause longer than the quiet time: the second word cancels the debt and still gets through,
+	#    onset included; the voice end moves to the second word.
+	g = SpeechGate.new()
+	g.process(_hiss(1.0, 0.0005, rng), RATE)
+	g.process(_voiced(0.35, 0.15, rng), RATE)
+	g.process(_hiss(0.3, 0.0005, rng), RATE)
+	eq(g.flushes, 1, "a 0.3 s pause flushes the first word")
+	var first_end := g.voice_end_sample
+	out = g.process(_voiced(0.35, 0.15, rng), RATE)
+	out.append_array(g.process(_hiss(0.05, 0.0005, rng), RATE))
+	check(_peak(out) > 0.05, "the second word is not dropped (peak %.3f)" % _peak(out))
+	check(g.voice_end_sample > first_end + int(0.3 * RATE), "voice end follows the second word")
+
+	# 9. A quiet ending (a soft "th" 10 dB under the loud word) counts as voice: the end and the
+	#    flush wait for it instead of replacing it with padding.
+	g = SpeechGate.new()
+	g.process(_hiss(1.0, 0.0005, rng), RATE)
+	g.process(_voiced(0.4, 0.15, rng), RATE)
+	var loud_end := g.samples_in
+	g.process(_hiss(0.12, 0.012, rng), RATE)          # ~ -44 dBFS: under the voice rule, over the soft one
+	check(g.voice_end_sample >= loud_end + int(0.1 * RATE), "soft ending extends the voice (%d ms past the loud part)" % [
+		(g.voice_end_sample - loud_end) * 1000 / RATE])
+	eq(g.flushes, 0, "no flush during the soft ending")
+	g.process(_hiss(0.2, 0.0005, rng), RATE)
+	eq(g.flushes, 1, "flush once it is really quiet")
+
+	# 10. Flush off: same length in and out, no flushes, voice end still tracked.
+	g = SpeechGate.new()
+	g.flush_on_end = false
+	g.process(_hiss(0.5, 0.0005, rng), RATE)
+	var w := g.process(_voiced(0.4, 0.15, rng), RATE)
+	w.append_array(g.process(_hiss(1.0, 0.0005, rng), RATE))
+	eq(w.size(), int(1.4 * RATE), "flush off keeps the stream the same length")
+	check(g.flushes == 0 and g.voice_end_sample > 0, "flush off: no flushes, end of voice still found")
+
+	# 11. Disabled gate is a pass-through.
 	g = SpeechGate.new()
 	g.enabled = false
 	var hiss := _hiss(0.5, 0.003, rng)

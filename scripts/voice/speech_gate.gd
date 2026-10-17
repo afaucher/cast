@@ -24,6 +24,19 @@ extends RefCounted
 ## seen in the last REPEAT_MEMORY are never voice and never reach the recognizer; a run of them sets
 ## is_stale, which VoiceCaster answers by restarting the device.
 ##
+## FLUSH ON VOICE END (flush_on_end, docs/design/stt-latency-staggered-streams.md). The streaming
+## model decodes in 320 ms chunks and only commits a word after hearing ~0.35-0.6 s of audio past
+## it, so waiting for real audio put ~0.6 s between the end of the voice and the cast. Instead, once
+## the raw (undelayed) input has been quiet for flush_quiet_sec after a voice run, the gate hands out
+## its delay line at once plus flush_pad_sec of comfort noise (the recognizer finishes the word and
+## the endpoint immediately), then owes that much audio: later output is dropped while the input
+## stays quiet. The first loud frame cancels the debt; its onset is safe in the delay line, the
+## recognizer just hears a longer pause. The END uses a softer rule than voice (flush_soft_db below
+## the voice level, at least FLUSH_FLOOR_RATIO x the floor) so quiet endings ("th", "s") are kept.
+## Replayed (repeat-guard) frames never count as voice, and the drained delay line follows the
+## same pass/cut rule as normal output, so a stale-mic replay is never flushed through.
+## voice_end_sample marks where the last voice ended (raw samples), for the true latency metric.
+##
 ## min_voice_db is the knob: the debug panel shows the floor, the threshold and
 ## the peak of the last voice so the player can set it.
 
@@ -41,6 +54,10 @@ const REPEAT_MEMORY := 1000       ## frames (10 s) of loud-frame fingerprints re
 const STALE_SCORE := 20.0         ## repeat score that means the input is replaying old audio
 const STALE_DECAY := 0.05         ## score lost per frame: 0.2 s of replayed words sets stale, word gaps don't clear it
 const STALE_MAX := 40.0           ## score cap: stale clears ~8 s after the repeats stop
+const FLUSH_QUIET_SEC := 0.1      ## quiet after a voice run that counts as the end of voice
+const FLUSH_SOFT_DB := 6.0        ## end rule: a frame this far below the voice rule still counts as voice
+const FLUSH_FLOOR_RATIO := 3.0    ## ... and must be at least this far above the floor (~4.8 dB)
+const FLUSH_PAD_SEC := 1.4        ## comfort noise pushed at the end (covers the model's delay + endpoint)
 
 var enabled := true
 var comfort_rms := COMFORT_RMS    ## comfort-noise level (tests/probes may vary it)
@@ -57,6 +74,13 @@ var rejected_bursts := 0          ## short loud blips that did not count as voic
 var repeat_guard := false         ## drop loud frames heard before (see REPEAT GUARD)
 var is_stale := false             ## the input is replaying old audio
 var repeated_frames := 0          ## loud frames dropped as repeats (stats)
+var flush_on_end := true          ## see FLUSH ON VOICE END
+var flush_quiet_sec := FLUSH_QUIET_SEC
+var flush_soft_db := FLUSH_SOFT_DB
+var flush_pad_sec := FLUSH_PAD_SEC
+var flushes := 0                  ## voice ends flushed (stats)
+var samples_in := 0               ## raw samples received while enabled (since the start)
+var voice_end_sample := -1        ## raw sample position where the most recent voice ended (-1 = none yet)
 
 var _rate := 0
 var _frame_len := 0
@@ -73,9 +97,15 @@ var _seen := {}                   ## fingerprint -> times in _seen_order
 var _seen_order := PackedInt64Array()
 var _seen_pos := 0
 var _repeat_score := 0.0
+var _frame_end := 0               ## raw sample position just after the last framed sample
+var _span := false                ## inside a voice span (raw input, for the end of voice)
+var _span_quiet := 0              ## frames since the span last had voice (soft rule)
+var _debt := 0                    ## output samples still owed after a flush (dropped while quiet)
+var _pad := PackedFloat32Array()  ## cached comfort noise for flushes (rebuilt on rate/length change)
 
 
-## Feed mono samples; returns the cleaned audio (same length, delayed by LOOKAHEAD).
+## Feed mono samples; returns the cleaned audio, delayed by LOOKAHEAD. Same length on average, but
+## with flush_on_end a voice end returns extra padding at once and later calls return less.
 func process(samples: PackedFloat32Array, rate: int) -> PackedFloat32Array:
 	if not enabled:
 		_update_level(samples)
@@ -84,6 +114,7 @@ func process(samples: PackedFloat32Array, rate: int) -> PackedFloat32Array:
 		_rate = rate
 		_frame_len = maxi(1, int(rate * FRAME_SEC))
 		reset()
+	samples_in += samples.size()
 	var out := PackedFloat32Array()
 	_acc.append_array(samples)
 	var pos := 0
@@ -106,6 +137,11 @@ func process_frames(frames: PackedVector2Array, rate: int) -> PackedFloat32Array
 
 func reset() -> void:
 	is_open = false
+	_frame_end = samples_in           # the dropped partial frame was counted in samples_in
+	_span = false
+	_span_quiet = 0
+	_debt = 0
+	voice_end_sample = -1
 	_acc = PackedFloat32Array()
 	_delay.clear()
 	_run = 0
@@ -126,6 +162,8 @@ func describe() -> String:
 		roundi(min_voice_db), "-" if last_peak_db <= -99.0 else "%d dB" % roundi(last_peak_db), rejected_bursts]
 	if repeated_frames > 0:
 		s += " · repeats dropped %d" % repeated_frames
+	if flush_on_end:
+		s += " · end flushes %d (quiet %d ms, pad %.1f s)" % [flushes, roundi(flush_quiet_sec * 1000.0), flush_pad_sec]
 	return s
 
 
@@ -151,10 +189,12 @@ func _frame(frame: PackedFloat32Array) -> PackedFloat32Array:
 	level = minf(1.0, sqrt(ms) * 8.0)
 	level_db = db(ms)
 	var loud := ms > maxf(noise_floor * LOUD_RATIO, pow(10.0, min_voice_db / 10.0))
+	var repeated := false
 	if repeat_guard:
 		_repeat_score = maxf(0.0, _repeat_score - STALE_DECAY)
 		if loud and _remember(hash(frame)):
 			loud = false
+			repeated = true
 			repeated_frames += 1
 			_repeat_score = minf(STALE_MAX, _repeat_score + 1.0)
 			_cut()                # a replay is cut off mid-word
@@ -179,11 +219,30 @@ func _frame(frame: PackedFloat32Array) -> PackedFloat32Array:
 			rejected_bursts += 1
 		_run = 0
 
+	_frame_end += frame.size()
+	var flush := _track_end(ms, loud, repeated)
+
 	# Delay line: the frame leaving now was recorded LOOKAHEAD ago.
 	_delay.append(frame)
+	var out: PackedFloat32Array
 	if _delay.size() <= lookahead:
-		return _comfort(frame.size())
-	var outgoing: PackedFloat32Array = _delay.pop_front()
+		out = _comfort(frame.size())
+	else:
+		out = _emit(_delay.pop_front())
+	if _debt > 0:
+		if loud:
+			_debt = 0             # voice is back: keep the inserted pause, stop dropping
+		else:
+			var drop := mini(_debt, out.size())
+			_debt -= drop
+			out = out.slice(drop)
+	if flush:
+		out.append_array(_flush_block())
+	return out
+
+
+## One delayed frame out: passed (with comfort noise) during the hangover, comfort noise otherwise.
+func _emit(outgoing: PackedFloat32Array) -> PackedFloat32Array:
 	if _hold > 0:
 		_hold -= 1
 		if _hold == 0:
@@ -192,6 +251,43 @@ func _frame(frame: PackedFloat32Array) -> PackedFloat32Array:
 			_peak = 0.0
 		return _dither(outgoing)
 	return _comfort(outgoing.size())
+
+
+## End-of-voice tracking on the raw input; true when this frame ends a voice span (flush now).
+func _track_end(ms: float, loud: bool, repeated: bool) -> bool:
+	if _run >= MIN_RUN:
+		_span = true
+	if not _span:
+		return false
+	if is_stale:
+		_span = false             # a replay is cut, never flushed through
+		return false
+	var soft_level := maxf(noise_floor * FLUSH_FLOOR_RATIO, pow(10.0, (min_voice_db - flush_soft_db) / 10.0))
+	if loud or (ms > soft_level and not repeated):
+		_span_quiet = 0
+		voice_end_sample = _frame_end
+		return false
+	_span_quiet += 1
+	if float(_span_quiet) * FRAME_SEC < flush_quiet_sec - 0.0001:
+		return false
+	_span = false
+	return flush_on_end
+
+
+## The delay line at once (same pass/cut rule as normal output), then flush_pad_sec of comfort
+## noise; both are owed back by dropping later output while the input stays quiet.
+func _flush_block() -> PackedFloat32Array:
+	var block := PackedFloat32Array()
+	for f in _delay:
+		block.append_array(_emit(f))
+	_delay.clear()
+	var n := int(flush_pad_sec * _rate)
+	if _pad.size() != n:
+		_pad = _comfort(n)
+	block.append_array(_pad)
+	_debt += block.size()
+	flushes += 1
+	return block
 
 
 func _cut() -> void:

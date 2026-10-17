@@ -76,7 +76,8 @@ func setup() -> void:
 	print("model loaded in %d ms; status: %s" % [Time.get_ticks_msec() - t0, caster.status])
 	check(caster.is_ready(), "is_ready (no mic needed)")
 	caster.spell_spoken.connect(func(id: String, power: float, h: String) -> void:
-		_casts.append({"spell": id, "power": power, "heard": h, "accidental": caster.last_cast_accidental(), "t": caster.clock()}))
+		_casts.append({"spell": id, "power": power, "heard": h, "accidental": caster.last_cast_accidental(), "t": caster.clock(),
+			"latency_ms": float(caster.last_cast().get("latency_ms", -1.0))}))
 	caster.spell_fizzled.connect(func(h: String, reason: String) -> void:
 		_fizzles.append({"heard": h, "reason": reason}))
 	caster.heard.connect(func(text: String, is_final: bool) -> void:
@@ -207,23 +208,42 @@ func _print_matrix(manifest: Array) -> void:
 
 ## A few clean casts at true real time (SPEED 1) for an honest latency number:
 ## accelerated feeding inflates it because the recognizer thread lags the audio.
+## Two measures per clip: "wave" is from the clip's last sample above |0.02| (independent of the
+## game), "game" is the cast's own latency_ms (the voice log and debug panel figure, measured from
+## SpeechGate's end of voice). Both must agree, and the median must stay under MAX_P50_MS: with
+## SpeechGate's flush on voice end it is ~150-200 ms (it was ~800 ms before, see
+## docs/design/stt-latency-staggered-streams.md).
+const MAX_P50_MS := 300.0
+const MAX_METRIC_DIFF_MS := 80.0
+
+
 func _realtime_latency(manifest: Array) -> void:
 	print("\n=== latency at real-time pacing (ms after the voice stops) ===")
-	var lats: Array = []
+	print("%-44s %-18s %8s %8s" % ["clip", "fired", "wave", "game"])
+	var lats: Array[float] = []
+	var game: Array[float] = []
 	for c in manifest:
-		if c["group"] != "clean" or not str(c["file"]).ends_with("_a0.wav"):
+		if c["group"] != "clean":
 			continue
 		var res := _play(c, 1.0)
 		var fired: Array = res["casts"]
-		print("%-44s %-18s %s" % [str(c["file"]).get_basename(), _fmt(fired), res["latency"]])
+		var g := "-"
 		if fired.size() == 1 and fired[0]["spell"] == c["loose"]:
 			lats.append((float(fired[0]["t"]) - _voiced_end) * 1000.0)
+			game.append(float(fired[0]["latency_ms"]))
+			g = "%+.0fms" % float(fired[0]["latency_ms"])
 		else:
 			_fail("real-time clip %s did not cast" % c["file"])
+		print("%-44s %-18s %8s %8s" % [str(c["file"]).get_basename(), _fmt(fired), res["latency"], g])
 	if not lats.is_empty():
 		lats.sort()
-		print("median latency %.0f ms" % lats[lats.size() / 2])
-		check(lats[lats.size() / 2] < 1500.0, "median latency under 1.5 s")
+		game.sort()
+		var p50 := lats[lats.size() / 2]
+		var g50 := game[game.size() / 2]
+		print("median latency %.0f ms (p90 %.0f ms); game metric median %.0f ms; flushes %d" % [
+			p50, lats[mini(lats.size() - 1, int(lats.size() * 0.9))], g50, caster.gate.flushes])
+		check(p50 < MAX_P50_MS, "median end-of-voice -> cast latency %.0f ms under %.0f ms" % [p50, MAX_P50_MS])
+		check(absf(g50 - p50) < MAX_METRIC_DIFF_MS, "game latency metric (%.0f ms) matches the waveform measure (%.0f ms)" % [g50, p50])
 
 
 func _fmt(fired: Array) -> String:

@@ -21,7 +21,10 @@ extends RefCounted
 ##
 ## What the recognizer gives us. The streaming zipformer (chunk-16) sends a new
 ## partial hypothesis every ~0.32 s (audio time), UPPER CASE, and ends an
-## utterance (final) after ~0.3 s of silence. A "cast <short pause> heal" is
+## utterance (final) after ~0.3 s of silence. Since 2026-10-17 SpeechGate flushes
+## each voice end (docs/design/stt-latency-staggered-streams.md), so the last word
+## of a phrase arrives ~0.15 s after the voice stops instead of ~0.6-0.9 s, and a
+## pause of 0.1 s or more ends the utterance at once. A "cast <short pause> heal" is
 ## therefore often TWO utterances ("CAST" final, then "HEEL"), so the trigger
 ## word is tracked as a pending cast that outlives utterance boundaries. All
 ## timing here is the caller's clock (audio time in VoiceCaster), never wall time.
@@ -48,8 +51,8 @@ extends RefCounted
 ##   trigger present at all (a bare "corn"/chaos cast has none)      +0.60
 ##   trigger mid-sentence rather than first word of the utterance    +0.50
 ##     (minus 0.20 when a pause precedes it: a fresh phrase. A real 0.3 s pause
-##      reads as ~0.9 s of recognition time between the words, because each
-##      word already lags the previous one by 0.3 to 0.6 s)
+##      reads as ~0.9 s of recognition time: the pause plus the trigger word
+##      itself, since the trigger is only recognized when the phrase ends)
 ##   sound-alike instead of exact/homophone match                    +0.10
 ##   utterance longer than 3 words                                   +0.04 per word (max 0.30)
 ## accidental = score >= 0.5. "cast heal" scores 0; "should I cast heal" 0.54;
@@ -111,11 +114,18 @@ extends RefCounted
 ##   gap_factor       "fluency": 1.0 while the spell word is recognized within
 ##                    `gap_free` of the trigger, falling linearly to `gap_floor`
 ##                    at `window`; later than that the phrase is broken.
-##                    These are recognition-time deltas, not pauses: a clean
-##                    "cast armor" already measures 0.3 to 0.65 s (word length +
-##                    0.32 s chunking), a 0.3 s pause ~1.0 s, 0.7 s ~1.6 s,
-##                    1.2 s ~1.9 s. The design doc's "reduce past 0.25 s, break
-##                    past 0.7 s" therefore maps to gap_free 0.9 / window 1.7.
+##                    These are recognition-time deltas, not pauses. With the
+##                    gate's flush on voice end (2026-10-17) a fluent "cast armor"
+##                    measures 0.04 to 0.54 s, and a pause shows up as the pause
+##                    PLUS the spell word (the trigger is flushed when the pause
+##                    starts, the spell word when it ends): 0.3 s ~0.65-0.95 s,
+##                    0.5 s ~0.9-1.15 s, 0.7-0.8 s ~1.1-1.45 s, 1.2 s ~1.6 s.
+##                    gap_free 1.0 / window 1.8 keeps every TTS cast at the power
+##                    it had before the flush (clean/rate/sloppy unchanged, the
+##                    hesitations within ~0.06, b800 "teeth" +0.16): a 0.3 s
+##                    pause is free, 0.5 s costs ~10%, 0.8 s ~25%. (Before the
+##                    flush the deltas carried 0.3-0.65 s of chunk lag and the
+##                    tuning was gap_free 0.9 / window 1.7.)
 ##   extras           each other word in the utterance costs `word_penalty`
 ##                    (fillers / 1-2 letter noise `filler_penalty`), capped at
 ##                    `penalty_cap` ("okay cast heal" is 96%; accidents in
@@ -142,9 +152,9 @@ const TUNING := {
 	# "strict" | "loose" | "chaos" (see above).
 	"strictness": "loose",
 	# Recognition-time budget from the trigger to the spell word (seconds).
-	"window": 1.7,
+	"window": 1.8,
 	# Gap (recognition-time) that costs nothing, then linear to gap_floor at window.
-	"gap_free": 0.9,
+	"gap_free": 1.0,
 	"gap_floor": 0.5,
 	# Words allowed between the trigger and the spell word ("cast the heal").
 	"max_between": 3,

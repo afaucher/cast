@@ -18,7 +18,7 @@ come from the speech-to-text evaluation in the Hero-Reader project
 |---|---|
 | ~95% hits on a clear adult voice through a decent mic; 70–80% in noise or on crowd-sourced audio | Misses are the common error. **A miss must be cheap.** |
 | Wrong word ~0.6%, rising to 3–5% when sound-alike words share a vocabulary | Never give one player two confusable spell words |
-| Latency from end of voice to event: **~330 ms p50, ~630 ms p90** | Animate from voice *onset*, not from recognition |
+| Latency from end of voice to cast: **~0.15 s** with the gate's flush on voice end (2026-10-17; it was ~0.8 s, see "Speech gate" below) | Animate from voice *onset* anyway; the cast now lands right after the voice stops |
 | Same-word double fire on 7–10% of utterances | Dedupe the same spell from the same player within 1.5 s |
 | Strong hotword boost **invents vocab words** from mumbles ("um" → "OF THE") | Chatter can produce spell words that were never said |
 | Signals available: voice onset and offset (`voice_activity`), mic level, streaming partials, the final transcript and its tokens, per-token timestamps, and the exact vs sound-alike match type | These are the inputs for fumble scoring (below) |
@@ -322,6 +322,45 @@ earlier in that session).
   - The status line and gate line show "mic … restarted it (n)" and "STALE".
   - Regression test: `tests/test_mic_stall.gd`.
 
+### Speech gate: flush on voice end (2026-10-17)
+`SpeechGate` sits between the mic and the recognizer. It adds comfort noise, keeps non-voice sound
+away from the model (80 ms lookahead, 0.5 s hangover) and runs the repeat guard above. It also ends
+every utterance early.
+
+- **Why:** the streaming Zipformer decodes in 320 ms chunks and only commits a word after hearing
+  about 0.35–0.6 s of audio *past* it. Waiting for that audio cost **~0.8 s from the end of the voice
+  to the cast** on the TTS clips (median 805 ms; the old logged figure of ~0.35–0.45 s was measured
+  from a tracker that runs ~230 ms late).
+- **What it does:** when the raw mic has been quiet for `flush_quiet_sec` (100 ms) after a voice
+  run, the gate immediately hands the recognizer its 80 ms delay line plus `flush_pad_sec` (1.4 s)
+  of comfort noise. The word, and the utterance's final, arrive at once.
+  - The gate then drops the same amount of later output while the room stays quiet, so the stream
+    stays real-time.
+  - The first loud frame cancels that. If the player was only pausing ("cast … heal"), the
+    recognizer simply hears a longer pause, and the onset is safe in the delay line.
+  - The end of voice uses a softer rule than the voice rule: `flush_soft_db` (6 dB) below the voice
+    level and at least 3× the noise floor. A quiet "th" or "s" is kept rather than replaced by
+    padding (that clipped fast "cast teeth" to "CAST HE" in the prototype).
+- **Mic stall:** replayed frames never count as voice, and the drained delay line follows the
+  normal cut rule. So a stale-mic replay is never flushed through, and the padding never trips the
+  repeat guard.
+- **Result (tests/test_voice_audio.gd):**
+  - Clean clips at real-time pacing: **median 166 ms, p90 178 ms** end of voice → cast, down from
+    805 ms. The test asserts under 300 ms.
+  - Accuracy, false fires and the accidental labels are unchanged on all 223 clip/mode runs.
+- **Grammar timing:** the trigger → spell gaps shrank from 0.3–0.65 s to 0.04–0.54 s for a fluent
+  phrase. A pause now reads as pause + spell word. Incantation's `gap_free`/`window` moved from
+  0.9/1.7 to **1.0/1.8 s** to keep every TTS cast's power where it was.
+- **The metric:** `latency_ms` (voice log, debug panel, `cast_detail`) is now measured from the
+  gate's raw end of voice (`SpeechGate.voice_end_sample`).
+- **Live-mic checks still to do:**
+  - **Noisy room:** the end rule needs ~100 ms below max(floor × 3, min voice − 6 dB). If the room
+    sits just under that, the flush fires late or not at all. That only falls back to the old
+    ~0.8 s; it never breaks a cast.
+  - **Slow or plosive speakers:** a 100 ms gap inside a word can flush mid-word ("CA" + "CAST
+    HEEL"). The pending trigger and the fragment rejoin absorb it on every TTS clip.
+- **Details:** `docs/design/stt-latency-staggered-streams.md`.
+
 ---
 
 ## 5. Latency budget and hiding it
@@ -331,9 +370,9 @@ earlier in that session).
 | Stage | Time |
 |---|---|
 | Speaking the word | 300–600 ms |
-| Endpoint silence + decode (end of voice → event) | ~330 ms p50 / ~630 ms p90 |
-| **Onset → effect** | **~0.7–1.2 s** |
-| Human reaction + speaking + ASR, for reactive casts | **~1.0 s p50, ~1.5 s p90** |
+| End of voice → cast (gate flush on voice end; was ~0.8 s) | ~0.17 s p50 / ~0.18 s p90 (TTS, real time) |
+| **Onset → effect** | **~0.5–0.8 s** |
+| Human reaction + speaking + ASR, for reactive casts | **~0.85 s p50, ~1.05 s p90** (estimate: the old 1.0/1.5 s with the ASR part 0.33/0.63 s replaced by 0.17/0.18 s) |
 
 **How to hide it:**
 1. **Voice onset (~0 ms):** the hero instantly starts a generic "gathering" pose, their

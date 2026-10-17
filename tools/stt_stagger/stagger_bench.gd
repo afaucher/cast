@@ -18,6 +18,10 @@ extends SceneTree
 ##   --quiet MS       quiet time that counts as end of voice for --flush (default 100).
 ##   --soft-db DB     a frame within DB below the gate's voice level still counts as voice when
 ##                    finding the end (keeps quiet endings like "th"; default 15, 0 = gate rule).
+##   --gate-flush 0|1 SpeechGate's own flush on voice end (the game's, since 2026-10-17). Default 0,
+##                    so the numbers above match the pre-flush game; --flush is the bench prototype.
+##   --speed X        audio seconds per wall second (default 1 = real time; the suite's tables use 4).
+##   --all            also play clips whose loose expectation is "any" or "none" (chatter).
 ##   --verbose        print every hypothesis with its time relative to the end of voice.
 ##   --out PATH       CSV of per-stream and merged results (default user://stagger_<streams>.csv).
 ##
@@ -58,6 +62,7 @@ class BenchCaster extends VoiceCaster:
 			return
 		_advance(samples.size(), sample_rate)
 		var speech := gate.process(samples, sample_rate)
+		_note_voice_end(sample_rate)
 		if flush_ms > 0.0:
 			_watch_voice(samples)
 			if _debt > 0 and not speech.is_empty():
@@ -134,6 +139,8 @@ var _phases := 1
 var _flush := 0.0
 var _quiet := 100.0
 var _verbose := false
+var _gate_flush := false
+var _speed := 1.0
 var _casters: Array[BenchCaster] = []
 var _casts: Array = []             ## per stream: Array of Dictionaries
 var _hyps: Array = []              ## per stream: Array of Dictionaries
@@ -152,6 +159,9 @@ func _initialize() -> void:
 	_n = int(_arg(args, "--streams", "1"))
 	_phases = maxi(1, int(_arg(args, "--phases", "1")))
 	_flush = float(_arg(args, "--flush", "0"))
+	_gate_flush = _arg(args, "--gate-flush", "0") == "1"
+	_speed = maxf(0.1, float(_arg(args, "--speed", "1")))
+	var all := args.has("--all")
 	_quiet = float(_arg(args, "--quiet", "100"))
 	var soft_db := float(_arg(args, "--soft-db", "15"))
 	_verbose = args.has("--verbose")
@@ -163,10 +173,11 @@ func _initialize() -> void:
 		quit(1)
 		return
 	var dir := ProjectSettings.globalize_path("res://tests/voice_clips")
-	var clips: Array = _read_manifest(dir).filter(func(c: Dictionary) -> bool: return groups.has(str(c["group"])) and str(c["loose"]) != "any")
+	var clips: Array = _read_manifest(dir).filter(func(c: Dictionary) -> bool: return groups.has(str(c["group"])) and (all or (str(c["loose"]) != "any" and str(c["loose"]) != "none")))
 	if limit > 0:
 		clips = clips.slice(0, limit)
-	print("streams %d, phases %d, flush %.0f ms (quiet %.0f ms), %d clips" % [_n, _phases, _flush, _quiet, clips.size()])
+	print("streams %d, phases %d, flush %.0f ms (quiet %.0f ms), gate flush %s, speed %.1f, %d clips" % [_n, _phases, _flush, _quiet,
+		"on" if _gate_flush else "off", _speed, clips.size()])
 	if _n == 0:
 		_probe_only(30.0)
 		quit(0)
@@ -179,6 +190,7 @@ func _initialize() -> void:
 		c.persist_settings = false
 		c.voice_log.enabled = false
 		c.flush_ms = _flush
+		c.gate.flush_on_end = _gate_flush
 		c.quiet_ms = _quiet
 		c.soft_db = soft_db
 		root.add_child(c)
@@ -193,7 +205,11 @@ func _initialize() -> void:
 		_cross_n.append(-1)
 		var idx := k
 		c.spell_spoken.connect(func(id: String, power: float, _h: String) -> void:
+			var lc: Dictionary = c.last_cast()
+			var sg: Dictionary = lc.get("signals", {})
 			(_casts[idx] as Array).append({"spell": id, "power": power, "us": Time.get_ticks_usec(), "stream": c.stream_samples,
+				"gap": float(lc.get("gap", 0.0)), "acc": bool(lc.get("accidental", false)), "acc_score": float(lc.get("accidental_score", 0.0)),
+				"game_lat": float(lc.get("latency_ms", -1.0)), "pause": float(sg.get("pause_before", 0.0)),
 				"ready_us": _cross_us[idx], "flush_us": c.flush_wall_us}))
 		var l: Node = c.get_child(0)
 		l.connect("hypothesis", func(text: String, fin: bool, _d: Array) -> void:
@@ -202,7 +218,7 @@ func _initialize() -> void:
 			if c.flush_ms <= 0.0 and _cross_us[idx] > 0:
 				_grid_res.append((now - _cross_us[idx]) / 1000.0))
 
-	_rows.append("n,flush,clip,group,expect,phase_ms,stream,offset_ms,spell,power,n_casts,lat_ms,ready_ms,compute_ms,status,final_text")
+	_rows.append("n,flush,clip,group,expect,phase_ms,stream,offset_ms,spell,power,n_casts,lat_ms,ready_ms,compute_ms,status,final_text,gap,accidental,acc_score,game_lat,pause_before,all_casts")
 	var step_ms := CHUNK_MS / _n / _phases
 	var t_all := Time.get_ticks_msec()
 	for c in clips:
@@ -265,7 +281,7 @@ func _play(c: Dictionary, dir: String, phase_ms: float) -> void:
 	_clip_start_us = Time.get_ticks_usec()
 	_clip_pos = 0
 	while _clip_pos < stream.size():
-		var due := _clip_start_us + int(float(_clip_pos + STEP) * 1000000.0 / RATE)
+		var due := _clip_start_us + int(float(_clip_pos + STEP) * 1000000.0 / RATE / _speed)
 		while Time.get_ticks_usec() < due:
 			_poll_all()
 			OS.delay_usec(1000)
@@ -315,6 +331,10 @@ func _record(c: Dictionary, phase_ms: float, voiced_end: int) -> void:
 		var lat := ""
 		var ready := ""
 		var compute := ""
+		var extra := ",,,,,"
+		var all_casts: PackedStringArray = PackedStringArray()
+		for cc: Dictionary in casts:
+			all_casts.append("%s%s %.2f" % ["~" if bool(cc["acc"]) else "", cc["spell"], float(cc["power"])])
 		if _verbose:
 			for h: Dictionary in _hyps[k]:
 				print("    s%d %+7.1f ms %s%s" % [k, (int(h["us"]) - end_us) / 1000.0, "FINAL " if bool(h["final"]) else "", h["text"]])
@@ -328,6 +348,7 @@ func _record(c: Dictionary, phase_ms: float, voiced_end: int) -> void:
 			lat = "%.1f" % ((us - end_us) / 1000.0)
 			var r_us: int = int(f0["flush_us"]) if int(f0["flush_us"]) > 0 and _flush > 0.0 else int(f0["ready_us"])
 			ready = "%.1f" % ((r_us - end_us) / 1000.0)
+			extra = "%.3f,%d,%.3f,%.1f,%.3f" % [float(f0["gap"]), int(bool(f0["acc"])), float(f0["acc_score"]), float(f0["game_lat"]), float(f0["pause"])]
 			compute = "%.1f" % ((us - r_us) / 1000.0)
 			if spell != expect:
 				status = "WRONG"
@@ -338,8 +359,8 @@ func _record(c: Dictionary, phase_ms: float, voiced_end: int) -> void:
 				first_k = k
 			for cc: Dictionary in casts:
 				spells_all[str(cc["spell"])] = true
-		_rows.append("%d,%.0f,%s,%s,%s,%.1f,%d,%.1f,%s,%.2f,%d,%s,%s,%s,%s,\"%s\"" % [_n, _flush, c["file"], c["group"], expect,
-			phase_ms, k, k * CHUNK_MS / _n, spell, power, casts.size(), lat, ready, compute, status, " | ".join(finals)])
+		_rows.append("%d,%.0f,%s,%s,%s,%.1f,%d,%.1f,%s,%.2f,%d,%s,%s,%s,%s,\"%s\",%s,\"%s\"" % [_n, _flush, c["file"], c["group"], expect,
+			phase_ms, k, k * CHUNK_MS / _n, spell, power, casts.size(), lat, ready, compute, status, " | ".join(finals), extra, " ; ".join(all_casts)])
 	# Merged: first cast wins; other streams' casts of the same spell are duplicates.
 	var mstatus := "ok"
 	var mlat := ""

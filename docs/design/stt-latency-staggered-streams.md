@@ -1,8 +1,9 @@
 # Speech latency: staggered recognizer streams vs. flushing at end of voice
 
-*Research note, 2026-10-17. Nothing in `scripts/` was changed. The prototype bench lives in
-`tools/stt_stagger/`, and its raw CSVs and logs are in `tools/stt_stagger/results/`. The
-voice clips are local only.*
+*Research note, 2026-10-17. The prototype bench lives in `tools/stt_stagger/`, and its raw
+CSVs and logs are in `tools/stt_stagger/results/`. The voice clips are local only.
+**Status: the flush is built into the game.** See "8. As built". Sections 1–7 describe the
+pre-flush pipeline they measured.*
 
 ## TL;DR
 
@@ -451,6 +452,83 @@ simulation of N streams: take the earliest correct cast among phases 320/N apart
 6. **Longer term**, only if the 150 ms floor matters:
    - a delay-penalty fine-tune of the same checkpoint (helps mid-utterance partials too);
    - or a chunk-8 re-export (untrained size). Each needs icefall/PyTorch tooling, not C++.
+
+## 8. As built (2026-10-17)
+
+Recommendations 1–3 are in the game. No C++ changed.
+
+**`scripts/voice/speech_gate.gd`: flush on voice end.**
+- **End of voice:**
+  - The gate watches the raw (undelayed) frames.
+  - A span starts with the existing voice rule (`MIN_RUN` loud frames).
+  - Each frame above max(floor × `FLUSH_FLOOR_RATIO` (3), min voice − `flush_soft_db` (6 dB))
+    extends the span and moves `voice_end_sample`.
+- **The flush:** after `flush_quiet_sec` (0.1 s) without such a frame, `process()` returns, at
+  once:
+  - the delay line, through the same `_emit` pass/cut rule as normal output;
+  - then `flush_pad_sec` (1.4 s) of cached comfort noise.
+- **Paying it back:** the same amount of later output is dropped until the first loud frame.
+- **Tunables:** `flush_on_end`, `flush_quiet_sec`, `flush_soft_db`, `flush_pad_sec` are
+  per-instance vars. `describe()` (the debug panel's gate line) shows "end flushes N (quiet
+  100 ms, pad 1.4 s)".
+- **Mic stall:**
+  - Repeat-guard frames never count as voice.
+  - When `is_stale`, a span is cut without a flush.
+  - The padding never passes through the fingerprinting, which only sees input.
+  - `test_mic_stall` checks that live speech flushes, that the padding is never taken for a
+    repeat, and that a replay starts no new flushes.
+
+**`scripts/voice/voice_caster.gd`: `latency_ms` from the true end of voice.**
+- After each `gate.process`, `_note_voice_end` maps `gate.voice_end_sample` onto the audio clock.
+- `is_hearing_voice()` is only the fallback when the gate is disabled.
+
+**`scripts/voice/incantation.gd`: `gap_free` 0.9 → 1.0 s, `window` 1.7 → 1.8 s** (see the POWER
+comment).
+- Fluent trigger → spell gaps fell from 0.3–0.65 s to 0.04–0.54 s.
+- A pause now reads as pause + spell word, e.g. 0.8 s → 1.1–1.45 s.
+- The new values put every TTS cast back at its old power: the hesitations are within ~0.06,
+  except b800 "teeth" (+0.16) and b300 "tentacles". The latter is now heard correctly ("CAST
+  TENTACLES" instead of "CA STE ACLES"), so it went 0.75 → 1.00.
+- `fresh_pause_s` (0.9) was left alone. Mid-sentence `pause_before` values measured the same
+  (0.32–0.34 s) with and without the flush.
+
+**Tests:**
+- `test_voice_gate`: new cases 7–10. They cover:
+  - the flush and payback;
+  - a pause with a second word;
+  - a soft ending;
+  - flush off.
+- `test_mic_stall`: the flush checks above.
+- `test_voice_audio`: the real-time table now plays all 12 clean clips and prints both
+  measures. It asserts that the median is under 300 ms and that the game metric is within 80 ms
+  of the waveform measure.
+
+**Before and after (suite runs; "before" is the 13:45 run on the pre-flush code):**
+
+| `tests/test_voice_audio.gd` | Before | After |
+|---|---:|---:|
+| Real-time end of voice → cast, clean clips (median) | 805 ms (6 clips) | **166 ms** (p90 178 ms, 12 clips) |
+| Game `latency_ms` median, same clips | (~230 ms under the truth) | 150 ms (agrees within 16 ms) |
+| Loose table latency at 4× feeding (median, 138 clips) | 846 ms | 265 ms |
+| Chaos table latency at 4× (median) | 1142 ms | 309 ms |
+| Outcomes (cast / miss / false fire / wrong spell) over 223 clip × mode runs | | **identical**: 0 false fires, 0 confusions, same 2 stress soft misses |
+| Accidental labels | | identical |
+| Power changes | | 14 runs, all small: fireball 0.96 → 1.00 (gap no longer penalized), hesitations as above |
+| `test_voice_triggers` (8 triggers) | cast 8/8 … abracadabra 2/8 | same hit rates; average power ±0.01 |
+| `test_voice_noise` | 0 phantoms through the gate | 0 phantoms, 0 flushes on idle noise |
+
+**Full suite:** `.\test_runner.ps1 -TestAll` reports **"All 55 test(s) passed."**
+
+**Still to check on a live mic:**
+- **Noisy room:** the end rule needs ~100 ms below max(3 × floor, min voice − 6 dB). Background
+  that sits just under that delays or skips the flush. That falls back to the old ~0.8 s; it
+  never loses a cast. Look at "end flushes N" on the debug panel's gate line; it should count up
+  once per phrase.
+- **Slow or plosive speakers:** 100 ms gaps inside a word can flush mid-word. This was absorbed on
+  every TTS clip.
+- **Players who keep talking right after a cast:** they get an inserted pause, which is
+  harmless in tests.
+- **Logged latency:** check that the voice log's `lat=` now reads ~150–250 ms.
 
 ## Reproduce
 
