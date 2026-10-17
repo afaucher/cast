@@ -10,3 +10,5 @@ data/pron_dict.txt
 test_logs/
 tests/voice_clips/
 build/
+# Build stamp written by build.ps1 (packed into the .pck)
+version.txt
