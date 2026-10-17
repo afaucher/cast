@@ -275,5 +275,5 @@ anyone outside the team plays. **P2** = later.
 
 ## 15. Spell slots and components
 
-- **P1** Four slots, readied spell (keys 1-4, E casts), and readied-spell benefits: early wind-up on partials, footprint preview, +25%. See `spells-and-components.md`.
+- **P1** Four slots, readied spell (keys 1-4, E casts). The readied spell gets a passive boost and is shown as its component held in the hero's hand. See `spells-and-components.md`.
 - **P1** Material components: monster drop tables, walk-over pickups, charges, swapping.
