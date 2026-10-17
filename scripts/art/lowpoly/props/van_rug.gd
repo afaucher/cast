@@ -20,6 +20,8 @@ render_mode specular_disabled, shadows_disabled;
 uniform float radius = 4.4;
 uniform vec2 track_dir = vec2(0.985, 0.174);
 uniform float scorch = 0.0;
+uniform float brightness = 1.0;      // overall brightness (brightly lit rooms want it darker)
+uniform float garage = 1.0;          // 1 = tyre tracks + oil stains (the van parks here); 0 = a plain ritual rug
 varying vec2 wp;
 
 const vec3 MAROON = vec3(0.36, 0.075, 0.10);
@@ -144,8 +146,8 @@ void fragment() {
 		track = max(track, band * treads * brk);
 		dust = max(dust, (1.0 - smoothstep(0.1, 0.5, dt)) * 0.5);
 	}
-	track *= run;
-	dust *= run * smoothstep(0.3, 0.6, noise(vec2(s * 1.2, t * 1.2 + 4.0)));
+	track *= run * garage;
+	dust *= run * garage * smoothstep(0.3, 0.6, noise(vec2(s * 1.2, t * 1.2 + 4.0)));
 	col = mix(col, col * 0.6, dust * 0.6);
 	col = mix(col, col * 0.15 + vec3(0.025, 0.018, 0.014), track * 0.92);
 
@@ -161,8 +163,9 @@ void fragment() {
 		oil = max(oil, 1.0 - smoothstep(0.82, 1.0, dd));
 		sheen = max(sheen, smoothstep(0.55, 0.85, dd) * (1.0 - smoothstep(0.95, 1.2, dd)));
 	}
+	oil *= garage;
 	col = mix(col, vec3(0.03, 0.024, 0.034), oil * 0.9);
-	col += vec3(0.05, 0.035, 0.10) * sheen * (1.0 - oil) * float(body);
+	col += vec3(0.05, 0.035, 0.10) * sheen * garage * (1.0 - oil) * float(body);
 
 	// burn marks (the morning after): charred centre, singed ring, ragged edge
 	vec3 burns[3] = vec3[3](vec3(-0.5, 2.0, 1.0), vec3(2.6, 1.6, 0.55), vec3(-2.3, -0.4, 0.6));
@@ -177,7 +180,7 @@ void fragment() {
 		col = mix(col, vec3(0.035, 0.028, 0.028), burn * 0.95);
 	}
 
-	ALBEDO = col;
+	ALBEDO = col * brightness;
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 }
@@ -221,6 +224,16 @@ func _init(r: float = 4.4) -> void:
 func set_van_yaw(yaw_deg: float) -> void:
 	var a := deg_to_rad(yaw_deg)
 	mat.set_shader_parameter("track_dir", Vector2(cos(a), -sin(a)))
+
+
+## false for a rug no van parks on (the ritual rooms' summoning circle): no tyre tracks, no oil.
+func set_garage(on: bool) -> void:
+	mat.set_shader_parameter("garage", 1.0 if on else 0.0)
+
+
+## Overall brightness, 1 = as in the garage.
+func set_tone(k: float) -> void:
+	mat.set_shader_parameter("brightness", k)
 
 
 ## 0 = clean, 1 = three burn marks.

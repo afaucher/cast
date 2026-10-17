@@ -44,6 +44,11 @@ func setup(e: Dictionary) -> void:
 	params["variant"] = int(absf(pos.x * 7.0 + pos.y * 13.0))
 	model = DecorModels.build(kind, params)
 	add_child(model)
+	if kind == "summoning_circle":
+		var rug := VanRug.new(float(params.get("radius", 2.1)) + 0.55)
+		rug.set_garage(false)
+		rug.set_tone(0.45)          # rooms are lit brighter than the garage; keep the chalk the brightest thing
+		add_child(rug)
 
 
 ## The invisible blocker circles of a walk-blocking piece (call once the piece is in the tree and placed).

@@ -220,8 +220,8 @@ static func _yoga_mat(s: LowPoly.Soup, variant: int) -> void:
 
 
 static func _summoning_circle(s: LowPoly.Soup, radius: float) -> void:
-	# a dark scorched disc, double chalk ring, a five-pointed star, tick marks and hot red sigils
-	_c(s, radius + 0.12, radius + 0.12, 0.03, 24, Vector3(0, 0.015, 0), Color(0.12, 0.08, 0.11))
+	# double chalk ring, a five-pointed star, tick marks and hot red sigils. The floor under it is a worn ritual
+	# rug (VanRug, added by DecorProp), not a dark disc: an opaque disc read as a flat black hole in the floor.
 	var segs := 36
 	for i in segs:
 		var a0 := TAU * float(i) / float(segs)
