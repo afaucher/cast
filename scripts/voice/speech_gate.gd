@@ -19,6 +19,11 @@ extends RefCounted
 ##    survive) until HANGOVER after it (fixes 2 when min_voice_db sits between
 ##    the player's voice and the background).
 ##
+## REPEAT GUARD (repeat_guard, on for the live mic): real mic audio never repeats bit for bit, but
+## a stalled input device replaying an old buffer does (playtest 2026-10-17). Loud frames already
+## seen in the last REPEAT_MEMORY are never voice and never reach the recognizer; a run of them sets
+## is_stale, which VoiceCaster answers by restarting the device.
+##
 ## min_voice_db is the knob: the debug panel shows the floor, the threshold and
 ## the peak of the last voice so the player can set it.
 
@@ -32,6 +37,10 @@ const COMFORT_RMS := 0.0003       ## ~-70 dBFS white noise floor added to everyt
 const FLOOR_MIN := 1e-8
 const FLOOR_BLOCK := 10           ## frames per floor block (100 ms)
 const FLOOR_SPAN := 30            ## blocks remembered (3 s): floor = quietest block
+const REPEAT_MEMORY := 1000       ## frames (10 s) of loud-frame fingerprints remembered
+const STALE_SCORE := 20.0         ## repeat score that means the input is replaying old audio
+const STALE_DECAY := 0.05         ## score lost per frame: 0.2 s of replayed words sets stale, word gaps don't clear it
+const STALE_MAX := 40.0           ## score cap: stale clears ~8 s after the repeats stop
 
 var enabled := true
 var comfort_rms := COMFORT_RMS    ## comfort-noise level (tests/probes may vary it)
@@ -45,6 +54,9 @@ var level_db := -100.0            ## latest 10 ms frame, dBFS
 var last_peak_db := -100.0        ## loudest frame of the most recent voice span
 var opens := 0                    ## voice spans seen (stats)
 var rejected_bursts := 0          ## short loud blips that did not count as voice (clicks)
+var repeat_guard := false         ## drop loud frames heard before (see REPEAT GUARD)
+var is_stale := false             ## the input is replaying old audio
+var repeated_frames := 0          ## loud frames dropped as repeats (stats)
 
 var _rate := 0
 var _frame_len := 0
@@ -57,6 +69,10 @@ var _rng := RandomNumberGenerator.new()
 var _blocks := PackedFloat32Array()
 var _block_sum := 0.0
 var _block_n := 0
+var _seen := {}                   ## fingerprint -> times in _seen_order
+var _seen_order := PackedInt64Array()
+var _seen_pos := 0
+var _repeat_score := 0.0
 
 
 ## Feed mono samples; returns the cleaned audio (same length, delayed by LOOKAHEAD).
@@ -94,15 +110,23 @@ func reset() -> void:
 	_delay.clear()
 	_run = 0
 	_hold = 0
+	is_stale = false
+	_repeat_score = 0.0
+	_seen.clear()
+	_seen_order = PackedInt64Array()
+	_seen_pos = 0
 
 
 ## Human-readable state for the debug panel.
 func describe() -> String:
 	if not enabled:
 		return "gate off"
-	return "gate %s · floor %d dB · min voice %d dB · last voice peak %s · blips ignored %d" % [
-		"OPEN" if is_open else "closed", roundi(db(noise_floor)), roundi(min_voice_db),
-		"-" if last_peak_db <= -99.0 else "%d dB" % roundi(last_peak_db), rejected_bursts]
+	var s := "gate %s · floor %d dB · min voice %d dB · last voice peak %s · blips ignored %d" % [
+		"STALE (replayed audio)" if is_stale else ("OPEN" if is_open else "closed"), roundi(db(noise_floor)),
+		roundi(min_voice_db), "-" if last_peak_db <= -99.0 else "%d dB" % roundi(last_peak_db), rejected_bursts]
+	if repeated_frames > 0:
+		s += " · repeats dropped %d" % repeated_frames
+	return s
 
 
 ## Mean-square energy -> dBFS.
@@ -127,6 +151,16 @@ func _frame(frame: PackedFloat32Array) -> PackedFloat32Array:
 	level = minf(1.0, sqrt(ms) * 8.0)
 	level_db = db(ms)
 	var loud := ms > maxf(noise_floor * LOUD_RATIO, pow(10.0, min_voice_db / 10.0))
+	if repeat_guard:
+		_repeat_score = maxf(0.0, _repeat_score - STALE_DECAY)
+		if loud and _remember(hash(frame)):
+			loud = false
+			repeated_frames += 1
+			_repeat_score = minf(STALE_MAX, _repeat_score + 1.0)
+			_cut()                # a replay is cut off mid-word
+		is_stale = _repeat_score >= STALE_SCORE or (is_stale and _repeat_score > 0.0)
+		if is_stale:
+			_cut()
 	_track_floor(ms)
 
 	var lookahead := maxi(1, int(round(LOOKAHEAD_SEC / FRAME_SEC)))
@@ -158,6 +192,33 @@ func _frame(frame: PackedFloat32Array) -> PackedFloat32Array:
 			_peak = 0.0
 		return _dither(outgoing)
 	return _comfort(outgoing.size())
+
+
+func _cut() -> void:
+	_run = 0
+	if _hold > 0:
+		_hold = 0
+		is_open = false
+		last_peak_db = db(_peak)
+		_peak = 0.0
+
+
+## Records a loud frame's fingerprint; true if it was already seen in the last REPEAT_MEMORY.
+func _remember(h: int) -> bool:
+	var again := _seen.has(h)
+	if _seen_order.size() < REPEAT_MEMORY:
+		_seen_order.append(h)
+	else:
+		var old := _seen_order[_seen_pos]
+		var c: int = int(_seen.get(old, 1)) - 1
+		if c <= 0:
+			_seen.erase(old)
+		else:
+			_seen[old] = c
+		_seen_order[_seen_pos] = h
+		_seen_pos = (_seen_pos + 1) % REPEAT_MEMORY
+	_seen[h] = int(_seen.get(h, 0)) + 1
+	return again
 
 
 ## Minimum statistics: the floor is the quietest 100 ms block in the last 3 s.

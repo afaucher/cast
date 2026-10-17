@@ -46,7 +46,11 @@ const TRIGGER_NOTES := {
 	"abracadabra": "the speech model mangles it (heard as ABERC AT AVERAGE, ABREK HAD EVER ...); 0 of 6 TTS casts worked",
 }
 const STRICTNESS_OPTIONS := ["strict", "loose", "chaos"]
-const MIC_BUS := "VoiceMic"
+## Mic watchdog. No input frames for STALL_SEC (the device went to sleep, was unplugged or grabbed by
+## another app), or the gate hearing the same audio again (SpeechGate.is_stale), restarts the input
+## device, at most every RESTART_EVERY seconds.
+const STALL_SEC := 1.0
+const RESTART_EVERY := 2.0
 
 ## Open the microphone in start(). Tests set this to false and use push_samples().
 var use_mic := true
@@ -73,9 +77,12 @@ var gate := SpeechGate.new()
 var _inc: Incantation
 var _spells := PackedStringArray()
 var _listener: Object = null     # WordListener (kept untyped: the class may not exist)
-var _capture: AudioEffectCapture = null
-var _mic_player: AudioStreamPlayer = null
 var _mic_ok := false
+## Times the watchdog restarted the input device (debug panel, voice log).
+var mic_restarts := 0
+var _last_frames_ms := 0
+var _last_restart_ms := -100000
+static var _mic_owner: Object = null   ## the caster that turned the input device on
 var _voice_active := false
 var _applied_saved := false
 
@@ -285,10 +292,9 @@ func get_incantation() -> Incantation:
 
 
 func stop() -> void:
-	if _mic_player != null:
-		_mic_player.stop()
-		_mic_player.queue_free()
-		_mic_player = null
+	if _mic_ok and _mic_owner == self:
+		AudioServer.set_input_device_active(false)
+		_mic_owner = null
 	if _listener != null:
 		(_listener as Node).queue_free()
 		_listener = null
@@ -297,16 +303,11 @@ func stop() -> void:
 
 
 func _process(delta: float) -> void:
-	if not _audio_driven:
-		_clock_t += delta
-	if _capture != null and _listener != null:
-		var n := _capture.get_frames_available()
-		if n > 0:
-			var rate := int(AudioServer.get_mix_rate())
-			_advance(n, rate)
-			var speech := gate.process_frames(_capture.get_buffer(n), rate)
-			if not speech.is_empty():
-				_listener.push_samples(speech, rate)
+	var fed := false
+	if _mic_ok and _listener != null:
+		fed = _pump_mic()
+	if not _audio_driven or (_mic_ok and not fed and Time.get_ticks_msec() - _last_frames_ms > 200):
+		_clock_t += delta         # no audio flowing: keep time moving so pending triggers expire
 	_ensure_incantation()
 	_dispatch(_inc.tick(clock()), false)
 	_update_voice_activity()
@@ -482,25 +483,55 @@ func _update_voice_activity() -> void:
 		voice_activity.emit(active)
 
 
+## The mic is read straight from the input device (AudioServer.get_input_frames). NOT through
+## AudioStreamMicrophone: when the device stops delivering, that stream keeps replaying its 4 s
+## ring buffer forever, at full volume, and the recognizer hears the same old words on a loop
+## (playtest 2026-10-17: "BRIGHT OVATER" every 8 s, "OH NO" every 4 s; reproduced with
+## tools/mic_probe). The direct path just goes quiet, which the watchdog notices.
 func _setup_mic() -> bool:
 	if AudioServer.get_input_device_list().is_empty():
 		return false
-	# Mic -> muted bus with a capture effect: raw samples, no playback.
-	var bus := AudioServer.get_bus_index(MIC_BUS)
-	if bus < 0:
-		bus = AudioServer.bus_count
-		AudioServer.add_bus(bus)
-		AudioServer.set_bus_name(bus, MIC_BUS)
-		AudioServer.set_bus_mute(bus, true)
-		var cap := AudioEffectCapture.new()
-		cap.buffer_length = 0.5
-		AudioServer.add_bus_effect(bus, cap)
-	_capture = AudioServer.get_bus_effect(bus, 0) as AudioEffectCapture
-	if _capture == null:
+	if AudioServer.set_input_device_active(true) != OK:
 		return false
-	_mic_player = AudioStreamPlayer.new()
-	_mic_player.stream = AudioStreamMicrophone.new()
-	_mic_player.bus = MIC_BUS
-	add_child(_mic_player)
-	_mic_player.play()
+	_mic_owner = self
+	_last_frames_ms = Time.get_ticks_msec()
+	gate.repeat_guard = true
 	return true
+
+
+## Moves waiting mic frames through the gate into the recognizer. Returns true if any came.
+func _pump_mic() -> bool:
+	var now := Time.get_ticks_msec()
+	var n := AudioServer.get_input_frames_available()
+	var fed := n > 0
+	if fed:
+		var rate := int(AudioServer.get_input_mix_rate())
+		_advance(n, rate)
+		var speech := gate.process_frames(AudioServer.get_input_frames(n), rate)
+		if not speech.is_empty():
+			_listener.push_samples(speech, rate)
+		_last_frames_ms = now
+	var reason := ""
+	if now - _last_frames_ms > int(STALL_SEC * 1000.0):
+		reason = "stopped sending audio"
+	elif gate.is_stale:
+		reason = "repeating old audio"
+	if reason != "" and now - _last_restart_ms > int(RESTART_EVERY * 1000.0):
+		_restart_mic(reason, now)
+	elif reason == "" and fed and status.begins_with("mic "):
+		status = "listening"
+	return fed
+
+
+func _restart_mic(reason: String, now: int) -> void:
+	mic_restarts += 1
+	_last_restart_ms = now
+	_last_frames_ms = now
+	# Reassigning the device reopens it; the toggle restarts capture.
+	AudioServer.input_device = AudioServer.input_device
+	AudioServer.set_input_device_active(false)
+	AudioServer.set_input_device_active(true)
+	_mic_owner = self
+	reset()                       # drop anything half-heard from the bad audio
+	status = "mic %s; restarted it (%d)" % [reason, mic_restarts]
+	push_warning("VoiceCaster: " + status)
