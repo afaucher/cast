@@ -71,7 +71,7 @@ func _physics_process(delta: float) -> void:
 	var step := speed * delta
 	var to := global_position + direction * step
 	_travelled += step
-	for a in GameWorld.actors_in_radius(to, hit_radius, target_team):
+	for a in GameWorld.hittable_in_radius(to, hit_radius, target_team):   # + breakables (mail packages)
 		_impact(a, to)
 		return
 	var map: HexMap = GameWorld.map

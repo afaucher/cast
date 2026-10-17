@@ -51,7 +51,7 @@ func _physics_process(delta: float) -> void:
 		left -= s
 		var to := global_position + direction * s
 		_travelled += s
-		for a in GameWorld.actors_in_radius(to, hit_radius, target_team):
+		for a in GameWorld.hittable_in_radius(to, hit_radius, target_team):   # + breakables (mail packages)
 			if _hit_ids.has(a.get_instance_id()):
 				continue
 			_strike(a, to)

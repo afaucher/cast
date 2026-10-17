@@ -150,6 +150,8 @@ func _check_hits() -> void:
 			a.apply_damage(damage, source)
 		elif a is PricedProp:
 			a.apply_damage(damage * PROP_DAMAGE_MULT, source)   # rolls through the client's property
+		elif a.is_in_group("breakables"):
+			a.apply_damage(damage, source)                      # and through the client's mail
 		a.shove(push, shove_distance, source)
 		Fx.burst(a.global_position + Vector3.UP * 0.4, _dust_colors(), 8, 2.5, 0.09, 0.45, 3.0, Vector3.UP, 70.0, false)
 

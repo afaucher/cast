@@ -64,6 +64,7 @@ everyone), **tentacles** (neon tentacles burst from the floor and shove everythi
 **teeth** (too many teeth sprout out of everyone in the area, then pop; a heal pulls them).
 
 - **Aiming:** everything lands where you aim, so to heal a friend you point at them.
+- **Fire:** a fireball can set anyone near the blast on fire (monsters, teammates, employees) for 5 to 10 seconds of mild damage. It never spreads, and healing doesn't put it out.
 - **Charges:** each cast spends a charge of that spell's material component. Monsters
   occasionally drop components. Walk over one to collect it, or press F to swap it into a full
   slot.
@@ -94,7 +95,7 @@ everyone), **tentacles** (neon tentacles burst from the floor and shove everythi
   --no-mic`, `--floor 3`, or `--shot <png> --shot-after 4` for screenshots. They're listed at the
   top of `scripts/app/game.gd`. `--menu` brings the menu back.
 - **Labs** (`--scene res://scenes/<name>.tscn`): `terrain_preview`, `voice_lab`, `wick_lab`,
-  `gasket_lab`, `rebar_lab`, `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `teeth_lab`.
+  `gasket_lab`, `rebar_lab`, `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `teeth_lab`.
 - **Tests:** the runner fails a test on any `SCRIPT ERROR`. Logs go to `test_logs/`.
 
 ### Docs

@@ -15,7 +15,7 @@ extends RefCounted
 ##     kernels and scorch ring, a teeth pop's tooth bits, tentacle floor cracks, a monster's ichor stain and
 ##     a shove slam's scuff. At most MAX_LIVE are alive; the oldest is recycled.
 ##
-## Mark kinds for Grime.mark(): SCORCH, CORN, TEETH, CRACKS, STAIN, SCUFF. Unknown kinds are ignored.
+## Mark kinds for Grime.mark(): SCORCH, CORN, TEETH, CRACKS, STAIN, SCUFF, PAPER. Unknown kinds are ignored.
 ## With no GrimeLayer in the tree (most tests) every call is a harmless no-op.
 
 const SCORCH := "scorch"      ## fireball impact; size = blast radius
@@ -24,6 +24,7 @@ const TEETH := "teeth"        ## a few tooth bits; size = 1 for a pop
 const CRACKS := "tentacles"   ## floor cracks; size = burst radius
 const STAIN := "stain"        ## a monster's death splat; size = the monster's radius
 const SCUFF := "scuff"        ## a shove slam / hard landing; size = 1
+const PAPER := "paper"        ## torn packing paper and cardboard from a broken mail package; size = 1
 
 const MAX_LIVE := 120         ## live player marks (each may draw a few decals)
 const LIFE := 30.0            ## seconds a player mark lasts

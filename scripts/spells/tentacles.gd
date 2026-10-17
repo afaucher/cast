@@ -62,3 +62,5 @@ func _burst() -> void:
 		if a.team == GameWorld.TEAM_MONSTERS:
 			Fx.attach_hit_feedback(a)
 			a.apply_damage(dmg, src)
+		elif a.is_in_group("breakables"):
+			a.apply_damage(dmg, src)   # mail packages burst when the tentacles come up under them

@@ -7,7 +7,7 @@ and the aim snaps onto a teammate near the cursor. **[decided]** marks the user'
 | Spell | Say | Effect | Hits | State |
 |---|---|---|---|---|
 | Heal | cast heal | A burst heal at the aim point | heroes | in game |
-| Fireball | cast fireball | A projectile that explodes at the aim point | monsters | in game |
+| Fireball | cast fireball | A projectile that explodes at the aim point; anyone near the blast may catch fire (see Burning) | monsters (damage), **everyone** (fire) | in game |
 | Armor | cast armor | A zone at the aim point where heroes take less damage | heroes | in game |
 | Corn | cast corn | A corn bomb drops from the sky | **everyone** | in game |
 | Tentacles | cast tentacles | Neon-purple tentacles burst from the floor and shove everything outward | **everyone** (shove), monsters (a little damage) | in game |
@@ -40,6 +40,47 @@ Details [proposal]:
   accidents should be rare. Corn remains the only spell that fires on a bare mention.
 - **Cooldown:** 12 s, the same tier as corn. A material-component source (an imp jaw?) is to be
   decided with the drop table in `spells-and-components.md`.
+
+## Burning [in game, 2026-10-17]
+A fireball blast can set anyone near it on fire. It is a status node (`scripts/spells/burning.gd`, `class_name
+Burning`) attached as a child of the actor, and it is the groundwork for Damp.
+
+- **Ignite:** when a fireball explodes, every actor in the blast (monsters, heroes, employees: friendly fire
+  included, since aiming at a teammate is the game) rolls to ignite. `IGNITE_CHANCE` is **35%** at the centre of
+  a full-power fireball, falling to 60% of that at the rim (`EDGE_CHANCE_MULT`) and to 60% of that at minimum
+  power (`LOW_POWER_MULT`). The roll uses `GameWorld.rng`, so a seeded run is repeatable.
+- **Who can't burn:** hellgates, priced props and mail packages (inanimate), the dead and the downed, and
+  anything fireproof or soaked (below). Rebar can burn even though he is immovable.
+- **Burn:** 5 to 10 s (random), `TICK_DAMAGE` 1.5 every 0.5 s, so **15 to 30 HP** over a full burn. Armor and
+  other damage modifiers apply. That never kills a full-HP hero (Wick, the frailest, has 85) but it finishes a
+  swarmer (12) or an archer (25), and an employee (30) can burn to death. The blast already hurts employees
+  more than that, so we accept it. A hero's fire never takes a hero below 1 HP, like the other
+  everyone-spells. The damage is dealt through `Actor.apply_damage` with the caster as the source, so kill
+  credit and ledger attribution work.
+- **Refresh, not stack:** igniting a burning actor sets the end to the longer of what is left and the new
+  duration (and adopts the new culprit). Damage never stacks.
+- **No spread:** no contact spread, no aura. Only a fireball blast ignites.
+- **Stops:** on burn-out, on death or downing, on extinguish. A heal does **not** put it out.
+- **Look:** 8 faceted orange and yellow flames flicker around the body and lick up from the head, with a small
+  warm light, embers on each tick and a scorch mark on the floor every 3 s (`Grime`, fades after 30 s). The
+  flames are built once per fire from shared meshes and materials; the flicker only edits transforms. Look-dev
+  scene: `scenes/burning_lab.tscn` (`--scene res://scenes/burning_lab.tscn --shot <png>`).
+
+**API (for Damp and other spells):**
+```gdscript
+Burning.ignite(actor, source, duration) -> Burning   # null if it cannot burn
+Burning.is_burning(actor)  /  Burning.remaining(actor)
+Burning.extinguish(actor) -> bool                    # put it out
+Burning.extinguish_in_radius(pos, radius, team = -1) -> int
+Burning.soak(actor, seconds)                         # extinguish AND no ignition until dry (the "damp" status)
+Burning.set_fireproof(actor, on)                     # permanent: group "fireproof"
+```
+Every live fire is in the group `burning`, and `Burning.ended(reason)` says why it stopped (`burnt_out`,
+`extinguished`, `died`).
+
+**How Damp is meant to use it:** a Damp cast calls `Burning.extinguish_in_radius` over its area and
+`Burning.soak(actor, seconds)` on everyone in it, so damp actors cannot ignite until they dry (a damp actor in a
+fireball blast just fizzles). Tests: `tests/test_burning.gd`.
 
 ## Brainstorm: next spells [proposal, 2026-10-16]
 These are user ideas, thought through but not built. Unless noted, every spell lands at the aim point

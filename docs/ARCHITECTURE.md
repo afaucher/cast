@@ -72,6 +72,9 @@ Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the 
   `fx_rng` (cosmetic rolls only),
   `spawn(node, at)`, `actors()`, `team_actors(team)`, `actors_in_radius(pos, r, team)`,
   `nearest_actor(pos, team, max_range)`, `flat_distance`, `TEAM_HEROES = 0`, `TEAM_MONSTERS = 1`.
+  `hittable_in_radius(pos, r, team)` is `actors_in_radius` plus every actor in the group `"breakables"` (mail
+  packages): `Combat.melee_arc`, `Projectile` and `ArrowShot` use it, so swings and shots also break the mail
+  but still never hit priced props or employees.
   A test or scene calls `GameWorld.begin(map, root_node3d)` first.
 - **`Actor`** (`scripts/core/actor.gd`, extends Node3D): `team`, `max_hp`, `hp`,
   `move_speed`, `radius`, `dead`, `facing`, `climbing`. `move(dir, delta)` does the terrain
