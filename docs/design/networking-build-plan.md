@@ -147,7 +147,7 @@ hero from the others. Animation and pose come from replicated state.
 interpolation with position and velocity, and `reset_physics_interpolation()` on teleports. **A player drops → the
 AI takes the seat back** through `seat_handover` (the reverse of the M6 handover, built here because drops happen in
 every playtest): the host takes the last received state, attaches `AllyBrain`, and the seat's original character
-returns (*proposal*, see §5). Floor carry gets keyed by **seat**, not `display_name`.
+returns (decided, see §5). Floor carry gets keyed by **seat**, not `display_name`.
 *Done when:* **`test_net_m2_walk`**: a client bot walks a scripted path. Under `off` and under `coast`, the host's
 render of that hero stays within 0.35 units of where the client had it at the same `host_time - interp_delay`, with
 no gap over 0.6 units in one frame. Each client sends under 3 KB/s. Then the client is killed, and its seat is
@@ -202,9 +202,10 @@ Followers ride the elevator via the host. Drop-offs, extraction and "crew incapa
 every hero's replicated `dead`.
 **M5b The shared invoice, the Ledger and pause.** The host's `Ledger` and `ContractSession` are authoritative; lines
 reach clients as events (the ticker and tracker read a mirror). The host builds the invoice and sends the finished
-dict. "Next contract" returns **everyone** to the board in the same lobby. **Pause online** *(proposal)*: with
-another player present, Esc opens the menu **without** pausing the tree. "Abandon contract" is host-only and takes
-the whole crew back to the board; clients get "Leave crew" instead. The elevator and van menus freeze only your own
+dict. "Next contract" returns **everyone** to the board in the same lobby. **Pause online** (decided): with
+another player present, Esc opens the menu **without** pausing the tree. **Anyone** can "Abandon contract", which
+takes the whole crew back to the board. The elevator is **first to choose**: whoever picks a row first decides for
+the crew. The elevator and van menus freeze only your own
 hero (`_freeze` today stops the whole world). Solo keeps the real pause.
 *Done when:* **`test_net_m5_contract`** (3 processes, `coast`, `--auto-elevator`-style bots): down to floor 2, then
 3, then out; every process shows the same invoice dict; carried HP is per seat. A client's van clock-out on floor 1
@@ -228,7 +229,7 @@ Its own milestone: it needs everything above, and it is the part the user decide
   it reports ready. Then the host stops `AllyBrain` at tick T and sends `seat_handover(hero_id, peer, character,
   epoch+1, state)`. The state is position, facing, HP, dead, modifiers, burning, slots, charges, cooldowns, the held
   slot and followers. The hero node and **net id stay the same** (followers and targets keep working); its model and
-  kit change to the joiner's character, with **HP carried as a fraction of max HP** *(proposal: kits differ, 85/120/160)*.
+  kit change to the joiner's character, at **full health** (decided: a joiner always arrives at 100% HP).
   Snapshots carry an **ownership epoch**, so everyone ignores stale states for that hero from the old owner. No
   license screen mid-contract: the joiner inherits the AI's spells.
 - **Joining during a floor change** waits for the next load barrier and arrives with the new floor.
@@ -355,11 +356,11 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 - Character select is out of scope. Everyone uses the default character, and the hello message and roster carry a
   `character_id` from M0 on, so a future character select only has to set it.
 
-**Open questions for the user:**
-1. **A player drops:** the AI takes the seat back, but as the seat's original character (Rebar/Gasket) or keeping
-   the leaver's character? *(proposal: the original)*
-2. **Character swap at handover:** the kits have different max HP (85/120/160). Does the joiner take over the AI's HP
-   **as a fraction** of max HP *(proposal)*, or as raw points?
-3. **Host migration:** none, so the host leaving ends the session for everyone?
-4. **The elevator online:** does the first player to choose decide for the crew, or does the crew vote?
-5. **Pause online:** OK that Esc never pauses while someone else is connected, and only the host can abandon?
+- **A player drops:** the AI takes the seat back as the seat's **original** character (Rebar/Gasket).
+- **A joiner takes over an AI** at **100% health** (not the AI's HP).
+- **No host migration:** the host leaving ends the session for everyone.
+- **The elevator online:** the **first** player to choose decides for the crew.
+- **Pause online:** no pause while someone else is connected; **anyone** can abandon the contract (it ends it for the
+  whole crew).
+
+No open questions remain. The main menu in §1 is still a proposal.
