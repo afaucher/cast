@@ -26,6 +26,7 @@ var trigger_word := "cast"   ## spoken keyword shown on the cards ("say: PICKLE 
 var _root: Control
 var _player_bar: HudBar
 var _player_name: Label
+var _party: VBoxContainer         ## top-left column: the player's own bar first (bigger), the allies' bars under it
 var _ally_box: VBoxContainer
 var _ally_bars: Array[HudBar] = []
 var _cards: Array[SpellCard] = []
@@ -63,7 +64,7 @@ func _ready() -> void:
 func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 	player = new_player
 	allies = new_allies
-	_player_name.text = player.display_name
+	_player_name.text = SteamIdentity.player_name(player.display_name)   # the Steam name; the hero name without Steam
 	for b in _ally_bars:
 		b.get_parent().queue_free()
 	_ally_bars.clear()
@@ -267,14 +268,15 @@ func _update_prompt() -> void:
 # --- Building ----------------------------------------------------------------------------
 
 func _build_player_panel() -> void:
+	_party = VBoxContainer.new()
+	_party.position = Vector2(20, 16)
+	_party.add_theme_constant_override("separation", 10)
+	_party.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_party)
 	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	box.offset_left = 20
-	box.offset_top = -76
-	box.offset_right = 340
-	box.offset_bottom = -20
+	box.add_theme_constant_override("separation", 2)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(box)
+	_party.add_child(box)
 	_player_name = Label.new()
 	_player_name.text = "Hero"
 	_style_label(_player_name, 20)
@@ -288,10 +290,9 @@ func _build_player_panel() -> void:
 
 func _build_ally_panel() -> void:
 	_ally_box = VBoxContainer.new()
-	_ally_box.position = Vector2(20, 20)
 	_ally_box.add_theme_constant_override("separation", 6)
 	_ally_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_ally_box)
+	_party.add_child(_ally_box)
 
 
 func _build_cards() -> void:

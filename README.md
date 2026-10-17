@@ -27,10 +27,14 @@ The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc 
    supervillain, wellness guru, tech founder, influencer). Each shows objectives, pay, danger and a
    property warning.
 2. **Pick two spells**, then go down.
-3. **Three floors.** Close hellgates, exterminate the pest you were hired for, and rescue employees.
-   They follow you, and pay $100 each if you get them out. Floor 3 holds the big **origin gate**.
-4. **The freight elevator** (press **E** at it) goes down a floor or cashes out. Leaving early always
-   works.
+3. **Three floors, only ever down.** The crew's work van teleports in on floor 1 and stays parked there;
+   floors 2 and 3 have no van, you just start. Close hellgates, exterminate the pest you were hired for, and
+   rescue employees. Press **E** next to one to bring them along; once a follower reaches an exit (the van's
+   door or the elevator) they leave right away and pay $100, and any still following when you take an exit
+   go with you. Floor 3 holds the big **origin gate**.
+4. **Two ways out.** The **freight elevator** (press **E** at it, on every floor) goes down a floor or exits
+   (floor 3: exit only). The **van** (press **E** at its side door, floor 1 only) clocks out and invoices
+   the client. Leaving early always works: unfinished objectives simply do not pay.
 5. **The invoice** bills the client: what you earned, minus property damage (capped at the
    contract's value, and never below $0), with the culprit named on every broken gold toilet.
 
@@ -51,7 +55,7 @@ HP carries between floors; everything resets between contracts.
 | LMB / RMB | Primary / secondary attack |
 | **Say "cast heal"** etc. | Cast any spell in your four slots. Fumbles weaken it or fizzle it |
 | 1 – 4 | Hold that slot's spell: it recharges 15% faster, and its component shows in your hand |
-| E | Use (elevator, employees), first match wins: at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; otherwise nothing. E never casts |
+| E | Use, first match wins: at the van's side door (floor 1), open the clock-out slip; at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; otherwise nothing. E never casts |
 | F | Swap a component on the floor into your held slot |
 | Enter | Type an incantation instead of speaking |
 | F1 | Voice debug panel: what the mic hears and what the game did |
@@ -90,7 +94,9 @@ everyone), **tentacles** (neon tentacles burst from the floor and shove everythi
 - **Engine:** Godot 4.7. `godot_env.ps1` uses `$env:CAST_GODOT`, or the copy installed in `..\Hero-Reader`.
 - **Not committed:** the speech DLLs (`addons/hero_listen/bin`), the zipformer model (`models/`) and
   the pronunciation dictionary (`data/pron_dict.txt`). Copy them from `..\Hero-Reader` (see
-  `.gitignore`). The Godot 4.7 export templates go in `build\deps`.
+  `.gitignore`). The GodotSteam binaries (`addons/godotsteam/win64/*`) come from
+  `..\bridge-to-friendship\addons\godotsteam\win64`. Steam (running) supplies the player's name on the HUD;
+  `steam_appid.txt` is 480 (Valve's Spacewar test app) until Cast has its own app id. The Godot 4.7 export templates go in `build\deps`.
 - **Dev flags** (after `--`) skip the menu, for example `--seed 7 --contract 0 --spells heal,corn
   --no-mic`, `--floor 3`, or `--shot <png> --shot-after 4` for screenshots. They're listed at the
   top of `scripts/app/game.gd`. `--menu` brings the menu back.

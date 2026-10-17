@@ -12,3 +12,6 @@ tests/voice_clips/
 build/
 # Build stamp written by build.ps1 (packed into the .pck)
 version.txt
+# GodotSteam binaries copied from ../bridge-to-friendship (see addons/godotsteam/README.md) -- never committed
+addons/godotsteam/win64/*
+!addons/godotsteam/win64/.gitkeep

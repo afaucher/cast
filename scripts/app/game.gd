@@ -66,6 +66,10 @@ const SCREEN_LAYER := 60          ## full-screen screens (board, elevator, invoi
 const ELEVATOR_REARM_DIST := 2    ## --auto-elevator only: after "stay", walk this many cells off before it asks again
 const ELEVATOR_USE_DIST := 1      ## the player can press E at the elevator from this many cells (on it or next to it)
 const ELEVATOR_PROMPT := "E: use elevator"
+const VAN_PROMPT := "E: clock out at the van"
+const VAN_FLOOR := 1              ## the van parks on the top floor only; floors 2 and 3 have no van and no arrival
+const VAN_USE_DIST := 2.8         ## the player can press E at the van from this far (world units) from its side door
+const DROPOFF_DIST := 2.5         ## a FOLLOWING employee this close (world units) to the van door or the elevator leaves right away
 const OBJECTIVE_INTERVAL := 0.25
 const FOLLOW_EXTRACT_CELLS := 3   ## followers within this many cells of the elevator ride along
 const INCAP_DELAY := 2.2
@@ -99,6 +103,7 @@ var _banner: Label
 var _banner_tween: Tween
 var _site: SiteBuilder.Site
 var _menu: ElevatorMenu = null
+var _van_menu: VanExitMenu = null    ## the clock-out slip at the van (floor 1 only)
 var _invoice: InvoiceScreen = null
 var _board: JobBoard = null
 var _picker: SpellPicker = null
@@ -306,7 +311,7 @@ func _build_world() -> void:
 	player = HeroFactory.spawn_hero(start, "Wick", PLAYER_COLOR, "sword", WickModel.new() if faceted else null, HeroKit.WICK)
 	var none: Array[String] = []
 	controller = HeroFactory.make_player(player, none)
-	controller.interact = _use_elevator_key
+	controller.interact = _use_key
 	var spots := _free_cells_near(start, 2)
 	# Each hero's kit (HP, primary, secondary, quirks) comes from HeroKit; --proto-heroes keeps the kits.
 	var rebar := HeroFactory.spawn_hero(spots[0], "Rebar", Color(0.85, 0.5, 0.25), "sword", RebarModel.new() if faceted else null, HeroKit.REBAR)
@@ -560,11 +565,13 @@ func _start() -> void:
 		_take_shot_later(str(opts["shot"]), float(opts.get("shot_after", 3.0)))
 
 
-## The crew arrives in the work van: it teleports in over a summoning circle in the start room and the heroes step out
-## beside its door (docs/design/environment.md, "Van arrival"). Player control comes back when they are out (~2.5 s), any
-## key or click skips ahead, and the van stays parked as solid decor. Without room for the van the crew stays at the start.
+## The crew arrives in the work van on the FIRST floor only: it teleports in over a summoning circle in the start room and
+## the heroes step out beside its door (docs/design/environment.md, "Van arrival"). Player control comes back when they are
+## out (~2.5 s), any key or click skips ahead, and the van stays parked as solid decor (and an exit, see _use_van). Floors 2
+## and 3 have no van and no arrival: the crew starts on the start cell and its free neighbours (see _build_world). Without
+## room for the van the crew stays at the start too.
 func _arrive_by_van() -> void:
-	if _site == null or _site.plan.van.is_empty():
+	if _floor_n() != VAN_FLOOR or _site == null or _site.plan.van.is_empty():
 		return
 	var crew: Array[Hero] = [player]
 	if allies.size() >= 2:
@@ -591,7 +598,7 @@ func _van_intro_enabled() -> bool:
 
 
 func _on_arrival_finished() -> void:
-	if controller != null and player != null and not player.dead and not _ended and _menu == null:
+	if controller != null and player != null and not player.dead and not _ended and _menu == null and _van_menu == null:
 		controller.enabled = true
 
 
@@ -727,19 +734,24 @@ func _update_tracker() -> void:
 		var alive_here := 0
 		var following := 0
 		for e in _site.employees:
-			if is_instance_valid(e) and not e.dead:
+			if is_instance_valid(e) and not e.dead and not bool(e.call("is_extracted")):
 				alive_here += 1
 				if e.has_method("is_following") and bool(e.call("is_following")):
 					following += 1
 		var spawned := int(st["employees"])
 		if spawned > 0:
 			var lost := int(st["lost"])
-			var detail := "%d alive" % alive_here
+			var rescued := int(st["extracted"])
+			var parts: Array[String] = []
+			if rescued > 0:
+				parts.append("%d rescued" % rescued)
+			parts.append("%d alive" % alive_here)
 			if following > 0:
-				detail += ", %d with you" % following
+				parts.append("%d with you" % following)
 			if lost > 0:
-				detail += ", %d lost" % lost
-			rows.append({"text": "Employees", "detail": detail, "state": "fail" if lost > 0 else "todo"})
+				parts.append("%d lost" % lost)
+			var detail := " · ".join(parts)
+			rows.append({"text": "Employees", "detail": detail, "state": "fail" if lost > 0 else ("done" if rescued > 0 and alive_here == 0 else "todo")})
 	_tracker.show_state("FLOOR %d / %d" % [_floor_n(), ContractRun.FLOOR_COUNT], _run.company, rows, Ledger.payout(), Ledger.deducted())
 	if _ticker != null:
 		_ticker.offset_top = _tracker.offset_bottom + 10.0
@@ -767,20 +779,59 @@ func _player_at_elevator() -> bool:
 	return player != null and not player.dead and Hex.distance(player.current_cell(), _exit_cell) <= ELEVATOR_USE_DIST
 
 
-## E at the elevator opens its menu (the controller calls this first; true = the press is used).
-func _use_elevator_key() -> bool:
-	if _menu != null or _leaving or _ended or _ending or _session == null or not _player_at_elevator():
+## True when the van is parked on this floor (floor 1 only) and its plan is there.
+func _has_van() -> bool:
+	return _arrival != null and _floor_n() == VAN_FLOOR and _site != null and not _site.plan.van.is_empty()
+
+
+## The floor in front of the van's sliding side door (world X/Z); INF when there is no van here.
+func _van_door_pos() -> Vector2:
+	if not _has_van():
+		return Vector2(INF, INF)
+	return _site.plan.van["door"]
+
+
+## True when `pos` is within `dist` of the van's side door (always false on floors 2 and 3).
+func _near_van(pos: Vector3, dist: float) -> bool:
+	return _has_van() and Vector2(pos.x, pos.z).distance_to(_van_door_pos()) <= dist
+
+
+## True when `pos` is within `dist` (world units) of the elevator.
+func _near_elevator_world(pos: Vector3, dist: float) -> bool:
+	var ex := Hex.to_world(_exit_cell)
+	return Vector2(pos.x, pos.z).distance_to(Vector2(ex.x, ex.z)) <= dist
+
+
+## True when the living player stands at the van's side door.
+func _player_at_van() -> bool:
+	return player != null and not player.dead and _near_van(player.global_position, VAN_USE_DIST)
+
+
+## E (the controller calls this first; true = the press is used). Priority: the van exit (at the van), then the elevator
+## (at it); otherwise false and the controller tries the employees. E never casts.
+func _use_key() -> bool:
+	if _menu != null or _van_menu != null or _leaving or _ended or _ending or _session == null:
 		return false
-	_open_elevator()
-	return true
+	if _player_at_van():
+		_open_van_exit()
+		return true
+	if _player_at_elevator():
+		_open_elevator()
+		return true
+	return false
 
 
 func _check_elevator() -> void:
+	var slip_free := _menu == null and _van_menu == null and not _leaving
 	if hud != null:
-		hud.context_prompt = ELEVATOR_PROMPT if _menu == null and not _leaving and _player_at_elevator() else ""
-		if hud.context_prompt == "" and _menu == null and not _leaving:
+		hud.context_prompt = ""
+		if slip_free and _player_at_van():
+			hud.context_prompt = VAN_PROMPT
+		elif slip_free and _player_at_elevator():
+			hud.context_prompt = ELEVATOR_PROMPT
+		elif slip_free:
 			hud.context_prompt = Employee.interact_prompt(player)   # "E: tell Marguerite to wait" / "E: bring Marguerite"
-	if _menu != null or _leaving or not opts.has("auto_elevator"):
+	if _menu != null or _van_menu != null or _leaving or not opts.has("auto_elevator"):
 		return   # without --auto-elevator the menu opens only on E (see _use_elevator_key)
 	var on_exit := false
 	for h in _heroes():
@@ -800,16 +851,63 @@ func _check_elevator() -> void:
 		_open_elevator()
 
 
-## Employees that follow a hero and stand within a few cells of the elevator ride out with the crew.
-func _followers_near_exit() -> Array[Actor]:
+## Employees that follow a hero and stand within a few cells of `cell` (an exit) ride out with the crew.
+func _followers_near_cell(cell: Vector2i) -> Array[Actor]:
 	var out: Array[Actor] = []
 	if _site == null:
 		return out
 	for e in _site.employees:
 		if is_instance_valid(e) and not e.dead and e.has_method("is_following") and bool(e.call("is_following")):
-			if Hex.distance(e.current_cell(), _exit_cell) <= FOLLOW_EXTRACT_CELLS:
+			if Hex.distance(e.current_cell(), cell) <= FOLLOW_EXTRACT_CELLS:
 				out.append(e)
 	return out
+
+
+func _followers_near_exit() -> Array[Actor]:
+	return _followers_near_cell(_exit_cell)
+
+
+## The followers near the van's side door (none on floors 2 and 3).
+func _followers_near_van() -> Array[Actor]:
+	if not _has_van():
+		var none: Array[Actor] = []
+		return none
+	var d := _van_door_pos()
+	return _followers_near_cell(Hex.from_world(Vector3(d.x, 0.0, d.y)))
+
+
+## Extract these employees now: the exit animation and bark, then $100 each in the Ledger (ContractSession.extract). An
+## employee extracted here is out of the "employees" group and no longer following, so nothing counts them again (not as a
+## follower at the exit, not as one of the $10 left alive at the close). Used by the drop-off and by taking an exit.
+func _extract_followers(riders: Array[Actor], line: String) -> void:
+	if riders.is_empty():
+		return
+	for e in riders:
+		if e.has_method("extract"):
+			e.call("extract", line)
+	_session.extract(riders.size(), player)
+	var pay := ContractRun.money(riders.size() * ContractRun.EMPLOYEE_EXTRACTED)
+	if riders.size() == 1:
+		_log("%s extracted  +%s" % [riders[0].display_name, pay], Color(0.6, 1.0, 0.7))
+		hud.show_message("%s is out  +%s" % [riders[0].display_name, pay], Color(0.6, 1.0, 0.7))
+	else:
+		_log("%d employees extracted  +%s" % [riders.size(), pay], Color(0.6, 1.0, 0.7))
+		hud.show_message("%d employees out  +%s" % [riders.size(), pay], Color(0.6, 1.0, 0.7))
+	_update_tracker()
+
+
+## The drop-off: an employee who is FOLLOWING the crew and gets within DROPOFF_DIST of the van's door or the elevator
+## leaves right away ($100, once), whether or not the crew ever takes the exit. Waiting and cowering employees never do.
+func _check_dropoffs() -> void:
+	if _site == null or _session == null or _menu != null or _van_menu != null or _leaving or _ended:
+		return
+	for e in _site.employees:
+		if not is_instance_valid(e) or e.dead or not e.has_method("is_following") or not bool(e.call("is_following")):
+			continue
+		var pos: Vector3 = e.global_position
+		if _near_van(pos, DROPOFF_DIST) or _near_elevator_world(pos, DROPOFF_DIST):
+			var one: Array[Actor] = [e]
+			_extract_followers(one, "I'm out, thanks!")
 
 
 func _elevator_lines() -> Array[String]:
@@ -844,10 +942,28 @@ func _open_elevator() -> void:
 				_use_elevator(str(opts["auto_elevator"]) == "down" and _menu.can_descend()))
 
 
+## The clock-out slip at the van (floor 1): the crew's other exit, the same as the elevator's "Exit".
+func _open_van_exit() -> void:
+	var info := {
+		"floor": _floor_n(), "floor_count": ContractRun.FLOOR_COUNT,
+		"payout": Ledger.payout(), "damages": Ledger.deducted(),
+		"followers": _followers_near_van().size(), "lines": _elevator_lines(),
+	}
+	_van_menu = VanExitMenu.new(info)
+	_screens().add_child(_van_menu)
+	_freeze(true)
+	_van_menu.clock_out.connect(_use_van)
+	_van_menu.cancel.connect(_close_elevator.bind(true))
+
+
+## Closes whichever exit slip is open (the elevator's or the van's).
 func _close_elevator(disarm: bool) -> void:
 	if _menu != null:
 		_menu.queue_free()
 		_menu = null
+	if _van_menu != null:
+		_van_menu.queue_free()
+		_van_menu = null
 	_freeze(false)
 	if disarm:
 		_elev_armed = false
@@ -866,13 +982,7 @@ func _freeze(on: bool) -> void:
 func _use_elevator(descend: bool) -> void:
 	if _leaving:
 		return
-	var riders := _followers_near_exit()
-	for e in riders:
-		if e.has_method("extract"):
-			e.call("extract")
-	_session.extract(riders.size(), player)
-	if riders.size() > 0:
-		_log("%d employees extracted  +%s" % [riders.size(), ContractRun.money(riders.size() * ContractRun.EMPLOYEE_EXTRACTED)], Color(0.6, 1.0, 0.7))
+	_extract_followers(_followers_near_exit(), "thank you!")
 	if not descend:
 		_end_contract(ContractSession.END_CASHED_OUT)
 		return
@@ -884,6 +994,14 @@ func _use_elevator(descend: bool) -> void:
 	_fade(0.0, 1.0, 0.45, func() -> void:
 		_fade_in = true
 		get_tree().reload_current_scene())
+
+
+## Clock out at the van: the followers near it are extracted, then the contract ends exactly like the elevator's exit.
+func _use_van() -> void:
+	if _leaving or _ended:
+		return
+	_extract_followers(_followers_near_van(), "thank you!")
+	_end_contract(ContractSession.END_CASHED_OUT)
 
 
 ## A full-screen black overlay that fades from alpha `a` to `b`.
@@ -1011,6 +1129,7 @@ func _physics_process(delta: float) -> void:
 	if _ending:
 		return
 	_check_elevator()
+	_check_dropoffs()
 	_objective_t -= delta
 	if _objective_t <= 0.0:
 		_objective_t = OBJECTIVE_INTERVAL
@@ -1051,7 +1170,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## A contract is running and nothing else (picker, elevator, invoice, ending, scene change) holds the screen.
 func _can_pause() -> bool:
-	return _pause == null and _session != null and player != null and _picker == null and _menu == null \
+	return _pause == null and _session != null and player != null and _picker == null and _menu == null and _van_menu == null \
 			and _invoice == null and not _ended and not _ending and not _leaving
 
 

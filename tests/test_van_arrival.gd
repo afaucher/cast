@@ -1,12 +1,14 @@
 extends TestCase
 ## The crew's work van (docs/design/environment.md, "Van arrival"):
-##  - it is planned on every floor of several seeds and archetypes, deterministically, on flat floor of the start room;
+##  - it is planned on FLOOR 1 ONLY (it parks at the top floor; floors 2 and 3 plan none, and nothing about their start rooms
+##    needs it) of several seeds and archetypes, deterministically, on flat floor of the start room;
 ##  - it overlaps no wall, prop, decor, package, gate, employee or note, leaves the corridors and the start cell open and
 ##    strands no walkable cell; its cells are blocked (monsters are not placed there);
 ##  - the crew's spots are walkable cells beside it, outside its blockers;
 ##  - in the game the arrival plays (crew hidden, control off), finishes in about 2.5 s, enables control, leaves the heroes
 ##    on walkable ground next to the van, and the van stays solid (blockers push heroes out) and unpriced;
 ##  - --no-van-intro parks it at once, skip() jumps to the end, tests default to no intro;
+##  - floors 2 and 3 in the game have no van and no arrival: the crew simply starts on walkable cells next to the start cell;
 ##  - the model is within its triangle budget and its door and lights respond.
 
 const GAME := preload("res://scripts/app/game.gd")
@@ -23,6 +25,7 @@ func setup() -> void:
 	_check_model()
 	await _check_arrival_in_game()
 	await _check_skip_and_defaults()
+	await _check_no_van_floors()
 	finish()
 
 
@@ -36,14 +39,19 @@ func _check_plans() -> void:
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
 				var plan := SiteBuilder.plan(map, run, f, catalog)
-				_floors += 1
-				_check_floor(map, plan, "%s seed %d floor %d" % [id, s, f])
+				var tag := "%s seed %d floor %d" % [id, s, f]
+				if f == 1:
+					_floors += 1
+					_check_floor(map, plan, tag)
+				else:
+					check(plan.van.is_empty(), tag + ": no van below the top floor")
+					check(not plan.blocked.has(plan.start), tag + ": the start cell is not blocked")
 	var run2 := ContractRun.make("guru", 3, 0.5)
-	var map2 := DungeonGen.generate(run2.floor_seed(2))
+	var map2 := DungeonGen.generate(run2.floor_seed(1))
 	var cat2 := ContractParts.prop_catalog(run2.site_type)
-	var a := SiteBuilder.plan(map2, run2, 2, cat2)
-	var b := SiteBuilder.plan(map2, run2, 2, cat2)
-	check(a.van == b.van and not a.van.is_empty(), "the van is deterministic per floor")
+	var a := SiteBuilder.plan(map2, run2, 1, cat2)
+	var b := SiteBuilder.plan(map2, run2, 1, cat2)
+	check(a.van == b.van and not a.van.is_empty(), "the van is deterministic on floor 1")
 	print("van: planned on %d floors, farthest from the start cell %.1f units" % [_floors, _worst_dist])
 
 
@@ -137,12 +145,15 @@ func _check_model() -> void:
 	van.set_lights(0.0)
 	near(float(van._lamp_mat.get_shader_parameter("glow_gain")), 0.0, 0.001, "and go dark")
 	van.set_bounce(-0.1)
-	near(van.chassis.position.y, -0.1, 0.0001, "the chassis rides on the suspension")
+	near(van.chassis.position.y, VanModel.RIDE_HEIGHT - 0.1, 0.0001, "the chassis rides on the suspension (offset from its rest height)")
 	var found_text := false
 	for l in van.find_children("*", "Label3D", true, false):
-		if (l as Label3D).text.contains("BUDGET SORCERY") or (l as Label3D).text.contains("SORCERY"):
+		if (l as Label3D).text == "CAST":
 			found_text = true
-	check(found_text, "the van carries the company name")
+	check(found_text, "the van carries the company name, CAST")
+	var tyre_low := (van.parts["Wheels"] as MeshInstance3D).mesh.get_aabb().position.y + (van.parts["Wheels"] as MeshInstance3D).position.y
+	near(tyre_low, VanModel.RIDE_HEIGHT, 0.001, "the tyres sit on the floor (a hair above, clear of the chalk circle), never in it")
+	check(tyre_low >= 0.0, "no tyre dips below the floor")
 	van.free()
 	var circle := VanCircle.new(2.9)
 	circle.settle()
@@ -241,6 +252,31 @@ func _check_arrival_in_game() -> void:
 		check(not (plan.van["cells"] as Array).has(m.current_cell()), "no monster stands on the van")
 	check(map != null, "map is there")
 	await _drop(g)
+
+
+## Floors 2 and 3: the crew has no van and no arrival. It starts as it did before the van existed: Wick on the start cell,
+## Rebar and Gasket on free floor cells next to it, all visible, standing on walkable ground, with control on at once.
+func _check_no_van_floors() -> void:
+	for f in [2, 3]:
+		var g := _make_game({"floor": f, "van_intro": true})     # even with the intro flag on: there is nothing to play
+		add_child(g)
+		await frames(6)
+		var map: HexMap = g.get("map")
+		var site: SiteBuilder.Site = g.get("_site")
+		var start: Vector2i = map.cells_with_tag("start")[0]
+		eq((g.get("_session") as ContractSession).floor_number, f, "floor %d: the contract starts there" % f)
+		check(g.get("_arrival") == null, "floor %d: no van arrival" % f)
+		check(site.plan.van.is_empty(), "floor %d: the plan has no van" % f)
+		check(g.find_children("VanArrival", "", true, false).is_empty(), "floor %d: no van in the scene" % f)
+		check((g.get("controller") as PlayerController).enabled, "floor %d: control is on from the first frame" % f)
+		var heroes: Array[Hero] = g.call("_heroes")
+		eq(heroes[0].current_cell(), start, "floor %d: Wick starts on the start cell" % f)
+		for h in heroes:
+			var cell := map.get_cell(h.current_cell())
+			check(h.visible, "floor %d: %s is out in the open" % [f, h.display_name])
+			check(cell != null and cell.type == HexMap.Tile.FLOOR, "floor %d: %s stands on a walkable cell" % [f, h.display_name])
+			check(Hex.distance(h.current_cell(), start) <= 2, "floor %d: %s starts beside the start cell" % [f, h.display_name])
+		await _drop(g)
 
 
 func _check_crew_out(g: Node3D, arrival: VanArrival) -> void:

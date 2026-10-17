@@ -1,6 +1,7 @@
 extends TestCase
 ## The contract flow inside the real game scene: the job board, a floor with its site and objective
-## tracker, the elevator menu (stay / cash out), and "crew incapacitated" ending in the invoice.
+## tracker, the elevator menu (go down / exit / stay; exit only on floor 3), the van's clock-out slip (floor 1 only), and
+## "crew incapacitated" ending in the invoice.
 ## (Going down reloads the scene, which a test cannot do, so that path is covered by the session tests.)
 
 const GAME := preload("res://scripts/app/game.gd")
@@ -19,6 +20,8 @@ func setup() -> void:
 	timeout_sec = 90.0
 	await _check_board()
 	await _check_floor_and_elevator()
+	await _check_van_exit()
+	await _check_elevator_floors()
 	await _check_incapacitated()
 	finish()
 
@@ -127,7 +130,8 @@ func _check_floor_and_elevator() -> void:
 		check(g.get("_menu") == null, "E away from the exit opens nothing")
 		eq(player.charges_of(held), 5, "E away from the exit does not cast the held spell")
 		near(player.cooldown_left(held), 0.0, 0.0001, "and spends no cooldown")
-		# Cash out: the invoice appears and matches the Ledger.
+		# Exit: the invoice appears and matches the Ledger. (The follower walks to the elevator and is dropped off by
+		# itself; test_exit_dropoff covers the drop-off and the exit extraction in detail.)
 		emp.global_position = Hex.to_world(exit_cell, lv) + Vector3(0.8, 0, 0.5)
 		player.global_position = Hex.to_world(exit_cell, lv)
 		await frames(4)
@@ -136,11 +140,10 @@ func _check_floor_and_elevator() -> void:
 		menu = g.get("_menu")
 		check(menu != null, "E at the exit asks again")
 		if menu != null:
-			var before := Ledger.earned()
 			menu.cash_out.emit()
 			await frames(3)
-			eq(session.extracted_total, 1, "the follower near the elevator was extracted")
-			check(Ledger.earned() >= before + ContractRun.EMPLOYEE_EXTRACTED, "extraction paid $100")
+			eq(session.extracted_total, 1, "the follower near the elevator was extracted (once)")
+			check(Ledger.earned() >= run.gate_pay + ContractRun.EMPLOYEE_EXTRACTED, "extraction paid $100")
 			var inv: InvoiceScreen = g.get("_invoice")
 			check(inv != null, "cashing out shows the invoice")
 			if inv != null:
@@ -150,6 +153,113 @@ func _check_floor_and_elevator() -> void:
 	g.queue_free()
 	await frames(3)
 	GAME.reset_flow()
+
+
+## The van (floor 1 only) is an exit too: E at its side door opens the clock-out slip, the prompt says so, E never casts, the
+## van wins over the elevator, Cancel closes it, and confirming ends the contract like the elevator's exit.
+func _check_van_exit() -> void:
+	var g := _make_game({"contract": 1, "seed": 5})
+	add_child(g)
+	await frames(10)
+	var run: ContractRun = g.get("_run")
+	var site: SiteBuilder.Site = g.get("_site")
+	var player: Hero = g.get("player")
+	var hud: Hud = g.get("hud")
+	var session: ContractSession = g.get("_session")
+	check(bool(g.call("_has_van")), "floor 1 has the van")
+	var door: Vector2 = site.plan.van["door"]
+	var out: Vector2 = site.plan.van["door_normal"]
+	var held := player.held_spell()
+	player.set_charges(held, 5)
+	var spot := Vector3(door.x + out.x * 2.0, 0.0, door.y + out.y * 2.0)
+	player.global_position = Vector3(spot.x, GameWorld.map.ground_level(spot) * Hex.LEVEL_HEIGHT, spot.z)
+	await frames(6)
+	eq(hud.context_prompt, "E: clock out at the van", "at the van's side door the HUD offers to clock out")
+	check(g.get("_van_menu") == null and g.get("_menu") == null, "walking up opens nothing by itself")
+	# a gate closed first, so the invoice has something on it
+	var gate: Actor = site.gates[0]
+	gate.apply_damage(99999.0, player)
+	await frames(4)
+	await _press_e()
+	var vm: VanExitMenu = g.get("_van_menu")
+	if not check(vm != null, "E at the van opens the clock-out slip"):
+		g.queue_free()
+		await frames(3)
+		GAME.reset_flow()
+		return
+	check(g.get("_menu") == null, "(not the elevator's)")
+	eq(player.charges_of(held), 5, "E at the van does not cast the held spell")
+	eq(GameWorld.root.process_mode, Node.PROCESS_MODE_DISABLED, "the world is frozen while the slip is open")
+	vm.cancel.emit()
+	await frames(3)
+	check(g.get("_van_menu") == null and g.get("_invoice") == null, "Cancel closes the slip and the contract goes on")
+	check(GameWorld.root.process_mode != Node.PROCESS_MODE_DISABLED, "and the world runs again")
+	# the van wins over the elevator when the crew stands at both
+	var door_cell := Hex.from_world(Vector3(door.x, 0.0, door.y))
+	g.set("_exit_cell", door_cell)
+	await frames(4)
+	eq(hud.context_prompt, "E: clock out at the van", "the van's prompt wins over the elevator's")
+	await _press_e()
+	check(g.get("_van_menu") != null and g.get("_menu") == null, "E opens the van slip first, not the elevator menu")
+	vm = g.get("_van_menu")
+	vm.clock_out.emit()
+	await frames(3)
+	var inv: InvoiceScreen = g.get("_invoice")
+	if check(inv != null, "clocking out at the van shows the invoice"):
+		eq(str(inv.inv["reason"]), ContractSession.END_CASHED_OUT, "the van's exit ends the contract like the elevator's")
+		eq(int(inv.inv["payout"]), Ledger.payout(), "the invoice matches the Ledger")
+		eq(int(inv.inv["earned"]), run.gate_pay + site.employees.size() * ContractRun.EMPLOYEE_ALIVE, "the closed gate plus $10 per employee left alive; unfinished objectives pay nothing")
+	check(session.finished, "the session is finished")
+	g.queue_free()
+	await frames(3)
+	GAME.reset_flow()
+
+
+## The elevator on floors 2 and 3: floor 2 offers going down and exit, floor 3 offers exit only. Neither floor has a van or an
+## arrival (the crew just starts), and closing the floor-3 origin gate does not end the contract by itself.
+func _check_elevator_floors() -> void:
+	for f in [2, 3]:
+		var g := _make_game({"contract": 1, "seed": 5, "floor": f})
+		add_child(g)
+		await frames(10)
+		var site: SiteBuilder.Site = g.get("_site")
+		var player: Hero = g.get("player")
+		var hud: Hud = g.get("hud")
+		eq(g.get("_session").floor_number, f, "floor %d: started there" % f)
+		check(g.get("_arrival") == null and not bool(g.call("_has_van")) and site.plan.van.is_empty(), "floor %d: no van and no arrival" % f)
+		check(g.get("controller").enabled and player.visible, "floor %d: the crew simply starts, in control" % f)
+		check(hud.context_prompt != "E: clock out at the van", "floor %d: no van prompt at the start" % f)
+		await _press_e()
+		check(g.get("_van_menu") == null, "floor %d: E at the start opens no van slip" % f)
+		if f == 3:
+			var origin: Actor = site.origin_gate
+			if check(origin != null, "floor 3 has the origin gate"):
+				origin.apply_damage(9999999.0, player)
+				await frames(30)
+				check(g.get("_session").state()["origin_closed"], "the origin gate closed")
+				check(g.get("_invoice") == null and not g.get("_ended"), "closing the origin gate does not end the contract by itself")
+		var exit_cell: Vector2i = g.get("_exit_cell")
+		var lv := GameWorld.map.ground_level(Hex.to_world(exit_cell))
+		player.global_position = Hex.to_world(exit_cell, lv)
+		await frames(6)
+		eq(hud.context_prompt, "E: use elevator", "floor %d: the elevator prompt" % f)
+		await _press_e()
+		var menu: ElevatorMenu = g.get("_menu")
+		if check(menu != null, "floor %d: E at the exit opens the elevator menu" % f):
+			if f == 2:
+				check(menu.can_descend() and menu._rows.size() == 3, "floor 2: go down / exit / stay")
+			else:
+				check(not menu.can_descend() and menu._rows.size() == 2, "floor 3: exit / stay, nothing further down")
+			menu.cash_out.emit()
+			await frames(3)
+			var inv: InvoiceScreen = g.get("_invoice")
+			check(inv != null, "floor %d: the elevator's exit ends the contract with the invoice" % f)
+			if inv != null:
+				eq(str(inv.inv["reason"]), ContractSession.END_CASHED_OUT, "floor %d: reason: cashed out" % f)
+				eq(int(inv.inv["payout"]), Ledger.payout(), "floor %d: the invoice matches the Ledger" % f)
+		g.queue_free()
+		await frames(3)
+		GAME.reset_flow()
 
 
 ## One E key press (the action is held for two physics frames, like a real tap).

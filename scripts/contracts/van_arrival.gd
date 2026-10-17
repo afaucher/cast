@@ -1,6 +1,6 @@
 class_name VanArrival
 extends Node3D
-## The crew's arrival at the start of every floor: the work van teleports in over a summoning circle, lands on its
+## The crew's arrival at the start of floor 1 (the van parks on the top floor only): the work van teleports in over a summoning circle, lands on its
 ## suspension, the side door slides open and Wick, Gasket and Rebar step out beside it. Afterwards the van stays
 ## parked as solid set dressing (invisible DecorBlocker circles keep heroes and monsters out of it, like any blocking
 ## decor; it is not priced and does not take damage) and the circle settles into a faint chalk mark on the floor.
@@ -443,6 +443,7 @@ func _pose_van(t: float) -> void:
 		sc = Vector3(lerpf(0.55, 1.0, k), lerpf(1.75, 1.0, k), lerpf(0.55, 1.0, k))
 	else:
 		# a quick squash on touchdown, then the suspension rocks the chassis
+		# (the squash scales about the floor and the tyres rest VanModel.RIDE_HEIGHT above it, so they never dip into it)
 		var squash := exp(-tau * 13.0)
 		sc = Vector3(1.0 + 0.1 * squash, 1.0 - 0.2 * squash, 1.0 + 0.1 * squash)
 	van.position = Vector3(0, y, 0)

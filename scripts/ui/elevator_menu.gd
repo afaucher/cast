@@ -2,9 +2,10 @@ class_name ElevatorMenu
 extends Control
 ## The freight elevator prompt that opens when the crew steps on the exit cell:
 ##   [1] Go down to floor N (more pay, more danger)     (not offered on the last floor)
-##   [2] Cash out
+##   [2] Exit: clock out and invoice the client        (the only way out on the last floor, where it is [1])
 ##   [Esc] Stay on this floor
-## Followers near the elevator ride along (extracted, $100 each). Cashing out is always available.
+## Followers near the elevator ride along (extracted, $100 each). Exiting is always available. (Floor 1's van is the
+## other exit, see VanExitMenu.)
 ## Drawn as a canary "while you were out" slip (scripts/ui/forms/). Add under a Control (Hud.add_overlay).
 ## The game pauses the simulation while it is open.
 
@@ -69,7 +70,8 @@ func _ready() -> void:
 		down.pressed.connect(func() -> void: go_down.emit())
 		body.add_child(down)
 		_rows.append(down)
-	var out := FormRow.new("Cash out", "2", "always works")
+	var out := FormRow.new("Exit", "2" if _can_descend else "1", "always works")
+	out.sub = "clock out and invoice the client"
 	out.pressed.connect(func() -> void: cash_out.emit())
 	body.add_child(out)
 	_rows.append(out)
@@ -97,10 +99,13 @@ func _input(event: InputEvent) -> void:
 		KEY_1, KEY_KP_1:
 			if _can_descend:
 				go_down.emit()
-				get_viewport().set_input_as_handled()
-		KEY_2, KEY_KP_2:
-			cash_out.emit()
+			else:
+				cash_out.emit()      # on the last floor the exit is row 1
 			get_viewport().set_input_as_handled()
+		KEY_2, KEY_KP_2:
+			if _can_descend:
+				cash_out.emit()
+				get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
 			stay.emit()
 			get_viewport().set_input_as_handled()

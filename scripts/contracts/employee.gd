@@ -325,9 +325,10 @@ static func interact(hero: Actor) -> bool:
 	return e.request_wait(hero) if e.can_wait(hero) else e.request_follow(hero)
 
 
-## Contract flow calls this for followers near the elevator: a cheer and a fade-out, then the employee
-## is freed. Emits `rescued` once, right away. Safe to call twice (the second call does nothing).
-func extract() -> void:
+## Contract flow calls this for followers at an exit (the drop-off, or the crew taking the elevator / van): a cheer
+## and a fade-out, then the employee is freed. `line` is the bark. Emits `rescued` once, right away. Safe to call twice
+## (the second call does nothing).
+func extract(line: String = "thank you!") -> void:
 	if _extracted or dead:
 		return
 	_extracted = true
@@ -336,7 +337,7 @@ func extract() -> void:
 	remove_from_group("employees")
 	remove_from_group("actors")   # no longer a target and no longer pushes anyone around
 	_set_state(State.EXTRACT)
-	say("thank you!", EXTRACT_TIME)
+	say(line, EXTRACT_TIME)
 	rescued.emit(self)
 	var tw := create_tween()
 	tw.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)

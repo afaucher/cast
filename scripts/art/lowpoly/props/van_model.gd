@@ -1,11 +1,14 @@
 class_name VanModel
 extends Node3D
-## The crew's work van ("Licensed Budget Sorcery"): a beat-up, rust-streaked white-grey panel van with a roof rack
-## (orange ladder, copper / PVC / ABS pipes, ratchet straps, a wand antenna), hose coils, a pipe wrench and a plunger on
-## the sides, a sliding side door that opens, headlights that can glow, and a wand-and-wrench roundel with the company
-## name on the doors. Faceted low-poly in the house style (LowPoly soup, MonsterMaterial: ink outline, amber rim,
-## vertex alpha 0.5 = emissive face). About 2.0 wide x 4.2 long x 2.2 tall (VanPlan.W/L/H); origin at the centre of the
-## footprint on the floor, the NOSE is +Z, the sliding door is on the -X side (it slides toward the rear, -Z).
+## The crew's work van ("Cast"): a beat-up, rust-streaked white-grey panel van with a roof rack (orange ladder, copper and
+## PVC pipes, two ratchet straps, a wand antenna), a pipe wrench and a wand-and-wrench logo on the sides, a sliding side
+## door that opens, headlights that can glow, and the company name, CAST, on the door and on the other side. Faceted
+## low-poly in the house style (LowPoly soup, MonsterMaterial: ink outline, amber rim, vertex alpha 0.5 = emissive face).
+## About 2.0 wide x 4.2 long x 2.2 tall (VanPlan.W/L/H); origin at the centre of the footprint on the floor, the NOSE is +Z,
+## the sliding door is on the -X side (it slides toward the rear, -Z).
+##
+## Kept deliberately sparse: every attached piece (rack load, logo, wrench, rust patch) has clear air around it and sits
+## clear of the wheel arches and of the door opening, so the van reads as a clean silhouette first and detail second.
 ##
 ##   var van := VanModel.new()
 ##   van.set_door_open(1.0)          # 0 closed .. 1 fully open (the door slides back along the body)
@@ -13,13 +16,24 @@ extends Node3D
 ##   van.set_bounce(-0.12, 0.0)      # chassis offset (y, world units) and body roll (radians): the suspension
 ##
 ## Parts (all MeshInstance3D unless noted): Chassis (Node3D) holds Body, Door, Lamps, InnerGlow, Signs and the two
-## lights, and rides on the suspension; Wheels stay on the floor. Label3D text sits under Signs and under Door.
+## lights, and rides on the suspension; Wheels stay put. Label3D text sits under Signs and under Door.
+##
+## Ride height: the tyres' lowest points are RIDE_HEIGHT above the origin (the floor); the chalk circle the van is parked
+## on is 0.035 proud of the tiles, so the tyres sit ON it instead of vanishing into it. The suspension only moves the
+## chassis (never below its rest height by more than the arches clear), the wheels never go lower.
 
 const LENGTH := 4.2
 const WIDTH := 2.0
 const HEIGHT := 2.2
 const DOOR_TRAVEL := 1.3          ## how far the sliding door moves toward the rear when fully open
 const DOOR_CLOSED_POS := Vector3(-1.095, 1.2, 0.4)
+const RIDE_HEIGHT := 0.045        ## tyre bottoms and the chassis rest this far above the floor (clears the 0.035 chalk circle)
+## Flat decals (side plates, logo, stripes, rust) stack in LEVELS: every slab is sunk into the wall and its outer face is
+## DECAL_BASE proud of it (more than the 0.005 dents the walls carry), each level a further DECAL_STEP, so no two faces
+## of overlapping pieces are ever coplanar (that was the z-fighting).
+const DECAL_BASE := 0.016
+const DECAL_STEP := 0.01
+const DENT := 0.005
 const SEED := 4107
 
 const PAINT := Color(0.80, 0.81, 0.79)
@@ -66,6 +80,7 @@ func _init() -> void:
 	PropModels._seed = SEED
 	chassis = Node3D.new()
 	chassis.name = "Chassis"
+	chassis.position.y = RIDE_HEIGHT
 	add_child(chassis)
 	_add_mesh("Body", _body_soup(), chassis, Vector3.ZERO, _material())
 	door = _add_mesh("Door", _door_soup(), chassis, DOOR_CLOSED_POS, _material())
@@ -73,7 +88,7 @@ func _init() -> void:
 	_add_mesh("Lamps", _lamps_soup(), chassis, Vector3.ZERO, _lamp_mat)
 	_inner_mat = _glow_material(2.2)
 	_add_mesh("InnerGlow", _inner_glow_soup(), chassis, Vector3.ZERO, _inner_mat)
-	_add_mesh("Wheels", _wheels_soup(), self, Vector3.ZERO, _material())
+	_add_mesh("Wheels", _wheels_soup(), self, Vector3(0.0, RIDE_HEIGHT, 0.0), _material())
 	_add_signs()
 	_head_light = OmniLight3D.new()
 	_head_light.name = "HeadLight"
@@ -124,9 +139,10 @@ func lights_amount() -> float:
 	return _lights
 
 
-## The suspension: chassis height offset (world units, negative = compressed) and a roll about the nose axis (radians).
+## The suspension: chassis height offset from its rest (world units, negative = compressed) and a roll about the nose axis
+## (radians). The wheels stay on the floor.
 func set_bounce(y: float, pitch: float = 0.0) -> void:
-	chassis.position.y = y
+	chassis.position.y = RIDE_HEIGHT + y
 	chassis.rotation.x = pitch
 
 
@@ -182,16 +198,20 @@ static func _rod(s: LowPoly.Soup, a: Vector3, b: Vector3, r: float, sides: int, 
 	PropModels.rod(s, a, b, r, r, sides, col)
 
 
-## A thin decal slab on the side face at x = side * 1.0: u runs along the van (+Z nose), v is height; wu x wv in size,
-## `rot` turns it about the face normal (degrees) and `lift` stacks decals (each layer a hair proud of the last).
-static func _decal(s: LowPoly.Soup, side: float, u: float, v: float, wu: float, wv: float, col: Color, rot: float = 0.0, lift: float = 0.0) -> void:
-	var thick := 0.014
-	_b(s, Vector3(thick, wv, wu), Vector3(side * (1.0 + thick * 0.5 + lift), v, u), col, Vector3(rot, 0, 0))
+## A flat slab on the side face at x = side * 1.0 (u runs along the van, +Z nose, v is height; wu x wv in size, `rot` turns it
+## about the face normal in degrees). `level` stacks layers: the outer face sits DECAL_BASE + level * DECAL_STEP proud of the
+## wall and the slab is sunk into it, so overlapping layers are always at least DECAL_STEP apart.
+static func _decal(s: LowPoly.Soup, side: float, u: float, v: float, wu: float, wv: float, col: Color, rot: float = 0.0, level: int = 0) -> void:
+	var outer := 1.0 + DECAL_BASE + DECAL_STEP * float(level)
+	var thick := outer - 0.99
+	_b(s, Vector3(thick, wv, wu), Vector3(side * (outer - thick * 0.5), v, u), col, Vector3(rot, 0, 0))
 
 
-## A flat round decal on a side face (axis along X).
-static func _disc(s: LowPoly.Soup, side: float, u: float, v: float, r: float, col: Color, lift: float = 0.0) -> void:
-	_cyl(s, r, r, 0.014, 12, Vector3(side * (1.0 + 0.007 + lift), v, u), col, Vector3(0, 0, 90))
+## A flat round decal on a side face (axis along X), stacked like _decal.
+static func _disc(s: LowPoly.Soup, side: float, u: float, v: float, r: float, col: Color, level: int = 0) -> void:
+	var outer := 1.0 + DECAL_BASE + DECAL_STEP * float(level)
+	var thick := outer - 0.99
+	_cyl(s, r, r, thick, 12, Vector3(side * (outer - thick * 0.5), v, u), col, Vector3(0, 0, 90))
 
 
 # --------------------------------------------------------------------------- the body
@@ -213,18 +233,18 @@ func _shell(s: LowPoly.Soup) -> void:
 	var y0 := 0.5
 	var y1 := 1.9
 	# roof, floor, rear, +X wall, -X rear segment, header over the door, pillar in front of it
-	_dented(s, Vector3(2.0, 0.12, 3.05), Vector3(0, y1 - 0.06, -0.525), PAINT_LT, 0.012, 3)
+	_dented(s, Vector3(2.0, 0.12, 3.05), Vector3(0, y1 - 0.06, -0.525), PAINT_LT, DENT, 3)
 	_b(s, Vector3(2.0, 0.12, 3.05), Vector3(0, y0 + 0.06, -0.525), TRIM)
-	_dented(s, Vector3(2.0, 1.4, 0.1), Vector3(0, (y0 + y1) * 0.5, -2.0), PAINT, 0.012)
-	_dented(s, Vector3(0.08, 1.4, 3.05), Vector3(0.96, (y0 + y1) * 0.5, -0.525), PAINT, 0.014, 3)
-	_dented(s, Vector3(0.08, 1.4, 1.9), Vector3(-0.96, (y0 + y1) * 0.5, -1.1), PAINT, 0.012, 3)
+	_dented(s, Vector3(2.0, 1.4, 0.1), Vector3(0, (y0 + y1) * 0.5, -2.0), PAINT, DENT)
+	_dented(s, Vector3(0.08, 1.4, 3.05), Vector3(0.96, (y0 + y1) * 0.5, -0.525), PAINT, DENT, 3)
+	_dented(s, Vector3(0.08, 1.4, 1.9), Vector3(-0.96, (y0 + y1) * 0.5, -1.1), PAINT, DENT, 3)
 	_b(s, Vector3(0.08, 0.1, 1.2), Vector3(-0.96, 1.85, 0.4), PAINT_LT)
 	_b(s, Vector3(0.08, 1.4, 0.1), Vector3(-0.96, (y0 + y1) * 0.5, 0.99), PAINT)
 
 
 ## The cab: lower body + hood, the sloped windscreen, side windows, door seams.
 func _cab(s: LowPoly.Soup) -> void:
-	_dented(s, Vector3(2.0, 0.7, 1.05), Vector3(0, 0.85, 1.525), PAINT, 0.012)        # lower cab and hood (z 1.0 .. 2.05)
+	_dented(s, Vector3(2.0, 0.7, 1.05), Vector3(0, 0.85, 1.525), PAINT, DENT)        # lower cab and hood (z 1.0 .. 2.05)
 	# cabin: a frustum rising from the belt line to the roof, its top flush with the cargo roof
 	s.merge(LowPoly.frustum(Vector2(2.0, 0.8), Vector2(1.98, 0.38), 0.7, PAINT_LT, SEED + 11, 0.0, 1, Vector2(0, -0.21), 0.05),
 			LowPoly.at(Vector3(0, 1.55, 1.4)))
@@ -249,7 +269,7 @@ func _front_and_rear(s: LowPoly.Soup) -> void:
 	# front: grille, bumper, plate, the (dark) lamp housings the Lamps mesh sits in
 	_b(s, Vector3(1.5, 0.34, 0.05), Vector3(0, 0.88, 2.06), TRIM)
 	for i in 5:
-		_b(s, Vector3(1.4, 0.025, 0.06), Vector3(0, 0.76 + 0.07 * float(i), 2.07), TRIM_LT)
+		_b(s, Vector3(0.84, 0.025, 0.06), Vector3(0, 0.76 + 0.07 * float(i), 2.07), TRIM_LT)
 	_b(s, Vector3(0.52, 0.3, 0.05), Vector3(-0.72, 0.9, 2.055), TRIM)
 	_b(s, Vector3(0.52, 0.3, 0.05), Vector3(0.72, 0.9, 2.055), TRIM)
 	_b(s, Vector3(2.08, 0.22, 0.2), Vector3(0, 0.56, 2.0), TRIM)
@@ -271,10 +291,9 @@ func _front_and_rear(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(1.9, 0.08, 0.08), Vector3(0, 1.78, -2.07), TRIM)
 
 
-## Roof plate details, the rack, the ladder, the pipes, the straps, the wand antenna.
+## The rack, the ladder, two pipes, two straps, the wand antenna. Everything rides on the cross bars with air between the
+## lanes (rail | copper | PVC | gap | ladder | rail) and stops short of the cab roof, so the antenna has a clear spot.
 func _roof_and_rack(s: LowPoly.Soup) -> void:
-	_b(s, Vector3(0.7, 0.05, 0.6), Vector3(0.45, 1.93, -1.6), PAINT_DK)                       # roof vent hatch
-	_b(s, Vector3(0.62, 0.04, 0.5), Vector3(0.45, 1.965, -1.6), PAINT)
 	# rack: two rails along the van on legs, four cross bars
 	for sx: float in [-1.0, 1.0]:
 		_b(s, Vector3(0.07, 0.08, 3.25), Vector3(sx * 0.84, 2.07, -0.55), TRIM_LT)
@@ -282,139 +301,86 @@ func _roof_and_rack(s: LowPoly.Soup) -> void:
 		_b(s, Vector3(1.78, 0.07, 0.07), Vector3(0, 2.02, zc), TRIM_LT)
 		for sx: float in [-1.0, 1.0]:
 			_b(s, Vector3(0.07, 0.14, 0.07), Vector3(sx * 0.84, 1.97, zc), TRIM)
-	# the ladder (orange fibreglass), strapped on the +X half of the rack, hanging out over the rear
-	var lx := 0.38
+	# the ladder (orange fibreglass) on the +X half of the rack, hanging a little out over the rear
+	var lx := 0.4
 	for sx: float in [-1.0, 1.0]:
-		_b(s, Vector3(0.06, 0.12, 3.7), Vector3(lx + sx * 0.25, 2.16, -0.5), LADDER)
-	for i in 12:
+		_b(s, Vector3(0.06, 0.12, 3.2), Vector3(lx + sx * 0.25, 2.115, -0.75), LADDER)
+	for i in 10:
 		var z := -2.2 + 0.31 * float(i)
-		_b(s, Vector3(0.5, 0.04, 0.045), Vector3(lx, 2.16, z), LADDER.lightened(0.18))
-	_b(s, Vector3(0.08, 0.1, 0.12), Vector3(lx - 0.25, 2.16, -2.38), TRIM)                    # rubber feet
-	_b(s, Vector3(0.08, 0.1, 0.12), Vector3(lx + 0.25, 2.16, -2.38), TRIM)
-	# pipes on the -X half: copper, PVC, black ABS and a fat flexi duct, longer than the van
-	_cyl(s, 0.08, 0.08, 4.3, 7, Vector3(-0.74, 2.17, -0.35), COPPER, Vector3(90, 0, 0))
-	_cyl(s, 0.07, 0.07, 3.8, 7, Vector3(-0.55, 2.16, -0.7), PVC, Vector3(90, 0, 0))
-	_cyl(s, 0.085, 0.085, 3.9, 7, Vector3(-0.36, 2.17, -0.1), ABS, Vector3(90, 0, 0))
-	_cyl(s, 0.095, 0.095, 3.4, 7, Vector3(-0.16, 2.18, -0.55), Color(0.52, 0.54, 0.58), Vector3(90, 0, 0))
-	for zend: float in [1.8, -2.5]:                                                               # capped / threaded ends
-		_cyl(s, 0.09, 0.09, 0.08, 7, Vector3(-0.74, 2.17, zend), COPPER.darkened(0.3), Vector3(90, 0, 0))
-	_cyl(s, 0.075, 0.075, 0.1, 7, Vector3(-0.55, 2.16, 1.2), PVC.darkened(0.25), Vector3(90, 0, 0))
-	# ratchet straps over ladder + pipes
+		_b(s, Vector3(0.5, 0.04, 0.045), Vector3(lx, 2.115, z), LADDER.lightened(0.18))
+	_b(s, Vector3(0.08, 0.1, 0.12), Vector3(lx - 0.25, 2.115, -2.31), TRIM)                   # rubber feet
+	_b(s, Vector3(0.08, 0.1, 0.12), Vector3(lx + 0.25, 2.115, -2.31), TRIM)
+	# two pipes on the -X half: copper and PVC (resting on the bars: bar top 2.055 + radius)
+	_cyl(s, 0.08, 0.08, 3.2, 7, Vector3(-0.6, 2.135, -0.75), COPPER, Vector3(90, 0, 0))
+	_cyl(s, 0.07, 0.07, 2.8, 7, Vector3(-0.28, 2.125, -0.95), PVC, Vector3(90, 0, 0))
+	# two ratchet straps over ladder + pipes, clear of every cross bar
 	for zc: float in [-1.35, 0.35]:
-		_b(s, Vector3(1.9, 0.045, 0.075), Vector3(0, 2.29, zc), STRAP)
-		_b(s, Vector3(0.12, 0.07, 0.1), Vector3(0.1, 2.31, zc), TRIM)
-		_b(s, Vector3(0.03, 0.3, 0.06), Vector3(0.96, 2.1, zc), STRAP)
-		_b(s, Vector3(0.03, 0.3, 0.06), Vector3(-0.96, 2.1, zc), STRAP)
+		_b(s, Vector3(1.9, 0.045, 0.075), Vector3(0, 2.24, zc), STRAP)
+		_b(s, Vector3(0.12, 0.07, 0.1), Vector3(0.1, 2.27, zc), TRIM)
+		_b(s, Vector3(0.03, 0.34, 0.06), Vector3(0.96, 2.1, zc), STRAP)
+		_b(s, Vector3(0.03, 0.34, 0.06), Vector3(-0.96, 2.1, zc), STRAP)
 	# the wand antenna on the cab roof: a spindly rod with a star on top
 	_rod(s, Vector3(-0.78, 1.9, 1.15), Vector3(-0.7, 2.5, 1.05), 0.022, 5, Color(0.26, 0.2, 0.34))
 
 
+## Side dressing, kept to a handful of pieces. -X (door side): the logo roundel on the rear segment (it stays clear of the
+## door when that slides back), the violet stripe, one rust patch. +X: the CAST plate with the logo, a pipe wrench in the band
+## under it, the stripe and a rust patch. The wheel arches and the door opening stay empty.
 func _side_details(s: LowPoly.Soup) -> void:
-	# -X (door) side, rear segment: the roundel (wand + wrench) with a coiled hose under it
-	_roundel(s, -1.0, -1.68, 1.58, 0.3)
-	_hose_coil(s, -1.0, -1.66, 1.02, 0.27, HOSE)
-	# the other side: a long navy banner (the text goes on as Label3D), the roundel again, a pipe wrench and a
-	# plunger on pegs, a yellow hose coil
-	_decal(s, 1.0, -0.55, 1.52, 2.7, 0.62, NAVY)
-	_decal(s, 1.0, -0.55, 1.84, 2.7, 0.035, AMBER, 0.0, 0.004)
-	_decal(s, 1.0, -0.55, 1.2, 2.7, 0.035, AMBER, 0.0, 0.004)
-	_roundel(s, 1.0, 0.62, 0.9, 0.3)
-	_hose_coil(s, 1.0, -1.5, 0.88, 0.27, HOSE_Y)
-	_pipe_wrench(s, 1.0, -0.85, 0.9)
-	_plunger(s, 1.0, -0.15, 0.9)
-	# a rust-red toolbox bolted under the +X side
-	_b(s, Vector3(0.22, 0.26, 0.9), Vector3(1.11, 0.43, -0.9), Color(0.74, 0.16, 0.12))
-	_b(s, Vector3(0.24, 0.04, 0.5), Vector3(1.11, 0.57, -0.9), TRIM_LT)
-	# a mud-flap and the fuel flap
-	_b(s, Vector3(0.03, 0.2, 0.2), Vector3(1.0, 0.92, 0.55), PAINT_DK)
+	_logo(s, -1.0, -1.78, 1.38, 0.17, 0, true)
+	# +X side: a CAST plate (an amber frame plate under a navy plate: a raised border) with the logo at its end; the name goes
+	# on as Label3D
+	_decal(s, 1.0, -0.525, 1.45, 1.91, 0.56, AMBER, 0.0, 0)
+	_decal(s, 1.0, -0.525, 1.45, 1.85, 0.5, NAVY, 0.0, 1)
+	_logo(s, 1.0, 0.1, 1.45, 0.17, 1, false)
+	_pipe_wrench(s, 1.0, -0.06, 0.9)
 	# sliding-door track on the -X side (the door runs on it)
-	_b(s, Vector3(0.05, 0.06, 1.95), Vector3(-1.03, 1.86, -1.2), TRIM)
-	_b(s, Vector3(0.05, 0.06, 1.95), Vector3(-1.03, 0.58, -1.2), TRIM)
-	_b(s, Vector3(0.05, 0.05, 1.5), Vector3(-1.03, 1.2, -1.28), TRIM)
-	# the violet stripe along the rear half of the -X side and the cab (the door carries its own)
-	_decal(s, -1.0, -1.1, 0.98, 1.75, 0.13, STRIPE, 0.0, 0.004)
-	_decal(s, -1.0, 1.52, 0.98, 1.0, 0.13, STRIPE, 0.0, 0.004)
-	_decal(s, 1.0, -0.2, 0.62, 3.2, 0.1, STRIPE, 0.0, 0.002)
+	_b(s, Vector3(0.05, 0.06, 1.8), Vector3(-1.035, 1.86, -1.1), TRIM)
+	# the violet stripe along the rear half of the -X side and the cab (the door carries its own), and along the +X side
+	_decal(s, -1.0, -1.1, 0.98, 1.75, 0.13, STRIPE)
+	_decal(s, -1.0, 1.585, 0.98, 0.87, 0.13, STRIPE)
+	_decal(s, 1.0, -0.2, 0.62, 3.2, 0.1, STRIPE)
 
 
-## The company roundel: an amber ring around a navy disc with a cream wand crossed over a steel wrench.
-static func _roundel(s: LowPoly.Soup, side: float, u: float, v: float, r: float) -> void:
-	_disc(s, side, u, v, r + 0.05, AMBER)
-	_disc(s, side, u, v, r, NAVY, 0.006)
-	_decal(s, side, u, v, 0.075, r * 1.7, CREAM, 45.0, 0.014)                                      # the wand
-	_decal(s, side, u, v, 0.085, r * 1.7, Color(0.72, 0.74, 0.80), -45.0, 0.02)                    # the wrench shaft
+## The company logo: a cream wand crossed over a steel wrench, optionally on an amber-ringed navy disc. `level` is the decal
+## level of the first layer; r scales everything (0.3 is the original roundel).
+static func _logo(s: LowPoly.Soup, side: float, u: float, v: float, r: float, level: int, disc: bool) -> void:
+	var k := r / 0.3
+	var lv := level
+	if disc:
+		_disc(s, side, u, v, r + 0.05, AMBER, lv)
+		_disc(s, side, u, v, r, NAVY, lv + 1)
+		lv += 1
+	var steel := Color(0.72, 0.74, 0.80)
+	_decal(s, side, u, v, 0.075 * k, r * 1.7, CREAM, 45.0, lv + 1)                                  # the wand
+	_decal(s, side, u, v, 0.085 * k, r * 1.7, steel, -45.0, lv + 2)                                 # the wrench shaft
 	var o := r * 0.62
-	_decal(s, side, u - o, v + o, 0.2, 0.09, Color(0.72, 0.74, 0.80), -45.0, 0.026)                # its jaws
-	_decal(s, side, u + o, v + o, 0.11, 0.11, Color(1.0, 0.85, 0.3), 45.0, 0.03)                   # the wand's star
+	_decal(s, side, u - o, v + o, 0.2 * k, 0.09 * k, steel, -45.0, lv + 3)                          # its jaws
+	_decal(s, side, u + o, v + o, 0.11 * k, 0.11 * k, Color(1.0, 0.85, 0.3), 45.0, lv + 3)          # the wand's star
 
 
-## A coil of hose hanging on a peg: a ring of short capsule-ish boxes with a loose end drooping below.
-static func _hose_coil(s: LowPoly.Soup, side: float, u: float, v: float, r: float, col: Color) -> void:
-	var segs := 12
-	for ring in 2:
-		var rr := r - 0.05 * float(ring)
-		for i in segs:
-			var a := TAU * (float(i) + 0.5) / float(segs)
-			var cu := u + cos(a) * rr
-			var cv := v + sin(a) * rr
-			var seg_len := TAU * rr / float(segs) * 1.12
-			var x := side * (1.0 + 0.045 + 0.05 * float(ring))
-			_b(s, Vector3(0.085, 0.085, seg_len), Vector3(x, cv, cu), col if i % 5 != 0 else col.lightened(0.25), Vector3(-(rad_to_deg(a) + 90.0), 0, 0))
-	_cyl(s, 0.03, 0.03, 0.2, 6, Vector3(side * 1.1, v, u), TRIM, Vector3(0, 0, 90))            # the peg
-	_b(s, Vector3(0.085, 0.24, 0.085), Vector3(side * 1.045, v - r - 0.1, u + r * 0.55), col)   # the drooping end
-	_b(s, Vector3(0.1, 0.07, 0.1), Vector3(side * 1.045, v - r - 0.25, u + r * 0.55), TRIM_LT)   # nozzle
-
-
+## A pipe wrench lying on a peg on the +X side: red handle, steel jaw head with a slot.
 static func _pipe_wrench(s: LowPoly.Soup, side: float, u: float, v: float) -> void:
-	# hangs from a peg, tilted: red-handled, steel jaws at the bottom
-	var x := side * 1.07
-	_b(s, Vector3(0.05, 0.62, 0.1), Vector3(x, v - 0.06, u), Color(0.78, 0.14, 0.12), Vector3(14, 0, 0))
-	_b(s, Vector3(0.07, 0.2, 0.2), Vector3(x, v - 0.4, u - 0.1), TRIM_LT, Vector3(14, 0, 0))
-	_b(s, Vector3(0.07, 0.08, 0.14), Vector3(x, v - 0.5, u - 0.04), TRIM_LT, Vector3(14, 0, 0))
-	_b(s, Vector3(0.06, 0.1, 0.1), Vector3(x, v + 0.26, u + 0.02), TRIM_LT, Vector3(14, 0, 0))
-	_cyl(s, 0.03, 0.03, 0.18, 6, Vector3(side * 1.1, v + 0.2, u + 0.02), TRIM, Vector3(0, 0, 90))
+	var x := side * 1.065
+	_b(s, Vector3(0.05, 0.07, 0.52), Vector3(x, v, u - 0.15), Color(0.78, 0.14, 0.12))
+	_b(s, Vector3(0.06, 0.2, 0.16), Vector3(x, v, u + 0.19), TRIM_LT)
+	_b(s, Vector3(0.07, 0.06, 0.07), Vector3(x, v + 0.05, u + 0.24), TRIM)
+	_cyl(s, 0.03, 0.03, 0.1, 6, Vector3(side * 1.05, v, u - 0.33), TRIM, Vector3(0, 0, 90))      # the peg through the handle end
 
 
-static func _plunger(s: LowPoly.Soup, side: float, u: float, v: float) -> void:
-	var x := side * 1.08
-	_rod(s, Vector3(x, v + 0.3, u), Vector3(x, v - 0.25, u), 0.03, 5, Color(0.55, 0.38, 0.2))
-	s.merge(LowPoly.cylinder(0.02, 0.17, 0.18, 8, Color(0.82, 0.14, 0.1), SEED + 21, 0.0, 1, 0.05), LowPoly.at(Vector3(x, v - 0.34, u), Vector3(0, 0, 90)))
-
-
-## Rust patches, grime and mud: low flat slabs proud of the paint, bigger and darker toward the bottom and the wheels.
+## Wheel-arch rings and two rust patches, each alone on a clear stretch of panel (none near the cab, the windscreen, the
+## roof, the arches, the door opening or a sign).
 func _wear(s: LowPoly.Soup) -> void:
-	var r := RandomNumberGenerator.new()
-	r.seed = SEED
-	# grime band along both sides' bottoms, over the rear and the front
 	for side: float in [-1.0, 1.0]:
-		_decal(s, side, -0.6, 0.64, 2.9, 0.14, GRIME, 0.0, 0.002)
-		_decal(s, side, 1.5, 0.66, 1.0, 0.12, GRIME, 0.0, 0.002)
-		# wheel-arch flares and the dark rings behind the tyres
+		# the dark arches behind the tyres: they stop above the floor so a compressed chassis never dips them under it
 		for wz: float in [1.5, -1.35]:
-			_cyl(s, 0.52, 0.52, 0.04, 10, Vector3(side * 1.005, 0.42, wz), TRIM, Vector3(0, 0, 90))
-	_b(s, Vector3(1.9, 0.14, 0.02), Vector3(0, 0.62, -2.06), GRIME)
-	# rust: bubbling patches along the bottom edges, the arches, the roof seams, around the door rails
-	for i in 15:
-		var side := -1.0 if i % 3 != 0 else 1.0
-		var u := r.randf_range(-1.95, 1.9)
-		var v := r.randf_range(0.6, 1.0) if r.randf() < 0.7 else r.randf_range(1.0, 1.75)
-		var w := r.randf_range(0.14, 0.55)
-		var h := r.randf_range(0.1, 0.34)
-		var col := RUST if r.randf() < 0.5 else (RUST_LT if r.randf() < 0.5 else RUST_DK)
-		_decal(s, side, u, v, w, h, col, r.randf_range(-12.0, 12.0), 0.003 + 0.002 * float(i % 3))
-	# rust on the rear and the front bumper corners, the hood and the roof
-	for sx: float in [-1.0, 1.0]:
-		_b(s, Vector3(0.45, 0.3, 0.02), Vector3(sx * 0.5, 0.78, -2.07), RUST_DK)
-		_b(s, Vector3(0.3, 0.18, 0.02), Vector3(sx * 0.7, 1.55, -2.075), RUST)
-		_b(s, Vector3(0.3, 0.02, 0.4), Vector3(sx * 0.6, 1.915, 1.9 - 1.0), GRIME)
-	_b(s, Vector3(0.5, 0.012, 0.35), Vector3(0.1, 1.215, 1.92), RUST)
-	_b(s, Vector3(0.7, 0.02, 0.5), Vector3(-0.3, 1.91, -0.6), GRIME)
-	_b(s, Vector3(0.4, 0.02, 0.3), Vector3(0.6, 1.91, -1.2), RUST)
-	# a dent and a dangling bit of bumper
-	_b(s, Vector3(0.5, 0.2, 0.04), Vector3(-0.55, 0.52, -2.2), TRIM, Vector3(0, 0, 28))
+			_cyl(s, 0.42, 0.42, 0.04, 10, Vector3(side * 1.005, 0.48, wz), TRIM, Vector3(0, 0, 90))
+	_decal(s, -1.0, -0.85, 1.55, 0.3, 0.14, RUST, 4.0)
+	_decal(s, 1.0, 0.75, 0.82, 0.3, 0.12, RUST_LT, -5.0)
 
 
-## The inside of the cargo bay, seen through the open door: dark liner, shelves with bins, a hose reel, a coil of cable.
+## The inside of the cargo bay, seen through the open door: dark liner, one shelf with two bins, a crate and a hose reel on
+## the floor, a hanging lantern. All of it on the far (+X) side or hanging mid-van, set well back from the opening.
 func _cargo_interior(s: LowPoly.Soup) -> void:
 	# liner panels just inside the shell (the slabs' own inner faces would show the white paint)
 	_b(s, Vector3(1.8, 1.16, 0.01), Vector3(0, 1.22, -1.94), INNER)
@@ -423,17 +389,14 @@ func _cargo_interior(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(1.8, 0.01, 2.9), Vector3(0, 1.815, -0.5), INNER)
 	_b(s, Vector3(1.8, 0.01, 2.9), Vector3(0, 0.625, -0.5), INNER_FLOOR)
 	_b(s, Vector3(0.01, 1.16, 1.8), Vector3(-0.915, 1.22, -1.05), INNER)
-	# a shelving rack on the +X wall with colourful bins, a toolbox and a coiled hose
-	for y: float in [0.95, 1.4]:
-		_b(s, Vector3(0.36, 0.04, 2.4), Vector3(0.72, y, -0.5), TRIM_LT)
-	_b(s, Vector3(0.3, 0.26, 0.5), Vector3(0.74, 1.09, 0.5), Color(0.2, 0.5, 0.85))
-	_b(s, Vector3(0.3, 0.2, 0.4), Vector3(0.74, 1.06, -0.1), Color(0.95, 0.75, 0.15))
-	_b(s, Vector3(0.3, 0.3, 0.45), Vector3(0.74, 1.57, 0.3), Color(0.78, 0.16, 0.12))
-	_b(s, Vector3(0.3, 0.22, 0.5), Vector3(0.74, 1.51, -0.5), Color(0.25, 0.62, 0.4))
-	_cyl(s, 0.2, 0.2, 0.3, 8, Vector3(0.72, 0.8, -0.9), HOSE, Vector3(0, 0, 90))
+	# one shelf on the +X wall with two bins, a crate and a coiled hose on the floor below
+	_b(s, Vector3(0.36, 0.04, 1.8), Vector3(0.72, 1.1, -0.25), TRIM_LT)
+	_b(s, Vector3(0.3, 0.26, 0.5), Vector3(0.74, 1.25, 0.4), Color(0.2, 0.5, 0.85))
+	_b(s, Vector3(0.3, 0.3, 0.45), Vector3(0.74, 1.27, -0.55), Color(0.78, 0.16, 0.12))
+	_cyl(s, 0.2, 0.2, 0.3, 8, Vector3(0.72, 0.83, -0.9), HOSE, Vector3(0, 0, 90))
 	_b(s, Vector3(0.5, 0.3, 0.6), Vector3(0.6, 0.78, 0.4), Color(0.36, 0.38, 0.5))
-	# a chunky wall-mounted cable drum and a hanging lantern frame
-	_b(s, Vector3(0.12, 0.5, 0.12), Vector3(-0.1, 1.55, -0.6), TRIM)
+	# the lantern's hanger from the ceiling
+	_b(s, Vector3(0.04, 0.2, 0.04), Vector3(-0.1, 1.71, 0.3), TRIM)
 
 
 # --------------------------------------------------------------------------- the sliding door
@@ -441,20 +404,22 @@ func _cargo_interior(s: LowPoly.Soup) -> void:
 ## Built around its own centre (the node sits at DOOR_CLOSED_POS): panel, band, rust, handle, roundel text goes in as Label3D.
 func _door_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(SEED + 3, 0.055)
-	_dented(s, Vector3(0.07, 1.28, 1.14), Vector3.ZERO, PAINT, 0.012, 3)
-	_b(s, Vector3(0.012, 0.13, 1.12), Vector3(-0.04, -0.27, 0), STRIPE)
-	_b(s, Vector3(0.012, 0.1, 1.0), Vector3(-0.04, -0.52, 0), GRIME)
-	_b(s, Vector3(0.05, 0.08, 0.26), Vector3(-0.05, -0.12, 0.34), TRIM_LT)         # handle
-	_b(s, Vector3(0.014, 0.28, 0.3), Vector3(-0.04, -0.36, -0.3), RUST)
-	_b(s, Vector3(0.014, 0.16, 0.18), Vector3(-0.042, -0.4, -0.2), RUST_DK)
-	_b(s, Vector3(0.014, 0.18, 0.26), Vector3(-0.04, 0.52, 0.3), RUST_LT)
-	# the plaque the name goes on
-	_b(s, Vector3(0.014, 0.76, 1.0), Vector3(-0.04, 0.26, 0), NAVY)
-	_b(s, Vector3(0.016, 0.03, 1.0), Vector3(-0.042, 0.62, 0), AMBER)
-	_b(s, Vector3(0.016, 0.03, 1.0), Vector3(-0.042, -0.1, 0), AMBER)
+	_dented(s, Vector3(0.07, 1.28, 1.14), Vector3.ZERO, PAINT, DENT, 3)
+	# the plate the name goes on: a raised amber frame plate (level 0) under the navy plate (level 1)
+	_door_slab(s, 0.33, 0.0, 1.02, 0.5, AMBER, 0)
+	_door_slab(s, 0.33, 0.0, 0.94, 0.42, NAVY, 1)
+	_b(s, Vector3(0.05, 0.08, 0.26), Vector3(-0.05, -0.05, 0.34), TRIM_LT)                       # handle
+	_door_slab(s, -0.22, 0.0, 1.12, 0.13, STRIPE, 0)                                               # in line with the body's stripe
 	# the same panel seen from inside (dark) so the open door reads as a door, not a floating slab
-	_b(s, Vector3(0.01, 1.2, 1.1), Vector3(0.036, 0, 0), INNER)
+	_b(s, Vector3(0.01, 1.2, 1.1), Vector3(0.036, 0.0, 0.0), INNER)
 	return s
+
+
+## A flat slab on the door's outer (-X) face, stacked in levels like VanModel._decal (the panel's face is at x = -0.035).
+static func _door_slab(s: LowPoly.Soup, y: float, z: float, wz: float, wy: float, col: Color, level: int) -> void:
+	var outer := 0.035 + DECAL_BASE + DECAL_STEP * float(level)
+	var thick := outer - 0.025
+	_b(s, Vector3(thick, wy, wz), Vector3(-(outer - thick * 0.5), y, z), col)
 
 
 # --------------------------------------------------------------------------- lights and glow
@@ -465,7 +430,6 @@ func _lamps_soup() -> LowPoly.Soup:
 	var warm := Color(1.0, 0.93, 0.7)
 	for sx: float in [-1.0, 1.0]:
 		_b(s, Vector3(0.44, 0.22, 0.04), Vector3(sx * 0.72, 0.9, 2.085), PropModels.glow(warm))
-		_b(s, Vector3(0.14, 0.12, 0.04), Vector3(sx * 0.93, 0.7, 2.085), PropModels.glow(AMBER))
 		_b(s, Vector3(0.14, 0.52, 0.04), Vector3(sx * 0.9, 1.15, -2.085), PropModels.glow(Color(1.0, 0.16, 0.1)))
 		_b(s, Vector3(0.1, 0.1, 0.04), Vector3(sx * 0.4, 0.62, -2.2), PropModels.glow(Color(1.0, 0.95, 0.85)))
 	# the star on the wand antenna
@@ -478,10 +442,9 @@ func _lamps_soup() -> LowPoly.Soup:
 ## A violet crystal lantern in the cargo and the glow strips on the shelves (shown when the door opens).
 func _inner_glow_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(SEED + 7, 0.04)
-	s.merge(LowPoly.boulder(Vector3(0.1, 0.17, 0.1), 0, 0.15, PropModels.glow(VIOLET), SEED + 8, 0.0), LowPoly.at(Vector3(-0.1, 1.4, -0.6)))
-	_b(s, Vector3(0.012, 0.03, 2.3), Vector3(0.5, 1.5, -0.5), PropModels.glow(Color(0.7, 0.45, 1.0)))
-	_b(s, Vector3(0.012, 0.03, 2.3), Vector3(0.5, 1.0, -0.5), PropModels.glow(Color(0.7, 0.45, 1.0)))
-	_b(s, Vector3(0.3, 0.012, 0.4), Vector3(0.0, 1.8, 0.4), PropModels.glow(Color(0.85, 0.75, 1.0)))   # ceiling strip
+	s.merge(LowPoly.boulder(Vector3(0.1, 0.17, 0.1), 0, 0.15, PropModels.glow(VIOLET), SEED + 8, 0.0), LowPoly.at(Vector3(-0.1, 1.5, 0.3)))
+	_b(s, Vector3(0.012, 0.03, 1.8), Vector3(0.5, 1.1, -0.25), PropModels.glow(Color(0.7, 0.45, 1.0)))   # the shelf's glow strip
+	_b(s, Vector3(0.3, 0.012, 0.4), Vector3(0.0, 1.8, 0.4), PropModels.glow(Color(0.85, 0.75, 1.0)))     # ceiling strip
 	return s
 
 
@@ -510,16 +473,10 @@ func _add_signs() -> void:
 	var font := FontVariation.new()
 	font.base_font = ThemeDB.fallback_font
 	font.variation_embolden = 0.9
-	# the door (-X side): the company name, on the navy plaque; it slides with the door
-	_label(door, "LICENSED
-BUDGET
-SORCERY", font, 38, 0.0052, CREAM, Vector3(-0.05, 0.28, 0.0), -90.0)
-	# the +X side banner
-	_label(signs, "BUDGET SORCERY", font, 52, 0.0056, CREAM, Vector3(1.026, 1.62, -0.55), 90.0)
-	_label(signs, "LICENSED  -  24/7 DISPATCH", font, 26, 0.0056, AMBER, Vector3(1.026, 1.37, -0.55), 90.0)
-	# the rear doors: a tagline and a phone number
-	_label(signs, "HOW'S MY SORCERY?", font, 26, 0.0052, TRIM, Vector3(0.0, 1.45, -2.075), 180.0)
-	_label(signs, "CALL 555-WAND-FIX", font, 24, 0.0052, TRIM, Vector3(0.0, 1.3, -2.075), 180.0)
+	# the door (-X side): the company name on the navy plate (plate face at x -0.061 + a hair); it slides with the door
+	_label(door, "CAST", font, 64, 0.0054, CREAM, Vector3(-0.073, 0.33, 0.0), -90.0)
+	# the +X side plate
+	_label(signs, "CAST", font, 80, 0.0058, CREAM, Vector3(1.039, 1.45, -0.8), 90.0)
 
 
 func _label(parent: Node3D, text: String, font: Font, size: int, pixel: float, col: Color, pos: Vector3, yaw: float) -> Label3D:

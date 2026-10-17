@@ -59,7 +59,8 @@ var packages: Array[Dictionary] = []
 ## The crew's work van (VanPlan, docs/design/environment.md "Van arrival"): {pos: Vector2 (world X/Z), yaw (degrees; nose =
 ## +Z, the sliding door on the model's -X side), w, d, cells (blocked), block_points, block_radius, door, door_normal,
 ## crew: [Wick, Gasket, Rebar spots] (Vector2), crew_cells, circle_radius, room, level}. Parked beside the start cell in the
-## start room, solid set dressing (not priced). {} when the start room has no flat space for it.
+## start room, solid set dressing (not priced). {} on floors 2 and 3 (the van parks on floor 1 only) and when the start
+## room has no flat space for it.
 var van: Dictionary = {}
 ## Rooms ordered by distance from the nearest gate, farthest first (start room left out).
 var ranked_rooms: Array[String] = []

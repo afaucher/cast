@@ -4,7 +4,7 @@ extends Control
 ##
 ##   godot --path . --resolution 1280x720 -- --scene res://scenes/forms_lab.tscn --screen board --lab-shot <abs.png>
 ##
-## --screen <s>    board | picker | pause | elevator | elevator_last | invoice | tracker | gallery
+## --screen <s>    board | picker | pause | elevator | elevator_last | van | invoice | tracker | gallery
 ## --lab-shot <p>  save a screenshot after --lab-after seconds (default 1.2) and quit
 ## --lab-after <s>
 ## --lab-focus <n> board: which offer is highlighted (default 0)
@@ -61,6 +61,10 @@ func _open(which: String, a: PackedStringArray) -> void:
 			var e := ElevatorMenu.new({"floor": 3 if last else 1, "floor_count": 3, "payout": 8400, "damages": 1200, "followers": 2,
 				"lines": ["Wine cellar sealed.", "Colin (valet) did not make it."]})
 			add_child(e)
+		"van":
+			var v := VanExitMenu.new({"floor": 1, "floor_count": 3, "payout": 8400, "damages": 1200, "followers": 2,
+				"lines": ["Hellgates closed on this floor: 1 of 2.", "Objectives not met do not pay. Damage comes out of what you earned."]})
+			add_child(v)
 		"invoice":
 			var inv := _demo_invoice()
 			var s := InvoiceScreen.new(inv)

@@ -256,6 +256,14 @@ func setup() -> void:
 	await frames(120)
 	check(not is_instance_valid(emp), "removed after the exit")
 	eq(rescued_count[0], 1, "still emitted exactly once")
+	# the bark can be chosen (the drop-off says "I'm out, thanks!"), and an extracted employee is no longer a follower
+	var emp2 := Employee.spawn(Vector2i(2, 0), {"style": "staff"})
+	emp2.request_follow(hero)
+	check(emp2.is_following(), "recruited again")
+	emp2.extract("I'm out, thanks!")
+	check(not emp2.is_following(), "an extracted employee is not a follower (an exit would not take it a second time)")
+	await frames(2)
+	eq(emp2.bubble_text(), "I'm out, thanks!", "the drop-off bark")
 	# a dead one cannot be extracted
 	emp = Employee.spawn(Vector2i(3, 0), {"style": "henchman"})
 	var r2 := [0]

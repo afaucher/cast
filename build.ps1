@@ -54,10 +54,12 @@ try {
 } finally { $env:APPDATA = $oldAppData }
 
 # Godot exits 0 on some failed exports -- the artifacts decide.
-foreach ($f in @("Cast.exe", "Cast.pck", "libhero_listen.windows.template_debug.x86_64.dll", "sherpa-onnx-c-api.dll", "onnxruntime.dll")) {
+foreach ($f in @("Cast.exe", "Cast.pck", "libhero_listen.windows.template_debug.x86_64.dll", "sherpa-onnx-c-api.dll", "onnxruntime.dll", "steam_api64.dll")) {
     if (-not (Test-Path (Join-Path $outDir $f))) { Write-Host "BUILD FAILED: missing $f" -ForegroundColor Red; exit 1 }
 }
 Set-Content -Path (Join-Path $outDir "version.txt") -Value $buildVersion
+# Steam needs its app id next to the exe when launched outside the Steam client (480 = Spacewar, dev only).
+if (Test-Path "$PSScriptRoot\steam_appid.txt") { Copy-Item "$PSScriptRoot\steam_appid.txt" -Destination $outDir }
 
 # --- Package -------------------------------------------------------------------------------------
 # Lessons from bridge-to-friendship's build.ps1: Compress-Archive silently skips a file it cannot open

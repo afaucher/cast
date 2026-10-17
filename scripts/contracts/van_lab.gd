@@ -12,6 +12,7 @@ extends Node3D
 ##                zoom the game starts at), side (the door side) / other / rear / front / top (the van alone, size 6, from that side)
 ## --yaw/--pitch/--size   override the camera;  --van-yaw <deg>  turn the van (default 135: the door faces the camera)
 ## --no-crew      leave the heroes out
+## --door <0..1>  force the sliding door (0 closed, 1 open) on a parked (no --t) van, to inspect either state
 ## No --shot: the arrival replays every 8 seconds.
 
 const GAME_YAW := 45.0
@@ -25,6 +26,7 @@ var cam_pitch := NAN
 var cam_size := NAN
 var van_yaw := 135.0
 var with_crew := true
+var door_override := NAN
 var map: HexMap
 var camera: Camera3D
 var arrival: VanArrival
@@ -62,6 +64,8 @@ func _parse_args() -> void:
 	if _arg(a, "--van-yaw") != "":
 		van_yaw = float(_arg(a, "--van-yaw"))
 	with_crew = not a.has("--no-crew")
+	if _arg(a, "--door") != "":
+		door_override = float(_arg(a, "--door"))
 
 
 static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
@@ -110,6 +114,8 @@ func _start() -> void:
 	# a shot without --t shows the parked van; --t (or no --shot at all) plays the arrival
 	var play := shot_path == "" or not is_nan(at_t)
 	arrival = VanArrival.spawn(_plan, crew, play)
+	if not play and not is_nan(door_override):
+		arrival.van.set_door_open(door_override)
 	if shot_path != "":
 		_run_shot()
 

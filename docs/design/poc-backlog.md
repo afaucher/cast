@@ -285,4 +285,5 @@ hero, the host owns monsters, and cross-owner hits and shoves travel as messages
 - **P1** Spell **teeth**: affliction, 1-2 s growth, pop with splash and shove, heal cleanses. See `spells.md`.
 - **P1** Rename the heroes: Pebble -> **Rebar**, Dagna -> **Gasket**, Larkin -> **Wick**. Done: labels, game.gd, docs, model classes and files. Voice clips ("gasket", "rebar", "wick", plus "Gasket heal me" etc.) assert that the names never cast a spell.
 - **P1** Contracts: objectives with pay (employees $10 each, disinfect a room $10k, hellgates $3k each), property-damage deductions, end-of-job invoice. See `contracts.md`.
+- Restock spell components at the van (floor 1 only); later.
 - **P2** Villain-lair site type (torture chamber, throne room, lab, moat, barracks). See `environment.md`.

@@ -93,8 +93,8 @@ so four agents can build in parallel without touching each other's files.
   - employees, in the rooms farthest from the origin;
   - priced props along room edges (from D's catalog);
   - the existing monster packs, biased toward the pest.
-- **Elevator** (the exit cell) menu: "Go down to floor N" / "Cash out". The early exit always
-  works.
+- **Elevator** (the exit cell) menu: "Go down to floor N" / "Exit" (floor 3: exit only), and the floor-1 van's clock-out
+  slip. The early exit always works; see `docs/design/contracts.md`, "Mission structure".
   - HP and downed state carry between floors; everything resets per contract.
   - Spells are re-picked per contract.
 - **Objectives** (exact pay from `contracts.md`): close hellgates ($3k each; origin gate more),

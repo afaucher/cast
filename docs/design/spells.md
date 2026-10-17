@@ -127,3 +127,44 @@ and follows the area rule: area spells hit **everyone** inside, except heal and 
 4. **Ghost** needs visibility and aggro rules (monsters losing targets).
 5. **Blind** shares that aggro work, plus a screen effect.
 6. **Damp** last, because it depends on fire and environment features that don't exist yet.
+
+### Mercurio Retrogrado: "Everything Goes Wrong" [parked, 2026-10-17]
+"cast mercurio retrogrado" is two Spanish words for an English-only speech model, so it should be near impossible to
+say. The reward is overpowered. The user picked this idea (#3 of six) and parked it with the other spells.
+
+**Single target:** whoever the aim ring is on. Enemies get a long, brutal bad week; a teammate (a misfire, or
+aiming at yourself) gets a short, funny one that never takes control away.
+
+| Effect | On an enemy (20 s) | On a player (8 s) |
+|---|---|---|
+| Attacks | half its swings and shots whiff; a whiffed swing can hit a neighbouring monster, a whiffed arrow veers into the pack | 1 in 4 attacks whiffs; a miss never hurts a teammate |
+| Communication (Mercury's domain) | it "mishears" orders: walks the wrong way for a beat, loses its target | **voice casts come out wrong:** "cast heal" fires a random other slotted spell |
+| Footing | trips every 3–4 s (0.6 s stun); its climbs fail (+2 steps become walls) | trips once or twice (a stagger, no stun, no damage) |
+| Damage taken | +50% from everything | none |
+| Shoves | pushed twice as far; a prop it gets knocked into bills "Act of Mercury: $0" | normal |
+| Look | a swirling ☿℞ glyph overhead, outline flickering like a bad signal | the same glyph, and the HUD subtitle "Mercury is in retrograde" |
+
+**Edge cases:**
+- **Hellgate:** you can't curse the gate; for 20 s everything it spawns comes out stumbling and cursed for 5 s.
+- **Swarmers:** the curse spreads to the target's swarm.
+- **Employees:** a cursed one wanders off and waits somewhere wrong.
+- **Heal:** halves the time left on a player and does nothing for enemies.
+- **Bosses:** half duration.
+
+**Open questions:**
+1. Is the voice swap on cursed players in?
+2. Enemy damage taken: +50%, or double?
+3. Are the durations right?
+4. Is "Act of Mercury" free property damage in?
+
+**Build notes:**
+- A status node like `Burning` (`scripts/spells/burning.gd`).
+- Test the phrase with recorded clips: hard but learnable. Add sound-alikes such as "MERCURY RETRO GRADO".
+- A ~90 s cooldown and a rare component (a quicksilver vial).
+
+**Other ideas considered:**
+1. Return to Sender: rewind the target into its gate.
+2. Miscommunication: it fights for you, then pops.
+4. Planetary Alignment: an orbit-and-slam nuke.
+5. Exes Return: replay every hit it took, doubled.
+6. Refund: delete it and get paid its bounty.

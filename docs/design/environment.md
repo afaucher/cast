@@ -189,22 +189,28 @@ and it breaks too). Shelves, racks, furniture, barrels and priced props stay sol
 - **Test:** `tests/test_breakable_crates.gd`. **Dev:** `--to-theme panic_room --break-crates 1.0`.
 
 ## Van arrival [built, 2026-10-17]
-**The premise:** the crew are Licensed Budget Sorcery contractors, so they don't walk in: at the start of every floor
-their beat-up work van teleports in over a summoning circle in the start room and they climb out. Then it just sits
-there as set dressing for the rest of the floor.
+**The premise:** the crew are Licensed Budget Sorcery contractors, so they don't walk in: at the start of **floor 1** their
+beat-up work van teleports in over a summoning circle in the start room and they climb out. Then it stays parked there for
+the floor, as solid set dressing **and as one of the contract's two exits** (E at its side door clocks out; see
+`contracts.md`, "Mission structure"). **The van parks on floor 1 only:** floors 2 and 3 have no van, no circle and no
+arrival (the crew just starts on the start cell and its neighbours, as before the van existed), because the crew only
+ever goes down.
 
-- **Van** (`VanModel`, `scripts/art/lowpoly/props/van_model.gd`): about 2.0 x 4.2 x 2.2, a boxy white-grey panel van with rust
-  patches, grime and dents, a roof rack (orange ladder, copper / PVC / ABS pipes, ratchet straps, a wand antenna), hose
-  coils, a pipe wrench and a plunger on pegs, a sliding side door (slides rearward, violet glow and a shelving rack
-  inside), headlights and tail lights that can glow, wheels on a bouncing suspension, a wand-and-wrench roundel on both
-  sides and the name as `Label3D` text ("LICENSED BUDGET SORCERY" on the door, "BUDGET SORCERY / LICENSED - 24/7 DISPATCH"
-  on the banner side, "HOW'S MY SORCERY?" on the back). At the game camera the text only reads when zoomed in; the roundel,
-  stripe, ladder and pipes carry the silhouette. Nose = +Z, door on the model's -X side.
+- **Van** (`VanModel`, `scripts/art/lowpoly/props/van_model.gd`): about 2.0 x 4.2 x 2.2, a boxy white-grey panel van with a few
+  rust patches, a roof rack (orange ladder, a copper and a PVC pipe, two ratchet straps, a wand antenna), a pipe wrench on the
+  banner side, a sliding side door (slides rearward, violet glow and one shelf with bins inside), headlights and tail lights
+  that can glow, wheels on a bouncing suspension, a small wand-and-wrench logo on both sides and the name as `Label3D` text:
+  "CAST" on the door plate and on the other side's plate. Kept sparse on purpose: every attached piece has clear air around it
+  and nothing sits in the door opening, on a wheel arch or on another piece. Side decals are stacked in levels
+  (`DECAL_BASE` / `DECAL_STEP`, sunk into the wall) so no two faces are coplanar (no z-fighting). The tyres rest
+  `RIDE_HEIGHT` (0.045) above the floor, clear of the 0.035 chalk circle; the suspension only moves the chassis. At the game
+  camera the name reads; the logo, stripe, ladder and pipes carry the silhouette. Nose = +Z, door on the model's -X side.
 - **Circle** (`VanCircle`, `van_circle.gd`): a shader-drawn pentagram in two rings with tick marks and rune glyphs on a flat
   quad. It has a glow look (amber HDR lines and halo, so it blooms) and a chalk look (faint broken lines) and blends between
   them; around it are a column of light, a shock ring, rising sparks and an amber light.
 - **Placement** (`VanPlan`, `scripts/contracts/van_plan.gd`, called from `SiteBuilder._plan_van` right after the themes are
-  dealt; pure data in `SitePlan.van`, deterministic per floor, no random numbers). The pose is searched over every flat
+  dealt, **floor 1 only**: floors 2 and 3 plan `{}` and their start rooms are laid out without it; pure data in
+  `SitePlan.van`, deterministic per floor, no random numbers). The pose is searched over every flat
   start-room cell within 5 cells of the start, 18 yaws:
   - the whole body plus a 0.4 x 0.55 margin is flat floor of the start room's base level (strictly flat cells first), at
     least 2 cells from any corridor cell (a cramped room relaxes this to 1 and shrinks the margin; it still fits 600 of 600 floors tried);
@@ -218,9 +224,11 @@ there as set dressing for the rest of the floor.
   `plan.blocked` so no monster spawns there. Across 5 archetypes x 40 seeds x 3 floors it always fits.
 - **Solid, not priced:** `VanArrival` adds four invisible `DecorBlocker` circles (r 0.98) along its axis, the same actors
   blocking decor uses, so heroes and monsters walk around it. It is not an `Actor`, not in the priced-prop list and takes
-  no damage (the blockers return 0), so no property damage is ever charged. The elevator and its menu are untouched.
+  no damage (the blockers return 0), so no property damage is ever charged. The van is also an **exit**: `game.gd` opens
+  the clock-out slip (`VanExitMenu`) on E within 2.8 of the plan's `door` point (floor 1 only), a request the host arbitrates
+  like the elevator's. The elevator and its menu keep working as before.
 - **Arrival** (`VanArrival`, `scripts/contracts/van_arrival.gd`, wired in `game.gd`'s `_arrive_by_van()` after the site is
-  built): a plain timeline, every moment a function of `time`:
+  built; it returns at once on floors 2 and 3): a plain timeline, every moment a function of `time`:
 
   | t (s) | what happens |
   |---|---|

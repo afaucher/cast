@@ -24,8 +24,9 @@ end; the north-star "consistently pretty good" team should clear most objectives
     follower tells them to wait ("E: tell Marguerite to wait"). A waiting employee crouches where they were
     told, still panics at monsters and then walks back, and never rejoins by proximity, so they do not
     chase you into a fight. A waiting employee still counts alive ($10); extraction only takes followers
-    near the elevator, so one left behind is not extracted. E (Use) priority: elevator, then the employee, then
-    nothing; E never casts, so a follower inside 2.2 never costs you a spell.
+    (see the drop-off and the exits below), so one left behind is not extracted. E (Use) priority: the van exit
+    (at the van), then the elevator (at it), then the employee, then nothing; E never casts, so a follower
+    inside 2.2 never costs you a spell.
     The press is a **request** (`Employee.request_wait / request_follow`): the host
     owns employees and a player's E asks it. AI allies never recruit. A hero within 2.2 of an employee
     that follows an AI ally can dismiss it.
@@ -129,13 +130,40 @@ How they fit together, from the top down:
    - Objectives can span floors (e.g. "close all 4 gates" across 2 floors), and pay rises with depth.
    - **The elevator is always available** (the early-exit rule). It needs a key press: while the player
      stands on or next to the exit cell the HUD says "E: use elevator" and E opens its menu (E never casts). At each floor the crew decides:
-     go down for more pay and more risk, or cash out. Unmet objectives don't pay, and damage is
+     go down for more pay and more risk, or exit. Unmet objectives don't pay, and damage is
      taken out of earnings (never below $0).
    - **The invoice** at the end totals every floor.
 
+### Mission structure [decided, user, 2026-10-17]
+- **Floors 1-3, no backtracking.** The crew only ever goes down.
+- **The van parks on floor 1 only.** It teleports in at the start of floor 1 (see `environment.md`, "Van arrival") and
+  stays parked there. Floors 2 and 3 have **no van and no arrival**: the crew just starts on the start cell and its free
+  neighbours (`SiteBuilder` plans no van below floor 1, `game.gd` spawns none).
+- **Two exits, and leaving early is always allowed at either** (unfinished objectives simply don't pay):
+  - **The elevator**, on every floor, offers **go down to the next floor** and **exit** (clock out and invoice). On
+    floor 3 it offers only exit. HUD prompt "E: use elevator".
+  - **The van**, floor 1 only. **E** within 2.8 of its side door (HUD prompt "E: clock out at the van") opens a small
+    canary slip (`VanExitMenu`): "Clock out: drive off and invoice the client" and Cancel. Confirming ends the contract
+    exactly like the elevator's exit. It is a request the host arbitrates, like the elevator.
+  - Closing the floor-3 **origin gate does not end the contract**; the crew still has to leave at the elevator or the van.
+- **Extraction:** employees FOLLOWING the crew within ~3 cells of the exit being used (van door or elevator) when the crew
+  leaves are extracted, **$100 each**. Any other living employee counts $10. Going down the elevator extracts its
+  followers too, before the floor changes.
+- **`use` (E) priority:** the van exit (at the van), then the elevator (at it), then employees, otherwise nothing. E never
+  casts.
+- **Drop-off [decided, user]:** an employee who is following the crew and gets within 2.5 world units of an exit (the
+  floor-1 van's door area, or the elevator on any floor) **leaves right away** and counts as extracted ($100), whether or
+  not the crew ever takes the exit and with no key press. Waiting and cowering employees never do. It reuses
+  `Employee.extract()` (the exit animation) with the bark "I'm out, thanks!" and the usual HUD money line. It is recorded
+  once: the Ledger line "Employee extracted" is written at drop-off time through `ContractSession.extract`, an employee that
+  left is no longer a follower (nothing extracts it again at the exit) and `ContractSession.employees_alive()` already
+  excludes it (nothing pays its $10). The objective tracker's employee row shows it at once ("1 rescued · 2 alive").
+  Tests: `tests/test_exit_dropoff.gd`.
+- **Not part of this:** restocking spell components at the van (see `poc-backlog.md`).
+
 ### Open questions
-- ~~**Floors:** how many per contract?~~ **Decided: 3 floors per contract.** Still open: do floors
-  loop back up (taking employees up the elevator)?
+- ~~**Floors:** how many per contract?~~ **Decided: 3 floors per contract, and no backtracking** (the crew only ever goes
+  down; see "Mission structure").
 - ~~**Per-floor contents**~~ **Decided (option B, the descent builds to a climax):**
   - **Floors 1–2:** smaller hellgates and stray pests spreading up from below.
   - **Floor 3:** the **origin gate**, one big, tough hellgate where it all started, worth the
