@@ -9,6 +9,8 @@ extends Control
 ## --lab-after <s>
 ## --lab-focus <n> board: which offer is highlighted (default 0)
 ## --lab-down <n>  press Down n times first (focus walk), for the picker / pause / elevator
+## --lab-card <i> picker: focus card i (0-based) after the first two are ticked
+## --lab-fake <n>  picker: offer n made-up spells instead of the real ones (checks a long catalog)
 
 var screen := "board"
 
@@ -49,9 +51,17 @@ func _open(which: String, a: PackedStringArray) -> void:
 				board.set_highlight(int(f))
 		"picker":
 			var p := SpellPicker.new()
+			var fake := int(Boot.arg_value(a, "--lab-fake"))   # a made-up list of this many spells (0 = the real ones)
+			if fake > 0:
+				p.spell_ids = SpellPicker.fake_ids(fake)
+				p.spell_meta = SpellPicker.fake_meta(p.spell_ids)
 			add_child(p)
-			p.toggle("heal")
-			p.toggle("fireball")
+			var offered := p.offered()
+			if offered.size() >= 2:
+				p.toggle(offered[0])
+				p.toggle(offered[1])
+			if Boot.arg_value(a, "--lab-card") != "":
+				p.focus_card.call_deferred(int(Boot.arg_value(a, "--lab-card")))
 			_walk(a)
 		"pause":
 			var p := PauseMenu.new()
@@ -112,7 +122,8 @@ func _walk(a: PackedStringArray) -> void:
 
 
 func _demo_invoice() -> Dictionary:
-	var run := ContractBoard.run_for_seed(12)
+	var seed_arg := Boot.arg_value(OS.get_cmdline_user_args(), "--invoice-seed")
+	var run := ContractBoard.run_for_seed(int(seed_arg) if seed_arg != "" else 12)   # --invoice-seed 60: the longest client name
 	var s := ContractSession.begin(run, 1)
 	var wick := _hero("Wick")
 	var rebar := _hero("Rebar")

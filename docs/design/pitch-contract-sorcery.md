@@ -10,9 +10,8 @@ spoken spells.***
 **Gig sorcerers take dangerous jobs in billionaires' survival bunkers: clearing out demons,
 recovering treasure, and billing for every hour.**
 
-The working name for the company is **Hex & Sons Contract Sorcery**: hex tiles, hexes, and
-a family firm with no actual sons. The player squad is "the crew," so the alternative is
-**Cast & Crew**.
+The company is **Cast Budget Sorcery** (decided 2026-10-17; the pitch's working name was "Hex & Sons Contract
+Sorcery": hex tiles, hexes, and a family firm with no actual sons). The player squad is "the crew".
 
 ## Tone
 

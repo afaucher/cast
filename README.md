@@ -55,7 +55,7 @@ HP carries between floors; everything resets between contracts.
 | LMB / RMB | Primary / secondary attack |
 | **Say "cast heal"** etc. | Cast any spell in your four slots. Fumbles weaken it or fizzle it |
 | 1 – 4 | Hold that slot's spell: it recharges 15% faster, and its component shows in your hand |
-| E | Use, first match wins: at the van's side door (floor 1), open the clock-out slip; at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; otherwise nothing. E never casts |
+| E | Use, first match wins: at the van's side door (floor 1), open the clock-out slip; at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; next to a note (a sign, memo, sticky note, voicemail...), read it, and E again closes it; otherwise nothing. E never casts |
 | F | Swap a component on the floor into your held slot |
 | Enter | Type an incantation instead of speaking |
 | F1 | Voice debug panel: what the mic hears and what the game did |

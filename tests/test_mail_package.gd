@@ -274,7 +274,7 @@ func _check_contents() -> void:
 	eq(Ledger.lines.size(), 1, "one line")
 	var line: Dictionary = Ledger.lines[0]
 	eq(String(line["kind"]), "earn", "an earning")
-	eq(String(line["label"]), "Unclaimed crypto (intercepted mail)", "the label")
+	eq(String(line["label"]), "Unclaimed crypto", "the label")
 	eq(String(line["who"]), "Wick", "credited to whoever broke it")
 	var pop_found := false
 	for n in root.get_children():

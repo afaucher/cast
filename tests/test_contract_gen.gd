@@ -25,7 +25,7 @@ func _check_tables() -> void:
 		check(d["site"] == "bunker" or d["site"] == "lair", "%s has a site type" % id)
 		for k: String in d["pests"]:
 			check(k == "everything" or MonsterFactory.KINDS.has(k), "%s pest '%s' is a monster kind" % [id, k])
-		check((d["events"] as Array).size() >= 3 and (d["clues"] as Array).size() >= 3, "%s has events and clues" % id)
+		check((d["events"] as Array).size() >= 3 and NoteCopy.STORY.has(id), "%s has events and notes" % id)
 		for key in ["good", "mid", "bad", "incap"]:
 			check(str(d["footers"][key]) != "", "%s footer %s" % [id, key])
 	var sites := {}
@@ -42,8 +42,14 @@ func _check_run_determinism() -> void:
 	eq(a.story, b.story, "same story")
 	eq(a.contract_value, b.contract_value, "same value")
 	eq(a.floor_employees, b.floor_employees, "same staff")
-	var c := ContractRun.make("guru", 78, 0.6)
-	check(a.client_name != c.client_name or a.story != c.story or a.pest != c.pest, "a different seed rolls a different contract")
+	# (The story used to carry the shuffled clue order, so two seeds almost always differed there; now compare the
+	# whole roll, over a few seeds.)
+	var differs := false
+	for s in [78, 79, 80]:
+		var c := ContractRun.make("guru", s, 0.6)
+		if a.client_name != c.client_name or a.story != c.story or a.pest != c.pest or a.floor_employees != c.floor_employees 				or a.floor_gates != c.floor_gates or a.company != c.company:
+			differs = true
+	check(differs, "a different seed rolls a different contract")
 	eq(a.floor_seed(1), a.seed, "floor 1 uses the contract seed")
 	check(a.floor_seed(2) != a.floor_seed(3) and a.floor_seed(2) != a.seed, "each floor has its own dungeon seed")
 
@@ -161,7 +167,7 @@ func _check_every_archetype_generates() -> void:
 	for id in ClientArchetype.IDS:
 		var run := ContractRun.make(id, 5, 0.5)
 		check(run.client_name != "" and run.company != "", "%s has a client name and company" % id)
-		check(run.story.has("event") and run.story.has("origin") and (run.story["clues"] as Array).size() == 3, "%s has a story" % id)
+		check(run.story.has("event") and run.story.has("origin"), "%s has a story" % id)
 		check(run.contract_value > 0, "%s has a contract value" % id)
 		seen_sites[run.site_type] = true
 		var map := DungeonGen.generate(run.floor_seed(1))
@@ -190,7 +196,7 @@ func _check_spawn_smoke() -> void:
 		if m.kind == "swarmer":
 			swarmers += 1
 	check(swarmers * 3 >= site.monsters.size() / 2, "the swarmer pest is over-represented (%d of %d)" % [swarmers, site.monsters.size()])
-	eq(site.notes.size(), 1, "one clue note")
+	eq(site.notes.size(), 2, "two notes (a story note and a hint slip)")
 	var start_room_monsters := 0
 	for m in site.monsters:
 		if site.plan.room_of_cell(Hex.from_world(m.global_position)) == site.plan.start_room:

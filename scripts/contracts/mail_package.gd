@@ -17,7 +17,7 @@ extends Actor
 ## CONTENTS, rolled once when it breaks (roll_contents, pure so tests can check the table):
 ##   skulls 20% / yogurt 20% / pickles 20%  decorative bits spill out (PackageSpill), gone after 30 s
 ##   component 25%  a random spell's ComponentPickup (it does not count toward SpellComponents.FLOOR_DROP_CAP)
-##   crypto 15%     $200-$2,000 earned on the invoice as "Unclaimed crypto (intercepted mail)"
+##   crypto 15%     $200-$2,000 earned on the invoice as "Unclaimed crypto"
 ## Every break also bursts into cardboard chips and leaves flattened flaps (and a torn-paper grime mark).
 ##
 ## Usage:
@@ -33,7 +33,7 @@ const BOX_HP := 10.0
 const LIFE_AFTER_BREAK := 1.0           ## the dead actor lingers this long (the spill is its own node), then goes
 const SHOVE_REACH := 0.12               ## an actor being shoved breaks it from this far inside its edge
 const FALL_GRAVITY := 14.0              ## a box left hanging by a broken one below drops with this
-const CRYPTO_LABEL := "Unclaimed crypto (intercepted mail)"
+const CRYPTO_LABEL := "Unclaimed crypto"
 const CRYPTO_MIN := 200
 const CRYPTO_MAX := 2000
 const CRYPTO_ROUND := 10

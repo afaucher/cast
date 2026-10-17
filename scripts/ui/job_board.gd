@@ -78,7 +78,7 @@ func _ready() -> void:
 	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	side.add_child(KeyHints.new([["1", "3", "or"], ["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "back"]]))
-	var rules := FormTheme.label("LEAVING EARLY ALWAYS WORKS  ·  UNMET OBJECTIVES DO NOT PAY  ·  PAY NEVER GOES BELOW $0", 18, Color(1, 1, 1, 0.85))
+	var rules := FormTheme.label("LEAVING EARLY ALWAYS WORKS  ·  UNMET OBJECTIVES DO NOT PAY", 18, Color(1, 1, 1, 0.85))
 	rules.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	rules.add_theme_constant_override("outline_size", 5)
 	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

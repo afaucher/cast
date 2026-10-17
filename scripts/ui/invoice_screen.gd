@@ -18,6 +18,10 @@ const BG := Color(0.065, 0.055, 0.07)
 const PAPER_W := 1000.0
 const SIDE_W := 340.0
 
+## Earned + damage rows that fit on one screen with NET PAYOUT in view (1280x720). Over this, each floor's earned
+## lines fold into one row per floor, then (if still over) the damages fold into one row per culprit (fit_rows).
+const ROW_BUDGET := 13
+
 ## Keys are ignored for this long after the screen appears (so a held key cannot skip it).
 const INPUT_GUARD_MS := 900
 
@@ -121,7 +125,7 @@ func _build_paper() -> Control:
 	meta.add_theme_constant_override("separation", 24)
 	inner.add_child(meta)
 	meta.add_child(_meta_box("BILL TO", [str(inv["client"]), str(inv["company"]), "Attn: Accounts Payable"]))
-	meta.add_child(_meta_box("VENDOR", [str(inv["vendor"]), "Licensed sorcery, per diem", "Crew of three, headsets included"]))
+	meta.add_child(_meta_box("VENDOR", [str(inv["vendor"]), "Licensed sorcery, billed by the job", "Crew of three, headsets included"]))
 	var status := "Cashed out on floor %d of %d" % [int(inv.get("floor_reached", 1)), ContractRun.FLOOR_COUNT]
 	if str(inv["reason"]) == ContractSession.END_INCAPACITATED:
 		status = "Crew incapacitated on floor %d of %d" % [int(inv.get("floor_reached", 1)), ContractRun.FLOOR_COUNT]
@@ -131,7 +135,8 @@ func _build_paper() -> Control:
 	inner.add_child(_header_band("LINE ITEMS (EARNED)"))
 	var grid := _grid()
 	inner.add_child(grid)
-	var floors: Array = inv["floors"]
+	var fitted := fit_rows(inv["floors"], inv["deductions"])
+	var floors: Array = fitted["floors"]
 	if floors.is_empty():
 		_row(grid, "", "No billable work completed.", "", "$0", INK_DIM)
 	for sec: Dictionary in floors:
@@ -146,7 +151,7 @@ func _build_paper() -> Control:
 	inner.add_child(_header_band("DEDUCTIONS: PROPERTY DAMAGE"))
 	var dgrid := _grid()
 	inner.add_child(dgrid)
-	var ded: Array = inv["deductions"]
+	var ded: Array = fitted["deductions"]
 	if ded.is_empty():
 		_row(dgrid, "", "No property damage reported. (We checked twice.)", "", "$0", INK_DIM)
 	for d: Dictionary in ded:
@@ -259,9 +264,46 @@ func _meta_box(title: String, lines: Array) -> Control:
 	b.add_child(FormTheme.label(title, 18, FormTheme.INK, true))
 	for i in lines.size():
 		var l := _t(str(lines[i]), 18 if i == 0 else 15, INK if i == 0 else INK_DIM)
-		l.clip_text = true
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # long client / company names wrap instead of being cut off
 		b.add_child(l)
 	return b
+
+
+## Fold the invoice's rows so earned + damage rows fit ROW_BUDGET: first each floor's earned lines become one
+## "Floor n work" row (qty = items, amount = the floor's total), then the damages become one row per culprit.
+## Totals never change. Returns {floors, deductions} in the same shapes ContractInvoice.build() uses.
+static func fit_rows(floors: Array, ded: Array, budget: int = ROW_BUDGET) -> Dictionary:
+	var earned_rows := 0
+	for sec: Dictionary in floors:
+		earned_rows += (sec["rows"] as Array).size()
+	var out_floors := floors
+	if earned_rows + ded.size() > budget:
+		out_floors = []
+		for sec: Dictionary in floors:
+			var qty := 0
+			var amount := 0
+			for r: Dictionary in sec["rows"]:
+				qty += int(r["qty"])
+				amount += int(r["amount"])
+			out_floors.append({"floor": sec["floor"], "rows": [{"label": "Floor %d work" % int(sec["floor"]), "qty": qty, "amount": amount}]})
+		earned_rows = out_floors.size()
+	var out_ded := ded
+	if earned_rows + ded.size() > budget:
+		var by_who: Dictionary = {}
+		var order: Array[String] = []
+		for d: Dictionary in ded:
+			var who := str(d["who"])
+			if not by_who.has(who):
+				by_who[who] = {"label": "Damage", "who": who, "qty": 0, "amount": 0}
+				order.append(who)
+			var row: Dictionary = by_who[who]
+			row["qty"] = int(row["qty"]) + int(d["qty"])
+			row["amount"] = int(row["amount"]) + int(d["amount"])
+		out_ded = []
+		for who in order:
+			out_ded.append(by_who[who])
+		out_ded.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["amount"]) > int(b["amount"]))
+	return {"floors": out_floors, "deductions": out_ded}
 
 
 ## A typed line.

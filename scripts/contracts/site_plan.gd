@@ -48,8 +48,11 @@ var lights: Array[Dictionary] = []
 var entrances: Dictionary = {}
 ## {room, theme, op, ok} for every recipe op the themer ran (diagnostics, tests).
 var decor_report: Array[Dictionary] = []
-## {cell: Vector2i, text: String}
+## Notes (ClueNote, docs/design/notes-rethink.md): {cell: Vector2i, text: String (filled), format: String (NoteCopy.FORMATS),
+## header: String, kind: "story" | "hint", yaw: float (degrees, faces the room's door), room: String}.
 var notes: Array[Dictionary] = []
+## The dispatch banner line for this floor (NoteCopy.DISPATCH, filled).
+var dispatch := ""
 ## Mail packages (MailPackage, docs/design/environment.md): 4-6 SPOTS a floor, each a stack of 1-3 breakable boxes:
 ## {cell: Vector2i (room cell the stack stands in), pos: Vector2 (world X/Z, against a wall), yaw (degrees, front = +Z,
 ## facing away from the wall), stack: int, room: String, seed: int, sizes: Array[String] (box kind per level, bottom
@@ -78,7 +81,7 @@ func net_fields() -> Dictionary:
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "packages": Net.SPAWN,
 		"room_themes": Net.SPAWN, "decor": Net.SPAWN, "lights": Net.SPAWN, "entrances": Net.SPAWN,
-		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "ranked_rooms": Net.SPAWN,
+		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "dispatch": Net.SPAWN, "ranked_rooms": Net.SPAWN,
 		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN, "van": Net.SPAWN,
 	}
 

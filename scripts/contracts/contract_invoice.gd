@@ -5,7 +5,7 @@ extends RefCounted
 ##   earned (sum of the floor sections) - deducted (damages capped at the contract value) = payout.
 
 const MONTHS: Array[String] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-const VENDOR := "Hex & Sons Contract Sorcery"
+const VENDOR := "Cast Budget Sorcery"
 const MAX_DEDUCTION_ROWS := 5
 const STAR_3_RATIO := 0.66
 const STAR_2_RATIO := 0.33

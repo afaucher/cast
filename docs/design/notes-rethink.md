@@ -1,281 +1,247 @@
-# Notes rethink
+# Notes
 
-Status: **proposal**, 2026-10-17. Nothing here is built. It replaces the `clues` in
-`client_archetype.gd`, the `SPREAD_LINES` and `floor_notes` in `contract_story.gd`, the floating
-"NOTE" label on `SiteBuilder.ClueNote`, and the "A note: " prefix in `game.gd` `_on_note_read`.
+Status: **built**, 2026-10-17. Code: `scripts/contracts/note_copy.gd` (all the copy),
+`note_facts.gd` (the `{slots}`), `site_builder.gd` `_plan_notes` (choice and placement),
+`clue_note.gd` (the world object), `scripts/art/lowpoly/props/note_models.gd` (the per-format models),
+`scripts/ui/forms/note_slip.gd` (the on-screen slip), `scripts/ui/dispatch_banner.gd` (the floor banner).
+Tests: `tests/test_notes.gd`.
 
-## 0. What is wrong today
+## As decided (user, 2026-10-17)
+
+1. **Every note was written BEFORE the outbreak.** Nobody writes notes afterwards. Notes are memos,
+   signs, schedules, sticky notes, voicemails, complaint forms and Slack exports that existed when
+   the site was normal, so they **foreshadow** rather than report. Hint facts are pre-outbreak truths
+   too: a shelter plan names the staff room, an insurance list names the priciest prop, a pest-control
+   ticket describes the pest, a "do not enter" sign or maintenance ticket names the gate room.
+2. **Notes are plain interactable set dressing.** Anyone nearby can read any note. Nothing tracks who
+   read what, and there is no per-player visibility.
+3. **No reward, no objective, nothing on the invoice.** The fun is snooping on your employer.
+4. **Dispatch floor banners stay** (dispatch talking live on the headset, not a note).
+
+## 0. What was wrong before
 
 | Problem | Example |
 |---|---|
-| **Double framing.** The banner says "A note:", then the text describes the object again. | "A note: A memo: 'Imps are NOT pets.'" |
-| **No information.** No line tells you anything about *this* floor. | "Burnt sage on every surface. It did not help." |
-| **Not tied to the story.** Clues are shuffled with no link to the rolled event or the floor. | The floor-3 note can be "KR1: find the gate" while you stand at the gate. |
+| **Double framing.** The banner said "A note:", then the text described the object again. | "A note: A memo: 'Imps are NOT pets.'" |
+| **No information.** No line told you anything about *this* floor. | "Burnt sage on every surface. It did not help." |
+| **Not tied to the story.** Clues were shuffled with no link to the rolled event or the floor. | The floor-3 note could be "KR1: find the gate" while you stand at the gate. |
 | **No reason to explore.** One note a floor, always 4–8 cells from the start. | |
-| **Generic banners.** The four spread lines are shared by all five clients and repeat every run. | "The incident is below. Its tenants are not staying below." |
+| **Generic banners.** Four spread lines shared by all five clients. | "The incident is below. Its tenants are not staying below." |
 
 ## 1. What notes are for
 
-**Rule: every note is a joke with a fact in it.** The joke builds the client; the fact helps the crew.
-A note that is only a joke is allowed on floor 1. After that it has to earn its spot.
+**Every note is a joke with a fact in it.** The joke is the client, caught off guard in their own
+paperwork; the fact is a pre-outbreak truth that still helps the crew. A joke-only note is fine on
+floor 1. After that it has to earn its spot.
 
-| Job | How |
-|---|---|
-| **Character and story** | One authored **story note** per floor, voiced by that client's people. Floor 1 sets up, floor 2 escalates, floor 3 explains the rolled event, right at the origin room. |
-| **Actionable hints** | Slots filled from the generated floor: where staff are hiding, which room has a gate, the priciest prop and its room, what the pest does. All true for this floor (section 5). |
-| **A reason to explore** | One **hint slip** per floor, placed in a side room off the start–exit route. Finding it pays off as information, not as money. |
-| **Something to say** | In co-op the slip shows only to the hero who found it. They have to call it out ("Hodges is in the gym"). That's the north-star rule: give the team something to say to each other. |
+**Two notes per floor:**
 
-**Per floor: 2 notes.**
-
-| Floor | Story note (authored, per client) | Hint slip (templated) |
+| Floor | Story note (written per client) | Hint slip (templated, shared) |
 |---|---|---|
-| 1 | near the start, as today: **sets up** the client | a **pest advisory**: what this contract's pest does |
-| 2 | mid-floor, on the way to the elevator: **escalates**, and carries a hint slot | staff or gate location |
-| 3 | at the origin room's doorway: **pays off** the rolled event | staff location or the priciest prop |
+| 1 | near the start: **sets up** the client | **pest-control ticket**: what this contract's pest does |
+| 2 | in a room roughly halfway to the elevator: **escalates**, usually with a hint slot | shelter plan (staff), else gate, else prop |
+| 3 | in the origin room, near its door: **the plan or warning that led to** the rolled event | insurance list (prop), else shelter plan, else pest |
+
+The hint slip goes in a **side room** (not the start, exit or origin room, preferring rooms off the
+start–exit route), so it is a reason to look around. A hint never repeats the kind of fact the floor's
+story note already gave.
 
 ### How a note is shown
 
-| Layer | What | Notes |
-|---|---|---|
-| **In the world** | The object itself: a yellow square on a wall, a clipboard, a laminated sign on a stand, a blinking desk phone, a letterhead sheet, a pink form. Each format has its own silhouette and colour. | **No floating "NOTE" text.** A slow bob plus a soft glint is enough. It is read automatically on proximity (2.2, as today); no key press. |
-| **On the HUD** | A **slip** that slides in at the lower left, drawn in the format's own style (section 2). Its header is the format's own title, so the object is the frame: no "Note:" and no "A memo:". It holds 6–9 s (scaled to length) and never blocks input. A second slip stacks above it (max 2). | Reuses `FormSheet` / `FormTheme` carbons and the Caveat hand font. |
-| **The top banner** | Reserved for **dispatch** (section 4), not for notes. | |
-| **Debug log** | `[note sticky F2] <text>`. Logs only (passive data collection). | |
+| Layer | What |
+|---|---|
+| **In the world** | The object itself, one look per format (section 2). No floating "NOTE" text: a small twinkling glint above it says "you can read this". |
+| **Reading** | **`[E] Read`** (`[E] Listen` for a voicemail) through the shared use prompt (`game.gd` `use_target()`), like the van, elevator and employees. Priority: van, elevator, employee, then note, so a note never steals a rescue. Walking past does **not** read it. |
+| **On the HUD** | E opens a slip at the lower left, drawn in the format's own style. Its title is the format's own header ("Grievance Form 7B", "Pest Control · Site Visit"), so the object is the frame: no "Note:". While it is open the prompt says `[E] Close`; E closes it, and so does walking away (`READ_RANGE` + 0.6). One slip at a time. Never blocks input. |
+| **Top banner** | Dispatch only (section 4). |
+| **Debug log** | `[note sticky F2] <text>`. |
+
+**Why `[E] Read` (user, 2026-10-17).** Notes are interactables, and the game already has one prompt system for
+"E does something here". Read-on-walk fired slips mid-fight in rooms you were only crossing; `[E]` makes snooping a
+choice, lets you read twice, and costs nothing (E never casts). Notes come after employees in the priority, so
+rescuing always wins when both are in reach. `tests/test_notes.gd` checks the prompt and the press agree.
 
 ## 2. Note formats
 
-Six formats. The format sets the visual and the layout; the client sets the header and the voice.
+| Format | In the world | HUD slip | Voice |
+|---|---|---|---|
+| **Sticky note** | a fan of yellow squares on the floor | yellow pad, Caveat handwriting, tilted, signature right-aligned | a staff member or henchman, first person |
+| **Incident report / ticket** | clipboard on the floor | white carbon, typed, stamped number | flat procedural |
+| **Laminated sign** | white A-frame floor sign, hazard-stripe band | glossy plate with hazard stripes, ALL-CAPS rule, pen additions in red hand | policy |
+| **Voicemail** | desk phone on a little stand, blinking red light | dark phone card, "1 new voicemail", transcript, waveform | **the client** (the only place they speak) |
+| **Client memo** | letterhead sheet with the client's accent band | letterhead in the client accent colour | corporate, the archetype's tone |
+| **Complaint form** | pink form on a cork-board easel | pink carbon, URGENT ticked, handwritten free text | an aggrieved employee |
 
-| Format | In the world | HUD slip | Voice | Best for |
-|---|---|---|---|---|
-| **Sticky note** | yellow square on a wall, monitor or prop | yellow pad, Caveat handwriting, tilted, signed "— {staff}" | a frightened staff member or henchman, first person | where staff are hiding |
-| **Incident report** | clipboard on a hook or the floor | white carbon, typed rows, stamped number | flat procedural; the facts are absurd, the tone isn't | gates, what happened |
-| **Laminated sign** | A-frame sign or wall plate, hazard-tape border | glossy white, ALL-CAPS rule plus small print; pen added underneath | policy that events have made wrong | pest advice, prop value |
-| **Voicemail** | desk phone with a blinking red light, or a dropped phone | phone-shaped card, "1 new · {client}", transcript | **the client**, the only place they speak (the pitch: clients exist as voicemails) | the client's priorities: their prop, their staff |
-| **Client memo** | letterhead sheet on a desk, client accent colour (`ClientArchetype.ACCENTS`) | letterhead with company and dept | corporate, the archetype's tone | floor-1 setup |
-| **Complaint form** | pink carbon form pinned to a board | pink carbon, tick boxes, one free-text line | an aggrieved employee filing paperwork mid-disaster | staff location, escalation |
-
-**Headers by client** (the slip's title line):
+**Headers** (a line can override with its own, e.g. "Calendar invite"):
 
 | Format | Prepper | Supervillain | Guru | Founder | Influencer |
 |---|---|---|---|---|---|
-| Incident report | Contingency Log | Lair Incident Report | Energy Report | Postmortem | Brand Safety Incident |
-| Client memo | From the desk of {client} | Henchmen Resources memo | Intention card | #general (Slack export) | Brand brief |
-| Complaint form | Staff Concern Form | Grievance Form 7B | Guest Feedback Card | Anonymous Feedback (named) | Comment Moderation Log |
-| Laminated sign | Bunker Protocol | Lair Policy | Retreat Etiquette | Office Norms | Studio Rules |
+| Report | Contingency Log | Maintenance Ticket | Energy Report | Ticket | Brand Safety Review |
+| Memo | From the desk of {client} | Henchmen Resources | Intention Card | #general | Brand Brief |
+| Complaint | Staff Concern Form | Grievance Form 7B | Guest Feedback Card | Anonymous Feedback (Named) | Comment Moderation Log |
+| Sign | Bunker Protocol | Lair Policy | Retreat Etiquette | Office Norms | Studio Rules |
+| Voicemail | 1 new voicemail · {client} (all clients) |||||
 
 ## 3. Copy
 
-Slots in `{braces}` are filled from the floor (section 5). `{PROP}` / `{ORIGIN}` are upper-case
-fills for signs. **Bold** = the default; the others are alternates. F3 lines with an **event** only
-appear when that event rolled. They are the payoff, and the generator prefers them.
-
-Format key: **Stk** sticky · **Rep** incident report · **Sign** laminated sign · **VM** voicemail ·
-**Memo** client memo · **Cmp** complaint form.
+Slots in `{braces}` are filled from the floor (section 5); `{PROP}` etc. are upper-case fills. F3 lines
+with an *event* only appear when that event rolled, and win over the generic ones when they do.
+Format key: **Stk** sticky · **Rep** report · **Sign** · **VM** voicemail · **Memo** · **Cmp** complaint.
 
 ### Prepper Billionaire (bunker)
 
 | Floor | Fmt | Line |
 |---|---|---|
-| 1 | Sign | **DOOR DRILL IN PROGRESS. DO NOT OPEN THE DOOR. If the door is open, the drill has failed. Remain calm and below.** |
+| 1 | Sign | DOOR DRILL EVERY SUNDAY. DO NOT OPEN THE DOOR DURING THE DRILL. To confirm the door is sealed, ask Sir. |
 | 1 | Memo | Staff will shelter in place. Staff will not shelter in MY place. The panic room seats one. |
-| 1 | Stk | Sir has gone "up top" to wait it out. Up top is a second bunker. — {staff} |
+| 1 | Stk | Sir says if anything happens he's going "up top". Up top is a second bunker. — {staff} |
 | 1 | Rep | Stockpile audit: rations, 40 years. Water, 40 years. Corn, do not ask. Exorcism supplies: none. |
-| 2 | Stk | **Hiding in the {staff_room} with the good silver. Please send a sorcerer. Not the cheap kind. — {staff}** |
-| 2 | VM | It's {client}. Don't touch the {prop} in the {prop_room}. Do whatever you like with the staff. |
-| 2 | Rep | Page 2 of 41. Page 1 is missing. So is the sommelier. Last seen near the portal in the {gate_room}. |
-| 2 | Sign | IN AN EMERGENCY, SAVE THE {PROP}. VALUE: {prop_price}. STAFF ARE INSURED SEPARATELY, AND LESS. |
-| 3 | Rep | *wine cellar:* **Drill debrief: the door was opened to confirm it was sealed. It was not. The 1787 is fine. Priorities met.** |
-| 3 | Stk | *home cinema:* **Sir pointed the projector at the floor seal "for ambience". The seal is very ambient now. — {staff}** |
-| 3 | Sign | *panic room:* **DRILL CANDLES MUST BE LED. (Underneath, in pen: "we only had the wax ones.")** |
-| 3 | Memo | Contingency 7 (demons) has been delegated to Contingency 8 (contractors). You are Contingency 8. |
-| 3 | VM | It's me again. The {origin} is humming. If it stops humming, don't tell me. Just invoice. |
+| 2 | Memo | Shelter plan: {staff} to the {staff_room}, with the good silver. The silver has priority. |
+| 2 | VM | Me again. If anything happens, save the {prop} in the {prop_room}. Then the staff, if there's time. |
+| 2 | Rep | Scratching behind the {gate_room} wall. Sommelier says it's the 1787 "breathing". Closed, no action. |
+| 2 | Sign | INSURED VALUE, {PROP}: {prop_price}. STAFF ARE INSURED SEPARATELY, AND LESS. |
+| 3 | Memo | *wine cellar:* Door drill, Sunday: open the cellar door to confirm it is sealed. If it is sealed, it won't open. Simple. |
+| 3 | Stk | *home cinema:* Movie night: Sir wants the projector pointed at the floor seal "for ambience". Doing it under protest. — {staff} |
+| 3 | Sign | *panic room:* DOOMSDAY DRILL: LED CANDLES ONLY. (In pen, underneath: "ordered wax. they came with a book.") |
+| 3 | Memo | Contingency 7 (demons) is delegated to Contingency 8 (contractors). Contingency 8 is cheaper. |
+| 3 | VM | It's me. The {origin} has been humming. If it stops humming, don't tell me. Just call someone cheap. |
 
 ### Supervillain (lair)
 
 | Floor | Fmt | Line |
 |---|---|---|
-| 1 | Memo | **To all henchmen: the imp is NOT a pet. Stop naming it. Its name is Biscuit. Stop calling it Biscuit.** |
+| 1 | Memo | To all henchmen: the imp is NOT a pet. Stop naming it. Its name is Biscuit. Stop calling it Biscuit. |
 | 1 | Sign | DAYS SINCE LAST ACCIDENT: 0. (The 0 is printed on. It came that way.) |
-| 1 | Cmp | I was promised dental. I have been bitten by something dental does not cover. — {staff} |
-| 1 | VM | This is {client}. Kill the demons. Leave the ambience. The ambience took years. |
-| 2 | Cmp | **Hiding in the {staff_room} since lunch. Lunch was not provided. Requesting rescue, then lunch. — {staff}** |
-| 2 | Stk | Whoever finds this: I'm in the {staff_room}. Tell the boss I died heroically. Don't tell him where. — {staff} |
-| 2 | Rep | The portal in the {gate_room} is classified as a feature. The feature is spawning. Action taken: corn. |
-| 2 | Sign | DO NOT DAMAGE THE {PROP} ({prop_price}). HENCHMEN CAN BE REPLACED. THE {PROP} CANNOT. |
-| 3 | Cmp | *henchmen barracks:* **Re: Biscuit. Biscuit was tamed. Biscuit brought friends. The barracks belong to Biscuit now. — {staff}** |
-| 3 | Sign | *throne room:* **COUNTDOWN REHEARSALS MUST NOT REACH ZERO. (In pen: "nobody said when to stop.")** |
-| 3 | Rep | *vat room:* **Vat marked DO NOT OPEN. Opened by: interns. Reason given: "It didn't say why." It says why now.** |
-| 3 | Memo | Monologue, draft 6, page 3: "And now, contractor, you will—" The rest is scorched. |
-| 3 | VM | It's {client}. Close the thing in the {origin}. Do not sit on my throne. I will know. |
+| 1 | Cmp | I was promised dental. I have been bitten twice by Biscuit. Biscuit is not covered by dental. — {staff} |
+| 1 | VM | This is {client}. The countdown is for rehearsal only. Whoever lets it reach zero becomes the rehearsal. |
+| 2 | Memo | Alarm protocol: {staff} shelters in the {staff_room}. Lunch will not be provided. It never is. |
+| 2 | Cmp | Grievance: I'm assigned to shelter in the {staff_room} in an emergency. It has no exit. Please advise. — {staff} |
+| 2 | Rep | The floor in the {gate_room} is warm and humming. Classified as a feature. Action taken: corn. |
+| 2 | Sign | ASSET REGISTER: {PROP}, {prop_price}. HENCHMEN CAN BE REPLACED. THE {PROP} CANNOT. |
+| 3 | Cmp | *henchmen barracks:* Someone in the barracks keeps Biscuit under a bunk and feeds it. It is bigger now. It has friends over. — {staff} |
+| 3 | Sign | *throne room:* COUNTDOWN REHEARSALS MUST STOP BEFORE ZERO. (In pen: "who is in charge of stopping?") |
+| 3 | Memo | *vat room:* Labelling policy: any vat marked DO NOT OPEN must also say why. Interns: this is not a challenge. |
+| 3 | Memo | (Monologue, draft 6) "...and once the gate is open, none shall close it!" Margin note: check if contractors can. |
+| 3 | VM | It's {client}. Nobody goes into the {origin} without me. Nobody sits on my throne. I will know. |
 
 ### Wellness Guru (bunker)
 
 | Floor | Fmt | Line |
 |---|---|---|
-| 1 | Cmp | **The retreat was transformative. I am now partly a different species. 4 stars.** |
+| 1 | Cmp | The retreat was transformative. The basement hums at night. I have never felt so watched. 5 stars. |
 | 1 | Sign | THIS IS A SHOE-FREE, PHONE-FREE, FEAR-FREE SPACE. Please leave your fear in the cubbies. |
-| 1 | Memo | Today's intention: abundance. Abundance has arrived. It has teeth. |
-| 1 | Stk | Burnt sage on every surface. It didn't help. Nobody thought it would help. — {staff} |
-| 2 | Stk | **We're in the {staff_room}, breathing in for four, out for four. Please hurry. We are on four. — {staff}** |
-| 2 | Rep | Reading, {gate_room}: intense. Source: a hole. The hole is not on the floor plan or the price list. |
-| 2 | VM | Hiii, it's {client}. The thing in the {gate_room} isn't evil, it's unaligned. Please align it. With fire. |
-| 2 | Sign | PLEASE BE GENTLE WITH THE {PROP}. It holds a lot of energy. It also cost {prop_price}. |
-| 3 | Cmp | *yoga studio:* **The closing ceremony opened something. I had hoped it would be my heart. 2 stars.** |
-| 3 | Rep | *meditation dome:* **Sound bath, gong strike 108. Something underneath struck back.** |
-| 3 | Sign | *cold plunge:* **COLD PLUNGE: 3 MINUTES MAXIMUM. Do not go deeper than the water.** |
-| 3 | Memo | The {origin} is closed for a private session. The session is a demon. Please knock. |
-| 3 | VM | It's {client}. Close the {origin} gently, please. It's had a very big week. |
+| 1 | Memo | Today's intention: abundance. Say it like you mean it. Say it to the floor. |
+| 1 | Stk | Re-ordered sage. Third time this week. Whatever is under the floor does not like sage. — {staff} |
+| 2 | Memo | If the energy turns, {staff} leads everyone to the {staff_room} and breathes. In for four. Out for four. |
+| 2 | Rep | Reading, {gate_room}: intense. Source: a crack in the floor. Recommended action: more crystals. |
+| 2 | VM | Hiii, it's {client}. Nobody use the {gate_room} this week. Its energy is unaligned. Namaste. |
+| 2 | Sign | PLEASE BE GENTLE WITH THE {PROP}. It holds a lot of energy. It is insured for {prop_price}. |
+| 3 | Memo | *yoga studio:* Closing ceremony: open your hearts, open your minds, open the circle. Don't worry about closing anything. |
+| 3 | Rep | *meditation dome:* Sound bath, gong strike 107: something underneath hummed back. Strike 108 is booked for Friday. |
+| 3 | Sign | *cold plunge:* COLD PLUNGE: 3 MINUTES MAXIMUM. Do not go deeper than the water. The water is deeper than it was. |
+| 3 | Cmp | The {origin} was lovely, but something kept knocking from below. Is that included? 3 stars. |
+| 3 | VM | It's {client}. Don't book anyone into the {origin} until it stops breathing. Lovely energy, though. |
 
 ### Tech Founder (lair)
 
 | Floor | Fmt | Line |
 |---|---|---|
-| 1 | Memo | **Q3 OKR: seal the gate. KR1: find the gate. KR2: define "seal". KR3: hire contractors (cheap).** |
-| 1 | Memo | is anyone else hearing chanting? asking for the standup |
+| 1 | Memo | is anyone else hearing chanting from sublevel 4? asking for the standup |
+| 1 | Memo | (OKRs) Q3: open the gate. KR1: find the gate. KR2: define "open". KR3: figure out closing later. |
 | 1 | Sign | WE ARE A FAMILY. Families do not discuss the basement. |
-| 1 | Rep | Pitch deck review, slide 12: "Summoning. TAM: infinite." Risks identified: none. We did not look. |
-| 2 | Memo | **wfh today. by home i mean the {staff_room}. by wfh i mean hiding. — {staff}** |
-| 2 | Rep | Incident: portal in the {gate_room}. Severity: P0. Owner: you, apparently. Action items: also you. |
-| 2 | Stk | Protect the {prop} in the {prop_room}. It cost {prop_price}. The interns are on a stipend. — {staff} |
-| 2 | VM | {client} here. Quick sync: there's a gate in the {gate_room}. Can you take it offline? Love the energy. |
-| 3 | Rep | *keynote stage:* **All-hands demo: summoned a stakeholder from below. It asked about equity. It is getting equity.** |
-| 3 | Memo | *data center:* **the goat scaled. the goat is still scaling. who approved the goat** |
-| 3 | Rep | *ping-pong lounge:* **Offsite retro: broke a seal on sublevel 4. Culture is up. Headcount is down.** |
-| 3 | Sign | THE {ORIGIN} IS A NO-MEETING ZONE. (It is currently having a meeting.) |
-| 3 | VM | {client} here. Close whatever's in the {origin} and we'll call it a pivot. |
+| 1 | Rep | (Board notes) Pitch deck, slide 12: "Summoning. TAM: infinite." Risks identified: none. We did not look. |
+| 2 | Memo | fire drill reminder: {staff}, your muster point is the {staff_room}. bring your laptop. you are still on call |
+| 2 | Rep | #4096: the {gate_room} floor is warm and making a noise. Priority: P3. Assignee: unassigned. |
+| 2 | Rep | (Asset register) {prop}, {prop_room}, {prop_price}. Interns are on a stipend. Replace accordingly. |
+| 2 | VM | Quick sync from {client}: the {gate_room} is off-limits pending facilities. Love the energy. |
+| 3 | Memo | *keynote stage:* (All-hands agenda) 1. Demo. 2. Summon a stakeholder, live. 3. Q&A, if it allows questions. |
+| 3 | Memo | *data center:* (#growth) idea: put the goat in the data center and see what scales. no downside. thoughts? |
+| 3 | Memo | *ping-pong lounge:* (Calendar invite) Offsite, Friday, sublevel 4. Agenda: break the seal (team building), ping-pong, retro. |
+| 3 | Sign | THE {ORIGIN} IS A NO-MEETING ZONE. Something down there keeps booking it. |
+| 3 | VM | {client} here. Whatever is under the {origin}, let's not tell the board. We'll call it a pivot. |
 
 ### Influencer (bunker)
 
 | Floor | Fmt | Line |
 |---|---|---|
-| 1 | Memo | **Caption draft: "Not an ad (it is an ad)." Edited 2:14 a.m.: "also i think the floor is breathing"** |
-| 1 | Sign | QUIET: RECORDING. If you hear chanting, that is the sound pack. (It is not the sound pack.) |
-| 1 | Stk | Do not film anything. Do not hit anything. Do not tag the portal. — Brand Safety |
+| 1 | Memo | (Drafts) Caption: "Not an ad (it is an ad)." Edited 2:14 a.m.: "also i think the floor is breathing" |
+| 1 | Sign | QUIET: RECORDING. If you hear chanting, it's the sound pack. (In pen: "we don't have a sound pack") |
+| 1 | Stk | Do not film the basement. Do not tag the basement. The basement is not on brand. — Brand Safety |
 | 1 | Memo | Mood board: "ancient". It was supposed to say "aesthetic". The vendor delivered "ancient". |
-| 2 | Stk | **Hiding in the {staff_room}. Battery at 4%. Please come before I have to go live. — {staff}** |
-| 2 | VM | Heyyy it's {client}. Can you do the {gate_room} first? That's where the good light is. |
-| 2 | Rep | Portal in the {gate_room}. Sentiment: negative. Engagement: unbelievable. Do not repost. |
-| 2 | Sign | THE {PROP} WAS GIFTED. GIFTED MEANS PRICELESS. (It means {prop_price}. We checked.) |
-| 3 | Rep | *content studio:* **Giveaway rules: "must be following to win." Something was following. It won.** |
-| 3 | Stk | *gifting suite:* **The unboxing ran long. The box kept going. Please don't open any more boxes. — {staff}** |
-| 3 | Memo | *podcast room:* **The collab was announced early. The entity has already posted. It has more followers than us.** |
-| 3 | Sign | THE {ORIGIN} IS A NO-FILTER ZONE. Everything in there is real now. |
-| 3 | VM | It's {client}. Close the thing in the {origin}. And maybe film it closing? Kidding. Unless? |
+| 2 | Memo | Shoot safety: if anything happens, {staff} gets everyone to the {staff_room}. Phones out. Content is content. |
+| 2 | VM | Heyyy it's {client}. No shoots in the {gate_room}, the floor keeps glitching. Like, physically. |
+| 2 | Rep | The {gate_room} is on the do-not-film list. Reason given: "vibes". Reviewed: no. |
+| 2 | Sign | #GIFTED: {PROP}. INSURED FOR {prop_price}. DO NOT LEAN ON IT FOR CONTENT. |
+| 3 | Memo | *content studio:* Giveaway stream, 9 p.m. Rules: anyone following can win. Anyone. Legal says "anyone" is fine. |
+| 3 | Stk | *gifting suite:* A box came for the gifting suite with no sender and it hums. Saving it for the unboxing. — {staff} |
+| 3 | Memo | *podcast room:* (Drafts) Collab post, embargoed to Friday: "the entity and I are SO excited." DO NOT POST EARLY. |
+| 3 | Sign | THE {ORIGIN} IS A NO-FILTER ZONE. (In pen: "it's already like that in there.") |
+| 3 | VM | It's {client}. If the {origin} starts glowing again, just, like, film it? Kidding. Unless? |
+
+(A bracketed lead such as "(Drafts)" above is the line's own header, not part of its text.)
 
 ### Hint slips (all clients)
 
-The floor's second note. The text is shared, the header comes from the client (section 2), so a
-prepper's pest advisory reads "Bunker Protocol" and a founder's reads "Office Norms".
-
 | Hint | Fmt | Line |
 |---|---|---|
-| Pest: imps | Sign | IMPS TRAVEL IN PACKS AND CIRCLE BETWEEN BITES. Something wide, aimed at the middle, is advised. |
-| Pest: skeletons | Sign | SKELETONS RAISE THEIR SWORD BEFORE THEY SWING. It is the only courtesy they extend. |
-| Pest: archers | Sign | ARCHERS WANT DISTANCE AND HIGH GROUND. Their arrows fly flat. A ledge between you is a wall. |
-| Pest: brutes | Sign | BRUTES CANNOT CLIMB. When the red ring fills, be outside it. Or be on something tall. |
-| Pest: everything | Sign | PEST: ALL OF THEM. Facilities apologises for the variety. |
-| Staff | Stk | If found: I'm in the {staff_room}. Knock twice. Knock once if you're a demon. — {staff} |
-| Staff | Rep | Headcount: {staff_count} missing on this level. Last seen in the {staff_room}, "just grabbing something". |
-| Gate | Sign | AUTHORISED PORTALS ONLY. The one in the {gate_room} is not authorised. |
-| Gate | Rep | Open portals on this level: {gate_count}. Target: 0. The variance is your job. |
-| Prop | Sign | {PROP}: {prop_price}. Please admire from at least one fireball away. |
+| Pest: imps | Rep | Small red things in the vents, in packs. They circle between bites. Technician's advice: aim wide. |
+| Pest: skeletons | Rep | Bones in the walls, walking. Each one raises its sword before it swings. Technician's advice: step back. |
+| Pest: archers | Rep | Hooded things on the high shelves. Arrows fly flat, so a ledge is a wall. Technician's advice: close in. |
+| Pest: brutes | Rep | Something heavy that can't climb. A red ring fills before it slams. Technician's advice: get on something tall. |
+| Pest: everything | Rep | We found one of everything. Quote attached. The quote is also one of everything. |
+| Staff | Sign | SHELTER POINT: {STAFF_ROOM}. ASSIGNED: {STAFF}. Bring water, a torch and a positive attitude. |
+| Staff | Memo | Drill roster: {staff_count} staff on this level. {staff} shelters in the {staff_room}. Last drill: {staff} was late. |
+| Gate | Sign | {GATE_ROOM}: DO NOT ENTER. FLOOR UNDER REVIEW. (In pen: "it hums.") |
+| Gate | Rep | {gate_count} warm spots on this level's floor plan, one of them in the {gate_room}. Status: monitoring. |
+| Prop | Rep | {prop}, {prop_room}: insured for {prop_price}. Coverage excludes fire and acts of demon. |
+| Prop | Sign | {PROP}: INSURED FOR {prop_price}. Please admire from at least one fireball away. |
 
-## 4. Floor banners
+Pest tickets carry the header "Pest Control · Site Visit", insurance lines "Insurance Schedule".
 
-**Keep them, but give them to dispatch.** The banner is the one line everyone is guaranteed to see,
-so it carries the one fact that matters for the floor. Notes are optional and voiced by the client's
-side; the banner is the crew's own side, on the headset. Two voices, no overlap.
+## 4. Floor banners (dispatch)
 
-- **Shown:** top centre, a canary strip (canary is already dispatch's carbon in `FormTheme`) with a
-  small headset glyph as the frame. No "Dispatch:" text prefix. Holds 5–6 s.
-- **Cut:** `SPREAD_LINES` and "Something is open and it is not the minibar."
-- **Floor 1** is two lines: the client's `event` (unchanged; they are good), then one dispatch line.
+Dispatch talks live on the headset, so the banner is not a note. It is a canary strip at the top centre
+with a headset glyph as its frame, no text prefix. Floor 1 shows the client's `event` above the line.
 
 | Floor | Line |
 |---|---|
-| 1 | **It started in the {origin}, three floors down. Work your way to it.** |
+| 1 | It started in the {origin}, three floors down. Work your way to it. |
 | 1 | Staff are worth $100 at an exit and $10 anywhere else. Dispatch is not judging. |
 | 1 | The client calls it a {pest} problem. Dispatch calls it a three-floor problem. |
-| 2 | **Floor 2. {gate_count} gates on this one. Close them and the floor stops refilling.** |
+| 2 | Floor 2. {gate_count} gates on this one. A closed gate stops spawning. |
 | 2 | Floor 2. Halfway down. The pay gets better. So do the {pest}. |
 | 2 | Floor 2. The elevator still has an exit button, if anyone's asking. |
-| 3 | **Floor 3. The big one is in the {origin}. Biggest line on the invoice.** |
+| 3 | Floor 3. The big one is in the {origin}. Close it and every gate stops spawning. |
 | 3 | Floor 3. Closing the {origin} gate doesn't clock you out. The elevator does. |
 | 3 | Floor 3. This is where it started. Try to finish it here too. |
 
-Floor-2 and floor-3 lines that name a fact (gate count, origin, the clock-out rule) are the defaults,
-because they are useful. Check the gate-refill line against the final hellgate rules before shipping.
+**Checked against `hellgate.gd`:** a gate spawns until it is closed (killed), so a closed gate stops
+spawning; closing the origin gate stops every gate's spawns site-wide (`HellgateEvents.stop_spawns`).
+Monsters already out stay out, which is why no line says the floor "clears".
 
-**Other text:** the `events` and invoice `footers` are the strongest copy in the file; keep them.
+The `events` and invoice `footers` are unchanged.
 
 ## 5. Data: keeping hints true
 
-Facts come from the `SitePlan` the host has just built, so every hint describes the floor you are on.
-
-**Line data** (replaces `"clues"` in `ClientArchetype.DATA`):
-
-```gdscript
-"notes": {
-    1: [{"f": "sign", "t": "DOOR DRILL IN PROGRESS. ..."}, ...],
-    2: [{"f": "sticky", "t": "Hiding in the {staff_room} with the good silver. ... — {staff}"}, ...],
-    3: [{"f": "report", "t": "Drill debrief: ...", "event": "wine cellar"}, ...],
-},
-```
-
-Hint slips, the pest advisories and the dispatch lines live in one shared table (`NoteCopy`), keyed
-by hint type, pest kind and floor.
-
-**Facts** (`NoteFacts.from(plan, run) -> Dictionary`), computed once per floor after `_plan_props`:
+- **Copy** lives in `NoteCopy`: per client `{floor: [{"f": format, "t": text, "event"?, "h"?}]}`, plus
+  the shared hint slips, pest tickets and dispatch lines.
+- **Facts** (`NoteFacts.from_plan(plan, run)`), read from the `SitePlan` once the props are planned:
 
 | Slot | Source | Missing when |
 |---|---|---|
-| `{client}` | first + last name from the roll (no suffix: "Admiral Grimsby") | never |
-| `{staff}`, `{staff_room}` | one entry of `plan.employees` (`name`, `room` → theme name) | no employees on the floor |
+| `{client}` | first + last name (no suffix) | never |
+| `{staff}`, `{STAFF}`, `{staff_room}`, `{STAFF_ROOM}` | one `plan.employees` entry: its name and its room | no employees |
 | `{staff_count}` | `plan.employees.size()` | 0 |
-| `{gate_room}` | a non-origin entry of `plan.gates` (`room` → theme name) | floor 3, or no small gates |
-| `{gate_count}` | `run.floor_gates[floor - 1]` | the floor has 0 gates |
-| `{prop}`, `{PROP}`, `{prop_room}`, `{prop_price}` | the highest `PricedProp.price_of` in `plan.props` | no props |
-| `{origin}`, `{ORIGIN}` | `run.story.origin` ("yoga studio"), not the theme name | never (all floors may say it) |
+| `{gate_room}`, `{GATE_ROOM}` | a non-origin `plan.gates` entry's room | no small gates (always on floor 3) |
+| `{gate_count}` | `plan.small_gate_count()` | 0 |
+| `{prop}`, `{PROP}`, `{prop_room}`, `{prop_price}` | the most expensive `plan.props` entry | no props |
+| `{origin}`, `{ORIGIN}` | `run.story.origin` ("yoga studio") | never |
 | `{pest}` | `ClientArchetype.pest_name(run.pest)` | never |
 
-**Room names.** A room is named by its theme (`plan.room_themes[tag]` → "wine cellar", "gym",
-"barracks"; the origin room uses the story's own word). Themes repeat on big floors, so when picking
-which employee, gate or prop a hint names, **prefer one in a room whose theme is unique on the floor**.
-If none is unique, add a landmark: "the gym by the elevator" / "the gym by the entrance" (whichever of
-the exit and start it is nearer).
-
-**Picking a line** (host, the floor's seeded RNG, so it is deterministic and the same for everyone):
-1. Candidates = the client's lines for this floor. On floor 3, if any line's `event` matches the rolled
-   origin, use only those.
-2. Drop any line whose slots are missing on this floor.
-3. Pick one; fill it with `text.format(facts)`. If no candidate survives, fall back to the slot-free
-   lines (every floor has at least one).
-
-`plan.notes` gets `{"cell", "text", "format", "header", "kind": "story"|"hint"}`. `ClueNote` builds the
-format's mesh; the HUD slip reads `format` and `header`. Clients only display what the host sent.
-
-**Placement:**
-- **Story note:** F1 as today (`_plan_notes`, near the start). F2 in the room nearest halfway between
-  start and exit. F3 on a free cell inside the origin room, nearest its entrance, outside the gate's radius.
-- **Hint slip:** a room that is not the start, exit or origin room, preferring rooms off the
-  start–exit route and far from the start. Claimed as a `ThemeCtx` body like the other props, so
-  packages and decor avoid it.
-
-**Tests** (alongside `tests/test_room_themes.gd`):
-- every archetype has at least 3 lines per floor and one slot-free line per floor;
-- every `events[].origin` has an F3 line with that `event`;
-- every slot in every line is a known slot;
-- every line filled with the **longest** values (longest theme, prop name, client name) is at most 140
-  characters;
-- no line starts with "Note", "A note" or "A memo";
-- for a seeded plan, the room a hint names actually contains that employee, gate or prop.
-
-## 6. Open questions
-
-1. **Hint slips only for the finder, in co-op?** Recommended (it makes the finder talk), but a crew of
-   strangers may miss it. Fallback: show it to everyone, tinted with the finder's colour.
-2. **Notes on the invoice?** Optional: "Documents recovered: 4 of 6. Filed." as a deadpan line, and a
-   hook for the north-star "secrets found" bonus later.
-3. **Voiced voicemails** later: the voicemail is the obvious place for a recorded client line.
+- **Room names** come from the room's theme ("wine cellar", "gym", "barracks"); the origin room uses the
+  story's own word. Targets in rooms whose theme is unique on the floor are preferred; otherwise the name
+  gets "by the elevator" / "by the entrance".
+- **Picking** (host, a generator seeded from the floor seed, so every machine plans the same notes and no
+  other roll moves): drop lines whose slots are missing, prefer event lines on floor 3, pick, fill.
+- `plan.notes` = `{cell, text, format, header, kind: "story"|"hint", yaw}` and `plan.dispatch` (the banner
+  line), both `Net.SPAWN`. `ClueNote` and the slip are LOCAL presentation.

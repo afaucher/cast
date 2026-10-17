@@ -144,7 +144,7 @@ Any hit breaks one: melee, arrows, spells, shoves, Rebar's bowl. It's unopened m
 | Tubs of yogurt | 20% | decorative; rolls around |
 | Loose pickles | 20% | decorative; scatters |
 | Spell component | 25% | a normal component pickup (random castable spell, 3 charges); doesn't count toward the per-floor monster drop cap |
-| Crypto cash | 15% | a random $200–$2,000 in whole $10s, earned on the invoice as "Unclaimed crypto (intercepted mail)" and shown as a green "+$1,240 crypto" pop |
+| Crypto cash | 15% | a random $200–$2,000 in whole $10s, earned on the invoice as "Unclaimed crypto" and shown as a green "+$1,240 crypto" pop |
 
 Spilled decorative contents (a few skulls, yogurt tubs with their lids, green pickles) and the box's
 flattened flaps shrink away so the spill is gone 30 s after the break, like other player-caused marks;

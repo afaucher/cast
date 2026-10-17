@@ -68,6 +68,7 @@ const ELEVATOR_USE_DIST := 1      ## the player can press E at the elevator from
 const PROMPT_ABOVE_VAN := 2.7     ## the use prompt floats this far above the floor in front of the van's side door
 const PROMPT_ABOVE_ELEVATOR := 3.0
 const PROMPT_ABOVE_PICKUP := 1.75 ## above the pickup's own name label
+const NOTE_CLOSE_SLACK := 0.6      ## an open note's slip closes once its reader is this far past ClueNote.READ_RANGE
 const VAN_FLOOR := 1              ## the van parks on the top floor only; floors 2 and 3 have no van and no arrival
 const VAN_USE_DIST := 2.8         ## the player can press E at the van from this far (world units) from its side door
 const DROPOFF_DIST := 2.5         ## a FOLLOWING employee this close (world units) to the van door or the elevator leaves right away
@@ -101,11 +102,12 @@ var subtitle: Label
 var _subtitle_tween: Tween
 var _screen_layer: CanvasLayer     ## board / elevator / invoice
 var _tracker: ObjectiveTracker
-var _use_prompt: UsePrompt         ## "[E] verb" over whatever E would act on right now (van, elevator, employee)
+var _use_prompt: UsePrompt         ## "[E] verb" over whatever E would act on right now (van, elevator, employee, note)
 var _swap_prompt: UsePrompt        ## "[F] Swap in ..." over the pickup F would swap in
 var _ticker: Control
-var _banner: Label
-var _banner_tween: Tween
+var _banner: DispatchBanner        ## dispatch on the headset: the floor line, the origin-closed line
+var _note_slip: NoteSlip           ## the note being read, lower left (E opens it; E or walking away closes it)
+var _open_note: ClueNote = null    ## the note whose slip is open
 var _site: SiteBuilder.Site
 var _menu: ElevatorMenu = null
 var _van_menu: VanExitMenu = null    ## the clock-out slip at the van (floor 1 only)
@@ -192,6 +194,7 @@ func _parse_args() -> void:
 			"--to-exit": opts["to_exit"] = true
 			"--to-package": opts["to_package"] = true
 			"--to-employee": opts["to_employee"] = true
+			"--to-note": opts["to_note"] = int(nxt)
 			"--press-e": opts["press_e"] = float(nxt)
 			"--break-crates": opts["break_crates"] = float(nxt)
 			"--demo-damage": opts["demo_damage"] = true
@@ -362,7 +365,7 @@ func _free_cells_near(c: Vector2i, radius: int) -> Array[Vector2i]:
 	return out
 
 
-## Everything the contract puts on this floor: hellgates, employees, priced props, a clue note, and the
+## Everything the contract puts on this floor: hellgates, employees, priced props, two notes, and the
 ## monster packs (one per room but the start room, leaning toward the pest). Then the session starts the floor.
 func _populate_site() -> void:
 	_site = SiteBuilder.build(map, _run, _floor_n())
@@ -374,11 +377,13 @@ func _populate_site() -> void:
 			g.connect("closed", _on_gate_closed)
 	for e in _site.employees:
 		e.damaged.connect(func(_amount: float, source: Node) -> void: _emp_cause[e.get_instance_id()] = Ledger.culprit_name(source))
-	for n in _site.notes:
-		n.connect("read", _on_note_read)
 	_log("site: %d gates%s, %d employees, %d props, %d monsters (%d pests: %s)" % [small, " + origin" if origin else "", _site.employees.size(),
 		_site.props.size(), _site.monsters.size(), _site.pest_spawned, _run.pest], Color(0.8, 0.8, 1.0))
 	_log("themes: %s  decor %d" % [str(_site.plan.room_themes), _site.plan.decor.size()], Color(0.8, 0.8, 1.0))
+	var note_list: Array[String] = []
+	for nt in _site.plan.notes:
+		note_list.append("%s %s in %s" % [nt["kind"], nt["format"], nt["room"]])
+	_log("notes: %s" % ", ".join(note_list), Color(0.8, 0.8, 1.0))
 
 
 # --- Voice --------------------------------------------------------------------
@@ -562,6 +567,12 @@ func _start() -> void:
 				_open_pause())
 	if opts.has("press_e"):
 		get_tree().create_timer(float(opts["press_e"])).timeout.connect(func() -> void:
+			if opts.has("to_note") and not _site.notes.is_empty():
+				# the crew settles after the teleport; step the player back up to the note's front before E
+				var n: ClueNote = _site.notes[clampi(int(opts["to_note"]), 0, _site.notes.size() - 1)]
+				var f := ThemeGeo.facing(n.yaw - 90.0) * 1.2
+				player.global_position = n.global_position + Vector3(f.x, 0.0, f.y)
+				player.snap_to_ground()
 			var used := controller.press_use()
 			_log("press-e: %s" % ("used" if used else "nothing"), Color(0.8, 1.0, 0.8)))
 	if opts.has("break_crates"):
@@ -643,47 +654,56 @@ func _build_contract_ui() -> void:
 	_ticker = ContractParts.make_ticker()
 	if _ticker != null:
 		hud.add_overlay(_ticker)
-	_banner = Label.new()
-	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_banner.offset_top = 120
-	_banner.custom_minimum_size = Vector2(500, 0)
-	_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_banner.add_theme_font_size_override("font_size", 22)
-	_banner.add_theme_color_override("font_outline_color", Color.BLACK)
-	_banner.add_theme_constant_override("outline_size", 7)
-	_banner.modulate.a = 0.0
+	_banner = DispatchBanner.new()
 	hud.add_overlay(_banner)
+	_note_slip = NoteSlip.new()
+	hud.add_overlay(_note_slip)
 	Ledger.line_added.connect(_on_ledger_line)
 	_update_tracker()
 
 
-## The story at the top of each floor: the flavour of how the incident reached here, then (floor 1) the cause.
+## Dispatch at the top of each floor (the line SiteBuilder planned for it); floor 1 adds the client's event above it.
 func _story_banner() -> void:
-	var notes: Array = _run.story["floor_notes"]
-	var text := str(notes[_floor_n() - 1])
-	if _floor_n() == 1:
-		text = "%s\n%s" % [str(_run.story["event"]), text]
-	_show_banner(text, 7.0)
+	if _site == null:
+		return
+	var lead := str(_run.story.get("event", "")) if _floor_n() == 1 else ""
+	_banner.show_line(_site.plan.dispatch, 7.0, lead)
 
 
 func _show_banner(text: String, hold: float) -> void:
-	if _banner == null:
+	if _banner != null:
+		_banner.show_line(text, hold)
+
+
+## E on a note: open its slip, or close it when it is the one already open. Reading is LOCAL presentation:
+## nothing is sent, tracked or paid.
+func _toggle_note(note: ClueNote) -> void:
+	if _note_slip == null or note == null:
 		return
-	if _banner_tween:
-		_banner_tween.kill()
-	_banner.text = text
-	_banner.modulate.a = 1.0
-	_banner_tween = create_tween()
-	_banner_tween.tween_interval(hold)
-	_banner_tween.tween_property(_banner, "modulate:a", 0.0, 0.8)
+	if _open_note == note and _note_slip.is_open():
+		_close_note()
+		return
+	_open_note = note
+	_note_slip.open_note(note.format, note.header, note.text, note.accent, _run.company if _run != null else "")
+	_log("[note %s F%d] %s" % [note.format, _floor_n(), note.text], Color(1.0, 0.95, 0.7))
 
 
-func _on_note_read(text: String) -> void:
-	_show_banner("A note: " + text, 8.0)
-	_log("note: " + text, Color(1.0, 0.95, 0.7))
+func _close_note() -> void:
+	_open_note = null
+	if _note_slip != null:
+		_note_slip.close_note()
+
+
+## Each frame: the open slip closes when its reader walks away (or dies, or a menu or the end takes over).
+func _update_note_slip() -> void:
+	if _open_note == null:
+		return
+	var gone := not is_instance_valid(_open_note) or player == null or player.dead or _menu != null or _van_menu != null 			or _leaving or _ended or _ending
+	if not gone:
+		var d := Vector2(player.global_position.x - _open_note.global_position.x, player.global_position.z - _open_note.global_position.z).length()
+		gone = d > ClueNote.READ_RANGE + NOTE_CLOSE_SLACK
+	if gone:
+		_close_note()
 
 
 # --- Objectives ------------------------------------------------------------------------------------
@@ -821,9 +841,10 @@ func _player_at_van() -> bool:
 	return player != null and not player.dead and _near_van(player.global_position, VAN_USE_DIST)
 
 
-## What E would act on right now. UseTarget.kind: "van" (clock out), "elevator" or "employee" (bring / tell to wait).
+## What E would act on right now. UseTarget.kind: "van" (clock out), "elevator", "employee" (bring / tell to wait) or
+## "note" (read it, or close the slip when it is the note already open).
 ## `verb` is the short caption for the use prompt and `pos` the world point it floats at. This is the ONE place that
-## decides the priority (the van exit, then the elevator, then the employee next to the hero), shared by the E press
+## decides the priority (the van exit, then the elevator, then the employee next to the hero, then a note), shared by the E press
 ## (_use_key, press_use) and the prompt (_update_use_prompts), so the prompt can never promise something else.
 ## null when E would do nothing: no contract, a slip open, the contract ending, or nothing in reach.
 class UseTarget extends RefCounted:
@@ -831,6 +852,7 @@ class UseTarget extends RefCounted:
 	var verb := ""
 	var pos := Vector3.ZERO
 	var employee: Employee = null
+	var note: ClueNote = null
 
 
 func use_target() -> UseTarget:
@@ -851,13 +873,29 @@ func use_target() -> UseTarget:
 		t.pos = Vector3(ex.x, _floor_y(ex.x, ex.z) + PROMPT_ABOVE_ELEVATOR, ex.z)
 	else:
 		var e := Employee.interact_target(player)
-		if e == null:
+		if e != null:
+			t.kind = "employee"
+			t.verb = e.interact_verb(player)
+			t.pos = e.prompt_point()
+			t.employee = e
+			return t
+		var n := _note_target()
+		if n == null:
 			return null
-		t.kind = "employee"
-		t.verb = e.interact_verb(player)
-		t.pos = e.prompt_point()
-		t.employee = e
+		t.kind = "note"
+		t.verb = "Close" if n == _open_note and _note_slip != null and _note_slip.is_open() else n.verb()
+		t.pos = n.prompt_point()
+		t.note = n
 	return t
+
+
+## The note E would act on: the open one while its reader is still near it, else the nearest in reach.
+func _note_target() -> ClueNote:
+	if _open_note != null and is_instance_valid(_open_note) and _note_slip != null and _note_slip.is_open():
+		var d := Vector2(player.global_position.x - _open_note.global_position.x, player.global_position.z - _open_note.global_position.z).length()
+		if d <= ClueNote.READ_RANGE + NOTE_CLOSE_SLACK:
+			return _open_note
+	return ClueNote.nearest(player.global_position)
 
 
 ## The ground height under world (x, z), falling back to the player's feet when there is no cell there.
@@ -878,6 +916,9 @@ func _use_key() -> bool:
 			return true
 		"elevator":
 			_open_elevator()
+			return true
+		"note":
+			_toggle_note(t.note)
 			return true
 	return Employee.interact(player)
 
@@ -1209,6 +1250,7 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	if voice:
 		hud.set_mic_level(voice.get_level())
+	_update_note_slip()
 	_update_use_prompts()
 	_stats_timer -= delta
 	if _stats_timer <= 0.0:
@@ -1396,6 +1438,22 @@ func _dev_teleports() -> void:
 					focus = _site.plan.centers[themed[0]]
 			_teleport_crew(focus)
 			return
+	if opts.has("to_note") and _site != null and not _site.plan.notes.is_empty():
+		# beside note N (the story note is 0, the hint slip 1), off to its side so nobody hides it from the camera
+		var nt: Dictionary = _site.plan.notes[clampi(int(opts["to_note"]), 0, _site.plan.notes.size() - 1)]
+		var nc: Vector2i = nt["cell"]
+		var front := ThemeGeo.world(nc) + ThemeGeo.facing(float(nt.get("yaw", 0.0)) - 90.0) * 1.5
+		var stand := nc
+		var stand_d := INF
+		var nlevel: int = map.get_cell(nc).level
+		for c in Hex.range_cells(nc, 2):
+			var cell4: HexMap.Cell = map.get_cell(c)
+			if c != nc and cell4 != null and cell4.type == HexMap.Tile.FLOOR and cell4.level == nlevel and not _site.plan.blocked.has(c) 					and ThemeGeo.world(c).distance_to(front) < stand_d:
+				stand_d = ThemeGeo.world(c).distance_to(front)
+				stand = c
+		_teleport_crew(stand)
+		_log("to-note: %s %s at %s, crew at %s" % [nt["kind"], nt["format"], nc, stand], Color(0.8, 0.8, 1.0))
+		return
 	if opts.has("to_employee") and _site != null and not _site.plan.employees.is_empty():
 		var ec: Vector2i = _site.plan.employees[0]["cell"]
 		var stand := ec

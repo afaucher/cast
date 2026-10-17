@@ -2,7 +2,8 @@ class_name ClientArchetype
 extends RefCounted
 ## The client table behind every contract (docs/design/contracts.md, "Contract generation").
 ## Each archetype supplies: the site type (bunker / lair), the pest pool, a name generator, the
-## objective mix, a pay scale, and the flavour text for the job card and the invoice.
+## objective mix, a pay scale, and the flavour text for the job card and the invoice. The notes and the
+## dispatch floor banners live in NoteCopy.
 ##
 ## Tone: deadpan corporate. The clients never appear in person; they exist as letterhead.
 ##
@@ -41,11 +42,6 @@ const DATA := {
 			{"text": "Movie night went ahead with the projector aimed at the wrong seal.", "origin": "home cinema"},
 			{"text": "The doomsday drill was run with real candles.", "origin": "panic room"},
 		],
-		"clues": [
-			"A laminated sign: DO NOT OPEN THE DOOR DURING THE DRILL (the drill is ongoing).",
-			"An incident log, page 2 of 41. Page 1 is missing. So is the sommelier.",
-			"A chalk circle where the rug used to be. The rug has been returned to inventory.",
-		],
 		"footers": {
 			"good": "Thank you. The bunker remains confidential. So do you.",
 			"mid": "Results are within the range we budgeted for disappointment.",
@@ -73,11 +69,6 @@ const DATA := {
 			{"text": "The henchmen tried to tame an imp. It did not take.", "origin": "henchmen barracks"},
 			{"text": "The doomsday countdown was started as a rehearsal.", "origin": "throne room"},
 			{"text": "A vat labelled DO NOT OPEN was opened by interns.", "origin": "vat room"},
-		],
-		"clues": [
-			"A memo: 'Imps are NOT pets. Stop naming them.' It is signed by the imps.",
-			"A clipboard: days since last accident, crossed out, then crossed out again.",
-			"A monologue draft, 14 pages. The demon interrupted on page 3.",
 		],
 		"footers": {
 			"good": "Acceptable. You may keep your lives. Remittance will follow.",
@@ -107,11 +98,6 @@ const DATA := {
 			{"text": "A sound bath resonated with something underneath.", "origin": "meditation dome"},
 			{"text": "The cleanse went deeper than the brochure promised.", "origin": "cold plunge"},
 		],
-		"clues": [
-			"A vision board. Someone has added 'a door' in red marker. It is a door.",
-			"Burnt sage on every surface. It did not help. It was never going to help.",
-			"A feedback card: 'The energy was intense. 4 stars, would manifest again.'",
-		],
 		"footers": {
 			"good": "We receive your work with gratitude. Payment will be released with intention.",
 			"mid": "The energy was fine. We will be sending you a feedback form.",
@@ -139,11 +125,6 @@ const DATA := {
 			{"text": "The all-hands demo summoned a stakeholder from below.", "origin": "keynote stage"},
 			{"text": "A growth hack involved a goat. It scaled.", "origin": "data center"},
 			{"text": "The offsite broke a seal on sublevel 4. Culture is up.", "origin": "ping-pong lounge"},
-		],
-		"clues": [
-			"A whiteboard: 'Q3 OKR: seal the gate. KR1: find the gate. KR2: define seal.'",
-			"A Slack export: 'is anyone else hearing chanting? asking for the standup'",
-			"A pitch deck, slide 12: 'Summoning (TAM: infinite).'",
 		],
 		"footers": {
 			"good": "Great job, team. We are aligning on payment. Please hold.",
@@ -173,11 +154,6 @@ const DATA := {
 			{"text": "An unboxing unboxed more than intended.", "origin": "gifting suite"},
 			{"text": "A collab with an entity was announced early.", "origin": "podcast room"},
 		],
-		"clues": [
-			"A sponsored post, 4.2M views: 'Not an ad (it is an ad). Also, I think the floor is breathing.'",
-			"A mood board. The mood is 'ancient'. It was supposed to be 'aesthetic'.",
-			"A brand deal contract. Clause 9 grants the entity 'creative control'.",
-		],
 		"footers": {
 			"good": "Love this for us! Payment is in the algorithm.",
 			"mid": "It's giving 'fine'. We will be tagging you in a story.",
@@ -195,15 +171,6 @@ const ACCENTS := {
 	"founder": Color(0.14, 0.5, 0.82),
 	"influencer": Color(0.92, 0.3, 0.58),
 }
-
-## Generic lines for floors 1-2 ("the incident is spreading").
-const SPREAD_LINES: Array[String] = [
-	"Residue from the incident is migrating upward. Treat as billable.",
-	"Stray pests have followed the freight shaft up from the origin.",
-	"Early signs of the incident: scorch marks, a smell, a lawsuit.",
-	"The incident is below. Its tenants are not staying below.",
-]
-
 
 static func get_data(id: String) -> Dictionary:
 	return DATA.get(id, DATA["prepper"])
