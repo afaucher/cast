@@ -55,7 +55,7 @@ func setup() -> void:
 	near(hud._player_bar.value, 0.7, 0.001, "player bar follows hp")
 	check(hero.try_cast("heal", 1.0, hero.global_position), "cast for the card flash")
 	await frames(3)
-	check(hud._cards.size() == 2 and hud._cards[0].flash > 0.0, "card flashes on cast")
+	check(hud._cards.size() == SpellComponents.SLOT_COUNT and hud._cards[0].flash > 0.0, "card flashes on cast")
 	hud.queue_free()
 
 	# --- Camera rig: ortho, iso angles, follows, zooms.

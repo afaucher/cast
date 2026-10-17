@@ -15,6 +15,13 @@ extends Node3D
 ##                       --autocast then aims at them
 ##   --idle-monsters     dev: --spawn-near monsters ignore heroes until hurt
 ##   --stage-ledge       dev: raise a 7-cell tower +5 levels near the start; --spawn-near monsters stand on it
+##   --give heal:9,corn:3  dev: slot these spells (up to 4) with these charges, after the picked two
+##   --hold N            dev: ready slot N (1-4) at the start
+##   --zoom S            dev: camera size (default 24; 6 is a close-up of the crew)
+##   --focus pebble|dagna|dev  dev: the camera follows that ally (or the --spawn-near monsters) instead of the player
+##   --give-allies a,b   dev: slot spell a for Pebble and b for Dagna (they only hold the component; allies do not cast)
+##   --drop-near a,b     dev: put component pickups for spells a, b on the floor just ahead of the player
+##   --slay-near         dev: 1.5 s in, kill the --spawn-near monsters (to watch their drops)
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
 const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn", "tentacles"]
@@ -83,6 +90,13 @@ func _parse_args() -> void:
 			"--spawn-near": opts["spawn_near"] = nxt
 			"--stage-ledge": opts["stage_ledge"] = true
 			"--idle-monsters": opts["idle_monsters"] = true
+			"--give": opts["give"] = nxt
+			"--hold": opts["hold"] = int(nxt)
+			"--give-allies": opts["give_allies"] = nxt
+			"--zoom": opts["zoom"] = float(nxt)
+			"--focus": opts["focus"] = nxt
+			"--drop-near": opts["drop_near"] = nxt
+			"--slay-near": opts["slay_near"] = true
 	if _seed < 0:
 		_seed = int(opts.get("seed", randi() % 100000))
 	if _spells.is_empty() and opts.has("spells"):
@@ -137,6 +151,13 @@ func _build_world() -> void:
 	rig.name = "CameraRig"
 	add_child(rig)
 	rig.target = player
+	if opts.get("focus", "") == "pebble":
+		rig.target = pebble
+	elif opts.get("focus", "") == "dagna":
+		rig.target = dagna
+	if opts.has("zoom"):
+		rig._zoom_target = float(opts["zoom"])
+		rig.camera.size = float(opts["zoom"])
 	rig.snap()
 	controller.camera = rig.camera
 	var reticle := AimReticle.new()
@@ -254,17 +275,23 @@ func _on_spell_spoken(id: String, power: float, heard: String) -> void:
 	_cast(id, power, heard, voice.last_cast_accidental())
 
 
+## A voice (or typed) cast of any slotted spell: held or not, it goes through the controller, which
+## checks charges (out of components fizzles with no cooldown), the cooldown (/1.15 on the held spell)
+## and spends a charge. It never changes which slot is held.
 func _cast(id: String, power: float, heard: String, accidental: bool = false) -> void:
 	if _ended or player == null or player.dead:
 		_log("ignored %s: no living player" % id.to_upper(), Color(0.7, 0.7, 0.7))
 		return
 	var known := player.spell_slots.has(id)
 	var cd := player.cooldown_left(id) if known else 0.0
+	var empty := known and player.charges_of(id) <= 0
 	var tag := "ACCIDENTAL " if accidental else ""
 	if controller.cast_spell(id, power):
-		_log("%sCAST %s %d%%  (\"%s\")" % [tag, id.to_upper(), roundi(power * 100.0), heard], Color(0.5, 1.0, 0.6))
+		_log("%sCAST %s %d%%  (\"%s\")  %d left" % [tag, id.to_upper(), roundi(power * 100.0), heard, player.charges_of(id)], Color(0.5, 1.0, 0.6))
 	elif not known:
 		_log("%s%s not in slots (%s)" % [tag, id.to_upper(), ", ".join(player.spell_slots)], Color(1.0, 0.6, 0.3))
+	elif empty:
+		_log("%s%s fizzled: out of %s" % [tag, id.to_upper(), SpellBook.component_name(id)], Color(1.0, 0.5, 0.45))
 	elif cd > 0.0:
 		_log("%s%s recharging %.1fs" % [tag, id.to_upper(), cd], Color(1.0, 0.8, 0.4))
 	else:
@@ -313,6 +340,7 @@ func _show_picker() -> void:
 
 func _start() -> void:
 	player.spell_slots = _spells.duplicate()
+	_apply_dev_loadout()
 	hud.bind(player, allies)
 	hud.enable_console()
 	controller.enabled = true
@@ -323,6 +351,15 @@ func _start() -> void:
 	else:
 		hud.show_center("Floor %d\nReach the magenta exit" % _floor, Color(0.8, 0.9, 1.0), 2.0)
 	_log("floor %d  seed %d  spells %s" % [_floor, _seed, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
+	_drop_near()
+	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
+		var marker := Node3D.new()
+		GameWorld.root.add_child(marker)
+		marker.global_position = _dev_centroid()
+		rig.target = marker
+		rig.snap()
+	if opts.has("slay_near"):
+		get_tree().create_timer(1.5).timeout.connect(_slay_dev_monsters)
 	if opts.has("autocast"):
 		await get_tree().create_timer(1.0).timeout
 		var centre := _dev_centroid()
@@ -385,12 +422,14 @@ func _update_stats() -> void:
 	var cell: HexMap.Cell = map.get_cell(c)
 	lines.append("you  hp %d/%d  cell %s  level %s%s" % [player.hp, player.max_hp, c,
 		str(cell.level) if cell else "?", "  CLIMBING" if player.climbing else ""])
-	var cds: Array[String] = []
-	for s in player.spell_slots:
+	for i in SpellComponents.SLOT_COUNT:
+		var s := player.slot_spell(i)
+		if s == "":
+			lines.append("slot %d  -- empty --%s" % [i + 1, "   <- held" if player.held_slot == i else ""])
+			continue
 		var cd := player.cooldown_left(s)
-		cds.append("%s %s" % [s, "ready" if cd <= 0.0 else "%.1fs" % cd])
-	if not cds.is_empty():
-		lines.append("spells  " + "   ".join(cds))
+		lines.append("slot %d  %s  x%d  %s  (cd %.1fs)%s" % [i + 1, s, player.charges_of(s), "ready" if cd <= 0.0 else "%.1fs" % cd,
+				player.cooldown_total(s), "   <- HELD" if player.held_slot == i else ""])
 	if player.has_modifier("armor"):
 		lines.append("armor  dmg x%.2f" % player.damage_taken_mult())
 	for a in allies:
@@ -427,6 +466,43 @@ func _take_shot_later(path: String, after: float) -> void:
 	get_viewport().get_texture().get_image().save_png(path)
 	print("[game] screenshot saved: ", path)
 	get_tree().quit()
+
+
+## Dev flag --give: "heal:9,corn:3" slots (or tops up) those spells with those charges.
+func _apply_dev_loadout() -> void:
+	if opts.has("give"):
+		for part in str(opts["give"]).split(","):
+			var bits := part.strip_edges().split(":")
+			var id := bits[0].strip_edges()
+			var n := int(bits[1]) if bits.size() > 1 else SpellComponents.START_CHARGES
+			if SpellBook.is_available(id):
+				player.slot_in(id, n)
+	if opts.has("hold"):
+		player.select_slot(int(opts["hold"]) - 1)
+	if opts.has("give_allies"):
+		var ids := str(opts["give_allies"]).split(",")
+		for i in mini(ids.size(), allies.size()):
+			allies[i].slot_in(ids[i].strip_edges(), SpellComponents.START_CHARGES)
+
+
+## Dev flag --drop-near: pickups for the listed spells, right next to the player.
+func _drop_near() -> void:
+	if not opts.has("drop_near"):
+		return
+	var ids := str(opts["drop_near"]).split(",")
+	# The first one lies just outside the collect radius but inside the swap radius, so a hero with
+	# full slots is offered the swap at once; the rest follow in a row.
+	var base := player.global_position + Vector3(0.9, 0.0, 0.55)
+	for i in ids.size():
+		var id := ids[i].strip_edges()
+		var p := ComponentPickup.drop(id, SpellComponents.PICKUP_CHARGES, base + Vector3(0.0, 0.0, 1.4 * i))
+		_log("drop-near: %s %s" % [id, "ok" if p != null else "no floor"], Color(0.8, 0.8, 1.0))
+
+
+func _slay_dev_monsters() -> void:
+	for m in _dev_monsters:
+		if is_instance_valid(m) and not m.dead:
+			m.die()
 
 
 ## Dev flag --spawn-near kind,n: n extra monsters of `kind` on open floor 4-5 cells from the player.

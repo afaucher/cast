@@ -2,9 +2,10 @@ class_name PlayerController
 extends Node
 ## Keyboard + mouse control for the player's hero (add as a child of the Hero).
 ## WASD moves relative to the iso camera, the mouse aims via a camera ray onto
-## the terrain, LMB = melee, RMB = ranged bolt, keys 1/2 = slot spells at full
-## power (the keyboard fallback for voice). aim_point() is also what voice
-## casts aim at; cast_spell() is the single entry for voice and keys.
+## the terrain, LMB = melee, RMB = ranged bolt, keys 1-4 = ready (hold) a spell slot,
+## E = cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
+## the pickup underfoot into the held slot. aim_point() is also what voice casts aim at;
+## cast_spell() is the single entry for voice and E (charges, cooldown, toasts).
 
 const DEFAULT_YAW_DEG := 45.0   ## iso yaw used when there is no camera (tests)
 const GROUND_REFINE_STEPS := 3
@@ -30,6 +31,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if hero.is_helpless():
 		hero.climbing = false   # shoved or staggered: no steering, no attacks (voice casts still work)
+		_slot_keys()
 		return
 	var cam := _camera()
 	var iv := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -40,6 +42,7 @@ func _physics_process(delta: float) -> void:
 		hero.climbing = false
 	if cam != null or aim_override != Vector3.INF:
 		hero.face_point(aim_point())
+	_slot_keys()
 	if _over_ui():
 		return
 	var aim := aim_point()
@@ -49,18 +52,62 @@ func _physics_process(delta: float) -> void:
 		hero.melee(to)
 	elif Input.is_action_pressed("attack_ranged"):
 		hero.shoot(to)
-	for i in 2:
-		if i < hero.spell_slots.size() and Input.is_action_just_pressed("cast_slot_%d" % (i + 1)):
-			cast_spell(hero.spell_slots[i], 1.0)
 
 
-## Cast from voice or keys. Handles the toasts: unknown spell, cooldown, success.
+## Keys 1-4 (ready a slot), E (cast the readied spell) and F (swap a pickup in).
+func _slot_keys() -> void:
+	for i in SpellComponents.SLOT_COUNT:
+		if Input.is_action_just_pressed("cast_slot_%d" % (i + 1)):
+			select_slot(i)
+	if Input.is_action_just_pressed("cast_readied"):
+		cast_readied()
+	if Input.is_action_just_pressed("swap_pickup"):
+		swap_pickup()
+
+
+## Ready slot `i` (0-based). An empty slot just says so.
+func select_slot(i: int) -> bool:
+	if hero == null or hero.dead:
+		return false
+	if hero.select_slot(i):
+		return true
+	if hud:
+		hud.show_message("Slot %d is empty" % (i + 1), Hud.COLOR_NEUTRAL)
+	return false
+
+
+## E: cast the held spell at the aim point with the fixed readied power.
+func cast_readied() -> bool:
+	if hero == null or hero.dead:
+		return false
+	var id := hero.held_spell()
+	if id == "":
+		if hud:
+			hud.show_message("Nothing readied", Hud.COLOR_NEUTRAL)
+		return false
+	return cast_spell(id, SpellComponents.READIED_POWER)
+
+
+## F: swap the pickup the hero stands next to into the held slot.
+func swap_pickup() -> bool:
+	if hero == null or hero.dead:
+		return false
+	return hero.swap_in_pickup()
+
+
+## Cast from voice or E. Handles the toasts: unknown spell, out of components (no cooldown spent),
+## cooldown, success.
 func cast_spell(id: String, power: float) -> bool:
 	if hero == null or hero.dead:
 		return false
 	if not hero.spell_slots.has(id):
 		if hud:
 			hud.show_unknown_spell(id)
+		return false
+	if hero.charges_of(id) <= 0:
+		SpellBook.fizzle(hero)
+		if hud:
+			hud.show_out_of_component(id)
 		return false
 	var left := hero.cooldown_left(id)
 	if left > 0.0:

@@ -8,7 +8,8 @@ extends Node3D
 ## override apply_idle() (called every frame while idle_enabled). They face local -Z; +X is their
 ## right; the origin is at the feet.
 ##
-## Hero hooks (all optional on the hero side): attack_swing(), cast_pose(), set_downed(), ui_height.
+## Hero hooks (all optional on the hero side): attack_swing(), cast_pose(), set_downed(), ui_height,
+## hold_item() (shows the held spell's material component in the free hand).
 
 ## Height of the top of the head, so a hero can park its health bar above.
 var ui_height := 2.0
@@ -19,6 +20,11 @@ var has_own_weapon := false
 var parts: Dictionary = {}                 ## name -> MeshInstance3D
 var idle_enabled := true
 var outline_px := 2.4
+
+## Where hold_item() parents its prop: a Node3D under the free hand (see _hold_host()). Null until used.
+var hold_anchor: Node3D = null
+var hold_scale := 1.0                      ## scale of a held prop in this model's space
+var hold_offset := Vector3.ZERO            ## prop position relative to the host part
 
 var _mat: ShaderMaterial
 var _t := 0.0
@@ -67,6 +73,37 @@ func _add_part(part_name: String, soup: LowPoly.Soup, parent: Node3D, pos: Vecto
 	parent.add_child(mi)
 	parts[part_name] = mi
 	return mi
+
+
+# ------------------------------------------------------------------ held item
+
+## Put `node` in the free hand (replacing whatever was there); null empties the hand. The previous
+## prop is freed. Models choose the hand with _hold_host() and tune hold_offset / hold_scale.
+func hold_item(node: Node3D) -> void:
+	if hold_anchor == null:
+		hold_anchor = Node3D.new()
+		hold_anchor.name = "HoldAnchor"
+		_hold_host().add_child(hold_anchor)
+		hold_anchor.position = hold_offset
+		hold_anchor.scale = Vector3.ONE * hold_scale
+	for c in hold_anchor.get_children():
+		hold_anchor.remove_child(c)
+		c.queue_free()
+	if node != null:
+		hold_anchor.add_child(node)
+
+
+## The prop currently in the hand, or null.
+func held_item() -> Node3D:
+	if hold_anchor == null or hold_anchor.get_child_count() == 0:
+		return null
+	return hold_anchor.get_child(0) as Node3D
+
+
+## The node the held prop hangs under: the hand that is not busy (a part that follows that hand).
+## Default: the body. Override per model.
+func _hold_host() -> Node3D:
+	return parts["body"] as Node3D if parts.has("body") else self
 
 
 # ------------------------------------------------------------------ animation

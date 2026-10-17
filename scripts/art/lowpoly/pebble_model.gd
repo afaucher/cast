@@ -48,6 +48,8 @@ func _init() -> void:
 	_setup_model("PebbleModel", MODEL_SCALE)
 	ui_height = 2.95 * MODEL_SCALE
 	_arm_kick = {"arm_l": 0.0, "arm_r": 0.0}
+	hold_offset = Vector3(-0.42, 0.18, -0.40)   # on his left fist (both hands punch, but the left is the quieter)
+	hold_scale = 1.5
 	_build()
 
 
@@ -182,6 +184,11 @@ func _leg_soup(side: int) -> LowPoly.Soup:
 	# stone foot, pushed forward so it reads from the front and overhead
 	out.merge(LowPoly.boulder(Vector3(0.24, 0.15, 0.33), 0, 0.14, STONE_DARK, 74 + side, 0.1), LowPoly.at(Vector3(0.0, -1.06, -0.08)))
 	return out
+
+
+## A held component rides in his left glove.
+func _hold_host() -> Node3D:
+	return parts["glove_l"] as Node3D
 
 
 # ------------------------------------------------------------------ animation

@@ -1,7 +1,8 @@
 class_name SpellBook
 extends RefCounted
-## The five spells: metadata for the UI/voice layer plus the static cast()
-## entry point. Power is in (0, 1] (voice confidence) and scales the effect.
+## The spells: metadata for the UI/voice layer plus the static cast()
+## entry point. Each spell also names its material "component" (see SpellComponents) and may be
+## "available": false while its gameplay is still to come (teeth). Power is in (0, 1] (voice confidence) and scales the effect.
 ## The spoken trigger word ("cast", "pickle"...) is configurable and only used
 ## for display: see incantation(). Cooldowns are NOT enforced here; Hero.try_cast owns them.
 
@@ -9,22 +10,34 @@ const SPELLS := {
 	"heal": {
 		"name": "Heal", "cooldown": 8.0, "color": Color(0.35, 0.95, 0.5),
 		"desc": "Heals every ally where you aim. Point at a friend, or at your feet.", "word": "heal",
+		"component": "Grave moss", "available": true,
 	},
 	"fireball": {
 		"name": "Fireball", "cooldown": 5.0, "color": Color(1.0, 0.55, 0.15),
 		"desc": "A fireball that explodes where you aim (or on the first thing it hits). Monsters only.", "word": "fireball",
+		"component": "Ember horn", "available": true,
 	},
 	"armor": {
 		"name": "Armor", "cooldown": 14.0, "color": Color(0.35, 0.6, 1.0),
 		"desc": "A shielding zone where you aim: allies inside take much less damage.", "word": "armor",
+		"component": "Hide plate", "available": true,
 	},
 	"corn": {
 		"name": "Corn", "cooldown": 12.0, "color": Color(1.0, 0.9, 0.25),
 		"desc": "A giant corn cob falls from the sky. Hits EVERYONE. You were warned.", "word": "corn",
+		"component": "Corn kernel", "available": true,
 	},
 	"tentacles": {
 		"name": "Tentacles", "cooldown": 10.0, "color": Color(0.75, 0.2, 1.0),
 		"desc": "Neon tentacles burst from the floor where you aim and shove EVERYONE outward.", "word": "tentacles",
+		"component": "Neon ichor", "available": true,
+	},
+	# Designed, its gameplay comes later (docs/design/spells.md). The component, drops and data are
+	# here already; available = false keeps it out of the picker, the slots and SpellBook.cast.
+	"teeth": {
+		"name": "Teeth", "cooldown": 12.0, "color": Color(0.96, 0.93, 0.8),
+		"desc": "Too many teeth sprout out of everyone at the aim point, then explode.", "word": "teeth",
+		"component": "Loose teeth", "available": false,
 	},
 }
 
@@ -56,11 +69,31 @@ const TENTACLES_DAMAGE := 6.0     ## monsters only, times power
 const MIN_POWER := 0.05
 
 
+## The castable spell ids (what the picker offers). Unavailable spells (teeth) are left out.
 static func ids() -> Array[String]:
 	var out: Array[String] = []
-	for k in SPELLS:
+	for k: String in SPELLS:
+		if is_available(k):
+			out.append(k)
+	return out
+
+
+## Every spell id in the data, castable or not.
+static func all_ids() -> Array[String]:
+	var out: Array[String] = []
+	for k: String in SPELLS:
 		out.append(k)
 	return out
+
+
+## False for a spell whose gameplay has not landed yet: it cannot be slotted or cast.
+static func is_available(id: String) -> bool:
+	return SPELLS.has(id) and bool(SPELLS[id].get("available", true))
+
+
+## The spell's material component, e.g. "Ember horn".
+static func component_name(id: String) -> String:
+	return str(SPELLS[id].get("component", "component")) if SPELLS.has(id) else "component"
 
 
 static func has_spell(id: String) -> bool:
@@ -104,7 +137,7 @@ static func find_in_text(text: String) -> String:
 ## Cast spell `id` from `caster` toward world point `aim`. Returns false for an unknown
 ## spell or a dead caster. Does not check slots or cooldown (see Hero.try_cast).
 static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
-	if caster == null or caster.dead or not SPELLS.has(id) or GameWorld.root == null:
+	if caster == null or caster.dead or not is_available(id) or GameWorld.root == null:
 		return false
 	power = clampf(power, MIN_POWER, 1.0)
 	if GameWorld.flat_distance(aim, caster.global_position) > 0.05:

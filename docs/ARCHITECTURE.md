@@ -48,8 +48,9 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 - **`Combat`** (`scripts/combat/combat.gd`): `melee_arc(attacker, dir, reach, arc_deg, dmg)`,
   `explode(pos, radius, dmg, team, source, edge_mult)`, `chest(actor)`.
 - **Input** (`scripts/app/input_setup.gd`): `move_up/down/left/right` (WASD),
-  `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1/2` (keys 1/2, keyboard fallback
-  for voice), `toggle_voice_debug` (F1), `restart` (F5).
+  `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1..4` (keys 1-4: ready/hold a spell slot),
+  `cast_readied` (E: cast the held spell at power 0.8), `swap_pickup` (F: swap a dropped component into
+  the held slot), `toggle_voice_debug` (F1), `restart` (F5).
 
 ## Cross-agent contracts (implemented by the owning agent)
 
@@ -90,8 +91,12 @@ through everything, shoving each actor 3.5 sideways/forward, 6 damage to monster
 reach 1.9, 16 damage to monsters, everything in reach shoved 2.2, teammates included).
 
 ### Heroes (`scripts/heroes/hero.gd`, `class_name Hero extends Actor`)
-`spell_slots: Array[String]` (2 entries), `try_cast(id, power, aim) -> bool` (checks the slot
-and the cooldown), `cooldown_left(id) -> float`. The player-controlled hero has `is_player = true`.
+`spell_slots: Array[String]` (up to `SpellComponents.SLOT_COUNT` = 4 entries, no gaps), `held_slot`,
+`charges_of(id)`, `try_cast(id, power, aim) -> bool` (checks the slot, the charges (0 = fizzle, no cooldown)
+and the cooldown, then spends 1 charge), `cooldown_left(id) -> float`, `cooldown_total(id)` (held spell
+/ 1.15). Material components: see `docs/design/spells-and-components.md` (`SpellComponents` holds the
+numbers and the drop table; `Monster._on_death` rolls the drops; `ComponentPickup` is the world prop).
+The player-controlled hero has `is_player = true`.
 `PlayerController` reads input. `AllyBrain` drives AI allies.
 
 ### Monsters (`scripts/monsters/*.gd`, each extends `Monster extends Actor`)

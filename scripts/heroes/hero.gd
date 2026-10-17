@@ -9,6 +9,14 @@ extends Actor
 signal spell_cast(id: String, power: float)
 signal melee_swung
 signal bolt_fired
+## A cast was refused because the spell has no charges left ("out of Ember horn"). No cooldown is spent.
+signal spell_empty(id: String)
+## A component pickup was collected: kind "added" (more charges for a slotted spell) or "filled" (a new slot).
+signal component_collected(id: String, amount: int, kind: String)
+## A pickup was swapped into the held slot (old_id is "" if nothing was there).
+signal component_swapped(old_id: String, new_id: String, slot: int)
+## The held slot or its spell changed (the component in the hand follows it).
+signal held_changed
 
 const MELEE_REACH := 1.6
 const MELEE_ARC := 100.0
@@ -47,9 +55,21 @@ var is_player := false:
 		if _name_label:
 			_name_label.visible = not v and not dead
 		_refresh_bar()
-var spell_slots: Array[String] = []
+## Spell ids in slots 1..SLOT_COUNT, in order, with no gaps (index = slot - 1). Assigning a new list gives
+## every newly listed spell SpellComponents.START_CHARGES; use slot_spell(i) for a safe lookup.
+var spell_slots: Array[String] = []:
+	set(v):
+		spell_slots = v
+		_sync_slots()
+## Index (0-based) of the held slot: that spell is readied for E and gets the passive cooldown boost,
+## and its component is shown in the hero's hand. Voice casts any slotted spell either way.
+var held_slot := 0
+## A dropped component the hero stands next to while every slot is full; F swaps it in. Set by ComponentPickup.
+var swap_candidate: ComponentPickup = null
 
 var _ready_at := {}                  ## cooldown key -> GameWorld.time when usable again
+var _charges := {}                   ## spell id -> charges left (components), 0..MAX_CHARGES
+var _held_prop: Node3D = null        ## the prototype body's held component (models keep theirs via hold_item)
 var _visual: Node3D
 var _weapon: Node3D
 var _body_mat: StandardMaterial3D
@@ -83,6 +103,7 @@ func _ready() -> void:
 	damaged.connect(func(_a: float, _s: Node) -> void: _refresh_bar())
 	healed.connect(func(_a: float) -> void: _refresh_bar())
 	_refresh_bar()
+	_refresh_hold()
 
 
 # --- Actions ------------------------------------------------------------------------------
@@ -91,16 +112,182 @@ func cooldown_left(id: String) -> float:
 	return maxf(0.0, float(_ready_at.get(id, 0.0)) - GameWorld.time)
 
 
-## Cast a spell in one of this hero's slots. False if dead, not slotted, on cooldown, or the spell refuses.
+## The cooldown a cast of `id` costs right now: the held spell recharges 15% more often.
+func cooldown_total(id: String) -> float:
+	var base := SpellBook.cooldown_of(id)
+	return base / SpellComponents.HELD_COOLDOWN_DIV if is_held(id) else base
+
+
+## Cast a spell in one of this hero's slots. False if dead, not slotted, out of charges (emits
+## spell_empty and spends nothing, no cooldown), on cooldown, or the spell refuses. A success spends 1 charge.
 func try_cast(id: String, power: float, aim: Vector3) -> bool:
-	if dead or not spell_slots.has(id) or cooldown_left(id) > 0.0:
+	if dead or not spell_slots.has(id):
+		return false
+	if charges_of(id) <= 0:
+		spell_empty.emit(id)
+		return false
+	if cooldown_left(id) > 0.0:
 		return false
 	if not SpellBook.cast(id, self, power, aim):
 		return false
-	_ready_at[id] = GameWorld.time + SpellBook.cooldown_of(id)
+	_ready_at[id] = GameWorld.time + cooldown_total(id)
+	_charges[id] = maxi(0, charges_of(id) - 1)
 	_cast_pose()
 	spell_cast.emit(id, power)
 	return true
+
+
+# --- Slots, charges, the held spell ---------------------------------------------------------
+
+## The spell in slot `i` (0-based), or "" when that slot is empty.
+func slot_spell(i: int) -> String:
+	return spell_slots[i] if i >= 0 and i < spell_slots.size() else ""
+
+
+func held_spell() -> String:
+	return slot_spell(held_slot)
+
+
+func is_held(id: String) -> bool:
+	return id != "" and held_spell() == id
+
+
+func charges_of(id: String) -> int:
+	return int(_charges.get(id, 0))
+
+
+## Set a slotted spell's charges directly (clamped 0..MAX_CHARGES). False if it is not slotted.
+func set_charges(id: String, n: int) -> bool:
+	if not spell_slots.has(id):
+		return false
+	_charges[id] = clampi(n, 0, SpellComponents.MAX_CHARGES)
+	return true
+
+
+## Put a spell into the first empty slot with `n` charges (or set its charges if already slotted).
+## False if it is unavailable, or every slot is full.
+func slot_in(id: String, n: int) -> bool:
+	if not SpellBook.is_available(id):
+		return false
+	if spell_slots.has(id):
+		return set_charges(id, n)
+	if spell_slots.size() >= SpellComponents.SLOT_COUNT:
+		return false
+	spell_slots.append(id)
+	_charges[id] = clampi(n, 0, SpellComponents.MAX_CHARGES)
+	_refresh_hold()
+	return true
+
+
+## Ready slot `i` (0-based): it becomes the held spell. False (nothing changes) for an empty or invalid slot.
+func select_slot(i: int) -> bool:
+	if slot_spell(i) == "":
+		return false
+	if held_slot != i:
+		held_slot = i
+		_refresh_hold()
+		held_changed.emit()
+	return true
+
+
+## What walking onto a pickup of `id` would do: "add" (slotted, room for charges), "capped" (slotted and
+## full of charges), "fill" (an empty slot takes it), "swap" (every slot is full: F swaps it into the held
+## slot) or "none" (the spell is not available).
+func component_outcome(id: String) -> String:
+	if not SpellBook.is_available(id):
+		return "none"
+	if spell_slots.has(id):
+		return "add" if charges_of(id) < SpellComponents.MAX_CHARGES else "capped"
+	return "fill" if spell_slots.size() < SpellComponents.SLOT_COUNT else "swap"
+
+
+## Collect a component of `id` with `amount` charges. Returns {"result": "added" | "filled" | "none",
+## "amount": charges actually taken, "slot": 0-based slot}. A slotted spell gains charges up to the cap; an
+## unslotted one takes the first empty slot; with every slot full nothing is taken (the pickup waits for an
+## F swap).
+func collect_component(id: String, amount: int) -> Dictionary:
+	var out := {"result": "none", "amount": 0, "slot": -1}
+	if dead or amount <= 0:
+		return out
+	match component_outcome(id):
+		"add":
+			var taken := mini(amount, SpellComponents.MAX_CHARGES - charges_of(id))
+			_charges[id] = charges_of(id) + taken
+			out = {"result": "added", "amount": taken, "slot": spell_slots.find(id)}
+		"fill":
+			var taken := mini(amount, SpellComponents.MAX_CHARGES)
+			slot_in(id, taken)
+			out = {"result": "filled", "amount": taken, "slot": spell_slots.find(id)}
+		_:
+			return out
+	component_collected.emit(id, int(out["amount"]), str(out["result"]))
+	return out
+
+
+## F: swap the pickup we are standing next to into the held slot. The old spell is dropped as a pickup
+## carrying its remaining charges (nothing is dropped if it had none). False if there is nothing to swap.
+func swap_in_pickup() -> bool:
+	var cand := swap_candidate
+	if dead or cand == null or not is_instance_valid(cand) or cand.is_queued_for_deletion():
+		return false
+	if component_outcome(cand.spell_id) != "swap":
+		return false
+	var slot := held_slot
+	var old := slot_spell(slot)
+	var old_n := charges_of(old)
+	var spot := cand.global_position
+	var new_id := cand.spell_id
+	var new_n := mini(cand.charges, SpellComponents.MAX_CHARGES)
+	cand.consume()
+	swap_candidate = null
+	var slots := spell_slots.duplicate()
+	slots[slot] = new_id
+	spell_slots = slots           # the setter re-syncs the charge table (the new spell starts at START_CHARGES) ...
+	_charges[new_id] = new_n      # ... then the pickup's own count replaces that
+	if old != "" and old_n > 0:
+		var away := spot - global_position
+		away.y = 0.0
+		away = away.normalized() if away.length() > 0.05 else -facing
+		ComponentPickup.drop(old, old_n, global_position + away * (SpellComponents.SWAP_RADIUS + 0.7))
+	_refresh_hold()
+	held_changed.emit()
+	component_swapped.emit(old, new_id, slot)
+	return true
+
+
+func _sync_slots() -> void:
+	if spell_slots.size() > SpellComponents.SLOT_COUNT:
+		spell_slots.resize(SpellComponents.SLOT_COUNT)
+	for id in spell_slots:
+		if not _charges.has(id):
+			_charges[id] = SpellComponents.START_CHARGES
+	for id: String in _charges.keys():
+		if not spell_slots.has(id):
+			_charges.erase(id)
+	held_slot = clampi(held_slot, 0, maxi(0, spell_slots.size() - 1))
+	_refresh_hold()
+
+
+## Show the held spell's component in the hand (on a model with hold_item, else on the prototype body).
+func _refresh_hold() -> void:
+	if _visual == null:
+		return   # the body is not built yet; _ready calls this again
+	var id := held_spell()
+	var prop: Node3D = ComponentProps.make(id, true) if id != "" else null
+	if visual_override != null:
+		if visual_override.has_method("hold_item"):
+			visual_override.call("hold_item", prop)
+		elif prop != null:
+			prop.free()
+		return
+	if _held_prop != null:
+		_held_prop.queue_free()
+		_held_prop = null
+	if prop != null:
+		prop.position = Vector3(-0.42, 0.78, -0.22)
+		prop.scale = Vector3.ONE * 0.8
+		_visual.add_child(prop)
+		_held_prop = prop
 
 
 ## Sword/staff swing toward `dir` (X/Z). Returns false while on cooldown.

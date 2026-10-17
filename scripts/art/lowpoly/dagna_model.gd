@@ -64,6 +64,8 @@ func _init() -> void:
 	ui_height = 1.74 * MODEL_SCALE
 	has_own_weapon = true
 	_arm_kick = {"weapon": 0.0, "spin": 0.0}
+	hold_offset = Vector3(-0.66, -0.40, -0.30)   # in her left fist (the right one has the wrench)
+	hold_scale = 1.6
 	_build()
 
 
@@ -213,6 +215,11 @@ func _wrench_soup() -> LowPoly.Soup:
 	s.merge(LowPoly.cylinder(0.15, 0.15, 0.38, 8, METAL_DARK, 142, 0.01), LowPoly.at(Vector3(0.0, 1.27, 0), Vector3(90, 0, 0)))   # adjuster ring
 	s.merge(LowPoly.cylinder(0.06, 0.06, 0.40, 6, BRASS, 143, 0.0), LowPoly.at(Vector3(0.0, 1.27, 0), Vector3(90, 0, 0)))
 	return s
+
+
+## A held component rides in her bare left fist.
+func _hold_host() -> Node3D:
+	return parts["arm_l"] as Node3D
 
 
 # ------------------------------------------------------------------ animation

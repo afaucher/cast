@@ -64,7 +64,7 @@ func setup() -> void:
 	check(not hero.try_cast("fireball", 1.0, origin + Vector3.RIGHT), "refuses a spell that is not slotted")
 	check(hero.try_cast("heal", 1.0, origin), "slotted spell casts")
 	check(not hero.try_cast("heal", 1.0, origin), "cooldown blocks the recast")
-	near(hero.cooldown_left("heal"), SpellBook.cooldown_of("heal"), 0.1, "cooldown_left right after cast")
+	near(hero.cooldown_left("heal"), SpellBook.cooldown_of("heal") / SpellComponents.HELD_COOLDOWN_DIV, 0.1, "cooldown_left right after cast (slot 1 is held: cooldown / 1.15)")
 	near(hero.cooldown_left("corn"), 0.0, 0.001, "other slot unaffected")
 	check(not hero.try_cast("nonsense", 1.0, origin), "unknown spell id refused")
 

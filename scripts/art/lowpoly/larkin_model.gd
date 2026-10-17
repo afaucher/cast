@@ -102,6 +102,7 @@ func _init() -> void:
 	ui_height = 2.27 * MODEL_SCALE
 	has_own_weapon = true
 	_arm_kick = {"bash": 0.0, "cast": 0.0, "raise": 0.0, "draw": 0.0}
+	hold_scale = 1.5
 	_thin_mat = LowPolyMaterial.make(1.1)
 	_build()
 
@@ -479,6 +480,10 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	wand.position = (WAND_REST_POS + Vector3(0.0, breath * 0.006, 0.0)).lerp(hand + Vector3(0.0, 0.02, -0.04), c)
 	wand.rotation = Vector3(lerpf(WAND_REST_ROT.x, deg_to_rad(-70.0), c), 0.0, lerpf(WAND_REST_ROT.z, 0.0, c))
 	wand.visible = true
+
+	# a held component sits in the free right hand, wherever it is (hanging, drawing, raised)
+	if hold_anchor != null:
+		hold_anchor.position = hand + Vector3(0.20, 0.28, -0.06)
 
 
 ## Re-aim a sleeve from the shoulder at `hand`, stretching it a little so it always reaches.

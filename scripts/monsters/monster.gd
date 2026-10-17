@@ -511,6 +511,7 @@ func _on_damaged(_amount: float, source: Node) -> void:
 func _on_death() -> void:
 	state = State.DEAD
 	remove_from_group("monsters")
+	SpellComponents.drop_for(self)   # material components, per the drop table
 	_end_windup()
 	if _bar != null:
 		_bar.visible = false
