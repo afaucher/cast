@@ -160,8 +160,11 @@ func _build_visuals() -> void:
 	var top := 1.95   # top of the figure; the bar, name and shield icon float above it
 	if visual_override != null:
 		_visual.add_child(visual_override)
-		_weapon = Node3D.new()   # inert stand-in so the swing / cast tweens have something to drive
-		_visual.add_child(_weapon)
+		# A model that carries its own weapon (has_own_weapon) animates it itself in attack_swing() /
+		# cast_pose(); every other override gets an inert stand-in so the tweens have a target.
+		if not ("has_own_weapon" in visual_override and bool(visual_override.get("has_own_weapon"))):
+			_weapon = Node3D.new()
+			_visual.add_child(_weapon)
 		if "ui_height" in visual_override:
 			top = float(visual_override.get("ui_height"))
 	else:
@@ -301,6 +304,8 @@ func _swing_pose() -> void:
 
 
 func _shoot_pose() -> void:
+	if visual_override != null and visual_override.has_method("shoot_pose"):
+		visual_override.call("shoot_pose")
 	if _weapon == null:
 		return
 	if _swing_tween and _swing_tween.is_valid():

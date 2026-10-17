@@ -1,5 +1,5 @@
 class_name PebbleModel
-extends Node3D
+extends LowPolyModel
 ## Pebble, Golem Utility: a hulking FACETED low-poly sandstone golem in a hi-vis vest, tool belt and
 ## faded jeans, with giant leather work gloves. Built entirely in code from LowPoly soups (flat
 ## shaded, per-face painted colours) with the LowPolyMaterial toon + amber rim + ink outline.
@@ -38,63 +38,21 @@ const GLOVE := Color(0.62, 0.46, 0.28)
 const GLOVE_DARK := Color(0.42, 0.29, 0.17)
 const DARK := Color(0.12, 0.08, 0.06)
 
-## Height of the top of the head, so a hero can park its health bar above.
-var ui_height := 2.95 * MODEL_SCALE
 
-var parts: Dictionary = {}                 ## name -> MeshInstance3D
-var idle_enabled := true
-var outline_px := 2.4
-
-var _mat: ShaderMaterial
-var _t := 0.0
-var _last_pos := Vector3.ZERO
-var _speed := 0.0
-var _swing_tween: Tween
 var _swing_next_right := true
-var _arm_kick := {"arm_l": 0.0, "arm_r": 0.0}   ## extra x rotation from swings / casts
 var _body_base_y := 1.55
 var _head_base_y := 1.24
 
 
 func _init() -> void:
-	name = "PebbleModel"
-	scale = Vector3.ONE * MODEL_SCALE
-	_mat = LowPolyMaterial.make(outline_px)
+	_setup_model("PebbleModel", MODEL_SCALE)
+	ui_height = 2.95 * MODEL_SCALE
+	_arm_kick = {"arm_l": 0.0, "arm_r": 0.0}
 	_build()
-
-
-func _ready() -> void:
-	_last_pos = global_position
-
-
-func has_part(part_name: String) -> bool:
-	return parts.has(part_name)
-
-
-func get_part(part_name: String) -> MeshInstance3D:
-	return parts.get(part_name)
-
-
-## Total triangle count over all parts (for tests / budgets).
-func triangle_count() -> int:
-	var n := 0
-	for p: MeshInstance3D in parts.values():
-		var arrays := p.mesh.surface_get_arrays(0)
-		n += (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
-	return n
 
 
 # ------------------------------------------------------------------ build
 
-func _add_part(part_name: String, soup: LowPoly.Soup, parent: Node3D, pos: Vector3) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.name = part_name
-	mi.mesh = soup.to_mesh()
-	mi.material_override = _mat
-	mi.position = pos
-	parent.add_child(mi)
-	parts[part_name] = mi
-	return mi
 
 
 func _build() -> void:
@@ -228,18 +186,6 @@ func _leg_soup(side: int) -> LowPoly.Soup:
 
 # ------------------------------------------------------------------ animation
 
-func _process(delta: float) -> void:
-	if not idle_enabled or not is_inside_tree():
-		return
-	_t += delta
-	var gp := global_position
-	var moved := Vector2(gp.x - _last_pos.x, gp.z - _last_pos.z).length()
-	_last_pos = gp
-	var spd := moved / maxf(delta, 0.0001)
-	_speed = lerpf(_speed, minf(spd, 6.0), clampf(delta * 10.0, 0.0, 1.0))
-	apply_idle(_t, _speed)
-
-
 ## Pose the idle / walk cycle at time t (breathing, a slow head nod, stomping legs when moving).
 func apply_idle(t: float, speed: float = 0.0) -> void:
 	var walk := clampf(speed / 4.5, 0.0, 1.0)
@@ -252,8 +198,8 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.5 * walk
 	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.5 * walk
 	var sway := breath * 0.015
-	(parts["arm_l"] as MeshInstance3D).rotation.x = ARM_FWD - stride * 0.28 * walk + sway + float(_arm_kick["arm_l"])
-	(parts["arm_r"] as MeshInstance3D).rotation.x = ARM_FWD + stride * 0.28 * walk - sway + float(_arm_kick["arm_r"])
+	(parts["arm_l"] as MeshInstance3D).rotation.x = ARM_FWD - stride * 0.28 * walk + sway + arm_kick("arm_l")
+	(parts["arm_r"] as MeshInstance3D).rotation.x = ARM_FWD + stride * 0.28 * walk - sway + arm_kick("arm_r")
 
 
 ## A quick heavy punch with alternating arms: wind back, slam forward, recover.
@@ -277,14 +223,3 @@ func cast_pose() -> void:
 	_kick_arm("arm_r", 0.0, 0.9, 0.1, 0.1, 0.5)
 
 
-func _kick_arm(key: String, windup: float, punch: float, t_wind: float, t_hit: float, t_back: float) -> void:
-	var tw := create_tween()
-	tw.tween_method(func(v: float) -> void: _arm_kick[key] = v, 0.0, windup, t_wind).set_trans(Tween.TRANS_SINE)
-	tw.tween_method(func(v: float) -> void: _arm_kick[key] = v, windup, punch, t_hit).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_method(func(v: float) -> void: _arm_kick[key] = v, punch, 0.0, t_back).set_trans(Tween.TRANS_BACK)
-
-
-## Downed: greyed out; the hero lies the whole model down.
-func set_downed(downed: bool) -> void:
-	_mat.set_shader_parameter("desat", 0.85 if downed else 0.0)
-	idle_enabled = not downed
