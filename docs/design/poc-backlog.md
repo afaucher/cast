@@ -272,3 +272,9 @@ anyone outside the team plays. **P2** = later.
   proportion template. AI images for concept sheets only.
 - **P2** The stretch hero Gulp (frog, tongue pull) and end-screen stats such as "Teammates
   bowled".
+
+## 15. Spell slots and components
+
+- **P1** Four slots, readied spell (keys 1-4, E casts), and readied-spell benefits: early wind-up on partials, footprint preview, +25%. See `spells-and-components.md`.
+- **P1** Material components: monster drop tables, walk-over pickups, charges, swapping.
+- **P2** Readied-spell icon over teammates; AI allies reading it.
