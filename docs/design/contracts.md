@@ -56,3 +56,26 @@ The comedy and the "well-oiled team" score live here, and payout could later buy
 2. Is pay per hero or for the whole team? (Proposed: the team pot, with credit and blame per hero on
    the invoice.)
 3. Does a contract have a timer? (Proposed: no hard timer, but a par time bonus.)
+
+## Decisions (user, 2026-10-16)
+1. **Leaving early always works.** Objectives you haven't met don't pay, and you may still owe for
+   damages, so a run CAN end in the red.
+2. **The invoice IS the summary screen**, and it looks like a real invoice: letterhead, line items,
+   deductions, net total due.
+3. **Hellgates take damage like anything else.** Auto-spawning only if the balance stays under
+   control. Options:
+   - a finite reserve per gate;
+   - spawning only when heroes are near or the gate is hit;
+   - no spawning (guarded only).
+4. **Employees:** $10 each alive, **$100 each extracted** (escorted to the exit).
+5. **No goo cleaning.** It's janitor work, not magic-user work. "Disinfect" becomes
+   **exterminate the pest you were hired for**: either *everything* on site, or a *specific* pest
+   (e.g. "imps only"). It stays on the magic side of the line.
+6. **The property penalty is capped.** The exact basis is still to decide; see the open questions.
+7. **Team pot.** The invoice still names credit and blame per hero.
+8. **Generation:** the room-tagging approach is too small. Bigger options are under discussion.
+
+### Open
+- **What the cap is based on:** a share of the contract's total value (so leaving early with nothing
+  earned can still leave you owing up to the cap), or a share of earnings?
+- **Hellgate spawning model:** one of the options in decision 3.
