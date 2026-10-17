@@ -174,23 +174,25 @@ const HINT_ORDER := {
 	3: ["prop", "staff", "pest"],
 }
 
-## The dispatch floor banners (dispatch talking live on the headset, not a note). Checked against
-## hellgate.gd: a closed gate stops spawning; closing the origin gate stops every gate's spawns.
+## The dispatch floor banners (dispatch talking live on the headset, not a note). Each banner is ONE thought: the
+## incident or the situation, leading straight into what it means for the crew on THIS floor. No generic tips (the
+## pay is on the job board and the tracker). Floor 1 is always {incident}: the contract's event as dispatch tells
+## it, with the staff tied to it (ClientArchetype events, "dispatch"). Checked against hellgate.gd: a closed gate
+## stops spawning; closing the origin gate stops every gate's spawns.
 const DISPATCH := {
 	1: [
-		"It started in the {origin}, three floors down. Work your way to it.",
-		"Staff are worth $100 at an exit and $10 anywhere else. Dispatch is not judging.",
-		"The client calls it a {pest} problem. Dispatch calls it a three-floor problem.",
+		"{incident}",
 	],
 	2: [
-		"Floor 2. {gate_count} gates on this one. A closed gate stops spawning.",
-		"Floor 2. Halfway down. The pay gets better. So do the {pest}.",
-		"Floor 2. The elevator still has an exit button, if anyone's asking.",
+		"The gates on this floor are feeding the {pest} problem. Close them and it stops coming.",
+		"The {origin} is still a floor below, so every gate up here keeps sending more. Close the gates.",
+		"Halfway down and the {pest} problem has gates now. Close them and this floor goes quiet.",
+		"Some of the staff made it this far before the {pest} did. Find them, then find the elevator.",
 	],
 	3: [
-		"Floor 3. The big one is in the {origin}. Close it and every gate stops spawning.",
-		"Floor 3. Closing the {origin} gate doesn't clock you out. The elevator does.",
-		"Floor 3. This is where it started. Try to finish it here too.",
+		"The {origin}'s on this floor. Close the big gate and the whole site goes quiet.",
+		"This is where it started, in the {origin}. Close the gate there and every other gate stops with it.",
+		"The big gate is in the {origin}. Closing it stops the site; only the elevator clocks you out.",
 	],
 }
 
@@ -203,7 +205,7 @@ const SLOT_KIND := {
 
 ## Every slot a line may use (NoteFacts provides them).
 const SLOTS: Array[String] = ["client", "staff", "STAFF", "staff_room", "STAFF_ROOM", "staff_count", "gate_room", "GATE_ROOM",
-	"gate_count", "prop", "PROP", "prop_room", "prop_price", "origin", "ORIGIN", "pest"]
+	"gate_count", "prop", "PROP", "prop_room", "prop_price", "origin", "ORIGIN", "pest", "incident"]
 
 
 ## The story lines for a client and floor; on the origin floor, the lines keyed to the rolled event

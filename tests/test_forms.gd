@@ -306,10 +306,63 @@ func _check_use_prompt_node() -> void:
 	p.show_at(Vector3.ZERO, "F", "Swap in Grave moss")
 	await frames(2)
 	check(p._viewport.size.x > narrow, "a longer verb makes a wider slip")
+	await _check_use_prompt_zoom(p)
 	p.hide_prompt()
 	await frames(4)
 	check(p.alpha > 0.0 and p.alpha < 1.0, "fading out")
 	await frames(12)
 	check(p.alpha == 0.0 and not p._sprite.visible, "gone after ~0.2 s")
 	p.queue_free()
+	await frames(2)
+
+
+## The slip is the same size on screen at every camera zoom (--zoom 6 to 36), and stays inside the viewport even when its
+## anchor is off screen or out of the camera's frame.
+func _check_use_prompt_zoom(p: UsePrompt) -> void:
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = CameraRig.SIZE_DEFAULT
+	add_child(cam)
+	cam.position = Vector3(0, 30, 21)
+	cam.look_at(Vector3.ZERO)
+	cam.make_current()
+	p.show_at(Vector3.ZERO, "E", "Clock out")
+	var heights: Array[float] = []
+	for zoom: float in [CameraRig.SIZE_DEFAULT, 11.0, 6.0, 36.0]:
+		cam.size = zoom
+		await frames(3)
+		var world_h := p._sprite.pixel_size * float(UsePrompt.PX_H)
+		var a := cam.unproject_position(p.global_position)
+		var b := cam.unproject_position(p.global_position + cam.global_basis.y * world_h)
+		heights.append(a.distance_to(b))
+	for i in range(1, heights.size()):
+		near(heights[i], heights[0], 0.5, "the use prompt is %.1f px tall at every zoom (%.1f)" % [heights[0], heights[i]])
+	near(heights[0], p.screen_height(), 0.5, "and that is its design height at the default zoom")
+	# far off screen: clamped back inside the viewport
+	cam.size = 6.0
+	p.show_at(Vector3(40, 0, -40), "E", "Clock out")
+	await frames(3)
+	var vp := p.get_viewport().get_visible_rect().size
+	var c := cam.unproject_position(p.global_position) + Vector2(p._sprite.offset.x, -p._sprite.offset.y) * (p.screen_height() / float(UsePrompt.PX_H))
+	check(c.x >= 0.0 and c.x <= vp.x and c.y >= 0.0 and c.y <= vp.y, "an anchor off screen keeps its slip on screen (%s in %s)" % [c, vp])
+	# over the HUD's spell cards: nudged up so it never covers them
+	var hud := Hud.new()
+	add_child(hud)
+	var hero := Hero.new()
+	add_child(hero)
+	hud.bind(hero, [] as Array[Hero])
+	await frames(3)
+	var cards := hud.cards_rect()
+	check(cards.size.x > 100.0 and cards.position.y > vp.y * 0.6, "the HUD reports where its spell cards are (%s)" % cards)
+	cam.size = CameraRig.SIZE_DEFAULT
+	var below := cam.project_position(cards.get_center(), 30.0)   # a world point that projects onto the cards' middle
+	p.show_at(below, "E", "Clock out")
+	await frames(3)
+	var at := cam.unproject_position(p.global_position)
+	var slip := Rect2(at + Vector2(p._sprite.offset.x, -p._sprite.offset.y) * (p.screen_height() / float(UsePrompt.PX_H)) - Vector2(float(p._viewport.size.x), float(UsePrompt.PX_H)) * (p.screen_height() / float(UsePrompt.PX_H)) * 0.5,
+			Vector2(float(p._viewport.size.x), float(UsePrompt.PX_H)) * (p.screen_height() / float(UsePrompt.PX_H)))
+	check(slip.end.y <= cards.position.y, "a prompt anchored over the spell cards sits above them (bottom %.0f, cards top %.0f)" % [slip.end.y, cards.position.y])
+	hud.queue_free()
+	hero.queue_free()
+	cam.queue_free()
 	await frames(2)

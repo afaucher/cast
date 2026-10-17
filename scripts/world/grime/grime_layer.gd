@@ -360,6 +360,10 @@ func _pieces(recipe: String, pos: Vector3, size: float) -> Array[GrimePlan.Mark]
 			_add(out, "scuff", pos, 0.3 + 0.5 * size)
 		Grime.WET:
 			_add(out, "puddle", pos, size * 0.95, 1.0)
+		Grime.COFFEE:
+			_add(out, "coffee", pos, clampf(size * 0.62, 0.7, 1.6), 1.1)
+			for i in 3:
+				_add(out, "coffee", _scatter(pos, size * 0.8), size * _frand(0.14, 0.22), 0.9)
 		Grime.PAPER:
 			_add(out, "paper", pos, 0.32 + 0.3 * size, 1.0)
 			for i in 2:

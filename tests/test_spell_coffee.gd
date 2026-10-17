@@ -292,6 +292,35 @@ func _area_and_teams() -> void:
 	SpellBook.cast("coffee", caster3, 1.0, Vector3(2.4, 0, 3.4))
 	await frames(2)
 	check(Coffee.is_hasted(buddy) and Coffee.is_hasted(buddy_mon), "aimed at a friend: the friend and the monster beside them")
+	# A MISS is still visible: a cast where nobody stands leaves a splash (spill, steam, droplets, the radius ring).
+	new_world(flat_map(14))
+	var c4 := _hero(Vector3(-8, 0, 0))
+	var empty_spot := Vector3(3.0, 0, 3.0)
+	var before := get_tree().get_nodes_in_group(CoffeeFx.GROUP).size()
+	var hit_nobody := SpellBook.cast("coffee", c4, 1.0, empty_spot)
+	check(hit_nobody, "a coffee cast at an empty spot still casts")
+	var splashes := get_tree().get_nodes_in_group(CoffeeFx.GROUP)
+	eq(splashes.size(), before + 1, "a miss leaves a splash node")
+	var sp := splashes[splashes.size() - 1] as Node3D
+	check(sp != null and GameWorld.flat_distance(sp.global_position, empty_spot) < 0.01, "... at the aim point")
+	check(sp.find_children("*", "CPUParticles3D", true, false).size() >= 2, "... with steam and flying droplets")
+	check(sp.find_children("*", "MeshInstance3D", true, false).size() >= 2, "... and the amber ring burst that shows the radius")
+	await frames(int((CoffeeFx.SPLASH_LIFE + 0.4) * 60.0))
+	check(not is_instance_valid(sp), "the splash cleans itself up")
+	# The hasted get steam wisps that are clearly there, and a visible crash.
+	new_world(flat_map(14))
+	var c5 := _hero(Vector3(-8, 0, 0))
+	var jittery := _hero(Vector3(1.0, 0, 0))
+	SpellBook.cast("coffee", c5, 1.0, Vector3.ZERO)
+	await frames(2)
+	var cof := jittery.get_node("Coffee") as Coffee
+	var plumes := cof.find_children("*", "CPUParticles3D", false, false)
+	check(plumes.size() >= 2 and (plumes[0] as CPUParticles3D).emitting and (plumes[0] as CPUParticles3D).amount >= 20, "a hasted actor has a thick, emitting steam plume")
+	check((plumes[0] as CPUParticles3D).mesh.get_aabb().size.x * (plumes[0] as CPUParticles3D).scale_amount_min > 0.4, "whose wisps are big enough to read (%.2f wide)" % ((plumes[0] as CPUParticles3D).mesh.get_aabb().size.x * (plumes[0] as CPUParticles3D).scale_amount_min))
+	await frames(int((SpellBook.coffee_duration(1.0) + 0.3) * 60.0))
+	check(Coffee.is_crashing(jittery), "the haste ran out into the crash")
+	check(not (plumes[0] as CPUParticles3D).emitting, "the steam stops in the crash")
+	check(cof.find_children("*", "Label3D", false, false).size() >= 3, "and the crash shows droopy z z Z")
 	# Through the slots, with a component.
 	var h := _hero(Vector3(-5, 0, 5))
 	h.spell_slots = ["coffee", "heal"] as Array[String]

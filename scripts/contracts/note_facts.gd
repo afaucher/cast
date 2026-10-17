@@ -28,6 +28,9 @@ static func from_plan(plan: SitePlan, run: ContractRun) -> Dictionary:
 		f["origin"] = origin
 		f["ORIGIN"] = origin.to_upper()
 	f["pest"] = ClientArchetype.pest_name(run.pest)
+	var incident := str(run.story.get("dispatch", ""))
+	if incident != "":
+		f["incident"] = incident   # the floor-1 dispatch banner: the event, in dispatch's voice, and what it means for the crew
 	# staff: one employee, preferring a room whose name is unique on the floor
 	if not plan.employees.is_empty():
 		var e: Dictionary = _prefer_unique(plan, run, plan.employees)

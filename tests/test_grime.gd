@@ -350,6 +350,14 @@ func _check_hooks() -> void:
 			var kernels := (mk["pieces"] as Array).size()
 			check(kernels >= 8, "corn: ring, scorch and kernels (%d decals)" % kernels)
 
+	# Coffee: a dark spill at the aim point on EVERY cast, even one that hits nobody.
+	SpellBook.cast("coffee", caster, 1.0, Hex.to_world(Vector2i(-1, 5), 0.0))
+	check(await wait_until(func() -> bool: return recipes.call().has(Grime.COFFEE), 60), "a coffee cast that hits nobody still leaves a spill")
+	for mk in layer.live_marks():
+		if mk["recipe"] == Grime.COFFEE:
+			check((mk["pieces"] as Array).size() >= 2, "the coffee spill is a splat with droplets (%d decals)" % (mk["pieces"] as Array).size())
+	check(Grime.LIFE <= 30.0, "and it fades inside the 30 s player-mark rule")
+
 	# Teeth pop.
 	var dummy := TrainingDummy.new()
 	dummy.max_hp = 1000.0

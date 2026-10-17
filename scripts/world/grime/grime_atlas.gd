@@ -22,7 +22,7 @@ const VARIANTS := {
 	"scorch": 2, "scratch": 2, "ichor": 3, "crack": 2, "rubble": 2, "paper": 2, "glass": 1, "wax": 2,
 	"wine": 2, "popcorn": 2, "chalk": 2, "oil": 2, "rust": 2, "spill": 2,
 	"kernel": 2, "tooth": 2, "ring": 1, "drag": 2, "scuff": 2, "crack_ichor": 2, "stain": 2,
-	"puddle": 2,
+	"puddle": 2, "coffee": 2,
 }
 
 static var _first: Dictionary = {}
@@ -299,6 +299,7 @@ static func _paint(kind: String, v: int, p: Painter) -> void:
 		"scuff": _scuff(p, c, v)
 		"crack_ichor": _crack_net(p, c, v, true)
 		"stain": _stain(p, c, v)
+		"coffee": _coffee(p, c, v)
 		"puddle": _puddle(p, c, v + 2, Color(0.20, 0.42, 0.60, 0.52), Color(0.38, 0.66, 0.84, 0.46), Color(0.3, 0.7, 1.0, 1.0), Color(0.85, 0.95, 1.0, 0.45))
 
 
@@ -342,6 +343,25 @@ static func _puddle(p: Painter, c: Vector2, v: int, body: Color, inner: Color, g
 		p.blob(q.x, q.y, rr, body, Color(glow.r, glow.g, glow.b, 0.5), 6, 0.25, 1.4, 0.1)
 	p.blob(c.x + p.rng.randf_range(-3, 3), c.y + p.rng.randf_range(-3, 3), 14.0, inner, Color(glow.r, glow.g, glow.b, 1.0), 7, 0.3, 3.0, 0.1)
 	p.blob(c.x - 6.0, c.y - 7.0, 4.0, hi, Color(0, 0, 0, 0), 5, 0.2, 1.5, 0.0)
+
+
+## A spilled coffee: a medium-dark brown splat with a pale crema rim, a lighter glossy middle and flung droplets round it.
+## (Kept warmer and lighter than a true black-brown so it still reads on the dark slate floor.)
+static func _coffee(p: Painter, c: Vector2, v: int) -> void:
+	var body := Color(0.30, 0.15, 0.06, 0.96)
+	var crema := Color(0.62, 0.42, 0.24, 0.85)
+	p.clear(Color(body.r, body.g, body.b))
+	p.blob(c.x, c.y, 24.0 + v * 2.0, crema, Color(0, 0, 0, 0), 9, 0.34, 3.5, 0.14)   # the pale rim where it thins out
+	p.blob(c.x, c.y, 20.0 + v * 2.0, body, Color(0, 0, 0, 0), 9, 0.34, 3.5, 0.14)
+	for i in 9 + v * 2:   # thrown droplets, a few with a tail back to the splat
+		var a := p.rng.randf() * TAU
+		var r1 := p.rng.randf_range(25.0, 34.0)
+		if i % 3 == 0:
+			p.stroke(c.x + cos(a) * 16.0, c.y + sin(a) * 16.0, c.x + cos(a) * (r1 - 3.0), c.y + sin(a) * (r1 - 3.0), 3.6, 1.0, body)
+		var q := c + p.polar(r1, a)
+		p.blob(q.x, q.y, p.rng.randf_range(2.0, 4.6), body, Color(0, 0, 0, 0), 5, 0.2, 1.2, 0.1)
+	p.blob(c.x + p.rng.randf_range(-2, 2), c.y + p.rng.randf_range(-2, 2), 13.0, Color(0.42, 0.22, 0.09, 0.92), Color(0, 0, 0, 0), 7, 0.3, 3.0, 0.1)
+	p.blob(c.x - 5.0, c.y - 6.0, 4.0, Color(0.85, 0.65, 0.42, 0.65), Color(0, 0, 0, 0), 5, 0.2, 1.5, 0.0)   # the glossy highlight
 
 
 static func _crack_net(p: Painter, c: Vector2, v: int, glowing: bool) -> void:

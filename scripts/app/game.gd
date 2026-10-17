@@ -20,6 +20,7 @@ extends Node3D
 ##   --no-mic            don't open the mic / load the model (typed casts only)
 ##   --shot <png>        save a screenshot after --shot-after game seconds (default 3) and quit
 ##   --autocast <id>     cast a spell once, 1 s in (for screenshots)
+##   --aim-offset x,z    dev: --autocast aims at the player's position plus this offset (world units) instead of at the monsters
 ##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
 ##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer) near the player;
 ##                       --autocast then aims at them
@@ -177,6 +178,7 @@ func _parse_args() -> void:
 			"--shot": opts["shot"] = nxt
 			"--shot-after": opts["shot_after"] = float(nxt)
 			"--autocast": opts["autocast"] = nxt
+			"--aim-offset": opts["aim_offset"] = nxt
 			"--proto-heroes": opts["proto_heroes"] = true
 			"--spawn-near": opts["spawn_near"] = nxt
 			"--stage-ledge": opts["stage_ledge"] = true
@@ -558,6 +560,9 @@ func _start() -> void:
 	if opts.has("autocast"):
 		await get_tree().create_timer(1.0).timeout
 		var centre := _dev_centroid()
+		if opts.has("aim_offset"):
+			var off := str(opts["aim_offset"]).split(",")
+			centre = player.global_position + Vector3(float(off[0]), 0.0, float(off[1]) if off.size() > 1 else 0.0)
 		if centre != Vector3.INF:
 			controller.aim_override = centre
 		_cast(str(opts["autocast"]), 1.0, "autocast")
@@ -662,12 +667,12 @@ func _build_contract_ui() -> void:
 	_update_tracker()
 
 
-## Dispatch at the top of each floor (the line SiteBuilder planned for it); floor 1 adds the client's event above it.
+## Dispatch at the top of each floor: ONE message, the line SiteBuilder planned for it (floor 1 tells the contract's event in
+## dispatch's voice and what it means for the crew; see NoteCopy.DISPATCH).
 func _story_banner() -> void:
 	if _site == null:
 		return
-	var lead := str(_run.story.get("event", "")) if _floor_n() == 1 else ""
-	_banner.show_line(_site.plan.dispatch, 7.0, lead)
+	_banner.show_line(_site.plan.dispatch, 7.0)
 
 
 func _show_banner(text: String, hold: float) -> void:

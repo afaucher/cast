@@ -13,6 +13,9 @@ signal console_submitted(text: String)
 
 const TOAST_TIME := 1.8
 const CARD_SIZE := Vector2(210, 104)
+const CARD_BOTTOM_GAP := 20.0     ## the spell cards sit this far above the screen bottom
+const TOAST_GAP := 12.0           ## the toast floats this far above the cards, so it never meets the dispatch banner at the top
+const TOAST_HEIGHT := 56.0
 const BAR_COLOR_PLAYER := Color(0.3, 0.85, 0.5)
 const BAR_COLOR_ALLY := Color(0.4, 0.7, 0.95)
 const COLOR_DANGER := Color(1.0, 0.45, 0.4)
@@ -46,6 +49,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	add_to_group("hud")
 	_root = Control.new()
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -118,6 +122,18 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Keep the HUD clear of a side panel docked on the right (0 = full width).
 func set_right_inset(px: float) -> void:
 	_root.offset_right = -px
+
+
+## The screen rectangle (canvas pixels) the spell cards cover; an empty Rect2 before bind(). The use prompt keeps clear of it.
+func cards_rect() -> Rect2:
+	if _card_box == null or _cards.is_empty():
+		return Rect2()
+	return _card_box.get_global_rect()
+
+
+## The screen rectangle of the cast toast (canvas pixels), for tests.
+func toast_rect() -> Rect2:
+	return _toast.get_global_rect() if _toast != null else Rect2()
 
 
 ## Add a full-screen Control (e.g. the SpellPicker) on top of the HUD.
@@ -270,7 +286,7 @@ func _build_cards() -> void:
 	_card_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_card_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_card_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_card_box.offset_bottom = -20
+	_card_box.offset_bottom = -CARD_BOTTOM_GAP
 	_card_box.add_theme_constant_override("separation", 12)
 	_card_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_card_box)
@@ -278,9 +294,13 @@ func _build_cards() -> void:
 
 func _build_toasts() -> void:
 	_toast = Label.new()
-	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	# Just above the spell cards at the bottom centre. (It used to sit at the top centre, behind the dispatch banner.)
+	_toast.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_toast.offset_top = 70
+	_toast.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_toast.offset_bottom = -(CARD_BOTTOM_GAP + CARD_SIZE.y + TOAST_GAP)
+	_toast.offset_top = _toast.offset_bottom - TOAST_HEIGHT
+	_toast.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_label(_toast, 40)

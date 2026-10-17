@@ -201,19 +201,24 @@ Pest tickets carry the header "Pest Control · Site Visit", insurance lines "Ins
 ## 4. Floor banners (dispatch)
 
 Dispatch talks live on the headset, so the banner is not a note. It is a canary strip at the top centre
-with a headset glyph as its frame, no text prefix. Floor 1 shows the client's `event` above the line.
+with a headset glyph as its frame, no text prefix. **Each banner is ONE thought** in one text block: the
+incident or situation leads straight into what it means for the crew on this floor. No generic pay tips
+(pay is on the job board and the tracker), and no second line above it.
+
+Floor 1 is the contract's event told in dispatch's voice, tied to the staff (`events[].dispatch` in
+`ClientArchetype`, exposed as the `{incident}` fact), e.g. "Interns opened a vat marked DO NOT OPEN. Some of
+them are still down here. Bring them out." Floors 2 and 3 use the floor's own facts:
 
 | Floor | Line |
 |---|---|
-| 1 | It started in the {origin}, three floors down. Work your way to it. |
-| 1 | Staff are worth $100 at an exit and $10 anywhere else. Dispatch is not judging. |
-| 1 | The client calls it a {pest} problem. Dispatch calls it a three-floor problem. |
-| 2 | Floor 2. {gate_count} gates on this one. A closed gate stops spawning. |
-| 2 | Floor 2. Halfway down. The pay gets better. So do the {pest}. |
-| 2 | Floor 2. The elevator still has an exit button, if anyone's asking. |
-| 3 | Floor 3. The big one is in the {origin}. Close it and every gate stops spawning. |
-| 3 | Floor 3. Closing the {origin} gate doesn't clock you out. The elevator does. |
-| 3 | Floor 3. This is where it started. Try to finish it here too. |
+| 1 | {incident} (15 events, one per client event) |
+| 2 | The gates on this floor are feeding the {pest} problem. Close them and it stops coming. |
+| 2 | The {origin} is still a floor below, so every gate up here keeps sending more. Close the gates. |
+| 2 | Halfway down and the {pest} problem has gates now. Close them and this floor goes quiet. |
+| 2 | Some of the staff made it this far before the {pest} did. Find them, then find the elevator. |
+| 3 | The {origin}'s on this floor. Close the big gate and the whole site goes quiet. |
+| 3 | This is where it started, in the {origin}. Close the gate there and every other gate stops with it. |
+| 3 | The big gate is in the {origin}. Closing it stops the site; only the elevator clocks you out. |
 
 **Checked against `hellgate.gd`:** a gate spawns until it is closed (killed), so a closed gate stops
 spawning; closing the origin gate stops every gate's spawns site-wide (`HellgateEvents.stop_spawns`).

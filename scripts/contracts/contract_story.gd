@@ -6,7 +6,9 @@ extends RefCounted
 ## Pure data + a roller; the rest of the generator reads the Dictionary it returns.
 ##
 ## story = {
-##   "event": String            the inciting event, one deadpan sentence
+##   "event": String            the inciting event, one deadpan sentence (the client's voice: the job board)
+##   "dispatch": String         the same event as dispatch says it on the floor-1 headset banner: the incident and
+##                              what it means for the crew, as one thought (NoteFacts "incident")
 ##   "origin": String           the origin room theme ("yoga studio")
 ##   "origin_floor": int        3
 ##   "summary": String          "Cause: ... Origin: the yoga studio, floor 3."
@@ -25,6 +27,7 @@ static func roll(archetype_id: String, rng: RandomNumberGenerator) -> Dictionary
 	rng.randi_range(0, 3)
 	return {
 		"event": str(ev["text"]),
+		"dispatch": str(ev.get("dispatch", ev["text"])),
 		"origin": origin,
 		"origin_floor": ContractRun.FLOOR_COUNT,
 		"summary": "%s Origin: the %s, floor %d." % [str(ev["text"]), origin, ContractRun.FLOOR_COUNT],

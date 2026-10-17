@@ -33,11 +33,8 @@ const TWITCH_MAX_GAP := 0.8
 const TWITCH_TIME := 0.1           ## a step lasts this long ...
 const TWITCH_DISTANCE := 0.22      ## ... and covers about this far
 const AIM_JITTER := 0.06           ## radians (about 3.4 degrees) of aim wobble at most
-const STEAM := Color(0.95, 0.86, 0.7, 0.8)
 const RING_HASTE := Color(1.0, 0.62, 0.18, 0.75)   ## the pulsing floor ring while hasted
 const RING_CRASH := Color(0.5, 0.4, 0.34, 0.4)     ## ... and the dull one in the crash
-
-static var _steam_mesh: SphereMesh = null
 
 var target: Actor = null
 
@@ -46,7 +43,8 @@ var _crash_end := -1.0             ## GameWorld.time the crash ends; -1 while st
 var _next_twitch := 0.0
 var _twitch_left := 0.0
 var _twitch_dir := Vector3.ZERO
-var _steam_fx: CPUParticles3D = null
+var _steam_fx: CPUParticles3D = null      ## the wisps off the head
+var _steam_body: CPUParticles3D = null    ## ... and off the shoulders
 var _ring: MeshInstance3D = null
 var _ring_mat: StandardMaterial3D = null
 
@@ -57,7 +55,7 @@ func net_fields() -> Dictionary:
 		"target": Net.SPAWN,
 		"_haste_end": Net.OWNER, "_crash_end": Net.OWNER,
 		"_next_twitch": Net.PRIVATE, "_twitch_left": Net.PRIVATE, "_twitch_dir": Net.PRIVATE,
-		"_steam_fx": Net.LOCAL, "_ring": Net.LOCAL, "_ring_mat": Net.LOCAL,
+		"_steam_fx": Net.LOCAL, "_steam_body": Net.LOCAL, "_ring": Net.LOCAL, "_ring_mat": Net.LOCAL,
 	}
 
 
@@ -68,10 +66,7 @@ static func cast(caster: Actor, power: float, pos: Vector3) -> Array[Actor]:
 	var radius := SpellBook.coffee_radius(power)
 	var secs := SpellBook.coffee_duration(power)
 	var out := Combat.each_in_radius(pos, radius, func(a: Actor) -> void: Coffee.drink(a, secs))
-	var col := SpellBook.color_of("coffee")
-	Fx.ring(pos, radius, Color(col.r, col.g, col.b, 0.85), 0.55, 0.0, false, 0.3)
-	var beans: Array[Color] = [Color(0.45, 0.28, 0.14), col, Color(0.85, 0.7, 0.5)]
-	Fx.burst(pos + Vector3.UP * 0.3, beans, 14, 3.0, 0.07, 0.6, 7.0, Vector3.UP, 70.0)
+	CoffeeFx.splash(pos, radius)   # on EVERY cast, even one that hits nobody: the spill, steam, droplets and the radius ring
 	return out
 
 
@@ -158,6 +153,8 @@ func _refuel(seconds: float) -> void:
 	target.set_modifier(MOD_RATE, SpellBook.COFFEE_ATTACK_MULT, left, Actor.STAT_ATTACK_RATE)
 	if _steam_fx != null:
 		_steam_fx.emitting = true
+	if _steam_body != null:
+		_steam_body.emitting = true
 	if _ring_mat != null:
 		_ring_mat.albedo_color = RING_HASTE
 
@@ -190,8 +187,11 @@ func _start_crash(now: float) -> void:
 	target.set_modifier(MOD_CRASH_RATE, SpellBook.COFFEE_CRASH_MULT, SpellBook.COFFEE_CRASH_TIME, Actor.STAT_ATTACK_RATE)
 	if _steam_fx != null:
 		_steam_fx.emitting = false
+	if _steam_body != null:
+		_steam_body.emitting = false
 	if _ring_mat != null:
 		_ring_mat.albedo_color = RING_CRASH
+	CoffeeFx.crash(self, _head_height())
 	Fx.number(target.global_position + Vector3(0, 2.4 + target.radius, 0), "crash...", Color(0.75, 0.62, 0.5), 0.7)
 
 
@@ -221,40 +221,29 @@ func _twitch(now: float, delta: float) -> void:
 	_twitch_left = TWITCH_TIME
 
 
-func _build_steam() -> void:
-	if _steam_mesh == null:
-		_steam_mesh = SphereMesh.new()
-		_steam_mesh.radius = 0.11
-		_steam_mesh.height = 0.22
-		_steam_mesh.radial_segments = 6
-		_steam_mesh.rings = 3
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.albedo_color = STEAM
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_steam_mesh.material = mat
+func _head_height() -> float:
 	var h := 1.6
 	if "ui_height" in target:
 		var v: Variant = target.get("ui_height")
 		if v is float and float(v) > 0.2:
 			h = float(v)
-	_steam_fx = CPUParticles3D.new()
-	_steam_fx.amount = 14
-	_steam_fx.lifetime = 0.9
-	_steam_fx.local_coords = false
-	_steam_fx.direction = Vector3.UP
-	_steam_fx.spread = 25.0
-	_steam_fx.initial_velocity_min = 0.5
-	_steam_fx.initial_velocity_max = 1.0
-	_steam_fx.gravity = Vector3(0, 0.4, 0)
-	_steam_fx.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	_steam_fx.emission_sphere_radius = 0.18
-	_steam_fx.scale_amount_curve = _shrink()
-	_steam_fx.mesh = _steam_mesh
-	_steam_fx.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_steam_fx.position = Vector3(0, h * 1.02, 0)
+	return h
+
+
+## Clearly visible steam for the whole haste: a thick plume of wisps off the head and a second one off the shoulders.
+func _build_steam() -> void:
+	var h := _head_height()
+	var r := maxf(target.radius, 0.3)
+	_steam_fx = CoffeeFx.steam(r * 0.6, 0.3, 26)
+	_steam_fx.position = Vector3(0, h * 0.98, 0)
 	add_child(_steam_fx)
 	_steam_fx.emitting = true
+	_steam_body = CoffeeFx.steam(r * 1.1, 0.24, 16)
+	_steam_body.position = Vector3(0, h * 0.5, 0)
+	_steam_body.initial_velocity_min = 0.5
+	_steam_body.initial_velocity_max = 1.1
+	add_child(_steam_body)
+	_steam_body.emitting = true
 
 
 ## A thin glowing ring on the floor around the feet: amber and pulsing while hasted, dull in the crash.
@@ -273,11 +262,3 @@ func _build_ring() -> void:
 	_ring.set_meta("no_flash", true)
 	_ring.position = Vector3(0, 0.08, 0)
 	add_child(_ring)
-
-
-static func _shrink() -> Curve:
-	var c := Curve.new()
-	c.add_point(Vector2(0, 0.6))
-	c.add_point(Vector2(0.3, 1.2))
-	c.add_point(Vector2(1, 0))
-	return c

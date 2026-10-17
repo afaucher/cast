@@ -73,7 +73,12 @@ func _build_longest() -> void:
 			if s.length() > best.length():
 				best = s
 		return best
+	var incidents: Array[String] = []
+	for id in ClientArchetype.IDS:
+		for ev: Dictionary in ClientArchetype.get_data(id)["events"]:
+			incidents.append(str(ev["dispatch"]))
 	_longest = {
+		"incident": longest.call(incidents),
 		"client": longest.call(clients), "staff": longest.call(staff), "staff_room": longest.call(rooms), "staff_count": "4",
 		"gate_room": longest.call(rooms), "gate_count": "4", "prop": longest.call(props), "prop_room": longest.call(rooms),
 		"prop_price": longest.call(prices), "origin": longest.call(origins), "pest": longest.call(pests),
@@ -177,6 +182,7 @@ func _check_plan(run: ContractRun, plan: SitePlan, map: HexMap, tag: String) -> 
 		var d := Hex.distance(plan.notes[0]["cell"], plan.start)
 		check(d >= 4 and d <= 8, "%s: floor 1's story note is near the start (%d)" % [tag, d])
 	check(plan.dispatch != "" and not plan.dispatch.contains("{"), "%s: a dispatch line: %s" % [tag, plan.dispatch])
+	_check_one_thought(run, plan, tag)
 	# the facts are true for this floor
 	var facts := NoteFacts.from_plan(plan, run)
 	if facts.has("staff"):
@@ -214,6 +220,24 @@ func _check_plan(run: ContractRun, plan: SitePlan, map: HexMap, tag: String) -> 
 		var t := str(nt["text"])
 		if t.contains("shelters in the ") and facts.has("staff_room"):
 			check(t.contains(str(facts["staff_room"])), "%s: the shelter line names the real staff room" % tag)
+
+
+## A dispatch banner is ONE thought: no standalone pay tip, no "Dispatch is not judging" button, two sentences at most. Floor 1
+## tells the contract's own event (dispatch's wording) and what it means for the crew; floors 2 and 3 are about that floor.
+func _check_one_thought(run: ContractRun, plan: SitePlan, tag: String) -> void:
+	var t := plan.dispatch
+	check(not t.contains("$") and not t.contains("not judging") and not t.contains("worth"), "%s: no glued-on pay tip: %s" % [tag, t])
+	check(t.length() <= NoteCopy.MAX_LEN, "%s: the banner fits (%d chars)" % [tag, t.length()])
+	var sentences := 0
+	for ch in t:
+		if ch == "." or ch == "!" or ch == "?":
+			sentences += 1
+	check(sentences >= 1 and sentences <= 3, "%s: one thought, a few sentences at most (%d)" % [tag, sentences])
+	if plan.floor_number == 1:
+		eq(t, str(run.story["dispatch"]), "%s: floor 1 tells the contract's event in dispatch's voice" % tag)
+		check(t.contains("Bring them out"), "%s: floor 1 ties the event to the staff" % tag)
+	elif plan.floor_number == ContractRun.FLOOR_COUNT:
+		check(t.contains(str(run.story["origin"])), "%s: floor 3 names the origin room" % tag)
 
 
 ## Same seed, same notes; and the notes' generator does not move anything else on the floor.
@@ -257,6 +281,10 @@ func _check_game() -> void:
 			check((l as Label3D).text != "NOTE", "no floating NOTE label")
 	var banner: DispatchBanner = g.get("_banner")
 	check(banner != null and banner.line == site.plan.dispatch, "the dispatch banner shows the floor's line")
+	check(not ("lead" in banner), "and it is one message: no separate incident line above it")
+	for f in range(1, 4):
+		for t: String in NoteCopy.DISPATCH[f]:
+			check(not t.contains("$") and not t.contains("not judging"), "no old pay tip in floor %d banner: %s" % [f, t])
 	# the monsters stay out of it
 	for m in site.monsters:
 		m.process_mode = Node.PROCESS_MODE_DISABLED

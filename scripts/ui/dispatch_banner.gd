@@ -2,10 +2,10 @@ class_name DispatchBanner
 extends Control
 ## Dispatch on the crew's headset (docs/design/notes-rethink.md, section 4): a canary strip at the top centre
 ## with a headset glyph as its frame, so no "Dispatch:" prefix is needed. Canary is dispatch's carbon
-## (FormTheme.CARBONS). An optional first line above the dispatch line (floor 1: the client's event, typed).
+## (FormTheme.CARBONS). ONE message in dispatch's voice, one thought (floor 1 tells the incident and what it means for
+## the crew; floors 2 and 3 are about that floor). Never a second line.
 ##
-##   banner.show_line("Floor 2. Halfway down. The pay gets better. So do the imps.", 6.0)
-##   banner.show_line(line, 7.0, run.story["event"])
+##   banner.show_line("The gates on this floor are feeding the imps problem. Close them and it stops coming.", 7.0)
 ##
 ## Pure presentation, LOCAL to each machine.
 
@@ -14,9 +14,9 @@ const TOP := 112.0
 const PAD := 18.0
 const GLYPH_W := 64.0
 const FADE := 0.8
+const FONT_SIZE := 27
 
 var line := ""
-var lead := ""
 var hold := 0.0             ## seconds left at full strength
 var alpha := 0.0
 
@@ -30,12 +30,11 @@ func _init() -> void:
 
 ## Who may write each var (see Net). All presentation, kept per machine.
 func net_fields() -> Dictionary:
-	return {"line": Net.LOCAL, "lead": Net.LOCAL, "hold": Net.LOCAL, "alpha": Net.LOCAL}
+	return {"line": Net.LOCAL, "hold": Net.LOCAL, "alpha": Net.LOCAL}
 
 
-func show_line(text: String, seconds: float, lead_text: String = "") -> void:
+func show_line(text: String, seconds: float) -> void:
 	line = text
-	lead = lead_text
 	hold = seconds
 	alpha = 1.0
 	_relayout()
@@ -56,9 +55,7 @@ func _text_w() -> float:
 
 func _relayout() -> void:
 	var h := PAD * 2.0
-	if lead != "":
-		h += FormTheme.typed_font(false).get_multiline_string_size(lead, HORIZONTAL_ALIGNMENT_LEFT, _text_w(), 19).y + 8.0
-	h += FormTheme.label_font(true).get_multiline_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, _text_w(), 27).y
+	h += FormTheme.label_font(true).get_multiline_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, _text_w(), FONT_SIZE).y
 	h = maxf(h, 76.0)
 	size = Vector2(WIDTH, h)
 	offset_left = -WIDTH * 0.5
@@ -78,13 +75,8 @@ func _draw() -> void:
 	draw_rect(Rect2(0, 0, GLYPH_W, r.size.y), Color(FormTheme.INK, 0.92))
 	_headset(Vector2(GLYPH_W * 0.5, r.size.y * 0.5))
 	var x := GLYPH_W + PAD
-	var y := PAD
-	if lead != "":
-		var tf := FormTheme.typed_font(false)
-		draw_multiline_string(tf, Vector2(x, y + tf.get_ascent(19)), lead, HORIZONTAL_ALIGNMENT_LEFT, _text_w(), 19, -1, Color(FormTheme.TYPED, 0.8))
-		y += tf.get_multiline_string_size(lead, HORIZONTAL_ALIGNMENT_LEFT, _text_w(), 19).y + 8.0
 	var lf := FormTheme.label_font(true)
-	draw_multiline_string(lf, Vector2(x, y + lf.get_ascent(27)), line, HORIZONTAL_ALIGNMENT_LEFT, _text_w(), 27, -1, FormTheme.INK)
+	draw_multiline_string(lf, Vector2(x, PAD + lf.get_ascent(FONT_SIZE)), line, HORIZONTAL_ALIGNMENT_LEFT, _text_w(), FONT_SIZE, -1, FormTheme.INK)
 
 
 ## A headset: the band, two ear cups and the boom mic, in paper on the ink panel.

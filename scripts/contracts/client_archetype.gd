@@ -38,9 +38,9 @@ const DATA := {
 		"everything_chance": 0.25,
 		"warning": "Property: 1787 wine collection and a home cinema. Insured, but not by us.",
 		"events": [
-			{"text": "During the annual door drill, someone opened the door to confirm it was sealed.", "origin": "wine cellar"},
-			{"text": "Movie night went ahead with the projector aimed at the wrong seal.", "origin": "home cinema"},
-			{"text": "The doomsday drill was run with real candles.", "origin": "panic room"},
+			{"text": "During the annual door drill, someone opened the door to confirm it was sealed.", "dispatch": "Someone opened the door to confirm it was sealed, and the staff are still on the wrong side of it. Bring them out.", "origin": "wine cellar"},
+			{"text": "Movie night went ahead with the projector aimed at the wrong seal.", "dispatch": "Movie night ran with the projector aimed at the wrong seal. Some of the staff are still in the audience. Bring them out.", "origin": "home cinema"},
+			{"text": "The doomsday drill was run with real candles.", "dispatch": "The doomsday drill ran with real candles. Some of the staff are still down here with them. Bring them out.", "origin": "panic room"},
 		],
 		"footers": {
 			"good": "Thank you. The bunker remains confidential. So do you.",
@@ -66,9 +66,9 @@ const DATA := {
 		"everything_chance": 0.3,
 		"warning": "Property: doomsday console, throne, one (1) irreplaceable shark. Please do not hit the shark.",
 		"events": [
-			{"text": "The henchmen tried to tame an imp. It did not take.", "origin": "henchmen barracks"},
-			{"text": "The doomsday countdown was started as a rehearsal.", "origin": "throne room"},
-			{"text": "A vat labelled DO NOT OPEN was opened by interns.", "origin": "vat room"},
+			{"text": "The henchmen tried to tame an imp. It did not take.", "dispatch": "The henchmen tried to tame an imp and it did not take. Some of the staff are still down here with it. Bring them out.", "origin": "henchmen barracks"},
+			{"text": "The doomsday countdown was started as a rehearsal.", "dispatch": "Someone started the doomsday countdown as a rehearsal. Some of the staff are still down here. Bring them out.", "origin": "throne room"},
+			{"text": "A vat labelled DO NOT OPEN was opened by interns.", "dispatch": "Interns opened a vat marked DO NOT OPEN. Some of them are still down here. Bring them out.", "origin": "vat room"},
 		],
 		"footers": {
 			"good": "Acceptable. You may keep your lives. Remittance will follow.",
@@ -94,9 +94,9 @@ const DATA := {
 		"everything_chance": 0.2,
 		"warning": "Property: crystal collection, a sound bath dome and 60 candles. Please bring a calm exit.",
 		"events": [
-			{"text": "The closing ceremony opened a gate in the yoga studio.", "origin": "yoga studio"},
-			{"text": "A sound bath resonated with something underneath.", "origin": "meditation dome"},
-			{"text": "The cleanse went deeper than the brochure promised.", "origin": "cold plunge"},
+			{"text": "The closing ceremony opened a gate in the yoga studio.", "dispatch": "The closing ceremony opened a gate in the yoga studio. Some of the staff are still sitting in the circle. Bring them out.", "origin": "yoga studio"},
+			{"text": "A sound bath resonated with something underneath.", "dispatch": "A sound bath got an answer from something underneath. Some of the staff are still listening. Bring them out.", "origin": "meditation dome"},
+			{"text": "The cleanse went deeper than the brochure promised.", "dispatch": "The cleanse went deeper than the brochure promised. Some of the staff are still in it. Bring them out.", "origin": "cold plunge"},
 		],
 		"footers": {
 			"good": "We receive your work with gratitude. Payment will be released with intention.",
@@ -122,9 +122,9 @@ const DATA := {
 		"everything_chance": 0.35,
 		"warning": "Property: server racks, a ping-pong table and a $40,000 espresso machine named Kevin.",
 		"events": [
-			{"text": "The all-hands demo summoned a stakeholder from below.", "origin": "keynote stage"},
-			{"text": "A growth hack involved a goat. It scaled.", "origin": "data center"},
-			{"text": "The offsite broke a seal on sublevel 4. Culture is up.", "origin": "ping-pong lounge"},
+			{"text": "The all-hands demo summoned a stakeholder from below.", "dispatch": "The all-hands demo summoned a stakeholder from below. Some of the staff are still in the meeting. Bring them out.", "origin": "keynote stage"},
+			{"text": "A growth hack involved a goat. It scaled.", "dispatch": "Someone put a goat in the data center and it scaled. Some of the staff are still down here with it. Bring them out.", "origin": "data center"},
+			{"text": "The offsite broke a seal on sublevel 4. Culture is up.", "dispatch": "The offsite broke a seal on sublevel 4. Some of the staff are still on the offsite. Bring them out.", "origin": "ping-pong lounge"},
 		],
 		"footers": {
 			"good": "Great job, team. We are aligning on payment. Please hold.",
@@ -150,9 +150,9 @@ const DATA := {
 		"everything_chance": 0.25,
 		"warning": "Property: ring lights, a gifting suite and a branded wall. Please film nothing. Please hit nothing.",
 		"events": [
-			{"text": "A giveaway stream opened a gate behind the ring light.", "origin": "content studio"},
-			{"text": "An unboxing unboxed more than intended.", "origin": "gifting suite"},
-			{"text": "A collab with an entity was announced early.", "origin": "podcast room"},
+			{"text": "A giveaway stream opened a gate behind the ring light.", "dispatch": "A giveaway stream opened a gate behind the ring light. Some of the staff are still live. Bring them out.", "origin": "content studio"},
+			{"text": "An unboxing unboxed more than intended.", "dispatch": "An unboxing unboxed more than intended. Some of the staff are still holding the box. Bring them out.", "origin": "gifting suite"},
+			{"text": "A collab with an entity was announced early.", "dispatch": "A collab with an entity went out early. Some of the staff are still in the collab. Bring them out.", "origin": "podcast room"},
 		],
 		"footers": {
 			"good": "Love this for us! Payment is in the algorithm.",
