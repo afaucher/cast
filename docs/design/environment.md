@@ -93,3 +93,20 @@ elevator with its light on.
 Suggested order: prop kit + themer with 3 themes (wine cellar, spa, server room), then the
 infestation pass, then lights. Generate a concept image or two of themed rooms first, as we did for
 the characters, to lock the look before building.
+
+## Decisions (user, 2026-10-17)
+- **Set dressing must be logical.** Every prop kind has a placement rule and an orientation rule:
+  - wall-backed props face into the room;
+  - corner props face the center;
+  - centerpieces sit at the focal point and face the entrance;
+  - grouped vignettes are placed as one unit (seat rows face the screen; chairs face their table).
+
+  Only ±10° of jitter, a clear hex in front of facing props, and nothing ever blocks doors or
+  corridors. No more chairs facing the wall.
+- **Full room themes, built now** rather than vignettes first. Each room gets a theme that chooses
+  its props and grime.
+- **Grime is visual only:**
+  - **Ambient grime persists:** story and infestation heat near gates and the origin, trails, and
+    theme-specific marks like wine splats in the cellar.
+  - **Anything the player causes fades after 30 s:** fireball scorch, corn kernels, teeth debris,
+    death stains.
