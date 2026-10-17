@@ -117,7 +117,9 @@ How they fit together, from the top down:
    - Each floor is a full generated level from the same client and story. It gets worse further
      down: more pests, more gates, closer to the origin.
    - Objectives can span floors (e.g. "close all 4 gates" across 2 floors), and pay rises with depth.
-   - **The elevator is always available** (the early-exit rule). At each floor the crew decides:
+   - **The elevator is always available** (the early-exit rule). It needs a key press: while the player
+     stands on or next to the exit cell the HUD says "E: use elevator" and E opens its menu (E casts the
+     held spell everywhere else, never both). At each floor the crew decides:
      go down for more pay and more risk, or cash out. Unmet objectives don't pay, and damage is
      taken out of earnings (never below $0).
    - **The invoice** at the end totals every floor.

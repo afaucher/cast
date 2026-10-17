@@ -14,6 +14,7 @@ const TEAM_NEUTRAL := 2
 var map: HexMap = null
 var root: Node3D = null      ## parent for actors, projectiles, zones, fx
 var rng := RandomNumberGenerator.new()
+var floor_drops := 0         ## component pickups monsters dropped on this floor (SpellComponents.FLOOR_DROP_CAP)
 var time := 0.0              ## game clock (seconds of physics time); use for cooldowns/durations
 
 
@@ -25,6 +26,7 @@ func begin(new_map: HexMap, new_root: Node3D, seed_value: int = 0) -> void:
 	map = new_map
 	root = new_root
 	rng.seed = seed_value
+	floor_drops = 0
 
 
 func end() -> void:

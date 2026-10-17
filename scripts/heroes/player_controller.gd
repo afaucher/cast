@@ -4,7 +4,7 @@ extends Node
 ## WASD moves relative to the iso camera, the mouse aims via a camera ray onto
 ## the terrain, LMB = melee (the hero's primary), RMB = the secondary (bolt / bowl / spin; Wick's arrow:
 ## tap to shoot, hold to draw a piercing shot and release), keys 1-4 = ready (hold) a spell slot,
-## E = cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
+## E = use the elevator when standing at it, else cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
 ## the pickup underfoot into the held slot. aim_point() is also what voice casts aim at;
 ## cast_spell() is the single entry for voice and E (charges, cooldown, toasts).
 
@@ -17,6 +17,9 @@ var camera: Camera3D = null     ## defaults to the viewport's current Camera3D
 var hud: Hud = null             ## optional: receives cast / cooldown toasts
 var enabled := true
 var aim_override := Vector3.INF ## scripted aim (autocast, tests); INF = use the mouse
+## Context action on E: called with no arguments when E is pressed, it returns true when it used the
+## press (the game opens the elevator when the hero stands at it). A used press does NOT cast.
+var interact: Callable = Callable()
 
 
 func _ready() -> void:
@@ -68,7 +71,7 @@ func _slot_keys() -> void:
 		if Input.is_action_just_pressed("cast_slot_%d" % (i + 1)):
 			select_slot(i)
 	if Input.is_action_just_pressed("cast_readied"):
-		cast_readied()
+		press_readied()
 	if Input.is_action_just_pressed("swap_pickup"):
 		swap_pickup()
 
@@ -82,6 +85,14 @@ func select_slot(i: int) -> bool:
 	if hud:
 		hud.show_message("Slot %d is empty" % (i + 1), Hud.COLOR_NEUTRAL)
 	return false
+
+
+## The E key: the context action first (the elevator, when the hero stands at it), else cast_readied().
+## One press does one thing, never both.
+func press_readied() -> bool:
+	if interact.is_valid() and bool(interact.call()):
+		return true
+	return cast_readied()
 
 
 ## E: cast the held spell at the aim point with the fixed readied power.

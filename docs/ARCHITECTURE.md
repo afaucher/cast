@@ -143,6 +143,15 @@ Monsters idle until a hero is within aggro range with line of sight, then act.
 `"exit"` (one cell), `"room:<n>"` for room floors (so monsters can be packed per room),
 `"corridor"`. `HexMapView` (`scripts/world/hex_map_view.gd`, extends Node3D): `build(map)`.
 
+Zone layout (tuned so floors are not crowded): 6-9 rooms of radius 5-8 (`DEFAULT_RMIN/RMAX`) at least `DEFAULT_GAP`
+(8) apart in an area of radius `DEFAULT_SIZE` (36); tree-link corridors are three wide, extra loops two wide
+(the climb shortcut and one short chokepoint stay one wide); about half as many raised features per room, never
+within `FEATURE_CENTER_CLEAR` (2) of a room's center or `FEATURE_DOOR_CLEAR` (3) of a door. Generation takes
+about 80 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder` then puts at most 6 priced props on a floor
+(next to walls, 4+ apart), scales the monster pack budgets by 0.7 and caps a room at one monster per
+`MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
+distinct angles and step out of the player's lane.
+
 ## Tests
 
 `tests/test_*.gd` extend `TestCase` (`scripts/test_support/test_case.gd`): override `setup()`,

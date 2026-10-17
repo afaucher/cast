@@ -85,14 +85,28 @@ func _check_floor_and_elevator() -> void:
 	await frames(40)
 	check(bool(emp.call("is_following")), "an employee follows a hero who comes within reach")
 
-	# Walk onto the elevator: the menu opens and the world freezes; Stay closes it and does not reopen at once.
+	# The elevator needs a key press. Stepping onto the exit only shows "E: use elevator"; E there opens the
+	# menu (and does not cast); E anywhere else still casts the held spell.
 	var player: Hero = g.get("player")
 	var exit_cell: Vector2i = g.get("_exit_cell")
 	var lv := GameWorld.map.ground_level(Hex.to_world(exit_cell))
+	var hud: Hud = g.get("hud")
+	var held := player.held_spell()
+	check(held != "", "a spell is held")
+	player.set_charges(held, 5)
+	player.global_position = Hex.to_world(exit_cell, lv)
+	await frames(6)
+	check(g.get("_menu") == null, "stepping on the exit does NOT open the elevator menu")
+	eq(hud.context_prompt, "E: use elevator", "standing on the exit shows the E prompt")
+	player.global_position = Hex.to_world(exit_cell + Hex.DIRS[0], GameWorld.map.ground_level(Hex.to_world(exit_cell + Hex.DIRS[0])))
+	await frames(4)
+	check(g.get("_menu") == null and hud.context_prompt != "", "next to the exit: the prompt shows, still no menu")
 	player.global_position = Hex.to_world(exit_cell, lv)
 	await frames(3)
+	await _press_e()
 	var menu: ElevatorMenu = g.get("_menu")
-	check(menu != null, "stepping on the exit opens the elevator menu")
+	check(menu != null, "E at the exit opens the elevator menu")
+	eq(player.charges_of(held), 5, "E at the exit does not cast the held spell")
 	if menu != null:
 		check(menu.can_descend(), "floor 1 offers going down")
 		eq(GameWorld.root.process_mode, Node.PROCESS_MODE_DISABLED, "the world is frozen while the menu is open")
@@ -101,15 +115,22 @@ func _check_floor_and_elevator() -> void:
 		check(g.get("_menu") == null, "Stay closes the menu")
 		check(GameWorld.root.process_mode != Node.PROCESS_MODE_DISABLED, "and the world runs again")
 		await frames(5)
-		check(g.get("_menu") == null, "the menu does not reopen while the crew stands on the elevator")
-		# Cash out: the invoice appears and matches the Ledger.
+		check(g.get("_menu") == null, "the menu does not reopen by itself while the crew stands on the elevator")
+		# E away from the elevator casts the held spell as before.
 		player.global_position = Hex.to_world(exit_cell, lv) + Vector3(8, 0, 8)
 		await frames(10)
+		eq(hud.context_prompt, "", "no prompt away from the elevator")
+		await _press_e()
+		check(g.get("_menu") == null, "E away from the exit opens nothing")
+		eq(player.charges_of(held), 4, "E away from the exit casts the held spell")
+		# Cash out: the invoice appears and matches the Ledger.
 		emp.global_position = Hex.to_world(exit_cell, lv) + Vector3(0.8, 0, 0.5)
 		player.global_position = Hex.to_world(exit_cell, lv)
 		await frames(4)
+		check(g.get("_menu") == null, "walking back does not ask by itself")
+		await _press_e()
 		menu = g.get("_menu")
-		check(menu != null, "walking away and back asks again")
+		check(menu != null, "E at the exit asks again")
 		if menu != null:
 			var before := Ledger.earned()
 			menu.cash_out.emit()
@@ -125,6 +146,14 @@ func _check_floor_and_elevator() -> void:
 	g.queue_free()
 	await frames(3)
 	GAME.reset_flow()
+
+
+## One E key press (the action is held for two physics frames, like a real tap).
+func _press_e() -> void:
+	Input.action_press("cast_readied")
+	await frames(2)
+	Input.action_release("cast_readied")
+	await frames(3)
 
 
 func _check_incapacitated() -> void:

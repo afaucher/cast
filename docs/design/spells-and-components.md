@@ -68,17 +68,26 @@ it dies.
 
 | Monster | Drops | For | Chance |
 |---|---|---|---|
-| grunt (skeleton) | Loose teeth | teeth | 35% |
-| archer | Grave moss | heal | 40% |
-| brute | Ember horn **or** Hide plate, 50/50 | fireball / armor | 100% |
-| swarmer (imp) | Neon ichor | tentacles | 15% **per imp** |
-| any monster | Corn kernel | corn | 5%, in addition |
+| grunt (skeleton) | Loose teeth | teeth | 12% (was 35%) |
+| archer | Grave moss | heal | 15% (was 40%) |
+| brute | Ember horn **or** Hide plate, 50/50 | fireball / armor | 35% (was 100%) |
+| swarmer (imp) | Neon ichor | tentacles | 3% **per imp** (was 15%) |
+| any monster | Corn kernel | corn | 2%, in addition (was 5%) |
+
+Drops are rare on purpose: not every creature drops every spell, and the floor should not fill up with
+pickups. Two more tunables in `SpellComponents` keep it that way:
+- **Per-floor cap** (`FLOOR_DROP_CAP` = 5): at most 5 monster-dropped pickups per floor. `GameWorld.floor_drops`
+  counts them and `GameWorld.begin()` (a floor loading) resets it. The dice are always rolled, so the rng
+  stream (and a floor's drops for a given seed) is the same whatever the cap does.
+- **Despawn** (`PICKUP_LIFETIME` = 60 s, `PICKUP_FADE` = 5 s): an uncollected pickup blinks for its last 5 s
+  (faster for the last 2) and then vanishes. A spell you swapped out for another is the exception: it is
+  dropped with lifetime 0 (never despawns), so no charges are ever lost to a swap.
 
 - **Teeth is not castable yet.** Its component, prop and drop entry are all in the data, but the
   spell is `available = false`: it is hidden from the picker, `Hero.slot_in` refuses it, `SpellBook.cast`
   refuses it, and **its drops are skipped** while unavailable (otherwise grunts would litter the floor
   with components nobody can use). Flip `available` to `true` in `SpellBook.SPELLS` when the teeth
-  gameplay lands and everything switches on: the 35% grunt drops, the pickup, slotting. (`roll_drops(...,
+  gameplay lands and everything switches on: the 12% grunt drops, the pickup, slotting. (`roll_drops(...,
   include_unavailable = true)` rolls the raw table, which the tests use.)
 - Drops fan out around the corpse and snap onto real floor (a monster shoved into a pit drops nothing).
 
@@ -125,4 +134,4 @@ small floating label ("Ember horn x3") when a player is within 4 units.
 - How many distinct spells for the vertical slice: 6-8? (Teeth is the sixth.)
 - Exploration secrets and vantage points holding rarer components (`exploration.md`).
 - Handing a component to a teammate; allies casting and collecting.
-- Whether a dropped pickup should eventually despawn (today it waits forever).
+- ~~Whether a dropped pickup should eventually despawn~~ Yes: 60 s, blinking for the last 5 (see Drops).

@@ -116,7 +116,24 @@ func _check_contract(run: ContractRun) -> void:
 						break
 			check(map.get_cell(c).type == HexMap.Tile.FLOOR, "%s: prop on floor" % ftag)
 			check(catalog.has(str(pr["kind"])), "%s: prop kind comes from the catalog" % ftag)
-		check(plan.props.size() <= SiteBuilder.MAX_PROPS, "%s: prop cap" % ftag)
+		check(plan.props.size() <= 6 and SiteBuilder.MAX_PROPS == 6, "%s: at most 6 props a floor (%d)" % [ftag, plan.props.size()])
+		check(SiteBuilder.PROP_SPACING >= 4, "props keep at least 4 apart")
+		for i in plan.props.size():
+			var pc: Vector2i = plan.props[i]["cell"]
+			var by_wall := false
+			for d in Hex.DIRS:
+				var nb: HexMap.Cell = map.get_cell(pc + d)
+				if nb != null and nb.type == HexMap.Tile.WALL:
+					by_wall = true
+			check(by_wall, "%s: prop %s stands next to a wall" % [ftag, pc])
+			check(map.get_cell(pc).tag.begins_with("room:"), "%s: prop %s is in a room, not a corridor" % [ftag, pc])
+			for j in range(i + 1, plan.props.size()):
+				check(Hex.distance(pc, plan.props[j]["cell"]) >= 4, "%s: props %s and %s are 4+ apart" % [ftag, pc, plan.props[j]["cell"]])
+		# --- packs: about 30% lighter than the old budgets ---
+		for rtag: String in plan.pack_budgets:
+			var idx := int(rtag.trim_prefix("room:"))
+			var old_max := 5 + idx + 3 * (f - 1) + int(roundf(run.difficulty * 3.0)) + 3
+			check(int(plan.pack_budgets[rtag]) <= maxi(2, int(ceil(0.7 * old_max))), "%s: %s pack budget %d is 30%% under the old %d" % [ftag, rtag, plan.pack_budgets[rtag], old_max])
 		check(plan.pack_budgets.size() >= 4, "%s: monster packs planned" % ftag)
 		check(not plan.pack_budgets.has(plan.start_room), "%s: no pack in the start room" % ftag)
 
@@ -179,6 +196,30 @@ func _check_spawn_smoke() -> void:
 		if site.plan.room_of_cell(Hex.from_world(m.global_position)) == site.plan.start_room:
 			start_room_monsters += 1
 	eq(start_room_monsters, 0, "no monsters in the start room")
+	# Density cap: at most one monster per 6 walkable room cells, and non-swarmers are spread out.
+	var per_room: Dictionary = {}
+	for m in site.monsters:
+		var rt := site.plan.room_of_cell(Hex.from_world(m.global_position))
+		per_room[rt] = int(per_room.get(rt, 0)) + 1
+	for rt: String in per_room:
+		var cap := SiteBuilder.room_cap(map, site.plan.rooms[rt])
+		check(int(per_room[rt]) <= cap, "%s holds %d monsters, cap %d (1 per %d cells)" % [rt, per_room[rt], cap, MonsterFactory.CELLS_PER_MONSTER])
+	eq(MonsterFactory.CELLS_PER_MONSTER, 6, "one monster per 6 walkable room cells")
+	var near_sum := 0.0
+	var near_n := 0
+	var solo: Array[Monster] = []
+	for m in site.monsters:
+		if m.kind != "swarmer":
+			solo.append(m)
+	for m in solo:
+		var best := 99
+		for o in solo:
+			if o != m and site.plan.room_of_cell(Hex.from_world(o.global_position)) == site.plan.room_of_cell(Hex.from_world(m.global_position)):
+				best = mini(best, Hex.distance(Hex.from_world(m.global_position), Hex.from_world(o.global_position)))
+		if best < 99:
+			near_sum += best
+			near_n += 1
+	check(near_n == 0 or near_sum / near_n >= 3.0, "packs are spread out: average nearest neighbour %.1f cells" % (near_sum / maxi(1, near_n)))
 	await get_tree().physics_frame
 	GameWorld.end()
 	world.queue_free()

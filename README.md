@@ -29,6 +29,7 @@ Dev flags (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, `--scene` ..
 | LMB / RMB | Sword / bolt (the bolt is weaker) |
 | **Say "cast heal"** etc. | Cast a spell in your slots. Fumbles weaken it or fizzle it |
 | 1 / 2 | Keyboard fallback for spell slots |
+| E | At the freight elevator (on or next to the exit; a prompt says so): open the elevator menu. Anywhere else: cast the held spell |
 | Enter | Type an incantation instead of speaking |
 | F1 | Toggle the debug side panel (what the mic hears and what the game did) |
 | F5 | Abandon the contract: back to the job board |

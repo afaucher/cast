@@ -34,11 +34,12 @@ static func make_player(hero: Hero, slots: Array[String]) -> PlayerController:
 
 
 ## Make `hero` an AI ally following `leader`.
-static func make_ally(hero: Hero, leader: Hero, prefers_ranged: bool, formation_angle: float) -> AllyBrain:
+static func make_ally(hero: Hero, leader: Hero, prefers_ranged: bool, formation_angle: float, formation_hexes: float = AllyBrain.FORMATION_HEX_MIN) -> AllyBrain:
 	var brain := AllyBrain.new()
 	brain.name = "AllyBrain"
 	brain.leader = leader
 	brain.prefers_ranged = prefers_ranged
 	brain.formation_angle = formation_angle
+	brain.formation_dist = clampf(formation_hexes, AllyBrain.FORMATION_HEX_MIN, AllyBrain.FORMATION_HEX_MAX) * AllyBrain.HEX_STEP
 	hero.add_child(brain)
 	return brain

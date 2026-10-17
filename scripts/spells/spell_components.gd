@@ -20,6 +20,9 @@ const COLLECT_RADIUS := 0.8      ## a hero this close picks it up automatically
 const SWAP_RADIUS := 1.2         ## a hero this close (slots full) can press F to swap it in
 const LABEL_RADIUS := 4.0        ## the floating name label shows when a player is this close
 const DROP_SCATTER := 0.55       ## several drops from one kill fan out this far
+const FLOOR_DROP_CAP := 5        ## at most this many monster-dropped pickups per floor (GameWorld.floor_drops counts them)
+const PICKUP_LIFETIME := 60.0    ## an uncollected pickup vanishes after this many seconds ...
+const PICKUP_FADE := 5.0         ## ... and blinks for the last this-many seconds
 
 ## Drop table. Every living monster that dies rolls each entry of its kind's list, and then each
 ## entry of ANY_KIND, independently. An entry: "spells" = the candidate spell ids (one is picked,
@@ -28,12 +31,12 @@ const DROP_SCATTER := 0.55       ## several drops from one kill fan out this far
 ## when rolling, so it never litters the floor with components nobody can use; the entry stays
 ## here so it switches on the moment SpellBook marks the spell available.
 const DROPS := {
-	"grunt": [{"spells": ["teeth"], "chance": 0.35}],
-	"archer": [{"spells": ["heal"], "chance": 0.40}],
-	"brute": [{"spells": ["fireball", "armor"], "chance": 1.0}],
-	"swarmer": [{"spells": ["tentacles"], "chance": 0.15}],   ## per imp
+	"grunt": [{"spells": ["teeth"], "chance": 0.12}],
+	"archer": [{"spells": ["heal"], "chance": 0.15}],
+	"brute": [{"spells": ["fireball", "armor"], "chance": 0.35}],
+	"swarmer": [{"spells": ["tentacles"], "chance": 0.03}],   ## per imp
 }
-const ANY_KIND: Array = [{"spells": ["corn"], "chance": 0.05}]   ## in addition, from every monster
+const ANY_KIND: Array = [{"spells": ["corn"], "chance": 0.02}]   ## in addition, from every monster
 
 
 ## The spell ids that drop when a monster of `kind` dies, rolled with `rng` (pass a seeded rng for
@@ -72,13 +75,18 @@ static func drop_charges(kind: String, id: String) -> int:
 	return PICKUP_CHARGES
 
 
-## Called when a monster dies: roll its drops and put the pickups on the floor around it.
+## Called when a monster dies: roll its drops and put the pickups on the floor around it. At most
+## FLOOR_DROP_CAP pickups per floor (the dice are always rolled, so the rng stream does not depend on
+## the cap; only the pickups past the cap are left out).
 static func drop_for(monster: Actor) -> Array[ComponentPickup]:
 	var out: Array[ComponentPickup] = []
 	if monster == null or GameWorld.root == null:
 		return out
 	var kind := str(monster.get("kind")) if "kind" in monster else ""
 	var ids := roll_drops(kind, GameWorld.rng)
+	var room_left := maxi(0, FLOOR_DROP_CAP - GameWorld.floor_drops)
+	if ids.size() > room_left:
+		ids.resize(room_left)
 	for i in ids.size():
 		var offset := Vector3.ZERO
 		if ids.size() > 1:
@@ -87,4 +95,5 @@ static func drop_for(monster: Actor) -> Array[ComponentPickup]:
 		var p := ComponentPickup.drop(ids[i], drop_charges(kind, ids[i]), monster.global_position + offset)
 		if p != null:
 			out.append(p)
+			GameWorld.floor_drops += 1
 	return out

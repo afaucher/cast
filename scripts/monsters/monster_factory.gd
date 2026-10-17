@@ -11,6 +11,8 @@ const COSTS := {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4}
 const WEIGHTS := {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5}
 const SWARM_MIN := 4
 const SWARM_MAX := 6
+const CELLS_PER_MONSTER := 6      ## density cap for a room: at most one monster per this many walkable cells
+const SPREAD_CANDIDATES := 16     ## farthest-point sampling tries when placing a pack member (more = more spread)
 
 const SCRIPTS := {
 	"grunt": preload("res://scripts/monsters/grunt.gd"),
@@ -85,7 +87,8 @@ static func cost_of(monsters: Array) -> int:
 
 ## Fill a room. Only walkable, non-stairs cells from `room_cells` are used, spread apart.
 ## Monsters are spawned (added to the world) and returned.
-static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumberGenerator) -> Array[Monster]:
+## `max_count` (>= 0) caps the monsters in the pack (the room's density cap); -1 = no cap.
+static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumberGenerator, max_count: int = -1) -> Array[Monster]:
 	var out: Array[Monster] = []
 	var map := GameWorld.map
 	var free: Array[Vector2i] = []
@@ -102,7 +105,7 @@ static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumb
 
 	var placed: Array[Vector2i] = []
 	for kind in plan_composition(budget, rng):
-		if free.is_empty():
+		if free.is_empty() or (max_count >= 0 and out.size() >= max_count):
 			break
 		var center := _pick_spread(free, placed, rng)
 		if kind != "swarmer":
@@ -112,6 +115,8 @@ static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumb
 			continue
 		# Swarmers: a tight clump around the chosen cell.
 		var want := rng.randi_range(SWARM_MIN, SWARM_MAX)
+		if max_count >= 0:
+			want = mini(want, max_count - out.size())
 		var near: Array[Vector2i] = []
 		for c in free:
 			if Hex.distance(c, center) <= 2:
@@ -130,7 +135,7 @@ static func _pick_spread(free: Array[Vector2i], placed: Array[Vector2i], rng: Ra
 	if placed.is_empty():
 		return best
 	var best_score := -1
-	for _i in 8:
+	for _i in SPREAD_CANDIDATES:
 		var c := free[rng.randi_range(0, free.size() - 1)]
 		var nearest := 1 << 20
 		for p in placed:

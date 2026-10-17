@@ -3,15 +3,17 @@ extends RefCounted
 ## Procedural hex dungeon: rooms at varied heights joined by terraced / stair corridors.
 ##
 ## Algorithm (all randomness from one seeded RandomNumberGenerator):
-##  1. Scatter 6-9 hex-blob rooms (round, lobed or bitten shapes) keeping a gap between them.
+##  1. Scatter 6-9 hex-blob rooms (radius 5-8: round, lobed or bitten shapes) keeping a wide gap between them.
 ##  2. Prim spanning tree over the room centers, then assign base levels by walking the tree
 ##     (random deltas, clamped 0..8).
-##  3. Carve each tree link (plus 1-2 extra loops) with a turn-penalised A*, two cells wide
-##     (one-wide only for the climb shortcut and at most one short chokepoint). Height along the
+##  3. Carve each tree link (plus 1-2 extra loops) with a turn-penalised A*: tree links three cells
+##     wide (a lane on each side of the route), extra loops two wide, and one-wide only for the climb
+##     shortcut and at most one short chokepoint. Height along the
 ##     corridor is a list of events: +-1 terraces, STAIRS cells (rise <= 4, chained) on straight
 ##     stretches, and on one loop a +-2 climb, which makes it a shortcut that needs climbing.
-##  4. Decorate rooms: platforms (+1), ziggurats (+1..+3 tiers), climbable ledges (+2),
-##     blocked pillars (+3..+5) and void pits, all kept one cell away from walls/doors/start/exit.
+##  4. Decorate rooms (sparsely, about 3 features a room): platforms (+1), ziggurats (+1..+3 tiers),
+##     climbable ledges (+2), blocked pillars (+3..+5) and void pits, all kept one cell away from
+##     walls, away from the doors, and out of the middle of the room (FEATURE_CENTER_CLEAR) and the start/exit.
 ##  5. Ring everything walkable with WALL cells, BFS-validate (start reaches exit and every
 ##     room without climbing), tag cells, and retry with a derived seed on failure.
 ##
@@ -24,6 +26,12 @@ const KEY_W := 256
 const PIT_MARK := -999
 const NARROW_CHANCE := 0.3      ## per eligible link, until one narrow chokepoint exists
 const NARROW_MAX_LEN := 7       ## only short links may be one hex wide
+const DEFAULT_SIZE := 36        ## default radius of the area room centers are scattered in
+const DEFAULT_RMIN := 5
+const DEFAULT_RMAX := 8
+const DEFAULT_GAP := 8          ## minimum empty cells between two rooms
+const FEATURE_CENTER_CLEAR := 2 ## no raised feature / pit within this many cells of a room's center
+const FEATURE_DOOR_CLEAR := 3   ## ... nor within this many cells of a corridor cell (the doors)
 
 enum Ev { TERRACE, CLIMB, STAIRS }
 enum Feature { PLATFORM, ZIGGURAT, LEDGE, PILLAR, PIT }
@@ -86,10 +94,10 @@ class Builder:
 
 	var rng := RandomNumberGenerator.new()
 	var p_rooms: int = 0
-	var p_size: int = 22
-	var p_rmin: int = 3
-	var p_rmax: int = 6
-	var p_gap: int = 5
+	var p_size: int = DEFAULT_SIZE
+	var p_rmin: int = DEFAULT_RMIN
+	var p_rmax: int = DEFAULT_RMAX
+	var p_gap: int = DEFAULT_GAP
 	var p_loops: int = -1
 	var p_wall: int = 3
 
@@ -110,10 +118,10 @@ class Builder:
 	func _init(s: int, params: Dictionary) -> void:
 		rng.seed = s
 		p_rooms = int(params.get("rooms", 0))
-		p_size = int(params.get("size", 22))
-		p_rmin = int(params.get("room_radius_min", 3))
-		p_rmax = maxi(p_rmin, int(params.get("room_radius_max", 6)))
-		p_gap = int(params.get("gap", 5))
+		p_size = int(params.get("size", DEFAULT_SIZE))
+		p_rmin = int(params.get("room_radius_min", DEFAULT_RMIN))
+		p_rmax = maxi(p_rmin, int(params.get("room_radius_max", DEFAULT_RMAX)))
+		p_gap = int(params.get("gap", DEFAULT_GAP))
 		p_loops = int(params.get("loops", -1))
 		p_wall = int(params.get("wall_height", 3))
 
@@ -181,7 +189,7 @@ class Builder:
 			for c in Hex.range_cells(center, radius):
 				cells[c] = true
 		elif style <= 2:
-			var main := maxi(3, radius - 1)
+			var main := maxi(4, radius - 1)
 			for c in Hex.range_cells(center, main):
 				cells[c] = true
 			for _i in rng.randi_range(1, 2):
@@ -277,7 +285,7 @@ class Builder:
 		for pr in cand:
 			if made >= loops:
 				break
-			if _carve(pr.x, pr.y, made == 0):
+			if _carve(pr.x, pr.y, made == 0, true):
 				made += 1
 		return true
 
@@ -421,7 +429,7 @@ class Builder:
 				return c + dd
 		return Vector2i(1 << 20, 0)
 
-	func _carve(ai: int, bi: int, shortcut: bool) -> bool:
+	func _carve(ai: int, bi: int, shortcut: bool, loop: bool = false) -> bool:
 		var ra := rooms[ai]
 		var rb := rooms[bi]
 		var S := _route(ra, rb)
@@ -441,15 +449,17 @@ class Builder:
 				map.set_cell(c, st.level)
 			map.get_cell(c).tag = "corridor"
 			corr_cells[c] = true
-		# Corridors are two wide: a parallel lane beside the routed path, stairs
-		# included (each lane gets its own matching staircase). One-wide passages
-		# are reserved for special cases: the climb shortcut and one short chokepoint.
+		# Tree links are three wide (a parallel lane on each side of the routed path), the extra loops
+		# two wide (one lane), stairs included (each lane gets its own matching staircase). One-wide
+		# passages are reserved for special cases: the climb shortcut and one short chokepoint.
 		var narrow := shortcut
 		if not shortcut and not narrow_used and n <= NARROW_MAX_LEN and rng.randf() < NARROW_CHANCE:
 			narrow = true
 			narrow_used = true
 		if not narrow:
-			_widen(S, steps, ai, bi)
+			_widen(S, steps, ai, bi, 1)
+			if not loop:
+				_widen(S, steps, ai, bi, -1)
 		for c in corr_cells:
 			corr_buffer[c] = true
 			for d in Hex.DIRS:
@@ -466,16 +476,16 @@ class Builder:
 			climb_features += 1
 		return true
 
-	## Add the second lane: for each path cell S[i], its neighbor one turn to the
-	## left of the travel direction, at the same height. A stairs cell's twin is
+	## Add a side lane: for each path cell S[i], its neighbor one turn to the left (turn +1) or right
+	## (turn -1) of the travel direction, at the same height. A stairs cell's twin is
 	## only added when the lane cells before and after it exist too, so a twin
 	## staircase never dead-ends into a wall.
-	func _widen(S: Array[Vector2i], steps: Array, ai: int, bi: int) -> void:
+	func _widen(S: Array[Vector2i], steps: Array, ai: int, bi: int, turn: int) -> void:
 		var n := S.size() - 2
 		var side := {}   # i -> side cell, for cells whose side is free
 		for i in range(1, n + 1):
 			var d := Hex.dir_to(S[i], S[i + 1])
-			var c: Vector2i = S[i] + Hex.DIRS[posmod(d + 1, 6)]
+			var c: Vector2i = S[i] + Hex.DIRS[posmod(d + turn, 6)]
 			if _penalty(c, ai, bi) >= 0 and not corr_cells.has(c):
 				side[i] = c
 		for i in range(1, n + 1):
@@ -634,13 +644,13 @@ class Builder:
 			clear[c] = true
 		var near_corr := {}
 		for c in corr_cells:
-			for n in Hex.range_cells(c, 2):
+			for n in Hex.range_cells(c, FEATURE_DOOR_CLEAR):
 				near_corr[n] = true
 		for room in rooms:
 			var valid := {}
 			var keys: Array[Vector2i] = []
 			for c in room.cells:
-				if near_corr.has(c) or clear.has(c):
+				if near_corr.has(c) or clear.has(c) or Hex.distance(c, room.center) <= FEATURE_CENTER_CLEAR:
 					continue
 				var inner := true
 				for d in Hex.DIRS:
@@ -653,14 +663,15 @@ class Builder:
 			if keys.is_empty():
 				continue
 			var plan: Array[int] = []
-			var scale := 1 + room.cells.size() / 60
-			for _i in rng.randi_range(1, scale + 1):
+			# About half the raised features the rooms used to get, in rooms that are twice the size.
+			var scale := 1 + room.cells.size() / 120
+			for _i in rng.randi_range(0, scale):
 				plan.append(Feature.ZIGGURAT if rng.randf() < 0.4 else Feature.PLATFORM)
-			for _i in rng.randi_range(1 if room.index == 1 or rng.randf() < 0.6 else 0, scale + 1):
+			for _i in rng.randi_range(1 if room.index == 1 else 0, 1):
 				plan.append(Feature.LEDGE)
-			for _i in rng.randi_range(0, scale + 1):
+			for _i in rng.randi_range(0, 1):
 				plan.append(Feature.PILLAR)
-			for _i in rng.randi_range(1 if room.index % 3 == 1 else 0, scale):
+			if room.index % 3 == 1 or rng.randf() < 0.2:
 				plan.append(Feature.PIT)
 			var occupied := {}
 			for kind in plan:

@@ -38,6 +38,10 @@ func _clear_pickups() -> void:
 		p.free()
 
 
+func _init() -> void:
+	timeout_sec = 200.0   # the despawn test runs a pickup through its whole 60 s life (game time)
+
+
 func setup() -> void:
 	root = Node3D.new()
 	add_child(root)
@@ -50,6 +54,8 @@ func setup() -> void:
 	await _test_swap()
 	await _test_drop_table()
 	await _test_monster_drops()
+	await _test_drop_cap()
+	await _test_despawn()
 	await _test_hand_models()
 	await _test_hud()
 	finish()
@@ -326,17 +332,17 @@ func _test_drop_table() -> void:
 		for i in n:
 			for id in SpellComponents.roll_drops(kind, rng, true):
 				tally[kind][id] = int(tally[kind].get(id, 0)) + 1
-	# grunt: loose teeth 35%; brute: ember horn or hide plate 50/50, always one; archer: moss 40%;
-	# swarmer: ichor 15%; corn 5% from everyone on top.
-	near(float(tally["grunt"].get("teeth", 0)) / n, 0.35, 0.04, "grunt teeth 35%")
-	near(float(tally["archer"].get("heal", 0)) / n, 0.40, 0.04, "archer moss 40%")
-	near(float(tally["swarmer"].get("tentacles", 0)) / n, 0.15, 0.03, "swarmer ichor 15%")
+	# Rare drops: grunt loose teeth 12%; archer moss 15%; swarmer ichor 3% per imp; brute ember horn or
+	# hide plate 35% (50/50 between them); corn 2% from everyone on top.
+	near(float(tally["grunt"].get("teeth", 0)) / n, 0.12, 0.025, "grunt teeth 12%")
+	near(float(tally["archer"].get("heal", 0)) / n, 0.15, 0.025, "archer moss 15%")
+	near(float(tally["swarmer"].get("tentacles", 0)) / n, 0.03, 0.012, "swarmer ichor 3%")
 	var horn := int(tally["brute"].get("fireball", 0))
 	var plate := int(tally["brute"].get("armor", 0))
-	eq(horn + plate, n, "a brute always drops exactly one of its two")
-	near(float(horn) / n, 0.5, 0.04, "50/50 horn vs plate")
+	near(float(horn + plate) / n, 0.35, 0.03, "a brute drops one of its two 35% of the time")
+	near(float(horn) / maxf(1.0, float(horn + plate)), 0.5, 0.07, "50/50 horn vs plate")
 	for kind in tally:
-		near(float(tally[kind].get("corn", 0)) / n, 0.05, 0.02, kind + " corn 5%")
+		near(float(tally[kind].get("corn", 0)) / n, 0.02, 0.012, kind + " corn 2%")
 	check(not tally["brute"].has("teeth") and not tally["archer"].has("tentacles"), "kinds only drop their own components")
 
 	# Teeth is available, so grunts really drop it by default (an unavailable spell would be skipped).
@@ -345,7 +351,7 @@ func _test_drop_table() -> void:
 	for i in n:
 		if SpellComponents.roll_drops("grunt", rng).has("teeth"):
 			teeth_seen += 1
-	near(float(teeth_seen) / n, 0.35, 0.04, "grunts drop teeth ~35% by default")
+	near(float(teeth_seen) / n, 0.12, 0.025, "grunts drop teeth ~12% by default")
 
 	# Deterministic with a seeded rng.
 	var a := RandomNumberGenerator.new()
@@ -363,14 +369,21 @@ func _test_drop_table() -> void:
 
 func _test_monster_drops() -> void:
 	_clear_pickups()
-	# A killed brute always leaves a component pickup (fireball or armor) next to the corpse.
-	var brute := MonsterFactory.spawn("brute", Vector2i(3, 0))
-	check(brute != null, "brute spawns")
-	var where := brute.global_position
-	brute.apply_damage(99999.0)
-	await frames(2)
-	var found := _pickups()
-	check(found.size() >= 1, "the brute dropped something")
+	GameWorld.begin(_flat_map(), root, 7)
+	# Brutes drop an ember horn or a hide plate only about a third of the time: kill them one by one until
+	# one does, and the pickup lies next to that corpse.
+	var found: Array[ComponentPickup] = []
+	var where := Vector3.ZERO
+	var kills := 0
+	while found.is_empty() and kills < 40:
+		var brute := MonsterFactory.spawn("brute", Vector2i(3, 0))
+		where = brute.global_position
+		brute.apply_damage(99999.0)
+		kills += 1
+		await frames(2)
+		found = _pickups().filter(func(q: ComponentPickup) -> bool: return q.spell_id != "corn")   # the rare corn kernel is not what this checks
+	check(kills > 1 or not found.is_empty(), "a brute does not always drop")
+	check(not found.is_empty() and kills < 40, "a brute dropped something within %d kills" % kills)
 	var ids: Array[String] = []
 	for p in found:
 		ids.append(p.spell_id)
@@ -378,6 +391,78 @@ func _test_monster_drops() -> void:
 	check(ids.has("fireball") or ids.has("armor"), "brute drops ember horn or hide plate: %s" % str(ids))
 	_clear_pickups()
 	await frames(25)
+
+
+## Kill `n` brutes spread over the flat map; returns the spell ids of the pickups that appeared, in order.
+func _kill_brutes(n: int) -> Array[String]:
+	var ids: Array[String] = []
+	for i in n:
+		var cell := Vector2i(i % 7 - 3, (i / 7) % 7 - 3)
+		var brute := MonsterFactory.spawn("brute", cell)
+		brute.apply_damage(99999.0)
+		await frames(1)
+		for p in _pickups():
+			if not p.has_meta("seen"):
+				p.set_meta("seen", true)
+				ids.append(p.spell_id)
+	return ids
+
+
+## At most FLOOR_DROP_CAP pickups drop on a floor; the count resets when a floor loads; it is repeatable.
+func _test_drop_cap() -> void:
+	_clear_pickups()
+	eq(SpellComponents.FLOOR_DROP_CAP, 5, "five drops a floor at most")
+	GameWorld.begin(_flat_map(), root, 4242)
+	eq(GameWorld.floor_drops, 0, "a loaded floor starts at zero drops")
+	var first := await _kill_brutes(60)
+	eq(first.size(), SpellComponents.FLOOR_DROP_CAP, "60 brutes drop exactly the cap (%s)" % str(first))
+	eq(GameWorld.floor_drops, SpellComponents.FLOOR_DROP_CAP, "the floor counts its drops")
+	check(_pickups().size() <= SpellComponents.FLOOR_DROP_CAP, "no more than the cap lie on the floor")
+	_clear_pickups()
+	# More kills after the cap drop nothing at all.
+	var more := await _kill_brutes(10)
+	eq(more.size(), 0, "past the cap nothing drops")
+	# The next floor loads: the count resets, and the same seed rolls the same drops.
+	GameWorld.begin(_flat_map(), root, 4242)
+	eq(GameWorld.floor_drops, 0, "the count resets on the next floor")
+	var again := await _kill_brutes(60)
+	eq(again, first, "deterministic with the same seed")
+	_clear_pickups()
+	await frames(2)
+
+
+## An uncollected pickup lasts PICKUP_LIFETIME seconds, blinks for the last PICKUP_FADE, then vanishes.
+func _test_despawn() -> void:
+	_clear_pickups()
+	GameWorld.begin(_flat_map(), root, 7)
+	eq(SpellComponents.PICKUP_LIFETIME, 60.0, "pickups last 60 s")
+	eq(SpellComponents.PICKUP_FADE, 5.0, "and blink for the last 5 s")
+	var p := ComponentPickup.drop("heal", 3, Hex.to_world(Vector2i(5, 0)))
+	check(p != null and p.lifetime == 60.0, "a dropped pickup gets the default lifetime")
+	var persistent := ComponentPickup.drop("armor", 3, Hex.to_world(Vector2i(-5, 0)), 0.0)
+	check(persistent != null and is_inf(persistent.time_left()), "a swapped-out spell (lifetime 0) never despawns")
+	var blink_seen := false
+	var steady_early := true
+	var step := 30   # half a second a go
+	var t := 0.0
+	while t < 59.5:
+		await frames(step)
+		t += step / 60.0
+		if not is_instance_valid(p) or p.is_queued_for_deletion():
+			break
+		var shown: bool = p._prop.visible
+		if t < 54.0 and not shown:
+			steady_early = false
+		if t > 55.0 and not shown:
+			blink_seen = true
+	check(steady_early, "it does not blink before the last 5 s")
+	check(is_instance_valid(p) and not p.is_queued_for_deletion(), "still there at 59.5 s")
+	await frames(90)
+	check(not is_instance_valid(p) or p.is_queued_for_deletion(), "gone after 60 s")
+	check(blink_seen, "it blinked in the last 5 s")
+	check(is_instance_valid(persistent) and not persistent.is_queued_for_deletion(), "the persistent pickup is still there")
+	_clear_pickups()
+	await frames(2)
 
 
 func _test_hand_models() -> void:

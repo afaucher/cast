@@ -15,17 +15,21 @@ const TURN := 1.2
 
 var spell_id := ""
 var charges := SpellComponents.PICKUP_CHARGES
+## Seconds until it vanishes if nobody takes it (blinks for the last SpellComponents.PICKUP_FADE). 0 = never.
+var lifetime := SpellComponents.PICKUP_LIFETIME
 
 var _prop: Node3D
 var _glow: MeshInstance3D
 var _label: Label3D
 var _t := 0.0
 var _used := false
+var _age := 0.0
+var _ring: MeshInstance3D
 
 
 ## Put a pickup of `id` on the floor at `pos` (nearest walkable spot within a couple of cells).
 ## Null when there is no world, the spell is unknown, or no floor is anywhere near.
-static func drop(id: String, amount: int, pos: Vector3) -> ComponentPickup:
+static func drop(id: String, amount: int, pos: Vector3, life: float = SpellComponents.PICKUP_LIFETIME) -> ComponentPickup:
 	if GameWorld.root == null or not SpellBook.has_spell(id) or amount <= 0:
 		return null
 	var spot := _floor_spot(pos)
@@ -34,6 +38,7 @@ static func drop(id: String, amount: int, pos: Vector3) -> ComponentPickup:
 	var p := ComponentPickup.new()
 	p.spell_id = id
 	p.charges = amount
+	p.lifetime = life
 	GameWorld.spawn(p, spot)
 	return p
 
@@ -94,6 +99,7 @@ func _ready() -> void:
 	ring.position.y = 0.06
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(ring)
+	_ring = ring
 	_label = Label3D.new()
 	_label.text = label_text()
 	_label.font_size = 36
@@ -127,9 +133,14 @@ func _process(delta: float) -> void:
 		_glow.position.y = _prop.position.y if _prop else HOVER
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if _used:
 		return
+	_age += delta
+	if lifetime > 0.0 and _age >= lifetime:
+		consume()
+		return
+	_blink()
 	var near_player := false
 	for h in GameWorld.team_actors(GameWorld.TEAM_HEROES):
 		var hero := h as Hero
@@ -158,6 +169,23 @@ func _physics_process(_delta: float) -> void:
 	if _label:
 		_label.visible = near_player
 		_label.text = label_text()
+
+
+## Seconds left before it vanishes (INF when it never does).
+func time_left() -> float:
+	return INF if lifetime <= 0.0 else lifetime - _age
+
+
+## In its last PICKUP_FADE seconds the pickup blinks, faster as the end nears.
+func _blink() -> void:
+	var left := time_left()
+	var on := true
+	if left <= SpellComponents.PICKUP_FADE:
+		var rate := 2.0 if left > 2.0 else 5.0   # blinks per second
+		on = fmod(_age * rate, 1.0) < 0.6
+	for n: Node3D in [_prop, _glow, _ring]:
+		if n != null:
+			n.visible = on
 
 
 func _collect(hero: Hero) -> void:

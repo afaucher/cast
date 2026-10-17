@@ -87,7 +87,9 @@ func _ally_tests() -> void:
 	var ally := HeroFactory.spawn_hero(Vector2i(-6, 3), "Follower", Color.ORANGE)
 	HeroFactory.make_ally(ally, leader, false, 2.4)
 	await frames(60 * 4)
-	check(GameWorld.flat_distance(ally.global_position, leader.global_position) < 4.2, "ally follows the leader")
+	var follow_d := GameWorld.flat_distance(ally.global_position, leader.global_position)
+	check(follow_d < AllyBrain.FORMATION_HEX_MAX * AllyBrain.HEX_STEP + 1.0, "ally follows the leader (%.1f units)" % follow_d)
+	check(follow_d > AllyBrain.FORMATION_HEX_MIN * AllyBrain.HEX_STEP - 1.0, "ally settles at its formation distance, not on top of the leader (%.1f)" % follow_d)
 
 	# Fight: a melee ally kills a nearby dummy; a ranged ally shoots one from range.
 	var d1 := _dummy(leader.global_position + Vector3(3.0, 0, 0), 60.0)

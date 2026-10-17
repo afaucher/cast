@@ -9,10 +9,13 @@ extends RefCounted
 ##  - origin room: the largest room that is neither the start nor the exit room (ties: farthest from
 ##    the start). It is also where the story says it happened;
 ##  - employees (2-4): the rooms farthest from the floor's gates (the origin on floor 3);
-##  - priced props: along room edges (next to a wall) on flat floor, never within 3 of the start or the
-##    exit, never within 2 cells of a corridor (so doors and corridors stay clear), spaced apart;
+##  - priced props: at most MAX_PROPS (6) a floor, one per room first (rooms in a shuffled order), only on cells
+##    next to a wall on flat floor, never within 3 of the start or the exit, never within 2 cells of a
+##    corridor (so doors and corridors stay clear), at least PROP_SPACING (4) apart;
 ##  - monster packs: one per room except the start room, bigger on later floors and harder jobs, denser
-##    near the gates (the pests spread outward), biased toward the contract's pest.
+##    near the gates (the pests spread outward), biased toward the contract's pest. Budgets are scaled by
+##    BUDGET_SCALE (0.7) and each room holds at most one monster per MonsterFactory.CELLS_PER_MONSTER
+##    walkable cells, placed spread out.
 ##
 ## Clear zones (hex distance): START_CLEAR / EXIT_CLEAR around the start and exit, CORRIDOR_CLEAR around
 ## any corridor cell.
@@ -21,8 +24,9 @@ const START_CLEAR := 3
 const EXIT_CLEAR := 3
 const CORRIDOR_CLEAR := 2
 const GATE_START_CLEAR := 5
-const PROP_SPACING := 3
-const MAX_PROPS := 9
+const PROP_SPACING := 4
+const MAX_PROPS := 6
+const BUDGET_SCALE := 0.7               ## packs are this fraction of the old budgets (less crowded floors)
 const PEST_MIN := 6                     ## at least this many pest-kind monsters per floor (a swarm counts as its imps)
 const ROOM_BUDGET_BASE := 5
 const ROOM_BUDGET_PER_ROOM := 1
@@ -340,8 +344,11 @@ static func _plan_props(map: HexMap, run: ContractRun, p: SitePlan, rng: RandomN
 		taken.append(e["cell"])
 	var tags: Array = p.rooms.keys()
 	tags.sort_custom(func(a: String, b: String) -> bool: return int(a.trim_prefix("room:")) < int(b.trim_prefix("room:")))
+	# Edge cells per room: next to a wall, flat, out of the corridors' way.
+	var edges: Dictionary = {}
+	var order: Array[String] = []
 	for tag: String in tags:
-		if tag == p.start_room or p.props.size() >= MAX_PROPS:
+		if tag == p.start_room:
 			continue
 		var level: int = int(p.base_levels[tag])
 		var edge: Array[Vector2i] = []
@@ -363,26 +370,43 @@ static func _plan_props(map: HexMap, run: ContractRun, p: SitePlan, rng: RandomN
 					break
 			if by_wall and flat:
 				edge.append(c)
-		var want := clampi((p.rooms[tag] as Array).size() / 22, 1, 3)
-		var placed := 0
-		var tries := 0
-		while placed < want and not edge.is_empty() and tries < 24 and p.props.size() < MAX_PROPS:
-			tries += 1
-			var c := edge[rng.randi_range(0, edge.size() - 1)]
-			var ok := true
-			for g in gate_cells:
-				if Hex.distance(g, c) < 4:
-					ok = false
-					break
-			for t in taken:
-				if Hex.distance(t, c) < PROP_SPACING:
-					ok = false
-					break
-			if not ok:
+		edges[tag] = edge
+		order.append(tag)
+	# A shuffled room order, so the first rooms do not hog the few props a floor gets.
+	for i in range(order.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t := order[i]
+		order[i] = order[j]
+		order[j] = t
+	var placed: Dictionary = {}
+	var round_n := 0
+	while p.props.size() < MAX_PROPS and round_n < 3:
+		round_n += 1
+		for tag in order:
+			if p.props.size() >= MAX_PROPS:
+				break
+			var want := clampi((p.rooms[tag] as Array).size() / 40, 1, 3)
+			var edge: Array[Vector2i] = edges[tag]
+			if int(placed.get(tag, 0)) >= want or edge.is_empty():
 				continue
-			taken.append(c)
-			placed += 1
-			p.props.append({"cell": c, "kind": catalog[rng.randi_range(0, catalog.size() - 1)], "room": tag})
+			for _try in 24:
+				var c := edge[rng.randi_range(0, edge.size() - 1)]
+				var ok := true
+				for g in gate_cells:
+					if Hex.distance(g, c) < 4:
+						ok = false
+						break
+				if ok:
+					for t in taken:
+						if Hex.distance(t, c) < PROP_SPACING:
+							ok = false
+							break
+				if not ok:
+					continue
+				taken.append(c)
+				placed[tag] = int(placed.get(tag, 0)) + 1
+				p.props.append({"cell": c, "kind": catalog[rng.randi_range(0, catalog.size() - 1)], "room": tag})
+				break
 
 
 # --- clue notes -----------------------------------------------------------------------------
@@ -422,7 +446,7 @@ static func _plan_packs(run: ContractRun, floor_n: int, p: SitePlan) -> void:
 		for g in gate_cells:
 			d = mini(d, Hex.distance(p.centers[tag], g))
 		budget += int(roundf(3.0 * (1.0 - clampf(float(d) / 24.0, 0.0, 1.0))))
-		p.pack_budgets[tag] = budget
+		p.pack_budgets[tag] = maxi(2, int(roundf(float(budget) * BUDGET_SCALE)))
 
 
 static func _block_cells(p: SitePlan) -> void:
@@ -491,6 +515,7 @@ static func _spawn_packs(map: HexMap, run: ContractRun, p: SitePlan, site: Site,
 	var tags: Array = p.pack_budgets.keys()
 	tags.sort_custom(func(a: String, b: String) -> bool: return int(a.trim_prefix("room:")) < int(b.trim_prefix("room:")))
 	var rooms_free: Dictionary = {}
+	var room_count: Dictionary = {}
 	for tag: String in tags:
 		var free: Array[Vector2i] = []
 		for c in (p.rooms[tag] as Array[Vector2i]):
@@ -498,7 +523,7 @@ static func _spawn_packs(map: HexMap, run: ContractRun, p: SitePlan, site: Site,
 				free.append(c)
 		rooms_free[tag] = free
 		var plan_kinds := biased_composition(int(p.pack_budgets[tag]), rng, run.pest)
-		_place_kinds(map, free, plan_kinds, rng, site)
+		room_count[tag] = _place_kinds(map, free, plan_kinds, rng, site, room_cap(map, p.rooms[tag]))
 	# Make sure there is something to exterminate: top up the pest if the dice were unkind.
 	if run.pest != "everything":
 		var guard := 0
@@ -506,7 +531,9 @@ static func _spawn_packs(map: HexMap, run: ContractRun, p: SitePlan, site: Site,
 			guard += 1
 			var tag: String = tags[rng.randi_range(0, tags.size() - 1)]
 			var kinds: Array[String] = [run.pest]
-			_place_kinds(map, rooms_free[tag], kinds, rng, site)
+			var cap := room_cap(map, p.rooms[tag]) - int(room_count[tag])
+			if cap > 0:
+				room_count[tag] = int(room_count[tag]) + _place_kinds(map, rooms_free[tag], kinds, rng, site, cap)
 
 
 ## MonsterFactory.plan_composition with the pest's weight multiplied (a swarmer is still at most one
@@ -543,8 +570,20 @@ static func biased_composition(budget: int, rng: RandomNumberGenerator, pest: St
 	return plan
 
 
-## Spawn a list of kinds on free walkable cells of one room, spread apart (a swarmer is a clump).
-static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String], rng: RandomNumberGenerator, site: Site) -> void:
+## The most monsters one room may hold: one per MonsterFactory.CELLS_PER_MONSTER walkable floor cells (at least 2).
+static func room_cap(map: HexMap, room_cells: Array) -> int:
+	var walkable := 0
+	for c: Vector2i in room_cells:
+		var cell := map.get_cell(c)
+		if cell != null and cell.type == HexMap.Tile.FLOOR:
+			walkable += 1
+	return maxi(2, walkable / MonsterFactory.CELLS_PER_MONSTER)
+
+
+## Spawn a list of kinds on free walkable cells of one room, spread apart (a swarmer is a clump of its own
+## imps), never more than `cap` monsters in all. Returns how many were spawned.
+static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String], rng: RandomNumberGenerator, site: Site, cap: int = 1 << 20) -> int:
+	var spawned := 0
 	var usable: Array[Vector2i] = []
 	for c in free:
 		var cell := map.get_cell(c)
@@ -552,19 +591,20 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 			usable.append(c)
 	var placed: Array[Vector2i] = []
 	for kind in kinds:
-		if usable.is_empty():
+		if usable.is_empty() or spawned >= cap:
 			break
 		var center: Vector2i = MonsterFactory._pick_spread(usable, placed, rng)
 		if kind != "swarmer":
 			var m := MonsterFactory.spawn(kind, center)
 			if m != null:
+				spawned += 1
 				site.monsters.append(m)
 				if site.pest == "everything" or kind == site.pest:
 					site.pest_spawned += 1
 			placed.append(center)
 			usable.erase(center)
 			continue
-		var want := rng.randi_range(MonsterFactory.SWARM_MIN, MonsterFactory.SWARM_MAX)
+		var want := mini(rng.randi_range(MonsterFactory.SWARM_MIN, MonsterFactory.SWARM_MAX), cap - spawned)
 		var near: Array[Vector2i] = []
 		for c in usable:
 			if Hex.distance(c, center) <= 2:
@@ -573,11 +613,13 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 		for i in mini(want, near.size()):
 			var sm := MonsterFactory.spawn("swarmer", near[i])
 			if sm != null:
+				spawned += 1
 				site.monsters.append(sm)
 				if site.pest == "everything" or site.pest == "swarmer":
 					site.pest_spawned += 1
 			usable.erase(near[i])
 		placed.append(center)
+	return spawned
 
 
 ## Convenience for the game: plan + spawn in one call.

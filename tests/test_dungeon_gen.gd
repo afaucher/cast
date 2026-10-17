@@ -1,5 +1,6 @@
 extends TestCase
-## DungeonGen invariants + HexMapView smoke test + prototype textures.
+## DungeonGen invariants (big airy rooms, three-wide corridors, sparse features kept out of room centers,
+## generation time) + HexMapView smoke test + prototype textures.
 
 const SEEDS: Array[int] = [1, 2, 3, 7, 42, 99, 1234, 31337]
 
@@ -15,8 +16,10 @@ func setup() -> void:
 		worst_ms = maxf(worst_ms, ms)
 		_check_map(m, s, s <= 2)
 		_check_corridor_width(m, s)
+		_check_room_sizes(m, s)
 	print("dungeon gen: avg %.0f ms, worst %.0f ms over %d seeds" % [total_ms / SEEDS.size(), worst_ms, SEEDS.size()])
-	check(worst_ms < 1000.0, "generation under 1s (worst %.0f ms)" % worst_ms)
+	check(worst_ms < 300.0, "generation under 300 ms (worst %.0f ms)" % worst_ms)
+	_check_features(s_list())
 
 	# determinism
 	var a := DungeonGen.generate(5)
@@ -26,7 +29,7 @@ func setup() -> void:
 	check(not _same(a, c), "different seed -> different map")
 
 	# params
-	var small := DungeonGen.generate(11, {"rooms": 6, "size": 22})
+	var small := DungeonGen.generate(11, {"rooms": 6, "size": 34})
 	_check_map(small, 11, false)
 	var rooms := _room_ids(small)
 	check(rooms.size() <= 6 and rooms.size() >= 5, "rooms param (%d)" % rooms.size())
@@ -168,11 +171,13 @@ func _check_map(m: HexMap, s: int, deep: bool) -> void:
 
 
 ## Size of the void component containing v, counting at most `limit`.
-## Corridors are two wide except for rare special cases: most corridor cells have
-## at least 3 walkable neighbours (a one-wide hall's cells have only 2).
+## Corridors are wide except for rare special cases: most corridor cells have at least 3 walkable
+## neighbours (a one-wide hall's cells have only 2, a two-wide hall's have 4), and the tree links are three
+## wide, whose lane cells have 4 and whose middle-lane cells have 5 or 6 walkable neighbours.
 func _check_corridor_width(m: HexMap, s: int) -> void:
 	var total := 0
 	var wide := 0
+	var three := 0
 	for c: Vector2i in m.cells:
 		if m.cells[c].tag != "corridor":
 			continue
@@ -183,7 +188,63 @@ func _check_corridor_width(m: HexMap, s: int) -> void:
 				k += 1
 		if k >= 3:
 			wide += 1
-	check(total > 0 and float(wide) / total >= 0.75, "seed %d: corridors mostly two wide (%d of %d cells)" % [s, wide, total])
+		if k >= 5:
+			three += 1
+	check(total > 0 and float(wide) / total >= 0.75, "seed %d: corridors mostly wide (%d of %d cells)" % [s, wide, total])
+	check(total > 0 and float(three) / total >= 0.2, "seed %d: the main corridors are three wide (%d of %d cells have a lane on both sides)" % [s, three, total])
+
+
+## Rooms are big: no tiny rooms (radius 5-8 blobs), a decent average, and a real span across.
+func _check_room_sizes(m: HexMap, s: int) -> void:
+	var rooms: Dictionary = {}
+	for c: Vector2i in m.cells:
+		var t: String = m.cells[c].tag
+		if t.begins_with("room:"):
+			if not rooms.has(t):
+				rooms[t] = []
+			rooms[t].append(c)
+	var sum := 0
+	for t in rooms:
+		var cells: Array = rooms[t]
+		sum += cells.size()
+		check(cells.size() >= 55, "seed %d: %s is roomy (%d cells)" % [s, t, cells.size()])
+		var span := 0
+		for a: Vector2i in cells:
+			for b: Vector2i in [cells[0], cells[cells.size() / 2], cells[cells.size() - 1]]:
+				span = maxi(span, Hex.distance(a, b))
+		check(span >= 8, "seed %d: %s spans %d cells across" % [s, t, span])
+	check(not rooms.is_empty() and float(sum) / rooms.size() >= 90.0, "seed %d: average room has %.0f cells" % [s, float(sum) / maxi(1, rooms.size())])
+
+
+func s_list() -> Array[int]:
+	return SEEDS
+
+
+## Raised features, pits and ledges stay out of the middle of every room (radius 2) and away from its doors.
+func _check_features(seeds: Array[int]) -> void:
+	var off_level := 0
+	var room_count := 0
+	for s in seeds:
+		var b := DungeonGen.Builder.new(s, {})
+		var m := b.build()
+		if m == null:
+			continue   # this seed needed a retry; the public generate() path is covered above
+		for r in b.rooms:
+			room_count += 1
+			for c in Hex.range_cells(r.center, DungeonGen.FEATURE_CENTER_CLEAR):
+				var cell: HexMap.Cell = m.get_cell(c)
+				check(cell != null and cell.level == r.level and cell.type == HexMap.Tile.FLOOR, "seed %d room %d: the middle is clear at %s" % [s, r.index, str(c)])
+			for c: Vector2i in r.cells:
+				var cell: HexMap.Cell = m.get_cell(c)
+				if cell == null or cell.level == r.level:
+					continue
+				off_level += 1
+				for d: Vector2i in b.corr_cells:
+					if Hex.distance(c, d) <= DungeonGen.FEATURE_DOOR_CLEAR:
+						check(false, "seed %d room %d: feature cell %s is within %d of a door" % [s, r.index, str(c), DungeonGen.FEATURE_DOOR_CLEAR])
+						break
+	check(room_count > 10, "features checked on %d rooms" % room_count)
+	check(float(off_level) / maxi(1, room_count) <= 9.0, "sparse features: %.1f raised cells a room" % (float(off_level) / maxi(1, room_count)))
 
 
 func _void_size(m: HexMap, v: Vector2i, limit: int) -> int:

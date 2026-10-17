@@ -5,7 +5,8 @@ extends Node3D
 ## CameraRig), MonsterFactory (monsters), VoiceCaster/VoiceDebugPanel (voice) and the contract layer
 ## (ContractRun/ContractSession/SiteBuilder: hellgates, employees, priced props, objectives, the Ledger).
 ##
-## Flow (docs/design/contracts.md): the elevator (the exit cell) opens a menu: go down (more pay, more
+## Flow (docs/design/contracts.md): the elevator (the exit cell) opens a menu when the player stands on or next
+## to it and presses E (a prompt says so; E casts the held spell everywhere else): go down (more pay, more
 ## danger) or cash out; cashing out is always allowed. HP and downed state carry between floors; a new
 ## contract resets everything (spells are re-picked). All heroes down ends the contract: "Crew
 ## incapacitated" and the invoice shows what was earned so far.
@@ -34,11 +35,12 @@ extends Node3D
 ##   --kit-demo draw|hammer|fist  dev: at 0.8 s Wick starts drawing his bow on the --spawn-near monsters (a drawn shot
 ##                       fires 1.3 s later), or Gasket (hammer) / Rebar (fist) steps up to them and swings once
 ##   --to-gate           dev: put the crew 5 cells from the first hellgate of the floor (the camera follows)
-##   --to-exit           dev: put the crew on the elevator (opens its menu)
+##   --to-exit           dev: put the crew on the elevator (shows "E: use elevator"; E opens the menu)
 ##   --demo-damage       dev: 1 s in, put two property-damage lines on the Ledger (to see the ticker and the tracker)
 ##   --show-panel        dev: keep the voice debug panel open in --shot screenshots
 ##   --hurt N            dev: every hero starts the floor N hp down (to see the HP carry over between floors)
-##   --auto-elevator down|out  dev: the elevator menu picks that option 1.2 s after it opens ("down" on the last floor cashes out)
+##   --auto-elevator down|out  dev: the elevator menu opens by itself when the crew stands on the exit (no E needed) and picks
+##                       that option 1.2 s later ("down" on the last floor cashes out)
 ##   --invoice-demo      dev: show a sample invoice (no game), for screenshots
 ##   --pause-demo        dev: open the pause overlay 1.5 s into the floor (screenshots)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
@@ -50,7 +52,9 @@ static func all_spells() -> PackedStringArray:
 	return PackedStringArray(SpellBook.ids())
 const PLAYER_COLOR := Color(0.3, 0.55, 0.95)
 const SCREEN_LAYER := 60          ## full-screen screens (board, elevator, invoice) sit above the debug panel (50)
-const ELEVATOR_REARM_DIST := 2    ## after "stay", walk this many cells off the elevator before it asks again
+const ELEVATOR_REARM_DIST := 2    ## --auto-elevator only: after "stay", walk this many cells off before it asks again
+const ELEVATOR_USE_DIST := 1      ## the player can press E at the elevator from this many cells (on it or next to it)
+const ELEVATOR_PROMPT := "E: use elevator"
 const OBJECTIVE_INTERVAL := 0.25
 const FOLLOW_EXTRACT_CELLS := 3   ## followers within this many cells of the elevator ride along
 const INCAP_DELAY := 2.2
@@ -273,12 +277,13 @@ func _build_world() -> void:
 	player = HeroFactory.spawn_hero(start, "Wick", PLAYER_COLOR, "sword", WickModel.new() if faceted else null, HeroKit.WICK)
 	var none: Array[String] = []
 	controller = HeroFactory.make_player(player, none)
+	controller.interact = _use_elevator_key
 	var spots := _free_cells_near(start, 2)
 	# Each hero's kit (HP, primary, secondary, quirks) comes from HeroKit; --proto-heroes keeps the kits.
 	var rebar := HeroFactory.spawn_hero(spots[0], "Rebar", Color(0.85, 0.5, 0.25), "sword", RebarModel.new() if faceted else null, HeroKit.REBAR)
-	HeroFactory.make_ally(rebar, player, false, 2.4)
+	HeroFactory.make_ally(rebar, player, false, 2.4, 2.6)
 	var gasket := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Gasket", Color(0.7, 0.4, 0.85), "sword", GasketModel.new() if faceted else null, HeroKit.GASKET)
-	HeroFactory.make_ally(gasket, player, false, 3.9)
+	HeroFactory.make_ally(gasket, player, false, 3.9, 3.3)
 	allies = [rebar, gasket]
 
 	rig = CameraRig.new()
@@ -681,9 +686,24 @@ func _on_actor_died(a: Actor) -> void:
 
 # --- The elevator ----------------------------------------------------------------------------------------
 
+## True when the living player stands on or next to the elevator (the exit cell).
+func _player_at_elevator() -> bool:
+	return player != null and not player.dead and Hex.distance(player.current_cell(), _exit_cell) <= ELEVATOR_USE_DIST
+
+
+## E at the elevator opens its menu (the controller calls this first; true = the press is used, no cast).
+func _use_elevator_key() -> bool:
+	if _menu != null or _leaving or _ended or _ending or _session == null or not _player_at_elevator():
+		return false
+	_open_elevator()
+	return true
+
+
 func _check_elevator() -> void:
-	if _menu != null or _leaving:
-		return
+	if hud != null:
+		hud.context_prompt = ELEVATOR_PROMPT if _menu == null and not _leaving and _player_at_elevator() else ""
+	if _menu != null or _leaving or not opts.has("auto_elevator"):
+		return   # without --auto-elevator the menu opens only on E (see _use_elevator_key)
 	var on_exit := false
 	for h in _heroes():
 		if not h.dead and h.current_cell() == _exit_cell:

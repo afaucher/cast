@@ -51,6 +51,7 @@ var hp: float
 var dead := false
 var facing := Vector3.FORWARD     ## unit X/Z vector the actor faces
 var climbing := false             ## true while crossing a climb ledge
+var pass_through_until := 0.0     ## GameWorld.time until which this actor does not push or get pushed by others
 var _modifiers := {}              ## id -> {"mult": float, "until": float}
 
 # Forced movement state. All of it is driven by _forced_tick(), connected to the tree's
@@ -511,11 +512,13 @@ func snap_to_ground(delta: float = -1.0) -> void:
 			global_position.y = g
 
 
-## Push apart from overlapping actors (cheap circle separation).
+## Push apart from overlapping actors (cheap circle separation). An actor with pass_through_until in the
+## future neither pushes nor is pushed (an ally squeezing past the leader in a one-wide hall).
 func _separate() -> void:
 	var map: HexMap = GameWorld.map
+	var ghost := pass_through_until > GameWorld.time
 	for other in GameWorld.actors_in_radius(global_position, radius):
-		if other == self:
+		if other == self or ghost or other.pass_through_until > GameWorld.time:
 			continue
 		var d := global_position - other.global_position
 		d.y = 0.0

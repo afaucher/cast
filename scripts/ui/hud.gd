@@ -32,6 +32,7 @@ var _cards: Array[SpellCard] = []
 var _card_box: HBoxContainer
 var _toast: Label
 var _prompt: Label
+var context_prompt := ""   ## a world prompt ("E: use elevator"); the swap prompt wins when both apply
 var _toast_tween: Tween
 var _center: Label
 var _center_tween: Tween
@@ -252,6 +253,11 @@ func _update_prompt() -> void:
 	if _prompt == null:
 		return
 	var t := swap_prompt_text()
+	if t == "" and context_prompt != "":
+		_prompt.visible = true
+		_prompt.text = context_prompt
+		_prompt.modulate = Color(1.0, 0.92, 0.6)
+		return
 	_prompt.visible = t != ""
 	if t != "":
 		_prompt.text = t

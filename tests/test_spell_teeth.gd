@@ -343,4 +343,4 @@ func _test_grunt_drops() -> void:
 	for i in 400:
 		if SpellComponents.roll_drops("grunt", rng).has("teeth"):
 			seen += 1
-	check(seen > 80 and seen < 200, "grunts drop teeth about 35%% of the time (%d / 400)" % seen)
+	check(seen > 20 and seen < 85, "grunts drop teeth about 12%% of the time (%d / 400)" % seen)

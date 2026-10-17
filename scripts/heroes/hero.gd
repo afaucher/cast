@@ -283,7 +283,7 @@ func swap_in_pickup() -> bool:
 		var away := spot - global_position
 		away.y = 0.0
 		away = away.normalized() if away.length() > 0.05 else -facing
-		ComponentPickup.drop(old, old_n, global_position + away * (SpellComponents.SWAP_RADIUS + 0.7))
+		ComponentPickup.drop(old, old_n, global_position + away * (SpellComponents.SWAP_RADIUS + 0.7), 0.0)   # the swapped-out spell never despawns
 	_refresh_hold()
 	held_changed.emit()
 	component_swapped.emit(old, new_id, slot)
