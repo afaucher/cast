@@ -21,6 +21,21 @@ accents and light colour. All props are faceted low-poly and built in code, like
 | **Server room** | rack rows with blinking LEDs, cable trays | cables torn out and sparking, a rogue house-AI eye on the monitors | sparks deal light damage on contact (a hazard), and the racks create corridors |
 | **Indoor pool** | a sunken pool (a pit cell cluster), loungers, a towel rack | purple glowing water, tentacle-ish shapes below | the pool IS a pit, so shoving monsters in is the point |
 
+## 1b. Second site type: the villain lair [decided direction]
+Same two-layer rule, but the site was **already evil before the demons wrecked it**: a supervillain
+or cult boss's lair, overrun by the very demons they were dabbling with.
+
+| Theme | Evil-before layer | Wrecked-by-demons layer | Gameplay hook |
+|---|---|---|---|
+| **Torture chamber** | racks, cages, hanging chains, iron maiden, a brazier | cages bent open, chains snapped, scorch marks | cages as cover; chains/braziers as shove hazards |
+| **Throne room / lair hub** | evil throne, red carpet, a monologue podium, a doomsday-device console | the throne toppled, the console sparking, an imp sitting on the throne | the console is the room objective (shut down or loot) |
+| **Lab / vat room** | glowing vats, specimen jars, a lever wall | vats cracked and leaking ichor, jars smashed | leaking vats = goo hazard; pulling levers opens areas |
+| **Shark/lava moat** | a moat with a retractable bridge (a classic) | the bridge half-broken | the moat is a pit: shove villains' demons in |
+| **Henchmen barracks** | bunk rows, matching jumpsuits, a "days since accident: 0" sign | bunks overturned, jumpsuits shredded | henchmen survivors could be the "employees" to protect |
+
+Contract sites can be either type: a **luxury bunker** (billionaire client) or a **villain lair**
+(the villain is the client, which is funnier: "I need my lair back by Thursday").
+
 ## 2. The infestation layer (all rooms, intensity grows deeper in)
 - **Demon ichor:** neon-purple goo puddles and drips on walls (decals). They glow in the dark,
   matching the tentacles and swarmer colour. Maybe they slow movement later.

@@ -279,3 +279,5 @@ anyone outside the team plays. **P2** = later.
 - **P1** Material components: monster drop tables, walk-over pickups, charges, swapping.
 - **P1** Spell **teeth**: affliction, 1-2 s growth, pop with splash and shove, heal cleanses. See `spells.md`.
 - **P1** Rename the heroes: Pebble -> **Rebar**, Dagna -> **Gasket**, Larkin -> **Wick**. Covers labels, game.gd, docs and model class names. Check with voice clips that "Gasket" is never heard as the "cast" trigger.
+- **P1** Contracts: objectives with pay (employees $10 each, disinfect a room $10k, hellgates $3k each), property-damage deductions, end-of-job invoice. See `contracts.md`.
+- **P2** Villain-lair site type (torture chamber, throne room, lab, moat, barracks). See `environment.md`.
