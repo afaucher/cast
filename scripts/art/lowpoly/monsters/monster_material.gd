@@ -28,7 +28,7 @@ static func _code() -> String:
 	code = code.replace("varying vec3 wnormal;",
 			"uniform vec4 tint_color : source_color = vec4(1.0, 0.25, 0.0, 1.0);\n"
 			+ "uniform float tint_k = 0.0;         // additive flash / windup pulse\n"
-			+ "uniform float glow_gain = 1.5;      // emissive faces (vertex alpha < 0.75)\n"
+			+ "uniform float glow_gain = 1.8;      // emissive faces (vertex alpha < 0.75)\n"
 			+ "varying vec3 wnormal;")
 	code = code.replace("EMISSION = min(e, vec3(0.95));",
 			"float glow_m = 1.0 - step(0.75, COLOR.a);\n"

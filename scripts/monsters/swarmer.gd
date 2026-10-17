@@ -40,6 +40,7 @@ func _init() -> void:
 	walk_bob = 0.14
 	walk_freq = 16.0
 	windup_scale = 0.3
+	model_windup_scale = 0.12
 
 
 func _ready() -> void:

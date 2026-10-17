@@ -12,6 +12,11 @@ extends Actor
 ## (or _tick_chase for completely custom behavior, as the archer does).
 ##
 ## Hit flash, windup tint, death topple/fade and the billboard HP bar live here.
+##
+## Looks: by default every kind wears its faceted MonsterModel (scripts/art/lowpoly/monsters). The
+## model animates idle / walk by itself and gets the hooks windup(t), attack_swing(), set_tint(),
+## set_fade() and set_downed(). The old primitive bodies (_build_visual) stay as a fallback: set
+## `Monster.use_proto_visuals = true` before spawning (tests, a dev flag).
 
 enum State { IDLE, CHASE, ATTACK, RETURN, DEAD }
 
@@ -45,7 +50,8 @@ var bar_height := 1.8
 var bar_width := 0.9
 var walk_bob := 0.05              ## visual bounce amplitude while walking
 var walk_freq := 9.0
-var windup_scale := 0.12          ## visual swell at full windup
+var windup_scale := 0.12          ## visual swell at full windup (primitive bodies)
+var model_windup_scale := 0.06    ## the same for a faceted model (its own windup pose does the rest)
 
 # --- State ----------------------------------------------------------------------------
 var state: int = State.IDLE
@@ -75,6 +81,7 @@ var _nudge_dir := Vector3.ZERO
 var _last_nav_frame := -100
 
 # Visuals
+var model: MonsterModel = null    ## faceted body (null when use_proto_visuals or an unknown kind)
 var _visual: Node3D = null
 var _bar: MeshInstance3D = null
 var _bar_mat: ShaderMaterial = null
@@ -86,6 +93,10 @@ var _walk_phase := 0.0
 var _bob := 0.0
 
 const BAR_SHADER_PATH := "res://scripts/monsters/hp_bar.gdshader"
+const MODEL_BAR_GAP := 0.25       ## HP bar floats this far above the model's ui_height
+
+## True: spawn the old primitive bodies instead of the faceted models (tests, dev flag).
+static var use_proto_visuals := false
 
 
 func _init() -> void:
@@ -99,7 +110,14 @@ func _ready() -> void:
 	_visual = Node3D.new()
 	_visual.name = "Visual"
 	add_child(_visual)
-	_build_visual(_visual)
+	if model == null and not use_proto_visuals:
+		model = MonsterModels.make(kind)
+	if model != null:
+		_visual.add_child(model)
+		bar_height = model.ui_height + MODEL_BAR_GAP
+		windup_scale = model_windup_scale
+	else:
+		_build_visual(_visual)
 	damaged.connect(_on_damaged)
 	# Stagger timers so a pack never scans/paths on the same frame.
 	_scan_t = randf() * SCAN_INTERVAL
@@ -229,6 +247,8 @@ func _tick_attack(delta: float) -> void:
 		_strike()
 		_next_attack_time = GameWorld.time + attack_cooldown
 		_strike_t = 1.0
+		if model != null:
+			model.attack_swing()
 		if state == State.ATTACK:
 			state = State.CHASE
 
@@ -513,6 +533,8 @@ func _on_death() -> void:
 	remove_from_group("monsters")
 	SpellComponents.drop_for(self)   # material components, per the drop table
 	_end_windup()
+	if model != null:
+		model.set_downed(true)
 	if _bar != null:
 		_bar.visible = false
 	for e in _mats:
@@ -530,6 +552,9 @@ func _on_death() -> void:
 
 
 func _set_fade(a: float) -> void:
+	if model != null:
+		model.set_fade(a)
+		return
 	for e in _mats:
 		var m: StandardMaterial3D = e[0]
 		var c: Color = m.albedo_color
@@ -596,6 +621,8 @@ func _update_visual(delta: float) -> void:
 	if absf(key - _tint_key) > 0.002:
 		_tint_key = key
 		_apply_tint(col, key)
+	if model != null:
+		model.windup(_telegraph)
 	_pose(delta, moved)
 
 
@@ -605,6 +632,9 @@ func _pose(_delta: float, _moving: bool) -> void:
 
 
 func _apply_tint(color: Color, k: float) -> void:
+	if model != null:
+		model.set_tint(color, k)
+		return
 	for e in _mats:
 		var m: StandardMaterial3D = e[0]
 		var base_em: Color = e[1]

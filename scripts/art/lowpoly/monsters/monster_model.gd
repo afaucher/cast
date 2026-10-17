@@ -16,36 +16,26 @@ extends LowPolyModel
 ##   set_fade(a)           1 -> 0 at the end of the death tween (the model shrinks away).
 ##   ui_height             top of the figure, for the hp bar.
 ##
-## INTEGRATION (not applied; monster.gd and the kinds are being edited elsewhere). Mirror of Hero's
-## visual_override: Monster gets an optional `model`, set before add_child (MonsterFactory) or defaulted
-## from `kind` in _ready:
+## INTEGRATION (applied in monster.gd): Monster has a `model: MonsterModel` field, defaulted in _ready()
+## from `kind` via MonsterModels.make(kind) (or set before add_child). `Monster.use_proto_visuals = true`
+## (static) brings back the old primitive bodies. The hooks, all in monster.gd:
+##   _ready()          model child of the Visual, bar_height = ui_height + 0.25, windup_scale = model_windup_scale
+##                     (0.06, swarmer 0.12: the model's own pose does most of the telegraph)
+##   _tick_attack()    model.attack_swing() right after the strike
+##   _update_visual()  model.windup(_telegraph) every frame (before _pose)
+##   _apply_tint()     model.set_tint(color, k) and return (the primitive _mats stay empty)
+##   _set_fade()       model.set_fade(a) and return
+##   _on_death()       model.set_downed(true) before the tweens (Monster still topples/sinks its Visual)
+## Only Monster's _visual (never the model) is rotated / scaled / lowered by the Monster; the model owns its
+## own scale (MODEL_SCALE, shrunk by set_fade). Shoves and pit falls move / spin / shrink the ACTOR node,
+## so the model just rides along (its walk cycle reads the actor's motion).
 ##
-##   monster.gd, new field:        var model: MonsterModel = null
-##   monster.gd, _ready():         replace `_build_visual(_visual)` with
-##                                     if model == null:
-##                                         model = MonsterModels.make(kind)
-##                                     if model != null:
-##                                         _visual.add_child(model)
-##                                         bar_height = model.ui_height + 0.25
-##                                     else:
-##                                         _build_visual(_visual)
-##   monster.gd, _tick_attack():   after `_strike_t = 1.0` add
-##                                     if model != null: model.attack_swing()
-##   monster.gd, _update_visual(): before `_pose(delta, moved)` add
-##                                     if model != null: model.windup(_telegraph)
-##   monster.gd, _apply_tint():    first line
-##                                     if model != null: model.set_tint(color, k)
-##   monster.gd, _set_fade():      first line
-##                                     if model != null: model.set_fade(a)
-##   monster.gd, _on_death():      before the tweens
-##                                     if model != null: model.set_downed(true)
-##   Optional: windup_scale 0.12 / 0.3 swells the whole Visual; with a model 0.06 (0.12 swarmer) reads better.
-##
-## The kind scripts need NO change: their _pose() overrides are already null-guarded (the primitive
-## parts they animate are never built when the model is used) and _build_visual just is not called.
+## The kind scripts need NO change besides swarmer's model_windup_scale: their _pose() overrides are
+## null-guarded (the primitive parts they animate are never built when the model is used) and
+## _build_visual just is not called.
 
 const SWING_TIME := 0.30
-const GLOW_GAIN := 1.5
+const GLOW_GAIN := 1.8
 
 ## Monster.kind this model is for ("grunt", "archer", "brute", "swarmer").
 var monster_kind := "monster"

@@ -22,8 +22,8 @@ const SKIN_LIGHT := Color(0.54, 0.15, 0.09)
 const SKIN_DARK := Color(0.36, 0.08, 0.07)
 const PLATE := Color(0.24, 0.07, 0.07)           ## darker horn-plate shoulders, brow, spines
 const BELLY := Color(0.46, 0.15, 0.10)
-const LAVA := Color(1.0, 0.30, 0.04)
-const LAVA_HOT := Color(1.0, 0.55, 0.12)
+const LAVA := Color(1.0, 0.46, 0.08)
+const LAVA_HOT := Color(1.0, 0.76, 0.26)
 const IVORY := Color(0.92, 0.86, 0.68)
 const IVORY_DARK := Color(0.66, 0.58, 0.42)
 const GOLD := Color(0.95, 0.74, 0.22)
@@ -75,7 +75,7 @@ static func _chest_front(x: float, y: float, push: float) -> Vector3:
 ## A glowing crack along a polyline of points.
 static func _crack(s: LowPoly.Soup, pts: Array[Vector3], r: float, seed_value: int) -> void:
 	for i in pts.size() - 1:
-		limb(s, pts[i], pts[i + 1], r * 1.5, r * 1.2, 4, glow(LAVA if i % 2 == 0 else LAVA_HOT), seed_value + i, 0.0, 0.0)
+		limb(s, pts[i], pts[i + 1], r * 2.6, r * 2.2, 4, glow(LAVA if i % 2 == 0 else LAVA_HOT), seed_value + i, 0.0, 0.0)
 
 
 func _body_soup() -> LowPoly.Soup:

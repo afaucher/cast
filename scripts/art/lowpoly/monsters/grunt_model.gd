@@ -13,7 +13,7 @@ extends MonsterModel
 ## arm_r, leg_l, leg_r, weapon. head / tabard / arms / weapon hang under body (weapon under arm_r, in the
 ## fist); jaw under head; legs under the root.
 
-const MODEL_SCALE := 1.10
+const MODEL_SCALE := 1.20
 const PART_NAMES: Array[String] = ["body", "head", "jaw", "tabard", "arm_l", "arm_r", "leg_l", "leg_r", "weapon"]
 
 const BONE := Color(0.90, 0.85, 0.72)

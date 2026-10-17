@@ -1,7 +1,7 @@
 extends Node3D
 ## Visual lab for the four monster kinds on a flat hex patch under the iso camera.
-##   godot --path . -- --scene res://scenes/monster_preview.tscn [--shot <abs png>] [--windup] [--hurt]
-## --shot saves a screenshot after ~10 frames and quits; --windup freezes every
+##   godot --path . -- --scene res://scenes/monster_preview.tscn [--shot <abs png>] [--windup] [--hurt] [--proto]
+## --proto shows the old primitive bodies instead of the faceted models. --shot saves a screenshot after ~10 frames and quits; --windup freezes every
 ## monster in its attack telegraph; --hurt shows the HP bars.
 
 var _shot_path := ""
@@ -15,6 +15,7 @@ func _ready() -> void:
 		_shot_path = args[si + 1]
 	var windup := args.has("--windup")
 	var hurt := args.has("--hurt")
+	Monster.use_proto_visuals = args.has("--proto")
 
 	var map := HexMap.new()
 	for c in Hex.range_cells(Vector2i.ZERO, 7):
