@@ -10,7 +10,7 @@ extends Node
 ## [--menu-after s], --menu-say <text>.
 
 const GAME_SCRIPT := preload("res://scripts/app/game.gd")
-const TAGLINE := "Licensed contract sorcery. Speak clearly."
+const TAGLINE := "Licensed Budget Sorcery"
 
 signal screen_changed(screen_name: String)
 
