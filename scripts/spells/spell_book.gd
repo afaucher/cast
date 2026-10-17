@@ -2,7 +2,7 @@ class_name SpellBook
 extends RefCounted
 ## The spells: metadata for the UI/voice layer plus the static cast()
 ## entry point. Each spell also names its material "component" (see SpellComponents) and may be
-## "available": false while its gameplay is still to come (teeth). Power is in (0, 1] (voice confidence) and scales the effect.
+## "available": false while its gameplay is still to come (none right now). Power is in (0, 1] (voice confidence) and scales the effect.
 ## The spoken trigger word ("cast", "pickle"...) is configurable and only used
 ## for display: see incantation(). Cooldowns are NOT enforced here; Hero.try_cast owns them.
 
@@ -32,12 +32,12 @@ const SPELLS := {
 		"desc": "Neon tentacles burst from the floor where you aim and shove EVERYONE outward.", "word": "tentacles",
 		"component": "Neon ichor", "available": true,
 	},
-	# Designed, its gameplay comes later (docs/design/spells.md). The component, drops and data are
-	# here already; available = false keeps it out of the picker, the slots and SpellBook.cast.
+	# Too many teeth on everyone at the aim point, then a pop (scripts/spells/teeth.gd, docs/design/spells.md).
+	# "available": false would keep a spell out of the picker, the slots, the drop table and SpellBook.cast.
 	"teeth": {
 		"name": "Teeth", "cooldown": 12.0, "color": Color(0.96, 0.93, 0.8),
-		"desc": "Too many teeth sprout out of everyone at the aim point, then explode.", "word": "teeth",
-		"component": "Loose teeth", "available": false,
+		"desc": "Too many teeth sprout out of EVERYONE at the aim point, then explode. Duck.", "word": "teeth",
+		"component": "Loose teeth", "available": true,
 	},
 }
 
@@ -66,10 +66,20 @@ const TENTACLES_SHOVE_BASE := 2.5
 const TENTACLES_SHOVE_POWER := 1.5
 const TENTACLES_DAMAGE := 6.0     ## monsters only, times power
 
+# --- Teeth
+const TEETH_RADIUS_BASE := 2.0
+const TEETH_RADIUS_POWER := 0.6
+const TEETH_GROW_SLOW := 2.0       ## grow time at power ~0 (seconds)
+const TEETH_GROW_FAST := 1.0       ## grow time at power 1
+const TEETH_DAMAGE := 25.0         ## the carrier, times power
+const TEETH_SPLASH_DAMAGE := 10.0  ## everyone else near the carrier, times power
+const TEETH_SPLASH_RADIUS := 1.5
+const TEETH_SHOVE := 1.2           ## mild shove outward from the carrier
+
 const MIN_POWER := 0.05
 
 
-## The castable spell ids (what the picker offers). Unavailable spells (teeth) are left out.
+## The castable spell ids (what the picker offers). Unavailable spells are left out.
 static func ids() -> Array[String]:
 	var out: Array[String] = []
 	for k: String in SPELLS:
@@ -154,6 +164,8 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 			_cast_corn(caster, power, target)
 		"tentacles":
 			_cast_tentacles(caster, power, target)
+		"teeth":
+			Teeth.cast(caster, power, target)
 	return true
 
 
@@ -209,6 +221,8 @@ static func _cast_heal(caster: Actor, power: float, pos: Vector3) -> void:
 	var amount := heal_amount(power)
 	for a in GameWorld.actors_in_radius(pos, HEAL_RADIUS, caster.team):
 		var got := a.heal(amount)
+		if Teeth.cancel_on(a):   # the dentist: a heal pulls the teeth before they pop
+			Fx.number(a.global_position + Vector3(0, 3.0, 0), "DENTIST!", SpellBook.color_of("teeth"), 1.0)
 		if got > 0.5:
 			Fx.number(a.global_position + Vector3(0, 2.4, 0), "+%d" % int(roundf(got)), Fx.NUMBER_HEAL, 1.1)
 		var sparkle: Array[Color] = [Color(0.7, 1.0, 0.75), col]
@@ -340,3 +354,25 @@ static func _cast_tentacles(caster: Actor, power: float, target: Vector3) -> voi
 	t.source_team = caster.team
 	t.caster = caster
 	GameWorld.spawn(t, target)
+
+
+# --- Teeth ---------------------------------------------------------------------------------
+
+## Everyone (any team) within this of the aim point is afflicted.
+static func teeth_radius(power: float) -> float:
+	return TEETH_RADIUS_BASE + TEETH_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+## Seconds the teeth grow before the pop: 2.0 at the weakest, 1.0 at full power.
+static func teeth_grow_time(power: float) -> float:
+	return TEETH_GROW_SLOW - (TEETH_GROW_SLOW - TEETH_GROW_FAST) * clampf(power, MIN_POWER, 1.0)
+
+
+## Damage to the carrier at the pop.
+static func teeth_damage(power: float) -> float:
+	return TEETH_DAMAGE * clampf(power, MIN_POWER, 1.0)
+
+
+## Damage to everyone else near the carrier at the pop.
+static func teeth_splash_damage(power: float) -> float:
+	return TEETH_SPLASH_DAMAGE * clampf(power, MIN_POWER, 1.0)

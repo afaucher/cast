@@ -12,6 +12,7 @@ const SPELLS := {
 	"armor": {"label": "ARMOR", "color": Color(0.45, 0.65, 1.00)},
 	"corn": {"label": "CORN", "color": Color(1.00, 0.88, 0.30)},
 	"tentacles": {"label": "TENTACLES", "color": Color(0.70, 0.40, 0.95)},
+	"teeth": {"label": "TEETH", "color": Color(0.96, 0.93, 0.80)},
 }
 const GLOW_SECONDS := 1.6
 const C_BG := Color(0.07, 0.08, 0.16)
@@ -83,8 +84,11 @@ func _build_ui() -> void:
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(_hint)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	# Six cards in two rows of three (a single row would not fit beside the 400 px panel).
+	var row := GridContainer.new()
+	row.columns = 3
+	row.add_theme_constant_override("h_separation", 14)
+	row.add_theme_constant_override("v_separation", 14)
 	row.custom_minimum_size = Vector2(0, 190)
 	root.add_child(row)
 	for id in SPELLS:
@@ -148,8 +152,8 @@ func _make_card(id: String) -> Control:
 
 func _update_hint() -> void:
 	var t := caster.get_trigger_word().to_upper()
-	_hint.text = "Say \"%s HEAL\", \"%s FIREBALL\", \"%s ARMOR\", \"%s CORN\" or \"%s TENTACLES\".  Mode: %s.  Pick the trigger word and mode in the panel on the right (F1 hides it)." % [
-		t, t, t, t, t, caster.get_strictness()]
+	_hint.text = "Say \"%s HEAL\", \"%s FIREBALL\", \"%s ARMOR\", \"%s CORN\", \"%s TENTACLES\" or \"%s TEETH\".  Mode: %s.  Pick the trigger word and mode in the panel on the right (F1 hides it)." % [
+		t, t, t, t, t, t, caster.get_strictness()]
 
 
 func _on_cast(info: Dictionary) -> void:

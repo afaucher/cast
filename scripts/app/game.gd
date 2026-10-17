@@ -26,7 +26,9 @@ extends Node3D
 ##                       fires 1.3 s later), or Dagna (hammer) / Pebble (fist) steps up to them and swings once
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
-const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn", "tentacles"]
+## Every castable spell, straight from SpellBook (new spells need no change here).
+static func all_spells() -> PackedStringArray:
+	return PackedStringArray(SpellBook.ids())
 const PLAYER_COLOR := Color(0.3, 0.55, 0.95)
 const ROOM_BUDGET_BASE := 5
 const ROOM_BUDGET_PER_ROOM := 1
@@ -105,7 +107,7 @@ func _parse_args() -> void:
 	if _spells.is_empty() and opts.has("spells"):
 		for s in str(opts["spells"]).split(","):
 			var id := s.strip_edges()
-			if id in ALL_SPELLS and not _spells.has(id):
+			if id in all_spells() and not _spells.has(id):
 				_spells.append(id)
 
 
@@ -260,7 +262,7 @@ func _setup_voice() -> void:
 	_fit_hud_to_panel()
 	var ok := false
 	if not opts.get("no_mic", false):
-		ok = voice.start(ALL_SPELLS)
+		ok = voice.start(all_spells())
 	if voice.has_method("get_trigger_word"):
 		hud.set_trigger_word(voice.call("get_trigger_word"))
 	_log("voice: %s" % ("listening" if ok else "no mic/model - type with Enter"), Color(0.6, 0.9, 1.0))

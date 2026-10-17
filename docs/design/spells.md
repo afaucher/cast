@@ -10,8 +10,8 @@ and the aim snaps onto a teammate near the cursor. **[decided]** marks the user'
 | Fireball | cast fireball | A projectile that explodes at the aim point | monsters | in game |
 | Armor | cast armor | A zone at the aim point where heroes take less damage | heroes | in game |
 | Corn | cast corn | A corn bomb drops from the sky | **everyone** | in game |
-| Tentacles | cast tentacles | Neon-purple tentacles burst from the floor and shove everything outward | **everyone** (shove), monsters (a little damage) | being built |
-| Teeth | cast teeth | "Too many teeth" sprout out of everyone in the area, grow for 1–2 s, then explode | **everyone** | designed |
+| Tentacles | cast tentacles | Neon-purple tentacles burst from the floor and shove everything outward | **everyone** (shove), monsters (a little damage) | in game |
+| Teeth | cast teeth | "Too many teeth" sprout out of everyone in the area, grow for 1–2 s, then explode | **everyone** | in game |
 
 ## Teeth [decided: core idea]
 **"Cast teeth":** too many teeth sprout out of **anyone** in the area at the aim point, monsters and

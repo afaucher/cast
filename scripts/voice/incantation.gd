@@ -3,7 +3,7 @@ extends RefCounted
 ## Pure incantation parsing and power scoring. No audio, no engine nodes, so it
 ## is unit-testable: feed it speech-recognizer hypotheses and read back events.
 ##
-##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles"]))
+##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth"]))
 ##   inc.vocabulary()                       # words to give the recognizer as hotwords
 ##   for ev in inc.feed("cast heel", false, t): ...   # streaming partial (or final=true)
 ##   for ev in inc.tick(t): ...             # call regularly so a lone trigger can time out
@@ -77,6 +77,33 @@ extends RefCounted
 ## five; the risk is a fast, clipped voice ("tent-" lost, see rate +3) and the
 ## pause case above. If it measured badly (untested), "kraken" or "squid" are shorter
 ## but more confusable ("crack in", "squad"); "tentacle" alone is already accepted.
+##
+## TEETH (6th spell; one syllable, the shortest and on paper the riskiest word).
+## Measured with TTS (David + Zira, rates -3..+3, tests/test_voice_audio.gd plus a one-off
+## sweep of 48 clips): the model writes "TEETH" for every "cast teeth" clip. 14 of 14
+## (every rate, both voices) fire teeth at 1.00, ~0.8 to 1.0 s after the voice stops (partial
+## ladder "CAST CAST TE CAST TEETH"; TE/TEE do nothing). "okay/please cast teeth", "cast teeth
+## now" and "cast the teeth" cast (0.93 to 1.00); "cast ... teeth" with a 300/500/800 ms pause
+## casts at 1.00/0.97/0.76. "tooth" is also heard exactly (12 of 14 sweep clips, plus the alias below): the rate -1
+## David clip lost the trigger ("CA | TO TOOTH") and is simply missed; at rate +3 "cast tooth" is fused to
+## "CASTOOTH", which the compound split reads as cast + "ooth" (alias 0.75, the ONLY alias).
+## The look-alikes are heard as themselves and are deliberately NOT aliased, because "cast these"
+## and "cast tea" are ordinary phrases and a miss is cheaper than a false cast: "these" is "THE SE"
+## (alone) or "CAST THESE" (fizzles, "unknown_spell"); "tea" is "TWO"/"T"/"TEA"/"TIT"; "tease",
+## "tees", "teen" are "TEAS"/"TIES"/"TEES"/"CASTING"; "teach me" is "TEACH ME" ("cast teach" is
+## "garbled", a fizzle). None casts in any strictness. Chatter that really says it ("nice teeth",
+## "brush your teeth") is heard as "TEETH" and only casts in chaos (0.90 to 0.95, flagged accidental);
+## loose needs the trigger, and teeth is not a mention word (only corn is). The hotword did not create
+## phantoms: idle noise through the model with the gate OFF gave 0 utterances, digital silence gave the
+## same "HE"/"AND" as before (no TEETH), and the gate leaves 0 either way (tests/test_voice_noise.gd).
+## Spell confusion holds both ways (16 of 16 deliberate teeth clips fire teeth and nothing else, and
+## no other clip fires it; same for tentacles). ASR RISK: it is short, so a hurried or mumbled
+## "cast teeth" in a noisy room is the likeliest to lose its front ("TE" and a vowel) or to meet a
+## trigger it fuses with ("summon teeth" is heard as one word, "SEVENTEENTH", every time, so that pairing
+## is left out of the trigger clips; "abracadabra" is hopeless anyway).
+## If it measured badly on real mics: "cast fangs" (also one syllable, but "fans"/"fines"), "cast
+## molar" or "cast dentist" (long and distinctive, the best bet) are the alternatives; "tooth" is
+## already accepted.
 ##
 ## POWER = cast_q * spell_q * gap_factor * (1 - extras), in (0, 1]:
 ##   cast_q, spell_q  quality of the matched words (tables below; 1.0 exact or
@@ -196,6 +223,11 @@ const TUNING := {
 			"tentacles": 1.0, "tentacle": 1.0,
 			"headacles": 0.8, "headacle": 0.75, "headagle": 0.75, "acles": 0.75,
 		},
+		# The exact words plus the one measured mishearing, below the 0.85 bare floor (see the TEETH note in the header).
+		"teeth": {
+			"teeth": 1.0, "tooth": 1.0,
+			"ooth": 0.75,
+		},
 	},
 }
 
@@ -225,7 +257,7 @@ var _last_fire: Dictionary = {}
 var _last_final_t := -1e9
 
 
-func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles"]), overrides: Dictionary = {}) -> void:
+func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth"]), overrides: Dictionary = {}) -> void:
 	_cfg = TUNING.duplicate(true)
 	for k in overrides:
 		_cfg[k] = overrides[k]

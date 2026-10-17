@@ -80,7 +80,7 @@ function Same([string]$group, [string]$text, [string]$expect, [double]$minPower,
     Add-Clip $group $text $expect $expect $expect $minPower $voice $rate
 }
 
-$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles" }
+$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth" }
 
 # Clean casts, both voices, normal pace: must fire at >= 0.9 in every mode.
 foreach ($v in @($v1, $v2)) {
@@ -97,6 +97,9 @@ foreach ($r in @(-3, 3)) {
 # ("headacles"/"headagle" are measured mishearings at rate +3, see Incantation).
 foreach ($r in @(-3, 3)) { Same "rate" "cast tentacles" "tentacles" 0.8 $v2 $r }
 Same "rate" "cast tentacle" "tentacles" 0.7 $v1 3
+# teeth (one syllable, the riskiest word): the pace extremes in the other voice too, and the singular.
+foreach ($r in @(-3, 3)) { Same "rate" "cast teeth" "teeth" 0.7 $v2 $r }
+Same "rate" "cast tooth" "teeth" 0.7 $v1 3
 # Sloppy but intended: preamble, suffix, mispronunciations, spelling variants.
 Same "sloppy" "okay cast heal"            "heal"     0.8 $v1 0
 Same "sloppy" "cast fireball now"         "fireball" 0.8 $v2 0
@@ -117,11 +120,21 @@ Same "sloppy" "cast tentacle"             "tentacles" 0.8 $v1 0
 Same "sloppy" "cast tentacle"             "tentacles" 0.8 $v2 0
 Same "sloppy" "please cast tentacles"     "tentacles" 0.8 $v2 0
 Same "sloppy" "cast tentacles now"        "tentacles" 0.8 $v1 0
+# teeth: preamble, suffix, singular, the other voice.
+Same "sloppy" "okay cast teeth"            "teeth" 0.8 $v1 0
+Same "sloppy" "okay cast teeth"            "teeth" 0.8 $v2 0
+Same "sloppy" "please cast teeth"          "teeth" 0.8 $v2 0
+Same "sloppy" "cast teeth now"             "teeth" 0.8 $v1 0
+Same "sloppy" "cast tooth"                 "teeth" 0.8 $v1 0
+Same "sloppy" "cast tooth"                 "teeth" 0.8 $v2 0
 # Hesitation between the keyword and the spell word.
 Same "hesitate" "cast <b300> heal"                    "heal"     0.8 $v1 0
 Same "hesitate" "cast <b300> tentacles"               "tentacles" 0.6 $v1 0
 Same "hesitate" "cast <b500> tentacles"               "tentacles" 0.8 $v2 0
 Same "hesitate" "cast <b800> tentacles"               "tentacles" 0.6 $v1 0
+Same "hesitate" "cast <b300> teeth"                   "teeth" 0.6 $v1 0
+Same "hesitate" "cast <b500> teeth"                   "teeth" 0.6 $v2 0
+Same "hesitate" "cast <b800> teeth"                   "teeth" 0.5 $v1 0
 Same "hesitate" "cast <b700> fireball"                "any"      0.3 $v1 0
 Same "hesitate" "cast <b400> uh <b400> heal"          "heal"     0.5 $v2 0
 Same "hesitate" "cast <b1200> armor"                  "any"      0.4 $v2 0
@@ -148,6 +161,17 @@ Add-Clip "negative" "did you cast fireball"          "none" "fireball" "fireball
 foreach ($t in @("hello", "let's go left", "pop", "of course", "behind you", "castle", "cast away", "the cast of the show", "I cast my vote",
         "attack", "ten tickets", "testicles", "I can't tackle this")) {
     Add-Clip "negative" $t "none" "none" "none" 0.0 $v1 0
+}
+# Teeth: the words it can be mistaken for, and chatter that really says it. "cast these" / "cast tea" are
+# the dangerous ones: the trigger plus a one-syllable "tee" sound. Nothing may cast in any mode, except
+# that chaos (any spell word anywhere) fires on the real word in "nice teeth" / "brush your teeth".
+foreach ($v in @($v1, $v2)) {
+    foreach ($t in @("these", "tea", "teach me", "tease", "cast these", "cast tea", "cast teach me")) {
+        Add-Clip "negative" $t "none" "none" "none" 0.0 $v 0
+    }
+    foreach ($t in @("nice teeth", "brush your teeth")) {
+        Add-Clip "negative" $t "none" "none" "teeth" 0.4 $v 0
+    }
 }
 # Tentacle sound-alikes in the other voice too (a different recognizer error profile).
 foreach ($t in @("attack", "ten tickets", "testicles", "I can't tackle this")) {
@@ -182,7 +206,12 @@ function Add-Trig([string]$trigger, [string]$kind, [string]$spell, [string]$voic
     $trows.Add(("{0},{1},{2},{3},{4},""{5}""" -f $name, $trigger, $kind, $spell, $voice, $text))
 }
 foreach ($t in $Triggers) {
-    foreach ($id in $spells.Keys) { Add-Trig $t "pos" $id $v1 "$t $($spells[$id])" }
+    foreach ($id in $spells.Keys) {
+        # "summon teeth" is heard as one word, SEVENTEENTH, every time (measured): a known bad pairing that
+        # would eat the trigger's whole miss budget. It is noted in the Incantation header instead.
+        if ($t -eq "summon" -and $id -eq "teeth") { continue }
+        Add-Trig $t "pos" $id $v1 "$t $($spells[$id])"
+    }
     Add-Trig $t "pos" "heal" $v2 "$t heal"
     Add-Trig $t "pos" "fireball" $v2 "$t fireball"
     Add-Trig $t "neg" "none" $v1 $t

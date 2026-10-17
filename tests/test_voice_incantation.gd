@@ -3,7 +3,7 @@ extends TestCase
 ## strictness modes, trigger words, the accidental label, settings and the
 ## VoiceCaster typed path. No audio and no model needed.
 
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth"]
 const TMP_SETTINGS := "user://test_voice_settings.cfg"
 const TMP_LOG := "user://test_voice_log.csv"
 
@@ -49,6 +49,7 @@ func setup() -> void:
 	_test_triggers()
 	_test_explain()
 	_test_tentacles()
+	_test_teeth()
 	_test_panel_cards()
 	_test_misc()
 	_test_settings()
@@ -345,7 +346,7 @@ func _test_triggers() -> void:
 
 func _test_explain() -> void:
 	var ex := _inc().explain("CAST HEEL")
-	eq(ex.size(), 6, "trigger + five spells")
+	eq(ex.size(), 7, "trigger + six spells")
 	eq(ex[0]["word"], "cast", "first is the trigger")
 	eq(ex[0]["kind"], "exact", "cast exact")
 	eq(ex[1]["kind"], "homophone", "heel is a homophone of heal")
@@ -421,13 +422,85 @@ func _test_tentacles() -> void:
 	eq(_inc().explain("CAST TENTACLES")[5]["kind"], "exact", "card kind exact")
 	eq(_inc().explain("CAST TENTACLE")[5]["kind"], "homophone", "tentacle is a homophone card")
 	eq(_inc().explain("CAST HEADACLES")[5]["kind"], "sound_alike", "headacles is a sound-alike card")
-	# The caster's own default list has all five.
-	eq(VoiceCaster.DEFAULT_SPELLS.size(), 5, "five default spells")
+	# The caster's own default list has all six.
+	eq(VoiceCaster.DEFAULT_SPELLS.size(), 6, "six default spells")
 	check(VoiceCaster.DEFAULT_SPELLS.has("tentacles"), "VoiceCaster default spells include tentacles")
 	check(not VoiceSettings.validate_trigger("tentacles")["ok"], "tentacles cannot be the trigger word")
 
 
-## Six cards (trigger + five spells) in a 3-column grid: two full rows, and a long
+## TEETH: one syllable, the riskiest spell word. Measured with TTS through the real model (see the
+## Incantation header and tests/test_voice_audio.gd): it writes "TEETH"/"TOOTH" for every clip, so
+## there are no sound-alike aliases except the one fused "CASTOOTH" at the fastest rate, and the
+## look-alikes ("these", "tea", "tease", "teach") must never cast.
+func _test_teeth() -> void:
+	for text in ["cast teeth", "cast tooth", "castTEETH", "CAST TOOTH", "okay cast teeth", "cast the teeth", "cast teeth teeth"]:
+		var c := _say(text)
+		eq(c.size(), 1, "teeth form: " + text)
+		if c.size() == 1:
+			eq(c[0]["spell"], "teeth", text)
+			check(c[0]["power"] >= 0.9, "teeth form is near full power: %s %s" % [text, c[0]["power"]])
+			check(not c[0]["accidental"], "deliberate: " + text)
+	# Streaming: TE/TEE do nothing, the word fires on the first partial that holds it, once.
+	var inc := _inc()
+	eq(_casts(inc.feed("CAST", false, 1.0)).size(), 0, "cast alone waits")
+	eq(_casts(inc.feed("CAST TE", false, 1.3)).size(), 0, "te is not the spell")
+	eq(_casts(inc.feed("CAST TEE", false, 1.5)).size(), 0, "tee is not the spell")
+	eq(_casts(inc.feed("CAST TEETH", false, 1.8)).size(), 1, "fires on the partial")
+	eq(_casts(inc.feed("CAST TEETH", true, 2.1)).size(), 0, "and not again on the final")
+	# The measured partial ladder ("CAST CAST TE CAST TEETH [CAST TEETH]") is one cast.
+	var ladder := _run(_inc(), [[1.0, "CAST", false], [1.3, "CAST TE", false], [1.6, "CAST TEETH", false], [1.9, "CAST TEETH", true]])
+	eq(_casts(ladder).size(), 1, "the real partial ladder casts once")
+	# The one measured mishearing: the fastest "tooth" is fused to "CASTOOTH" (alias "ooth", 0.75).
+	var fused := _say("castooth")
+	eq(fused.size(), 1, "fused castooth casts")
+	if fused.size() == 1:
+		eq(fused[0]["spell"], "teeth", "castooth is teeth")
+		near(fused[0]["power"], 0.75, 0.001, "alias quality")
+	# Never a mention word, bare or buried in chatter does nothing in strict/loose.
+	for text in ["teeth", "tooth", "ooth", "nice teeth", "brush your teeth", "my teeth hurt", "the tooth fairy"]:
+		eq(_say(text).size(), 0, "loose: bare does nothing: " + text)
+		eq(_say(text, {"strictness": "strict"}).size(), 0, "strict: bare does nothing: " + text)
+	# Chaos: the exact word anywhere casts (like every spell), the weak alias never does bare.
+	eq(_say("nice teeth", {"strictness": "chaos"}).size(), 1, "chaos: teeth anywhere")
+	eq(_say("brush your teeth", {"strictness": "chaos"}).size(), 1, "chaos: teeth anywhere")
+	eq(_say("ooth", {"strictness": "chaos"}).size(), 0, "chaos: the weak alias does not fire bare")
+	# The look-alikes, as the model writes them (measured: "cast these" -> THESE, "cast tea" -> TEA/TIT/T,
+	# "cast tease" -> TIES, "cast teach" -> TEACH), must not cast in any mode. Deliberately NOT aliased.
+	for text in ["cast these", "cast tea", "cast tit", "cast tease", "cast ties", "cast tees", "cast tee", "cast teach", "cast teach me",
+			"cast teen", "cast t", "cast tea tea", "cast teeth's", "cast tenth", "cast teethe", "these", "tea", "teach me", "tease", "ties"]:
+		eq(_say(text).size(), 0, "loose: no cast: " + text)
+		eq(_say(text, {"strictness": "chaos"}).size(), 0, "chaos: no cast: " + text)
+		eq(_say(text, {"strictness": "strict"}).size(), 0, "strict: no cast: " + text)
+	# "cast these" fizzles (the player is told), it does not stay silent or cast something else.
+	var these := _run(_inc(), [[1.0, "CAST THESE", true]])
+	eq(_casts(these).size(), 0, "cast these casts nothing")
+	eq(_fizzles(these).size(), 1, "cast these fizzles")
+	# No confusion with the other spells, both directions.
+	for sp in SPELLS:
+		var c := _say("cast " + sp)
+		eq(c.size(), 1, "one spell for cast " + sp)
+		if c.size() == 1:
+			eq(c[0]["spell"], sp, "cast %s fires %s" % [sp, sp])
+	for text in ["cast teeth", "cast tooth", "cast ooth"]:
+		for c in _say(text):
+			eq(c["spell"], "teeth", "only teeth: " + text)
+	for text in ["cast tentacles", "cast heal", "cast corn", "cast armor", "cast fireball", "cast tenth"]:
+		for c in _say(text):
+			check(c["spell"] != "teeth", "never teeth: " + text)
+	# Not a hair-trigger: only corn is a mention spell.
+	var mentions: Array = Incantation.TUNING["mention_spells"]
+	check(not mentions.has("teeth"), "teeth is not a mention spell")
+	# Vocabulary, explain cards and the caster's own default list.
+	check(_inc().vocabulary().has("teeth"), "vocab has teeth")
+	eq(_inc().explain("CAST TEETH")[6]["kind"], "exact", "card kind exact")
+	eq(_inc().explain("CAST TOOTH")[6]["kind"], "homophone", "tooth is a homophone card")
+	eq(_inc().explain("CAST OOTH")[6]["kind"], "sound_alike", "ooth is a sound-alike card")
+	eq(_inc().explain("CAST THESE")[6]["kind"], "", "these is not a teeth card")
+	check(VoiceCaster.DEFAULT_SPELLS.has("teeth"), "VoiceCaster default spells include teeth")
+	check(not VoiceSettings.validate_trigger("teeth")["ok"], "teeth cannot be the trigger word")
+
+
+## Seven cards (trigger + six spells) in a 3-column grid: three rows, and a long
 ## "sound-alike 'headacles'" caption must not push the grid past the 400 px panel.
 func _test_panel_cards() -> void:
 	var caster := VoiceCaster.new()
@@ -441,13 +514,13 @@ func _test_panel_cards() -> void:
 	panel.toggle_with_f1 = false
 	add_child(panel)
 	panel.attach(caster)
-	eq(panel._cards.size(), 6, "panel has trigger + five spell cards")
+	eq(panel._cards.size(), 7, "panel has trigger + six spell cards")
 	eq(panel._card_grid.columns, 3, "three columns")
-	eq(int(ceil(float(panel._cards.size()) / float(panel._card_grid.columns))), 2, "two rows")
+	eq(int(ceil(float(panel._cards.size()) / float(panel._card_grid.columns))), 3, "three rows")
 	var names: Array = []
 	for c in panel._cards:
 		names.append(str(c["word"]))
-	check(names.has("tentacles"), "a tentacles card exists: %s" % str(names))
+	check(names.has("tentacles") and names.has("teeth"), "tentacles and teeth cards exist: %s" % str(names))
 	for i in panel._cards.size():
 		panel._set_card(i, "sound_alike", "headacles tentacles tentacle", 0.7)
 		(panel._cards[i]["power"] as Label).text = "ACCIDENTAL 100%"

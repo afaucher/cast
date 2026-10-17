@@ -64,7 +64,7 @@ func _test_data_and_input() -> void:
 	near(SpellComponents.READIED_POWER, 0.8, 0.0001, "E power")
 	for a in ["cast_slot_1", "cast_slot_2", "cast_slot_3", "cast_slot_4", "cast_readied", "swap_pickup"]:
 		check(InputMap.has_action(a), "input action " + a)
-	# Every castable spell names a component; teeth keeps its data but is not available yet.
+	# Every castable spell names a component (teeth included since its gameplay landed).
 	for id in SpellBook.ids():
 		check(SpellBook.component_name(id) != "", "component for " + id)
 	eq(SpellBook.component_name("heal"), "Grave moss")
@@ -73,9 +73,10 @@ func _test_data_and_input() -> void:
 	eq(SpellBook.component_name("corn"), "Corn kernel")
 	eq(SpellBook.component_name("tentacles"), "Neon ichor")
 	eq(SpellBook.component_name("teeth"), "Loose teeth")
-	check(SpellBook.has_spell("teeth") and not SpellBook.is_available("teeth"), "teeth exists, unavailable")
-	check(not SpellBook.ids().has("teeth"), "teeth is not offered by the picker")
-	check(SpellBook.ids().size() == 5, "five castable spells")
+	check(SpellBook.has_spell("teeth") and SpellBook.is_available("teeth"), "teeth exists and is available")
+	check(SpellBook.ids().has("teeth"), "teeth is offered by the picker")
+	check(SpellBook.ids().size() == 6, "six castable spells")
+	eq(SpellBook.all_ids().size(), SpellBook.ids().size(), "no unavailable spells are left")
 
 
 func _test_slots_and_casting() -> void:
@@ -124,11 +125,10 @@ func _test_slots_and_casting() -> void:
 	# Recast refused on cooldown; no charge spent.
 	check(not pc.cast_spell("fireball", 1.0), "cooldown blocks")
 	eq(h.charges_of("fireball"), 4, "a refused cast spends nothing")
-	# A spell that is not slotted is refused; so is unavailable teeth.
+	# A spell that is not slotted is refused (teeth included: it has to be slotted first).
 	check(not pc.cast_spell("corn", 1.0), "corn is not slotted")
 	check(not pc.cast_spell("teeth", 1.0), "teeth is not slotted")
-	check(not h.slot_in("teeth", 3), "teeth cannot be slotted until its gameplay lands")
-	check(not SpellBook.cast("teeth", h, 1.0, Vector3.ZERO), "teeth does not cast")
+	check(not SpellBook.cast("nonsense", h, 1.0, Vector3.ZERO), "an unknown spell does not cast")
 
 	# The held boost really shortens the wait: run the clock.
 	await frames(int(5.05 * 60.0))
@@ -232,8 +232,8 @@ func _test_pickups() -> void:
 	eq(collected.back(), ["corn", 3, "filled"])
 	eq(h.held_slot, 0, "the held slot did not move")
 
-	# Teeth is unavailable: a teeth pickup is never collected (and never fills a slot).
-	check(h.component_outcome("teeth") == "none", "teeth has no outcome")
+	# Teeth is a real spell now: with every slot full a teeth pickup waits for an F swap.
+	check(h.component_outcome("teeth") == "swap", "a teeth pickup is a swap candidate with full slots")
 	h.queue_free()
 	_clear_pickups()
 	await frames(2)
@@ -339,13 +339,13 @@ func _test_drop_table() -> void:
 		near(float(tally[kind].get("corn", 0)) / n, 0.05, 0.02, kind + " corn 5%")
 	check(not tally["brute"].has("teeth") and not tally["archer"].has("tentacles"), "kinds only drop their own components")
 
-	# Unavailable spells are skipped by default (teeth cannot be slotted yet).
+	# Teeth is available, so grunts really drop it by default (an unavailable spell would be skipped).
 	rng.seed = 99
 	var teeth_seen := 0
 	for i in n:
 		if SpellComponents.roll_drops("grunt", rng).has("teeth"):
 			teeth_seen += 1
-	eq(teeth_seen, 0, "no teeth pickups while teeth is unavailable")
+	near(float(teeth_seen) / n, 0.35, 0.04, "grunts drop teeth ~35% by default")
 
 	# Deterministic with a seeded rng.
 	var a := RandomNumberGenerator.new()
