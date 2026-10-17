@@ -4,8 +4,8 @@
 #   .\test_runner.ps1 -TestAll                 # every tests\test_*.gd, in parallel
 #   .\test_runner.ps1 -TestAll -NoImport       # skip the import pass
 #
-# Logs: test_logs\<name>.log / .err.log. A test passes only with exit code 0
-# AND the ">>> [TEST PASSED] <name> <<<" marker.
+# Logs: test_logs\<name>.log / .err.log. A test passes only with exit code 0,
+# the ">>> [TEST PASSED] <name> <<<" marker, AND no "SCRIPT ERROR" in its output.
 param(
     [string]$TestName = "",
     [switch]$TestAll,
@@ -42,7 +42,10 @@ function Finish-Test($r) {
     $out = $r.Out.Result; $err = $r.Err.Result
     Set-Content -Path "$logDir\$($r.Name).log" -Value $out
     Set-Content -Path "$logDir\$($r.Name).err.log" -Value $err
-    $ok = ($r.Proc.ExitCode -eq 0) -and ($out -match [regex]::Escape(">>> [TEST PASSED] $($r.Name) <<<"))
+    # A script error inside a coroutine aborts the test silently but can still end in a
+    # PASS marker, so any SCRIPT ERROR in the output fails the test too.
+    $scriptErr = ($out + "`n" + $err) -match "SCRIPT ERROR"
+    $ok = ($r.Proc.ExitCode -eq 0) -and ($out -match [regex]::Escape(">>> [TEST PASSED] $($r.Name) <<<")) -and (-not $scriptErr)
     $secs = $r.Watch.Elapsed.TotalSeconds.ToString("F1")
     if ($ok) { Write-Host "  PASS  $($r.Name)  ($secs s)" -ForegroundColor Green }
     else {
