@@ -275,5 +275,5 @@ anyone outside the team plays. **P2** = later.
 
 ## 15. Spell slots and components
 
-- **P1** Four slots, readied spell (keys 1-4, E casts). The readied spell recharges 5% faster (a passive boost) and is shown as its component held in the hero's hand. See `spells-and-components.md`.
+- **P1** Four slots, readied spell (keys 1-4, E casts). The readied spell recharges 15% faster (a passive boost) and is shown as its component held in the hero's hand. See `spells-and-components.md`.
 - **P1** Material components: monster drop tables, walk-over pickups, charges, swapping.

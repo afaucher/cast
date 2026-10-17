@@ -21,9 +21,9 @@ Selecting a slot is not an active mechanic. It's a **passive boost** to that one
 hero **holding its material component in hand** (a glowing ember for fireball, a cob for corn, a
 coil of neon ichor for tentacles).
 
-- **The boost [decided]:** while readied, the spell can be cast **5% more often**: its cooldown is
-  divided by 1.05, about 4.8% shorter. It applies to casts by voice or with E. The boost is small on
-  purpose; it nudges priorities rather than dominating them.
+- **The boost [decided]:** while readied, the spell can be cast **15% more often**: its cooldown is
+  divided by 1.15, about 13% shorter. It applies to casts by voice or with E. It's noticeable but
+  not dominant: it nudges priorities rather than dictating them.
 - **Choosing what to hold** is the "what do I want to prioritize right now?" decision. It's quiet
   and strategic, not a reflex.
 - **Teammates can read it** from the component in your hand, which gives co-op awareness for free.
@@ -64,13 +64,13 @@ Ideas that were set aside, as too active or too much UI:
 2. Is a swap screen acceptable, or must swaps happen in-world (walk over a component = auto-slot
    into the readied slot)? The in-world version needs no menus, which suits the no-mid-play-keys
    preference.
-3. ~~What should the passive boost be?~~ Decided: 5% more frequent casts (a shorter cooldown).
+3. ~~What should the passive boost be?~~ Decided: 15% more frequent casts (a shorter cooldown).
 4. How many distinct spells for the vertical slice: 6–8?
 
 ## Impact on the POC code (for whoever builds it)
 - `Hero.spell_slots` grows to 4; add `readied_slot` and per-spell `charges`.
 - `PlayerController`: keys 1–4 select, `E` casts the readied spell; key casting moves from 1/2 to E.
-- `Hero.try_cast`: when the cast spell is the readied one, set its cooldown to `cooldown / 1.05`.
+- `Hero.try_cast`: when the cast spell is the readied one, set its cooldown to `cooldown / 1.15`.
 - Hero models: a hand attachment point that shows the held component (`LowPolyModel`).
 - `MonsterFactory`/`Monster`: drop table on death, and a pickup actor that auto-collects on walk-over.
 - HUD: 4 cards, readied highlight, charges count.
