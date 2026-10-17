@@ -67,9 +67,9 @@ func _test_data_and_input() -> void:
 	eq(SpellComponents.PICKUP_CHARGES, 3, "pickup charges")
 	eq(SpellComponents.MAX_CHARGES, 9, "cap")
 	near(SpellComponents.HELD_COOLDOWN_DIV, 1.15, 0.0001, "held boost")
-	near(SpellComponents.READIED_POWER, 0.8, 0.0001, "E power")
-	for a in ["cast_slot_1", "cast_slot_2", "cast_slot_3", "cast_slot_4", "cast_readied", "swap_pickup"]:
+	for a in ["cast_slot_1", "cast_slot_2", "cast_slot_3", "cast_slot_4", "use", "swap_pickup"]:
 		check(InputMap.has_action(a), "input action " + a)
+	check(not InputMap.has_action("cast_readied"), "E no longer has a cast action")
 	# Every castable spell names a component (teeth included since its gameplay landed).
 	for id in SpellBook.ids():
 		check(SpellBook.component_name(id) != "", "component for " + id)
@@ -113,11 +113,17 @@ func _test_slots_and_casting() -> void:
 	near(h.cooldown_total("heal"), 8.0 / 1.15, 0.0001, "held cooldown total")
 	near(h.cooldown_total("fireball"), 5.0, 0.0001, "non-held cooldown total")
 
-	# E casts the held spell at power 0.8.
-	check(pc.cast_readied(), "E casts the held spell")
+	# E (use) never casts: nothing to use here, so it does nothing, spends no charge and no cooldown.
+	check(not pc.press_use(), "E with nothing to use does nothing")
+	eq(casts.size(), 0, "E did not cast")
+	eq(h.charges_of("heal"), 5, "E spent no charge")
+	near(h.cooldown_left("heal"), 0.0, 0.0001, "E spent no cooldown")
+
+	# A voice cast of the held spell applies the shorter held cooldown.
+	check(pc.cast_spell("heal", 0.8), "voice casts the held spell")
 	eq(casts.size(), 1)
 	eq(casts[0][0], "heal")
-	near(float(casts[0][1]), 0.8, 0.0001, "E power is 0.8")
+	near(float(casts[0][1]), 0.8, 0.0001, "voice power passes through")
 	near(h.cooldown_left("heal"), 8.0 / 1.15, 0.001, "held spell cooldown is /1.15")
 	eq(h.charges_of("heal"), 4, "a cast spends one charge")
 
@@ -158,8 +164,11 @@ func _test_slots_and_casting() -> void:
 	near(h.cooldown_left("fireball"), 0.0, 0.0001, "still no cooldown")
 	eq(casts.size(), 2, "no cast went off")
 	h.select_slot(1)
-	check(not pc.cast_readied(), "E on an empty held spell fizzles too")
-	eq(hud._toast.text, "Out of Ember horn")
+	hud.show_message("marker", Hud.COLOR_NEUTRAL)
+	check(not pc.press_use(), "E on an empty held spell does nothing")
+	eq(hud._toast.text, "marker", "E shows no toast, not even a nothing-readied hint")
+	eq(casts.size(), 2, "E did not cast")
+	near(h.cooldown_left("fireball"), 0.0, 0.0001, "E spent no cooldown")
 	hud.queue_free()
 	pc.hud = null
 	h.select_slot(0)
@@ -171,7 +180,7 @@ func _test_slots_and_casting() -> void:
 	await frames(int(7.2 * 60.0))
 	check(not pc.cast_spell("heal", 1.0), "and then it is out")
 
-	# The keyboard path: E (cast_readied) and the number keys go through the controller.
+	# The keyboard path: E (use) and the number keys go through the controller.
 	h.set_charges("heal", 5)
 	h.set_charges("fireball", 5)
 	casts.clear()
@@ -180,13 +189,12 @@ func _test_slots_and_casting() -> void:
 	Input.action_release("cast_slot_2")
 	eq(h.held_spell(), "fireball", "key 2 readies slot 2")
 	await frames(2)
-	Input.action_press("cast_readied")
+	Input.action_press("use")
 	await frames(2)
-	Input.action_release("cast_readied")
-	eq(casts.size(), 1, "E key casts once")
-	if casts.size() > 0:
-		eq(casts[0][0], "fireball")
-		near(float(casts[0][1]), 0.8, 0.0001)
+	Input.action_release("use")
+	eq(casts.size(), 0, "the E key never casts")
+	eq(h.charges_of("fireball"), 5, "the E key spends no charge")
+	near(h.cooldown_left("fireball"), 0.0, 0.0001, "the E key spends no cooldown")
 	Input.action_press("cast_slot_4")   # empty: nothing changes
 	await frames(2)
 	Input.action_release("cast_slot_4")

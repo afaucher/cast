@@ -41,7 +41,7 @@ const JOIN_RANGE := 2.0            ## a hero this close becomes the leader
 ## cowering or waiting employee recruits them, E near your follower dismisses them. False would bring back
 ## latching on by proximity for never-dismissed employees (and E would only dismiss and recall).
 const JOIN_NEEDS_E := true
-const WAIT_RANGE := 2.2            ## E tells YOUR follower to wait from this far (kept tight so E near a trailing follower is not hijacked from casting)
+const WAIT_RANGE := 2.2            ## E tells YOUR follower to wait from this far (kept tight so E only reaches an employee who is actually beside the hero)
 const RECALL_RANGE := 2.2          ## E recruits a waiting (or, with JOIN_NEEDS_E, a cowering) employee from this far
 const WAIT_SLACK := 0.9            ## a waiting employee strays this far from its spot before walking back
 const WAIT_ARRIVED := 0.35
@@ -317,7 +317,7 @@ static func interact_prompt(hero: Actor) -> String:
 	return ("E: tell %s to wait" if e.can_wait(hero) else "E: bring %s") % e.display_name
 
 
-## The E press: dismiss or recruit the nearest employee. True when it was used (the press does not cast).
+## The E press: dismiss or recruit the nearest employee. True when it was used.
 static func interact(hero: Actor) -> bool:
 	var e := interact_target(hero)
 	if e == null:

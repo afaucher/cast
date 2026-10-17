@@ -4,10 +4,10 @@ extends Node
 ## WASD moves relative to the iso camera, the mouse aims via a camera ray onto
 ## the terrain, LMB = melee (the hero's primary), RMB = the secondary (bolt / bowl / spin; Wick's arrow:
 ## tap to shoot, hold to draw a piercing shot and release), keys 1-4 = ready (hold) a spell slot,
-## E = use the elevator when standing at it, else tell your employee to wait / bring a waiting one (Employee.interact),
-## else cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
-## the pickup underfoot into the held slot. aim_point() is also what voice casts aim at;
-## cast_spell() is the single entry for voice and E (charges, cooldown, toasts).
+## E = use: the elevator when standing at it, else tell your employee to wait / bring a waiting one
+## (Employee.interact), else nothing. E never casts. F = swap the pickup underfoot into the held slot.
+## aim_point() is also what voice casts aim at; cast_spell() is the single entry for voice and the typed
+## console (charges, cooldown, toasts).
 
 const DEFAULT_YAW_DEG := 45.0   ## iso yaw used when there is no camera (tests)
 const GROUND_REFINE_STEPS := 3
@@ -19,7 +19,7 @@ var hud: Hud = null             ## optional: receives cast / cooldown toasts
 var enabled := true
 var aim_override := Vector3.INF ## scripted aim (autocast, tests); INF = use the mouse
 ## Context action on E: called with no arguments when E is pressed, it returns true when it used the
-## press (the game opens the elevator when the hero stands at it). A used press does NOT cast.
+## press (the game opens the elevator when the hero stands at it).
 var interact: Callable = Callable()
 
 
@@ -75,13 +75,13 @@ func _physics_process(delta: float) -> void:
 			hero.shoot(to)
 
 
-## Keys 1-4 (ready a slot), E (cast the readied spell) and F (swap a pickup in).
+## Keys 1-4 (ready a slot), E (use) and F (swap a pickup in).
 func _slot_keys() -> void:
 	for i in SpellComponents.SLOT_COUNT:
 		if Input.is_action_just_pressed("cast_slot_%d" % (i + 1)):
 			select_slot(i)
-	if Input.is_action_just_pressed("cast_readied"):
-		press_readied()
+	if Input.is_action_just_pressed("use"):
+		press_use()
 	if Input.is_action_just_pressed("swap_pickup"):
 		swap_pickup()
 
@@ -98,26 +98,14 @@ func select_slot(i: int) -> bool:
 
 
 ## The E key, in priority order: the context action (the elevator, when the hero stands at it), then an
-## employee next to the hero (dismiss the one following them, or recruit a waiting one), else cast_readied().
-## One press does one thing, never more.
-func press_readied() -> bool:
+## employee next to the hero (dismiss the one following them, or recruit a waiting one), else nothing (false).
+## One press does one thing, never more, and never casts: spells are cast by voice or the typed console.
+func press_use() -> bool:
 	if interact.is_valid() and bool(interact.call()):
 		return true
 	if hero != null and not hero.dead and Employee.interact(hero):
 		return true
-	return cast_readied()
-
-
-## E: cast the held spell at the aim point with the fixed readied power.
-func cast_readied() -> bool:
-	if hero == null or hero.dead:
-		return false
-	var id := hero.held_spell()
-	if id == "":
-		if hud:
-			hud.show_message("Nothing readied", Hud.COLOR_NEUTRAL)
-		return false
-	return cast_spell(id, SpellComponents.READIED_POWER)
+	return false
 
 
 ## F: swap the pickup the hero stands next to into the held slot.
@@ -127,7 +115,7 @@ func swap_pickup() -> bool:
 	return hero.swap_in_pickup()
 
 
-## Cast from voice or E. Handles the toasts: unknown spell, out of components (no cooldown spent),
+## Cast from voice or the typed console. Handles the toasts: unknown spell, out of components (no cooldown spent),
 ## cooldown, success.
 func cast_spell(id: String, power: float) -> bool:
 	if hero == null or hero.dead:

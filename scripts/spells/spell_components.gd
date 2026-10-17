@@ -13,7 +13,6 @@ const MAX_CHARGES := 9           ## cap per spell
 
 # --- The held (readied) slot ---------------------------------------------------------------
 const HELD_COOLDOWN_DIV := 1.15  ## the held spell's cooldown is divided by this (15% more often)
-const READIED_POWER := 0.8       ## power of a spell cast with E (the voice sets its own power)
 
 # --- Pickups ---------------------------------------------------------------------------------
 const COLLECT_RADIUS := 0.8      ## a hero this close picks it up automatically

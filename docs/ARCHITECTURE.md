@@ -95,7 +95,7 @@ Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the 
   `explode(pos, radius, dmg, team, source, edge_mult)`, `chest(actor)`.
 - **Input** (`scripts/app/input_setup.gd`): `move_up/down/left/right` (WASD),
   `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1..4` (keys 1-4: ready/hold a spell slot),
-  `cast_readied` (E: cast the held spell at power 0.8), `swap_pickup` (F: swap a dropped component into
+  `use` (E: use the elevator or an employee; never casts), `swap_pickup` (F: swap a dropped component into
   the held slot), `toggle_voice_debug` (F1), `restart` (F5), `pause` (Esc).
 
 ## Cross-agent contracts (implemented by the owning agent)

@@ -6,7 +6,7 @@ extends Node3D
 ## (ContractRun/ContractSession/SiteBuilder: hellgates, employees, priced props, objectives, the Ledger).
 ##
 ## Flow (docs/design/contracts.md): the elevator (the exit cell) opens a menu when the player stands on or next
-## to it and presses E (a prompt says so; E casts the held spell everywhere else): go down (more pay, more
+## to it and presses E (a prompt says so; E never casts): go down (more pay, more
 ## danger) or cash out; cashing out is always allowed. HP and downed state carry between floors; a new
 ## contract resets everything (spells are re-picked). All heroes down ends the contract: "Crew
 ## incapacitated" and the invoice shows what was earned so far.
@@ -548,7 +548,7 @@ func _start() -> void:
 				_open_pause())
 	if opts.has("press_e"):
 		get_tree().create_timer(float(opts["press_e"])).timeout.connect(func() -> void:
-			var used := controller.press_readied()
+			var used := controller.press_use()
 			_log("press-e: %s" % ("used" if used else "nothing"), Color(0.8, 1.0, 0.8)))
 	if opts.has("break_crates"):
 		get_tree().create_timer(float(opts["break_crates"])).timeout.connect(_break_crates_dev)
@@ -767,7 +767,7 @@ func _player_at_elevator() -> bool:
 	return player != null and not player.dead and Hex.distance(player.current_cell(), _exit_cell) <= ELEVATOR_USE_DIST
 
 
-## E at the elevator opens its menu (the controller calls this first; true = the press is used, no cast).
+## E at the elevator opens its menu (the controller calls this first; true = the press is used).
 func _use_elevator_key() -> bool:
 	if _menu != null or _leaving or _ended or _ending or _session == null or not _player_at_elevator():
 		return false

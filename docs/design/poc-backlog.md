@@ -280,7 +280,7 @@ hero, the host owns monsters, and cross-owner hits and shoves travel as messages
 
 ## 15. Spell slots and components
 
-- **P1** Four slots, readied spell (keys 1-4, E casts). The readied spell recharges 15% faster (a passive boost) and is shown as its component held in the hero's hand. See `spells-and-components.md`.
+- **P1** Four slots, held spell (keys 1-4; E is Use and never casts, spells are cast by voice or the typed console). The held spell recharges 15% faster (a passive boost) and is shown as its component held in the hero's hand. See `spells-and-components.md`.
 - **P1** Material components: monster drop tables, walk-over pickups, charges, swapping.
 - **P1** Spell **teeth**: affliction, 1-2 s growth, pop with splash and shove, heal cleanses. See `spells.md`.
 - **P1** Rename the heroes: Pebble -> **Rebar**, Dagna -> **Gasket**, Larkin -> **Wick**. Done: labels, game.gd, docs, model classes and files. Voice clips ("gasket", "rebar", "wick", plus "Gasket heal me" etc.) assert that the names never cast a spell.

@@ -93,7 +93,7 @@ var spell_slots: Array[String] = []:
 	set(v):
 		spell_slots = v
 		_sync_slots()
-## Index (0-based) of the held slot: that spell is readied for E and gets the passive cooldown boost,
+## Index (0-based) of the held slot: that spell gets the passive cooldown boost,
 ## and its component is shown in the hero's hand. Voice casts any slotted spell either way.
 var held_slot := 0
 ## A dropped component the hero stands next to while every slot is full; F swaps it in. Set by ComponentPickup.

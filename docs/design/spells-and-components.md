@@ -1,4 +1,4 @@
-# Spell slots, readied spells and material components
+# Spell slots, held spells and material components
 
 Status: **implemented**, 2026-10-16. The user's decisions are marked **[decided]**; numbers marked
 *(tunable)* live in one place (`scripts/spells/spell_components.gd` and `SpellBook.SPELLS`) and are
@@ -7,12 +7,12 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 ## Where the data lives
 | What | File |
 |---|---|
-| Slot count, charges, cap, held boost, E power, pickup radii, **drop table** | `scripts/spells/spell_components.gd` (`SpellComponents`) |
+| Slot count, charges, cap, held boost, pickup radii, **drop table** | `scripts/spells/spell_components.gd` (`SpellComponents`) |
 | Per-spell component name, `available` flag, cooldowns | `scripts/spells/spell_book.gd` (`SpellBook.SPELLS`) |
 | Pickup actor | `scripts/spells/component_pickup.gd` (`ComponentPickup`) |
 | Faceted prop for each component (pickup and hand) | `scripts/spells/component_props.gd` (`ComponentProps`) |
 | Slots, charges, held slot, swap | `scripts/heroes/hero.gd` |
-| Keys 1-4 / E / F, the cast entry point | `scripts/heroes/player_controller.gd`, `scripts/app/input_setup.gd` |
+| Keys 1-4 / E (use) / F, the cast entry point | `scripts/heroes/player_controller.gd`, `scripts/app/input_setup.gd` |
 | Cards, toasts, swap prompt | `scripts/ui/hud.gd` |
 | Hand attachment | `LowPolyModel.hold_item()` (`scripts/art/lowpoly/`), `rebar_model.gd`, `gasket_model.gd`, `wick_model.gd` |
 | Drop hook | `Monster._on_death` -> `SpellComponents.drop_for` |
@@ -26,16 +26,17 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 
 ## Controls [decided, implemented]
 - **1-4** ready (hold) a slot. An empty slot says "Slot N is empty" and changes nothing.
-- **E** (`cast_readied`) casts the held spell at the aim point at a fixed power of **0.8**
-  (`READIED_POWER`).
+- **E** (`use`) is the context key (freight elevator, employees). It never casts: E casting was removed
+  (2026-10-17, user). Spells are cast by voice, or by the typed console (Enter), only.
 - **Voice** casts *any* slotted spell, held or not, at the voice's own power, and **does not change
   which slot is held**.
 - **F** (`swap_pickup`) swaps the pickup you are standing next to into the held slot (below).
-- Keys 1-4 no longer cast. They used to be "cast slot 1/2 at full power"; E replaces that.
+- Keys 1-4 do not cast (they used to be "cast slot 1/2 at full power"), and neither does E (removed 2026-10-17, user).
+  The held slot is purely the passive boost plus the component in the hero's hand.
 
 ## The held spell: a passive boost, shown in your hand [decided, implemented]
 - **The boost:** the held spell's cooldown is divided by **1.15** (`HELD_COOLDOWN_DIV`), about 13%
-  shorter, for casts by voice or by E. It is read when the spell is cast, so switching the held slot
+  shorter, for casts by voice or the typed console. It is read when the spell is cast, so switching the held slot
   mid-cooldown does not retroactively change a cooldown that is running. No other active mechanics.
 - **In hand:** the hero visibly holds the held spell's component, in the hand that isn't busy.
   `LowPolyModel.hold_item(node)` parents a prop to a hand anchor (null empties the hand); each model

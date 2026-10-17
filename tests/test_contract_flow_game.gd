@@ -89,7 +89,7 @@ func _check_floor_and_elevator() -> void:
 	check(bool(emp.call("is_following")), "E next to an employee brings them along")
 
 	# The elevator needs a key press. Stepping onto the exit only shows "E: use elevator"; E there opens the
-	# menu (and does not cast); E anywhere else still casts the held spell.
+	# menu (and does not cast); E anywhere else does nothing (E never casts).
 	var player: Hero = g.get("player")
 	var exit_cell: Vector2i = g.get("_exit_cell")
 	var lv := GameWorld.map.ground_level(Hex.to_world(exit_cell))
@@ -119,13 +119,14 @@ func _check_floor_and_elevator() -> void:
 		check(GameWorld.root.process_mode != Node.PROCESS_MODE_DISABLED, "and the world runs again")
 		await frames(5)
 		check(g.get("_menu") == null, "the menu does not reopen by itself while the crew stands on the elevator")
-		# E away from the elevator casts the held spell as before.
+		# E away from the elevator does nothing, and certainly casts nothing.
 		player.global_position = Hex.to_world(exit_cell, lv) + Vector3(8, 0, 8)
 		await frames(10)
 		eq(hud.context_prompt, "", "no prompt away from the elevator")
 		await _press_e()
 		check(g.get("_menu") == null, "E away from the exit opens nothing")
-		eq(player.charges_of(held), 4, "E away from the exit casts the held spell")
+		eq(player.charges_of(held), 5, "E away from the exit does not cast the held spell")
+		near(player.cooldown_left(held), 0.0, 0.0001, "and spends no cooldown")
 		# Cash out: the invoice appears and matches the Ledger.
 		emp.global_position = Hex.to_world(exit_cell, lv) + Vector3(0.8, 0, 0.5)
 		player.global_position = Hex.to_world(exit_cell, lv)
@@ -153,9 +154,9 @@ func _check_floor_and_elevator() -> void:
 
 ## One E key press (the action is held for two physics frames, like a real tap).
 func _press_e() -> void:
-	Input.action_press("cast_readied")
+	Input.action_press("use")
 	await frames(2)
-	Input.action_release("cast_readied")
+	Input.action_release("use")
 	await frames(3)
 
 

@@ -24,9 +24,9 @@ end; the north-star "consistently pretty good" team should clear most objectives
     follower tells them to wait ("E: tell Marguerite to wait"). A waiting employee crouches where they were
     told, still panics at monsters and then walks back, and never rejoins by proximity, so they do not
     chase you into a fight. A waiting employee still counts alive ($10); extraction only takes followers
-    near the elevator, so one left behind is not extracted. E priority: elevator, then the employee, then
-    casting the readied spell. A follower inside 2.2 therefore takes the E press, so cast by voice while one
-    trails you closely. The press is a **request** (`Employee.request_wait / request_follow`): the host
+    near the elevator, so one left behind is not extracted. E (Use) priority: elevator, then the employee, then
+    nothing; E never casts, so a follower inside 2.2 never costs you a spell.
+    The press is a **request** (`Employee.request_wait / request_follow`): the host
     owns employees and a player's E asks it. AI allies never recruit. A hero within 2.2 of an employee
     that follows an AI ally can dismiss it.
 - **Disinfect a room:** the room has an infestation meter (nests, goo puddles, a spawner). Destroying
@@ -128,8 +128,7 @@ How they fit together, from the top down:
      down: more pests, more gates, closer to the origin.
    - Objectives can span floors (e.g. "close all 4 gates" across 2 floors), and pay rises with depth.
    - **The elevator is always available** (the early-exit rule). It needs a key press: while the player
-     stands on or next to the exit cell the HUD says "E: use elevator" and E opens its menu (E casts the
-     held spell everywhere else, never both). At each floor the crew decides:
+     stands on or next to the exit cell the HUD says "E: use elevator" and E opens its menu (E never casts). At each floor the crew decides:
      go down for more pay and more risk, or cash out. Unmet objectives don't pay, and damage is
      taken out of earnings (never below $0).
    - **The invoice** at the end totals every floor.
