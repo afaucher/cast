@@ -487,7 +487,7 @@ func _draw_scope() -> void:
 
 ## Level graph scale: -70 dBFS at the bottom, -10 dBFS at the top.
 static func _db_to_unit(v: float) -> float:
-	return clampf((v + 70.0) / 60.0, 0.0, 1.0)
+	return SpeechGate.db_to_unit(v)
 
 
 # --- caster events -------------------------------------------------------------------

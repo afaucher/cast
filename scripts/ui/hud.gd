@@ -228,7 +228,8 @@ func enable_console() -> void:
 		console_submitted.emit(t))
 	console.gui_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE:
-			console.release_focus())
+			console.release_focus()
+			console.accept_event())   # Esc leaves the box; it must not also open the pause menu
 	_root.add_child(console)
 
 

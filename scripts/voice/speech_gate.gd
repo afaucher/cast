@@ -110,6 +110,15 @@ static func db(ms: float) -> float:
 	return 10.0 * log(maxf(ms, FLOOR_MIN)) / log(10.0)
 
 
+## The level meters' scale (debug panel graph, voice setup meter): -70 dBFS at 0, -10 dBFS at 1.
+const METER_MIN_DB := -70.0
+const METER_MAX_DB := -10.0
+
+
+static func db_to_unit(v: float) -> float:
+	return clampf((v - METER_MIN_DB) / (METER_MAX_DB - METER_MIN_DB), 0.0, 1.0)
+
+
 func _frame(frame: PackedFloat32Array) -> PackedFloat32Array:
 	var e := 0.0
 	for s in frame:

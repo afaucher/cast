@@ -18,6 +18,40 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` | lead |
 | Design docs | `docs/design/*` | design agent |
 
+## Boot flow and the main menu
+
+`scenes/boot.tscn` (`scripts/app/boot.gd`, `class_name Boot`) is the main scene. It registers the input actions,
+applies the saved game settings (`GameSettings.apply`: master volume and, unless a screenshot flag is present, the
+window mode and size) and then changes scene to `Boot.route(args)`:
+
+| Command line (after `--`) | Opens |
+|---|---|
+| `--run-test <name>` | the test (headless harness, nothing else runs) |
+| `--scene <res path>` | that scene |
+| `--menu` | `scenes/main_menu.tscn`, even with other flags (they still reach the game) |
+| no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after` | the main menu |
+| any other `--flag` (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, every `game.gd` flag, flags added later) | `scenes/game.tscn`, as before |
+
+`scripts/ui/main_menu.gd` (`MainMenu`) is the menu: `MenuBackdrop` (a slowly swaying camera over a generated
+HexMapView + DungeonLook hall, the three `*Model` heroes idling and a `HellgateModel` in the distance; no GameWorld,
+no actors) behind the buttons Start, Voice setup, Settings, Quit. Start calls `game.gd`'s `reset_flow()` and loads
+`Boot.GAME_SCENE`, which opens on the job board. Sub-screens are `VoiceSetupScreen` (runs a real `VoiceCaster`
+with the mic; edits the cast word, strictness and min-voice through the caster, which persists them via
+`VoiceSettings`; live dB meter from `SpeechGate`; "Try it" shows HEARD, the matched spell and its power) and
+`SettingsScreen` (`GameSettings`). Styling is shared in `MenuStyle`. Esc goes back (`pause` input action).
+Dev: `--menu-screen voice|settings`, `--menu-shot <png> [--menu-after s]`, `--menu-say "cast heal"`,
+`--settings-file <path>` (so screenshots never touch the player's settings).
+
+Settings live in `user://settings.cfg`: `[voice]` (`trigger_word`, `strictness`, `min_voice_db`: `VoiceSettings`) and
+`[game]` (`master_volume` 0..1, `fullscreen`, `resolution` "WxH", `voice_panel_visible`: `GameSettings`). The game reads
+both: `VoiceCaster.start()` applies `[voice]`, `game.gd` reads `voice_panel_visible` when it builds the debug panel.
+
+In game (`game.gd`): **Esc** during a contract (no picker, elevator menu, invoice or "crew incapacitated" under way)
+opens `PauseMenu` and sets `get_tree().paused`, so the whole world (GameWorld clock, actors, tweens, voice) stops while
+the overlay (process mode ALWAYS) runs. Resume unpauses; Abandon contract does what F5 does (back to the job board);
+Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the job board also goes to the menu.
+`game.scene_changer` is a test seam for those two scene changes.
+
 ## Core contracts (already written, see the source)
 
 - **`Hex`** (`scripts/core/hex.gd`): pointy-top axial `Vector2i(q, r)`. `Hex.SIZE = 1.0`
@@ -50,7 +84,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 - **Input** (`scripts/app/input_setup.gd`): `move_up/down/left/right` (WASD),
   `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1..4` (keys 1-4: ready/hold a spell slot),
   `cast_readied` (E: cast the held spell at power 0.8), `swap_pickup` (F: swap a dropped component into
-  the held slot), `toggle_voice_debug` (F1), `restart` (F5).
+  the held slot), `toggle_voice_debug` (F1), `restart` (F5), `pause` (Esc).
 
 ## Cross-agent contracts (implemented by the owning agent)
 

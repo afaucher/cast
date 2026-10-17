@@ -17,6 +17,7 @@ const KEYS := {
 	"swap_pickup": [KEY_F],
 	"toggle_voice_debug": [KEY_F1],
 	"restart": [KEY_F5],
+	"pause": [KEY_ESCAPE],
 }
 const MOUSE := {
 	"attack_melee": MOUSE_BUTTON_LEFT,

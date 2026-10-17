@@ -40,7 +40,10 @@ extends Node3D
 ##   --hurt N            dev: every hero starts the floor N hp down (to see the HP carry over between floors)
 ##   --auto-elevator down|out  dev: the elevator menu picks that option 1.2 s after it opens ("down" on the last floor cashes out)
 ##   --invoice-demo      dev: show a sample invoice (no game), for screenshots
-## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Enter = type an incantation.
+##   --pause-demo        dev: open the pause overlay 1.5 s into the floor (screenshots)
+## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
+## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
+## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
 
 ## Every castable spell, straight from SpellBook (new spells need no change here).
 static func all_spells() -> PackedStringArray:
@@ -60,6 +63,8 @@ static var _dev_released := false   ## F5 pressed: the dev flags that skip the b
 static var _fade_in := false        ## the next scene fades in from black (arrived by elevator)
 
 var opts := {}
+## Test seam for "Abandon contract" / "Main menu": called with "" (reload the board) or a scene path.
+var scene_changer := Callable()
 var map: HexMap
 var player: Hero
 var allies: Array[Hero] = []
@@ -80,7 +85,10 @@ var _banner_tween: Tween
 var _site: SiteBuilder.Site
 var _menu: ElevatorMenu = null
 var _invoice: InvoiceScreen = null
-var _ended := false                ## the contract is over (invoice shown or coming)
+var _board: JobBoard = null
+var _picker: SpellPicker = null
+var _pause: PauseMenu = null
+var _ended := false               ## the contract is over (invoice shown or coming)
 var _ending := false               ## the crew is down, the invoice is a moment away
 var _leaving := false              ## a scene change is under way
 var _elev_armed := true
@@ -118,6 +126,8 @@ static func reset_flow() -> void:
 
 
 func _exit_tree() -> void:
+	if _pause != null:
+		get_tree().paused = false   # never leave the next scene frozen
 	if GameWorld.actor_died.is_connected(_on_actor_died):
 		GameWorld.actor_died.disconnect(_on_actor_died)
 	if GameWorld.root != null and GameWorld.root.get_parent() == self:
@@ -157,6 +167,7 @@ func _parse_args() -> void:
 			"--hurt": opts["hurt"] = float(nxt)
 			"--auto-elevator": opts["auto_elevator"] = nxt
 			"--invoice-demo": opts["invoice_demo"] = true
+			"--pause-demo": opts["pause_demo"] = true
 
 
 # --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
@@ -198,9 +209,11 @@ func _screens() -> CanvasLayer:
 func _show_board() -> void:
 	var board_seed := int(opts.get("seed", randi() % 100000))
 	var board := JobBoard.new(ContractBoard.offers(board_seed))
+	_board = board
 	_screens().add_child(board)
 	board.picked.connect(func(run: ContractRun) -> void:
 		board.queue_free()
+		_board = null
 		_begin_contract(run)
 		_enter_floor())
 	if opts.has("shot"):
@@ -326,6 +339,7 @@ func _populate_site() -> void:
 func _setup_voice() -> void:
 	voice = VoiceCaster.new()
 	voice.name = "VoiceCaster"
+	voice.settings_path = GameSettings.path   # the menu's voice setup writes here
 	add_child(voice)
 	voice.spell_spoken.connect(_on_spell_spoken)
 	voice.spell_fizzled.connect(_on_spell_fizzled)
@@ -338,6 +352,8 @@ func _setup_voice() -> void:
 	debug_layer.layer = 50
 	add_child(debug_layer)
 	debug_panel = VoiceDebugPanel.new()
+	# Settings > "Voice debug panel visible at start" (F1 still toggles it); --show-panel always opens it.
+	debug_panel.visible = opts.has("show_panel") or bool(GameSettings.load_settings()["voice_panel_visible"])
 	debug_layer.add_child(debug_panel)
 	debug_panel.attach(voice)
 	debug_panel.visibility_changed.connect(_fit_hud_to_panel)
@@ -437,12 +453,14 @@ func _on_console(text: String) -> void:
 func _show_picker() -> void:
 	controller.enabled = false
 	var picker := SpellPicker.new()
+	_picker = picker
 	if voice.has_method("get_trigger_word"):
 		picker.set_trigger_word(voice.call("get_trigger_word"))
 	hud.add_overlay(picker)
 	picker.picked.connect(func(chosen: Array[String]) -> void:
 		_spells = chosen.duplicate()
 		picker.queue_free()
+		_picker = null
 		_start())
 
 
@@ -484,6 +502,10 @@ func _start() -> void:
 		if centre != Vector3.INF:
 			controller.aim_override = centre
 		_cast(str(opts["autocast"]), 1.0, "autocast")
+	if opts.has("pause_demo"):
+		get_tree().create_timer(1.5).timeout.connect(func() -> void:
+			if _can_pause():
+				_open_pause())
 	if opts.has("demo_damage"):
 		get_tree().create_timer(1.0).timeout.connect(func() -> void:
 			Ledger.damage("Vintage 1787 wine barrel", 4000, player)
@@ -907,15 +929,79 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
-		# Back to the job board: abandon the contract (dev flags that skip the board stop applying).
-		_dev_released = true
-		_run = null
-		_session = null
-		_spells.clear()
-		Ledger.end_contract()
-		get_tree().reload_current_scene()
+		_abandon_to_board()
+	elif event.is_action_pressed("pause"):
+		if _board != null:
+			_to_main_menu()   # Esc on the job board: back to the menu
+		elif _can_pause():
+			_open_pause()
 	elif event.is_action_pressed("toggle_voice_debug") and debug_panel != null and _invoice == null:
 		debug_panel.visible = not debug_panel.visible
+
+
+# --- Pause (Esc) ----------------------------------------------------------------------------------------
+
+## A contract is running and nothing else (picker, elevator, invoice, ending, scene change) holds the screen.
+func _can_pause() -> bool:
+	return _pause == null and _session != null and player != null and _picker == null and _menu == null \
+			and _invoice == null and not _ended and not _ending and not _leaving
+
+
+## The pause overlay; the whole tree stops (GameWorld's clock, actors, spells, tweens, the voice caster)
+## except the overlay itself, which runs while paused.
+func _open_pause() -> void:
+	_pause = PauseMenu.new()
+	_screens().add_child(_pause)
+	get_tree().paused = true
+	_pause.resume.connect(_close_pause)
+	_pause.abandon.connect(_abandon_to_board)
+	_pause.main_menu.connect(_to_main_menu)
+
+
+func _close_pause() -> void:
+	if _pause == null:
+		return
+	_pause.queue_free()
+	_pause = null
+	get_tree().paused = false
+	if voice != null:
+		voice.reset()   # drop audio heard while the game was stopped
+
+
+## F5 and "Abandon contract": back to the job board; the contract is dropped, and the dev flags that skip
+## the board stop applying.
+func _abandon_to_board() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	get_tree().paused = false
+	_dev_released = true
+	_run = null
+	_session = null
+	_spells.clear()
+	Ledger.end_contract()
+	_change_scene("")
+
+
+## "Main menu" (pause overlay, Esc on the job board): drop the contract and open the menu scene.
+func _to_main_menu() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	get_tree().paused = false
+	reset_flow()
+	Ledger.end_contract()
+	_change_scene(Boot.MENU_SCENE)
+
+
+## "" reloads this scene (the job board), anything else opens that scene.
+func _change_scene(path: String) -> void:
+	if scene_changer.is_valid():
+		scene_changer.call(path)
+	elif path == "":
+		get_tree().reload_current_scene()
+	else:
+		get_tree().change_scene_to_file(path)
 
 
 func _update_stats() -> void:

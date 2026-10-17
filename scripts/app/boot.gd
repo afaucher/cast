@@ -1,9 +1,23 @@
+class_name Boot
 extends Node
-## Entry point. Plain run -> the game. Command-line options (after `--`):
+## Entry point. A plain run opens the MAIN MENU; any dev flag that implies jumping straight in opens the
+## game (or the named scene) as before. Command-line options (after `--`):
 ##   --run-test <name>   run res://tests/<name>.gd headless-friendly and quit
-##   --scene <res path>  open a specific scene instead of the game
+##   --scene <res path>  open a specific scene instead of the menu / game
+##   --menu              show the menu even when other dev flags are present (they still reach the game)
+##   --menu-shot <png>   menu: save a screenshot after --menu-after seconds (default 1.5) and quit
+##   --menu-screen <s>   menu: open on "main" (default), "voice" or "settings"
+##   --menu-after <s>    menu: seconds before --menu-shot fires (default 1.5)
+##   --menu-say <text>   menu: inject this text into the voice setup's "Try it" (screenshots)
+##   --settings-file <p> read and write the game/voice settings at this path instead of user://settings.cfg
+##   --no-mic            no microphone (the menu's voice setup too); does not skip the menu
+## Anything else (--seed, --spells, --contract, --floor, --shot, --zoom ... every game.gd flag, and any flag
+## added later) skips the menu, so every dev flow keeps working.
 
 const GAME_SCENE := "res://scenes/game.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
+## Flags that belong to the menu and do not mean "jump into the game".
+const MENU_FLAGS: Array[String] = ["--menu", "--menu-shot", "--menu-screen", "--menu-say", "--menu-after", "--settings-file", "--no-mic"]
 
 
 func _ready() -> void:
@@ -13,11 +27,33 @@ func _ready() -> void:
 	if i >= 0 and i + 1 < args.size():
 		_run_test(args[i + 1])
 		return
-	var scene := GAME_SCENE
-	i = args.find("--scene")
+	var file := arg_value(args, "--settings-file")
+	if file != "":
+		GameSettings.path = file
+	# Screenshots keep the window as it is; everything else gets the saved volume / window.
+	GameSettings.apply(GameSettings.load_settings(), not args.has("--shot") and not args.has("--menu-shot"))
+	get_tree().change_scene_to_file.call_deferred(route(args))
+
+
+## The scene a command line opens (see the header).
+static func route(args: PackedStringArray) -> String:
+	var explicit := arg_value(args, "--scene")
+	if explicit != "":
+		return explicit
+	if args.has("--menu"):
+		return MENU_SCENE
+	for a in args:
+		if a.begins_with("--") and not MENU_FLAGS.has(a):
+			return GAME_SCENE
+	return MENU_SCENE
+
+
+## The value after `key`, or "".
+static func arg_value(args: PackedStringArray, key: String) -> String:
+	var i := args.find(key)
 	if i >= 0 and i + 1 < args.size():
-		scene = args[i + 1]
-	get_tree().change_scene_to_file.call_deferred(scene)
+		return args[i + 1]
+	return ""
 
 
 func _run_test(test_name: String) -> void:
