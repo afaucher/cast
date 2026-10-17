@@ -373,7 +373,7 @@ func melee(dir: Vector3) -> bool:
 	dir = dir.normalized()
 	facing = dir
 	cancel_draw()
-	_ready_at[KEY_MELEE] = GameWorld.time + melee_cooldown
+	_ready_at[KEY_MELEE] = GameWorld.time + scaled_cooldown(melee_cooldown)
 	for foe in GameWorld.actors_in_radius(global_position, melee_reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
 	Combat.melee_arc(self, dir, melee_reach, melee_arc, melee_damage, melee_shove)
@@ -405,11 +405,12 @@ func is_drawing() -> bool:
 	return _draw_start >= 0.0
 
 
-## 0..1: how far the bow is drawn (1 = a full draw, the next release is the drawn shot).
+## 0..1: how far the bow is drawn (1 = a full draw, the next release is the drawn shot). A hasted archer draws
+## faster (the draw time scales with the attack rate, like every cooldown).
 func draw_progress() -> float:
 	if _draw_start < 0.0:
 		return 0.0
-	return clampf((GameWorld.time - _draw_start) / maxf(arrow_draw_time, 0.001), 0.0, 1.0)
+	return clampf((GameWorld.time - _draw_start) / maxf(scaled_cooldown(arrow_draw_time), 0.001), 0.0, 1.0)
 
 
 ## Begin drawing the bow (RMB pressed). False if this hero has no arrow, is down or helpless, or the
@@ -452,7 +453,7 @@ func fire_arrow(dir: Vector3, drawn: bool) -> bool:
 	dir = dir.normalized()
 	facing = dir
 	cancel_draw()
-	_ready_at[KEY_RANGED] = GameWorld.time + arrow_tap_cooldown
+	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(arrow_tap_cooldown)
 	var dmg := arrow_draw_damage if drawn else arrow_tap_damage
 	var rng := arrow_draw_range if drawn else arrow_tap_range
 	var pierce := arrow_draw_pierce if drawn else 1
@@ -467,7 +468,7 @@ func move(dir: Vector3, delta: float) -> bool:
 	if _draw_start < 0.0:
 		return super.move(dir, delta)
 	var base := move_speed
-	move_speed = base * draw_move_mult
+	move_speed = base * draw_move_mult   # (Actor.move then applies the modifiers on top: coffee, goo, roots)
 	var moved := super.move(dir, delta)
 	move_speed = base
 	return moved
@@ -521,7 +522,7 @@ func _bowl(dir: Vector3) -> bool:
 		dir = facing
 	dir = dir.normalized()
 	facing = dir
-	_ready_at[KEY_RANGED] = GameWorld.time + BOWL_COOLDOWN
+	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(BOWL_COOLDOWN)
 	BowlBoulder.launch(self, dir, BOWL_SPEED, BOWL_RANGE, BOWL_DAMAGE, BOWL_SHOVE)
 	_bowl_pose()
 	bolt_fired.emit()
@@ -530,7 +531,7 @@ func _bowl(dir: Vector3) -> bool:
 
 ## Gasket's spin: everything within SPIN_REACH is shoved outward; monsters also take damage.
 func _spin() -> bool:
-	_ready_at[KEY_RANGED] = GameWorld.time + SPIN_COOLDOWN
+	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(SPIN_COOLDOWN)
 	for foe in GameWorld.actors_in_radius(global_position, SPIN_REACH, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
 	Combat.melee_arc(self, facing, SPIN_REACH, 360.0, SPIN_DAMAGE, SPIN_SHOVE)
@@ -550,7 +551,7 @@ func _bolt(dir: Vector3) -> bool:
 		dir = facing
 	dir = dir.normalized()
 	facing = dir
-	_ready_at[KEY_RANGED] = GameWorld.time + RANGED_COOLDOWN
+	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(RANGED_COOLDOWN)
 	var on_hit := func(_p: Projectile, hit: Actor, pos: Vector3) -> void:
 		if hit:
 			Fx.attach_hit_feedback(hit)

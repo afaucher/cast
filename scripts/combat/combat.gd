@@ -15,7 +15,7 @@ static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: floa
 	for a in GameWorld.hittable_in_radius(attacker.global_position, reach, foe):
 		var to := a.global_position - attacker.global_position
 		to.y = 0.0
-		if to.length() > 0.001 and rad_to_deg(dir.angle_to(to.normalized())) > arc_deg * 0.5:
+		if arc_deg < 360.0 and to.length() > 0.001 and rad_to_deg(dir.angle_to(to.normalized())) > arc_deg * 0.5:   # (a full circle skips the test: a target exactly behind measured 180.0000x degrees and was missed)
 			continue
 		# Can't swing up/down a cliff: at most a 2-level difference.
 		if absf(a.global_position.y - attacker.global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
@@ -40,6 +40,23 @@ static func shove_radius(pos: Vector3, radius: float, distance: float, source: N
 		a.shove(away if away.length() > 0.05 else a.facing, distance, source)
 		out.append(a)
 	return out
+
+
+## Run `apply` (a Callable taking one Actor) on every living actor within `radius` of `pos` (all teams, or `team`
+## only if >= 0). This is the one place an area spell applies a status to whoever stands in it (the verb it calls,
+## e.g. Actor.set_modifier, is what the Net layer routes to the actor's owner). Returns the actors it reached.
+static func each_in_radius(pos: Vector3, radius: float, apply: Callable, team: int = -1) -> Array[Actor]:
+	var out: Array[Actor] = []
+	for a in GameWorld.actors_in_radius(pos, radius, team):
+		apply.call(a)
+		out.append(a)
+	return out
+
+
+## Give everyone within `radius` of `pos` the modifier `id` (Actor.set_modifier: `stat` says what it changes, the
+## same id refreshes), e.g. vines' root. Returns the actors it reached.
+static func modify_radius(pos: Vector3, radius: float, id: String, mult: float, duration: float, stat: String = Actor.STAT_DAMAGE_TAKEN, team: int = -1) -> Array[Actor]:
+	return each_in_radius(pos, radius, func(a: Actor) -> void: a.set_modifier(id, mult, duration, stat), team)
 
 
 ## Damage everyone of `team` (-1 = everyone) within radius of pos, with

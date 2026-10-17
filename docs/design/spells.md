@@ -1,6 +1,6 @@
 # Spell roster
 
-Status: 2026-10-16. Every spell lands where the caster aims (the same point the ranged attack goes),
+Status: 2026-10-17. Every spell lands where the caster aims (the same point the ranged attack goes),
 and the aim snaps onto a teammate near the cursor. **[decided]** marks the user's calls;
 **[proposal]** marks suggestions still waiting on the user.
 
@@ -12,6 +12,9 @@ and the aim snaps onto a teammate near the cursor. **[decided]** marks the user'
 | Corn | cast corn | A corn bomb drops from the sky | **everyone** | in game |
 | Tentacles | cast tentacles | Neon-purple tentacles burst from the floor and shove everything outward | **everyone** (shove), monsters (a little damage) | in game |
 | Teeth | cast teeth | "Too many teeth" sprout out of everyone in the area, grow for 1–2 s, then explode | **everyone** | in game |
+| Vines | cast vines | Thorny vines root everyone in the area for ~2 s: no walking, no shoving, attacks still work | **everyone** | in game |
+| Damp | cast damp | A wide soggy area: fires go out, nobody can ignite for 15 s, puddles make shoves slide further | **everyone** | in game |
+| Coffee | cast coffee | +60% move and attack speed for 6 s, twitchy, then a 2 s crash (−30%) | **everyone** in a small radius | in game |
 
 ## Teeth [decided: core idea]
 **"Cast teeth":** too many teeth sprout out of **anyone** in the area at the aim point, monsters and
@@ -43,7 +46,7 @@ Details [proposal]:
 
 ## Burning [in game, 2026-10-17]
 A fireball blast can set anyone near it on fire. It is a status node (`scripts/spells/burning.gd`, `class_name
-Burning`) attached as a child of the actor, and it is the groundwork for Damp.
+Burning`) attached as a child of the actor. Damp is built on it (see "Damp" below).
 
 - **Ignite:** when a fireball explodes, every actor in the blast (monsters, heroes, employees: friendly fire
   included, since aiming at a teammate is the game) rolls to ignite. `IGNITE_CHANCE` is **35%** at the centre of
@@ -66,7 +69,7 @@ Burning`) attached as a child of the actor, and it is the groundwork for Damp.
   flames are built once per fire from shared meshes and materials; the flicker only edits transforms. Look-dev
   scene: `scenes/burning_lab.tscn` (`--scene res://scenes/burning_lab.tscn --shot <png>`).
 
-**API (for Damp and other spells):**
+**API (used by Damp and other spells):**
 ```gdscript
 Burning.ignite(actor, source, duration) -> Burning   # null if it cannot burn
 Burning.is_burning(actor)  /  Burning.remaining(actor)
@@ -74,38 +77,121 @@ Burning.extinguish(actor) -> bool                    # put it out
 Burning.extinguish_in_radius(pos, radius, team = -1) -> int
 Burning.soak(actor, seconds)                         # extinguish AND no ignition until dry (the "damp" status)
 Burning.set_fireproof(actor, on)                     # permanent: group "fireproof"
+Burning.is_soaked(actor)  /  Burning.soaked_left(actor)   # damp, and for how long
 ```
 Every live fire is in the group `burning`, and `Burning.ended(reason)` says why it stopped (`burnt_out`,
 `extinguished`, `died`).
 
-**How Damp is meant to use it:** a Damp cast calls `Burning.extinguish_in_radius` over its area and
-`Burning.soak(actor, seconds)` on everyone in it, so damp actors cannot ignite until they dry (a damp actor in a
-fireball blast just fizzles). Tests: `tests/test_burning.gd`.
+**How Damp uses it:** a Damp cast calls `Burning.extinguish_in_radius` over its area and `Burning.soak(actor,
+seconds)` on everyone in it (through `Wet.douse`), so damp actors cannot ignite until they dry. A fireball blast on a
+soaked actor shows "FIZZLE" and a puff of steam, and rolls no dice (the rng stream is unchanged). Tests:
+`tests/test_burning.gd`, `tests/test_spell_damp.gd`.
+
+## Vines [in game, 2026-10-17]
+**"Cast vines":** thorny vines burst out of the floor at the aim point and **root everyone** in the area (heroes, the
+caster if inside, monsters, employees) for about two seconds. Code: `scripts/spells/vines.gd` (the spell),
+`vines_fx.gd` (the burst), `vine_wrap.gd` (the wrap on each rooted actor). Tests: `tests/test_spell_vines.gd`.
+
+- **Area and time:** radius 2.4 + 0.6 × power (2.4 to 3.0), root 1.6 + 0.6 × power seconds (1.6 to 2.2), after a 0.3 s
+  telegraph. Cooldown 10 s. No damage.
+- **Root:** the `vines` modifier with `Actor.STAT_ROOT` (see "Speed modifiers" below). A rooted actor **cannot walk**
+  (`Actor.move` does nothing and `effective_speed()` is 0) and **cannot be shoved**: `Actor.shove` returns at once, so
+  tentacles, the bowl, the spin, a hero's or a monster's melee nudge, the brute's slam, a teeth pop's shove, a
+  hellgate's shove and a shove into a priced prop all do nothing to it. The damage those attacks also deal still
+  lands. It can still **attack and cast**, and it can turn.
+- **Re-casting** refreshes the root (the same id never stacks). A slide already in progress is not cancelled.
+- **Friendly fire:** vines root teammates (aim at a fleeing friend next to a teeth carrier) and do not hurt them.
+- **Combos:** vines then **teeth**, and nobody escapes the pop (friends included); vines are the counter to your own
+  shove spells; a hasted actor in vines is still rooted, and the haste is waiting when the roots let go.
+- **Look:** a variant of the tentacles kit: 11 short green faceted vines, curled at the tips and studded with pale
+  thorns, sprout across the area, sway while the roots hold and sink away after. Each rooted actor wears two thorny
+  strands spiralling up its legs (`VineWrap`, which grows, sways and withers with the modifier).
+- **Component:** a **seed pod** (a split green pod with pale seeds and a curled tendril). Drops from archers (8%).
+  Spa planters are the planned environment source (no planters exist yet).
+- **Voice:** "VINES" is heard for nearly every clip; see the measured results in `scripts/voice/incantation.gd`.
+
+## Damp [in game, 2026-10-17]
+**"Cast damp":** a wide area gets soggy. Code: `scripts/spells/damp.gd` (the spell and its puddle field), `wet.gd`
+(the status look), `Burning` (above) and a `puddle` Grime mark. Tests: `tests/test_spell_damp.gd`.
+
+- **Area:** radius 4.0 + 1.0 × power (4.0 to 5.0), wider than tentacles. Cooldown 10 s, 0.2 s telegraph. No damage.
+- **Fire:** every fire in the area goes out (`Burning.extinguish_in_radius`), any team.
+- **Soak:** everyone in the area is soaked for **15 s** (`Wet.douse` → `Burning.soak`): they **cannot ignite** until
+  dry, so a **fireball blast on soaked actors fizzles**. A shorter second dose never cuts the damp short.
+- **Wet floor:** most hex cells in the area (80%, and the middle ones always) become puddles for **24 s**, drying
+  over the last 8 s. A shove that starts on a wet cell goes up to **+50% further** (`Damp.slide_mult`, which
+  `Actor.shove` asks): tentacles, the bowl, the spin, melee and teeth all slide further on a puddle. The bonus fades
+  as the puddles dry. Which cells are wet is a pure function of (centre, radius, cast stamp), so no list is sent.
+- **Grime:** one `Grime.WET` decal per wet cell (a new `puddle` tile in the atlas). It fades by itself inside the 30 s
+  player-mark rule, and the wet floor ends first, at 24 s.
+- **Look:** a drizzle of droplets falls over the area inside a cyan ring. Soaked actors **drip** (a small particle
+  emitter at the body) and leave **wet footprints** that fade over 3.5 s. Inanimate things (hellgates, priced props,
+  mail packages) are soaked but do not drip.
+- **Combos:** **+ fire** puts out a fireball's burn and soaks you against the next blast (it answers your team's own
+  fire); **+ shoves** a wet floor slides everything further. Planned: wet footprints reveal ghosts, and server-room
+  sparks electrify puddles.
+- **Component:** a **soggy sponge**. Drops from grunts (6%); a leaky pipe is the planned environment source.
+- **Voice:** "DAMP" is heard cleanly. "damn" is not an alias (see the voice notes in `incantation.gd`).
+
+## Coffee [in game, 2026-10-17]
+**"Cast coffee":** haste, then a crash. Code: `scripts/spells/coffee.gd`, and the speed system in `Actor`. Tests:
+`tests/test_spell_coffee.gd`.
+
+- **Area:** a **small** radius, 1.5 + 0.5 × power (1.5 to 2.0). Everyone in it is caffeinated: heroes, the caster if
+  inside, **monsters** ("caffeinate the swarmers by accident") and employees. Cooldown 14 s. Immediate, no telegraph.
+- **Haste:** **+60% move speed and +60% attack speed** for 4.5 + 1.5 × power seconds (**6 s** at full power). Attack
+  speed divides every attack cooldown: a hero's melee, bolt, bowl, spin and arrow **and the bow's draw time** (Wick's
+  draw gets faster), and a monster's strike cooldown. **Spell cooldowns are not sped up** (coffee is about the body,
+  not the voice).
+- **Twitchy:** the **local player** gets a slight **aim wobble** (up to 0.06 rad, about 3.4°, two slow sines of the game
+  clock, so no random numbers) on melee, shots and voice casts. **AI allies, monsters and employees** take tiny random
+  steps instead (about 0.22 units, every 0.35 to 0.8 s, rolled on `GameWorld.rng`, never while winding up an attack,
+  rooted or helpless).
+- **Crash:** then **−30% move and attack speed for 2 s**. Drinking again refreshes the haste to the longer time and
+  cancels a crash (no stacking).
+- **Combos:** **Wick's draw** (a faster draw, jittery aim); **vines** (rooted wins; the haste resumes after); a
+  **goo slow** (the speeds multiply, 1.6 × 0.5 = 0.8).
+- **Look:** steam wisps curl off the head while it lasts, "COFFEE!" and "crash..." float up, and a ring and a burst
+  of beans mark the cast.
+- **Component:** **coffee beans** (three roasted beans with their grooves). Drops from brutes (10%). The break room and
+  a reward for protecting employees are the planned environment sources.
+- **Voice:** one speaker's "cast coffee" is often written "COUGHING": that and "cough" are aliased, below the bare
+  floor (see `incantation.gd`).
+
+### Speed modifiers (`Actor.set_modifier`)
+One verb, four stats, built for coffee and ready for goo slows:
+```gdscript
+actor.set_modifier(id, mult, duration, stat = Actor.STAT_DAMAGE_TAKEN)   # same id refreshes, never stacks
+actor.clear_modifier(id)
+# stats: STAT_DAMAGE_TAKEN (armor 0.4), STAT_MOVE_SPEED, STAT_ATTACK_RATE, STAT_ROOT (presence = rooted)
+actor.move_speed_mult()  /  actor.effective_speed()        # move_speed x modifiers, 0 while rooted
+actor.attack_rate_mult()  /  actor.scaled_cooldown(base)   # base / rate
+actor.is_rooted()  /  actor.modifier_left(id)
+Combat.modify_radius(pos, radius, id, mult, duration, stat)   # an area applies it to everyone in range
+```
+- **Stacking:** the modifiers of one stat **multiply** (haste 1.6 × goo 0.5 = 0.8), so independent sources combine and
+  none replaces another. The same id refreshes.
+- **Clamps:** move speed 0.2 to 2.5, attack rate 0.25 to 3.0, so a pile of slows never freezes an actor and a pile of
+  haste never rockets one. Standing still is what a **root** is for, and it overrides every speed.
+- Old callers are unchanged: `set_modifier("armor", 0.5, 10.0)` is still damage taken. Movement code reads
+  `effective_speed()` (never `move_speed`, which stays the base a kit or the AI sets) and attacks read
+  `scaled_cooldown()`.
 
 ## Brainstorm: next spells [proposal, 2026-10-16]
-These are user ideas, thought through but not built. Unless noted, every spell lands at the aim point
+These are user ideas, thought through but not built. (Vines, Damp and Coffee were built on 2026-10-17: see their sections above.) Unless noted, every spell lands at the aim point
 and follows the area rule: area spells hit **everyone** inside, except heal and armor.
 
 | Spell | Effect | Hits | Chaos / co-op angle | Voice risk |
 |---|---|---|---|---|
 | **Wind** | A directional gust from the caster toward the aim point: a cone that shoves everything along it 2–3 hexes, with a whoosh and dust streaks | everyone in the cone | Blow monsters off ledges and into pits, or a friend off the crate tower. It differs from tentacles (radial, from the floor) because it's aimed and linear. | medium: "when", "win", "wine" (a wine cellar exists) |
 | **Blind** | A dark cloud. Anyone inside can't see for ~2–3 s. Monsters lose their target and swing at random; a hero gets a brief black-edged, pinhole screen effect. | everyone in the area | Blinding a teammate is the misplay. Blinding the brute mid-windup makes its slam go off in a random direction. | medium: "behind", "blond", "blend" |
-| **Damp** | Everything in a wide area gets slightly moist: puddles, wet footprints, dripping models. It puts out fire. | everyone and everything | Mostly utility and comedy; the value is in the combos. | medium–high: "damn" (common chatter, but loose mode needs the trigger), "dump", "camp", "dam" |
-| **Vines** | Vines burst up and root everyone in the area for ~2 s. Rooted actors can still attack, but can't move and **can't be shoved**. | everyone in the area | Root the brute so it can't reach you, or root a fleeing friend next to a teeth carrier. It's the counter to your own shove spells. | medium: "wines", "vibes", "fines", "binds" |
 | **Ghost** | **Single target:** the actor nearest the aim point (a teammate, yourself, or an ENEMY; it falls back to the caster) becomes nearly invisible for ~4 s. Its own attack breaks it early. | one actor | On a hero: monsters drop aggro, which makes it a rescue or escape tool, and the ghost passes through actors. **On an enemy it's simply dumb [decided]:** the monster is nearly invisible to your side (a faint shimmer, no HP bar or windup glow), keeps fighting normally, and AI allies lose it. There's no upside; it's the corn of single-target spells. | medium: "goes", "go", "host", "post" |
-| **Coffee** | Haste: +60% move and attack speed for ~6 s, but twitchy (aim jitter, tiny random steps). Then a crash: −30% speed for 2 s. | everyone in a **small** radius (monsters too) | Coffee the team before a rush, or caffeinate the swarmers by accident. The crash makes timing matter. | low–medium: "copy" (matters only if the "Brace!/Copy!" call-and-response is built), "coughing" |
 
-**Combos:**
-- **Damp:**
-  - **+ fire:** puts out fireball blasts and burning patches, and soaks the next fireball (a fizzle). It answers your team's own fire.
-  - **+ ghost:** wet footprints reveal ghosts, enemy-ghost misplays included.
-  - **+ server-room sparks:** electrified puddles become a hazard.
-  - **+ shoves (wind, tentacles, bowl):** a wet floor makes shoves slide further.
-- **Vines:**
-  - **+ teeth:** root a pack, then teeth them, and nobody escapes the pop (friends included).
-  - **vs shoves:** rooted actors ignore wind, tentacles, the bowl and spin.
+**Combos** (the ones for the built spells are in their sections above):
+- **Damp + ghost:** wet footprints reveal ghosts, enemy-ghost misplays included.
+- **Damp + server-room sparks:** electrified puddles become a hazard.
+- **Wind + wet floor:** wind shoves slide further on puddles (it uses the same `Actor.shove` factor), and rooted actors ignore it like every shove.
 - **Blind + brute:** its slam fires blind, maybe into its own swarmers.
-- **Coffee + Wick's draw:** a faster draw, but jittery aim.
 - **Ghost + employees** (`contracts.md`): ghost an employee past a hellgate.
 
 **Component ideas** (extending `spells-and-components.md`):
@@ -114,19 +200,12 @@ and follows the area rule: area spells hit **everyone** inside, except heal and 
 |---|---|---|
 | Wind | feather or fan blade | archer |
 | Blind | ink sac or bat wing | a new enemy |
-| Damp | sponge or leaky pipe | environment pickup |
-| Vines | seed pod | spa planters |
 | Ghost | ectoplasm | a future ghost enemy |
-| Coffee | beans | the break room, or a reward for protecting employees |
 
-**Suggested build order:**
-1. **Vines** introduces a new mechanic (root) that counters the shove system and combos with teeth.
-   The art is a simple variant of the tentacles kit.
-2. **Wind** is almost free: an aimed cone on top of the existing shove system.
-3. **Coffee** needs a small speed-modifier system (useful later for goo slows).
-4. **Ghost** needs visibility and aggro rules (monsters losing targets).
-5. **Blind** shares that aggro work, plus a screen effect.
-6. **Damp** last, because it depends on fire and environment features that don't exist yet.
+**Suggested build order** (Vines, Coffee and Damp are built):
+1. **Wind** is almost free: an aimed cone on top of the existing shove system. It already slides further on Damp's puddles and ignores rooted actors.
+2. **Ghost** needs visibility and aggro rules (monsters losing targets).
+3. **Blind** shares that aggro work, plus a screen effect.
 
 ### Mercurio Retrogrado: "Everything Goes Wrong" [parked, 2026-10-17]
 "cast mercurio retrogrado" is two Spanish words for an English-only speech model, so it should be near impossible to

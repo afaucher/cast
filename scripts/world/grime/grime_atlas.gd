@@ -13,7 +13,7 @@ extends RefCounted
 ## grime must never fight them. GrimeLayer's shader also clips every mark at the hex tile edges.
 
 const COLS := 7
-const ROWS := 6
+const ROWS := 7
 const TILE := 80
 const CONTENT := 0.46
 
@@ -22,6 +22,7 @@ const VARIANTS := {
 	"scorch": 2, "scratch": 2, "ichor": 3, "crack": 2, "rubble": 2, "paper": 2, "glass": 1, "wax": 2,
 	"wine": 2, "popcorn": 2, "chalk": 2, "oil": 2, "rust": 2, "spill": 2,
 	"kernel": 2, "tooth": 2, "ring": 1, "drag": 2, "scuff": 2, "crack_ichor": 2, "stain": 2,
+	"puddle": 2,
 }
 
 static var _first: Dictionary = {}
@@ -298,6 +299,7 @@ static func _paint(kind: String, v: int, p: Painter) -> void:
 		"scuff": _scuff(p, c, v)
 		"crack_ichor": _crack_net(p, c, v, true)
 		"stain": _stain(p, c, v)
+		"puddle": _puddle(p, c, v + 2, Color(0.20, 0.42, 0.60, 0.52), Color(0.38, 0.66, 0.84, 0.46), Color(0.3, 0.7, 1.0, 1.0), Color(0.85, 0.95, 1.0, 0.45))
 
 
 static func _scorch(p: Painter, c: Vector2, v: int) -> void:

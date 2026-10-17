@@ -3,7 +3,7 @@ extends RefCounted
 ## Pure incantation parsing and power scoring. No audio, no engine nodes, so it
 ## is unit-testable: feed it speech-recognizer hypotheses and read back events.
 ##
-##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth"]))
+##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]))
 ##   inc.vocabulary()                       # words to give the recognizer as hotwords
 ##   for ev in inc.feed("cast heel", false, t): ...   # streaming partial (or final=true)
 ##   for ev in inc.tick(t): ...             # call regularly so a lone trigger can time out
@@ -108,6 +108,28 @@ extends RefCounted
 ## molar" or "cast dentist" (long and distinctive, the best bet) are the alternatives; "tooth" is
 ## already accepted.
 ##
+## VINES, DAMP, COFFEE (7th to 9th spells; measured 2026-10-17 with TTS, David + Zira, rates -3/0/+3, through the
+## real model with the nine-word vocabulary: tests/test_voice_audio.gd, test_voice_triggers.gd, test_voice_noise.gd).
+## Deliberate clips (loose): vines 11 of 11, damp 10 of 10, coffee 10 of 10 fired the right spell and no other, and no
+## other clip fired them (0 confusions); latency is the same ~150 ms as the other spells.
+## VINES: "VINES" for every clip but one: rate +3 David fuses it, "CASTBINES", which the compound split reads as cast +
+## "bines" (alias 0.75). The singular is "VINE", accepted exactly (a rate +3 "cast vine" was once heard as "CAST ONE" and
+## is simply missed). The look-alikes are heard as themselves: "wines" is "ONES"/"WINES", "vibes" "VI BES"/"BIBES",
+## "fines" "FINES", and "cast wines/vibes/fines/binds" only fizzle ("garbled"). EXCEPT "binds": both voices write it
+## as "VINES", so it is a true hearing of the spell word: it casts in chaos only (a bare word needs the trigger in loose).
+## DAMP: "DAMP" for every clip, both voices, all rates, power 0.96 to 1.00. The look-alikes are not aliased: "damn"
+## is "DAMN"/"DIM", "dam" "DAMN"/"DIM"/"DOWN", "dump" "DUMP", "camp" "CAMP". "damn" is common chatter, but loose needs
+## the trigger word ("that was damn good", "goddamn it" never cast) and "cast damn" is not a cast. "damp towel" casts
+## damp in chaos only. If real mics often hear "cast damp" as "DAMN", add "damn" at 0.75 (below the bare floor, so chaos
+## still ignores it) and accept that "cast damn" then casts.
+## COFFEE: Zira writes "COFFEE" every time; David writes "COUGHING" or "COUGH" for 3 of his 5 clips ("cast coffee" at
+## rate 0 and +3, "okay cast coffee"), so both are aliased (0.8 / 0.75, power about 0.8, which is why coffee's clean-cast
+## bar is 0.75). "copy" is "COPY"/"COP"/"CO PY", never coffee ("cast copy" fizzles). So "cast coughing" IS a cast of
+## coffee (a measured mishearing, and rare chatter). "coffee break" and "I need coffee" cast coffee in chaos only.
+## Chatter: none of the new words fires in strict or loose without the trigger, and the extra hotwords created no
+## phantoms (idle noise and digital silence give the same nothing / "HE" "AND" as with six spells, none through the
+## gate). Also measured: "summon vines" is heard as "SUM IN VINES", so "sum in" joined the summon trigger's aliases.
+##
 ## POWER = cast_q * spell_q * gap_factor * (1 - extras), in (0, 1]:
 ##   cast_q, spell_q  quality of the matched words (tables below; 1.0 exact or
 ##                    homophone, down to ~0.6 for a near miss).
@@ -193,7 +215,7 @@ const TUNING := {
 			"cast": 1.0, "caste": 1.0, "kast": 1.0, "casts": 0.95,
 			"cass": 0.85, "cats": 0.8, "cost": 0.75, "cash": 0.65,
 		},
-		"summon": {"summon": 1.0, "some in": 0.9, "summons": 0.95, "summoned": 0.9},
+		"summon": {"summon": 1.0, "some in": 0.9, "sum in": 0.9, "summons": 0.95, "summoned": 0.9},
 		"pickle": {"pickle": 1.0, "pickles": 0.95},
 		"magic": {"magic": 1.0},
 		"conjure": {"conjure": 1.0, "conjured": 0.9},
@@ -238,6 +260,19 @@ const TUNING := {
 			"teeth": 1.0, "tooth": 1.0,
 			"ooth": 0.75,
 		},
+		# vines / damp / coffee: the exact words plus the measured mishearings, all below the 0.85 bare floor
+		# (see the VINES / DAMP / COFFEE note in the header).
+		"vines": {
+			"vines": 1.0, "vine": 1.0,
+			"bines": 0.75,
+		},
+		"damp": {
+			"damp": 1.0,
+		},
+		"coffee": {
+			"coffee": 1.0,
+			"coughing": 0.8, "cough": 0.75,
+		},
 	},
 }
 
@@ -267,7 +302,7 @@ var _last_fire: Dictionary = {}
 var _last_final_t := -1e9
 
 
-func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth"]), overrides: Dictionary = {}) -> void:
+func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]), overrides: Dictionary = {}) -> void:
 	_cfg = TUNING.duplicate(true)
 	for k in overrides:
 		_cfg[k] = overrides[k]

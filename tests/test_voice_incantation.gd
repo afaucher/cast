@@ -3,7 +3,7 @@ extends TestCase
 ## strictness modes, trigger words, the accidental label, settings and the
 ## VoiceCaster typed path. No audio and no model needed.
 
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
 const TMP_SETTINGS := "user://test_voice_settings.cfg"
 const TMP_LOG := "user://test_voice_log.csv"
 
@@ -50,6 +50,7 @@ func setup() -> void:
 	_test_explain()
 	_test_tentacles()
 	_test_teeth()
+	_test_vines_damp_coffee()
 	_test_panel_cards()
 	_test_misc()
 	_test_settings()
@@ -346,7 +347,7 @@ func _test_triggers() -> void:
 
 func _test_explain() -> void:
 	var ex := _inc().explain("CAST HEEL")
-	eq(ex.size(), 7, "trigger + six spells")
+	eq(ex.size(), 10, "trigger + nine spells")
 	eq(ex[0]["word"], "cast", "first is the trigger")
 	eq(ex[0]["kind"], "exact", "cast exact")
 	eq(ex[1]["kind"], "homophone", "heel is a homophone of heal")
@@ -422,8 +423,8 @@ func _test_tentacles() -> void:
 	eq(_inc().explain("CAST TENTACLES")[5]["kind"], "exact", "card kind exact")
 	eq(_inc().explain("CAST TENTACLE")[5]["kind"], "homophone", "tentacle is a homophone card")
 	eq(_inc().explain("CAST HEADACLES")[5]["kind"], "sound_alike", "headacles is a sound-alike card")
-	# The caster's own default list has all six.
-	eq(VoiceCaster.DEFAULT_SPELLS.size(), 6, "six default spells")
+	# The caster's own default list has all nine.
+	eq(VoiceCaster.DEFAULT_SPELLS.size(), 9, "nine default spells")
 	check(VoiceCaster.DEFAULT_SPELLS.has("tentacles"), "VoiceCaster default spells include tentacles")
 	check(not VoiceSettings.validate_trigger("tentacles")["ok"], "tentacles cannot be the trigger word")
 
@@ -500,7 +501,60 @@ func _test_teeth() -> void:
 	check(not VoiceSettings.validate_trigger("teeth")["ok"], "teeth cannot be the trigger word")
 
 
-## Seven cards (trigger + six spells) in a 3-column grid: three rows, and a long
+## Vines, damp and coffee: their spoken forms and the measured mishearings cast with the trigger; the look-alikes and
+## chatter ("damn" is everywhere) never do, and none of the words is a mention word (only corn is).
+func _test_vines_damp_coffee() -> void:
+	var forms := {
+		"vines": ["cast vines", "cast vine", "okay cast vines", "castbines", "cast bines", "cast vines now"],
+		"damp": ["cast damp", "okay cast damp", "cast damp now", "please cast damp"],
+		"coffee": ["cast coffee", "cast coughing", "cast cough", "okay cast coffee", "cast coffee now"],
+	}
+	for id: String in forms:
+		for text: String in forms[id]:
+			var c := _say(text)
+			eq(c.size(), 1, "%s form: %s" % [id, text])
+			if c.size() == 1:
+				eq(c[0]["spell"], id, text)
+				check(float(c[0]["power"]) >= 0.7, "%s is not weak: %s" % [text, c[0]["power"]])
+				check(not bool(c[0]["accidental"]), "%s is deliberate" % text)
+	# Exact words are full power; the measured mishearings are a little less.
+	near(float(_say("cast vines")[0]["power"]), 1.0, 0.001, "cast vines is full power")
+	near(float(_say("cast damp")[0]["power"]), 1.0, 0.001, "cast damp is full power")
+	near(float(_say("cast coffee")[0]["power"]), 1.0, 0.001, "cast coffee is full power")
+	check(float(_say("cast coughing")[0]["power"]) < 0.9, "coughing is a sound-alike: a bit weaker")
+	# Without the trigger nothing casts in loose or strict, whatever is said.
+	for text in ["vines", "damp", "coffee", "nice vines", "damp towel", "I need coffee", "coffee break", "coughing", "bines",
+			"damn", "that was damn good", "goddamn it", "dump", "camp", "dam", "wines", "vibes", "fines", "binds", "copy", "I am coughing"]:
+		eq(_say(text).size(), 0, "no trigger, no cast (loose): " + text)
+		eq(_say(text, {"strictness": "strict"}).size(), 0, "no trigger, no cast (strict): " + text)
+	# Look-alikes after the trigger are not casts either ("damn" is not aliased: it is chatter, not a mishearing).
+	for text in ["cast damn", "cast dam", "cast dump", "cast camp", "cast wines", "cast vibes", "cast fines", "cast binds", "cast copy", "cast cop", "cast fine", "cast wine"]:
+		eq(_say(text).size(), 0, "look-alike does not cast: " + text)
+	# Chaos: the real words anywhere.
+	for pair in [["nice vines", "vines"], ["damp towel", "damp"], ["I need coffee", "coffee"]]:
+		var c := _say(pair[0], {"strictness": "chaos"})
+		eq(c.size(), 1, "chaos: " + pair[0])
+		if c.size() == 1:
+			eq(c[0]["spell"], pair[1], "chaos picks " + pair[1])
+			check(bool(c[0]["accidental"]), "chaos cast of '%s' is flagged accidental" % pair[0])
+	# The mishearings (below the 0.85 bare floor) never fire without a trigger, even in chaos.
+	for text in ["coughing", "bines", "damn", "wines"]:
+		eq(_say(text, {"strictness": "chaos"}).size(), 0, "chaos ignores a bare mishearing: " + text)
+	# The spells are in the vocabulary, cannot be trigger words, are not mention spells and have cards.
+	for id in ["vines", "damp", "coffee"]:
+		check(_inc().vocabulary().has(id), "vocab has " + id)
+		check(not VoiceSettings.validate_trigger(id)["ok"], id + " cannot be the trigger word")
+		check(VoiceCaster.DEFAULT_SPELLS.has(id), "VoiceCaster default spells include " + id)
+	var mentions: Array = _inc().config()["mention_spells"]
+	for id in ["vines", "damp", "coffee"]:
+		check(not mentions.has(id), id + " is not a mention spell")
+	# One spell never fires another.
+	for text in ["cast vines", "cast damp", "cast coffee"]:
+		for c in _say(text):
+			eq(c["spell"], text.substr(5), "only itself: " + text)
+
+
+## Ten cards (trigger + nine spells) in a 3-column grid: four rows, and a long
 ## "sound-alike 'headacles'" caption must not push the grid past the 400 px panel.
 func _test_panel_cards() -> void:
 	var caster := VoiceCaster.new()
@@ -514,9 +568,9 @@ func _test_panel_cards() -> void:
 	panel.toggle_with_f1 = false
 	add_child(panel)
 	panel.attach(caster)
-	eq(panel._cards.size(), 7, "panel has trigger + six spell cards")
+	eq(panel._cards.size(), 10, "panel has trigger + nine spell cards")
 	eq(panel._card_grid.columns, 3, "three columns")
-	eq(int(ceil(float(panel._cards.size()) / float(panel._card_grid.columns))), 3, "three rows")
+	eq(int(ceil(float(panel._cards.size()) / float(panel._card_grid.columns))), 4, "four rows")
 	var names: Array = []
 	for c in panel._cards:
 		names.append(str(c["word"]))

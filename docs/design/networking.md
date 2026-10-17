@@ -254,6 +254,10 @@ or a `Combat` resolver call when the `Net` layer is built:
 - **Burning** (added on main the same day). `Burning.on_blast` rolls ignition for every actor in the
   blast on the caster's machine. Each actor's owner should roll its own ignition and tick its own fire,
   as `Burning.net_fields()` already assumes.
+- **Vines, Damp, Coffee** (added 2026-10-17) call `set_modifier` / `Burning.soak` through area helpers
+  (`Combat.modify_radius`, `Wet.douse_in_radius`, `Coffee.cast`) on every machine, so each target's owner has to apply
+  its own. `Actor.shove` now also asks `Damp.slide_mult` (a wet floor) and refuses while rooted; both read state every
+  machine has from the cast event / the replicated modifier. See M4 in `networking-build-plan.md`.
 - **Mail packages** break on any hit from any machine and roll their contents on the spot. The host
   should roll the contents and pay the crypto; a break from a player's machine becomes a "hit package
   X" request.

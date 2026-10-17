@@ -15,7 +15,7 @@ extends RefCounted
 ##     kernels and scorch ring, a teeth pop's tooth bits, tentacle floor cracks, a monster's ichor stain and
 ##     a shove slam's scuff. At most MAX_LIVE are alive; the oldest is recycled.
 ##
-## Mark kinds for Grime.mark(): SCORCH, CORN, TEETH, CRACKS, STAIN, SCUFF, PAPER. Unknown kinds are ignored.
+## Mark kinds for Grime.mark(): SCORCH, CORN, TEETH, CRACKS, STAIN, SCUFF, PAPER, WET. Unknown kinds are ignored.
 ## With no GrimeLayer in the tree (most tests) every call is a harmless no-op.
 
 const SCORCH := "scorch"      ## fireball impact; size = blast radius
@@ -24,6 +24,7 @@ const TEETH := "teeth"        ## a few tooth bits; size = 1 for a pop
 const CRACKS := "tentacles"   ## floor cracks; size = burst radius
 const STAIN := "stain"        ## a monster's death splat; size = the monster's radius
 const SCUFF := "scuff"        ## a shove slam / hard landing; size = 1
+const WET := "wet"            ## a damp puddle that dries away; size = the cell radius it fills
 const PAPER := "paper"        ## torn packing paper and cardboard from a broken mail package; size = 1
 
 const MAX_LIVE := 120         ## live player marks (each may draw a few decals)
@@ -38,7 +39,7 @@ const STYLE := {
 	"wine": [0.80, 0.0], "popcorn": [0.90, 0.0], "chalk": [0.65, 0.0], "oil": [0.80, 0.0],
 	"rust": [0.75, 0.0], "spill": [0.85, 0.55], "kernel": [1.0, 0.0], "tooth": [1.0, 0.0],
 	"ring": [0.80, 0.50], "drag": [0.85, 0.55], "scuff": [0.60, 0.0], "crack_ichor": [0.90, 0.85],
-	"stain": [0.90, 0.50],
+	"stain": [0.90, 0.50], "puddle": [0.85, 0.30],
 }
 
 static var _layer: GrimeLayer = null

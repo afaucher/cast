@@ -40,7 +40,7 @@ const LEAD := 0.5                  ## silence before each clip (pushed at once, 
 const TAIL := 0.9                  ## after it (paced)
 const CHUNK_MS := 320.0            ## decode_chunk_len 32 feature frames x 10 ms (encoder metadata)
 const FIRST_READY := 7480          ## samples before the first decode can run (T = 45 frames, see doc)
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
 
 
 ## VoiceCaster with sample accounting (and the optional flush-on-voice-end prototype).

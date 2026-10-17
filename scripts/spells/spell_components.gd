@@ -30,9 +30,9 @@ const PICKUP_FADE := 5.0         ## ... and blinks for the last this-many second
 ## when rolling, so it never litters the floor with components nobody can use; the entry stays
 ## here so it switches on the moment SpellBook marks the spell available.
 const DROPS := {
-	"grunt": [{"spells": ["teeth"], "chance": 0.12}],
-	"archer": [{"spells": ["heal"], "chance": 0.15}],
-	"brute": [{"spells": ["fireball", "armor"], "chance": 0.35}],
+	"grunt": [{"spells": ["teeth"], "chance": 0.12}, {"spells": ["damp"], "chance": 0.06}],
+	"archer": [{"spells": ["heal"], "chance": 0.15}, {"spells": ["vines"], "chance": 0.08}],
+	"brute": [{"spells": ["fireball", "armor"], "chance": 0.35}, {"spells": ["coffee"], "chance": 0.10}],
 	"swarmer": [{"spells": ["tentacles"], "chance": 0.03}],   ## per imp
 }
 const ANY_KIND: Array = [{"spells": ["corn"], "chance": 0.02}]   ## in addition, from every monster

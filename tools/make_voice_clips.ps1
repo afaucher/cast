@@ -80,16 +80,21 @@ function Same([string]$group, [string]$text, [string]$expect, [double]$minPower,
     Add-Clip $group $text $expect $expect $expect $minPower $voice $rate
 }
 
-$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth" }
+$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth"; vines = "vines"; damp = "damp"; coffee = "coffee" }
 
 # Clean casts, both voices, normal pace: must fire at >= 0.9 in every mode.
 foreach ($v in @($v1, $v2)) {
-    foreach ($id in $spells.Keys) { Same "clean" "cast $($spells[$id])" $id 0.9 $v 0 }
+    foreach ($id in $spells.Keys) {
+        # David hears "cast coffee" as "COUGHING" (a measured alias, 0.8), so coffee's bar is lower.
+        $mp = if ($id -eq "coffee") { 0.75 } else { 0.9 }
+        Same "clean" "cast $($spells[$id])" $id $mp $v 0
+    }
 }
 # Pace changes (TTS rate -3 slow .. +3 fast).
 foreach ($r in @(-3, 3)) {
     foreach ($id in $spells.Keys) {
-        $mp = if ($id -eq "tentacles") { 0.7 } else { 0.8 }   # +3 hears it as "headacles" (a 0.8 alias)
+        # +3 hears tentacles as "headacles" (a 0.8 alias) and David hears vines as "CASTBINES" (a 0.75 alias)
+        $mp = if ($id -eq "tentacles" -or $id -eq "vines") { 0.7 } else { 0.8 }
         Same "rate" "cast $($spells[$id])" $id $mp $v1 $r
     }
 }
@@ -100,6 +105,8 @@ Same "rate" "cast tentacle" "tentacles" 0.7 $v1 3
 # teeth (one syllable, the riskiest word): the pace extremes in the other voice too, and the singular.
 foreach ($r in @(-3, 3)) { Same "rate" "cast teeth" "teeth" 0.7 $v2 $r }
 Same "rate" "cast tooth" "teeth" 0.7 $v1 3
+# vines / damp / coffee: the pace extremes in the other voice too.
+foreach ($r in @(-3, 3)) { foreach ($id in @("vines", "damp", "coffee")) { Same "rate" "cast $id" $id 0.7 $v2 $r } }
 # Sloppy but intended: preamble, suffix, mispronunciations, spelling variants.
 Same "sloppy" "okay cast heal"            "heal"     0.8 $v1 0
 Same "sloppy" "cast fireball now"         "fireball" 0.8 $v2 0
@@ -127,11 +134,25 @@ Same "sloppy" "please cast teeth"          "teeth" 0.8 $v2 0
 Same "sloppy" "cast teeth now"             "teeth" 0.8 $v1 0
 Same "sloppy" "cast tooth"                 "teeth" 0.8 $v1 0
 Same "sloppy" "cast tooth"                 "teeth" 0.8 $v2 0
+# vines / damp / coffee: preamble, suffix, the singular, the other voice.
+Same "sloppy" "okay cast vines"             "vines"  0.8 $v1 0
+Same "sloppy" "please cast vines"           "vines"  0.8 $v2 0
+Same "sloppy" "cast vines now"              "vines"  0.8 $v1 0
+Same "sloppy" "cast vine"                   "vines"  0.8 $v1 0
+Same "sloppy" "okay cast damp"              "damp"   0.8 $v1 0
+Same "sloppy" "please cast damp"            "damp"   0.8 $v2 0
+Same "sloppy" "cast damp now"               "damp"   0.8 $v1 0
+Same "sloppy" "okay cast coffee"            "coffee" 0.7 $v1 0   # David: "O K CAST COUGHING" (alias 0.8, less the preamble)
+Same "sloppy" "please cast coffee"          "coffee" 0.8 $v2 0
+Same "sloppy" "cast coffee now"             "coffee" 0.8 $v1 0
 # Hesitation between the keyword and the spell word.
 Same "hesitate" "cast <b300> heal"                    "heal"     0.8 $v1 0
 Same "hesitate" "cast <b300> tentacles"               "tentacles" 0.6 $v1 0
 Same "hesitate" "cast <b500> tentacles"               "tentacles" 0.8 $v2 0
 Same "hesitate" "cast <b800> tentacles"               "tentacles" 0.6 $v1 0
+Same "hesitate" "cast <b300> vines"                   "vines" 0.6 $v1 0
+Same "hesitate" "cast <b500> damp"                    "damp" 0.6 $v2 0
+Same "hesitate" "cast <b300> coffee"                  "coffee" 0.6 $v1 0
 Same "hesitate" "cast <b300> teeth"                   "teeth" 0.6 $v1 0
 Same "hesitate" "cast <b500> teeth"                   "teeth" 0.6 $v2 0
 Same "hesitate" "cast <b800> teeth"                   "teeth" 0.5 $v1 0
@@ -143,7 +164,9 @@ Add-Clip "hesitate" "cast <b3000> heal"               "none" "none" "any" 0.0 $v
 foreach ($v in @($v1, $v2)) {
     foreach ($id in $spells.Keys) {
         $loose = if ($id -eq "corn") { "corn" } else { "none" }
-        Add-Clip "bare" $spells[$id] "none" $loose $id 0.9 $v 0
+        # David's bare "vines" is heard as "VI NES" (two tokens), so chaos cannot be held to firing it.
+        $chaos = if ($id -eq "vines") { "any" } else { $id }
+        Add-Clip "bare" $spells[$id] "none" $loose $chaos 0.9 $v 0
     }
 }
 # Chatter. Accidental invocations are part of the theme in loose/chaos, so the
@@ -171,6 +194,22 @@ foreach ($v in @($v1, $v2)) {
     }
     foreach ($t in @("nice teeth", "brush your teeth")) {
         Add-Clip "negative" $t "none" "none" "teeth" 0.4 $v 0
+    }
+}
+# Vines / damp / coffee: the words they can be mistaken for, and chatter that really says them. "damn" is common
+# chatter ("cast damn" would be the trigger plus a one-syllable "dam" sound), "wines"/"vibes"/"fines"/"binds" are the
+# vines mishearings, "copy"/"coughing" the coffee ones. Nothing may cast in any mode, except that chaos (any spell
+# word anywhere) fires on the real word in "nice vines" / "I need coffee" / "damp towel".
+foreach ($v in @($v1, $v2)) {
+    foreach ($t in @("wines", "vibes", "fines", "damn", "that was damn good", "dump", "camp", "dam", "copy", "coughing", "goddamn it",
+            "cast wines", "cast vibes", "cast fines", "cast binds", "cast dump", "cast camp", "cast dam", "cast copy")) {
+        Add-Clip "negative" $t "none" "none" "none" 0.0 $v 0
+    }
+    # The recognizer writes "binds" as VINES (measured, both voices): it fires vines in chaos only, like "nice vines".
+    Add-Clip "negative" "binds" "none" "none" "any" 0.0 $v 0
+    foreach ($t in @("nice vines", "damp towel", "I need coffee", "coffee break")) {
+        $chaos = if ($t -like "*vines*") { "vines" } elseif ($t -like "*damp*") { "damp" } else { "coffee" }
+        Add-Clip "negative" $t "none" "none" $chaos 0.4 $v 0
     }
 }
 # Hero names (Rebar, Gasket, Wick) may become voice callsigns, so they must never cast by themselves.

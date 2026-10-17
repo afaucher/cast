@@ -22,8 +22,14 @@ const NET_SCRIPTS := [
 	"res://scripts/spells/armor_zone.gd",
 	"res://scripts/spells/burning.gd",
 	"res://scripts/spells/component_pickup.gd",
+	"res://scripts/spells/coffee.gd",
 	"res://scripts/spells/corn_strike.gd",
+	"res://scripts/spells/damp.gd",
 	"res://scripts/spells/tentacles.gd",
+	"res://scripts/spells/vine_wrap.gd",
+	"res://scripts/spells/vines.gd",
+	"res://scripts/spells/vines_fx.gd",
+	"res://scripts/spells/wet.gd",
 ]
 
 const ACTOR := "res://scripts/core/actor.gd"

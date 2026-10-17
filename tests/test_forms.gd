@@ -173,9 +173,9 @@ func _check_picker() -> void:
 	p.toggle(ids[1])
 	check(not p._start.disabled, "two picks enable Start")
 	check(p._start.has_focus(), "the second pick moves focus to Start, so Enter signs")
-	check(bool((p._buttons[ids[0]] as FormRow).button_pressed), "a picked row is ticked")
+	check(bool((p._buttons[ids[0]] as LicenseCard).button_pressed), "a picked card is ticked")
 	p.set_trigger_word("pickle")
-	check((p._buttons[ids[0]] as FormRow).hint.contains("pickle"), "the trigger word reaches the row hints")
+	check((p._buttons[ids[0]] as LicenseCard).hint.contains("pickle"), "the trigger word reaches the card hints")
 	var got := []
 	p.picked.connect(func(s: Array[String]) -> void: got.append(s))
 	check(p.confirm(), "confirm with two")

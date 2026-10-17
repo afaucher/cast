@@ -39,6 +39,23 @@ const SPELLS := {
 		"desc": "Too many teeth sprout out of EVERYONE at the aim point, then explode. Duck.", "word": "teeth",
 		"component": "Loose teeth", "available": true,
 	},
+	# Vines root everyone in the area (scripts/spells/vines.gd); damp soaks and puts out fire and leaves a wet floor
+	# (damp.gd); coffee is haste then a crash (coffee.gd). Design record: docs/design/spells.md.
+	"vines": {
+		"name": "Vines", "cooldown": 10.0, "color": Color(0.45, 0.78, 0.22),
+		"desc": "Thorny vines burst up and ROOT EVERYONE in the area for about two seconds: no walking, no shoving.", "word": "vines",
+		"component": "Seed pod", "available": true,
+	},
+	"damp": {
+		"name": "Damp", "cooldown": 10.0, "color": Color(0.30, 0.82, 0.92),
+		"desc": "A wide area gets soggy: fires go out, nobody can ignite for a while, and shoves slide further on the puddles.", "word": "damp",
+		"component": "Soggy sponge", "available": true,
+	},
+	"coffee": {
+		"name": "Coffee", "cooldown": 14.0, "color": Color(0.66, 0.43, 0.24),
+		"desc": "Everyone in a small radius gets +60% move and attack speed for six seconds, twitchy, then a crash. Monsters too.", "word": "coffee",
+		"component": "Coffee beans", "available": true,
+	},
 }
 
 # --- Targeting: every spell lands where the player aims, like the ranged bolt.
@@ -75,6 +92,30 @@ const TEETH_DAMAGE := 25.0         ## the carrier, times power
 const TEETH_SPLASH_DAMAGE := 10.0  ## everyone else near the carrier, times power
 const TEETH_SPLASH_RADIUS := 1.5
 const TEETH_SHOVE := 1.2           ## mild shove outward from the carrier
+
+# --- Vines
+const VINES_RADIUS_BASE := 2.4
+const VINES_RADIUS_POWER := 0.6
+const VINES_ROOT_BASE := 1.6       ## seconds rooted at power ~0
+const VINES_ROOT_POWER := 0.6      ## ... plus this at power 1 (2.2 s)
+
+# --- Damp
+const DAMP_RADIUS_BASE := 4.0      ## a WIDE area
+const DAMP_RADIUS_POWER := 1.0
+const DAMP_SOAK := 15.0            ## seconds nobody in the area can ignite (Burning.soak)
+const DAMP_PUDDLE_LIFE := 24.0     ## the wet floor lasts this long (Grime marks live 30 s)
+const DAMP_DRY_TIME := 8.0         ## ... and dries out over the last this-many seconds
+const DAMP_SLIDE_BONUS := 0.5      ## +50% shove distance on a fully wet puddle cell
+
+# --- Coffee
+const COFFEE_RADIUS_BASE := 1.5    ## a SMALL radius
+const COFFEE_RADIUS_POWER := 0.5
+const COFFEE_MOVE_MULT := 1.6      ## +60% walking speed
+const COFFEE_ATTACK_MULT := 1.6    ## +60% attack speed (cooldowns divide by it)
+const COFFEE_TIME_BASE := 4.5      ## seconds of haste at power ~0
+const COFFEE_TIME_POWER := 1.5     ## ... plus this at power 1 (6 s)
+const COFFEE_CRASH_MULT := 0.7     ## -30% move and attack speed
+const COFFEE_CRASH_TIME := 2.0
 
 const MIN_POWER := 0.05
 
@@ -116,6 +157,10 @@ static func spell_name(id: String) -> String:
 
 static func cooldown_of(id: String) -> float:
 	return float(SPELLS[id]["cooldown"]) if SPELLS.has(id) else 0.0
+
+
+static func desc_of(id: String) -> String:
+	return str(SPELLS[id].get("desc", "")) if SPELLS.has(id) else ""
 
 
 static func color_of(id: String) -> Color:
@@ -166,6 +211,12 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 			_cast_tentacles(caster, power, target)
 		"teeth":
 			Teeth.cast(caster, power, target)
+		"vines":
+			_cast_vines(caster, power, target)
+		"damp":
+			_cast_damp(caster, power, target)
+		"coffee":
+			Coffee.cast(caster, power, target)
 	return true
 
 
@@ -382,3 +433,50 @@ static func teeth_damage(power: float) -> float:
 ## Damage to everyone else near the carrier at the pop.
 static func teeth_splash_damage(power: float) -> float:
 	return TEETH_SPLASH_DAMAGE * clampf(power, MIN_POWER, 1.0)
+
+
+# --- Vines ---------------------------------------------------------------------------------
+
+## Everyone (any team) within this of the aim point is rooted.
+static func vines_radius(power: float) -> float:
+	return VINES_RADIUS_BASE + VINES_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+## Seconds the roots hold.
+static func vines_duration(power: float) -> float:
+	return VINES_ROOT_BASE + VINES_ROOT_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+static func _cast_vines(caster: Actor, power: float, target: Vector3) -> void:
+	var v := Vines.new()
+	v.power = clampf(power, MIN_POWER, 1.0)
+	v.source_team = caster.team
+	v.caster = caster
+	v.start_time = GameWorld.time
+	GameWorld.spawn(v, target)
+
+
+# --- Damp ----------------------------------------------------------------------------------
+
+static func damp_radius(power: float) -> float:
+	return DAMP_RADIUS_BASE + DAMP_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+static func _cast_damp(caster: Actor, power: float, target: Vector3) -> void:
+	var d := Damp.new()
+	d.power = clampf(power, MIN_POWER, 1.0)
+	d.source_team = caster.team
+	d.caster = caster
+	d.start_time = GameWorld.time
+	GameWorld.spawn(d, target)
+
+
+# --- Coffee --------------------------------------------------------------------------------
+
+static func coffee_radius(power: float) -> float:
+	return COFFEE_RADIUS_BASE + COFFEE_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+## Seconds of haste before the crash.
+static func coffee_duration(power: float) -> float:
+	return COFFEE_TIME_BASE + COFFEE_TIME_POWER * clampf(power, MIN_POWER, 1.0)

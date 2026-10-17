@@ -28,6 +28,20 @@ signal shove_impact(kind: String, pos: Vector3, amount: float)
 
 const CLIMB_SPEED_FACTOR := 0.35
 
+# --- Modifiers (set_modifier) -----------------------------------------------------------
+# One verb, four stats. Each active modifier is {mult, until, stat}; a stat's value is the PRODUCT of its live
+# modifiers, so different sources stack (haste 1.6 x a goo slow 0.5 = 0.8) and the same id refreshes instead of
+# stacking. Speed and attack rate are clamped so no pile-up freezes or rockets an actor; being rooted is the
+# only way to stand still.
+const STAT_DAMAGE_TAKEN := "damage_taken"   ## multiplies incoming damage (armor 0.4); the default stat
+const STAT_MOVE_SPEED := "move_speed"       ## multiplies walking speed (coffee 1.6, crash 0.7, goo)
+const STAT_ATTACK_RATE := "attack_rate"     ## multiplies attacks per second: cooldowns and the bow draw divide by it
+const STAT_ROOT := "root"                   ## present = rooted: cannot move and cannot be shoved (vines); mult is unused
+const MOVE_MULT_MIN := 0.2
+const MOVE_MULT_MAX := 2.5
+const ATTACK_RATE_MIN := 0.25
+const ATTACK_RATE_MAX := 3.0
+
 # --- Forced movement (shove) tuning -------------------------------------------------
 const SHOVE_TIME := 0.35          ## slide duration for a full-size shove (shorter for small nudges)
 const SHOVE_TIME_MIN := 0.2
@@ -108,24 +122,80 @@ func net_fields() -> Dictionary:
 
 ## Multiplier on incoming damage from active modifiers (e.g. Armor zone 0.5).
 func damage_taken_mult() -> float:
+	return stat_mult(STAT_DAMAGE_TAKEN)
+
+
+## Add or refresh a modifier. Same id refreshes, never stacks. `stat` says what it changes (the STAT_ constants);
+## it defaults to damage taken, which is what every older caller means. Modifiers of one stat multiply, so a
+## spell and a status stack sensibly. This is the verb for every timed buff or debuff: once the Net layer exists
+## it applies here if this machine owns the actor and is sent to the owner otherwise.
+func set_modifier(id: String, mult: float, duration: float, stat: String = STAT_DAMAGE_TAKEN) -> void:
+	_modifiers[id] = {"mult": mult, "until": _now() + duration, "stat": stat}
+
+
+## Drop a modifier early (a re-dose of coffee cancels its crash). Part of the set_modifier verb.
+func clear_modifier(id: String) -> void:
+	_modifiers.erase(id)
+
+
+func has_modifier(id: String) -> bool:
+	return _modifiers.has(id) and _modifiers[id]["until"] >= _now()
+
+
+## Seconds left on a modifier, 0 when it is not active.
+func modifier_left(id: String) -> float:
+	return maxf(0.0, float(_modifiers[id]["until"]) - _now()) if has_modifier(id) else 0.0
+
+
+## The product of every live modifier of `stat` (1.0 with none). Expired ones are dropped here.
+func stat_mult(stat: String) -> float:
 	var now := _now()
 	var m := 1.0
 	for id in _modifiers.keys():
 		var e: Dictionary = _modifiers[id]
 		if e["until"] < now:
 			_modifiers.erase(id)
-		else:
-			m *= e["mult"]
+		elif e.get("stat", STAT_DAMAGE_TAKEN) == stat:
+			m *= float(e["mult"])
 	return m
 
 
-## Add or refresh a damage-taken modifier. Same id refreshes, never stacks.
-func set_modifier(id: String, mult: float, duration: float) -> void:
-	_modifiers[id] = {"mult": mult, "until": _now() + duration}
+## Walking speed multiplier from every STAT_MOVE_SPEED modifier, clamped to MOVE_MULT_MIN..MOVE_MULT_MAX.
+func move_speed_mult() -> float:
+	return clampf(stat_mult(STAT_MOVE_SPEED), MOVE_MULT_MIN, MOVE_MULT_MAX)
 
 
-func has_modifier(id: String) -> bool:
-	return _modifiers.has(id) and _modifiers[id]["until"] >= _now()
+## Units per second the actor really walks at: move_speed x its modifiers, 0 while rooted. Movement code
+## reads this, never move_speed (which stays the base value kits and AI set).
+func effective_speed() -> float:
+	return 0.0 if is_rooted() else move_speed * move_speed_mult()
+
+
+## Attacks-per-second multiplier from every STAT_ATTACK_RATE modifier, clamped to ATTACK_RATE_MIN..ATTACK_RATE_MAX.
+func attack_rate_mult() -> float:
+	return clampf(stat_mult(STAT_ATTACK_RATE), ATTACK_RATE_MIN, ATTACK_RATE_MAX)
+
+
+## A base cooldown (or draw time) as it is right now: shorter when hasted, longer when slowed.
+func scaled_cooldown(base: float) -> float:
+	return base / attack_rate_mult()
+
+
+## Rooted (vines): cannot walk and cannot be shoved, but may still attack and cast.
+func is_rooted() -> bool:
+	return stat_mult_present(STAT_ROOT)
+
+
+## True if any live modifier has this stat (for stats where only presence matters).
+func stat_mult_present(stat: String) -> bool:
+	var now := _now()
+	for id in _modifiers.keys():
+		var e: Dictionary = _modifiers[id]
+		if e["until"] < now:
+			_modifiers.erase(id)
+		elif e.get("stat", STAT_DAMAGE_TAKEN) == stat:
+			return true
+	return false
 
 
 ## Returns the damage actually dealt.
@@ -180,8 +250,11 @@ func move(dir: Vector3, delta: float) -> bool:
 	if dir.length() > 1.0:
 		dir = dir.normalized()
 	facing = dir.normalized()
+	if is_rooted():
+		climbing = false
+		return false   # vines: can turn and attack, cannot walk
 	var map: HexMap = GameWorld.map
-	var step := dir * move_speed * delta
+	var step := dir * effective_speed() * delta
 	var from := global_position
 	var moved := false
 	for attempt in [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]:
@@ -218,10 +291,11 @@ func move(dir: Vector3, delta: float) -> bool:
 #   - a shove caused by a hero can never take a hero below 1 HP (slam, fall or pit)
 
 ## Push this actor `distance` world units along `dir` (X/Z, any length) after scaling by
-## shove_mult. `source` is who caused it (used for friendly-fire protection and damage credit).
+## shove_mult (and by a wet floor, Damp.slide_mult). A rooted actor (vines) is not pushed at all.
+## `source` is who caused it (used for friendly-fire protection and damage credit).
 func shove(dir: Vector3, distance: float, source: Node = null) -> void:
-	if dead or shove_mult <= 0.0 or distance <= 0.0 or _void_fall or _pull or not is_inside_tree():
-		return
+	if dead or shove_mult <= 0.0 or distance <= 0.0 or _void_fall or _pull or not is_inside_tree() or is_rooted():
+		return   # (a rooted actor ignores every shove: tentacles, the bowl, the spin, melee, props)
 	dir.y = 0.0
 	if dir.length() < 0.001:
 		dir = facing
@@ -229,7 +303,7 @@ func shove(dir: Vector3, distance: float, source: Node = null) -> void:
 	dir = dir.normalized()
 	if not _forced:
 		_note_safe()
-	var d := distance * shove_mult
+	var d := distance * shove_mult * Damp.slide_mult(self)   # a wet floor slides further
 	_slide_dir = dir
 	_slide_dist = d
 	_slide_dur = lerpf(SHOVE_TIME_MIN, SHOVE_TIME, clampf(d / SHOVE_FULL_DIST, 0.0, 1.0))

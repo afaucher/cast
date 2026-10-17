@@ -11,7 +11,7 @@ const STEP := 320
 const LEAD := 0.5
 const TAIL := 0.8
 const SPEED := 4.0
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
 ## Options expected to work (hit rate >= MIN_HIT_RATE, no false fires). Others
 ## are only reported: see VoiceCaster.TRIGGER_NOTES for why they are flagged.
 const MIN_HIT_RATE := 0.8
@@ -22,7 +22,7 @@ var _hyps: Array = []
 
 
 func _init() -> void:
-	timeout_sec = 290.0
+	timeout_sec = 600.0   # nine spells: about 40% more clips than with six
 
 
 func setup() -> void:

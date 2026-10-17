@@ -109,6 +109,16 @@ static func is_fireproof(a: Actor) -> bool:
 	return a.has_meta(META_SOAKED_UNTIL) and float(a.get_meta(META_SOAKED_UNTIL)) > GameWorld.time
 
 
+## Soaked by Damp and not yet dry.
+static func is_soaked(a: Actor) -> bool:
+	return a != null and is_instance_valid(a) and a.has_meta(META_SOAKED_UNTIL) and float(a.get_meta(META_SOAKED_UNTIL)) > GameWorld.time
+
+
+## Seconds of damp left, 0 when dry.
+static func soaked_left(a: Actor) -> float:
+	return maxf(0.0, float(a.get_meta(META_SOAKED_UNTIL)) - GameWorld.time) if is_soaked(a) else 0.0
+
+
 static func set_fireproof(a: Actor, on: bool) -> void:
 	if on:
 		a.add_to_group(FIREPROOF)
@@ -183,12 +193,21 @@ static func on_blast(pos: Vector3, radius: float, power: float, source: Node) ->
 	var out: Array[Actor] = []
 	for a in GameWorld.actors_in_radius(pos, radius):
 		if not can_burn(a):
+			if is_soaked(a) and not a.dead:
+				_fizzle(a)   # damp: the blast hisses out on a soaked actor (no roll, so the rng stream is unchanged)
 			continue
 		var frac := GameWorld.flat_distance(a.global_position, pos) / maxf(radius, 0.001)
 		if GameWorld.rng.randf() < ignite_chance(power, frac):
 			if ignite(a, source, roll_duration()) != null:
 				out.append(a)
 	return out
+
+
+## A soaked actor shrugs a fireball off: a puff of steam and a word.
+static func _fizzle(a: Actor) -> void:
+	var steam: Array[Color] = [Color(0.85, 0.92, 0.98), Color(0.6, 0.7, 0.78)]
+	Fx.burst(a.global_position + Vector3.UP * 0.9, steam, 8, 1.4, 0.16, 0.8, -1.2, Vector3.UP, 45.0, false)
+	Fx.number(a.global_position + Vector3(0, 2.4 + a.radius, 0), "FIZZLE", Color(0.6, 0.88, 1.0), 0.8)
 
 
 static func _of(a: Actor) -> Burning:

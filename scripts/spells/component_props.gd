@@ -9,6 +9,9 @@ extends RefCounted
 ##   corn       Corn kernel   one fat golden kernel on a husk leaf
 ##   tentacles  Neon ichor    glowing purple flask with a cork
 ##   teeth      Loose teeth   three white molars, one with a gold filling
+##   vines      Seed pod      split green pod with pale seeds, a curled tendril and a thorn
+##   damp       Soggy sponge  yellow porous sponge with a dripping blue bead
+##   coffee     Coffee beans  three roasted beans with their grooves
 ## Used by ComponentPickup (the world prop) and held in a hero's hand (LowPolyModel.hold_item).
 
 const BONE := Color(0.95, 0.92, 0.80)
@@ -36,9 +39,21 @@ const ICHOR := Color(0.78, 0.22, 1.0)
 const ICHOR_LIGHT := Color(0.95, 0.62, 1.0)
 const ICHOR_DARK := Color(0.46, 0.10, 0.70)
 const GLASS := Color(0.62, 0.40, 0.90)
+const POD := Color(0.40, 0.70, 0.20)
+const POD_DARK := Color(0.20, 0.45, 0.12)
+const POD_LIGHT := Color(0.66, 0.90, 0.36)
+const SEED := Color(0.96, 0.92, 0.62)
+const THORN := Color(0.92, 0.80, 0.48)
+const SPONGE := Color(0.95, 0.80, 0.25)
+const SPONGE_DARK := Color(0.72, 0.55, 0.12)
+const SPONGE_HOLE := Color(0.50, 0.36, 0.08)
+const WATER := Color(0.35, 0.80, 0.98)
+const BEAN := Color(0.48, 0.28, 0.14)
+const BEAN_LIGHT := Color(0.66, 0.42, 0.22)
+const BEAN_DARK := Color(0.22, 0.12, 0.06)
 
 ## How strongly each prop's own colour glows (the neon variant of the shared material).
-const GLOW := {"heal": 0.12, "fireball": 0.22, "armor": 0.05, "corn": 0.10, "tentacles": 0.45, "teeth": 0.04}
+const GLOW := {"heal": 0.12, "fireball": 0.22, "armor": 0.05, "corn": 0.10, "tentacles": 0.45, "teeth": 0.04, "vines": 0.10, "damp": 0.18, "coffee": 0.06}
 
 
 ## The prop for spell `id` (the component of that spell). An unknown id gets a plain grey gem.
@@ -54,6 +69,9 @@ static func make(id: String, glow: bool = false) -> Node3D:
 		"corn": soup = _kernel()
 		"tentacles": soup = _flask()
 		"teeth": soup = _teeth()
+		"vines": soup = _pod()
+		"damp": soup = _sponge()
+		"coffee": soup = _beans()
 		_: soup = LowPoly.boulder(Vector3(0.2, 0.2, 0.2), 0, 0.2, Color(0.6, 0.6, 0.65), 1)
 	var mi := MeshInstance3D.new()
 	mi.name = "Mesh"
@@ -167,4 +185,53 @@ static func _teeth() -> LowPoly.Soup:
 	s.merge(_tooth(776, 1.05), LowPoly.at(Vector3(0.12, -0.03, -0.05), Vector3(0, -15, -18)))
 	s.merge(_tooth(780, 0.9), LowPoly.at(Vector3(0.0, 0.02, 0.15), Vector3(-30, 0, 4)))
 	s.merge(LowPoly.box(Vector3(0.07, 0.045, 0.035), GOLD, 784, 0.0, 1, 0.03), LowPoly.at(Vector3(-0.12, 0.17, -0.06)))   # gold filling
+	return s
+
+
+## A fat green seed pod standing on its base, split at the top to show pale seeds, with a curled tendril and a thorn.
+static func _pod() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(791, 0.08)
+	s.merge(LowPoly.boulder(Vector3(0.17, 0.21, 0.15), 1, 0.07, POD, 792, 0.07), LowPoly.at(Vector3(0.0, -0.04, 0.0)))   # the body
+	s.merge(LowPoly.boulder(Vector3(0.10, 0.14, 0.09), 0, 0.10, POD_LIGHT, 793, 0.06), LowPoly.at(Vector3(-0.06, 0.0, -0.09)))   # a sunlit rib
+	s.merge(LowPoly.boulder(Vector3(0.12, 0.05, 0.10), 0, 0.10, POD_DARK, 794, 0.06), LowPoly.at(Vector3(0.0, 0.15, 0.0)))   # the split rim
+	for p: Vector3 in [Vector3(-0.04, 0.19, 0.01), Vector3(0.04, 0.2, -0.02), Vector3(0.0, 0.2, 0.05)]:
+		s.merge(LowPoly.boulder(Vector3(0.036, 0.04, 0.036), 0, 0.10, SEED, 795 + int(p.x * 100.0)), LowPoly.at(p))
+	# a curled tendril off the stem
+	var pos := Vector3(0.0, -0.25, 0.0)
+	var ang := 0.0
+	for i in 5:
+		var seg := LowPoly.cylinder(0.03 - 0.004 * i, 0.026 - 0.004 * i, 0.09, 5, POD_DARK, 800 + i, 0.004)
+		var mid := pos + Vector3(sin(ang), cos(ang), 0.0) * 0.045
+		s.merge(seg, LowPoly.at(mid, Vector3(0, 0, -rad_to_deg(ang))))
+		pos += Vector3(sin(ang), cos(ang), 0.0) * 0.09
+		ang += 0.55
+	s.merge(LowPoly.cylinder(0.04, 0.0, 0.13, 4, THORN, 810, 0.0), LowPoly.at(Vector3(0.14, 0.0, 0.1), Vector3(0, 0, -80)))   # a thorn
+	return s
+
+
+## A chunky yellow sponge, full of holes, with a bright drip hanging off one corner.
+static func _sponge() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(821, 0.07)
+	s.merge(LowPoly.box(Vector3(0.36, 0.2, 0.26), SPONGE, 822, 0.02, 2, 0.08), LowPoly.at(Vector3(0.0, 0.0, 0.0), Vector3(0, 18, 0)))
+	s.merge(LowPoly.box(Vector3(0.36, 0.06, 0.26), SPONGE_DARK, 823, 0.02, 1, 0.08), LowPoly.at(Vector3(0.0, -0.08, 0.0), Vector3(0, 18, 0)))   # the scrubby underside
+	for p: Vector3 in [Vector3(-0.1, 0.1, 0.04), Vector3(0.07, 0.1, -0.06), Vector3(0.12, 0.1, 0.07), Vector3(-0.03, 0.1, -0.07), Vector3(0.0, 0.1, 0.07)]:
+		s.merge(LowPoly.boulder(Vector3(0.032, 0.02, 0.032), 0, 0.12, SPONGE_HOLE, 824 + int(p.x * 100.0), 0.05), LowPoly.at(p))
+	s.merge(LowPoly.boulder(Vector3(0.045, 0.07, 0.045), 0, 0.10, WATER, 830, 0.05), LowPoly.at(Vector3(0.17, -0.12, 0.1)))   # the drip
+	s.merge(LowPoly.boulder(Vector3(0.025, 0.035, 0.025), 0, 0.10, WATER, 831, 0.05), LowPoly.at(Vector3(0.18, -0.22, 0.1)))
+	return s
+
+
+static func _bean(seed_value: int, size: float) -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(seed_value, 0.07)
+	s.merge(LowPoly.boulder(Vector3(0.09, 0.13, 0.075) * size, 1, 0.05, BEAN, seed_value + 1, 0.06))
+	s.merge(LowPoly.boulder(Vector3(0.05, 0.07, 0.03) * size, 0, 0.10, BEAN_LIGHT, seed_value + 2, 0.05), LowPoly.at(Vector3(-0.025, 0.02, -0.05) * size))   # a glossy highlight
+	s.merge(LowPoly.box(Vector3(0.016, 0.22, 0.03) * size, BEAN_DARK, seed_value + 3, 0.0, 1, 0.04), LowPoly.at(Vector3(0.0, 0.0, 0.062) * size, Vector3(0, 0, 8)))   # the groove
+	return s
+
+
+static func _beans() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(841, 0.05)
+	s.merge(_bean(842, 1.5), LowPoly.at(Vector3(-0.1, -0.02, 0.0), Vector3(20, 15, 25)))
+	s.merge(_bean(846, 1.35), LowPoly.at(Vector3(0.1, -0.04, 0.04), Vector3(-25, -20, -35)))
+	s.merge(_bean(850, 1.4), LowPoly.at(Vector3(0.0, 0.05, -0.1), Vector3(60, 10, 70)))
 	return s

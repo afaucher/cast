@@ -17,6 +17,16 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 | Hand attachment | `LowPolyModel.hold_item()` (`scripts/art/lowpoly/`), `rebar_model.gd`, `gasket_model.gd`, `wick_model.gd` |
 | Drop hook | `Monster._on_death` -> `SpellComponents.drop_for` |
 
+## The license checkout [implemented, 2026-10-17]
+`SpellPicker` (FORM 15) lists every spell from `SpellBook.ids()` as a compact **licence card** in a three-column grid
+(`LicenseCard`), with nothing hard-coded per spell, so a new spell appears without a picker change. The details of the
+focused card (description, "say: cast X", cooldown, component) are in a panel on the right, plus your two picks. The
+grid is at least 5 and at most 7 rows tall and **scrolls** past that (focus keeps the card in view), so the sheet fits
+1600 x 900 canvas units (1280 x 720 and the Steam Deck's 1280 x 800) from nine spells to a hundred. Arrows and the
+D-pad move in 2D, Enter ticks, **1-9** tick the first nine cards (optional: later cards are reached with the arrows),
+Esc goes back. Test hook: set `spell_ids` / `spell_meta` (`SpellPicker.fake_ids(24)`) before adding it to the tree;
+`tests/test_license_checkout.gd` covers 9, 24 and 100 spells.
+
 ## Slots [decided, implemented]
 - Each hero has **4 spell slots** (`SpellComponents.SLOT_COUNT`). The start-of-game picker still
   picks **2** spells; they go in slots 1-2 with **5 charges** each (`START_CHARGES`, *tunable*).
@@ -62,6 +72,9 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 | Corn | Corn kernel | one fat golden kernel on a husk leaf |
 | Tentacles | Neon ichor | glowing purple flask |
 | Teeth | Loose teeth | three white molars (gold filling) |
+| Vines | Seed pod | split green pod with pale seeds, a curled tendril and a thorn |
+| Damp | Soggy sponge | yellow porous sponge with a dripping blue bead |
+| Coffee | Coffee beans | three roasted beans with their grooves |
 
 ### Drops (data table `SpellComponents.DROPS` / `ANY_KIND`, *tunable*)
 Every monster rolls each entry of its kind's list, then each entry of `ANY_KIND`, independently when
@@ -73,6 +86,9 @@ it dies.
 | archer | Grave moss | heal | 15% (was 40%) |
 | brute | Ember horn **or** Hide plate, 50/50 | fireball / armor | 35% (was 100%) |
 | swarmer (imp) | Neon ichor | tentacles | 3% **per imp** (was 15%) |
+| grunt (skeleton) | Soggy sponge | damp | 6% |
+| archer | Seed pod | vines | 8% |
+| brute | Coffee beans | coffee | 10% |
 | any monster | Corn kernel | corn | 2%, in addition (was 5%) |
 
 Drops are rare on purpose: not every creature drops every spell, and the floor should not fill up with
@@ -91,6 +107,11 @@ pickups. Two more tunables in `SpellComponents` keep it that way:
   gameplay lands and everything switches on: the 12% grunt drops, the pickup, slotting. (`roll_drops(...,
   include_unavailable = true)` rolls the raw table, which the tests use.)
 - Drops fan out around the corpse and snap onto real floor (a monster shoved into a pit drops nothing).
+
+Vines, damp and coffee (2026-10-17) take their drops from the monsters for now. Their designed environment sources do
+not exist yet: seed pods from spa planters, a sponge or leaky pipe as an environment pickup, and coffee beans from the
+break room or as a reward for protecting employees. A broken mail package can also hold any castable spell's component
+(`MailPackage.roll_component` uses `SpellBook.ids()`, so all nine are possible).
 
 ## Pickups, and the swap rule [decided, implemented]
 `ComponentPickup` is a world prop: it bobs and turns, has a soft glow and a faint floor ring, and shows a
@@ -132,7 +153,8 @@ small floating label ("Ember horn x3") when a player is within 4 units.
    a deliberate stop-and-press, and the old spell's charges are never lost, so a lock added only friction.
 
 ## Still open
-- How many distinct spells for the vertical slice: 6-8? (Teeth is the sixth.)
+- How many distinct spells for the vertical slice? There are nine now (vines, damp and coffee are the seventh to ninth);
+  the license checkout (FORM 15) is a scrolling catalog that is meant to grow past 20.
 - Exploration secrets and vantage points holding rarer components (`exploration.md`).
 - Handing a component to a teammate; allies casting and collecting.
 - ~~Whether a dropped pickup should eventually despawn~~ Yes: 60 s, blinking for the last 5 (see Drops).

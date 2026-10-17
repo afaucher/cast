@@ -186,6 +186,28 @@ from the wind-up event. Shoves on another player are requests (`Hero._spin` hitt
 modifier. `PricedProp` stops a slider through a message to the slider's owner.
 **M4c Runtime guards and agreement (layer 5).** In debug builds, a write to an `OWNER` field on a non-owner raises
 a script error. Agreement tests.
+**New spells (vines, damp, coffee; built 2026-10-17 to fit this milestone).** Each is a **scheduled effect**: one cast
+event, then every machine runs it from `SPAWN` params and a `start_time` stamp (`Vines` and `Damp` already take the
+stamp as a `SPAWN` parameter and burst on the first frame if it is in the past; `ArmorZone`/`CornStrike`/`Tentacles`
+still have to be moved to the same pattern). What each one does to *other* entities goes through verbs, applied by the
+target's owner:
+- **Vines** roots with `set_modifier("vines", 1, dur, STAT_ROOT)` through `Combat.modify_radius`: each machine runs the
+  burst, and each target's owner applies and replicates its own root (`_modifiers` is `OWNER`). `Actor.shove`
+  refuses while rooted, so a shove request that reaches the owner of a rooted hero is simply dropped there. The vines
+  and the leg wraps are cosmetic.
+- **Damp** soaks through `Wet.douse` -> `Burning.soak` (a status the target's owner applies; the soak end time is the
+  owner's, like the fire). Fires are put out by each owner. **Puddles are cosmetic plus one factor:** which cells are wet
+  is a pure function of (centre, radius, stamp), so no list is sent, and `Damp.slide_mult` scales a shove where *its
+  owner* applies it (the shoved actor's machine), so every machine needs the damp field, which it has from the cast
+  event. The Grime decals are cosmetic. Nothing about puddles is host-arbitrated.
+- **Coffee** applies `coffee_move`/`coffee_rate` (and later the crash pair) as speed modifiers on each target's owner,
+  where `Coffee` also runs the haste to crash schedule and the twitch (`GameWorld.rng` on the owner: a hero's machine
+  for an AI-less player, the host for monsters and allies). The aim wobble is the local player's input (a sum of
+  sines of the game clock, no rolls). Remote machines see only the replicated modifiers, enough to draw the steam.
+- **Hit resolution gap, same as tentacles:** `Combat.modify_radius`/`each_in_radius` run on every machine today; at M4b
+  they apply only to the targets that machine resolves (the owner for a hero, the host for everything else).
+  `Burning.extinguish_in_radius` and `Wet.douse_in_radius` are the same kind of loop and move with them.
+
 *Done when:* **`test_net_m4_casts`** (3 processes, `coast`): a corn strike cast by client A lands on all three within
 one frame of the same `host_time`; a heal aimed at client B lands on B once; B standing in the blast is hit once (not
 once per machine), and B sidestepping on its screen is not hit. **`test_net_m4_hits`**: client damage to a monster

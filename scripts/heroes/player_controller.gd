@@ -141,8 +141,14 @@ func cast_spell(id: String, power: float) -> bool:
 	return false
 
 
-## World point under the mouse (on the terrain), or the scripted aim, or a spot ahead of the hero.
+## World point under the mouse (on the terrain), or the scripted aim, or a spot ahead of the hero. While the hero
+## is hasted on coffee it wobbles a little (Coffee.jitter_aim): melee, shots and voice casts all take this point.
 func aim_point() -> Vector3:
+	var p := _raw_aim_point()
+	return Coffee.jitter_aim(hero, p) if hero != null else p
+
+
+func _raw_aim_point() -> Vector3:
 	if aim_override != Vector3.INF:
 		return aim_override
 	var cam := _camera()

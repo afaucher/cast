@@ -282,7 +282,7 @@ func _tick_attack(delta: float) -> void:
 		_end_windup()
 		_strike()
 		_strike_employee()
-		_next_attack_time = GameWorld.time + attack_cooldown
+		_next_attack_time = GameWorld.time + scaled_cooldown(attack_cooldown)
 		_strike_t = 1.0
 		if model != null:
 			model.attack_swing()
@@ -544,7 +544,7 @@ func _steer_to(pos: Vector3, delta: float) -> bool:
 	var l := d.length()
 	if l < 0.05:
 		return false
-	var scale_f := minf(1.0, l / maxf(move_speed * delta, 0.0001))   # never overshoot the point
+	var scale_f := minf(1.0, l / maxf(effective_speed() * delta, 0.0001))   # never overshoot the point
 	return move(d / l * scale_f, delta)
 
 
@@ -558,7 +558,7 @@ func _on_stuck() -> void:
 
 ## Monsters that cannot climb refuse CLIMB moves (so heroes can escape onto +2 ledges).
 func move(dir: Vector3, delta: float) -> bool:
-	if is_shoved():
+	if is_shoved() or is_rooted():
 		return false
 	if not can_climb and not dead:
 		var d := dir
@@ -568,7 +568,8 @@ func move(dir: Vector3, delta: float) -> bool:
 				d = d.normalized()
 			var map := GameWorld.map
 			if map != null:
-				var step := d * move_speed * delta
+				var spd := effective_speed()
+				var step := d * spd * delta
 				var from := global_position
 				var chosen := Vector3.ZERO
 				for attempt in [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]:
@@ -583,7 +584,7 @@ func move(dir: Vector3, delta: float) -> bool:
 					climbing = false
 					facing = d.normalized()
 					return false
-				var moved := super.move(chosen / maxf(move_speed * delta, 0.0001), delta)
+				var moved := super.move(chosen / maxf(spd * delta, 0.0001), delta)
 				facing = d.normalized()
 				return moved
 	return super.move(dir, delta)

@@ -79,9 +79,14 @@ func _test_data_and_input() -> void:
 	eq(SpellBook.component_name("corn"), "Corn kernel")
 	eq(SpellBook.component_name("tentacles"), "Neon ichor")
 	eq(SpellBook.component_name("teeth"), "Loose teeth")
+	eq(SpellBook.component_name("vines"), "Seed pod")
+	eq(SpellBook.component_name("damp"), "Soggy sponge")
+	eq(SpellBook.component_name("coffee"), "Coffee beans")
 	check(SpellBook.has_spell("teeth") and SpellBook.is_available("teeth"), "teeth exists and is available")
 	check(SpellBook.ids().has("teeth"), "teeth is offered by the picker")
-	check(SpellBook.ids().size() == 6, "six castable spells")
+	for id in ["vines", "damp", "coffee"]:
+		check(SpellBook.has_spell(id) and SpellBook.is_available(id) and SpellBook.ids().has(id), "%s is offered by the picker" % id)
+	check(SpellBook.ids().size() == 9, "nine castable spells")
 	eq(SpellBook.all_ids().size(), SpellBook.ids().size(), "no unavailable spells are left")
 
 
@@ -343,6 +348,11 @@ func _test_drop_table() -> void:
 	near(float(tally["grunt"].get("teeth", 0)) / n, 0.12, 0.025, "grunt teeth 12%")
 	near(float(tally["archer"].get("heal", 0)) / n, 0.15, 0.025, "archer moss 15%")
 	near(float(tally["swarmer"].get("tentacles", 0)) / n, 0.03, 0.012, "swarmer ichor 3%")
+	# The 2026-10-17 spells: grunts carry soggy sponges (6%), archers seed pods (8%), brutes coffee beans (10%).
+	near(float(tally["grunt"].get("damp", 0)) / n, 0.06, 0.02, "grunt sponge 6%")
+	near(float(tally["archer"].get("vines", 0)) / n, 0.08, 0.02, "archer seed pod 8%")
+	near(float(tally["brute"].get("coffee", 0)) / n, 0.10, 0.025, "brute coffee beans 10%")
+	check(not tally["swarmer"].has("damp") and not tally["swarmer"].has("vines") and not tally["swarmer"].has("coffee"), "imps do not carry the new components")
 	var horn := int(tally["brute"].get("fireball", 0))
 	var plate := int(tally["brute"].get("armor", 0))
 	near(float(horn + plate) / n, 0.35, 0.03, "a brute drops one of its two 35% of the time")
@@ -350,6 +360,15 @@ func _test_drop_table() -> void:
 	for kind in tally:
 		near(float(tally[kind].get("corn", 0)) / n, 0.02, 0.012, kind + " corn 2%")
 	check(not tally["brute"].has("teeth") and not tally["archer"].has("tentacles"), "kinds only drop their own components")
+
+	# A broken mail package can hold ANY castable spell's component, the three new ones included.
+	var mail_seen := {}
+	rng.seed = 31
+	for i in 900:
+		mail_seen[MailPackage.roll_component(rng)] = true
+	for id in SpellBook.ids():
+		check(mail_seen.has(id), "a mail package can contain the %s component" % id)
+	eq(mail_seen.size(), 9, "all nine spells show up in 900 rolls")
 
 	# Teeth is available, so grunts really drop it by default (an unavailable spell would be skipped).
 	rng.seed = 99
