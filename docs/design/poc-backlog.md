@@ -277,3 +277,4 @@ anyone outside the team plays. **P2** = later.
 
 - **P1** Four slots, readied spell (keys 1-4, E casts). The readied spell recharges 15% faster (a passive boost) and is shown as its component held in the hero's hand. See `spells-and-components.md`.
 - **P1** Material components: monster drop tables, walk-over pickups, charges, swapping.
+- **P1** Spell **teeth**: affliction, 1-2 s growth, pop with splash and shove, heal cleanses. See `spells.md`.
