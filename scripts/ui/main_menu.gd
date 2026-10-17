@@ -40,9 +40,6 @@ var voice_screen: VoiceSetupScreen = null
 var settings_screen: SettingsScreen = null
 
 var _opened_from: Button = null
-var _info_word: Label
-var _info_strict: Label
-var _info_gate: Label
 
 
 func _ready() -> void:
@@ -191,11 +188,6 @@ func _build_main() -> void:
 	clipboard.offset_right = 658.0
 	clipboard.offset_top = -419.0
 	clipboard.offset_bottom = 419.0
-	clipboard.tabs = [
-		{"text": "jobs", "color": FormTheme.carbon("canary")},
-		{"text": "rig", "color": FormTheme.carbon("blue")},
-		{"text": "options", "color": FormTheme.carbon("gold")},
-	]
 	main_panel.add_child(clipboard)
 
 	var sheet := FormSheet.new("27-B", "Work order", "CAST  ·  " + TAGLINE, "Copy", "OFFICE", "white", 46)
@@ -230,15 +222,6 @@ func _build_main() -> void:
 	build_label.name = "BuildVersion"
 	office_head.add_child(build_label)
 	body.add_child(FormTheme.margin(office_head, 22, 6, 22, 0))
-	var office := GridContainer.new()
-	office.columns = 3
-	office.add_theme_constant_override("h_separation", 12)
-	office.add_theme_constant_override("v_separation", 6)
-	office.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_info_word = _office_field(office, "CAST WORD")
-	_info_strict = _office_field(office, "STRICTNESS")
-	_info_gate = _office_field(office, "MIN VOICE")
-	body.add_child(FormTheme.margin(office, 22, 4, 22, 4))
 	body.add_child(FormTheme.spacer())
 	body.add_child(FormTheme.rule(2.0))
 	var ads := HBoxContainer.new()
@@ -272,28 +255,12 @@ func _menu_row(parent: Control, text: String, number: String, hint: String, on_p
 	return r
 
 
-## One "typed value in a boxed field" cell of the office-use grid; returns the value label.
-func _office_field(grid: GridContainer, caption: String) -> Label:
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 0)
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.add_child(FormTheme.label(caption, 15, FormTheme.INK))
-	var val := FormTheme.typed("-", 20)
-	v.add_child(val)
-	grid.add_child(FormTheme.boxed(v, 8, 3))
-	return val
-
-
-## Fill the hint on Voice setup and the office-use fields from the saved voice settings.
+## Fill the hint on Voice setup from the saved voice settings.
 func _refresh_info() -> void:
 	var vs := VoiceSettings.load_settings(_settings_file())
 	var word := str(vs["trigger_word"])
 	var strict := str(vs["strictness"])
 	voice_button.hint = "\"%s\" · %s" % [word, strict]
-	_info_word.text = word
-	_info_strict.text = strict
-	_info_gate.text = "%d dB" % roundi(float(vs["min_voice_db"]))
 
 
 func _open(from: Button, which: String) -> void:
