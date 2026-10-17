@@ -83,6 +83,7 @@ func _pop() -> void:
 	Fx.ring(pos, RADIUS, Color(1.0, 0.9, 0.3, 0.9), 0.5, 0.0, false, 0.2)
 	Fx.flash_sphere(pos + Vector3.UP * 0.6, 1.2, Color(1, 0.95, 0.6, 0.7), 0.25)
 	Fx.number(pos + Vector3.UP * 2.8, "POP!", Color(1.0, 0.95, 0.4), 1.6)
+	Grime.mark(Grime.CORN, pos, RADIUS)   # kernels + a scorch ring that fade after 30 s
 	get_tree().create_timer(1.6).timeout.connect(queue_free)
 
 

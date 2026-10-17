@@ -37,23 +37,28 @@ const LIFE_AFTER_BREAK := 3.0           ## a prop without rubble lingers this lo
 
 ## One table for everything: display name, price (dollars), HP (fragility; corn does 60, fireball
 ## 40, a hard shove ~25), footprint radius and site. Order here = catalog order.
+## Placement (RoomThemes): "place" = wall (back to the nearest wall) or corner (tucked into a concave corner);
+## "orient" = away_from_wall (faces into the room along the wall's normal), face_center (toward the room's centre)
+## or face_entrance (toward the room's main door); "foot" = the footprint (lateral x forward, world units).
+## The front of every model is +Z, so a prop at yaw 0 faces +Z.
 const TABLE := {
-	"wine_rack": {"name": "Wine rack", "price": 1200, "hp": 45.0, "radius": 0.7, "site": "bunker"},
-	"wine_barrel": {"name": "Vintage 1787 wine barrel", "price": 4000, "hp": 85.0, "radius": 0.68, "site": "bunker"},
-	"marble_statue": {"name": "Marble statue", "price": 8000, "hp": 110.0, "radius": 0.58, "site": "bunker"},
-	"gold_toilet": {"name": "Gold toilet", "price": 15000, "hp": 130.0, "radius": 0.55, "site": "bunker"},
-	"projector": {"name": "Home-cinema projector", "price": 2500, "hp": 35.0, "radius": 0.5, "site": "bunker"},
-	"zen_fountain": {"name": "Zen fountain", "price": 900, "hp": 55.0, "radius": 0.72, "site": "bunker"},
-	"server_rack": {"name": "Server rack", "price": 3000, "hp": 70.0, "radius": 0.5, "site": "bunker"},
-	"crystal_lamp": {"name": "Crystal lamp", "price": 600, "hp": 25.0, "radius": 0.5, "site": "bunker"},
-	"doomsday_console": {"name": "Doomsday console", "price": 20000, "hp": 140.0, "radius": 0.78, "site": "lair"},
-	"torture_rack": {"name": "Torture rack", "price": 1500, "hp": 80.0, "radius": 0.75, "site": "lair"},
-	"specimen_vat": {"name": "Specimen vat", "price": 5000, "hp": 45.0, "radius": 0.68, "site": "lair"},
-	"villain_throne": {"name": "Villain throne", "price": 9000, "hp": 100.0, "radius": 0.7, "site": "lair"},
-	"shark_tank": {"name": "Shark tank", "price": 7000, "hp": 60.0, "radius": 0.78, "site": "lair"},
-	"henchman_locker": {"name": "Henchman locker", "price": 300, "hp": 70.0, "radius": 0.62, "site": "lair"},
-	"evil_portrait": {"name": "Evil portrait", "price": 2000, "hp": 30.0, "radius": 0.55, "site": "lair"},
-	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair"},
+	"wine_rack": {"name": "Wine rack", "price": 1200, "hp": 45.0, "radius": 0.7, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.6)},
+	"wine_barrel": {"name": "Vintage 1787 wine barrel", "price": 4000, "hp": 85.0, "radius": 0.68, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.35, 1.25)},
+	"marble_statue": {"name": "Marble statue", "price": 8000, "hp": 110.0, "radius": 0.58, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
+	"gold_toilet": {"name": "Gold toilet", "price": 15000, "hp": 130.0, "radius": 0.55, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.05, 1.05)},
+	"projector": {"name": "Home-cinema projector", "price": 2500, "hp": 35.0, "radius": 0.5, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.9, 0.9)},
+	"zen_fountain": {"name": "Zen fountain", "price": 900, "hp": 55.0, "radius": 0.72, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.7, 1.7)},
+	"server_rack": {"name": "Server rack", "price": 3000, "hp": 70.0, "radius": 0.5, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.9, 0.8)},
+	"crystal_lamp": {"name": "Crystal lamp", "price": 600, "hp": 25.0, "radius": 0.5, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
+	"treadmill": {"name": "Smart treadmill", "price": 2800, "hp": 75.0, "radius": 0.55, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 1.9)},
+	"doomsday_console": {"name": "Doomsday console", "price": 20000, "hp": 140.0, "radius": 0.78, "site": "lair", "place": "wall", "orient": "face_entrance", "foot": Vector2(1.5, 1.0)},
+	"torture_rack": {"name": "Torture rack", "price": 1500, "hp": 80.0, "radius": 0.75, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 0.9)},
+	"specimen_vat": {"name": "Specimen vat", "price": 5000, "hp": 45.0, "radius": 0.68, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.5, 1.5)},
+	"villain_throne": {"name": "Villain throne", "price": 9000, "hp": 100.0, "radius": 0.7, "site": "lair", "place": "wall", "orient": "face_entrance", "foot": Vector2(1.1, 1.2)},
+	"shark_tank": {"name": "Shark tank", "price": 7000, "hp": 60.0, "radius": 0.78, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 1.0)},
+	"henchman_locker": {"name": "Henchman locker", "price": 300, "hp": 70.0, "radius": 0.62, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.3, 0.6)},
+	"evil_portrait": {"name": "Evil portrait", "price": 2000, "hp": 30.0, "radius": 0.55, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.1, 1.0)},
+	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
 }
 
 var kind := ""
@@ -87,6 +92,15 @@ static func is_kind(k: String) -> bool:
 	return TABLE.has(k)
 
 
+## {place, orient, foot, radius} of a kind (see TABLE): where it goes and which way it faces.
+static func placement(k: String) -> Dictionary:
+	var d: Dictionary = TABLE.get(k, {})
+	return {
+		"place": String(d.get("place", "wall")), "orient": String(d.get("orient", "away_from_wall")),
+		"foot": d.get("foot", Vector2(1.0, 1.0)), "radius": float(d.get("radius", 0.6)),
+	}
+
+
 static func price_of(k: String) -> int:
 	return int((TABLE[k] as Dictionary)["price"]) if TABLE.has(k) else 0
 
@@ -106,20 +120,26 @@ static func money(amount: int) -> String:
 
 
 ## Spawn a prop standing on `cell`. opts (all optional): `yaw` degrees (default 15: front toward the
-## iso camera, a little turned so its side shows), `hp_mult`, `rubble` (false = vanish when broken). Null for an unknown kind.
+## iso camera, a little turned so its side shows; SiteBuilder passes the themed pose's yaw: front = +Z, so
+## the prop faces (sin yaw, cos yaw)), `pos` (Vector2 world X/Z: stand there instead of the cell centre, e.g.
+## pushed up against a wall), `hp_mult`, `rubble` (false = vanish when broken). Null for an unknown kind.
 static func spawn(cell: Vector2i, kind_id: String, opts: Dictionary = {}) -> PricedProp:
 	if not TABLE.has(kind_id) or GameWorld.root == null:
 		push_warning("PricedProp.spawn: unknown kind '%s' or no world" % kind_id)
 		return null
 	var p := PricedProp.new()
 	p.setup(kind_id, opts)
+	var at := Hex.to_world(cell)
+	if opts.has("pos"):
+		var pp: Vector2 = opts["pos"]
+		at = Vector3(pp.x, 0.0, pp.y)
 	var level := 0.0
 	var map := GameWorld.map
 	if map != null:
-		var l := map.ground_level(Hex.to_world(cell))
+		var l := map.ground_level(at)
 		if not is_nan(l):
 			level = l
-	GameWorld.spawn(p, Hex.to_world(cell, level))
+	GameWorld.spawn(p, Vector3(at.x, level * Hex.LEVEL_HEIGHT, at.z))
 	p.snap_to_ground()
 	return p
 
@@ -190,6 +210,12 @@ func tag_alpha() -> float:
 
 func model_height() -> float:
 	return PropModels.height(kind)
+
+
+## The unit X/Z vector the prop's front faces (its yaw: front = +Z).
+func facing_vector() -> Vector2:
+	var r := deg_to_rad(rotation_degrees.y)
+	return Vector2(sin(r), cos(r))
 
 
 func last_culprit() -> Node:

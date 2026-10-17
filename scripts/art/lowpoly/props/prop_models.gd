@@ -31,7 +31,7 @@ const HEIGHTS := {
 	"wine_rack": 1.7, "wine_barrel": 1.25, "marble_statue": 2.2, "gold_toilet": 1.35,
 	"projector": 1.35, "zen_fountain": 1.15, "server_rack": 1.95, "crystal_lamp": 1.45,
 	"doomsday_console": 1.75, "torture_rack": 0.95, "specimen_vat": 2.0, "villain_throne": 2.35,
-	"shark_tank": 1.6, "henchman_locker": 1.75, "evil_portrait": 2.0, "brazier": 1.15,
+	"shark_tank": 1.6, "henchman_locker": 1.75, "evil_portrait": 2.0, "brazier": 1.15, "treadmill": 1.5,
 }
 
 static var _seed := 1
@@ -66,6 +66,7 @@ static func build(kind: String) -> Node3D:
 		"zen_fountain": _zen_fountain(s)
 		"server_rack": _server_rack(s)
 		"crystal_lamp": _crystal_lamp(s)
+		"treadmill": _treadmill(s)
 		"doomsday_console": _doomsday_console(s)
 		"torture_rack": _torture_rack(s)
 		"specimen_vat": _specimen_vat(s)
@@ -98,6 +99,7 @@ static func palette(kind: String) -> Array[Color]:
 		"zen_fountain": out = [STONE, Color(0.35, 0.36, 0.4), Color(0.4, 0.85, 0.85)]
 		"server_rack": out = [IRON, IRON_LT, Color(0.3, 1.0, 0.5), Color(1.0, 0.6, 0.2)]
 		"crystal_lamp": out = [Color(0.85, 0.55, 1.0), Color(1.0, 0.7, 0.95), GOLD, Color(0.6, 0.35, 0.9)]
+		"treadmill": out = [IRON, IRON_LT, VELVET, Color(0.3, 0.9, 1.0)]
 		"doomsday_console": out = [IRON, IRON_LT, Color(1.0, 0.2, 0.15), Color(0.95, 0.8, 0.2)]
 		"torture_rack": out = [WOOD_DK, WOOD, IRON, Color(0.7, 0.62, 0.45)]
 		"specimen_vat": out = [IRON, Color(0.3, 1.0, 0.55), Color(0.2, 0.55, 0.4), Color(0.45, 0.2, 0.6)]
@@ -364,6 +366,27 @@ static func _crystal_lamp(s: LowPoly.Soup) -> void:
 		var base_col := Color(0.6, 0.35, 0.9)
 		rod(s, sp[0], sp[1], float(sp[2]), float(sp[2]) * 0.35, 5, base_col)
 		rod(s, (sp[0] as Vector3).lerp(sp[1], 0.45), sp[1], float(sp[2]) * 0.62, 0.0, 5, col)
+
+
+static func _treadmill(s: LowPoly.Soup) -> void:
+	# the runner stands on the belt facing +Z (toward the console, i.e. into the room); the belt's rear is at the wall
+	box(s, Vector3(0.8, 0.2, 1.85), Vector3(0, 0.22, -0.05), IRON)
+	box(s, Vector3(0.62, 0.05, 1.65), Vector3(0, 0.34, -0.05), Color(0.14, 0.14, 0.17))
+	for i in 7:
+		box(s, Vector3(0.6, 0.02, 0.05), Vector3(0, 0.375, -0.78 + 0.26 * float(i)), Color(0.24, 0.24, 0.3))
+	for sx in [-0.42, 0.42]:
+		box(s, Vector3(0.1, 0.14, 1.8), Vector3(sx, 0.36, -0.05), IRON_LT)
+	box(s, Vector3(0.82, 0.34, 0.3), Vector3(0, 0.34, -0.86), VELVET)
+	# uprights, handlebar and a tilted console with a glowing screen
+	for sx in [-0.37, 0.37]:
+		rod(s, Vector3(sx, 0.36, 0.6), Vector3(sx, 1.18, 0.74), 0.05, 0.04, 5, IRON_LT)
+	cyl(s, 0.032, 0.032, 0.84, 5, Vector3(0, 1.1, 0.78), IRON_LT, Vector3(0, 0, 90))
+	box(s, Vector3(0.84, 0.36, 0.12), Vector3(0, 1.3, 0.76), IRON, Vector3(-28, 0, 0))
+	box(s, Vector3(0.62, 0.22, 0.03), Vector3(0, 1.31, 0.83), glow(Color(0.3, 0.9, 1.0)), Vector3(-28, 0, 0))
+	box(s, Vector3(0.16, 0.05, 0.03), Vector3(0.26, 1.2, 0.86), glow(Color(1.0, 0.35, 0.3)), Vector3(-28, 0, 0))
+	# a towel over the bar and a water bottle in the holder
+	box(s, Vector3(0.3, 0.2, 0.05), Vector3(-0.2, 1.02, 0.8), Color(0.9, 0.92, 0.95))
+	cyl(s, 0.05, 0.05, 0.22, 6, Vector3(0.3, 1.04, 0.6), Color(0.3, 0.7, 0.95))
 
 
 # ------------------------------------------------------------------ lair

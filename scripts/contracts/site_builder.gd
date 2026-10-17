@@ -9,9 +9,14 @@ extends RefCounted
 ##  - origin room: the largest room that is neither the start nor the exit room (ties: farthest from
 ##    the start). It is also where the story says it happened;
 ##  - employees (2-4): the rooms farthest from the floor's gates (the origin on floor 3);
-##  - priced props: at most MAX_PROPS (6) a floor, one per room first (rooms in a shuffled order), only on cells
-##    next to a wall on flat floor, never within 3 of the start or the exit, never within 2 cells of a
-##    corridor (so doors and corridors stay clear), at least PROP_SPACING (4) apart;
+##  - ROOM THEMES (scripts/world/themes): every room gets a theme from the site's pool (the start room is the
+##    "service entrance", the origin room gets the theme the story names), recorded as SitePlan.room_themes;
+##  - priced props: at most MAX_PROPS (6) a floor, one per room first (rooms in a shuffled order), the kind
+##    picked by the room's theme (wine rack in the cellar, projector in the cinema, ...), only on cells next to
+##    a wall on flat floor, never within 3 of the start or the exit, never within 2 cells of a corridor (so
+##    doors and corridors stay clear), at least PROP_SPACING (4) apart. Each stands BACK TO THE WALL facing into
+##    the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw;
+##  - decor (not priced): each theme's set dressing, vignettes placed as one unit (SitePlan.decor, see RoomThemes);
 ##  - monster packs: one per room except the start room, bigger on later floors and harder jobs, denser
 ##    near the gates (the pests spread outward), biased toward the contract's pest. Budgets are scaled by
 ##    BUDGET_SCALE (0.7) and each room holds at most one monster per MonsterFactory.CELLS_PER_MONSTER
@@ -49,6 +54,7 @@ const HENCHMAN_NAMES: Array[String] = [
 
 ## Plan one floor. `catalog` is the prop kinds available (PricedProp.catalog(site_type)).
 static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[String]) -> SitePlan:
+	var t_start := Time.get_ticks_usec()
 	var p := SitePlan.new()
 	p.floor_number = floor_n
 	var rng := RandomNumberGenerator.new()
@@ -70,10 +76,21 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 
 	_plan_gates(map, run, floor_n, p, rng, avoid, near_corr)
 	_plan_employees(map, run, floor_n, p, rng, avoid)
-	_plan_props(map, run, p, rng, avoid, near_corr, catalog)
+	var theme_seed: int = run.floor_seed(floor_n)
+	var t0 := Time.get_ticks_usec()
+	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
+	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
+	last_theme_usec = Time.get_ticks_usec() - t0
+	t0 = Time.get_ticks_usec()
+	_plan_props(map, run, p, rng, avoid, near_corr, catalog, ctx)
 	_plan_notes(map, run, floor_n, p, near_corr)
+	last_theme_usec += Time.get_ticks_usec() - t0
+	t0 = Time.get_ticks_usec()
+	RoomThemes.plan_decor(ctx)
+	last_theme_usec += Time.get_ticks_usec() - t0
 	_plan_packs(run, floor_n, p)
 	_block_cells(p)
+	last_plan_usec = Time.get_ticks_usec() - t_start
 	return p
 
 
@@ -235,6 +252,10 @@ static func _plan_gates(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan
 
 
 const NO_SPOT := Vector2i(1 << 20, 1 << 20)
+## Microseconds the last plan() spent on room themes + set dressing (assign, props placement included, decor); a
+## perf probe for tests/test_room_themes.gd.
+static var last_theme_usec := 0
+static var last_plan_usec := 0
 
 
 ## The flat spot nearest the room centre that keeps clear of the start/exit, corridors and `taken` gates.
@@ -335,7 +356,7 @@ static func _employee_spot(map: HexMap, p: SitePlan, tag: String, avoid: Diction
 
 # --- props ----------------------------------------------------------------------------------
 
-static func _plan_props(map: HexMap, run: ContractRun, p: SitePlan, rng: RandomNumberGenerator, avoid: Dictionary, near_corr: Dictionary, catalog: Array[String]) -> void:
+static func _plan_props(map: HexMap, run: ContractRun, p: SitePlan, rng: RandomNumberGenerator, avoid: Dictionary, near_corr: Dictionary, catalog: Array[String], ctx: ThemeCtx) -> void:
 	if catalog.is_empty():
 		return
 	var gate_cells := p.gate_cells()
@@ -389,24 +410,48 @@ static func _plan_props(map: HexMap, run: ContractRun, p: SitePlan, rng: RandomN
 			var edge: Array[Vector2i] = edges[tag]
 			if int(placed.get(tag, 0)) >= want or edge.is_empty():
 				continue
-			for _try in 24:
-				var c := edge[rng.randi_range(0, edge.size() - 1)]
-				var ok := true
-				for g in gate_cells:
-					if Hex.distance(g, c) < 4:
-						ok = false
-						break
-				if ok:
-					for t in taken:
-						if Hex.distance(t, c) < PROP_SPACING:
+			# The theme picks the kind (a wine rack in the cellar, the projector in the cinema ...); a room
+			# whose theme has none in this catalog takes any kind of the site.
+			var themed := RoomThemes.priced_kinds(str(p.room_themes.get(tag, "")), catalog)
+			var kinds: Array[String] = []
+			var n_placed := int(placed.get(tag, 0))
+			if themed.is_empty():
+				kinds = catalog.duplicate()
+				for i in range(kinds.size() - 1, 0, -1):
+					var j := rng.randi_range(0, i)
+					var t := kinds[i]
+					kinds[i] = kinds[j]
+					kinds[j] = t
+			else:
+				# the theme's first choice half the time, any of its props otherwise
+				var first := 0 if rng.randf() < 0.5 else rng.randi_range(0, themed.size() - 1)
+				for i in themed.size():
+					kinds.append(themed[(n_placed + first + i) % themed.size()])
+			var done := false
+			for kind in kinds:
+				for pose in RoomThemes.priced_poses(ctx, tag, kind, edge):
+					var c: Vector2i = pose["cell"]
+					var ok := true
+					for g in gate_cells:
+						if Hex.distance(g, c) < 4:
 							ok = false
 							break
-				if not ok:
-					continue
-				taken.append(c)
-				placed[tag] = int(placed.get(tag, 0)) + 1
-				p.props.append({"cell": c, "kind": catalog[rng.randi_range(0, catalog.size() - 1)], "room": tag})
-				break
+					if ok:
+						for t in taken:
+							if Hex.distance(t, c) < PROP_SPACING:
+								ok = false
+								break
+					if not ok:
+						continue
+					taken.append(c)
+					placed[tag] = n_placed + 1
+					RoomThemes.commit_priced(ctx, tag, kind, pose)
+					p.props.append({"cell": c, "kind": kind, "room": tag, "pos": pose["pos"], "yaw": pose["yaw"],
+							"place": pose["place"], "orient": pose["orient"], "foot": pose["foot"]})
+					done = true
+					break
+				if done:
+					break
 
 
 # --- clue notes -----------------------------------------------------------------------------
@@ -460,6 +505,15 @@ static func _block_cells(p: SitePlan) -> void:
 			p.blocked[n] = true
 	for nt in p.notes:
 		p.blocked[nt["cell"]] = true
+	# Walk-blocking decor (racks, bunks, barrels, ...): monsters are not placed inside it.
+	for dc in p.decor:
+		if not bool(dc["blocks"]):
+			continue
+		var rad: float = float(dc["block_radius"])
+		for bp: Vector2 in (dc["block_points"] as Array):
+			for n in Hex.range_cells(ThemeGeo.cell_of(bp), 1):
+				if ThemeGeo.hex_dist(bp, n) < rad + 0.1:
+					p.blocked[n] = true
 
 
 # ===========================================================================================
@@ -474,6 +528,7 @@ class Site:
 	var origin_gate: Actor = null
 	var employees: Array[Actor] = []
 	var props: Array[Actor] = []
+	var decor: Array[Node3D] = []       ## set dressing (DecorProp nodes) and the "ThemeLights" holder
 	var monsters: Array[Monster] = []
 	var notes: Array[Node3D] = []
 	var pest := ""                      ## the contract's pest ("everything" = every monster counts)
@@ -499,9 +554,14 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 		if emp != null:
 			site.employees.append(emp)
 	for pr in p.props:
-		var prop := ContractParts.spawn_prop(pr["cell"], str(pr["kind"]), {"site": run.site_type})
+		var opts := {"site": run.site_type}
+		if pr.has("pos"):
+			opts["pos"] = pr["pos"]     # back to the wall, facing into the room
+			opts["yaw"] = pr["yaw"]
+		var prop := ContractParts.spawn_prop(pr["cell"], str(pr["kind"]), opts)
 		if prop != null:
 			site.props.append(prop)
+	site.decor = DecorProp.spawn_plan(p)
 	for nt in p.notes:
 		var note := ClueNote.new()
 		note.text = str(nt["text"])
