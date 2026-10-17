@@ -8,6 +8,10 @@ extends Node3D
 ## It needs none of the game systems (no GameWorld, no actors, no physics): one terrain mesh, the walls and props
 ## as a few meshes, three models, one van, one gate and about six lights, and nothing allocates per frame.
 ##
+## The van and its chalk circle stand on the crew's summoning mat (VanRug: a worn maroon rug with a woven border, tyre
+## tracks and oil stains, scorched in the "after" mood), so the floor under them is not flat black; the chalk is drawn bold
+## (VanCircle.set_chalk_style) to read on it.
+##
 ## The menu (a clipboard form) sits on the LEFT third, so the crew and the van are framed into the right two
 ## thirds (`FRAME_SHIFT`). The glowing hex seams are turned down (HexMapView.seam_gain / seam_near_gain) because
 ## bright seams under a UI are loud.
@@ -47,6 +51,7 @@ const BREACH_R := Vector2(1.85, 2.3)
 const GATE_AT := Vector3(8.7, 0.0, -6.9)
 const VAN_AT := Vector3(1.4, 0.0, -1.2)
 const VAN_YAW := -10.0
+const RUG_RADIUS := 4.4              ## the crew's summoning mat under the van and its circle (the circle is 3.2)
 const CAM_POS := Vector3(-0.4, 5.0, 11.4)
 const CAM_LOOK := Vector3(2.6, 1.5, -1.0)
 const CAM_FOV := 42.0
@@ -72,7 +77,7 @@ const SWAY_SPEED := 0.12             ## rad/s: a full sway takes ~52 s
 
 ## Hex seams: calm under a menu (1 = the game's loudness).
 const SEAM_GAIN := 0.35
-const SEAM_NEAR_GAIN := 0.2
+const SEAM_NEAR_GAIN := 0.3
 const SEAM_NEAR_RANGE := 18.0
 
 const STONE: Array[Color] = [Color(0.34, 0.31, 0.29), Color(0.3, 0.28, 0.27), Color(0.38, 0.35, 0.31), Color(0.27, 0.26, 0.27)]
@@ -95,6 +100,7 @@ var terrain: HexMapView
 var camera: Camera3D
 var gate: HellgateModel
 var van: VanModel
+var rug: VanRug
 var wick: WickModel
 var rebar: RebarModel
 var gasket: GasketModel
@@ -332,8 +338,13 @@ func _build_gate() -> void:
 ## The van on its chalk pentagram, side door open. VanModel's nose is +Z and its sliding door is on -X; turned 90
 ## degrees the nose points to +X and the open door faces the camera.
 func _build_van() -> void:
+	rug = VanRug.new(RUG_RADIUS)
+	rug.position = VAN_AT
+	rug.set_van_yaw(VAN_YAW)
+	add_child(rug)
 	var circle := VanCircle.new(3.2)
 	circle.settle()
+	circle.set_chalk_style(0.9, 1.25, 0.6, Color(0.96, 0.92, 0.80))     # bold chalk: it has to read on the rug
 	circle.position = VAN_AT
 	add_child(circle)
 	if circle.light != null:
@@ -460,6 +471,8 @@ func _apply_mood() -> void:
 	if _breach_flicker != null:
 		_breach_flicker.base = 5.0 if night else 3.4
 	van.set_lights(1.0 if night else 0.0)
+	if rug != null:
+		rug.set_scorch(1.0 if after else 0.0)
 	var head := van.get_node_or_null("Chassis/HeadLight") as Light3D
 	if head != null:
 		head.visible = night
@@ -577,7 +590,9 @@ func _after_job() -> void:
 		Kit.box(s, Vector3(0.1, 0.08, 0.08), p, Color(1.0, 0.86, 0.35) if rng.randf() < 0.7 else Color(0.98, 0.97, 0.9), Vector3(rng.randf() * 90, rng.randf() * 180, 0))
 	for i in 5:
 		var p2 := VAN_AT + Vector3(rng.randf_range(-4, 4), 0.01, rng.randf_range(0.5, 3.5))
-		Kit.cyl(s, rng.randf_range(0.4, 0.8), rng.randf_range(0.4, 0.8), 0.01, 7, p2, Color(0.08, 0.06, 0.06))
+		var sr := rng.randf_range(0.4, 0.8)
+		if Vector2(p2.x - VAN_AT.x, p2.z - VAN_AT.z).length() > RUG_RADIUS + sr:
+			Kit.cyl(s, sr, sr, 0.01, 7, p2, Color(0.08, 0.06, 0.06))      # bare floor only: the rug's own burn marks are in its shader
 	_mood_root.add_child(Kit.mesh(s, 0.0, "AfterMess"))
 
 

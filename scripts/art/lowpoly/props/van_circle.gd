@@ -28,6 +28,8 @@ uniform float ignite = 0.0;          // 0..1: how much of the figure is drawn
 uniform float glow = 0.0;            // amber strength
 uniform float chalk = 0.0;           // chalk amount
 uniform float chalk_alpha = 0.42;
+uniform float chalk_width = 1.0;     // multiplies the line width
+uniform float chalk_solid = 0.0;     // 0 = broken, smudged chalk (the in-game look); 1 = mostly unbroken lines
 uniform float flare = 0.0;           // the filled amber disc inside the ring
 uniform vec3 amber = vec3(1.0, 0.52, 0.10);
 uniform vec3 chalk_col = vec3(0.90, 0.86, 0.74);
@@ -60,7 +62,7 @@ void fragment() {
 	float a = fract(atan(p.x, -p.y) / 6.2831853);      // 0 at the top, clockwise
 	float sweep = ignite * 1.08;
 	float vis_ring = smoothstep(sweep, sweep - 0.06, a);
-	float w = 0.032;
+	float w = 0.032 * chalk_width;
 	float d = 9.0;                                      // distance to the nearest line, in radii
 
 	// two rings
@@ -123,7 +125,7 @@ void fragment() {
 	// chalk layer: broken lines, smudged
 	float n1 = noise(p * 38.0);
 	float n2 = noise(p * 9.0 + 3.0);
-	float broken = smoothstep(0.30, 0.58, n1) * (0.55 + 0.45 * n2);
+	float broken = mix(smoothstep(0.30, 0.58, n1) * (0.55 + 0.45 * n2), mix(0.82, 1.0, n2), chalk_solid);
 	float smudge = (1.0 - smoothstep(0.0, 0.1, d)) * 0.16 * n2;
 	float a_c = (m * broken + smudge) * chalk_alpha * chalk;
 
@@ -385,6 +387,15 @@ func set_light(k: float) -> void:
 
 func sparks(on: bool) -> void:
 	spark_fx.emitting = on
+
+
+## The chalk's look. The defaults are the in-game one (faint, broken, smudged); the garage lays the circle on a rug
+## and wants it bold: more alpha, a fatter line, fewer gaps (`solid` 0..1), and a brighter chalk colour if given.
+func set_chalk_style(alpha: float, width: float = 1.0, solid: float = 0.0, color: Color = Color(0.90, 0.86, 0.74)) -> void:
+	floor_mat.set_shader_parameter("chalk_alpha", clampf(alpha, 0.0, 1.0))
+	floor_mat.set_shader_parameter("chalk_width", maxf(width, 0.1))
+	floor_mat.set_shader_parameter("chalk_solid", clampf(solid, 0.0, 1.0))
+	floor_mat.set_shader_parameter("chalk_col", Vector3(color.r, color.g, color.b))
 
 
 ## The final state: a faint chalk mark and nothing else.
