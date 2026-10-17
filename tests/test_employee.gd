@@ -1,6 +1,5 @@
 extends MonsterTestBase
-## Employee: a neutral, fragile civilian. Cowers, panics away from monsters, latches onto the first hero
-## within 2 and trails them (pathing, no +2 climbs), switches leader when the leader goes down, dies to
+## Employee: a neutral, fragile civilian. Cowers, panics away from monsters, is recruited by E (request_follow, within 2.2; walking past does nothing) and trails the hero (pathing, no +2 climbs), switches leader when the leader goes down, dies to
 ## friendly-fire area damage with no floor (and to shoves into pits), can be targeted by monsters, and
 ## leaves through extract() emitting `rescued` once.
 
@@ -74,8 +73,11 @@ func setup() -> void:
 	hero = add_hero(Vector2i(1, 0))                          # ~1.7 away
 	hero.move_speed = 4.5
 	var other := add_hero(Vector2i(-4, 3))                   # a second hero, far away
-	var latched := await wait_until(func() -> bool: return emp.is_following(), 40)
-	check(latched, "latches onto a hero within 2")
+	await frames(60)
+	check(not emp.is_following(), "a hero within 2 does NOT recruit by standing there (joining needs E)")
+	check(not emp.request_follow(other), "a hero 6 away cannot recruit")
+	check(emp.request_follow(hero), "E from a hero within reach recruits")
+	check(emp.is_following(), "latches onto the hero who asked")
 	check(emp.leader() == hero, "the near hero is the leader")
 	eq(emp.model.mood(), "follow", "the model switches to its follow walk")
 	var max_d := 0.0
@@ -101,7 +103,7 @@ func setup() -> void:
 	new_world(map_w)
 	emp = Employee.spawn(Vector2i(0, 0), {"style": "staff"})
 	hero = add_hero(Vector2i(1, 0))
-	await wait_until(func() -> bool: return emp.is_following(), 40)
+	emp.request_follow(hero)
 	check(emp.is_following(), "latched before the wall test")
 	hero.global_position = Vector3(8.0, hero.global_position.y, 0.0)   # the far side of the wall
 	var rounded := await wait_until(func() -> bool: return fdist(emp, hero) < 3.4, 900)
@@ -111,7 +113,7 @@ func setup() -> void:
 	new_world(_ledge_map())
 	emp = Employee.spawn(Vector2i(0, 0), {"style": "staff"})
 	hero = add_hero(Vector2i(1, 0))
-	await wait_until(func() -> bool: return emp.is_following(), 40)
+	emp.request_follow(hero)
 	check(emp.is_following(), "latched before the ledge test")
 	hero.global_position = Hex.to_world(Vector2i(5, 0), 2.0)   # up on the +2 ledge
 	await frames(420)
@@ -123,8 +125,8 @@ func setup() -> void:
 	emp = Employee.spawn(Vector2i(0, 0), {"style": "staff"})
 	var h1 := add_hero(Vector2i(1, 0))
 	var h2 := add_hero(Vector2i(-4, 0))                       # ~6.9 away: not a leader yet
-	await wait_until(func() -> bool: return emp.is_following(), 40)
-	check(emp.leader() == h1, "follows the hero within 2, not the far one")
+	emp.request_follow(h1)
+	check(emp.leader() == h1, "follows the hero who recruited it, not the far one")
 	h1.dead = true                                            # downed (stays in the tree)
 	check(emp.leader() == null, "a downed leader is no leader")
 	var switched := await wait_until(func() -> bool: return emp.leader() == h2, 40)
@@ -233,7 +235,7 @@ func setup() -> void:
 	new_world(flat_map(10))
 	emp = Employee.spawn(Vector2i(0, 0), {"style": "staff"})
 	hero = add_hero(Vector2i(1, 0))
-	await wait_until(func() -> bool: return emp.is_following(), 40)
+	emp.request_follow(hero)
 	var rescued_count := [0]
 	var rescued_who := [null]
 	emp.rescued.connect(func(e: Employee) -> void:
@@ -248,6 +250,7 @@ func setup() -> void:
 	check(Employee.alive().is_empty(), "extracted employees are not counted alive")
 	check(not emp.is_in_group("employees"), "left the employees group")
 	eq(emp.model.mood(), "cheer", "cheers on the way out")
+	await frames(2)
 	check(emp.bubble_text() != "", "says thanks")
 	check(not Combat.explode(emp.global_position, 3.0, 5.0, -1, hero, 1.0).has(emp), "area blasts no longer reach an extracted employee")
 	await frames(120)

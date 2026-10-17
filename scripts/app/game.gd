@@ -39,6 +39,9 @@ extends Node3D
 ##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, service_entrance); the
 ##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing
 ##   --to-package        dev: put the crew two cells from the first mail package stack of the floor (zoom in with --zoom 10)
+##   --to-employee       dev: put the crew 1.5 cells from the first employee (it latches on; E prompts "tell X to wait")
+##   --press-e S         dev: press E (the controller's context key) S seconds in
+##   --break-crates S    dev: S seconds in, hit every breakable crate stack within 9 units of the player (screenshots)
 ##   --to-exit           dev: put the crew on the elevator (shows "E: use elevator"; E opens the menu)
 ##   --demo-damage       dev: 1 s in, put two property-damage lines on the Ledger (to see the ticker and the tracker)
 ##   --show-panel        dev: keep the voice debug panel open in --shot screenshots
@@ -177,6 +180,9 @@ func _parse_args() -> void:
 			"--to-theme": opts["to_theme"] = nxt
 			"--to-exit": opts["to_exit"] = true
 			"--to-package": opts["to_package"] = true
+			"--to-employee": opts["to_employee"] = true
+			"--press-e": opts["press_e"] = float(nxt)
+			"--break-crates": opts["break_crates"] = float(nxt)
 			"--demo-damage": opts["demo_damage"] = true
 			"--show-panel": opts["show_panel"] = true
 			"--hurt": opts["hurt"] = float(nxt)
@@ -540,6 +546,12 @@ func _start() -> void:
 		get_tree().create_timer(1.5).timeout.connect(func() -> void:
 			if _can_pause():
 				_open_pause())
+	if opts.has("press_e"):
+		get_tree().create_timer(float(opts["press_e"])).timeout.connect(func() -> void:
+			var used := controller.press_readied()
+			_log("press-e: %s" % ("used" if used else "nothing"), Color(0.8, 1.0, 0.8)))
+	if opts.has("break_crates"):
+		get_tree().create_timer(float(opts["break_crates"])).timeout.connect(_break_crates_dev)
 	if opts.has("demo_damage"):
 		get_tree().create_timer(1.0).timeout.connect(func() -> void:
 			Ledger.damage("Vintage 1787 wine barrel", 4000, player)
@@ -558,7 +570,7 @@ func _arrive_by_van() -> void:
 	if allies.size() >= 2:
 		crew.append(allies[1])   # Gasket
 		crew.append(allies[0])   # Rebar
-	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit")
+	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_arrival = VanArrival.spawn(_site.plan.van, crew, play)
 	if _arrival == null:
@@ -766,6 +778,8 @@ func _use_elevator_key() -> bool:
 func _check_elevator() -> void:
 	if hud != null:
 		hud.context_prompt = ELEVATOR_PROMPT if _menu == null and not _leaving and _player_at_elevator() else ""
+		if hud.context_prompt == "" and _menu == null and not _leaving:
+			hud.context_prompt = Employee.interact_prompt(player)   # "E: tell Marguerite to wait" / "E: bring Marguerite"
 	if _menu != null or _leaving or not opts.has("auto_elevator"):
 		return   # without --auto-elevator the menu opens only on E (see _use_elevator_key)
 	var on_exit := false
@@ -1175,6 +1189,16 @@ func _dev_teleports() -> void:
 					focus = _site.plan.centers[themed[0]]
 			_teleport_crew(focus)
 			return
+	if opts.has("to_employee") and _site != null and not _site.plan.employees.is_empty():
+		var ec: Vector2i = _site.plan.employees[0]["cell"]
+		var stand := ec
+		for c in Hex.ring(ec, 1):
+			var cell3: HexMap.Cell = map.get_cell(c)
+			if cell3 != null and cell3.type == HexMap.Tile.FLOOR:
+				stand = c
+				break
+		_teleport_crew(stand)
+		return
 	if opts.has("to_package") and _site != null and not _site.plan.packages.is_empty():
 		# two cells from the first stack, toward the middle of its room
 		var pk: Dictionary = _site.plan.packages[0]
@@ -1203,6 +1227,13 @@ func _dev_teleports() -> void:
 		_teleport_crew(best)
 	elif opts.has("to_exit"):
 		_teleport_crew(_exit_cell)
+
+
+## Dev flag --break-crates: hit the crate stacks around the player (screenshots of the break).
+func _break_crates_dev() -> void:
+	for a in GameWorld.breakables_in_radius(player.global_position, 9.0):
+		if a is BreakableCrate:
+			a.apply_damage(5.0, player)
 
 
 func _teleport_crew(cell: Vector2i) -> void:

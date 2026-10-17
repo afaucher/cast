@@ -119,7 +119,7 @@ static func _box(s: LowPoly.Soup, size: Vector3, pos: Vector3, col: Color, seed_
 # --------------------------------------------------------------------------- loose bits
 
 ## How much bigger than its modelled size each loose bit is drawn (they have to read from the game camera).
-const BIT_SCALE := {"skull": 1.35, "tub": 1.4, "lid": 1.4, "pickle": 1.3, "flap": 1.0}
+const BIT_SCALE := {"skull": 1.35, "tub": 1.4, "lid": 1.4, "pickle": 1.3, "flap": 1.0, "plank": 1.0}
 
 
 ## Half the thickness of a bit lying on the floor (so it rests on it); "tub_up" is a tub standing upright.
@@ -132,6 +132,7 @@ static func rest_height(kind: String) -> float:
 		"lid": return 0.008 * k
 		"pickle": return 0.052 * k
 		"flap": return 0.008
+		"plank": return 0.022
 	return 0.05
 
 
@@ -144,6 +145,7 @@ static func bit(kind: String, seed_value: int = 1) -> Node3D:
 		"tub": _tub(s, n, seed_value)
 		"lid": _lid(s, n, seed_value)
 		"pickle": _pickle(s, n)
+		"plank": _plank(s, n, seed_value)
 		_: _flap(s, n, seed_value)
 	var root := Node3D.new()
 	root.name = kind.capitalize()
@@ -186,6 +188,16 @@ static func _pickle(s: LowPoly.Soup, n: int) -> void:
 	s.merge(LowPoly.boulder(Vector3(0.17, 0.052, 0.052), 1, 0.12, PICKLE, n + 1, 0.07), LowPoly.at(Vector3.ZERO))
 	for i in 3:
 		s.merge(LowPoly.boulder(Vector3(0.02, 0.012, 0.014), 0, 0.2, PICKLE_DK, n + 2 + i, 0.05), LowPoly.at(Vector3(-0.08 + 0.08 * i, 0.04, 0.012 * (i - 1))))
+
+
+## A splintered board from a broken wooden crate (decor crate stacks, BreakableCrate): a plank with a nail and a
+## darker cross-batten stub, in one of two lengths.
+static func _plank(s: LowPoly.Soup, n: int, seed_value: int) -> void:
+	var long_board := seed_value % 3 != 0
+	var pl := 0.50 if long_board else 0.30
+	s.merge(LowPoly.box(Vector3(pl, 0.034, 0.11), PropModels.WOOD, n + 1, 0.0, 1, 0.07), LowPoly.at(Vector3.ZERO))
+	s.merge(LowPoly.box(Vector3(0.09, 0.02, 0.12), PropModels.WOOD_DK, n + 2, 0.0, 1, 0.05), LowPoly.at(Vector3(pl * 0.28, 0.026, 0)))
+	s.merge(LowPoly.box(Vector3(0.026, 0.026, 0.026), Color(0.75, 0.78, 0.82), n + 3, 0.0, 1, 0.0), LowPoly.at(Vector3(pl * 0.28, 0.044, 0)))
 
 
 static func _flap(s: LowPoly.Soup, n: int, seed_value: int) -> void:

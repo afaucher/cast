@@ -6,7 +6,7 @@ extends Node3D
 ## break (the same 30 s as the grime layer's player-caused marks). Purely visual: it uses its own seeded
 ## RandomNumberGenerator (never GameWorld.rng), has no collision and frees itself.
 ##
-##   PackageSpill.burst(pos, "skulls", seed, away_dir, 0.4)    # pos = the floor under the box; contents: skulls / yogurt / pickles / "" (flaps only)
+##   PackageSpill.burst(pos, "skulls", seed, away_dir, 0.4)    # pos = the floor under the box; contents: skulls / yogurt / pickles / planks (a broken crate) / "" (flaps only)
 
 const LIFE := 30.0              ## seconds from the break until the spill is gone
 const SHRINK := 4.0             ## ... it shrinks over the last SHRINK of them
@@ -20,6 +20,7 @@ const MAKEUP := {
 	"skulls": [["skull", 3, 5]],
 	"yogurt": [["tub", 4, 6], ["lid", 2, 4]],
 	"pickles": [["pickle", 5, 8]],
+	"planks": [["plank", 5, 7]],        ## a broken wooden crate (BreakableCrate): boards only, no cardboard flaps
 }
 const FLAPS := 4
 
@@ -55,7 +56,7 @@ static func burst(pos: Vector3, contents: String, seed_value: int, away: Vector2
 		for i in count:
 			serial += 1
 			sp._add(String(entry[0]), serial, rng, away, 0.9, height)
-	for i in FLAPS:
+	for i in (0 if contents == "planks" else FLAPS):
 		serial += 1
 		sp._add("flap", serial, rng, away, 1.0, height)
 	GameWorld.spawn(sp, pos)

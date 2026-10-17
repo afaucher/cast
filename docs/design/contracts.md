@@ -18,7 +18,17 @@ end; the north-star "consistently pretty good" team should clear most objectives
   run around and get in the way, and they can be hit by **your** spells: corn, teeth, tentacle
   shoves into pits. Losing one costs $10, which is funny exactly because it's so little. The
   real cost is the end-of-job report ("Employees lost: 3. Cause: corn.").
-  - **Option:** an escort variant where employees follow a hero to the exit (call them by voice later?).
+  - **Escort [built]:** employees follow a hero to the exit, and joining takes **E**
+    (`Employee.JOIN_NEEDS_E`, on): walking past does nothing. E next to a cowering or waiting employee
+    (nearest within 2.2) brings them along ("E: bring Marguerite" shows on the HUD); E next to your own
+    follower tells them to wait ("E: tell Marguerite to wait"). A waiting employee crouches where they were
+    told, still panics at monsters and then walks back, and never rejoins by proximity, so they do not
+    chase you into a fight. A waiting employee still counts alive ($10); extraction only takes followers
+    near the elevator, so one left behind is not extracted. E priority: elevator, then the employee, then
+    casting the readied spell. A follower inside 2.2 therefore takes the E press, so cast by voice while one
+    trails you closely. The press is a **request** (`Employee.request_wait / request_follow`): the host
+    owns employees and a player's E asks it. AI allies never recruit. A hero within 2.2 of an employee
+    that follows an AI ally can dismiss it.
 - **Disinfect a room:** the room has an infestation meter (nests, goo puddles, a spawner). Destroying
   nests and the spawner drains it, and goo can be cleaned by fireball (burn it) or simply walked
   off over time. It's a big lump sum for one room, so it naturally becomes the main objective.

@@ -4,7 +4,8 @@ extends Node
 ## WASD moves relative to the iso camera, the mouse aims via a camera ray onto
 ## the terrain, LMB = melee (the hero's primary), RMB = the secondary (bolt / bowl / spin; Wick's arrow:
 ## tap to shoot, hold to draw a piercing shot and release), keys 1-4 = ready (hold) a spell slot,
-## E = use the elevator when standing at it, else cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
+## E = use the elevator when standing at it, else tell your employee to wait / bring a waiting one (Employee.interact),
+## else cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
 ## the pickup underfoot into the held slot. aim_point() is also what voice casts aim at;
 ## cast_spell() is the single entry for voice and E (charges, cooldown, toasts).
 
@@ -96,10 +97,13 @@ func select_slot(i: int) -> bool:
 	return false
 
 
-## The E key: the context action first (the elevator, when the hero stands at it), else cast_readied().
-## One press does one thing, never both.
+## The E key, in priority order: the context action (the elevator, when the hero stands at it), then an
+## employee next to the hero (dismiss the one following them, or recruit a waiting one), else cast_readied().
+## One press does one thing, never more.
 func press_readied() -> bool:
 	if interact.is_valid() and bool(interact.call()):
+		return true
+	if hero != null and not hero.dead and Employee.interact(hero):
 		return true
 	return cast_readied()
 

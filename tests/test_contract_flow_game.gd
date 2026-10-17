@@ -77,13 +77,16 @@ func _check_floor_and_elevator() -> void:
 	eq(Ledger.earned(), run.gate_pay, "closing a hellgate pays the gate rate")
 	eq(session.state()["gates_closed"], 1, "the session counted it")
 
-	# An employee latches onto a hero who comes close, and rides the elevator out for $100.
+	# An employee follows a hero who presses E next to them, and rides the elevator out for $100.
 	var emp: Actor = site.employees[0]
 	var hero_pos: Vector3 = g.get("player").global_position
 	var emp_pos := emp.global_position
 	g.get("player").global_position = emp_pos + Vector3(1.0, 0, 0)
 	await frames(40)
-	check(bool(emp.call("is_following")), "an employee follows a hero who comes within reach")
+	check(not bool(emp.call("is_following")), "walking up to an employee does not recruit them")
+	g.get("player").global_position = emp.global_position + Vector3(1.0, 0, 0)   # it may have fled a monster: step up to it again
+	await _press_e()
+	check(bool(emp.call("is_following")), "E next to an employee brings them along")
 
 	# The elevator needs a key press. Stepping onto the exit only shows "E: use elevator"; E there opens the
 	# menu (and does not cast); E anywhere else still casts the held spell.

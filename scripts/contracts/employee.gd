@@ -8,9 +8,13 @@ extends Actor
 ##   COWER    crouched and trembling where it hid. A "help!" bubble shows when a hero is near.
 ##   PANIC    a monster is within PANIC_RANGE (or something just hurt it): run away, pathing around
 ##            walls, arms flailing. Calms down (back to COWER) after CALM_TIME with nothing near.
-##   FOLLOW   a hero came within JOIN_RANGE (2): latch on as the leader. Trails 1.5-3 behind, paths with
+##   FOLLOW   a hero recruited them with E (request_follow; with JOIN_NEEDS_E off, a hero within JOIN_RANGE (2)
+##            does it just by standing there): latch on as the leader. Trails 1.5-3 behind, paths with
 ##            HexMap.find_path (can't climb +2 ledges, like Rebar) and sprints to catch up. If the
 ##            leader goes down it switches to the nearest other hero (within SWITCH_RANGE), else COWERs.
+##   WAIT     the hero told them to wait (E, request_wait): crouched where they were, ignoring heroes. A monster
+##            still sets off PANIC, and once calm they walk back to the spot they were told to wait at. A
+##            dismissed employee never rejoins by proximity, only another E (request_follow) recruits them.
 ##   EXTRACT  extract() was called: a cheer, then it shrinks away and is freed.
 ##
 ## Contract flow API (agent A): spawn(), is_following(), leader(), extract(), is_extracted(), alive(),
@@ -23,7 +27,7 @@ extends Actor
 ## of the "employees" and "actors" groups by then, so it can no longer be hurt or counted as alive.
 signal rescued(employee: Employee)
 
-enum State { COWER, PANIC, FOLLOW, EXTRACT }
+enum State { COWER, PANIC, FOLLOW, EXTRACT, WAIT }
 
 const MAX_HP := 30.0
 const WALK_SPEED := 3.3
@@ -33,6 +37,15 @@ const PANIC_RANGE := 4.0           ## a monster this close sets off a panic
 const CALM_RANGE := 5.5            ## ... and it takes this much room (for CALM_TIME) to calm down
 const CALM_TIME := 1.5
 const JOIN_RANGE := 2.0            ## a hero this close becomes the leader
+## True (the decision): joining needs E, first contact included. A hero walking past does nothing; E near a
+## cowering or waiting employee recruits them, E near your follower dismisses them. False would bring back
+## latching on by proximity for never-dismissed employees (and E would only dismiss and recall).
+const JOIN_NEEDS_E := true
+const WAIT_RANGE := 2.2            ## E tells YOUR follower to wait from this far (kept tight so E near a trailing follower is not hijacked from casting)
+const RECALL_RANGE := 2.2          ## E recruits a waiting (or, with JOIN_NEEDS_E, a cowering) employee from this far
+const WAIT_SLACK := 0.9            ## a waiting employee strays this far from its spot before walking back
+const WAIT_ARRIVED := 0.35
+const RETURN_GIVEUP := 8.0         ## seconds of trying to walk back before it waits where it stands
 const FOLLOW_MIN := 1.5            ## closer than this to the leader: back off
 const FOLLOW_SETTLE := 2.2         ## catching up stops here
 const FOLLOW_MAX := 3.0            ## farther than this: catch up
@@ -57,6 +70,8 @@ const COWER_LINES := {
 }
 const PANIC_LINES := {"staff": "AAAH!", "henchman": "NOPE!"}
 const LATCH_LINES := {"staff": "oh, thank you!", "henchman": "I'm with you!"}
+const WAIT_LINES := {"staff": "Waiting here.", "henchman": "Waiting here, boss."}
+const RECALL_LINES := {"staff": "Right behind you!", "henchman": "Right behind you, boss!"}
 
 ## "staff" (bunker) or "henchman" (lair). Set before the employee enters the tree (spawn() does).
 var style := "staff"
@@ -67,6 +82,10 @@ var model: EmployeeModel = null
 
 var _leader: Actor = null
 var _extracted := false
+var _return_giveup := 0.0
+var _returning_to_spot := false     ## walking back to the wait spot (a tick-to-tick flag, not shared)
+var _dismissed := false             ## told to wait: no more auto-joining by proximity until recruited again
+var _wait_spot := Vector3.ZERO      ## where a dismissed employee holds (and returns to after a scare)
 var _threat := Vector3.ZERO
 var _threat_valid := false
 var _calm_at := 0.0
@@ -163,6 +182,8 @@ func net_fields() -> Dictionary:
 		"state": Net.OWNER,
 		"_leader": Net.OWNER,           # will travel as an entity id
 		"_extracted": Net.OWNER,
+		"_returning_to_spot": Net.PRIVATE, "_return_giveup": Net.PRIVATE,
+		"_dismissed": Net.OWNER, "_wait_spot": Net.OWNER,   # a player's E is a request; the host decides (request_wait / request_follow)
 		"_say_text": Net.OWNER, "_say_until": Net.OWNER,   # events like "OW!" show on every screen
 		# AI working state (threat memory, scan/replan timers, pathing, stuck detection).
 		"_threat": Net.PRIVATE, "_threat_valid": Net.PRIVATE, "_calm_at": Net.PRIVATE,
@@ -196,6 +217,112 @@ func leader() -> Actor:
 
 func is_extracted() -> bool:
 	return _extracted
+
+
+## True while told to wait (calm and holding their spot, or scared off it and coming back).
+func is_waiting() -> bool:
+	return _dismissed and not _extracted and not dead
+
+
+## True once the crew told them to wait and nobody has recruited them again: they ignore proximity.
+func is_dismissed() -> bool:
+	return _dismissed
+
+
+# --- E: dismiss and recall --------------------------------------------------------------
+# A player's E is a REQUEST to the employee (the host will own employees in co-op and grant it); the
+# controller never writes the state itself. Both return true when the request was granted.
+
+## Can `hero` tell this employee to wait right now? It must be following that hero (or an AI ally of the
+## crew: the player may dismiss what an ally picked up) and be close enough.
+func can_wait(hero: Actor) -> bool:
+	if hero == null or not is_instance_valid(hero) or hero.dead or dead or _extracted:
+		return false
+	if state != State.FOLLOW or not _controlled_by(hero):
+		return false
+	return _reach(hero) <= WAIT_RANGE
+
+
+## Can `hero` recruit this employee right now? A dismissed one always, a never-dismissed one only when
+## JOIN_NEEDS_E; one following somebody else (another player) never.
+func can_follow(hero: Actor) -> bool:
+	if hero == null or not is_instance_valid(hero) or hero.dead or dead or _extracted:
+		return false
+	if state == State.FOLLOW or not (_dismissed or JOIN_NEEDS_E):
+		return false
+	return _reach(hero) <= RECALL_RANGE
+
+
+## "Wait here": stop following and hold this spot. Still panics if a monster comes, then returns.
+func request_wait(hero: Actor) -> bool:
+	if not can_wait(hero):
+		return false
+	_dismissed = true
+	_leader = null
+	_wait_spot = global_position
+	_catching = false
+	_set_state(State.WAIT)
+	say(str(WAIT_LINES[style]), 1.6)
+	return true
+
+
+## "Come with me": follow `hero` again.
+func request_follow(hero: Actor) -> bool:
+	if not can_follow(hero):
+		return false
+	var line := str(RECALL_LINES[style]) if _dismissed else str(LATCH_LINES[style])   # first contact vs recalled
+	_dismissed = false
+	_latch(hero, line)
+	return true
+
+
+func _controlled_by(hero: Actor) -> bool:
+	var ld := leader()
+	if ld == null:
+		return false
+	if ld == hero:
+		return true
+	var ally := ld as Hero
+	return ally != null and not ally.is_player and (hero as Hero) != null and (hero as Hero).is_player
+
+
+func _reach(hero: Actor) -> float:
+	if absf(hero.global_position.y - global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
+		return INF
+	return GameWorld.flat_distance(global_position, hero.global_position)
+
+
+## The employee `hero`'s E would act on: the nearest one it can tell to wait or recruit, or null.
+static func interact_target(hero: Actor) -> Employee:
+	if hero == null or not is_instance_valid(hero) or hero.dead:
+		return null
+	var best: Employee = null
+	var best_d := INF
+	for n in hero.get_tree().get_nodes_in_group("employees"):
+		var e := n as Employee
+		if e == null or not (e.can_wait(hero) or e.can_follow(hero)):
+			continue
+		var d := GameWorld.flat_distance(e.global_position, hero.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+## "E: tell Marguerite to wait" / "E: bring Marguerite" (empty when E would do nothing here).
+static func interact_prompt(hero: Actor) -> String:
+	var e := interact_target(hero)
+	if e == null:
+		return ""
+	return ("E: tell %s to wait" if e.can_wait(hero) else "E: bring %s") % e.display_name
+
+
+## The E press: dismiss or recruit the nearest employee. True when it was used (the press does not cast).
+static func interact(hero: Actor) -> bool:
+	var e := interact_target(hero)
+	if e == null:
+		return false
+	return e.request_wait(hero) if e.can_wait(hero) else e.request_follow(hero)
 
 
 ## Contract flow calls this for followers near the elevator: a cheer and a fade-out, then the employee
@@ -245,6 +372,8 @@ func _physics_process(delta: float) -> void:
 					_tick_panic(delta)
 				State.FOLLOW:
 					_tick_follow(delta)
+				State.WAIT:
+					_tick_wait(delta)
 	_update_visual(delta)
 
 
@@ -281,27 +410,28 @@ func _scan() -> void:
 		if mon_d <= PANIC_RANGE:
 			_calm_at = now + CALM_TIME
 
+	var joins := hero != null and hero_d <= JOIN_RANGE and not _dismissed and not JOIN_NEEDS_E
 	match state:
-		State.COWER:
-			if hero != null and hero_d <= JOIN_RANGE:
+		State.COWER, State.WAIT:
+			if joins:
 				_latch(hero)
 			elif mon_d <= PANIC_RANGE:
 				_set_state(State.PANIC)
 		State.PANIC:
-			if hero != null and hero_d <= JOIN_RANGE:
+			if joins:
 				_latch(hero)
 			elif mon_d > CALM_RANGE and now >= _calm_at and now >= _panic_until:
-				_set_state(State.COWER)
+				_set_state(State.WAIT if _dismissed else State.COWER)
 		State.FOLLOW:
 			if leader() == null:
 				_lose_leader()
 
 
-func _latch(hero: Actor) -> void:
+func _latch(hero: Actor, line: String = "") -> void:
 	_leader = hero
 	_catching = false
 	_set_state(State.FOLLOW)
-	say(str(LATCH_LINES[style]), 1.6)
+	say(line if line != "" else str(LATCH_LINES[style]), 1.6)
 
 
 ## The leader went down (or vanished): the nearest other hero takes over, else back to hiding.
@@ -332,8 +462,12 @@ func _set_state(s: int) -> void:
 	_path_idx = 1
 	_next_replan = 0.0
 	_stuck_t = 0.0
+	_returning_to_spot = false
 	match s:
 		State.COWER:
+			move_speed = WALK_SPEED
+			model.set_mood("cower")
+		State.WAIT:
 			move_speed = WALK_SPEED
 			model.set_mood("cower")
 		State.PANIC:
@@ -351,6 +485,30 @@ func _set_state(s: int) -> void:
 func _tick_cower() -> void:
 	if _hero_pos_valid and _hero_near:
 		face_point(_hero_pos)   # peeks out at whoever is near
+
+
+## Told to wait: hold the spot. Scared off it (a panic, a shove), walk back once it is calm.
+func _tick_wait(delta: float) -> void:
+	move_speed = WALK_SPEED
+	var to := _wait_spot - global_position
+	to.y = 0.0
+	var d := to.length()
+	if d > WAIT_SLACK or (_returning_to_spot and d > WAIT_ARRIVED):
+		if not _returning_to_spot:
+			_returning_to_spot = true
+			_return_giveup = GameWorld.time + RETURN_GIVEUP
+			model.set_mood("follow")   # the walking pose
+		if GameWorld.time >= _return_giveup:
+			_wait_spot = global_position   # cannot get back (blocked): wait right here instead
+			return
+		var moved := _walk_toward(_wait_spot, delta)
+		_check_stuck(moved, delta)
+	else:
+		if _returning_to_spot:
+			_returning_to_spot = false
+			model.set_mood("cower")
+		if _hero_pos_valid and _hero_near:
+			face_point(_hero_pos)
 
 
 func _tick_panic(delta: float) -> void:
@@ -512,7 +670,7 @@ func _on_hurt(_amount: float, source: Node) -> void:
 		_threat = src.global_position
 		_threat_valid = true
 	_panic_until = GameWorld.time + HURT_PANIC_TIME
-	if state == State.COWER:
+	if state == State.COWER or state == State.WAIT:
 		_set_state(State.PANIC)
 	say("OW!", 0.7)
 

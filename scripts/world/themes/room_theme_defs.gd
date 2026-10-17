@@ -220,6 +220,11 @@ const DECOR := {
 	"crate_stack": {"place": "corner", "orient": "face_center", "w": 1.15, "d": 1.15, "h": 1.3, "blocks": true, "weight": 1.0},
 }
 
+## Decor kinds that read as stacks of boxes or crates. They join the "breakables" group and smash like mail packages
+## (no loot, no property damage); every other kind (shelves, racks, furniture, barrels) stays solid. Add a box-like
+## kind here and it breaks too.
+const BREAKABLE_DECOR: Array[String] = ["crate_stack"]
+
 
 static func theme(id: String) -> Dictionary:
 	return THEMES.get(id, {})
@@ -238,6 +243,11 @@ static func pool(site_type: String) -> Array[String]:
 
 static func theme_name(id: String) -> String:
 	return String((THEMES.get(id, {}) as Dictionary).get("name", id))
+
+
+## True for the decor kinds that read as boxes or crates: they break (BreakableCrate) instead of standing solid.
+static func is_breakable(kind: String) -> bool:
+	return BREAKABLE_DECOR.has(kind)
 
 
 static func decor(kind: String) -> Dictionary:
