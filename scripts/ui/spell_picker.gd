@@ -3,9 +3,11 @@ extends Control
 ## Pre-game screen: choose exactly 2 of the spells, drawn as FORM 15 "License checkout" (scripts/ui/forms/):
 ## one ruled row per spell with a box to tick. Click rows (or press 1-6, or arrow to a row and press
 ## Enter), then Start (or Enter once two are chosen). Add it under a Control (Hud.add_overlay), not a bare
-## CanvasLayer. Emits picked(spells) with the ids in pick order.
+## CanvasLayer. Emits picked(spells) with the ids in pick order, or cancelled() from the "Back to the board" row
+## (Esc does the same through the game).
 
 signal picked(spells: Array[String])
+signal cancelled
 
 const PICK_COUNT := 2
 
@@ -14,6 +16,7 @@ var trigger_word := "cast"
 var _selected: Array[String] = []
 var _buttons := {}          ## id -> FormRow
 var _start: FormRow
+var _back: FormRow
 var _sheet: FormSheet
 var _sub: Label
 
@@ -53,10 +56,16 @@ func _ready() -> void:
 	_start.pressed.connect(confirm)
 	body.add_child(_start)
 	rows.append(_start)
+	_back = FormRow.new("Back to the board", "ESC", "pick another job")
+	_back.row_h = 56.0
+	_back.show_box = false
+	_back.pressed.connect(func() -> void: cancelled.emit())
+	body.add_child(_back)
+	rows.append(_back)
 	FormTheme.chain(rows)
 	_refresh()
 
-	var keys := KeyHints.new([["1-6", "tick a license"], ["Up", "Down", "move"], ["Enter", "tick / sign"]])
+	var keys := KeyHints.new([["1-6", "tick a license"], ["Up", "Down", "move"], ["Enter", "tick / sign"], ["Esc", "back"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 330.0
 	keys.offset_top = -46.0

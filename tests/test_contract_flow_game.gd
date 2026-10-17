@@ -43,14 +43,44 @@ func _check_board() -> void:
 		eq(board.offers.size(), 3, "three offers on the board")
 		check(Ledger.active == false or Ledger.lines.is_empty(), "no contract is running on the board")
 		var first_value: int = board.offers[0].contract_value
+		var names: Array[String] = []
+		for o in board.offers:
+			names.append(o.client_name)
 		board.choose(0)
 		await frames(3)
 		check(g.get("_session") != null, "taking an offer starts the contract")
 		eq(g.get("_session").floor_number, 1, "on floor 1")
 		eq(Ledger.contract_value, first_value, "the Ledger carries the contract value")
 		check(g.get("hud") != null, "the world was built after picking")
-	g.queue_free()
-	await frames(3)
+		# Back out of the license checkout: the job is dropped and the board comes back with the same offers.
+		var picker: SpellPicker = g.get("_picker")
+		check(picker != null, "the license checkout is open")
+		var went: Array[String] = []
+		g.set("scene_changer", func(path: String) -> void: went.append(path))
+		if picker != null:
+			picker.cancelled.emit()
+		await frames(2)
+		eq(went, ["" as String], "backing out reloads the job board")
+		check(g.get("_session") == null and not Ledger.active, "no contract is running after backing out")
+		g.queue_free()
+		await frames(3)
+		var g2: Node3D = load("res://scripts/app/game.gd").new()
+		g2.set("opts", {"no_mic": true})     # no seed: the remembered board seed decides
+		add_child(g2)
+		await frames(2)
+		var again: Array[String] = []
+		for layer in g2.get_children():
+			if layer is CanvasLayer:
+				for c in layer.get_children():
+					if c is JobBoard:
+						for o in (c as JobBoard).offers:
+							again.append(o.client_name)
+		eq(again, names, "the same three offers are back")
+		g2.queue_free()
+		await frames(3)
+	else:
+		g.queue_free()
+		await frames(3)
 	GAME.reset_flow()
 
 

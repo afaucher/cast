@@ -80,6 +80,8 @@ static var _session: ContractSession = null
 static var _spells: Array[String] = []
 static var _dev_released := false   ## F5 pressed: the dev flags that skip the board / picker stop applying
 static var _fade_in := false        ## the next scene fades in from black (arrived by elevator)
+static var _board_seed := -1        ## the job board's seed while a contract is being set up, so backing out of the
+                                    ## license screen shows the same three offers; -1 = deal a new board
 
 var opts := {}
 ## Test seam for "Abandon contract" / "Main menu": called with "" (reload the board) or a scene path.
@@ -139,6 +141,7 @@ func _ready() -> void:
 
 ## Forget the contract in progress (tests; F5 and "next contract" do the same inline).
 static func reset_flow() -> void:
+	_board_seed = -1
 	_run = null
 	_session = null
 	_spells.clear()
@@ -237,7 +240,8 @@ func _screens() -> CanvasLayer:
 
 
 func _show_board() -> void:
-	var board_seed := int(opts.get("seed", randi() % 100000))
+	var board_seed := _board_seed if _board_seed >= 0 else int(opts.get("seed", randi() % 100000))
+	_board_seed = board_seed
 	var offers := ContractBoard.offers(board_seed)
 	var board := JobBoard.new(offers)
 	_board = board
@@ -497,7 +501,9 @@ func _show_picker() -> void:
 	if voice.has_method("get_trigger_word"):
 		picker.set_trigger_word(voice.call("get_trigger_word"))
 	hud.add_overlay(picker)
+	picker.cancelled.connect(_back_to_board)
 	picker.picked.connect(func(chosen: Array[String]) -> void:
+		_board_seed = -1   # committed to this job: the next board is a new one
 		_spells = chosen.duplicate()
 		picker.queue_free()
 		_picker = null
@@ -1160,6 +1166,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("pause"):
 		if _board != null:
 			_to_main_menu()   # Esc on the job board: back to the menu
+		elif _picker != null:
+			_back_to_board()  # Esc on the license checkout: back to the same three offers
 		elif _can_pause():
 			_open_pause()
 	elif event.is_action_pressed("toggle_voice_debug") and debug_panel != null and _invoice == null:
@@ -1202,6 +1210,21 @@ func _abandon_to_board() -> void:
 		return
 	_leaving = true
 	get_tree().paused = false
+	_dev_released = true
+	_board_seed = -1   # an abandoned job: deal a new board
+	_run = null
+	_session = null
+	_spells.clear()
+	Ledger.end_contract()
+	_change_scene("")
+
+
+## Back out of the license checkout (Esc or its "Back to the board" row): the job isn't started, so nothing is
+## billed; the board reopens with the same three offers.
+func _back_to_board() -> void:
+	if _leaving:
+		return
+	_leaving = true
 	_dev_released = true
 	_run = null
 	_session = null
