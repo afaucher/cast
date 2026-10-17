@@ -70,7 +70,7 @@ func net_fields() -> Dictionary:
 	return {
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
-		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN,
+		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "packages": Net.SPAWN,
 		"room_themes": Net.SPAWN, "decor": Net.SPAWN, "lights": Net.SPAWN, "entrances": Net.SPAWN,
 		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "ranked_rooms": Net.SPAWN,
 		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN,

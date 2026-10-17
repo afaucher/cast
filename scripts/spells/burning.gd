@@ -66,6 +66,19 @@ var _light: OmniLight3D = null
 var _over := false
 
 
+## Who may write each var (see Net). A fire belongs to the burning actor's owner, who ticks its damage
+## (the victim decides), so it lives on the hero's machine for a hero and on the host for anyone else.
+func net_fields() -> Dictionary:
+	return {
+		"target": Net.SPAWN,
+		"_source": Net.OWNER,              # the culprit (kill credit, ledger); a refresh adopts a new one
+		"_ends_at": Net.OWNER, "_over": Net.OWNER,
+		"_next_tick": Net.PRIVATE,
+		"_next_scorch": Net.LOCAL,         # scorch marks are cosmetic grime
+		"_flames": Net.LOCAL, "_base": Net.LOCAL, "_light": Net.LOCAL,
+	}
+
+
 # --- Public API ---------------------------------------------------------------------------------
 
 ## A random burn length for a new fire (uses GameWorld.rng).

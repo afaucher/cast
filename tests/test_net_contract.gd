@@ -20,6 +20,7 @@ const NET_SCRIPTS := [
 	"res://scripts/heroes/ally_brain.gd",
 	"res://scripts/heroes/player_controller.gd",
 	"res://scripts/spells/armor_zone.gd",
+	"res://scripts/spells/burning.gd",
 	"res://scripts/spells/component_pickup.gd",
 	"res://scripts/spells/corn_strike.gd",
 	"res://scripts/spells/tentacles.gd",
@@ -48,6 +49,7 @@ var RULES := [
 			"res://scripts/heroes/hero_kit.gd": "sets starting HP when a kit is applied (spawn)",
 			"res://scripts/app/game.gd": "--hurt dev flag",
 			"res://scripts/monsters/monster_fight.gd": "screenshot lab",
+			"res://scripts/spells/burning_lab.gd": "screenshot lab",
 			"res://scripts/art/lowpoly/props/decor_models.gd": "`anim.dead` is a decor animation, not an actor",
 		}],
 ]

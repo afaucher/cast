@@ -251,6 +251,12 @@ or a `Combat` resolver call when the `Net` layer is built:
 - **Scheduled effects start at their own `_ready`.** `ArmorZone`, `CornStrike` and `Tentacles` take
   their start time from `GameWorld.time` in `_ready`. They should take the cast's timestamp as a
   `SPAWN` parameter, so every machine runs the same schedule.
+- **Burning** (added on main the same day). `Burning.on_blast` rolls ignition for every actor in the
+  blast on the caster's machine. Each actor's owner should roll its own ignition and tick its own fire,
+  as `Burning.net_fields()` already assumes.
+- **Mail packages** break on any hit from any machine and roll their contents on the spot. The host
+  should roll the contents and pay the crypto; a break from a player's machine becomes a "hit package
+  X" request.
 - **Employee mood is computed on the host.** `_hero_near`/`_scared` are `LOCAL` (they only drive the
   tag, bubble and pose), but today `_scan()` computes them, and `_scan()` will run only on the host.
   Each screen needs its own recompute.

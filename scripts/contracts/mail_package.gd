@@ -117,7 +117,7 @@ func setup(opts: Dictionary = {}) -> void:
 	if below != null:
 		_below = weakref(below)
 	forced_contents = String(opts.get("contents", ""))
-	var seed_value: int = int(opts["seed"]) if opts.has("seed") else int(randi())
+	var seed_value: int = int(opts["seed"]) if opts.has("seed") else GameWorld.rng.randi()
 	_rng.seed = seed_value
 	name = "MailPackage"
 	rotation_degrees.y = float(opts.get("yaw", 0.0))
@@ -134,6 +134,23 @@ func _init() -> void:
 	add_to_group(GROUP)
 	# one hit and it is gone: a floating "10" over a bursting box is just noise
 	set_meta("fx_hit_feedback", true)
+
+
+## Who may write each var (see Net); Actor's come from super(). Mail is host-owned: the host rolls the
+## contents when a box breaks and everyone else is told the result.
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		"size_kind": Net.SPAWN, "stack_index": Net.SPAWN, "forced_contents": Net.SPAWN,
+		"_below": Net.SPAWN,               # travels as an entity id
+		"contents": Net.OWNER, "crypto_amount": Net.OWNER, "component_id": Net.OWNER, "broke": Net.OWNER,
+		"_lift": Net.OWNER,                # drops when the box below breaks
+		"_rng": Net.PRIVATE,               # the host's dice for the contents; the result is replicated
+		"_fall_v": Net.PRIVATE, "_last_source": Net.PRIVATE,
+		"pickup": Net.PRIVATE,             # the pickup is its own host-owned entity
+		"_model": Net.LOCAL, "spill": Net.LOCAL,
+	})
+	return f
 
 
 # --- Lifecycle ---------------------------------------------------------------------------
