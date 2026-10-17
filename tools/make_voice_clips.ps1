@@ -80,7 +80,7 @@ function Same([string]$group, [string]$text, [string]$expect, [double]$minPower,
     Add-Clip $group $text $expect $expect $expect $minPower $voice $rate
 }
 
-$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn" }
+$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles" }
 
 # Clean casts, both voices, normal pace: must fire at >= 0.9 in every mode.
 foreach ($v in @($v1, $v2)) {
@@ -88,8 +88,15 @@ foreach ($v in @($v1, $v2)) {
 }
 # Pace changes (TTS rate -3 slow .. +3 fast).
 foreach ($r in @(-3, 3)) {
-    foreach ($id in $spells.Keys) { Same "rate" "cast $($spells[$id])" $id 0.8 $v1 $r }
+    foreach ($id in $spells.Keys) {
+        $mp = if ($id -eq "tentacles") { 0.7 } else { 0.8 }   # +3 hears it as "headacles" (a 0.8 alias)
+        Same "rate" "cast $($spells[$id])" $id $mp $v1 $r
+    }
 }
+# tentacles at the pace extremes in the other voice, and the singular at the fast end
+# ("headacles"/"headagle" are measured mishearings at rate +3, see Incantation).
+foreach ($r in @(-3, 3)) { Same "rate" "cast tentacles" "tentacles" 0.8 $v2 $r }
+Same "rate" "cast tentacle" "tentacles" 0.7 $v1 3
 # Sloppy but intended: preamble, suffix, mispronunciations, spelling variants.
 Same "sloppy" "okay cast heal"            "heal"     0.8 $v1 0
 Same "sloppy" "cast fireball now"         "fireball" 0.8 $v2 0
@@ -103,8 +110,18 @@ Same "sloppy" "cass heel"                 "any"      0.4 $v1 0
 Same "sloppy" "cast he'll"                "any"      0.4 $v2 0
 Same "sloppy" "caste corn"                "any"      0.4 $v2 0
 Same "sloppy" "cast corn corn"            "corn"     0.8 $v2 0
+# tentacles (the longest, rarest spell word): preamble, singular, hesitation, the other voice.
+Same "sloppy" "okay cast tentacles"       "tentacles" 0.8 $v1 0
+Same "sloppy" "okay cast tentacles"       "tentacles" 0.8 $v2 0
+Same "sloppy" "cast tentacle"             "tentacles" 0.8 $v1 0
+Same "sloppy" "cast tentacle"             "tentacles" 0.8 $v2 0
+Same "sloppy" "please cast tentacles"     "tentacles" 0.8 $v2 0
+Same "sloppy" "cast tentacles now"        "tentacles" 0.8 $v1 0
 # Hesitation between the keyword and the spell word.
 Same "hesitate" "cast <b300> heal"                    "heal"     0.8 $v1 0
+Same "hesitate" "cast <b300> tentacles"               "tentacles" 0.6 $v1 0
+Same "hesitate" "cast <b500> tentacles"               "tentacles" 0.8 $v2 0
+Same "hesitate" "cast <b800> tentacles"               "tentacles" 0.6 $v1 0
 Same "hesitate" "cast <b700> fireball"                "any"      0.3 $v1 0
 Same "hesitate" "cast <b400> uh <b400> heal"          "heal"     0.5 $v2 0
 Same "hesitate" "cast <b1200> armor"                  "any"      0.4 $v2 0
@@ -122,12 +139,19 @@ Add-Clip "negative" "I need a heal over here"        "none" "none" "heal"     0.
 Add-Clip "negative" "nice fireball"                  "none" "none" "fireball" 0.4 $v1 0
 Add-Clip "negative" "watch out for the fire ball"    "none" "none" "fireball" 0.4 $v1 0
 Add-Clip "negative" "put your armor on"              "none" "none" "armor"    0.4 $v1 0
+Add-Clip "negative" "watch out for the tentacles"    "none" "none" "tentacles" 0.4 $v1 0
+Add-Clip "negative" "watch out for the tentacles"    "none" "none" "tentacles" 0.4 $v2 0
 Add-Clip "negative" "corn on the cob"                "none" "corn" "corn"     0.4 $v1 0
 Add-Clip "negative" "corner"                         "none" "corn" "corn"     0.4 $v1 0
 Add-Clip "negative" "should I cast heal"             "none" "heal" "heal"     0.4 $v1 0
 Add-Clip "negative" "did you cast fireball"          "none" "fireball" "fireball" 0.4 $v2 0
-foreach ($t in @("hello", "let's go left", "pop", "of course", "behind you", "castle", "cast away", "the cast of the show", "I cast my vote")) {
+foreach ($t in @("hello", "let's go left", "pop", "of course", "behind you", "castle", "cast away", "the cast of the show", "I cast my vote",
+        "attack", "ten tickets", "testicles", "I can't tackle this")) {
     Add-Clip "negative" $t "none" "none" "none" 0.0 $v1 0
+}
+# Tentacle sound-alikes in the other voice too (a different recognizer error profile).
+foreach ($t in @("attack", "ten tickets", "testicles", "I can't tackle this")) {
+    Add-Clip "negative" $t "none" "none" "none" 0.0 $v2 0
 }
 Add-Clip "negative" "I need a heal over here"        "none" "none" "heal"     0.4 $v2 0
 Add-Clip "negative" "nice fireball"                  "none" "none" "fireball" 0.4 $v2 0

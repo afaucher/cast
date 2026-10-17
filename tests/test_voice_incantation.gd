@@ -3,7 +3,7 @@ extends TestCase
 ## strictness modes, trigger words, the accidental label, settings and the
 ## VoiceCaster typed path. No audio and no model needed.
 
-const SPELLS := ["heal", "fireball", "armor", "corn"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles"]
 const TMP_SETTINGS := "user://test_voice_settings.cfg"
 const TMP_LOG := "user://test_voice_log.csv"
 
@@ -48,6 +48,8 @@ func setup() -> void:
 	_test_accidental_label()
 	_test_triggers()
 	_test_explain()
+	_test_tentacles()
+	_test_panel_cards()
 	_test_misc()
 	_test_settings()
 	_test_caster_typed()
@@ -343,7 +345,7 @@ func _test_triggers() -> void:
 
 func _test_explain() -> void:
 	var ex := _inc().explain("CAST HEEL")
-	eq(ex.size(), 5, "trigger + four spells")
+	eq(ex.size(), 6, "trigger + five spells")
 	eq(ex[0]["word"], "cast", "first is the trigger")
 	eq(ex[0]["kind"], "exact", "cast exact")
 	eq(ex[1]["kind"], "homophone", "heel is a homophone of heal")
@@ -356,6 +358,103 @@ func _test_explain() -> void:
 	var tr := _inc({"trigger": "pickle"}).explain("PICKLE CORN")
 	eq(tr[0]["word"], "pickle", "explain uses the active trigger")
 	eq(tr[0]["kind"], "exact", "pickle exact")
+
+
+func _test_tentacles() -> void:
+	# Exact forms, as the model writes them ("CAST TENTACLES", "CAST TENTACLE").
+	for text in ["cast tentacles", "cast tentacle", "castTENTACLES", "CAST TENTACLE", "okay cast tentacles"]:
+		var c := _say(text)
+		eq(c.size(), 1, "tentacles form: " + text)
+		if c.size() == 1:
+			eq(c[0]["spell"], "tentacles", text)
+			check(c[0]["power"] >= 0.95, "tentacles form is near full power: %s %s" % [text, c[0]["power"]])
+			check(not c[0]["accidental"], "deliberate: " + text)
+	# Streaming: fires on the first partial that holds the word (TENT/TENTA do nothing).
+	var inc := _inc()
+	eq(_casts(inc.feed("CAST", false, 1.0)).size(), 0, "cast alone waits")
+	eq(_casts(inc.feed("CAST TENT", false, 1.3)).size(), 0, "tent is not the spell")
+	eq(_casts(inc.feed("CAST TENTA", false, 1.5)).size(), 0, "tenta is not the spell")
+	eq(_casts(inc.feed("CAST TENTACLES", false, 1.8)).size(), 1, "fires on the partial")
+	eq(_casts(inc.feed("CAST TENTACLES", true, 2.1)).size(), 0, "and not again on the final")
+	# Singular partial then plural: one cast.
+	var evs := _run(_inc(), [[1.0, "CAST TENTACLE", false], [1.3, "CAST TENTACLES", false], [1.6, "CAST TENTACLES", true]])
+	eq(_casts(evs).size(), 1, "tentacle -> tentacles fires once")
+	# Measured mishearings (TTS at the fastest rate; split "cast | caste ... acles"): reduced power.
+	for pair in [["cast headacles", 0.8], ["cast headacle", 0.75], ["cast headagle", 0.75], ["cast acles", 0.75]]:
+		var c := _say(pair[0])
+		eq(c.size(), 1, "alias casts: " + pair[0])
+		if c.size() == 1:
+			eq(c[0]["spell"], "tentacles", pair[0])
+			near(c[0]["power"], pair[1], 0.001, "alias quality " + pair[0])
+	# The caster rejoins the finals "CA" + "STE" + "ACLES" into one token (JOIN_GAP); it must split.
+	eq(_say("casteacles").size(), 1, "run-together casteacles is split and casts")
+	# Never a mention word: bare or buried in chatter does nothing in strict/loose.
+	for text in ["tentacles", "tentacle", "watch out for the tentacles", "tentacles tentacles", "headacles", "acles"]:
+		eq(_say(text).size(), 0, "loose: bare does nothing: " + text)
+		eq(_say(text, {"strictness": "strict"}).size(), 0, "strict: bare does nothing: " + text)
+	# Chaos: the exact word anywhere casts (like every spell), the weak aliases never do bare.
+	eq(_say("watch out for the tentacles", {"strictness": "chaos"}).size(), 1, "chaos: tentacles anywhere")
+	for text in ["it gives me headacles", "what acles", "the headagle"]:
+		eq(_say(text, {"strictness": "chaos"}).size(), 0, "chaos: weak alias does not fire bare: " + text)
+	# Sound-alikes of the word in chatter (measured TTS: "TESTACLES", "TEN TICKETS", "ATTACK") do nothing.
+	for text in ["testicles", "testacles", "ten tickets", "attack", "I can't tackle this", "tent tackles", "tentative", "tenticles"]:
+		eq(_say(text).size(), 0, "no bare cast: " + text)
+		eq(_say(text, {"strictness": "chaos"}).size(), 0, "no chaos cast: " + text)
+	# No confusion with the other spells, both directions (cast <spell> fires exactly that spell).
+	for sp in SPELLS:
+		var c := _say("cast " + sp)
+		eq(c.size(), 1, "one spell for cast " + sp)
+		if c.size() == 1:
+			eq(c[0]["spell"], sp, "cast %s fires %s" % [sp, sp])
+	for text in ["cast tentacles", "cast tentacle", "cast headacles"]:
+		for c in _say(text):
+			eq(c["spell"], "tentacles", "only tentacles: " + text)
+	# The nearest other spell words stay put.
+	var garbled := _run(_inc(), [[1.0, "cast tent", true]])
+	eq(_casts(garbled).size(), 0, "cast tent is not a spell")
+	eq(_fizzles(garbled).size(), 1, "cast tent fizzles")
+	# Not a hair-trigger: only corn is a mention spell.
+	var mentions: Array = Incantation.TUNING["mention_spells"]
+	check(not mentions.has("tentacles"), "tentacles is not a mention spell")
+	# Both words join the recognizer's vocabulary, and it is in the explain cards.
+	check(_inc().vocabulary().has("tentacles"), "vocab has tentacles")
+	eq(_inc().explain("CAST TENTACLES")[5]["kind"], "exact", "card kind exact")
+	eq(_inc().explain("CAST TENTACLE")[5]["kind"], "homophone", "tentacle is a homophone card")
+	eq(_inc().explain("CAST HEADACLES")[5]["kind"], "sound_alike", "headacles is a sound-alike card")
+	# The caster's own default list has all five.
+	eq(VoiceCaster.DEFAULT_SPELLS.size(), 5, "five default spells")
+	check(VoiceCaster.DEFAULT_SPELLS.has("tentacles"), "VoiceCaster default spells include tentacles")
+	check(not VoiceSettings.validate_trigger("tentacles")["ok"], "tentacles cannot be the trigger word")
+
+
+## Six cards (trigger + five spells) in a 3-column grid: two full rows, and a long
+## "sound-alike 'headacles'" caption must not push the grid past the 400 px panel.
+func _test_panel_cards() -> void:
+	var caster := VoiceCaster.new()
+	caster.use_mic = false
+	caster.use_saved_settings = false
+	caster.persist_settings = false
+	caster.voice_log.enabled = false
+	add_child(caster)
+	caster.start(VoiceCaster.DEFAULT_SPELLS)
+	var panel := VoiceDebugPanel.new()
+	panel.toggle_with_f1 = false
+	add_child(panel)
+	panel.attach(caster)
+	eq(panel._cards.size(), 6, "panel has trigger + five spell cards")
+	eq(panel._card_grid.columns, 3, "three columns")
+	eq(int(ceil(float(panel._cards.size()) / float(panel._card_grid.columns))), 2, "two rows")
+	var names: Array = []
+	for c in panel._cards:
+		names.append(str(c["word"]))
+	check(names.has("tentacles"), "a tentacles card exists: %s" % str(names))
+	for i in panel._cards.size():
+		panel._set_card(i, "sound_alike", "headacles tentacles tentacle", 0.7)
+		(panel._cards[i]["power"] as Label).text = "ACCIDENTAL 100%"
+	var widest: float = panel._card_grid.get_combined_minimum_size().x
+	check(widest <= VoiceDebugPanel.PANEL_WIDTH - 20.0, "card grid min width %.0f fits the panel (%.0f)" % [widest, VoiceDebugPanel.PANEL_WIDTH - 20.0])
+	panel.queue_free()
+	caster.queue_free()
 
 
 func _test_misc() -> void:

@@ -334,6 +334,9 @@ func _make_card(word: String) -> Dictionary:
 	box.add_child(name_l)
 	var kind := _label(" ", 10, C_DIM)
 	kind.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# "sound-alike 'tent tickles'" must not widen the card past the 400 px panel.
+	kind.clip_text = true
+	kind.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	box.add_child(kind)
 	var bar := ProgressBar.new()
 	bar.max_value = 1.0

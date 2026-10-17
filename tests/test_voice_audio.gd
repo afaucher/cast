@@ -16,7 +16,7 @@ const STEP := 320              # 20 ms chunks, like the mic
 const LEAD := 0.5              # seconds of silence before each clip
 const TAIL := 0.8              # and after
 const SPEED := 4.0             # audio seconds per wall second
-const SPELLS := ["heal", "fireball", "armor", "corn"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles"]
 const DELIBERATE_GROUPS := ["clean", "rate", "sloppy", "hesitate"]
 ## Stress clips (fastest TTS rate, long hesitations) sit on the recognizer's edge:
 ## shifting the audio by 80 ms flips some of them (measured). Their MISSES use a
@@ -24,6 +24,9 @@ const DELIBERATE_GROUPS := ["clean", "rate", "sloppy", "hesitate"]
 ## wrong spells, false fires and clean misses always fail.
 const STRESS_GROUPS := ["rate", "hesitate"]
 const STRESS_MISS_BUDGET := 2
+## Clips whose recognizer text is printed in full (the measurement table for the
+## tentacles spell word and its chatter sound-alikes).
+const MEASURE_WORDS := ["tentacle", "attack", "ten tickets", "testicles", "tackle"]
 
 var caster: VoiceCaster
 var _casts: Array = []         # {spell, power, heard, accidental, t}
@@ -32,6 +35,9 @@ var _hyps: Array = []
 var _voiced_end := 0.0
 var _matrix := {}              # clip file -> {mode: text}
 var _bad := 0
+var _confusions: Array = []    # "file [mode]: clip says X, fired Y" (see _confusion_of)
+var _tentacle_clips := 0       # deliberate tentacles clips seen (loose) ...
+var _tentacle_fired := 0       # ... and how many of them fired tentacles
 
 
 func _init() -> void:
@@ -84,6 +90,7 @@ func setup() -> void:
 	_run_all(chatter + manifest.filter(func(c: Dictionary) -> bool: return str(c["file"]).begins_with("hesitate_cast_b3000")), "chaos")
 	_set_mode("loose")
 	_print_matrix(manifest)
+	_print_confusion()
 	_realtime_latency(manifest)
 	print("\n%s" % ("all clips behaved" if _bad == 0 else "%d clip(s) misbehaved" % _bad))
 	finish()
@@ -123,6 +130,7 @@ func _run_all(clips: Array, mode: String) -> void:
 				status = "LABEL"
 			if c["group"] == "clean" and fired.size() == 1:
 				clean_min = minf(clean_min, fired[0]["power"])
+		_note_confusion(c, fired, mode)
 		if (status == "MISS" or status == "WEAK") and c["group"] in STRESS_GROUPS:
 			stress_misses += 1
 			status = "%s (stress, budget %d)" % [status, STRESS_MISS_BUDGET]
@@ -133,6 +141,10 @@ func _run_all(clips: Array, mode: String) -> void:
 		var fz := ""
 		if not res["fizzles"].is_empty():
 			fz = "fizzle:" + str(res["fizzles"][0]["reason"])
+		for w in MEASURE_WORDS:
+			if str(c["text"]).to_lower().contains(w):
+				print("    measured [%s] %s: heard %s" % [mode, c["file"], " ".join(PackedStringArray(res["hyps"]))])
+				break
 		var key: String = c["file"]
 		if not _matrix.has(key):
 			_matrix[key] = {}
@@ -141,6 +153,35 @@ func _run_all(clips: Array, mode: String) -> void:
 			_fmt(fired), res["latency"], fz, "" if status == "ok" else "  <-- " + status])
 	print("false fires: %d; stress misses: %d; lowest clean-cast power: %s" % [false_fires, stress_misses, "%.2f" % clean_min if clean_min < 9.0 else "n/a"])
 	check(stress_misses <= STRESS_MISS_BUDGET, "[%s] stress-clip misses %d within budget %d" % [mode, stress_misses, STRESS_MISS_BUDGET])
+
+
+## Spell confusion: "cast tentacles" (and its sloppy forms) must never fire another
+## spell, and no other spell's clip may fire tentacles. Checked on every clip in
+## every mode, including the ones whose expectation is only "any".
+func _note_confusion(c: Dictionary, fired: Array, mode: String) -> void:
+	var text := str(c["text"]).to_lower()
+	var about_tentacles := text.contains("tentacle")
+	# Chatter that merely mentions it ("watch out for the tentacles") is judged by its own expectation.
+	var deliberate: bool = c["group"] in DELIBERATE_GROUPS
+	if deliberate and about_tentacles:
+		_tentacle_clips += 1 if mode == "loose" else 0
+		for f in fired:
+			if f["spell"] == "tentacles":
+				_tentacle_fired += 1 if mode == "loose" else 0
+			else:
+				_confusions.append("%s [%s]: \"%s\" fired %s" % [c["file"], mode, c["text"], f["spell"]])
+	elif not about_tentacles:
+		for f in fired:
+			if f["spell"] == "tentacles":
+				_confusions.append("%s [%s]: \"%s\" fired tentacles" % [c["file"], mode, c["text"]])
+
+
+func _print_confusion() -> void:
+	print("
+=== spell confusion (tentacles vs the rest) ===")
+	print("deliberate tentacles clips (loose): %d, fired tentacles: %d; confusions: %d" % [_tentacle_clips, _tentacle_fired, _confusions.size()])
+	for line in _confusions:
+		_fail("spell confusion: " + str(line))
 
 
 func _print_matrix(manifest: Array) -> void:

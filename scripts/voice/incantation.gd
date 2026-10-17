@@ -3,7 +3,7 @@ extends RefCounted
 ## Pure incantation parsing and power scoring. No audio, no engine nodes, so it
 ## is unit-testable: feed it speech-recognizer hypotheses and read back events.
 ##
-##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn"]))
+##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles"]))
 ##   inc.vocabulary()                       # words to give the recognizer as hotwords
 ##   for ev in inc.feed("cast heel", false, t): ...   # streaming partial (or final=true)
 ##   for ev in inc.tick(t): ...             # call regularly so a lone trigger can time out
@@ -59,6 +59,24 @@ extends RefCounted
 ## -3..+3, plus the fast run-together "CASTCORN"). It writes "HEEL" for "heal"
 ## every time even with the hotword boost, so heel/he'll are exact. "fireball" is
 ## "FIREBALL", or "FIRE BALL" when spoken apart ("fire bowl" is a near miss).
+##
+## TENTACLES (5th spell; 9 letters, rare word, hotword-biased like the others).
+## Measured with TTS (David + Zira, rates -3..+3, 16 deliberate clips): the model
+## writes "TENTACLES"/"TENTACLE" for every clip at rate -3..+2 and in both voices
+## (16 of 16 cast, no other spell ever fires, no tentacles from any other spell's
+## clips, ~0.5 s after the voice stops). Mishearings, all aliased below 0.85 so
+## they cannot fire without the trigger: rate +3 gives "HEADACLES"/"HEADAGLE"
+## (0.8/0.75) and a 300 ms pause after "cast" can lose the front half:
+## "CA STE ACLES" (alias "acles" 0.75, via the CA+STE+ACLES rejoin and compound
+## split). Chatter does not fire it: "attack", "ten tickets", "I can't tackle
+## this" are heard as such, "testicles" as "TESTACLES" (hotword pull toward
+## -ACLES, NOT aliased), "watch out for the tentacles" only casts in chaos. Not a
+## mention word (only corn is). Adding the hotword changed nothing in the
+## phantom tests (identical to the 4-spell vocabulary, 0 through the gate).
+## ASR RISK: "tentacles" is long and unambiguous, so recall is the best of the
+## five; the risk is a fast, clipped voice ("tent-" lost, see rate +3) and the
+## pause case above. If it measured badly (untested), "kraken" or "squid" are shorter
+## but more confusable ("crack in", "squad"); "tentacle" alone is already accepted.
 ##
 ## POWER = cast_q * spell_q * gap_factor * (1 - extras), in (0, 1]:
 ##   cast_q, spell_q  quality of the matched words (tables below; 1.0 exact or
@@ -172,6 +190,12 @@ const TUNING := {
 			"corn": 1.0, "korn": 0.9, "corns": 0.9, "corner": 0.75, "corners": 0.7,
 			"corny": 0.75, "cornet": 0.7, "kern": 0.6, "cord": 0.6,
 		},
+		# Aliases are measured mishearings only, all below the 0.85 bare-match floor
+		# so none can fire without the trigger (see the tentacles note in the header).
+		"tentacles": {
+			"tentacles": 1.0, "tentacle": 1.0,
+			"headacles": 0.8, "headacle": 0.75, "headagle": 0.75, "acles": 0.75,
+		},
 	},
 }
 
@@ -201,7 +225,7 @@ var _last_fire: Dictionary = {}
 var _last_final_t := -1e9
 
 
-func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn"]), overrides: Dictionary = {}) -> void:
+func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles"]), overrides: Dictionary = {}) -> void:
 	_cfg = TUNING.duplicate(true)
 	for k in overrides:
 		_cfg[k] = overrides[k]

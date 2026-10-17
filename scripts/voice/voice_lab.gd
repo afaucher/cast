@@ -1,6 +1,6 @@
 extends Control
 ## Standalone voice test scene (scenes/voice_lab.tscn): say an incantation into
-## the mic (or type it) and watch the four spell cards light up with their power.
+## the mic (or type it) and watch the spell cards light up with their power.
 ## The debug panel is docked on the right (F1 hides it): level graph, the
 ## recognizer's raw text, match cards, event log and stats. Run:
 ##   godot --path . res://scenes/voice_lab.tscn      (or .\run.ps1, scene arg)
@@ -11,6 +11,7 @@ const SPELLS := {
 	"fireball": {"label": "FIREBALL", "color": Color(1.00, 0.55, 0.20)},
 	"armor": {"label": "ARMOR", "color": Color(0.45, 0.65, 1.00)},
 	"corn": {"label": "CORN", "color": Color(1.00, 0.88, 0.30)},
+	"tentacles": {"label": "TENTACLES", "color": Color(0.70, 0.40, 0.95)},
 }
 const GLOW_SECONDS := 1.6
 const C_BG := Color(0.07, 0.08, 0.16)
@@ -130,7 +131,7 @@ func _make_card(id: String) -> Control:
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	p.add_child(box)
-	var name_l := _label(str(SPELLS[id]["label"]), 28)
+	var name_l := _label(str(SPELLS[id]["label"]), 24)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(name_l)
 	var power := _label(" ", 30)
@@ -147,8 +148,8 @@ func _make_card(id: String) -> Control:
 
 func _update_hint() -> void:
 	var t := caster.get_trigger_word().to_upper()
-	_hint.text = "Say \"%s HEAL\", \"%s FIREBALL\", \"%s ARMOR\" or \"%s CORN\".  Mode: %s.  Pick the trigger word and mode in the panel on the right (F1 hides it)." % [
-		t, t, t, t, caster.get_strictness()]
+	_hint.text = "Say \"%s HEAL\", \"%s FIREBALL\", \"%s ARMOR\", \"%s CORN\" or \"%s TENTACLES\".  Mode: %s.  Pick the trigger word and mode in the panel on the right (F1 hides it)." % [
+		t, t, t, t, t, caster.get_strictness()]
 
 
 func _on_cast(info: Dictionary) -> void:
