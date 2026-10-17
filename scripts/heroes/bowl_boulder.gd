@@ -8,6 +8,7 @@ extends Node3D
 
 const RADIUS := 0.5             ## visual radius of the boulder
 const HIT_RADIUS := 0.55        ## reach around its center (an actor's own radius is added)
+const PROP_DAMAGE_MULT := 6.0   ## a rolling boulder is rough on priced props (6 x damage each)
 const MAX_DY := 1.1             ## only touches actors at about its own height
 const GRAVITY := 24.0
 const SLAM_RISE_LEVELS := 1.95
@@ -134,6 +135,8 @@ func _check_hits() -> void:
 		if a.team == GameWorld.TEAM_MONSTERS:
 			Fx.attach_hit_feedback(a)
 			a.apply_damage(damage, source)
+		elif a is PricedProp:
+			a.apply_damage(damage * PROP_DAMAGE_MULT, source)   # rolls through the client's property
 		a.shove(push, shove_distance, source)
 		Fx.burst(a.global_position + Vector3.UP * 0.4, _dust_colors(), 8, 2.5, 0.09, 0.45, 3.0, Vector3.UP, 70.0, false)
 

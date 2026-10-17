@@ -14,7 +14,7 @@ const SPELLS := {
 	},
 	"fireball": {
 		"name": "Fireball", "cooldown": 5.0, "color": Color(1.0, 0.55, 0.15),
-		"desc": "A fireball that explodes where you aim (or on the first thing it hits). Monsters only.", "word": "fireball",
+		"desc": "A fireball that explodes where you aim (or on the first thing it hits). Monsters, the client's property and bystanders (never heroes).", "word": "fireball",
 		"component": "Ember horn", "available": true,
 	},
 	"armor": {
@@ -263,6 +263,10 @@ static func _cast_fireball(caster: Actor, power: float, aim: Vector3) -> void:
 			Fx.attach_hit_feedback(a)
 		var src: Node = src_ref.get_ref() as Node
 		Combat.explode(pos, radius, dmg, team, src, 1.0)
+		# Every neutral actor takes the blast too: priced props (breaking one costs money) and employees.
+		for n in GameWorld.actors_in_radius(pos, radius, GameWorld.TEAM_NEUTRAL):
+			Fx.attach_hit_feedback(n)
+		Combat.explode(pos, radius, dmg, GameWorld.TEAM_NEUTRAL, src, 1.0)
 		Fx.explosion(pos, radius, col)
 	var size := 0.22 + 0.12 * power
 	# damage 0 on the direct hit: all damage comes from the explosion (monsters only).
