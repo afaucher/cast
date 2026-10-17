@@ -71,6 +71,29 @@ func actors_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Acto
 	return out
 
 
+## Living actors in the group "breakables" (mail packages) within radius. They are neutral, so melee, arrows
+## and bolts (which only look for the foe team) use hittable_in_radius to catch them as well.
+func breakables_in_radius(pos: Vector3, radius: float) -> Array[Actor]:
+	var out: Array[Actor] = []
+	if root == null or not root.is_inside_tree():
+		return out
+	for n in root.get_tree().get_nodes_in_group("breakables"):
+		var a := n as Actor
+		if a != null and not a.dead and flat_distance(a.global_position, pos) <= radius + a.radius:
+			out.append(a)
+	return out
+
+
+## What a swing or a shot against `team` can hit: that team's living actors in radius plus every breakable.
+## (Priced props and employees stay out of it on purpose: nobody breaks the client's property by accident.)
+func hittable_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Actor]:
+	var out := actors_in_radius(pos, radius, team)
+	if team == -1:
+		return out   # everyone, breakables included
+	out.append_array(breakables_in_radius(pos, radius))
+	return out
+
+
 func nearest_actor(pos: Vector3, team: int, max_range: float = INF) -> Actor:
 	var best: Actor = null
 	var best_d := max_range

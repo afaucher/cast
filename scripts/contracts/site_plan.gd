@@ -50,6 +50,12 @@ var entrances: Dictionary = {}
 var decor_report: Array[Dictionary] = []
 ## {cell: Vector2i, text: String}
 var notes: Array[Dictionary] = []
+## Mail packages (MailPackage, docs/design/environment.md): 4-6 SPOTS a floor, each a stack of 1-3 breakable boxes:
+## {cell: Vector2i (room cell the stack stands in), pos: Vector2 (world X/Z, against a wall), yaw (degrees, front = +Z,
+## facing away from the wall), stack: int, room: String, seed: int, sizes: Array[String] (box kind per level, bottom
+## first), twists: Array[float] (yaw offset per level, degrees), shifts: Array[Vector2] (X/Z offset per level)}.
+## Always on room floor near a room entrance (never a corridor cell, never in the start / exit clear zones).
+var packages: Array[Dictionary] = []
 ## Rooms ordered by distance from the nearest gate, farthest first (start room left out).
 var ranked_rooms: Array[String] = []
 ## Monster pack budget per room tag (the start room has none).

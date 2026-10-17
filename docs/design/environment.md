@@ -132,18 +132,41 @@ into `SiteBuilder.plan()`; the result is on the `SitePlan` (`room_themes`, `deco
   at most one per room (8-9 a floor).
 - **Dev flag:** `--to-theme <id>` puts the crew in the middle of the first room with that theme.
 
-## Mail packages (interactive set dressing) [decided, 2026-10-17]
+## Mail packages (interactive set dressing) [built, 2026-10-17]
 **The premise:** the client never even opened their mail, so the crew can steal it. Taped-up brown
-boxes, sometimes stacked 2–3 high, sit near room entrances and corridors as if just delivered:
-4–6 per floor. Any hit breaks one: melee, arrows, spells, shoves, Rebar's bowl. It's unopened
-mail, so breaking it is **not** property damage.
+boxes, sometimes stacked 2–3 high, sit near room entrances as if just delivered: 4–6 stacks per floor.
+Any hit breaks one: melee, arrows, spells, shoves, Rebar's bowl. It's unopened mail, so breaking it is
+**not** property damage (never `Ledger.damage`).
 
 | Contents | Chance | Effect |
 |---|---|---|
 | Pile of human skulls | 20% | decorative; tumbles out |
 | Tubs of yogurt | 20% | decorative; rolls around |
 | Loose pickles | 20% | decorative; scatters |
-| Spell component | 25% | a normal component pickup; doesn't count toward the per-floor monster drop cap |
-| Crypto cash | 15% | a random $200–$2,000, earned on the invoice as "Unclaimed crypto (intercepted mail)" |
+| Spell component | 25% | a normal component pickup (random castable spell, 3 charges); doesn't count toward the per-floor monster drop cap |
+| Crypto cash | 15% | a random $200–$2,000 in whole $10s, earned on the invoice as "Unclaimed crypto (intercepted mail)" and shown as a green "+$1,240 crypto" pop |
 
-Spilled decorative contents fade after 30 s, like other player-caused marks.
+Spilled decorative contents (a few skulls, yogurt tubs with their lids, green pickles) and the box's
+flattened flaps shrink away so the spill is gone 30 s after the break, like other player-caused marks;
+a torn-paper grime mark (`Grime.PAPER`) fades on the same clock.
+
+- **Placement** (`SiteBuilder._plan_packages` → `SitePlan.packages`): a dedicated RNG seeded from the floor
+  seed, so no prop, decor piece or pack moves. 4–6 spots a floor on open room floor, backed against a wall
+  2–6 cells from the nearest corridor cell (near a door, never in the doorway or a corridor), outside the
+  START / EXIT clear zones and hellgate zones, clear of every planned body (employees, notes, priced props,
+  decor, the lanes kept open in front of them). One per room first, then two. A spot is 1 (58%), 2 (30%) or
+  3 (12%) boxes of kind small / medium / long; an upper box is the same size or a small one, a little twisted
+  and shifted. The cells go into `plan.blocked`, so no monster spawns inside them.
+- **Actor** (`MailPackage`, scripts/contracts): neutral, immovable, 10 hp, and *any* damage breaks it. Each
+  box of a stack is its own breakable (the model sits `lift` above the actor's ground point); when the box
+  below breaks, the one above drops onto what is left under it. Group `"breakables"`. Contents are rolled
+  from the box's own seed when it breaks (`MailPackage.roll_contents(rng)` is pure). Models:
+  `PackageModels` (taped cardboard, shipping label, loose bits), spill: `PackageSpill`.
+- **What breaks it:** `Combat.melee_arc`, `Projectile` and `ArrowShot` look at
+  `GameWorld.hittable_in_radius` (the foe team plus the breakables group), which covers hero melee,
+  Gasket's spin, arrows, Wick's bolt, the fireball projectile and monster swings and shots. Corn and teeth
+  already hit every team, the fireball blast hits team neutral, tentacles and Rebar's bowl check the group,
+  and an actor shoved into a box breaks it (credited to the shover). Priced props and employees are still
+  not hit by melee or arrows.
+- **Dev:** `--scene res://scenes/package_lab.tscn` (sizes, stacks, every contents spilled; `--shot`),
+  `--to-package` puts the crew next to the first stack of the floor.

@@ -42,6 +42,8 @@ func setup() -> void:
 	var caster := _hero(Vector3.ZERO)
 	var buddy := _hero(Vector3(5.5, 0, 1.6))      # stands inside the blast radius, must be spared
 	var target := _dummy(Vector3(6.0, 0, 0))
+	for a: Actor in [caster, buddy, target]:
+		Burning.set_fireproof(a, true)   # this block checks the blast damage exactly; burning is covered by test_burning
 	check(SpellBook.cast("fireball", caster, 1.0, target.global_position), "fireball casts")
 	await frames(70)
 	near(target.hp, target.max_hp - SpellBook.fireball_damage(1.0), 0.01, "fireball damages the monster")

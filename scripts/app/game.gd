@@ -38,6 +38,7 @@ extends Node3D
 ##   --to-theme <id>     dev: put the crew in the middle of the first room with that theme (wine_cellar, home_cinema, spa, gym,
 ##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, service_entrance); the
 ##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing
+##   --to-package        dev: put the crew two cells from the first mail package stack of the floor (zoom in with --zoom 10)
 ##   --to-exit           dev: put the crew on the elevator (shows "E: use elevator"; E opens the menu)
 ##   --demo-damage       dev: 1 s in, put two property-damage lines on the Ledger (to see the ticker and the tracker)
 ##   --show-panel        dev: keep the voice debug panel open in --shot screenshots
@@ -172,6 +173,7 @@ func _parse_args() -> void:
 			"--to-gate": opts["to_gate"] = true
 			"--to-theme": opts["to_theme"] = nxt
 			"--to-exit": opts["to_exit"] = true
+			"--to-package": opts["to_package"] = true
 			"--demo-damage": opts["demo_damage"] = true
 			"--show-panel": opts["show_panel"] = true
 			"--hurt": opts["hurt"] = float(nxt)
@@ -1114,6 +1116,20 @@ func _dev_teleports() -> void:
 					focus = _site.plan.centers[themed[0]]
 			_teleport_crew(focus)
 			return
+	if opts.has("to_package") and _site != null and not _site.plan.packages.is_empty():
+		# two cells from the first stack, toward the middle of its room
+		var pk: Dictionary = _site.plan.packages[0]
+		var pc: Vector2i = pk["cell"]
+		var mid: Vector2i = _site.plan.centers[str(pk["room"])]
+		var near := pc
+		var near_d := 99
+		for c in Hex.ring(pc, 2):
+			var cell2: HexMap.Cell = map.get_cell(c)
+			if cell2 != null and cell2.type == HexMap.Tile.FLOOR and Hex.distance(c, mid) < near_d:
+				near_d = Hex.distance(c, mid)
+				near = c
+		_teleport_crew(near)
+		return
 	if opts.has("to_gate") and _site != null and not _site.gates.is_empty():
 		var gc: Vector2i = _site.plan.gates[0]["cell"]
 		var best := gc
