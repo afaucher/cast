@@ -16,33 +16,24 @@ waiting for a yes are marked **[proposal]**.
 - The awkward part, raised by the user: if voice can cast anything, selecting a spell has no
   meaning of its own. The next section gives it some.
 
-## The readied spell is "the one in your hand" [proposal]
-Selecting answers the question "what do I want to prioritize right now?". Readying a spell earns three things:
+## The readied spell: a passive boost, held in your hand [decided direction]
+Selecting a slot is not an active mechanic. It's a **passive boost** to that one spell, shown by the
+hero **holding its material component in hand** (a glowing ember for fireball, a cob for corn, a
+coil of neon ichor for tentacles).
 
-1. **Instant feel, by hiding voice latency.** The game knows which spell you're likely to say, so
-   when speech starts and the partial transcript is consistent with the readied spell's incantation
-   (e.g. the trigger word is heard), the hero starts the cast wind-up at once. The cast resolves when
-   recognition confirms it, and a mismatch turns into a cheap fizzle. Non-readied spells wait for the
-   final recognition (about 0.5–0.8 s after you stop speaking). This is the biggest benefit.
-2. **Aim preview.** The reticle shows the readied spell's real footprint: the corn blast circle, the
-   tentacles shove ring, the armor zone, the fireball path. Teammates also see it, so the crew can
-   read "Larkin is about to corn that spot".
-3. **A modest boost:** +25% power, and a fumbled readied cast never fully fizzles. It drops to a
-   floor of 0.5 power rather than failing.
+- **While readied**, the spell is simply stronger whenever it's cast, by voice or with E. Something
+  like +25% power, or a bigger area or longer duration; the exact boost per spell is to tune.
+- **Choosing what to hold** is the "what do I want to prioritize right now?" decision. It's quiet
+  and strategic, not a reflex.
+- **Teammates can read it** from the component in your hand, which gives co-op awareness for free.
+- **E** casts the readied (held) spell from the keyboard. Voice casts any slotted spell; casting a
+  different one doesn't change what you're holding.
 
-Other details:
-- **Saying a non-readied slotted spell** casts it normally, with no boost and the full wait. It does
-  NOT change which spell is readied.
-- **Keyboard E** casts the readied spell at a fixed 0.8 power, lower than a clean voice cast, so
-  voice stays the better choice (`voice-mechanic.md`).
-- **Teammate UI:** a small icon over each hero shows their readied spell. This is co-op
-  communication for free, and fits "a well-oiled team" (`north-star.md`).
-
-Alternatives considered:
-- **Only the readied spell is voice-castable.** Rejected: it guts the voice fantasy and adds a
-  key press to every cast.
-- **Casting a non-readied spell costs an extra component** ("rummaging in the bag"). Possible
-  later, if the material economy needs a sink.
+Ideas that were set aside, as too active or too much UI:
+- the readied spell starting its wind-up early to hide voice latency;
+- a footprint preview on the reticle;
+- only the readied spell being voice-castable;
+- extra component cost for casting a spell you aren't holding.
 
 ## Material components [proposal]
 - Each spell has a **component**. Picking one up when the spell isn't slotted offers it for a slot
@@ -72,14 +63,14 @@ Alternatives considered:
 2. Is a swap screen acceptable, or must swaps happen in-world (walk over a component = auto-slot
    into the readied slot)? The in-world version needs no menus, which suits the no-mid-play-keys
    preference.
-3. Should the readied spell also be readable by AI allies (so they could cover you)?
+3. What should the passive boost be per spell: plain power, or something spell-specific (corn
+   radius, armor duration, tentacles push distance)?
 4. How many distinct spells for the vertical slice: 6–8?
 
 ## Impact on the POC code (for whoever builds it)
 - `Hero.spell_slots` grows to 4; add `readied_slot` and per-spell `charges`.
 - `PlayerController`: keys 1–4 select, `E` casts the readied spell; key casting moves from 1/2 to E.
-- `VoiceCaster`: emit an early "likely spell" hint from partials (the trigger is heard and the
-  partial is a prefix of the readied incantation), so the game can start the wind-up early.
-- `AimReticle`: draw the readied spell's footprint.
+- `SpellBook.cast`: apply the readied spell's passive boost.
+- Hero models: a hand attachment point that shows the held component (`LowPolyModel`).
 - `MonsterFactory`/`Monster`: drop table on death, and a pickup actor that auto-collects on walk-over.
-- HUD: 4 cards, readied highlight, charges count, and an icon over each teammate's head.
+- HUD: 4 cards, readied highlight, charges count.
