@@ -23,6 +23,8 @@ signal shove_impact(kind: String, pos: Vector3, amount: float)
 @export var display_name: String = "Actor"
 ## How far shoves carry this actor: 1 = normal, 0 = immovable, 0.4 = heavy, 1.5 = light.
 @export var shove_mult := 1.0
+## Speed multiplier while crossing a +2 climb ledge (a hero kit tunes it: Larkin 0.6, Dagna 0.25).
+@export var climb_speed_factor := CLIMB_SPEED_FACTOR
 
 const CLIMB_SPEED_FACTOR := 0.35
 
@@ -166,10 +168,10 @@ func move(dir: Vector3, delta: float) -> bool:
 			continue
 		var probe: Vector3 = from + attempt + attempt.normalized() * radius * 0.5
 		var mv := map.movement_check(from, probe) if map else HexMap.Move.OK
-		if mv == HexMap.Move.BLOCKED:
+		if mv == HexMap.Move.BLOCKED or (mv == HexMap.Move.CLIMB and not _climb_allowed()):
 			continue
 		climbing = mv == HexMap.Move.CLIMB
-		var s: Vector3 = attempt * (CLIMB_SPEED_FACTOR if climbing else 1.0)
+		var s: Vector3 = attempt * (climb_speed_factor if climbing else 1.0)
 		global_position = from + s
 		moved = true
 		break
@@ -524,6 +526,11 @@ func _separate() -> void:
 		var target := global_position + push
 		if map == null or map.movement_check(global_position, target) == HexMap.Move.OK:
 			global_position = target
+
+
+## Override: may this actor cross a +2 climb ledge on foot? (Heroes: the kit's can_climb; Pebble can't.)
+func _climb_allowed() -> bool:
+	return true
 
 
 ## Turn to face a world point (X/Z only).

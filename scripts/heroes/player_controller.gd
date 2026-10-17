@@ -2,7 +2,8 @@ class_name PlayerController
 extends Node
 ## Keyboard + mouse control for the player's hero (add as a child of the Hero).
 ## WASD moves relative to the iso camera, the mouse aims via a camera ray onto
-## the terrain, LMB = melee, RMB = ranged bolt, keys 1-4 = ready (hold) a spell slot,
+## the terrain, LMB = melee (the hero's primary), RMB = the secondary (bolt / bowl / spin; Larkin's arrow:
+## tap to shoot, hold to draw a piercing shot and release), keys 1-4 = ready (hold) a spell slot,
 ## E = cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
 ## the pickup underfoot into the held slot. aim_point() is also what voice casts aim at;
 ## cast_spell() is the single entry for voice and E (charges, cooldown, toasts).
@@ -31,6 +32,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if hero.is_helpless():
 		hero.climbing = false   # shoved or staggered: no steering, no attacks (voice casts still work)
+		hero.cancel_draw()
 		_slot_keys()
 		return
 	var cam := _camera()
@@ -43,15 +45,21 @@ func _physics_process(delta: float) -> void:
 	if cam != null or aim_override != Vector3.INF:
 		hero.face_point(aim_point())
 	_slot_keys()
-	if _over_ui():
-		return
 	var aim := aim_point()
 	var to := aim - hero.global_position
 	to.y = 0.0
+	var ranged := Input.is_action_pressed("attack_ranged")
+	if hero.is_drawing() and not ranged:
+		hero.release_draw(to)   # RMB let go: tap or drawn shot (even if the cursor drifted onto the HUD)
+	if _over_ui():
+		return
 	if Input.is_action_pressed("attack_melee"):
-		hero.melee(to)
-	elif Input.is_action_pressed("attack_ranged"):
-		hero.shoot(to)
+		hero.melee(to)          # also lowers a drawn bow
+	elif ranged:
+		if hero.secondary_kind == "arrow":
+			hero.start_draw()   # hold to draw; released above (early = tap shot)
+		else:
+			hero.shoot(to)
 
 
 ## Keys 1-4 (ready a slot), E (cast the readied spell) and F (swap a pickup in).

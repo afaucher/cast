@@ -22,6 +22,8 @@ extends Node3D
 ##   --give-allies a,b   dev: slot spell a for Pebble and b for Dagna (they only hold the component; allies do not cast)
 ##   --drop-near a,b     dev: put component pickups for spells a, b on the floor just ahead of the player
 ##   --slay-near         dev: 1.5 s in, kill the --spawn-near monsters (to watch their drops)
+##   --kit-demo draw|hammer|fist  dev: at 0.8 s Larkin starts drawing his bow on the --spawn-near monsters (a drawn shot
+##                       fires 1.3 s later), or Dagna (hammer) / Pebble (fist) steps up to them and swings once
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
 const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn", "tentacles"]
@@ -97,6 +99,7 @@ func _parse_args() -> void:
 			"--focus": opts["focus"] = nxt
 			"--drop-near": opts["drop_near"] = nxt
 			"--slay-near": opts["slay_near"] = true
+			"--kit-demo": opts["kit_demo"] = nxt
 	if _seed < 0:
 		_seed = int(opts.get("seed", randi() % 100000))
 	if _spells.is_empty() and opts.has("spells"):
@@ -133,16 +136,14 @@ func _build_world() -> void:
 	# Faceted low-poly models by default; --proto-heroes brings back the capsule bodies.
 	var faceted: bool = not bool(opts.get("proto_heroes", false))
 	var start: Vector2i = map.cells_with_tag("start")[0]
-	player = HeroFactory.spawn_hero(start, "Larkin", PLAYER_COLOR, "sword", LarkinModel.new() if faceted else null)
+	player = HeroFactory.spawn_hero(start, "Larkin", PLAYER_COLOR, "sword", LarkinModel.new() if faceted else null, HeroKit.LARKIN)
 	var none: Array[String] = []
 	controller = HeroFactory.make_player(player, none)
 	var spots := _free_cells_near(start, 2)
-	var pebble := HeroFactory.spawn_hero(spots[0], "Pebble", Color(0.85, 0.5, 0.25), "sword", PebbleModel.new() if faceted else null)
-	pebble.shove_mult = 0.0          # Pebble is immovable (design: he is the one who shoves)
-	pebble.secondary_kind = "bowl"   # RMB / AI: a rolling boulder
+	# Each hero's kit (HP, primary, secondary, quirks) comes from HeroKit; --proto-heroes keeps the kits.
+	var pebble := HeroFactory.spawn_hero(spots[0], "Pebble", Color(0.85, 0.5, 0.25), "sword", PebbleModel.new() if faceted else null, HeroKit.PEBBLE)
 	HeroFactory.make_ally(pebble, player, false, 2.4)
-	var dagna := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Dagna", Color(0.7, 0.4, 0.85), "sword", DagnaModel.new() if faceted else null)
-	dagna.secondary_kind = "spin"    # RMB / AI: a 360 degree whirl
+	var dagna := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Dagna", Color(0.7, 0.4, 0.85), "sword", DagnaModel.new() if faceted else null, HeroKit.DAGNA)
 	HeroFactory.make_ally(dagna, player, false, 3.9)
 	allies = [pebble, dagna]
 	player.died.connect(func() -> void: _end("You died\nF5 for a new dungeon", Color(1.0, 0.4, 0.35)))
@@ -360,6 +361,8 @@ func _start() -> void:
 		rig.snap()
 	if opts.has("slay_near"):
 		get_tree().create_timer(1.5).timeout.connect(_slay_dev_monsters)
+	if opts.has("kit_demo"):
+		_kit_demo(str(opts["kit_demo"]))
 	if opts.has("autocast"):
 		await get_tree().create_timer(1.0).timeout
 		var centre := _dev_centroid()
@@ -497,6 +500,34 @@ func _drop_near() -> void:
 		var id := ids[i].strip_edges()
 		var p := ComponentPickup.drop(id, SpellComponents.PICKUP_CHARGES, base + Vector3(0.0, 0.0, 1.4 * i))
 		_log("drop-near: %s %s" % [id, "ok" if p != null else "no floor"], Color(0.8, 0.8, 1.0))
+
+
+## Dev flag --kit-demo: show one hero's primary / secondary on the --spawn-near monsters (screenshots).
+func _kit_demo(kind: String) -> void:
+	for ally in allies:   # only the demo hero acts
+		var b := ally.get_node_or_null("AllyBrain")
+		if b != null:
+			b.set_physics_process(false)
+	await get_tree().create_timer(0.8).timeout
+	var centre := _dev_centroid()
+	if centre == Vector3.INF:
+		return
+	if kind == "draw":
+		controller.enabled = false   # no mouse button is held, so the controller would release at once
+		player.face_point(centre)
+		player.start_draw()
+		await get_tree().create_timer(1.3).timeout
+		player.release_draw(centre - player.global_position)
+		return
+	var hero: Hero = allies[1] if kind == "hammer" else allies[0]
+	var away := (centre - player.global_position)
+	away.y = 0.0
+	away = away.normalized()
+	var spot := centre - away * (hero.melee_reach - 0.25)
+	hero.global_position = Vector3(spot.x, hero.global_position.y, spot.z)
+	hero.snap_to_ground()
+	hero.face_point(centre)
+	hero.melee(away)
 
 
 func _slay_dev_monsters() -> void:

@@ -75,7 +75,7 @@ func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 		_style_label(lbl, 16)
 		row.add_child(lbl)
 		var bar := HudBar.new()
-		bar.custom_minimum_size = Vector2(150, 14)
+		bar.custom_minimum_size = Vector2(150, 18)
 		bar.fill = BAR_COLOR_ALLY
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(bar)
@@ -103,7 +103,7 @@ func _process(delta: float) -> void:
 		if i < allies.size() and is_instance_valid(allies[i]):
 			var a := allies[i]
 			_ally_bars[i].fill = BAR_COLOR_ALLY if not a.dead else Color(0.4, 0.4, 0.42)
-			_ally_bars[i].set_value(a.hp / a.max_hp, "DOWN" if a.dead else "")
+			_ally_bars[i].set_value(a.hp / a.max_hp, "DOWN" if a.dead else "%d / %d" % [int(ceilf(a.hp)), int(a.max_hp)])
 	_mic_bar.set_value(lerpf(_mic_bar.value, _mic_target, clampf(18.0 * delta, 0.0, 1.0)), "")
 	_update_prompt()
 

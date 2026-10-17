@@ -42,12 +42,44 @@ const TURN_RATE := 18.0
 const KEY_MELEE := "_melee"
 const KEY_RANGED := "_ranged"
 const SWING_REST_YAW := -20.0   # degrees; weapon rests slightly to the right of forward
+# Larkin's arrow (secondary_kind "arrow"): the defaults a HeroKit overrides (see HeroKit.ARROW).
+const ARROW_TAP_DAMAGE := 12.0
+const ARROW_TAP_COOLDOWN := 0.55
+const ARROW_TAP_RANGE := 14.0
+const ARROW_DRAW_TIME := 0.7
+const ARROW_DRAW_DAMAGE := 28.0
+const ARROW_DRAW_RANGE := 18.0
+const ARROW_DRAW_PIERCE := 3
+const ARROW_SPEED := 22.0
+const DRAW_MOVE_MULT := 0.5
+const CHARGE_RING_RADIUS := 1.05
 
 @export var hero_color := Color(0.3, 0.55, 0.95)
 @export var weapon_kind := "sword"   ## "sword" or "staff" (cosmetic)
 ## What shoot() (RMB / the AI's ranged use) does: "bolt" (the weak ranged bolt / arrows),
 ## "bowl" (Pebble's rolling boulder) or "spin" (Dagna's 360 degree whirl).
 @export var secondary_kind := "bolt"
+## The kit this hero was given (HeroKit.apply), or "" for the generic sword hero.
+var kit_id := ""
+## The primary (LMB / AI melee). The defaults are the generic sword; a HeroKit overrides them.
+var primary_name := "Sword"
+var melee_damage := MELEE_DAMAGE
+var melee_cooldown := MELEE_COOLDOWN
+var melee_reach := MELEE_REACH
+var melee_arc := MELEE_ARC
+var melee_shove := MELEE_SHOVE
+## Pebble can't climb +2 ledges (he steps up +1 only), like the brute.
+var can_climb := true
+## Arrow stats (secondary_kind "arrow": tap, or hold RMB to draw); a HeroKit overrides them.
+var arrow_tap_damage := ARROW_TAP_DAMAGE
+var arrow_tap_cooldown := ARROW_TAP_COOLDOWN
+var arrow_tap_range := ARROW_TAP_RANGE
+var arrow_draw_time := ARROW_DRAW_TIME
+var arrow_draw_damage := ARROW_DRAW_DAMAGE
+var arrow_draw_range := ARROW_DRAW_RANGE
+var arrow_draw_pierce := ARROW_DRAW_PIERCE
+var arrow_speed := ARROW_SPEED
+var draw_move_mult := DRAW_MOVE_MULT
 
 var is_player := false:
 	set(v):
@@ -79,6 +111,9 @@ var _shield_icon: Sprite3D
 var _shield_bubble: MeshInstance3D
 var _swing_tween: Tween
 var _visual_yaw := 0.0
+var _draw_start := -1.0              ## GameWorld.time the bow draw began, or -1 when not drawing
+var _charge_ring: MeshInstance3D = null
+var _charge_mat: StandardMaterial3D = null
 
 ## Opt-in replacement for the capsule/hat/weapon body (e.g. a PebbleModel). Set it before the
 ## hero enters the tree (HeroFactory.spawn_hero(..., model)). The model faces local -Z; if it has
@@ -299,11 +334,12 @@ func melee(dir: Vector3) -> bool:
 		dir = facing
 	dir = dir.normalized()
 	facing = dir
-	_ready_at[KEY_MELEE] = GameWorld.time + MELEE_COOLDOWN
-	for foe in GameWorld.actors_in_radius(global_position, MELEE_REACH, GameWorld.other_team(team)):
+	cancel_draw()
+	_ready_at[KEY_MELEE] = GameWorld.time + melee_cooldown
+	for foe in GameWorld.actors_in_radius(global_position, melee_reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
-	Combat.melee_arc(self, dir, MELEE_REACH, MELEE_ARC, MELEE_DAMAGE, MELEE_SHOVE)
-	Fx.slash_arc(global_position, dir, MELEE_REACH, MELEE_ARC, hero_color.lightened(0.5))
+	Combat.melee_arc(self, dir, melee_reach, melee_arc, melee_damage, melee_shove)
+	Fx.slash_arc(global_position, dir, melee_reach, melee_arc, hero_color.lightened(0.5))
 	_swing_pose()
 	melee_swung.emit()
 	return true
@@ -319,7 +355,125 @@ func shoot(dir: Vector3) -> bool:
 			return _bowl(dir)
 		"spin":
 			return _spin()
+		"arrow":
+			return fire_arrow(dir, false)
 	return _bolt(dir)
+
+
+# --- Larkin's arrow: tap, or hold to draw ------------------------------------------------------
+
+## True while the bow is being drawn (RMB held with secondary_kind "arrow").
+func is_drawing() -> bool:
+	return _draw_start >= 0.0
+
+
+## 0..1: how far the bow is drawn (1 = a full draw, the next release is the drawn shot).
+func draw_progress() -> float:
+	if _draw_start < 0.0:
+		return 0.0
+	return clampf((GameWorld.time - _draw_start) / maxf(arrow_draw_time, 0.001), 0.0, 1.0)
+
+
+## Begin drawing the bow (RMB pressed). False if this hero has no arrow, is down or helpless, or the
+## bow is still recovering from the last shot. Moving while drawn is allowed at draw_move_mult speed.
+func start_draw() -> bool:
+	if secondary_kind != "arrow" or dead or is_helpless() or cooldown_left(KEY_RANGED) > 0.0:
+		return false
+	if _draw_start < 0.0:
+		_draw_start = GameWorld.time
+		_update_draw_visuals()
+	return true
+
+
+## Let go of the string (RMB released). A full draw (held arrow_draw_time or more) fires the drawn
+## shot (piercing, harder, longer); releasing early fires a tap shot. False if not drawing.
+func release_draw(dir: Vector3) -> bool:
+	if _draw_start < 0.0:
+		return false
+	var full := draw_progress() >= 1.0
+	cancel_draw()
+	return fire_arrow(dir, full)
+
+
+## Lower the bow without shooting.
+func cancel_draw() -> void:
+	if _draw_start < 0.0:
+		return
+	_draw_start = -1.0
+	_update_draw_visuals()
+
+
+## Fire an arrow toward `dir` (X/Z): the tap shot, or `drawn` for the charged one. Shares the
+## secondary cooldown. False while on cooldown, down or helpless.
+func fire_arrow(dir: Vector3, drawn: bool) -> bool:
+	if dead or is_helpless() or cooldown_left(KEY_RANGED) > 0.0:
+		return false
+	dir.y = 0.0
+	if dir.length() < 0.001:
+		dir = facing
+	dir = dir.normalized()
+	facing = dir
+	cancel_draw()
+	_ready_at[KEY_RANGED] = GameWorld.time + arrow_tap_cooldown
+	var dmg := arrow_draw_damage if drawn else arrow_tap_damage
+	var rng := arrow_draw_range if drawn else arrow_tap_range
+	var pierce := arrow_draw_pierce if drawn else 1
+	ArrowShot.shoot(self, dir, dmg, arrow_speed, rng, pierce, drawn, hero_color.lightened(0.5))
+	_shoot_pose()
+	bolt_fired.emit()
+	return true
+
+
+## Move at draw_move_mult speed while the bow is drawn.
+func move(dir: Vector3, delta: float) -> bool:
+	if _draw_start < 0.0:
+		return super.move(dir, delta)
+	var base := move_speed
+	move_speed = base * draw_move_mult
+	var moved := super.move(dir, delta)
+	move_speed = base
+	return moved
+
+
+func _climb_allowed() -> bool:
+	return can_climb
+
+
+## Keep the model's bow and the charge ring in step with the draw.
+func _update_draw_visuals() -> void:
+	var p := draw_progress()
+	if visual_override != null and visual_override.has_method("draw_hold"):
+		visual_override.call("draw_hold", p)
+	if _draw_start >= 0.0:
+		if _charge_ring == null:
+			_make_charge_ring()
+		_charge_ring.visible = true
+		var full := p >= 1.0
+		var pulse := 1.0 + (0.07 * sin(GameWorld.time * 18.0) if full else 0.0)
+		var k := lerpf(0.3, 1.0, p) * pulse
+		_charge_ring.scale = Vector3(k, 0.15, k)
+		var base := hero_color.lightened(0.45)
+		var col := Color(1.0, 0.95, 0.55) if full else base
+		_charge_mat.albedo_color = Color(col, lerpf(0.35, 0.95, p))
+	elif _charge_ring != null:
+		_charge_ring.visible = false
+
+
+func _make_charge_ring() -> void:
+	_charge_ring = MeshInstance3D.new()
+	_charge_ring.name = "ChargeRing"
+	var torus := TorusMesh.new()
+	torus.inner_radius = CHARGE_RING_RADIUS - 0.09
+	torus.outer_radius = CHARGE_RING_RADIUS
+	torus.rings = 40
+	torus.ring_segments = 6
+	_charge_ring.mesh = torus
+	_charge_mat = Fx.glow_material(Color(1, 1, 1, 0.5))
+	_charge_ring.material_override = _charge_mat
+	_charge_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_charge_ring.position = Vector3(0, 0.08, 0)
+	_charge_ring.set_meta("no_flash", true)
+	add_child(_charge_ring)
 
 
 ## Pebble's bowl: a boulder rolls along the ground toward `dir`, shoving everything it touches.
@@ -371,6 +525,7 @@ func _bolt(dir: Vector3) -> bool:
 
 
 func _on_death() -> void:
+	cancel_draw()
 	# Downed, not removed: lie flat, grey out. Dead actors drop out of GameWorld queries.
 	if _body_mat:
 		_body_mat.albedo_color = Color(0.45, 0.45, 0.48)
@@ -512,6 +667,11 @@ func _process(delta: float) -> void:
 	var target_yaw := atan2(-facing.x, -facing.z)
 	_visual_yaw = lerp_angle(_visual_yaw, target_yaw, clampf(TURN_RATE * delta, 0.0, 1.0))
 	_visual.rotation.y = _visual_yaw
+	if _draw_start >= 0.0:
+		if dead or is_helpless():
+			cancel_draw()
+		else:
+			_update_draw_visuals()
 	if not dead:
 		_set_armor_visuals(has_modifier("armor"))
 		if _shield_bubble.visible:

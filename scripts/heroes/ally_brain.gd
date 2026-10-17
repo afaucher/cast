@@ -76,7 +76,7 @@ func _fight(foe: Actor, delta: float) -> void:
 	var d := to.length()
 	var dir := to.normalized() if d > 0.001 else hero.facing
 	if prefers_ranged:
-		if d < Hero.MELEE_REACH - 0.2:
+		if d < hero.melee_reach - 0.2:
 			hero.face_point(foe.global_position)
 			hero.melee(dir)
 		elif d < RANGED_MIN:
@@ -90,13 +90,19 @@ func _fight(foe: Actor, delta: float) -> void:
 		else:
 			_move_toward(foe.global_position, delta)
 	else:
-		if d <= MELEE_STOP + 0.2:
+		if d <= _melee_stop() + 0.2:
 			hero.face_point(foe.global_position)
 			hero.melee(dir)
 		else:
 			_move_toward(foe.global_position, delta)
-			if d <= Hero.MELEE_REACH - 0.2:
+			if d <= hero.melee_reach - 0.2:
 				hero.melee(dir)
+
+
+## How close a melee ally closes in: a little inside its own primary's reach (Pebble's long fist stops
+## farther out than Dagna's hammer).
+func _melee_stop() -> float:
+	return clampf(hero.melee_reach - 0.25, 1.0, MELEE_STOP + 0.35)
 
 
 func _follow(delta: float) -> void:
@@ -130,7 +136,7 @@ func _move_toward(goal: Vector3, delta: float) -> void:
 	var map: HexMap = GameWorld.map
 	var goal_cell := Hex.from_world(goal)
 	if GameWorld.time >= _repath_at or goal_cell != _path_goal:
-		_path = map.find_path(hero.current_cell(), goal_cell, true)
+		_path = map.find_path(hero.current_cell(), goal_cell, hero.can_climb)
 		_path_goal = goal_cell
 		_path_idx = 1
 		_repath_at = GameWorld.time + REPATH_INTERVAL

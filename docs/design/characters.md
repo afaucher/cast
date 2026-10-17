@@ -44,6 +44,29 @@ unique per crew**, so a hero's signature color is also that player's color.
 | Quirk | Heavy | Stout + wall-breaker | Light | Hollow | Hops |
 | Color | Moss green | Denim blue | Plum | Mustard | Coral |
 
+**As implemented (2026-10-16).** The three kits are data in `scripts/heroes/hero_kit.gd`
+(`HeroKit.DATA` and `HeroKit.ARROW`), applied by `HeroFactory.spawn_hero(..., kit_id)` and
+therefore also under `--proto-heroes`. Anything not in the table below is unchanged.
+
+| | **Pebble** | **Dagna** | **Larkin** |
+|---|---|---|---|
+| Max HP | 160 | 120 | 85 |
+| Primary (LMB / ally melee) | Slam fist: 26 dmg / 0.8 s / reach 1.8 / 120° / shove 1.0 | Hammer: 28 dmg / 0.65 s / reach 1.5 / 90° / shove 0.9 | Bow bash: 12 dmg / 0.4 s / reach 1.3 / 90° / shove 0.7 |
+| Secondary (RMB / ally ranged) | Bowl (6 dmg to monsters, shoves 3.5, 2.0 s, range 9) | Spin (16 dmg to monsters, reach 1.9, shoves 2.2, 1.4 s) | Arrow, below |
+| `shove_mult` | 0 (immovable) | 0.6 | 1.3 |
+| Climb +2 | Cannot (`can_climb` false; allies path without climbs) | ×0.25 | ×0.6 |
+| Walking speed | 4.5 for everyone (the per-hero speeds in the roster table are not applied yet) | | |
+
+**Larkin's arrow (as implemented).**
+- **Tap** (RMB pressed and released before 0.7 s): 12 dmg, range 14, speed 22, pierces 1.
+- **Draw** (RMB held 0.7 s or more): the next release fires a **drawn shot**: 28 dmg, range 18,
+  **pierces up to 3 targets** (each is hit once).
+- Both shots share one 0.55 s recovery, and the bow cannot be drawn while it recovers.
+- Releasing early fires a tap. Melee, a shove, a stagger or going down lowers the bow without a shot.
+- While drawn Larkin walks at half speed. A **charge ring** grows under him and turns gold when
+  full, and the model's `draw_hold(amount)` pulls the string.
+- Not yet: the +30% high-ground bonus, shooting while climbing.
+
 **Names can double as voice callsigns** ("heal Pebble"), so two syllables with a
 distinctive vowel work best. Pebble, Cobble, Dagna, Larkin, Rattles and Hollis are all
 good. **Avoid "Tor"** as a callsign: "Tor", "core" and "corn" sit too close to the corn
@@ -67,8 +90,8 @@ never notices what it's standing on.*
   - That includes **teammates**. The brute moves only 1 hex, and bosses are immune.
   - The boulder rides the terrain: it rolls off drops and crumbles at a +2 rise or a wall.
   - The shoulder boulder regrows over the cooldown, so the cooldown reads on the model.
-- **Quirk, Heavy:** steps up +1 only, so **no +2 climbs** (like the brute). It can't be
-  shoved or staggered.
+- **Quirk, Heavy:** steps up +1 only, so **no +2 climbs** (like the brute): `Hero.can_climb` is
+  false and the ally brain paths without climbs. It can't be shoved (`shove_mult` 0).
   - *P2 "Leg-up":* an ally next to a still Pebble can use it as a step onto +3 ledges.
 
 **Shoving teammates: yes.** It's the roster's main source of player-caused chaos *and* a
@@ -106,7 +129,7 @@ singed.*
   - A full whirl leaves Dagna **dizzy** for 1 s (steering wobbles ±40°).
   - No spinning while climbing, and the spin never hurts teammates.
 - **Quirk, Stout:**
-  - Shoved only 1 hex, and climbs +2 slowly (×0.25).
+  - Shoved at ×0.6 (`shove_mult`), and climbs +2 slowly (×0.25).
   - **Wall-breaker:** cracked secret walls glint for her from 6 hexes and break in one
     swing (others need about 5).
 
@@ -126,7 +149,7 @@ second.*
   - High ground gives Larkin +30% (others get +15%).
 - **Quirk, Light:**
   - Climbs +2 at ×0.6, and is the only hero who **can shoot while climbing**.
-  - A shove sends Larkin **3 hexes**.
+  - Shoves carry Larkin ×1.3 as far (`shove_mult` 1.3).
 
 ### Sir Rattles: the armor (DROPPED)
 *An empty suit of armor honoring a 400-year-old contract. Very polite, very literal.*

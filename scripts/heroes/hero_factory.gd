@@ -5,9 +5,12 @@ extends RefCounted
 
 
 ## Spawn a hero standing on `cell` (needs GameWorld.begin() to have been called).
-## `model` optionally replaces the prototype body (see Hero.visual_override).
-static func spawn_hero(cell: Vector2i, hero_name: String, color: Color, weapon: String = "sword", model: Node3D = null) -> Hero:
+## `model` optionally replaces the prototype body (see Hero.visual_override). `kit_id` ("larkin",
+## "dagna", "pebble") gives it that HeroKit (HP, primary, secondary, quirks) before it enters the world.
+static func spawn_hero(cell: Vector2i, hero_name: String, color: Color, weapon: String = "sword", model: Node3D = null, kit_id: String = "") -> Hero:
 	var h := Hero.new()
+	if kit_id != "":
+		HeroKit.apply_to(h, kit_id)
 	h.visual_override = model
 	h.display_name = hero_name
 	h.hero_color = color
