@@ -35,6 +35,9 @@ extends Node3D
 ##   --kit-demo draw|hammer|fist  dev: at 0.8 s Wick starts drawing his bow on the --spawn-near monsters (a drawn shot
 ##                       fires 1.3 s later), or Gasket (hammer) / Rebar (fist) steps up to them and swings once
 ##   --to-gate           dev: put the crew 5 cells from the first hellgate of the floor (the camera follows)
+##   --to-theme <id>     dev: put the crew in the middle of the first room with that theme (wine_cellar, home_cinema, spa, gym,
+##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, service_entrance); the
+##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing
 ##   --to-exit           dev: put the crew on the elevator (shows "E: use elevator"; E opens the menu)
 ##   --demo-damage       dev: 1 s in, put two property-damage lines on the Ledger (to see the ticker and the tracker)
 ##   --show-panel        dev: keep the voice debug panel open in --shot screenshots
@@ -43,6 +46,8 @@ extends Node3D
 ##                       that option 1.2 s later ("down" on the last floor cashes out)
 ##   --invoice-demo      dev: show a sample invoice (no game), for screenshots
 ##   --pause-demo        dev: open the pause overlay 1.5 s into the floor (screenshots)
+##   --no-grime          dev: no grime / damage decal layer (scripts/world/grime)
+##   --grime-demo        dev: 1 s in, cast fireball / corn / tentacles 6 cells from the crew and drop teeth / scuff marks (screenshots)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
@@ -165,6 +170,7 @@ func _parse_args() -> void:
 			"--slay-near": opts["slay_near"] = true
 			"--kit-demo": opts["kit_demo"] = nxt
 			"--to-gate": opts["to_gate"] = true
+			"--to-theme": opts["to_theme"] = nxt
 			"--to-exit": opts["to_exit"] = true
 			"--demo-damage": opts["demo_damage"] = true
 			"--show-panel": opts["show_panel"] = true
@@ -172,6 +178,8 @@ func _parse_args() -> void:
 			"--auto-elevator": opts["auto_elevator"] = nxt
 			"--invoice-demo": opts["invoice_demo"] = true
 			"--pause-demo": opts["pause_demo"] = true
+			"--no-grime": opts["no_grime"] = true
+			"--grime-demo": opts["grime_demo"] = true
 
 
 # --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
@@ -337,6 +345,7 @@ func _populate_site() -> void:
 		n.connect("read", _on_note_read)
 	_log("site: %d gates%s, %d employees, %d props, %d monsters (%d pests: %s)" % [small, " + origin" if origin else "", _site.employees.size(),
 		_site.props.size(), _site.monsters.size(), _site.pest_spawned, _run.pest], Color(0.8, 0.8, 1.0))
+	_log("themes: %s  decor %d" % [str(_site.plan.room_themes), _site.plan.decor.size()], Color(0.8, 0.8, 1.0))
 
 
 # --- Voice --------------------------------------------------------------------
@@ -481,6 +490,10 @@ func _start() -> void:
 			h.hp = maxf(1.0, h.hp - float(opts["hurt"]))
 			h._refresh_bar()
 	_populate_site()
+	if not opts.has("no_grime"):
+		GrimeLayer.attach(self, map, _site.plan, _run.floor_seed(_floor_n()))
+		if opts.has("grime_demo"):
+			GrimeDemo.run(self, player)
 	_spawn_near()
 	_build_contract_ui()
 	_dev_teleports()
@@ -1083,6 +1096,24 @@ func _take_shot_later(path: String, after: float) -> void:
 
 ## Dev flags --to-gate / --to-exit: move the crew (screenshots).
 func _dev_teleports() -> void:
+	if opts.has("to_theme") and _site != null:
+		var themed := _site.plan.rooms_with_theme(str(opts["to_theme"]))
+		if not themed.is_empty():
+			# the middle of the room's set dressing (the room's centre when it has none)
+			var focus: Vector2i = _site.plan.centers[themed[0]]
+			var sum := Vector2.ZERO
+			var n := 0
+			for dc in _site.plan.decor:
+				if str(dc["room"]) == themed[0] and String(dc["place"]) != "ring":
+					sum += dc["pos"]
+					n += 1
+			if n > 0:
+				var mid := sum / float(n)
+				focus = Hex.from_world(Vector3(mid.x, 0.0, mid.y))
+				if map.get_cell(focus) == null or map.get_cell(focus).type != HexMap.Tile.FLOOR:
+					focus = _site.plan.centers[themed[0]]
+			_teleport_crew(focus)
+			return
 	if opts.has("to_gate") and _site != null and not _site.gates.is_empty():
 		var gc: Vector2i = _site.plan.gates[0]["cell"]
 		var best := gc

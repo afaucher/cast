@@ -44,6 +44,7 @@ func _burst() -> void:
 	var radius := SpellBook.tentacles_radius(power)
 	var dist := SpellBook.tentacles_distance(power)
 	var dmg := SpellBook.tentacles_damage(power)
+	Grime.mark(Grime.CRACKS, global_position, radius)   # floor cracks that fade after 30 s
 	for a in GameWorld.actors_in_radius(global_position, radius):
 		var away := a.global_position - global_position
 		away.y = 0.0

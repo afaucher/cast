@@ -125,6 +125,7 @@ static func _on_pop(aff: Affliction) -> void:
 	elif carrier != null:
 		pos = carrier.global_position
 	_end(aff)
+	Grime.mark(Grime.TEETH, pos, 1.0)   # a few tooth bits that fade after 30 s
 	var power := aff.power
 	var src: Node = caster
 	var carrier_alive := carrier != null and not carrier.dead

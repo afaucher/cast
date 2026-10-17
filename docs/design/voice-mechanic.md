@@ -303,6 +303,25 @@ carelessly), because only the true ones are the feature.
 - **Voice-commanding AI allies (POC-friendly).** "Fox, heal me" makes the AI ally cast.
   This tests targeting grammar today, with no networking.
 
+### Mic capture: the stalled-mic loop (playtest 2026-10-17)
+About 5 minutes into a playtest the mic display filled with word-shaped input at speaking volume,
+and spells stopped working. The voice log showed the same audio heard on a fixed loop: "BRIGHT
+OVATER" every 8.00 s for a minute, then "FRIGHT A LEADER / OH NO" every 4.0 s ("OH NO" had been said
+earlier in that session).
+
+- **Cause:** the input device stopped delivering audio (it went to sleep or another app took it).
+  Godot's `AudioStreamMicrophone` then replays its 4 s input ring buffer forever, at full volume.
+  `tools/mic_probe.gd` reproduces it: 562 of 570 loud blocks during a stall were bit-exact repeats.
+  It only happens once the ring has filled, so any session longer than 4 s is exposed.
+- **Fix:**
+  - `VoiceCaster` reads the device directly (`AudioServer.get_input_frames`). That goes quiet on a
+    stall instead of looping.
+  - A watchdog restarts the device after 1 s without frames, or when the gate reports stale audio.
+  - `SpeechGate`'s repeat guard drops any loud 10 ms frame already heard in the last 10 s and flags
+    `is_stale`.
+  - The status line and gate line show "mic … restarted it (n)" and "STALE".
+  - Regression test: `tests/test_mic_stall.gd`.
+
 ---
 
 ## 5. Latency budget and hiding it

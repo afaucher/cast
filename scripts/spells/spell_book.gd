@@ -268,6 +268,7 @@ static func _cast_fireball(caster: Actor, power: float, aim: Vector3) -> void:
 			Fx.attach_hit_feedback(n)
 		Combat.explode(pos, radius, dmg, GameWorld.TEAM_NEUTRAL, src, 1.0)
 		Fx.explosion(pos, radius, col)
+		Grime.mark(Grime.SCORCH, pos, radius)   # a scorch that fades after 30 s (no-op without a GrimeLayer)
 	var size := 0.22 + 0.12 * power
 	# damage 0 on the direct hit: all damage comes from the explosion (monsters only).
 	var p := Fx.make_projectile(caster, Combat.chest(caster) + dir * 0.6, dir, 0.0, FIREBALL_SPEED, reach, col, size, on_hit)
