@@ -12,6 +12,7 @@ extends Node3D
 ##   --autocast <id>     cast a spell once, 1 s in (for screenshots)
 ##   --pebble            ally Brom uses the faceted low-poly PebbleModel (look-dev comparison)
 ##   --dagna             ally Wren uses the faceted low-poly DagnaModel (combine with --pebble)
+##   --larkin            the PLAYER hero uses the faceted low-poly LarkinModel (combine with both)
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
 const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn"]
@@ -76,6 +77,7 @@ func _parse_args() -> void:
 			"--autocast": opts["autocast"] = nxt
 			"--pebble": opts["pebble"] = true
 			"--dagna": opts["dagna"] = true
+			"--larkin": opts["larkin"] = true
 	if _seed < 0:
 		_seed = int(opts.get("seed", randi() % 100000))
 	if _spells.is_empty() and opts.has("spells"):
@@ -108,7 +110,8 @@ func _build_world() -> void:
 
 	# Heroes: player on the start cell, allies on free neighbors.
 	var start: Vector2i = map.cells_with_tag("start")[0]
-	player = HeroFactory.spawn_hero(start, "You", PLAYER_COLOR, "sword")
+	var larkin_model: Node3D = LarkinModel.new() if opts.get("larkin", false) else null
+	player = HeroFactory.spawn_hero(start, "You", PLAYER_COLOR, "sword", larkin_model)
 	var none: Array[String] = []
 	controller = HeroFactory.make_player(player, none)
 	var spots := _free_cells_near(start, 2)
