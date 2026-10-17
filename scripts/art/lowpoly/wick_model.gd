@@ -1,6 +1,6 @@
-class_name LarkinModel
+class_name WickModel
 extends LowPolyModel
-## Larkin, the Nervous Archer: a lanky, thin, worried FACETED low-poly human with a huge crooked,
+## Wick, the Nervous Archer: a lanky, thin, worried FACETED low-poly human with a huge crooked,
 ## droopy olive wizard hat, messy dark hair, a muted blue-grey patched work jacket, a brown leather
 ## strap and satchel, brown boots, a makeshift bow of gnarled branches carried in his left hand, a
 ## stubby copper wand tucked in his belt and a quiver of mismatched arrows on his back. Built
@@ -8,7 +8,7 @@ extends LowPolyModel
 ## LowPolyMaterial toon + amber rim + ink outline.
 ##
 ## Faces local -Z, +X is his right (so the bow is in the -X hand). Origin is at the feet. About
-## 2.2 units to the hat tip (the prototype hero is ~1.95, Dagna 1.74, Pebble ~3.2), only ~0.8 wide
+## 2.2 units to the hat tip (the prototype hero is ~1.95, Gasket 1.74, Rebar ~3.2), only ~0.8 wide
 ## across the shoulders and arms, so he is the tallest, thinnest silhouette, and the hat is the
 ## signature shape from above.
 ##
@@ -98,7 +98,7 @@ var _shoot_tween: Tween
 
 
 func _init() -> void:
-	_setup_model("LarkinModel", MODEL_SCALE)
+	_setup_model("WickModel", MODEL_SCALE)
 	ui_height = 2.27 * MODEL_SCALE
 	has_own_weapon = true
 	_arm_kick = {"bash": 0.0, "cast": 0.0, "raise": 0.0, "draw": 0.0}

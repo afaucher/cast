@@ -239,7 +239,7 @@ func _test_pickups() -> void:
 	await frames(2)
 
 	# Allies do not collect: only heroes with is_player.
-	var ally := HeroFactory.spawn_hero(Vector2i(2, 0), "Pebble", Color.ORANGE)
+	var ally := HeroFactory.spawn_hero(Vector2i(2, 0), "Rebar", Color.ORANGE)
 	ally.spell_slots = ["heal"] as Array[String]
 	ComponentPickup.drop("heal", 3, ally.global_position)
 	await frames(3)
@@ -382,7 +382,7 @@ func _test_monster_drops() -> void:
 
 func _test_hand_models() -> void:
 	# hold_item on each hero model: attaches under the model, replaces, and clears.
-	for model: LowPolyModel in [PebbleModel.new(), DagnaModel.new(), LarkinModel.new()]:
+	for model: LowPolyModel in [RebarModel.new(), GasketModel.new(), WickModel.new()]:
 		add_child(model)
 		var prop := ComponentProps.make("fireball")
 		model.hold_item(prop)
@@ -405,15 +405,15 @@ func _test_hand_models() -> void:
 		prop.free()
 
 	# A hero shows the HELD spell's component in the hand and follows the held slot.
-	var larkin := LarkinModel.new()
-	var h := _player(Vector2i(0, 0), ["heal", "corn"] as Array[String], larkin)
+	var wick := WickModel.new()
+	var h := _player(Vector2i(0, 0), ["heal", "corn"] as Array[String], wick)
 	await frames(3)
-	check(larkin.held_item() != null and larkin.held_item().name == "Component_heal", "Larkin holds grave moss")
+	check(wick.held_item() != null and wick.held_item().name == "Component_heal", "Wick holds grave moss")
 	h.select_slot(1)
-	check(larkin.held_item() != null and larkin.held_item().name == "Component_corn", "holding follows the held slot")
-	var before := larkin.hold_anchor.position
+	check(wick.held_item() != null and wick.held_item().name == "Component_corn", "holding follows the held slot")
+	var before := wick.hold_anchor.position
 	await frames(3)
-	check(larkin.hold_anchor.position.length() > 0.1, "the prop sits at the free hand (%s)" % str(before))
+	check(wick.hold_anchor.position.length() > 0.1, "the prop sits at the free hand (%s)" % str(before))
 	h.slot_in("armor", 3)
 	h.queue_free()
 	await frames(2)

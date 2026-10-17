@@ -1,7 +1,7 @@
 extends TestCase
-## Larkin's faceted low-poly model (the Nervous Archer): builds headless with every named part on the
-## shared LowPolyModel base, uses FLAT per-face normals, stays cheap, is tall and thin next to Dagna and
-## Pebble, runs its shoot / bash / cast poses and works as a Hero's visual override without changing
+## Wick's faceted low-poly model (the Nervous Archer): builds headless with every named part on the
+## shared LowPolyModel base, uses FLAT per-face normals, stays cheap, is tall and thin next to Gasket and
+## Rebar, runs its shoot / bash / cast poses and works as a Hero's visual override without changing
 ## gameplay numbers.
 
 const MAX_NODES := 20
@@ -9,12 +9,12 @@ const MAX_TRIS := 3500
 
 
 func setup() -> void:
-	var lar := LarkinModel.new()
+	var lar := WickModel.new()
 	add_child(lar)
-	check(lar is LowPolyModel, "LarkinModel extends LowPolyModel")
+	check(lar is LowPolyModel, "WickModel extends LowPolyModel")
 	var all_names: Array[String] = []
-	all_names.append_array(LarkinModel.PART_NAMES)
-	all_names.append_array(LarkinModel.BOW_PART_NAMES)
+	all_names.append_array(WickModel.PART_NAMES)
+	all_names.append_array(WickModel.BOW_PART_NAMES)
 	for part_name in all_names:
 		check(lar.has_part(part_name), "part %s exists" % part_name)
 		var mi := lar.get_part(part_name)
@@ -47,12 +47,12 @@ func setup() -> void:
 			checked += 1
 	check(checked > 400, "checked %d triangles" % checked)
 
-	# size: taller and thinner than the old hero and Dagna, shorter than Pebble, hat over his head
+	# size: taller and thinner than the old hero and Gasket, shorter than Rebar, hat over his head
 	check(lar.ui_height > 2.0 and lar.ui_height < 2.4, "about 2.1-2.3 units to the hat tip (ui_height %.2f)" % lar.ui_height)
-	var dag := DagnaModel.new()
-	var peb := PebbleModel.new()
-	check(lar.ui_height > dag.ui_height + 0.3, "taller than Dagna")
-	check(lar.ui_height < peb.ui_height, "shorter than Pebble")
+	var dag := GasketModel.new()
+	var peb := RebarModel.new()
+	check(lar.ui_height > dag.ui_height + 0.3, "taller than Gasket")
+	check(lar.ui_height < peb.ui_height, "shorter than Rebar")
 	dag.free()
 	peb.free()
 	var hat_box := lar.get_part("hat").mesh.get_aabb()
@@ -63,7 +63,7 @@ func setup() -> void:
 	var bow_box := lar.get_part("weapon").mesh.get_aabb()
 	check(bow_box.size.y > 1.2, "a full-size bow (%.2f long)" % bow_box.size.y)
 	check(bow_box.size.z > 0.25, "the bow is visibly curved (%.2f)" % bow_box.size.z)
-	var shoulders := (LarkinModel.SHOULDER.x + 0.12) * 2.0
+	var shoulders := (WickModel.SHOULDER.x + 0.12) * 2.0
 	check(shoulders < 0.9, "thin: %.2f across the shoulders" % shoulders)
 
 	# poses: the shoot pose raises the bow and draws the string, the bash and the cast move things
@@ -112,7 +112,7 @@ func setup() -> void:
 	for c in Hex.range_cells(Vector2i.ZERO, 6):
 		map.set_cell(c, 0)
 	GameWorld.begin(map, root)
-	var model := LarkinModel.new()
+	var model := WickModel.new()
 	var hero := HeroFactory.spawn_hero(Vector2i.ZERO, "You", Color(0.3, 0.55, 0.95), "sword", model)
 	var plain := HeroFactory.spawn_hero(Vector2i(2, 0), "Plain", Color(0.3, 0.55, 0.95))
 	await frames(2)

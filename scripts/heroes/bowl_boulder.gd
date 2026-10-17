@@ -1,6 +1,6 @@
 class_name BowlBoulder
 extends Node3D
-## Pebble's "bowl": a faceted sandstone boulder that rolls along the terrain (following the
+## Rebar's "bowl": a faceted sandstone boulder that rolls along the terrain (following the
 ## ground height, dropping down ledges), passes THROUGH actors and shoves each one it touches
 ## sideways/forward out of its path. Monsters take damage; heroes (teammates, the player) are
 ## only shoved. Stops at a +2 rise, a wall, the end of its range or a pit.

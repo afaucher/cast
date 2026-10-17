@@ -1,6 +1,6 @@
-class_name HeroPebble
+class_name HeroRebar
 extends RefCounted
-## Pebble, the foundation stone that walked off the job: a wide, lumpy PALE SANDSTONE boulder
+## Rebar, the foundation stone that walked off the job: a wide, lumpy PALE SANDSTONE boulder
 ## (never slate, which would vanish into the dark hex columns) with a moss-green cap, a tiny
 ## yellow hard hat and a hi-vis belt. No glowing eyes. The shoulder boulder is its Bowl ammo.
 
@@ -45,8 +45,8 @@ static func build(f: ToyFigure) -> void:
 		f.add("hand_" + side, arm, ArtMesh.blob(Vector3(0.52, 0.46, 0.52), 2.4, 0.12, 41 + s), CharacterKit.SANDSTONE, Vector3(0, -0.56, 0))
 	f.add("weapon", body, ArtMesh.blob(Vector3(0.58, 0.50, 0.54), 2.3, 0.2, 51), CharacterKit.SANDSTONE_DK, Vector3(bw * 0.38, bh * 0.56, 0.04))
 
-	f.idle_fn = Callable(HeroPebble, "idle")
-	f.pose_fn = Callable(HeroPebble, "pose")
+	f.idle_fn = Callable(HeroRebar, "idle")
+	f.pose_fn = Callable(HeroRebar, "pose")
 
 
 static func idle(f: ToyFigure, t: float) -> void:

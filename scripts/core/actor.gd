@@ -23,7 +23,7 @@ signal shove_impact(kind: String, pos: Vector3, amount: float)
 @export var display_name: String = "Actor"
 ## How far shoves carry this actor: 1 = normal, 0 = immovable, 0.4 = heavy, 1.5 = light.
 @export var shove_mult := 1.0
-## Speed multiplier while crossing a +2 climb ledge (a hero kit tunes it: Larkin 0.6, Dagna 0.25).
+## Speed multiplier while crossing a +2 climb ledge (a hero kit tunes it: Wick 0.6, Gasket 0.25).
 @export var climb_speed_factor := CLIMB_SPEED_FACTOR
 
 const CLIMB_SPEED_FACTOR := 0.35
@@ -528,7 +528,7 @@ func _separate() -> void:
 			global_position = target
 
 
-## Override: may this actor cross a +2 climb ledge on foot? (Heroes: the kit's can_climb; Pebble can't.)
+## Override: may this actor cross a +2 climb ledge on foot? (Heroes: the kit's can_climb; Rebar can't.)
 func _climb_allowed() -> bool:
 	return true
 

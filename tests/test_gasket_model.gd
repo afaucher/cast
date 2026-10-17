@@ -1,6 +1,6 @@
 extends TestCase
-## Dagna's faceted low-poly model: builds headless with every named part on the shared LowPolyModel
-## base, uses FLAT per-face normals, stays cheap, is short and wide next to Pebble, animates her own
+## Gasket's faceted low-poly model: builds headless with every named part on the shared LowPolyModel
+## base, uses FLAT per-face normals, stays cheap, is short and wide next to Rebar, animates her own
 ## wrench (swing / spin) and works as a Hero's visual override without changing gameplay numbers.
 
 const MAX_NODES := 20
@@ -8,10 +8,10 @@ const MAX_TRIS := 3500
 
 
 func setup() -> void:
-	var dag := DagnaModel.new()
+	var dag := GasketModel.new()
 	add_child(dag)
-	check(dag is LowPolyModel, "DagnaModel extends LowPolyModel")
-	for part_name in DagnaModel.PART_NAMES:
+	check(dag is LowPolyModel, "GasketModel extends LowPolyModel")
+	for part_name in GasketModel.PART_NAMES:
 		check(dag.has_part(part_name), "part %s exists" % part_name)
 		var mi := dag.get_part(part_name)
 		if mi != null:
@@ -28,7 +28,7 @@ func setup() -> void:
 
 	# flat normals: every vertex of a triangle carries that triangle's geometric normal
 	var checked := 0
-	for part_name in DagnaModel.PART_NAMES:
+	for part_name in GasketModel.PART_NAMES:
 		var arrays := dag.get_part(part_name).mesh.surface_get_arrays(0)
 		var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
@@ -42,10 +42,10 @@ func setup() -> void:
 			checked += 1
 	check(checked > 400, "checked %d triangles" % checked)
 
-	# size: short next to Pebble and the old hero, with a beard wider than her head and a wrench taller than her
+	# size: short next to Rebar and the old hero, with a beard wider than her head and a wrench taller than her
 	check(dag.ui_height > 1.4 and dag.ui_height < 1.9, "about 1.5-1.8 units tall (ui_height %.2f)" % dag.ui_height)
-	var peb := PebbleModel.new()
-	check(dag.ui_height < peb.ui_height * 0.65, "much shorter than Pebble")
+	var peb := RebarModel.new()
+	check(dag.ui_height < peb.ui_height * 0.65, "much shorter than Rebar")
 	peb.free()
 	var beard := dag.get_part("beard")
 	check(beard.mesh.get_aabb().size.x > 0.55, "a broad beard (%.2f wide)" % beard.mesh.get_aabb().size.x)
@@ -84,7 +84,7 @@ func setup() -> void:
 	for c in Hex.range_cells(Vector2i.ZERO, 6):
 		map.set_cell(c, 0)
 	GameWorld.begin(map, root)
-	var model := DagnaModel.new()
+	var model := GasketModel.new()
 	var hero := HeroFactory.spawn_hero(Vector2i.ZERO, "Wren", Color(0.7, 0.4, 0.85), "staff", model)
 	var plain := HeroFactory.spawn_hero(Vector2i(2, 0), "Plain", Color(0.3, 0.55, 0.95))
 	await frames(2)

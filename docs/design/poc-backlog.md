@@ -244,11 +244,11 @@ anyone outside the team plays. **P2** = later.
   - a leash fix so shoved monsters don't reset and heal.
 
   A teammate-caused shove or fall never downs anyone.
-- **P1** Pebble's Bowl: a piercing, terrain-riding boulder that shoves both teams (0 damage
+- **P1** Rebar's Bowl: a piercing, terrain-riding boulder that shoves both teams (0 damage
   to allies). The reticle turns hazard-yellow when its path crosses a teammate.
-- **P1** Dagna's Spin: a tap for a 360° spin, a hold for a whirl of up to 2.5 s, then
+- **P1** Gasket's Spin: a tap for a 360° spin, a hold for a whirl of up to 2.5 s, then
   dizziness. Plus the Hammer smash.
-- **P1** Larkin's arrows (tap, plus a hold-to-draw piercing shot) and shooting while
+- **P1** Wick's arrows (tap, plus a hold-to-draw piercing shot) and shooting while
   climbing. Sir Rattles' shield (hold to block projectiles in a front arc, tap to bash and
   interrupt).
 - **P1** Movement quirks:
@@ -262,11 +262,11 @@ anyone outside the team plays. **P2** = later.
   shared toon-ramp and inverted-hull outline material. A placeholder art pass on Sir
   Rattles first, then the other three heroes, in code-built primitives.
 - **P1** Generator: a no-climb way back (stairs) from every one-way drop, so the brute and
-  Pebble are never stranded.
+  Rebar are never stranded.
 - **P2** A one-day KayKit comparison spike: a pack model next to a primitive hero at the
   default zoom.
-- **P2** Dagna's wall-breaker (cracked secret walls glint and break in one swing) and
-  Pebble's Leg-up (allies use a still Pebble as a step).
+- **P2** Gasket's wall-breaker (cracked secret walls glint and break in one swing) and
+  Rebar's Leg-up (allies use a still Rebar as a step).
 - **P2** Spell "signature twists" per hero. Loadouts stay open, and corn never gets a twist.
 - **P2** Vertical-slice models: rigid-part low-poly in Blender, toon-shaded, on one
   proportion template. AI images for concept sheets only.
@@ -278,6 +278,6 @@ anyone outside the team plays. **P2** = later.
 - **P1** Four slots, readied spell (keys 1-4, E casts). The readied spell recharges 15% faster (a passive boost) and is shown as its component held in the hero's hand. See `spells-and-components.md`.
 - **P1** Material components: monster drop tables, walk-over pickups, charges, swapping.
 - **P1** Spell **teeth**: affliction, 1-2 s growth, pop with splash and shove, heal cleanses. See `spells.md`.
-- **P1** Rename the heroes: Pebble -> **Rebar**, Dagna -> **Gasket**, Larkin -> **Wick**. Covers labels, game.gd, docs and model class names. Check with voice clips that "Gasket" is never heard as the "cast" trigger.
+- **P1** Rename the heroes: Pebble -> **Rebar**, Dagna -> **Gasket**, Larkin -> **Wick**. Done: labels, game.gd, docs, model classes and files. Voice clips ("gasket", "rebar", "wick", plus "Gasket heal me" etc.) assert that the names never cast a spell.
 - **P1** Contracts: objectives with pay (employees $10 each, disinfect a room $10k, hellgates $3k each), property-damage deductions, end-of-job invoice. See `contracts.md`.
 - **P2** Villain-lair site type (torture chamber, throne room, lab, moat, barracks). See `environment.md`.

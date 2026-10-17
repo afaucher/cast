@@ -43,11 +43,11 @@ func setup() -> void:
 	check(heights["grunt"] < heights["brute"] and heights["archer"] < heights["brute"], "brute is the tallest")
 	check(heights["swarmer"] > 0.5, "swarmer is not tiny")
 
-	# heroes stay matte: nothing in Pebble glows
-	var peb := PebbleModel.new()
+	# heroes stay matte: nothing in Rebar glows
+	var peb := RebarModel.new()
 	add_child(peb)
 	var glowing := 0
-	for part_name in PebbleModel.PART_NAMES:
+	for part_name in RebarModel.PART_NAMES:
 		for c: Color in peb.get_part(part_name).mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]:
 			if c.a < 0.75:
 				glowing += 1

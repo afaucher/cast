@@ -65,7 +65,7 @@ func setup() -> void:
 	eq(target.get_child_count(), 0, "nothing left on the victim after cancel")
 
 	# --- Height from ui_height (a hero model); a second afflict replaces the first.
-	var model := PebbleModel.new()
+	var model := RebarModel.new()
 	add_child(model)
 	var fx3 := TeethFx.afflict(model, 5.0, _on_pop)
 	near(fx3.height, model.ui_height, 0.001, "height read from the model's ui_height")

@@ -1,6 +1,6 @@
 class_name ArrowShot
 extends Projectile
-## Larkin's arrow: a Projectile that can pierce. `pierce` is how many actors it may hit (a tap shot 1,
+## Wick's arrow: a Projectile that can pierce. `pierce` is how many actors it may hit (a tap shot 1,
 ## a drawn shot 3); each actor is hit once and the arrow flies on until it has used its hits, reaches
 ## max_range or meets terrain taller than its flight height. A drawn shot is longer, brighter and
 ## trails a glow.

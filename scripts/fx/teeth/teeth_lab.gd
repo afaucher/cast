@@ -7,7 +7,7 @@ extends Node3D
 ## --shot <png>   deterministic: time is stepped by hand to --at seconds, one frame is saved, then quit.
 ## --at <sec>     the moment to capture (default 0.6)
 ## --view game|close   game = the exact game camera (yaw 45, pitch -56, ortho 24); close = ortho ~7
-##                on Dagna and the grunt (override with --yaw / --pitch / --size)
+##                on Gasket and the grunt (override with --yaw / --pitch / --size)
 ## --grow <sec>   give every victim the same grow time instead of the staggered 1.0 .. 2.0 s
 ## --seed <n>     tooth layout seed (default 7)
 ## --cancel <sec> heal everyone at that time (cancel()) instead of letting them pop
@@ -19,9 +19,9 @@ const GAME_SIZE := 24.0
 
 ## name -> [x along the camera's right axis, depth, grow time]
 const SLOTS := {
-	"pebble": [-7.2, 0.8, 1.0],
-	"larkin": [-4.4, -0.6, 1.5],
-	"dagna": [-1.5, 0.3, 1.3],
+	"rebar": [-7.2, 0.8, 1.0],
+	"wick": [-4.4, -0.6, 1.5],
+	"gasket": [-1.5, 0.3, 1.3],
 	"grunt": [1.6, -0.2, 1.7],
 	"brute": [4.9, 0.9, 2.0],
 	"swarmer": [7.4, -0.4, 1.2],
@@ -48,9 +48,9 @@ var _orbit := 0.0
 func _ready() -> void:
 	_parse_args()
 	_build_world()
-	victims["pebble"] = PebbleModel.new()
-	victims["larkin"] = LarkinModel.new()
-	victims["dagna"] = DagnaModel.new()
+	victims["rebar"] = RebarModel.new()
+	victims["wick"] = WickModel.new()
+	victims["gasket"] = GasketModel.new()
 	victims["grunt"] = MonsterModels.make("grunt")
 	victims["brute"] = MonsterModels.make("brute")
 	victims["swarmer"] = MonsterModels.make("swarmer")

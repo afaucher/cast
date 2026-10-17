@@ -25,8 +25,8 @@ const DELIBERATE_GROUPS := ["clean", "rate", "sloppy", "hesitate"]
 const STRESS_GROUPS := ["rate", "hesitate"]
 const STRESS_MISS_BUDGET := 2
 ## Clips whose recognizer text is printed in full (the measurement tables for the
-## tentacles and teeth spell words and their chatter sound-alikes).
-const MEASURE_WORDS := ["tentacle", "attack", "ten tickets", "testicles", "tackle", "teeth", "tooth", "these", "tea", "tease", "teach"]
+## tentacles and teeth spell words and their chatter sound-alikes, and the hero names, which must never cast).
+const MEASURE_WORDS := ["gasket", "rebar", "wick", "tentacle", "attack", "ten tickets", "testicles", "tackle", "teeth", "tooth", "these", "tea", "tease", "teach"]
 ## The spells whose confusion with every other spell is checked, and the text stems
 ## of their clips ("tentacle" covers tentacles/tentacle, "teeth"/"tooth" the teeth forms).
 const FOCUS_STEMS := {"tentacles": ["tentacle"], "teeth": ["teeth", "tooth"]}

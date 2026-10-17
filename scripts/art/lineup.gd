@@ -12,7 +12,7 @@ extends Node3D
 ##          compare   the 4 core heroes in all 3 styles, one row per style (mid zoom), plus
 ##                    <shot>_game.png / _game_crop.png (true game zoom) and _low.png (low camera, shows proportions)
 ##   --style toy|heroic|flat   look for the heroes (ignored by compare)
-##   --focus pebble,dagna      close view: centre on these (ids, or "proto", "imp", "skeleton")
+##   --focus rebar,gasket      close view: centre on these (ids, or "proto", "imp", "skeleton")
 ##   --size N                  override the ortho size
 ##   --pitch N                 override the camera pitch (degrees, negative looks down)
 ##   --pose melee|secondary    freeze everyone in a demo pose (default: idle frozen at t=1)
@@ -23,8 +23,8 @@ extends Node3D
 
 const YAW := 45.0
 const PITCH := -62.0
-const HERO_ROW: Array[String] = ["pebble", "dagna", "larkin", "sir_rattles", "gulp"]
-const COMPARE_HEROES: Array[String] = ["pebble", "dagna", "larkin", "sir_rattles"]
+const HERO_ROW: Array[String] = ["rebar", "gasket", "wick", "sir_rattles", "gulp"]
+const COMPARE_HEROES: Array[String] = ["rebar", "gasket", "wick", "sir_rattles"]
 const SPACING := 2.5
 const FACE_YAW := -135.0 + 22.0     ## toward the camera, turned a little so a side shows
 

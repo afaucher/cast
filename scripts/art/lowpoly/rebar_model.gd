@@ -1,6 +1,6 @@
-class_name PebbleModel
+class_name RebarModel
 extends LowPolyModel
-## Pebble, Golem Utility: a hulking FACETED low-poly sandstone golem in a hi-vis vest, tool belt and
+## Rebar, Golem Utility: a hulking FACETED low-poly sandstone golem in a hi-vis vest, tool belt and
 ## faded jeans, with giant leather work gloves. Built entirely in code from LowPoly soups (flat
 ## shaded, per-face painted colours) with the LowPolyMaterial toon + amber rim + ink outline.
 ##
@@ -17,7 +17,7 @@ extends LowPolyModel
 ## of the hips so they show from above and from the game camera.
 const ARM_FWD := 0.0          ## arms hang straight down so he reads upright from the steep game camera
 
-## The model is built at ~2.4 units; this scales it up so Pebble is ~1.35x the prototype hero.
+## The model is built at ~2.4 units; this scales it up so Rebar is ~1.35x the prototype hero.
 const MODEL_SCALE := 1.1
 
 const PART_NAMES: Array[String] = ["body", "head", "vest", "belt", "arm_l", "arm_r", "glove_l", "glove_r", "leg_l", "leg_r"]
@@ -45,7 +45,7 @@ var _head_base_y := 1.24
 
 
 func _init() -> void:
-	_setup_model("PebbleModel", MODEL_SCALE)
+	_setup_model("RebarModel", MODEL_SCALE)
 	ui_height = 2.95 * MODEL_SCALE
 	_arm_kick = {"arm_l": 0.0, "arm_r": 0.0}
 	hold_offset = Vector3(-0.42, 0.18, -0.40)   # on his left fist (both hands punch, but the left is the quieter)

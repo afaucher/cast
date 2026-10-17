@@ -2,6 +2,5 @@
 
 [ext_resource type="Script" path="res://scripts/art/lowpoly/character_lab.gd" id="1"]
 
-[node name="LarkinLab" type="Node3D"]
+[node name="GasketLab" type="Node3D"]
 script = ExtResource("1")
-focus_hero = "larkin"

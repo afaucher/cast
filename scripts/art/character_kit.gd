@@ -2,14 +2,14 @@ class_name CharacterKit
 extends RefCounted
 ## Procedural "chunky toy toon" characters for Cast, assembled from rigid primitive parts.
 ##
-##   var fig: ToyFigure = CharacterKit.build("dagna", &"toy")   # styles: toy | heroic | flat
+##   var fig: ToyFigure = CharacterKit.build("gasket", &"toy")   # styles: toy | heroic | flat
 ##
-## One file per hero (HeroPebble, HeroDagna, HeroLarkin, HeroSirRattles, HeroGulp) holds the
+## One file per hero (HeroRebar, HeroGasket, HeroWick, HeroSirRattles, HeroGulp) holds the
 ## shapes; this file holds the roster, the palette, the style -> proportions table and the
 ## shared helpers. Style is a parameter, not a separate kit: proportions come from PROPORTIONS
 ## (heroic = taller / slimmer, ~5.5 heads) and the shading from Toon.STYLES.
 
-const HEROES: Array[String] = ["pebble", "dagna", "larkin", "sir_rattles", "gulp"]
+const HEROES: Array[String] = ["rebar", "gasket", "wick", "sir_rattles", "gulp"]
 const STYLE_IDS: Array[StringName] = [&"toy", &"heroic", &"flat"]
 
 ## Per-style proportion multipliers: head/hat, legs, torso, width, limb thickness.
@@ -61,9 +61,9 @@ static func build(hero_id: String, style: StringName = &"toy") -> Node3D:
 	fig.rig = rig
 	fig.parts["rig"] = rig
 	match hero_id:
-		"pebble": HeroPebble.build(fig)
-		"dagna": HeroDagna.build(fig)
-		"larkin": HeroLarkin.build(fig)
+		"rebar": HeroRebar.build(fig)
+		"gasket": HeroGasket.build(fig)
+		"wick": HeroWick.build(fig)
 		"sir_rattles": HeroSirRattles.build(fig)
 		"gulp": HeroGulp.build(fig)
 		_: push_warning("CharacterKit: unknown hero '%s'" % hero_id)

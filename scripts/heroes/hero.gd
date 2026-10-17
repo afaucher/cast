@@ -42,7 +42,7 @@ const TURN_RATE := 18.0
 const KEY_MELEE := "_melee"
 const KEY_RANGED := "_ranged"
 const SWING_REST_YAW := -20.0   # degrees; weapon rests slightly to the right of forward
-# Larkin's arrow (secondary_kind "arrow"): the defaults a HeroKit overrides (see HeroKit.ARROW).
+# Wick's arrow (secondary_kind "arrow"): the defaults a HeroKit overrides (see HeroKit.ARROW).
 const ARROW_TAP_DAMAGE := 12.0
 const ARROW_TAP_COOLDOWN := 0.55
 const ARROW_TAP_RANGE := 14.0
@@ -57,7 +57,7 @@ const CHARGE_RING_RADIUS := 1.05
 @export var hero_color := Color(0.3, 0.55, 0.95)
 @export var weapon_kind := "sword"   ## "sword" or "staff" (cosmetic)
 ## What shoot() (RMB / the AI's ranged use) does: "bolt" (the weak ranged bolt / arrows),
-## "bowl" (Pebble's rolling boulder) or "spin" (Dagna's 360 degree whirl).
+## "bowl" (Rebar's rolling boulder) or "spin" (Gasket's 360 degree whirl).
 @export var secondary_kind := "bolt"
 ## The kit this hero was given (HeroKit.apply), or "" for the generic sword hero.
 var kit_id := ""
@@ -68,7 +68,7 @@ var melee_cooldown := MELEE_COOLDOWN
 var melee_reach := MELEE_REACH
 var melee_arc := MELEE_ARC
 var melee_shove := MELEE_SHOVE
-## Pebble can't climb +2 ledges (he steps up +1 only), like the brute.
+## Rebar can't climb +2 ledges (he steps up +1 only), like the brute.
 var can_climb := true
 ## Arrow stats (secondary_kind "arrow": tap, or hold RMB to draw); a HeroKit overrides them.
 var arrow_tap_damage := ARROW_TAP_DAMAGE
@@ -115,7 +115,7 @@ var _draw_start := -1.0              ## GameWorld.time the bow draw began, or -1
 var _charge_ring: MeshInstance3D = null
 var _charge_mat: StandardMaterial3D = null
 
-## Opt-in replacement for the capsule/hat/weapon body (e.g. a PebbleModel). Set it before the
+## Opt-in replacement for the capsule/hat/weapon body (e.g. a RebarModel). Set it before the
 ## hero enters the tree (HeroFactory.spawn_hero(..., model)). The model faces local -Z; if it has
 ## attack_swing() / cast_pose() / set_downed(bool) / ui_height they are used. Stats, radius and AI
 ## are untouched. Null = the prototype look.
@@ -345,7 +345,7 @@ func melee(dir: Vector3) -> bool:
 	return true
 
 
-## The secondary attack toward `dir` (X/Z): the ranged bolt, Pebble's bowl or Dagna's spin,
+## The secondary attack toward `dir` (X/Z): the ranged bolt, Rebar's bowl or Gasket's spin,
 ## per secondary_kind. Returns false while on cooldown.
 func shoot(dir: Vector3) -> bool:
 	if dead or is_helpless() or cooldown_left(KEY_RANGED) > 0.0:
@@ -360,7 +360,7 @@ func shoot(dir: Vector3) -> bool:
 	return _bolt(dir)
 
 
-# --- Larkin's arrow: tap, or hold to draw ------------------------------------------------------
+# --- Wick's arrow: tap, or hold to draw ------------------------------------------------------
 
 ## True while the bow is being drawn (RMB held with secondary_kind "arrow").
 func is_drawing() -> bool:
@@ -476,7 +476,7 @@ func _make_charge_ring() -> void:
 	add_child(_charge_ring)
 
 
-## Pebble's bowl: a boulder rolls along the ground toward `dir`, shoving everything it touches.
+## Rebar's bowl: a boulder rolls along the ground toward `dir`, shoving everything it touches.
 func _bowl(dir: Vector3) -> bool:
 	dir.y = 0.0
 	if dir.length() < 0.001:
@@ -490,7 +490,7 @@ func _bowl(dir: Vector3) -> bool:
 	return true
 
 
-## Dagna's spin: everything within SPIN_REACH is shoved outward; monsters also take damage.
+## Gasket's spin: everything within SPIN_REACH is shoved outward; monsters also take damage.
 func _spin() -> bool:
 	_ready_at[KEY_RANGED] = GameWorld.time + SPIN_COOLDOWN
 	for foe in GameWorld.actors_in_radius(global_position, SPIN_REACH, GameWorld.other_team(team)):

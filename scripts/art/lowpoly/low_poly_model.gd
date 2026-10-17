@@ -1,6 +1,6 @@
 class_name LowPolyModel
 extends Node3D
-## Shared base for the faceted low-poly hero models (PebbleModel, DagnaModel): the named-parts
+## Shared base for the faceted low-poly hero models (RebarModel, GasketModel): the named-parts
 ## dictionary, the LowPolyMaterial, idle / walk speed tracking, the arm-kick tween helper, the
 ## downed look, and budget helpers for tests.
 ##

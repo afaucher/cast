@@ -1,5 +1,5 @@
 extends TestCase
-## Pebble's faceted low-poly model: builds headless with every named part, uses FLAT per-face
+## Rebar's faceted low-poly model: builds headless with every named part, uses FLAT per-face
 ## normals (adjacent faces never share a smoothed normal), stays cheap, and works as a Hero's
 ## visual override (swing, hit flash, downed) without changing the hero's gameplay numbers.
 
@@ -8,9 +8,9 @@ const MAX_TRIS := 2500
 
 
 func setup() -> void:
-	var peb := PebbleModel.new()
+	var peb := RebarModel.new()
 	add_child(peb)
-	for part_name in PebbleModel.PART_NAMES:
+	for part_name in RebarModel.PART_NAMES:
 		check(peb.has_part(part_name), "part %s exists" % part_name)
 		var mi := peb.get_part(part_name)
 		if mi != null:
@@ -26,7 +26,7 @@ func setup() -> void:
 	# flat normals: every vertex of a triangle carries that triangle's geometric normal
 	var shared_positions := 0
 	var distinct_at_shared := 0
-	for part_name in PebbleModel.PART_NAMES:
+	for part_name in RebarModel.PART_NAMES:
 		var arrays := peb.get_part(part_name).mesh.surface_get_arrays(0)
 		var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
@@ -73,7 +73,7 @@ func setup() -> void:
 	for c in Hex.range_cells(Vector2i.ZERO, 6):
 		map.set_cell(c, 0)
 	GameWorld.begin(map, root)
-	var model := PebbleModel.new()
+	var model := RebarModel.new()
 	var hero := HeroFactory.spawn_hero(Vector2i.ZERO, "Brom", Color(0.85, 0.5, 0.25), "sword", model)
 	var plain := HeroFactory.spawn_hero(Vector2i(2, 0), "Plain", Color(0.3, 0.55, 0.95))
 	await frames(2)

@@ -2,7 +2,7 @@ class_name PlayerController
 extends Node
 ## Keyboard + mouse control for the player's hero (add as a child of the Hero).
 ## WASD moves relative to the iso camera, the mouse aims via a camera ray onto
-## the terrain, LMB = melee (the hero's primary), RMB = the secondary (bolt / bowl / spin; Larkin's arrow:
+## the terrain, LMB = melee (the hero's primary), RMB = the secondary (bolt / bowl / spin; Wick's arrow:
 ## tap to shoot, hold to draw a piercing shot and release), keys 1-4 = ready (hold) a spell slot,
 ## E = cast the readied spell at the aim point (power SpellComponents.READIED_POWER), F = swap
 ## the pickup underfoot into the held slot. aim_point() is also what voice casts aim at;

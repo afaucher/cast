@@ -2,14 +2,14 @@ class_name BruteModel
 extends MonsterModel
 ## Brute: the bunker owner's pet demon bouncer. A huge, hunched, dark-red horned bruiser with lava cracks
 ## glowing through its hide, ivory horns and tusks, a heavy gold chain, gold cuffs on its wrists and the
-## shredded remains of charcoal pinstripe suit trousers. Pebble's bulk, but a villain: darker, warmer, glowing.
+## shredded remains of charcoal pinstripe suit trousers. Rebar's bulk, but a villain: darker, warmer, glowing.
 ##
 ## INTEGRATION: kind "brute" -> MonsterModels.make("brute"); see the full patch at the top of
 ## monster_model.gd. windup(_telegraph) every frame (both fists go up overhead, the cracks flare),
 ## attack_swing() at the slam (fists crash down, it hunches), set_downed / set_tint / set_fade as for every
 ## model. brute.gd needs no change (its _pose is null-guarded; the slam ring is independent of the model).
 ##
-## Faces local -Z, +X is its right. About 2.8 tall to the horn tips, ~2.3 across the fists (Pebble: 3.2 x
+## Faces local -Z, +X is its right. About 2.8 tall to the horn tips, ~2.3 across the fists (Rebar: 3.2 x
 ## 1.7). Rigid named parts (MeshInstance3D): body, head, horn_l, horn_r, chain, arm_l, arm_r, fist_l,
 ## fist_r, leg_l, leg_r. head / chain / arms hang under body; horns under head; fists under their arm;
 ## legs under the root.

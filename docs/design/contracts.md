@@ -27,7 +27,7 @@ end; the north-star "consistently pretty good" team should clear most objectives
   area, a natural chaos moment.
 - **Property damage:** breakable props (wine racks, the cinema screen, the gold toilet, the doomsday
   console) each carry a price. Damage comes from fireball, corn, teeth pops, shoves into props,
-  and Pebble's bowl.
+  and Rebar's bowl.
   - Show it live as a running ticker ("-$1,200 wine rack") so players feel it as it happens.
   - **Cap:** deductions can't exceed some share of the job's pay, so chaos stings but never zeroes
     a run (per `north-star.md`).
@@ -36,7 +36,7 @@ end; the north-star "consistently pretty good" team should clear most objectives
 ## End-of-job invoice [proposal]
 The run ends at the exit with an **invoice** screen:
 - line items earned;
-- deductions with the culprit named ("Larkin: corn, -$900");
+- deductions with the culprit named ("Wick: corn, -$900");
 - the net payout;
 - a star rating.
 

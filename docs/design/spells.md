@@ -27,7 +27,7 @@ Details [proposal]:
   a packed room.
 - **Co-op chaos:**
   - Teammates near an afflicted hero should scatter, which gives the "Overcooked" moment of everyone
-    running away from Dagna.
+    running away from Gasket.
   - Afflicted heroes may run toward monsters to share the pop.
   - Friendly fire never downs a hero; heroes end at 1 HP at worst, as with the other everyone-spells.
 - **Synergy:** a **heal** cast on an afflicted ally pulls the teeth before they pop (the dentist).

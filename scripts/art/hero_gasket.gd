@@ -1,6 +1,6 @@
-class_name HeroDagna
+class_name HeroGasket
 extends RefCounted
-## Dagna, the demolition dwarf: stout, a denim hard hat, a beard spilling forward (it shows
+## Gasket, the demolition dwarf: stout, a denim hard hat, a beard spilling forward (it shows
 ## facing from above), a big sledgehammer. Denim blue is her colour; the vest straps are the
 ## white crew strips.
 
@@ -51,8 +51,8 @@ static func build(f: ToyFigure) -> void:
 			var handle := f.add("weapon", hand, ArtMesh.cyl(0.045, 0.045, 0.95, 8, 0.01), CharacterKit.WOOD, Vector3(0, 0.30, 0), Vector3(-12, 0, 6))
 			f.add("weapon_head", handle, ArtMesh.blob(Vector3(0.66, 0.36, 0.38), 5.0), CharacterKit.STEEL_DK, Vector3(0, 0.50, 0))
 
-	f.idle_fn = Callable(HeroDagna, "idle")
-	f.pose_fn = Callable(HeroDagna, "pose")
+	f.idle_fn = Callable(HeroGasket, "idle")
+	f.pose_fn = Callable(HeroGasket, "pose")
 
 
 static func idle(f: ToyFigure, t: float) -> void:

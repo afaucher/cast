@@ -70,7 +70,7 @@ elevator with its light on.
   - pool/pit edges (shove targets);
   - gas pipes: fireball makes them explode, which is chaos.
 - **Spawners:** summoning circles and nests. Destroy them to stop the waves; this is the room objective.
-- **Secrets:** a cracked wall that Dagna's hammer breaks, and vault doors in panic rooms
+- **Secrets:** a cracked wall that Gasket's hammer breaks, and vault doors in panic rooms
   (`exploration.md`).
 
 ## 6. How to build it (production)

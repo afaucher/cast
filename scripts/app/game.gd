@@ -18,12 +18,12 @@ extends Node3D
 ##   --give heal:9,corn:3  dev: slot these spells (up to 4) with these charges, after the picked two
 ##   --hold N            dev: ready slot N (1-4) at the start
 ##   --zoom S            dev: camera size (default 24; 6 is a close-up of the crew)
-##   --focus pebble|dagna|dev  dev: the camera follows that ally (or the --spawn-near monsters) instead of the player
-##   --give-allies a,b   dev: slot spell a for Pebble and b for Dagna (they only hold the component; allies do not cast)
+##   --focus rebar|gasket|dev  dev: the camera follows that ally (or the --spawn-near monsters) instead of the player
+##   --give-allies a,b   dev: slot spell a for Rebar and b for Gasket (they only hold the component; allies do not cast)
 ##   --drop-near a,b     dev: put component pickups for spells a, b on the floor just ahead of the player
 ##   --slay-near         dev: 1.5 s in, kill the --spawn-near monsters (to watch their drops)
-##   --kit-demo draw|hammer|fist  dev: at 0.8 s Larkin starts drawing his bow on the --spawn-near monsters (a drawn shot
-##                       fires 1.3 s later), or Dagna (hammer) / Pebble (fist) steps up to them and swings once
+##   --kit-demo draw|hammer|fist  dev: at 0.8 s Wick starts drawing his bow on the --spawn-near monsters (a drawn shot
+##                       fires 1.3 s later), or Gasket (hammer) / Rebar (fist) steps up to them and swings once
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
 ## Every castable spell, straight from SpellBook (new spells need no change here).
@@ -134,30 +134,30 @@ func _build_world() -> void:
 	if not exits.is_empty():
 		_exit_cell = exits[0]
 
-	# The crew: the player is Larkin; Pebble and Dagna are AI allies on free neighbors.
+	# The crew: the player is Wick; Rebar and Gasket are AI allies on free neighbors.
 	# Faceted low-poly models by default; --proto-heroes brings back the capsule bodies.
 	var faceted: bool = not bool(opts.get("proto_heroes", false))
 	var start: Vector2i = map.cells_with_tag("start")[0]
-	player = HeroFactory.spawn_hero(start, "Larkin", PLAYER_COLOR, "sword", LarkinModel.new() if faceted else null, HeroKit.LARKIN)
+	player = HeroFactory.spawn_hero(start, "Wick", PLAYER_COLOR, "sword", WickModel.new() if faceted else null, HeroKit.WICK)
 	var none: Array[String] = []
 	controller = HeroFactory.make_player(player, none)
 	var spots := _free_cells_near(start, 2)
 	# Each hero's kit (HP, primary, secondary, quirks) comes from HeroKit; --proto-heroes keeps the kits.
-	var pebble := HeroFactory.spawn_hero(spots[0], "Pebble", Color(0.85, 0.5, 0.25), "sword", PebbleModel.new() if faceted else null, HeroKit.PEBBLE)
-	HeroFactory.make_ally(pebble, player, false, 2.4)
-	var dagna := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Dagna", Color(0.7, 0.4, 0.85), "sword", DagnaModel.new() if faceted else null, HeroKit.DAGNA)
-	HeroFactory.make_ally(dagna, player, false, 3.9)
-	allies = [pebble, dagna]
+	var rebar := HeroFactory.spawn_hero(spots[0], "Rebar", Color(0.85, 0.5, 0.25), "sword", RebarModel.new() if faceted else null, HeroKit.REBAR)
+	HeroFactory.make_ally(rebar, player, false, 2.4)
+	var gasket := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Gasket", Color(0.7, 0.4, 0.85), "sword", GasketModel.new() if faceted else null, HeroKit.GASKET)
+	HeroFactory.make_ally(gasket, player, false, 3.9)
+	allies = [rebar, gasket]
 	player.died.connect(func() -> void: _end("You died\nF5 for a new dungeon", Color(1.0, 0.4, 0.35)))
 
 	rig = CameraRig.new()
 	rig.name = "CameraRig"
 	add_child(rig)
 	rig.target = player
-	if opts.get("focus", "") == "pebble":
-		rig.target = pebble
-	elif opts.get("focus", "") == "dagna":
-		rig.target = dagna
+	if opts.get("focus", "") == "rebar":
+		rig.target = rebar
+	elif opts.get("focus", "") == "gasket":
+		rig.target = gasket
 	if opts.has("zoom"):
 		rig._zoom_target = float(opts["zoom"])
 		rig.camera.size = float(opts["zoom"])
@@ -564,7 +564,7 @@ func _spawn_near() -> void:
 			cands.append(c)
 	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
 	if parts.size() > 2 and parts[2].strip_edges() == "cluster":
-		# Candidates 5-7 cells out with a clear view of the player (so Pebble can bowl at them).
+		# Candidates 5-7 cells out with a clear view of the player (so Rebar can bowl at them).
 		cands.clear()
 		for c in Hex.range_cells(here, 7):
 			var cc: HexMap.Cell = map.get_cell(c)

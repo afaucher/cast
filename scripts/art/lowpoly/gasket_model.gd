@@ -1,13 +1,13 @@
-class_name DagnaModel
+class_name GasketModel
 extends LowPolyModel
-## Dagna, Dwarf Pipe Warlock: a short, very wide FACETED low-poly dwarf woman with a huge ginger
+## Gasket, Dwarf Pipe Warlock: a short, very wide FACETED low-poly dwarf woman with a huge ginger
 ## braided beard, green welding goggles pushed up on her forehead, a dark blue padded overcoat with
 ## cream fur trim, a leather belt and buckle, a bandaged left forearm, brown boots, and a big
 ## faceted pipe-wrench hammer carried upright at her right side. Built entirely in code from LowPoly
 ## soups (flat shaded, per-face painted colours) with the LowPolyMaterial toon + rim + outline.
 ##
 ## Faces local -Z, +X is her right. Origin is at the feet. About 1.6 units tall (the prototype hero
-## is ~1.95, Pebble ~3.2) and ~1.4 wide across the shoulders and arms: stout. The head pokes up
+## is ~1.95, Rebar ~3.2) and ~1.4 wide across the shoulders and arms: stout. The head pokes up
 ## clear of the fur collar, the beard is a bright orange wedge down her front, the arms hang at her
 ## sides and the boots show under the coat, so she still reads as standing from the steep camera.
 ##
@@ -60,7 +60,7 @@ var _body_base_y := BODY_Y
 
 
 func _init() -> void:
-	_setup_model("DagnaModel", MODEL_SCALE)
+	_setup_model("GasketModel", MODEL_SCALE)
 	ui_height = 1.74 * MODEL_SCALE
 	has_own_weapon = true
 	_arm_kick = {"weapon": 0.0, "spin": 0.0}

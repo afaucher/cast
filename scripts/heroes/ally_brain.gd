@@ -16,7 +16,7 @@ const RANGED_MAX := 7.0
 const REPATH_INTERVAL := 0.6
 const WAYPOINT_REACHED := 0.35
 const PROBE_STEP := 0.4
-const BOWL_MIN := 3.0          ## Pebble bowls at enemies this far ...
+const BOWL_MIN := 3.0          ## Rebar bowls at enemies this far ...
 const BOWL_MAX := 9.0          ## ... up to this far
 const BOWL_LANE := 1.0         ## skip a throw that would pass this close to another hero
 
@@ -99,8 +99,8 @@ func _fight(foe: Actor, delta: float) -> void:
 				hero.melee(dir)
 
 
-## How close a melee ally closes in: a little inside its own primary's reach (Pebble's long fist stops
-## farther out than Dagna's hammer).
+## How close a melee ally closes in: a little inside its own primary's reach (Rebar's long fist stops
+## farther out than Gasket's hammer).
 func _melee_stop() -> float:
 	return clampf(hero.melee_reach - 0.25, 1.0, MELEE_STOP + 0.35)
 

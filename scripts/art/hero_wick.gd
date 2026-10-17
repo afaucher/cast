@@ -1,6 +1,6 @@
-class_name HeroLarkin
+class_name HeroWick
 extends RefCounted
-## Larkin, the wizard-school dropout who kept the hat and took up the bow: lanky, a huge crooked
+## Wick, the wizard-school dropout who kept the hat and took up the bow: lanky, a huge crooked
 ## plum hat (the tallest diagonal on screen) with a headlamp, a bent-tent-pole bow, a taped-up
 ## wand, a quiver on the back (reads from behind), and a white bandolier strip.
 
@@ -72,8 +72,8 @@ static func build(f: ToyFigure) -> void:
 	f.add("wand_tape", wand, ArtMesh.merge([tape_ring, tape_ring, ArtMesh.blob(Vector3(0.11, 0.12, 0.11), 2.2)],
 			[ArtMesh.xf(Vector3(0, -0.02, 0)), ArtMesh.xf(Vector3(0, 0.12, 0)), ArtMesh.xf(Vector3(0, 0.33, 0))]), Color(0.72, 0.74, 0.76))
 
-	f.idle_fn = Callable(HeroLarkin, "idle")
-	f.pose_fn = Callable(HeroLarkin, "pose")
+	f.idle_fn = Callable(HeroWick, "idle")
+	f.pose_fn = Callable(HeroWick, "pose")
 
 
 static func idle(f: ToyFigure, t: float) -> void:

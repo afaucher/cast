@@ -95,18 +95,18 @@ func setup() -> void:
 	near(mon_b.hp, mon_b.max_hp - SpellBook.tentacles_damage(1.0), 0.001, "monsters take 6 * power")
 	near(far_mon.hp, far_mon.max_hp, 0.001, "out of range monsters are not hurt")
 
-	# --- Immovable actors (Pebble) stay put but monsters still take the damage.
+	# --- Immovable actors (Rebar) stay put but monsters still take the damage.
 	_fresh()
 	caster = _hero(Vector3(-7, 0, 0))
-	var pebble := _hero(Vector3(1.45, 0, 0))
-	pebble.shove_mult = 0.0
+	var rebar := _hero(Vector3(1.45, 0, 0))
+	rebar.shove_mult = 0.0
 	var rock := _dummy(Vector3(-1.45, 0, 0))
 	rock.shove_mult = 0.0
 	var brute_like := _dummy(Vector3(0, 0, 1.5))
 	brute_like.shove_mult = 0.4
 	SpellBook.cast("tentacles", caster, 1.0, center)
 	await frames(70)
-	near(pebble.global_position.x, 1.45, 0.0001, "an immovable hero stays put")
+	near(rebar.global_position.x, 1.45, 0.0001, "an immovable hero stays put")
 	near(rock.global_position.x, -1.45, 0.0001, "an immovable monster stays put")
 	near(rock.hp, rock.max_hp - 6.0, 0.001, "but still takes the damage")
 	near(brute_like.global_position.z - 1.5, 4.0 * 0.4, 0.2, "a heavy actor (0.4) goes 40% as far")

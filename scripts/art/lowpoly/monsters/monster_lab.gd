@@ -1,6 +1,6 @@
 extends Node3D
 ## Monster look-dev lab: the real terrain look (HexMapView + DungeonLook) with the four faceted monsters
-## (grunt, archer, brute, swarmer) and the three heroes (Larkin, Dagna, Pebble) for scale. Scene:
+## (grunt, archer, brute, swarmer) and the three heroes (Wick, Gasket, Rebar) for scale. Scene:
 ## scenes/monster_lab.tscn. A separate lab from character_lab.gd so the hero labs stay untouched.
 ##
 ##   godot --path . -- --scene res://scenes/monster_lab.tscn --shot <abs.png>
@@ -57,9 +57,9 @@ var only_view := ""
 var only_kind := ""
 var map: HexMap
 var camera: Camera3D
-var larkin: LarkinModel
-var dagna: DagnaModel
-var pebble: PebbleModel
+var wick: WickModel
+var gasket: GasketModel
+var rebar: RebarModel
 var monsters := {}                       ## kind -> MonsterModel
 var extra_swarmers: Array[MonsterModel] = []
 var _orbit := 0.0
@@ -69,10 +69,10 @@ var _cycle := 0.0
 func _ready() -> void:
 	_parse_args()
 	_build_world()
-	larkin = LarkinModel.new()
-	dagna = DagnaModel.new()
-	pebble = PebbleModel.new()
-	for h: Node3D in [larkin, dagna, pebble]:
+	wick = WickModel.new()
+	gasket = GasketModel.new()
+	rebar = RebarModel.new()
+	for h: Node3D in [wick, gasket, rebar]:
 		add_child(h)
 	for k in KINDS:
 		var m := MonsterModels.make(k)
@@ -127,7 +127,7 @@ func _build_world() -> void:
 
 
 func _heroes() -> Array[LowPolyModel]:
-	var out: Array[LowPolyModel] = [larkin, dagna, pebble]
+	var out: Array[LowPolyModel] = [wick, gasket, rebar]
 	return out
 
 
@@ -185,14 +185,14 @@ func _place_close(kind: String, view: String) -> void:
 
 ## x offsets along the camera's right axis for the row layout: heroes, then monsters, then the swarm.
 func _row_slots() -> Array:
-	return [[larkin, -8.4, 0.0], [dagna, -6.1, 0.0], [pebble, -3.5, 0.0],
+	return [[wick, -8.4, 0.0], [gasket, -6.1, 0.0], [rebar, -3.5, 0.0],
 			[monsters["grunt"], -0.6, 0.0], [monsters["archer"], 1.6, 0.0], [monsters["brute"], 4.3, 0.0],
 			[monsters["swarmer"], 6.9, 0.0], [extra_swarmers[0], 7.7, 0.9], [extra_swarmers[1], 7.9, -0.9]]
 
 
 ## Hero group on the left, monsters on the right, all facing each other, as in play.
 func _fight_slots() -> Array:
-	return [[larkin, -6.0, 2.0], [dagna, -5.2, -0.6], [pebble, -3.6, 1.2],
+	return [[wick, -6.0, 2.0], [gasket, -5.2, -0.6], [rebar, -3.6, 1.2],
 			[monsters["grunt"], 0.4, -0.8], [monsters["archer"], 3.6, 2.4], [monsters["brute"], 2.6, 0.5],
 			[monsters["swarmer"], 1.2, 1.6], [extra_swarmers[0], 1.8, 2.4], [extra_swarmers[1], 0.8, -2.0]]
 
@@ -221,7 +221,7 @@ func _place_group(view: String) -> void:
 		var n: LowPolyModel = e[0]
 		n.global_position = right * float(e[1]) + fwd * float(e[2])
 		if layout == "fight":
-			var is_hero := n == larkin or n == dagna or n == pebble
+			var is_hero := n == wick or n == gasket or n == rebar
 			var face_dir := right if is_hero else -right
 			n.rotation.y = atan2(-face_dir.x, -face_dir.z)
 		else:

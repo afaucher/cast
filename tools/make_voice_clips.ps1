@@ -173,6 +173,17 @@ foreach ($v in @($v1, $v2)) {
         Add-Clip "negative" $t "none" "none" "teeth" 0.4 $v 0
     }
 }
+# Hero names (Rebar, Gasket, Wick) may become voice callsigns, so they must never cast by themselves.
+# "gasket" is the worrying one: it starts like the trigger "cast". Nothing may cast in strict or loose
+# (loose needs the trigger word); "Gasket heal me" may cast heal in chaos (any spell word anywhere).
+foreach ($v in @($v1, $v2)) {
+    Add-Clip "negative" "Gasket heal me"  "none" "none" "any"  0.0 $v 0
+    Add-Clip "negative" "Rebar watch out" "none" "none" "none" 0.0 $v 0
+    Add-Clip "negative" "Wick come here"  "none" "none" "none" 0.0 $v 0
+    foreach ($t in @("gasket", "rebar", "wick")) {
+        Add-Clip "negative" $t "none" "none" "none" 0.0 $v 0
+    }
+}
 # Tentacle sound-alikes in the other voice too (a different recognizer error profile).
 foreach ($t in @("attack", "ten tickets", "testicles", "I can't tackle this")) {
     Add-Clip "negative" $t "none" "none" "none" 0.0 $v2 0

@@ -1,7 +1,7 @@
 extends TestCase
 ## Shoves built into attacks: every melee hit nudges its target (hero 0.7, monster 0.35, brute
-## slam 1.0), Pebble's bowl (a boulder that shoves everything along its path, damages monsters
-## only), Dagna's spin (360 degrees, 2.2 outward, monsters take damage), Pebble being immovable,
+## slam 1.0), Rebar's bowl (a boulder that shoves everything along its path, damages monsters
+## only), Gasket's spin (360 degrees, 2.2 outward, monsters take damage), Rebar being immovable,
 ## and the AllyBrain using its secondary sensibly.
 
 var root: Node3D
@@ -79,8 +79,8 @@ func setup() -> void:
 
 	# --- Bowl: shoves EVERY actor it touches out of its path; monsters take damage, heroes none.
 	_fresh()
-	var pebble := _hero(Vector3(-6, 0, 0), "bowl")
-	pebble.shove_mult = 0.0
+	var rebar := _hero(Vector3(-6, 0, 0), "bowl")
+	rebar.shove_mult = 0.0
 	var m1 := _dummy(Vector3(-2.0, 0, 0.1))
 	var ally := _hero(Vector3(1.0, 0, -0.2))
 	var m2 := _dummy(Vector3(3.0, 0, 0.15))
@@ -89,9 +89,9 @@ func setup() -> void:
 	var before := {}
 	for a in [m1, ally, m2, off_path, beyond]:
 		before[a] = a.global_position
-	check(pebble.shoot(Vector3.RIGHT), "the bowl is thrown")
-	check(not pebble.shoot(Vector3.RIGHT), "and has a cooldown")
-	near(pebble.cooldown_left(Hero.KEY_RANGED), Hero.BOWL_COOLDOWN, 0.05, "2 s cooldown")
+	check(rebar.shoot(Vector3.RIGHT), "the bowl is thrown")
+	check(not rebar.shoot(Vector3.RIGHT), "and has a cooldown")
+	near(rebar.cooldown_left(Hero.KEY_RANGED), Hero.BOWL_COOLDOWN, 0.05, "2 s cooldown")
 	await frames(30)
 	check(m1.is_shoved() or _hd(m1, before[m1]) > 0.5, "the boulder reaches the first monster quickly")
 	await frames(110)
@@ -102,22 +102,22 @@ func setup() -> void:
 	near(m1.hp, m1.max_hp - Hero.BOWL_DAMAGE, 0.001, "monster takes 6")
 	near(m2.hp, m2.max_hp - Hero.BOWL_DAMAGE, 0.001, "monster takes 6")
 	near(ally.hp, ally.max_hp, 0.001, "a teammate takes no damage")
-	near(pebble.hp, pebble.max_hp, 0.001, "nor does the thrower")
+	near(rebar.hp, rebar.max_hp, 0.001, "nor does the thrower")
 	near(off_path.global_position.distance_to(before[off_path]), 0.0, 0.0001, "off the path is untouched")
 	near(beyond.global_position.distance_to(before[beyond]), 0.0, 0.0001, "past the range is untouched")
-	check(pebble.cooldown_left(Hero.KEY_RANGED) == 0.0, "cooldown elapsed")
-	check(pebble.shoot(Vector3.RIGHT), "and the bowl can be thrown again")
+	check(rebar.cooldown_left(Hero.KEY_RANGED) == 0.0, "cooldown elapsed")
+	check(rebar.shoot(Vector3.RIGHT), "and the bowl can be thrown again")
 	await frames(10)
 
 	# A heavy (brute-like) actor on the line is moved less.
 	_fresh()
-	pebble = _hero(Vector3(-6, 0, 0), "bowl")
+	rebar = _hero(Vector3(-6, 0, 0), "bowl")
 	var light_m := _dummy(Vector3(-1.5, 0, 0.2))
 	var heavy_m := _dummy(Vector3(2.0, 0, 0.2))
 	heavy_m.shove_mult = 0.4
 	var lp := light_m.global_position
 	var hp0 := heavy_m.global_position
-	pebble.shoot(Vector3.RIGHT)
+	rebar.shoot(Vector3.RIGHT)
 	await frames(140)
 	var light_d := _hd(light_m, lp)
 	var heavy_d := _hd(heavy_m, hp0)
@@ -125,23 +125,23 @@ func setup() -> void:
 
 	# The boulder stops at a +2 rise ...
 	_fresh(func(x: float) -> int: return 2 if x > 1.5 else 0)
-	pebble = _hero(Vector3(-4, 0, 0), "bowl")
+	rebar = _hero(Vector3(-4, 0, 0), "bowl")
 	var behind_wall := _dummy(Vector3(3.5, 2 * Hex.LEVEL_HEIGHT, 0))
-	pebble.shoot(Vector3.RIGHT)
+	rebar.shoot(Vector3.RIGHT)
 	await frames(140)
 	near(behind_wall.global_position.x, 3.5, 0.0001, "the bowl stops at a +2 rise and never reaches the plateau")
 	# ... and drops down a ledge, still shoving what it finds below.
 	_fresh(func(x: float) -> int: return 3 if x < 1.0 else 0)
-	pebble = _hero(Hex.to_world(Vector2i(-1, 0), 3), "bowl")
+	rebar = _hero(Hex.to_world(Vector2i(-1, 0), 3), "bowl")
 	var below := _dummy(Vector3(4.0, 0, 0.1))
 	var below_pos := below.global_position
-	pebble.shoot(Vector3.RIGHT)
+	rebar.shoot(Vector3.RIGHT)
 	await frames(140)
 	check(_hd(below, below_pos) > 2.5, "the bowl rolls off a ledge and shoves a monster below (%.2f)" % _hd(below, below_pos))
 
-	# --- Spin: 360 degrees, 2.2 outward, damage to monsters only, Pebble unaffected.
+	# --- Spin: 360 degrees, 2.2 outward, damage to monsters only, Rebar unaffected.
 	_fresh()
-	var dagna := _hero(Vector3.ZERO, "spin")
+	var gasket := _hero(Vector3.ZERO, "spin")
 	var ring: Array[TrainingDummy] = []
 	for i in 3:
 		var ang := TAU * i / 3.0 + 0.3
@@ -153,9 +153,9 @@ func setup() -> void:
 	var starts := {}
 	for a in ring + [mate, rock_hero, outside]:
 		starts[a] = a.global_position
-	check(dagna.shoot(Vector3.RIGHT), "the spin fires")
-	check(not dagna.shoot(Vector3.RIGHT), "and has a cooldown")
-	near(dagna.cooldown_left(Hero.KEY_RANGED), Hero.SPIN_COOLDOWN, 0.05, "1.4 s cooldown")
+	check(gasket.shoot(Vector3.RIGHT), "the spin fires")
+	check(not gasket.shoot(Vector3.RIGHT), "and has a cooldown")
+	near(gasket.cooldown_left(Hero.KEY_RANGED), Hero.SPIN_COOLDOWN, 0.05, "1.4 s cooldown")
 	await frames(40)
 	for d in ring:
 		var out: Vector3 = starts[d]
@@ -164,15 +164,15 @@ func setup() -> void:
 		near(d.hp, d.max_hp - Hero.SPIN_DAMAGE, 0.001, "and take 16")
 	near(mate.global_position.distance_to(starts[mate]), Hero.SPIN_SHOVE, 0.3, "a teammate is shoved too")
 	near(mate.hp, mate.max_hp, 0.001, "but takes no damage")
-	near(rock_hero.global_position.distance_to(starts[rock_hero]), 0.0, 0.0001, "Pebble (shove_mult 0) is unaffected by the spin")
+	near(rock_hero.global_position.distance_to(starts[rock_hero]), 0.0, 0.0001, "Rebar (shove_mult 0) is unaffected by the spin")
 	near(outside.global_position.distance_to(starts[outside]), 0.0, 0.0001, "out of reach is untouched")
-	near(dagna.global_position.length(), 0.0, 0.0001, "Dagna stays where she is")
+	near(gasket.global_position.length(), 0.0, 0.0001, "Gasket stays where she is")
 	await frames(60)
-	check(dagna.shoot(Vector3.RIGHT), "the spin is ready again after 1.4 s")
+	check(gasket.shoot(Vector3.RIGHT), "the spin is ready again after 1.4 s")
 
-	# --- AllyBrain: Dagna spins when 2+ enemies are in reach, or 1 and the spin is ready.
+	# --- AllyBrain: Gasket spins when 2+ enemies are in reach, or 1 and the spin is ready.
 	_fresh()
-	var d2 := HeroFactory.spawn_hero(Vector2i.ZERO, "Dagna", Color.PURPLE, "sword")
+	var d2 := HeroFactory.spawn_hero(Vector2i.ZERO, "Gasket", Color.PURPLE, "sword")
 	d2.secondary_kind = "spin"
 	var leader := _hero(Vector3(0, 0, -3))
 	HeroFactory.make_ally(d2, leader, false, 2.4)
@@ -182,7 +182,7 @@ func setup() -> void:
 	check(d2.cooldown_left(Hero.KEY_RANGED) > 0.5, "the ally brain spins with two enemies in reach")
 	check(_hd(e1, Vector3(1.3, 0, 0)) > 0.3, "and the enemies are shoved")
 	_fresh()
-	d2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Dagna", Color.PURPLE, "sword")
+	d2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Gasket", Color.PURPLE, "sword")
 	d2.secondary_kind = "spin"
 	leader = _hero(Vector3(0, 0, -3))
 	HeroFactory.make_ally(d2, leader, false, 2.4)
@@ -190,7 +190,7 @@ func setup() -> void:
 	await frames(3)
 	check(d2.cooldown_left(Hero.KEY_RANGED) > 0.5, "and with one enemy in reach and the spin ready")
 	_fresh()
-	d2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Dagna", Color.PURPLE, "sword")
+	d2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Gasket", Color.PURPLE, "sword")
 	d2.secondary_kind = "spin"
 	leader = _hero(Vector3(0, 0, -3))
 	HeroFactory.make_ally(d2, leader, false, 2.4)
@@ -200,28 +200,28 @@ func setup() -> void:
 	await frames(120)
 	check(d2.cooldown_left(Hero.KEY_RANGED) > 0.0 or e1.hp < e1.max_hp, "she closes in and fights (spin or melee) once it is near")
 
-	# --- AllyBrain: Pebble bowls at an enemy 3 to 9 away, but not through another hero, or point blank.
+	# --- AllyBrain: Rebar bowls at an enemy 3 to 9 away, but not through another hero, or point blank.
 	_fresh()
-	var p2 := HeroFactory.spawn_hero(Vector2i.ZERO, "Pebble", Color.ORANGE, "sword")
+	var p2 := HeroFactory.spawn_hero(Vector2i.ZERO, "Rebar", Color.ORANGE, "sword")
 	p2.secondary_kind = "bowl"
 	p2.shove_mult = 0.0
 	leader = _hero(Vector3(0, 0, -4))
 	HeroFactory.make_ally(p2, leader, false, 2.4)
 	var far_foe := _dummy(Vector3(6.0, 0, 0))
 	await frames(3)
-	check(p2.cooldown_left(Hero.KEY_RANGED) > 1.0, "Pebble bowls at an enemy 6 away")
+	check(p2.cooldown_left(Hero.KEY_RANGED) > 1.0, "Rebar bowls at an enemy 6 away")
 	await frames(150)
 	check(far_foe.hp < far_foe.max_hp or _hd(far_foe, Vector3(6, 0, 0)) > 0.5, "and the boulder gets it")
 	_fresh()
-	p2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Pebble", Color.ORANGE, "sword")
+	p2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Rebar", Color.ORANGE, "sword")
 	p2.secondary_kind = "bowl"
 	var player := _hero(Vector3(3.0, 0, 0.3))                  # standing in the lane
 	HeroFactory.make_ally(p2, player, false, 2.4)
 	far_foe = _dummy(Vector3(6.5, 0, 0))
 	await frames(3)
-	near(p2.cooldown_left(Hero.KEY_RANGED), 0.0, 0.0001, "Pebble holds the throw when the player is in the lane")
+	near(p2.cooldown_left(Hero.KEY_RANGED), 0.0, 0.0001, "Rebar holds the throw when the player is in the lane")
 	_fresh()
-	p2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Pebble", Color.ORANGE, "sword")
+	p2 = HeroFactory.spawn_hero(Vector2i.ZERO, "Rebar", Color.ORANGE, "sword")
 	p2.secondary_kind = "bowl"
 	leader = _hero(Vector3(0, 0, -4))
 	HeroFactory.make_ally(p2, leader, false, 2.4)

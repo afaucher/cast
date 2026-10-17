@@ -1,26 +1,26 @@
 class_name HeroKit
 extends RefCounted
 ## Per-hero kits: HP, the primary (LMB / AI melee), the secondary (RMB / AI ranged) and the movement
-## quirks, as plain data. HeroKit.get_kit("larkin") returns the numbers; apply(hero) copies them onto a
+## quirks, as plain data. HeroKit.get_kit("wick") returns the numbers; apply(hero) copies them onto a
 ## Hero. The numbers are the ones in docs/design/characters.md; the Hero.MELEE_* / BOLT constants stay
 ## as the generic "sword" defaults for a Hero that never got a kit (tests, the training arena).
 ##
 ## Primaries:
-##   Larkin  "Bow bash"   12 dmg / 0.4 s / reach 1.3 / 90 deg / shove 0.7
-##   Dagna   "Hammer"     28 dmg / 0.65 s / reach 1.5 / 90 deg / shove 0.9
-##   Pebble  "Slam fist"  26 dmg / 0.8 s / reach 1.8 / 120 deg / shove 1.0
+##   Wick  "Bow bash"   12 dmg / 0.4 s / reach 1.3 / 90 deg / shove 0.7
+##   Gasket   "Hammer"     28 dmg / 0.65 s / reach 1.5 / 90 deg / shove 0.9
+##   Rebar  "Slam fist"  26 dmg / 0.8 s / reach 1.8 / 120 deg / shove 1.0
 ## Walk speeds are not part of the kit yet (everyone walks at Hero's 4.5).
-## Secondaries: Larkin "arrow" (tap or draw), Dagna "spin", Pebble "bowl" (the spin / bowl stats live on
+## Secondaries: Wick "arrow" (tap or draw), Gasket "spin", Rebar "bowl" (the spin / bowl stats live on
 ## Hero as constants and are unchanged).
 
-const LARKIN := "larkin"
-const DAGNA := "dagna"
-const PEBBLE := "pebble"
+const WICK := "wick"
+const GASKET := "gasket"
+const REBAR := "rebar"
 
 ## id -> kit data. Keys not listed fall back to the defaults in `_defaults()`.
 const DATA := {
-	LARKIN: {
-		"display_name": "Larkin",
+	WICK: {
+		"display_name": "Wick",
 		"max_hp": 85.0,
 		"primary_name": "Bow bash",
 		"melee_damage": 12.0,
@@ -33,8 +33,8 @@ const DATA := {
 		"can_climb": true,
 		"climb_speed_factor": 0.6,
 	},
-	DAGNA: {
-		"display_name": "Dagna",
+	GASKET: {
+		"display_name": "Gasket",
 		"max_hp": 120.0,
 		"primary_name": "Hammer",
 		"melee_damage": 28.0,
@@ -47,8 +47,8 @@ const DATA := {
 		"can_climb": true,
 		"climb_speed_factor": 0.25,
 	},
-	PEBBLE: {
-		"display_name": "Pebble",
+	REBAR: {
+		"display_name": "Rebar",
 		"max_hp": 160.0,
 		"primary_name": "Slam fist",
 		"melee_damage": 26.0,
@@ -63,7 +63,7 @@ const DATA := {
 	},
 }
 
-## Larkin's arrow (the "arrow" secondary): a tap, or a drawn shot after holding RMB for draw_time.
+## Wick's arrow (the "arrow" secondary): a tap, or a drawn shot after holding RMB for draw_time.
 const ARROW := {
 	"tap_damage": 12.0,
 	"tap_cooldown": 0.55,
@@ -95,14 +95,14 @@ var arrow: Dictionary = ARROW.duplicate()
 
 
 static func ids() -> Array[String]:
-	return [LARKIN, DAGNA, PEBBLE]
+	return [WICK, GASKET, REBAR]
 
 
 static func has_kit(kit_id: String) -> bool:
 	return DATA.has(kit_id.to_lower())
 
 
-## The kit for `kit_id` (case-insensitive: "Larkin", "dagna"), or null if there is none.
+## The kit for `kit_id` (case-insensitive: "Wick", "gasket"), or null if there is none.
 static func get_kit(kit_id: String) -> HeroKit:
 	var key := kit_id.to_lower()
 	if not DATA.has(key):

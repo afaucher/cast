@@ -22,12 +22,12 @@ func setup() -> void:
 	check(empty != null and empty.parts.size() == 1, "unknown hero id gives an empty rig")
 
 	# per-hero identity pieces from characters.md
-	var pebble := _b("pebble") as ToyFigure
-	check(pebble.has_part("moss") and pebble.has_part("hat"), "Pebble: moss cap + tiny hard hat")
-	var dagna := _b("dagna") as ToyFigure
-	check(dagna.has_part("beard") and dagna.has_part("weapon_head"), "Dagna: beard + hammer head")
-	var larkin := _b("larkin") as ToyFigure
-	check(larkin.has_part("hat") and larkin.has_part("bowstring") and larkin.has_part("wand_tape") and larkin.has_part("lamp"), "Larkin: hat, bow, taped wand, headlamp")
+	var rebar := _b("rebar") as ToyFigure
+	check(rebar.has_part("moss") and rebar.has_part("hat"), "Rebar: moss cap + tiny hard hat")
+	var gasket := _b("gasket") as ToyFigure
+	check(gasket.has_part("beard") and gasket.has_part("weapon_head"), "Gasket: beard + hammer head")
+	var wick := _b("wick") as ToyFigure
+	check(wick.has_part("hat") and wick.has_part("bowstring") and wick.has_part("wand_tape") and wick.has_part("lamp"), "Wick: hat, bow, taped wand, headlamp")
 	var rattles := _b("sir_rattles") as ToyFigure
 	check(rattles.has_part("visor") and rattles.has_part("neck") and rattles.has_part("plume"), "Sir Rattles: void visor, empty neck, plume")
 	var visor := rattles.get_part("visor") as MeshInstance3D
@@ -50,14 +50,14 @@ func setup() -> void:
 		check(has_strip, "%s wears a crew strip" % id)
 
 	# style differences: toy outlines, flat does not, heroic is taller
-	var toy := _b("dagna", &"toy") as ToyFigure
-	var flat := _b("dagna", &"flat") as ToyFigure
-	var heroic := _b("dagna", &"heroic") as ToyFigure
+	var toy := _b("gasket", &"toy") as ToyFigure
+	var flat := _b("gasket", &"flat") as ToyFigure
+	var heroic := _b("gasket", &"heroic") as ToyFigure
 	check((toy.get_part("body") as MeshInstance3D).material_override.next_pass != null, "toy style has an outline pass")
 	check((flat.get_part("body") as MeshInstance3D).material_override.next_pass == null, "flat style has no outline pass")
-	check(top_of(heroic) > top_of(toy), "heroic Dagna is taller than toy Dagna")
-	var lark_t := _b("larkin", &"toy") as ToyFigure
-	check(top_of(lark_t) > top_of(toy), "Larkin is taller than Dagna")
+	check(top_of(heroic) > top_of(toy), "heroic Gasket is taller than toy Gasket")
+	var lark_t := _b("wick", &"toy") as ToyFigure
+	check(top_of(lark_t) > top_of(toy), "Wick is taller than Gasket")
 	for n in _made:
 		n.free()
 	finish()

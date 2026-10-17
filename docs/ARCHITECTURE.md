@@ -75,7 +75,7 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool
 
 ### Forced movement (`Actor.shove`)
 `Actor.shove(dir, distance, source = null)` starts a short (0.2-0.35 s, ease-out) kinematic slide of
-`distance * shove_mult` along `dir` on X/Z (`shove_mult` 0 = immovable: Pebble; brute 0.4, swarmer 1.5).
+`distance * shove_mult` along `dir` on X/Z (`shove_mult` 0 = immovable: Rebar; brute 0.4, swarmer 1.5).
 It is driven by the tree's `physics_frame` signal only while active. While `is_shoved()` the actor ignores
 `move()`; `is_helpless()` (shoved or staggered) is what the player controller, `AllyBrain`, `Monster` and the
 training dummy check before steering or attacking (voice casts still work). Terrain rules differ from walking:
@@ -86,8 +86,8 @@ training dummy check before steering or attacking (voice casts still work). Terr
 - a shove caused by a hero (`source` team) never takes a hero below 1 HP (slam, fall or pit).
 Monsters cancel a wind-up when shoved and re-home where they land (no leash-heal). Signals: `shoved`, `shove_impact`.
 Built on it: every melee hit nudges (hero 0.7, monster 0.35, brute slam 1.0: `Combat.melee_arc(..., shove)`),
-the Tentacles spell, and the heroes' `secondary_kind`: `"bolt"` (Larkin), `"bowl"` (Pebble: `BowlBoulder` rolls
-through everything, shoving each actor 3.5 sideways/forward, 6 damage to monsters only) and `"spin"` (Dagna: 360 degrees,
+the Tentacles spell, and the heroes' `secondary_kind`: `"bolt"` (Wick), `"bowl"` (Rebar: `BowlBoulder` rolls
+through everything, shoving each actor 3.5 sideways/forward, 6 damage to monsters only) and `"spin"` (Gasket: 360 degrees,
 reach 1.9, 16 damage to monsters, everything in reach shoved 2.2, teammates included).
 
 ### Heroes (`scripts/heroes/hero.gd`, `class_name Hero extends Actor`)

@@ -14,7 +14,7 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 | Slots, charges, held slot, swap | `scripts/heroes/hero.gd` |
 | Keys 1-4 / E / F, the cast entry point | `scripts/heroes/player_controller.gd`, `scripts/app/input_setup.gd` |
 | Cards, toasts, swap prompt | `scripts/ui/hud.gd` |
-| Hand attachment | `LowPolyModel.hold_item()` (`scripts/art/lowpoly/`), `pebble_model.gd`, `dagna_model.gd`, `larkin_model.gd` |
+| Hand attachment | `LowPolyModel.hold_item()` (`scripts/art/lowpoly/`), `rebar_model.gd`, `gasket_model.gd`, `wick_model.gd` |
 | Drop hook | `Monster._on_death` -> `SpellComponents.drop_for` |
 
 ## Slots [decided, implemented]
@@ -40,9 +40,9 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 - **In hand:** the hero visibly holds the held spell's component, in the hand that isn't busy.
   `LowPolyModel.hold_item(node)` parents a prop to a hand anchor (null empties the hand); each model
   picks the host part:
-  - **Pebble:** his left glove (both fists punch alternately, the left is just the quieter).
-  - **Dagna:** her bare left fist (the right has the wrench).
-  - **Larkin:** the free right hand (the bow is in the left); the anchor follows that hand every frame.
+  - **Rebar:** his left glove (both fists punch alternately, the left is just the quieter).
+  - **Gasket:** her bare left fist (the right has the wrench).
+  - **Wick:** the free right hand (the bow is in the left); the anchor follows that hand every frame.
   - The old capsule body (`--proto-heroes`, arena) gets a prop on its off side.
 - **Teammates can read it** from the component in your hand.
 

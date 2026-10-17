@@ -4,11 +4,11 @@
 pitch-contract-sorcery.md. Numbers are relative to today's `Hero`: sword 20 dmg / 0.45 s /
 1.6 reach / 100°, bolt 8 dmg / 0.6 s / 12 range, 100 HP, speed 4.5, climb ×0.35.*
 
-> **Names (2026-10-16): the stone golem is REBAR (was Pebble), the dwarf is GASKET (was Dagna),
-> and the human archer is WICK (was Larkin).** The rename in code and UI is still to do. Old names
-> below are kept for history.
+> **Names (2026-10-16): the stone golem is REBAR, the dwarf is GASKET and the human archer is
+> WICK** (formerly Pebble, Dagna and Larkin). The code, UI and this document all use the new
+> names; the old ones survive only in this note and in the filenames of old concept art.
 >
-> **Roster update (2026-10-16): the crew is three heroes: Pebble, Dagna and Larkin.**
+> **Roster update (2026-10-16): the crew is three heroes: Rebar, Gasket and Wick.**
 > Sir Rattles and Gulp were dropped. Their sections below are kept for reference only.
 > The art direction changed too: faceted low-poly "contractor wizards"
 > (`docs/design/concepts/contractor_wizards_v1.webp`), not the chunky toy toon in section 4.
@@ -33,9 +33,9 @@ not in the bunker.
 There are four core heroes for the POC and the slice, plus a stretch hero. **Heroes are
 unique per crew**, so a hero's signature color is also that player's color.
 
-| | **Pebble** (rock) | **Dagna** (dwarf) | **Larkin** (human) | **Sir Rattles** (armor) | *Gulp* (stretch) |
+| | **Rebar** (rock) | **Gasket** (dwarf) | **Wick** (human) | **Sir Rattles** (armor) | *Gulp* (stretch) |
 |---|---|---|---|---|---|
-| Name options | Pebble, Cobble, Tor | Dagna, Gorm, Brun | Larkin, Wendell, Sprig | Sir Rattles, Hollis, Dame Vacancy | Gulp, Marsh |
+| Name options | Rebar, Cobble, Tor | Gasket, Gorm, Brun | Wick, Wendell, Sprig | Sir Rattles, Hollis, Dame Vacancy | Gulp, Marsh |
 | Kind | Stonekin golem | Dwarf | Human | Animated armor (empty) | Frogfolk |
 | Role | Anchor / control | Brawler / AoE | Ranged / climber | Protector / drop scout | Puller / rescuer |
 | HP · speed · radius | 160 · 3.6 · 0.6 | 120 · 4.0 · 0.45 | 85 · 5.0 · 0.35 | 130 · 4.2 · 0.45 | 90 · 4.8 · 0.4 |
@@ -48,7 +48,7 @@ unique per crew**, so a hero's signature color is also that player's color.
 (`HeroKit.DATA` and `HeroKit.ARROW`), applied by `HeroFactory.spawn_hero(..., kit_id)` and
 therefore also under `--proto-heroes`. Anything not in the table below is unchanged.
 
-| | **Pebble** | **Dagna** | **Larkin** |
+| | **Rebar** | **Gasket** | **Wick** |
 |---|---|---|---|
 | Max HP | 160 | 120 | 85 |
 | Primary (LMB / ally melee) | Slam fist: 26 dmg / 0.8 s / reach 1.8 / 120° / shove 1.0 | Hammer: 28 dmg / 0.65 s / reach 1.5 / 90° / shove 0.9 | Bow bash: 12 dmg / 0.4 s / reach 1.3 / 90° / shove 0.7 |
@@ -57,32 +57,37 @@ therefore also under `--proto-heroes`. Anything not in the table below is unchan
 | Climb +2 | Cannot (`can_climb` false; allies path without climbs) | ×0.25 | ×0.6 |
 | Walking speed | 4.5 for everyone (the per-hero speeds in the roster table are not applied yet) | | |
 
-**Larkin's arrow (as implemented).**
+**Wick's arrow (as implemented).**
 - **Tap** (RMB pressed and released before 0.7 s): 12 dmg, range 14, speed 22, pierces 1.
 - **Draw** (RMB held 0.7 s or more): the next release fires a **drawn shot**: 28 dmg, range 18,
   **pierces up to 3 targets** (each is hit once).
 - Both shots share one 0.55 s recovery, and the bow cannot be drawn while it recovers.
 - Releasing early fires a tap. Melee, a shove, a stagger or going down lowers the bow without a shot.
-- While drawn Larkin walks at half speed. A **charge ring** grows under him and turns gold when
+- While drawn Wick walks at half speed. A **charge ring** grows under him and turns gold when
   full, and the model's `draw_hold(amount)` pulls the string.
 - Not yet: the +30% high-ground bonus, shooting while climbing.
 
-**Names can double as voice callsigns** ("heal Pebble"), so two syllables with a
-distinctive vowel work best. Pebble, Cobble, Dagna, Larkin, Rattles and Hollis are all
+**Names can double as voice callsigns** ("heal Rebar"), so two syllables with a
+distinctive vowel work best. Rebar, Cobble, Gasket, Wick, Rattles and Hollis are all
 good. **Avoid "Tor"** as a callsign: "Tor", "core" and "corn" sit too close to the corn
 hair-trigger.
 
-### Pebble: the rock
+**Voice check (2026-10-16).** `tools/make_voice_clips.ps1` renders "Gasket heal me", "Rebar watch out",
+"Wick come here" and the bare names as negatives: none casts in strict, loose or chaos
+(`tests/test_voice_audio.gd`). The recognizer hears "gasket" as GASKET (never "cast"), "rebar" as
+REBAR or RIBAR, and "wick" as WICK, WIG or WHITCOMBE, so "Wick" will be the flakiest callsign.
+
+### Rebar: the rock
 *A gentle, slow-talking boulder, formerly the bunker's foundation stone. Loves the team and
 never notices what it's standing on.*
 
 - **Silhouette:** the widest footprint, a lumpy boulder disc.
-  - The 62° pitch shows mostly **tops**, so Pebble reads as a moss cap with a tiny hard
+  - The 62° pitch shows mostly **tops**, so Rebar reads as a moss cap with a tiny hard
     hat.
   - It's **pale sandstone**, never slate, which would vanish into the dark hex columns.
   - No glowing eyes: glowing eyes mean "enemy".
 - **Melee, Slam fist:** 26 dmg / 0.8 s / 1.8 reach / 120°.
-- **Secondary, Bowl:** Pebble tears a boulder off its shoulder and bowls it at the aim
+- **Secondary, Bowl:** Rebar tears a boulder off its shoulder and bowls it at the aim
   point.
   - 6 dmg, or **0 to teammates**. Cooldown 2.0 s, range 9 (about 5 hexes), speed 8,
     hit radius 0.6.
@@ -92,7 +97,7 @@ never notices what it's standing on.*
   - The shoulder boulder regrows over the cooldown, so the cooldown reads on the model.
 - **Quirk, Heavy:** steps up +1 only, so **no +2 climbs** (like the brute): `Hero.can_climb` is
   false and the ally brain paths without climbs. It can't be shoved (`shove_mult` 0).
-  - *P2 "Leg-up":* an ally next to a still Pebble can use it as a step onto +3 ledges.
+  - *P2 "Leg-up":* an ally next to a still Rebar can use it as a step onto +3 ledges.
 
 **Shoving teammates: yes.** It's the roster's main source of player-caused chaos *and* a
 skill tool. Bowling a friend out of the brute's slam ring is a rescue. It passes the
@@ -113,7 +118,7 @@ north-star filter:
 - Bowl archers off their perches.
 - Bowl the brute into a 3-deep pit. It can't climb, so it walks round to the stairs.
 
-### Dagna: the dwarf
+### Gasket: the dwarf
 *A demolition foreman who believes every problem is a wall. Cheerful, loud, slightly
 singed.*
 
@@ -122,18 +127,18 @@ singed.*
     big hammer head.
   - The hammer glows ember only during swings.
 - **Melee, Hammer smash:** 28 dmg / 0.65 s / 1.5 reach / 90°.
-- **Secondary, Spin.** Dagna has **no ranged attack.**
+- **Secondary, Spin.** Gasket has **no ranged attack.**
   - **Tap:** a 360° spin. 16 dmg, reach 1.9, 0.35 s, cooldown 1.4 s.
   - **Hold:** whirl for up to 2.5 s at 70% speed, dealing 10 dmg every 0.3 s. It knocks
     swarmers 1 hex outward.
-  - A full whirl leaves Dagna **dizzy** for 1 s (steering wobbles ±40°).
+  - A full whirl leaves Gasket **dizzy** for 1 s (steering wobbles ±40°).
   - No spinning while climbing, and the spin never hurts teammates.
 - **Quirk, Stout:**
   - Shoved at ×0.6 (`shove_mult`), and climbs +2 slowly (×0.25).
   - **Wall-breaker:** cracked secret walls glint for her from 6 hexes and break in one
     swing (others need about 5).
 
-### Larkin: the human
+### Wick: the human
 *A lanky wizard-school dropout who kept the hat and took up the bow. Points first, aims
 second.*
 
@@ -146,10 +151,10 @@ second.*
 - **Secondary, Arrow:**
   - **Tap:** 12 dmg / 0.55 s / range 14 / speed 22.
   - **Hold to draw (0.7 s):** 28 dmg, pierces 3, range 18.
-  - High ground gives Larkin +30% (others get +15%).
+  - High ground gives Wick +30% (others get +15%).
 - **Quirk, Light:**
   - Climbs +2 at ×0.6, and is the only hero who **can shoot while climbing**.
-  - Shoves carry Larkin ×1.3 as far (`shove_mult` 1.3).
+  - Shoves carry Wick ×1.3 as far (`shove_mult` 1.3).
 
 ### Sir Rattles: the armor (DROPPED)
 *An empty suit of armor honoring a 400-year-old contract. Very polite, very literal.*
@@ -177,26 +182,26 @@ second.*
   - an enemy;
   - a teammate in trouble.
   - Or it pulls Gulp itself onto a ledge up to +3.
-- It's the pull to Pebble's push.
+- It's the pull to Rebar's push.
 - **Slap:** 14 / 0.4 s / 1.4 / 90°.
 - **Quirk, Hops:** climbs +2 at walking speed.
 
 ### How they play together
 
 **Each hero moves differently, so every floor is a route puzzle:**
-- Pebble is ground-only (+1 steps).
-- Dagna climbs slowly.
-- Larkin climbs fast.
+- Rebar is ground-only (+1 steps).
+- Gasket climbs slowly.
+- Wick climbs fast.
 - Sir Rattles takes drops nobody else can.
 
 "Who can get up there?" becomes a voice call.
 
 | Well-oiled combos | Fun chaos |
 |---|---|
-| **Spinning top:** Dagna holds Spin and Pebble bowls her through the pack, hitting all the way | Pebble bowls Dagna into the brute *mid-wind-up*, not spinning |
-| **Bowling for archers:** perched archers get bowled off, straight into Dagna's spin | Pebble bowls Sir Rattles off a 5-level ledge: "you knocked my head off" |
-| **Pool party:** the brute gets shoved into a 3-deep pit, and Larkin snipes from the rim at +30% | Larkin (light, 3 hexes) gets bowled into the infinity pool |
-| **Shield wall:** Sir Rattles shields, Larkin draws full shots from behind, and someone armors the knight | Dagna whirls the full 2.5 s, gets dizzy and wobbles off a ledge |
+| **Spinning top:** Gasket holds Spin and Rebar bowls her through the pack, hitting all the way | Rebar bowls Gasket into the brute *mid-wind-up*, not spinning |
+| **Bowling for archers:** perched archers get bowled off, straight into Gasket's spin | Rebar bowls Sir Rattles off a 5-level ledge: "you knocked my head off" |
+| **Pool party:** the brute gets shoved into a 3-deep pit, and Wick snipes from the rim at +30% | Wick (light, 3 hexes) gets bowled into the infinity pool |
+| **Shield wall:** Sir Rattles shields, Wick draws full shots from behind, and someone armors the knight | Gasket whirls the full 2.5 s, gets dizzy and wobbles off a ledge |
 | **Rescue bowl:** a friend gets bowled out of the slam ring for 0 damage | The rescue bowl shoves the *other* friend in |
 | **Drop scout:** the knight takes the 5-level drop and calls the stair route | The knight lands in a nest and falls apart in the middle of it |
 
@@ -204,7 +209,7 @@ second.*
 - Shoves never damage teammates.
 - The reticle turns hazard-yellow when a bowl's path crosses a teammate. It's a warning,
   not a block.
-- The end screen shows "Teammates bowled: Pebble, 7".
+- The end screen shows "Teammates bowled: Rebar, 7".
 
 ---
 
@@ -215,13 +220,13 @@ POC.
 - **Voice is personal.** Gating a word behind a hero forces some players onto words they
   say badly. Rebindable words only work if players own their vocabulary.
 - **Two axes give more combos.** The hero sets the *body role*, and the spells set the
-  *voice role* (Warden, Cantor, Evoker, Cornjurer). A healing Pebble is a valid crew.
+  *voice role* (Warden, Cantor, Evoker, Cornjurer). A healing Rebar is a valid crew.
 - **P2 signature twists:** a small bonus when a hero slots one particular spell. These are
   flavor, not restrictions:
-  - **Pebble + armor:** allies in the zone can't be shoved, so you can bowl straight
+  - **Rebar + armor:** allies in the zone can't be shoved, so you can bowl straight
     through them.
-  - **Dagna + armor:** a spin reflects arrows.
-  - **Larkin + fireball:** range 16 → 20.
+  - **Gasket + armor:** a spin reflects arrows.
+  - **Wick + fireball:** range 16 → 20.
   - **Sir Rattles + heal:** reattaches plates and adds a 15-point shield.
   - **Corn gets no twist**, ever.
 
@@ -270,7 +275,7 @@ screenshot**: each hero must still read from its top silhouette alone.
 | Armored | A hazard-tape ring at the feet; the outline turns emissive blue |
 | Climbing | A climb pose and dust, plus a small ↑ chevron (exposed to +25% ranged damage) |
 | Shoved, dizzy | Tumble and streaks; orbiting stars |
-| Downed | Desaturated, with a revive ring in the hero color. Pebble becomes a cairn and Sir Rattles a pile; Dagna slumps; Larkin's hat covers his face |
+| Downed | Desaturated, with a revive ring in the hero color. Rebar becomes a cairn and Sir Rattles a pile; Gasket slumps; Wick's hat covers his face |
 
 **Alternatives:**
 - **Paper-cutout billboards.** The most "comic", crisp at small sizes.
@@ -312,13 +317,13 @@ screenshot**: each hero must still read from its top silhouette alone.
 - **AI images for concept sheets only**, never for final meshes.
 - One proportion template, about 1.5–3k triangles, palette-texture colors.
 - Rigid parts mean no skin weights, and they keep the falling-apart gags.
-- Kitbash CC0 helmets and weapons where they fit. Model Pebble and Sir Rattles custom.
+- Kitbash CC0 helmets and weapons where they fit. Model Rebar and Sir Rattles custom.
 - Budget about 1 week per hero, with animation.
 
 **Animation set (every hero; POC and slice unless marked):**
 1. idle
 2. walk
-3. climb +2 (Pebble: a "can't" shrug)
+3. climb +2 (Rebar: a "can't" shrug)
 4. drop/land (Sir Rattles: fall apart and reassemble)
 5. melee
 6. secondary: bowl; spin tap and loop; draw and release; shield up and bash
@@ -360,7 +365,7 @@ screenshot**: each hero must still read from its top silhouette alone.
    team. Bowl needs pierce, a hit-once set, both teams minus the caster, and ground riding.
 8. **Re-pathing after a fall** already works. But a brute in a pit with no stair route
    gets stuck, so the **generator must guarantee a no-climb way back from every one-way
-   drop**. That also keeps Pebble from being stranded.
+   drop**. That also keeps Rebar from being stranded.
 
 ---
 
@@ -370,9 +375,9 @@ screenshot**: each hero must still read from its top silhouette alone.
    color and rig. `HeroFactory` spawns by id.
 2. **Shove physics:** knockback, `shove_check`, falls, void, stagger and the leash fix.
    Test a +3 drop, a +5 drop, a +2 wall, void, and the brute.
-3. **Pebble's Bowl,** plus the reticle warning when its path crosses a teammate.
-4. **Dagna's Spin:** tap, hold, dizzy.
-5. **Larkin's draw shot** and shooting while climbing; **Sir Rattles' shield** and bash.
+3. **Rebar's Bowl,** plus the reticle warning when its path crosses a teammate.
+4. **Gasket's Spin:** tap, hold, dizzy.
+5. **Wick's draw shot** and shooting while climbing; **Sir Rattles' shield** and bash.
 6. **Movement quirks:** Heavy, Stout, Light and Hollow. AI-ally pathing respects them.
 7. **`HeroRig`** with toon and outline materials. A placeholder art pass on **Sir Rattles
    first** (closest to today's hero), then the other three.
