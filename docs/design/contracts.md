@@ -130,6 +130,8 @@ How they fit together, from the top down:
 - **Between contracts:** **decided: everything heals and resets** (HP, downed heroes, cooldowns,
   statuses). Within a contract, damage carries from floor to floor, so taking the elevator down
   hurt is part of the push-your-luck.
-  - **Still open:** do spell components and charges carry over? Does money (the team pot) persist,
-    and what is it for? Is there reputation with recurring clients? Does the board refresh every
-    time?
+  - **Spells:** decided: re-picked at the start of every contract for now. Components and charges
+    don't carry over.
+  - **Money:** decided: it has no purpose yet. The invoice total is the score.
+  - **Reputation:** decided: none.
+  - **Still open:** does the board refresh every time? (Proposed: yes, 3 new offers per pick.)
