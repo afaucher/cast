@@ -8,6 +8,8 @@ signal actor_died(actor: Actor)
 
 const TEAM_HEROES := 0
 const TEAM_MONSTERS := 1
+## Employees and priced props: not a side in the fight. Area spells (team -1) still hit them.
+const TEAM_NEUTRAL := 2
 
 var map: HexMap = null
 var root: Node3D = null      ## parent for actors, projectiles, zones, fx

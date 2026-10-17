@@ -16,6 +16,7 @@ driver/enable_input=true
 [autoload]
 
 GameWorld="*res://scripts/core/game_world.gd"
+Ledger="*res://scripts/contracts/contract_ledger.gd"
 
 [display]
 
