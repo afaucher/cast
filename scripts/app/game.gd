@@ -10,9 +10,7 @@ extends Node3D
 ##   --no-mic            don't open the mic / load the model (typed casts only)
 ##   --shot <png>        save a screenshot after --shot-after game seconds (default 3) and quit
 ##   --autocast <id>     cast a spell once, 1 s in (for screenshots)
-##   --pebble            ally Brom uses the faceted low-poly PebbleModel (look-dev comparison)
-##   --dagna             ally Wren uses the faceted low-poly DagnaModel (combine with --pebble)
-##   --larkin            the PLAYER hero uses the faceted low-poly LarkinModel (combine with both)
+##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
 const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn"]
@@ -75,9 +73,7 @@ func _parse_args() -> void:
 			"--shot": opts["shot"] = nxt
 			"--shot-after": opts["shot_after"] = float(nxt)
 			"--autocast": opts["autocast"] = nxt
-			"--pebble": opts["pebble"] = true
-			"--dagna": opts["dagna"] = true
-			"--larkin": opts["larkin"] = true
+			"--proto-heroes": opts["proto_heroes"] = true
 	if _seed < 0:
 		_seed = int(opts.get("seed", randi() % 100000))
 	if _spells.is_empty() and opts.has("spells"):
@@ -108,20 +104,19 @@ func _build_world() -> void:
 	if not exits.is_empty():
 		_exit_cell = exits[0]
 
-	# Heroes: player on the start cell, allies on free neighbors.
+	# The crew: the player is Larkin; Pebble and Dagna are AI allies on free neighbors.
+	# Faceted low-poly models by default; --proto-heroes brings back the capsule bodies.
+	var faceted: bool = not bool(opts.get("proto_heroes", false))
 	var start: Vector2i = map.cells_with_tag("start")[0]
-	var larkin_model: Node3D = LarkinModel.new() if opts.get("larkin", false) else null
-	player = HeroFactory.spawn_hero(start, "You", PLAYER_COLOR, "sword", larkin_model)
+	player = HeroFactory.spawn_hero(start, "Larkin", PLAYER_COLOR, "sword", LarkinModel.new() if faceted else null)
 	var none: Array[String] = []
 	controller = HeroFactory.make_player(player, none)
 	var spots := _free_cells_near(start, 2)
-	var brom_model: Node3D = PebbleModel.new() if opts.get("pebble", false) else null
-	var brom := HeroFactory.spawn_hero(spots[0], "Brom", Color(0.85, 0.5, 0.25), "sword", brom_model)
-	HeroFactory.make_ally(brom, player, false, 2.4)
-	var wren_model: Node3D = DagnaModel.new() if opts.get("dagna", false) else null
-	var wren := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Wren", Color(0.7, 0.4, 0.85), "staff", wren_model)
-	HeroFactory.make_ally(wren, player, true, 3.9)
-	allies = [brom, wren]
+	var pebble := HeroFactory.spawn_hero(spots[0], "Pebble", Color(0.85, 0.5, 0.25), "sword", PebbleModel.new() if faceted else null)
+	HeroFactory.make_ally(pebble, player, false, 2.4)
+	var dagna := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Dagna", Color(0.7, 0.4, 0.85), "sword", DagnaModel.new() if faceted else null)
+	HeroFactory.make_ally(dagna, player, false, 3.9)
+	allies = [pebble, dagna]
 	player.died.connect(func() -> void: _end("You died\nF5 for a new dungeon", Color(1.0, 0.4, 0.35)))
 
 	rig = CameraRig.new()
