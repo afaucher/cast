@@ -125,8 +125,14 @@ How they fit together, from the top down:
 ### Open questions
 - ~~**Floors:** how many per contract?~~ **Decided: 3 floors per contract.** Still open: do floors
   loop back up (taking employees up the elevator)?
-- **Per-floor contents:** does every floor need its own hellgate, or can the origin floor hold the
-  "boss" gate?
+- ~~**Per-floor contents**~~ **Decided (option B, the descent builds to a climax):**
+  - **Floors 1–2:** smaller hellgates and stray pests spreading up from below.
+  - **Floor 3:** the **origin gate**, one big, tough hellgate where it all started, worth the
+    largest payout. Closing it is the contract's finale.
+  - **Proposals:**
+    - the origin gate has phases, getting faster spawns and a defensive burst as it weakens;
+    - closing it calms the rest of the site (its stray spawns stop);
+    - leaving before floor 3 forfeits the biggest line on the invoice.
 - **Between contracts:** **decided: everything heals and resets** (HP, downed heroes, cooldowns,
   statuses). Within a contract, damage carries from floor to floor, so taking the elevator down
   hurt is part of the push-your-luck.
