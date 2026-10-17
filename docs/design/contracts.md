@@ -79,3 +79,46 @@ The comedy and the "well-oiled team" score live here, and payout could later buy
 - **What the cap is based on:** a share of the contract's total value (so leaving early with nothing
   earned can still leave you owing up to the cap), or a share of earnings?
 - **Hellgate spawning model:** one of the options in decision 3.
+
+## Contract generation [decided directions: 1 client, 2 story, 3 descent, 6 job board]
+How they fit together, from the top down:
+
+1. **Job board (6):** before a run, dispatch offers **3 contracts**. Each card shows the client,
+   the site, the objectives and prices, the floor count, the danger, and the property warnings.
+   The crew picks one together over voice ("I'm not doing the guru again").
+2. **Client (1):** each offer is generated from a **client archetype**, which supplies:
+   - the site type (bunker or villain lair) and its room theme pool;
+   - the **pest** the job is about (exterminate "everything" or one kind);
+   - the **priceless props** and their price tags;
+   - the objective mix and pay scale;
+   - a personality for the job card and invoice text.
+
+   Archetypes to start: prepper billionaire, supervillain, wellness guru, tech founder,
+   influencer. (Proposed; add or cut freely.)
+3. **Story (2):** generation then rolls **what happened**: an inciting event plus where it
+   started. For example, "the closing ceremony opened a gate in the yoga studio", or "the henchmen
+   tried to tame an imp".
+
+   The story drives the level:
+   - **Origin room:** it's themed for the event and holds the first hellgate.
+   - **Spread:** pests spread outward from it, so density rises toward the origin.
+   - **Survivors:** employees hide in the rooms farthest from it.
+   - **Clues:** environmental storytelling (notes, trashed rituals, broken props) points back to it.
+
+   The story is the reason the map looks the way it does, and exploring reveals it.
+4. **Descent (3):** a contract is **several floors** joined by the freight elevator.
+   - Each floor is a full generated level from the same client and story. It gets worse further
+     down: more pests, more gates, closer to the origin.
+   - Objectives can span floors (e.g. "close all 4 gates" across 2 floors), and pay rises with depth.
+   - **The elevator is always available** (the early-exit rule). At each floor the crew decides:
+     go down for more pay and more risk, or cash out. Unmet objectives don't pay, and damage is
+     still owed, up to the cap.
+   - **The invoice** at the end totals every floor.
+
+### Open questions
+- **Floors:** how many per contract (2–4?), and do floors loop back up (taking employees up the
+  elevator)?
+- **Per-floor contents:** does every floor need its own hellgate, or can the origin floor hold the
+  "boss" gate?
+- **Board refresh:** does the board refresh each time, and is there any persistence between
+  contracts (reputation with recurring clients)?
