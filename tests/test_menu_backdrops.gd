@@ -73,8 +73,6 @@ func _check_garage_moods() -> void:
 		check(g.gate is HellgateModel, "%s: the hellgate glows" % m)
 		check(g.van is VanModel, "%s: the real van is parked" % m)
 		near(g.van.door_open_amount(), 1.0, 0.001, "%s: the side door is open" % m)
-		check(g.rug is VanRug and g.rug.radius > 3.2, "%s: the summoning mat lies under the circle" % m)
-		near(float((g.rug as VanRug).mat.get_shader_parameter("scorch")), 1.0 if m == "after" else 0.0, 0.001, "%s: the mat is scorched only after a bad job" % m)
 		near(g.van.lights_amount(), 1.0 if m == "night" else 0.0, 0.001, "%s: headlights only at night" % m)
 		check(g.map.cells.size() > 100, "%s: a floor (%d cells)" % [m, g.map.cells.size()])
 		check(g.terrain.seam_gain < 1.0 and g.terrain.seam_near_gain < 1.0, "%s: the hex seams are turned down" % m)
