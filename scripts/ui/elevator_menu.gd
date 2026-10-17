@@ -5,16 +5,12 @@ extends Control
 ##   [2] Cash out
 ##   [Esc] Stay on this floor
 ## Followers near the elevator ride along (extracted, $100 each). Cashing out is always available.
-## Add under a Control (Hud.add_overlay). The game pauses the simulation while it is open.
+## Drawn as a canary "while you were out" slip (scripts/ui/forms/). Add under a Control (Hud.add_overlay).
+## The game pauses the simulation while it is open.
 
 signal go_down
 signal cash_out
 signal stay
-
-const C_TEXT := Color(0.93, 0.94, 0.98)
-const C_DIM := Color(0.62, 0.65, 0.76)
-const C_MONEY := Color(0.55, 0.92, 0.62)
-const C_WARN := Color(1.0, 0.8, 0.3)
 
 ## {floor: int, floor_count: int, payout: int, damages: int, followers: int, lines: Array[String]}
 var info: Dictionary = {}
@@ -23,6 +19,7 @@ var info: Dictionary = {}
 const INPUT_GUARD_MS := 500
 
 var _can_descend := false
+var _rows: Array[Control] = []
 var _born_ms := 0
 
 
@@ -34,81 +31,63 @@ func _ready() -> void:
 	_born_ms = Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	theme = FormTheme.theme()
 	_can_descend = int(info.get("floor", 1)) < int(info.get("floor_count", 3))
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.03, 0.05, 0.78)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(dim)
+	add_child(FormTheme.dim_rect(0.7))
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
-	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.085, 0.095, 0.135)
-	sb.border_color = Color(0.95, 0.85, 0.3)
-	sb.set_border_width_all(3)
-	sb.set_corner_radius_all(6)
-	sb.content_margin_left = 34
-	sb.content_margin_right = 34
-	sb.content_margin_top = 24
-	sb.content_margin_bottom = 28
-	panel.add_theme_stylebox_override("panel", sb)
-	panel.custom_minimum_size = Vector2(620, 0)
-	center.add_child(panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	panel.add_child(v)
+	# A short canary "while you were out" slip (scripts/ui/forms/).
+	var floor_n := int(info.get("floor", 1))
+	var floors := int(info.get("floor_count", 3))
+	var sheet := FormSheet.new("E-1", "While you were out", "Freight elevator  ·  floor %d of %d" % [floor_n, floors], "Floor", "%d / %d" % [floor_n, floors], "canary", 36)
+	sheet.custom_minimum_size = Vector2(820, 0)
+	center.add_child(sheet)
+	var body := sheet.body
 
-	var title := _label("FREIGHT ELEVATOR", 34, Color(1.0, 0.9, 0.4))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
-	var sub := _label("Floor %d of %d" % [int(info.get("floor", 1)), int(info.get("floor_count", 3))], 18, C_DIM)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(sub)
-	v.add_child(_gap(4))
-
-	var pay_row := HBoxContainer.new()
-	v.add_child(pay_row)
-	var pl := _label("Payout so far", 20, C_TEXT)
-	pl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pay_row.add_child(pl)
-	pay_row.add_child(_label(ContractRun.money(int(info.get("payout", 0))), 26, C_MONEY))
+	var facts := FormSection.new("Report")
+	body.add_child(facts)
+	var pay := FormField.new("Payout so far", FormTheme.typed(ContractRun.money(int(info.get("payout", 0))), 30, FormTheme.GREEN_INK), 330.0, 52.0)
+	facts.box.add_child(pay)
 	if int(info.get("damages", 0)) > 0:
-		var dr := HBoxContainer.new()
-		v.add_child(dr)
-		var dl := _label("Property damage so far", 16, C_DIM)
-		dl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		dr.add_child(dl)
-		dr.add_child(_label("-" + ContractRun.money(int(info["damages"])), 18, Color(1.0, 0.5, 0.45)))
+		facts.box.add_child(FormField.new("Property damage so far", FormTheme.typed("-" + ContractRun.money(int(info["damages"])), 24, FormTheme.RED), 330.0, 46.0))
 	for line: String in info.get("lines", []):
-		var ll := _label(line, 16, C_TEXT)
-		ll.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		ll.custom_minimum_size = Vector2(540, 0)
-		v.add_child(ll)
+		var ll := FormTheme.typed_wrapped(line, 20)
+		ll.custom_minimum_size = Vector2(700, 0)
+		facts.box.add_child(ll)
 	var followers := int(info.get("followers", 0))
 	if followers > 0:
-		v.add_child(_label("%d employee%s riding along: +$%d each on the way out." % [followers, "s" if followers != 1 else "", ContractRun.EMPLOYEE_EXTRACTED], 16, C_WARN))
-	v.add_child(_gap(6))
+		var fl := FormTheme.typed_wrapped("%d employee%s riding along: +$%d each on the way out." % [followers, "s" if followers != 1 else "", ContractRun.EMPLOYEE_EXTRACTED], 20, FormTheme.GREEN_INK, true)
+		fl.custom_minimum_size = Vector2(700, 0)
+		facts.box.add_child(fl)
 
+	_rows.clear()
 	if _can_descend:
-		var down := _button("[1]  Go down to floor %d  (more pay, more danger)" % (int(info["floor"]) + 1), Color(0.75, 0.3, 0.2))
+		var down := FormRow.new("Go down to floor %d" % (floor_n + 1), "1", "more pay, more danger")
 		down.pressed.connect(func() -> void: go_down.emit())
-		v.add_child(down)
-	var out := _button("[2]  Cash out", Color(0.2, 0.5, 0.3))
+		body.add_child(down)
+		_rows.append(down)
+	var out := FormRow.new("Cash out", "2", "always works")
 	out.pressed.connect(func() -> void: cash_out.emit())
-	v.add_child(out)
-	var stay_b := _button("[Esc]  Stay on this floor", Color(0.25, 0.28, 0.4))
-	stay_b.custom_minimum_size = Vector2(0, 40)
-	stay_b.add_theme_font_size_override("font_size", 18)
+	body.add_child(out)
+	_rows.append(out)
+	var stay_b := FormRow.new("Stay on this floor", "Esc", "")
 	stay_b.pressed.connect(func() -> void: stay.emit())
-	v.add_child(stay_b)
+	body.add_child(stay_b)
+	_rows.append(stay_b)
 	if not _can_descend:
-		var last := _label("Last floor: there is nowhere further down to go.", 14, C_DIM)
-		last.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		v.add_child(last)
+		body.add_child(FormTheme.margin(FormTheme.small("Last floor: there is nowhere further down to go.", 18), 22, 8, 22, 4))
+	body.add_child(FormTheme.gap(10))
+	FormTheme.chain(_rows)
+	# Take focus once the keys-held guard has passed, so a key still down from the walk here cannot press a row.
+	get_tree().create_timer(INPUT_GUARD_MS / 1000.0, true).timeout.connect(_grab_first)
+
+
+func _grab_first() -> void:
+	if is_inside_tree() and not _rows.is_empty() and get_viewport().gui_get_focus_owner() == null:
+		(_rows[0] as Control).grab_focus()
 
 
 func _input(event: InputEvent) -> void:
@@ -129,33 +108,3 @@ func _input(event: InputEvent) -> void:
 
 func can_descend() -> bool:
 	return int(info.get("floor", 1)) < int(info.get("floor_count", 3))
-
-
-func _button(text: String, color: Color) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(0, 54)
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 22)
-	for state in ["normal", "hover", "pressed"]:
-		var s := StyleBoxFlat.new()
-		s.bg_color = color.darkened(0.3 if state == "normal" else 0.1)
-		s.border_color = color.lightened(0.2)
-		s.set_border_width_all(2)
-		s.set_corner_radius_all(6)
-		b.add_theme_stylebox_override(state, s)
-	return b
-
-
-func _gap(h: float) -> Control:
-	var c := Control.new()
-	c.custom_minimum_size = Vector2(0, h)
-	return c
-
-
-func _label(text: String, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
-	return l

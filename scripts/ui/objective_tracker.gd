@@ -1,25 +1,24 @@
 class_name ObjectiveTracker
 extends Control
-## The HUD's objective list (top-right of the play area, left of the voice debug panel because the HUD
-## root shrinks for it): the floor, each objective with a check box, the running payout and damages.
+## The HUD's objective list, drawn as a small canary work-order slip (top-right of the play area, left of the
+## voice debug panel because the HUD root shrinks for it): the floor, each objective with a check box, the
+## running payout and damages. Kept small and opaque enough to read mid-fight.
 ## Pure presentation: the game feeds it with show_state(); it never reads simulation data itself.
 ##
 ## rows: [{text: String, detail: String, state: "todo"|"partial"|"done"|"fail"}]
 
-const WIDTH := 340.0
-const PAD := 12.0
-const ROW_H := 24.0
-const TITLE_H := 44.0
-const FOOT_H := 52.0
+const WIDTH := 360.0
+const PAD := 14.0
+const ROW_H := 31.0
+const TITLE_H := 60.0
+const FOOT_H := 62.0
 
-const C_BG := Color(0.04, 0.05, 0.09, 0.8)
-const C_EDGE := Color(1, 1, 1, 0.22)
-const C_TEXT := Color(0.93, 0.94, 0.98)
-const C_DIM := Color(0.62, 0.65, 0.76)
-const C_DONE := Color(0.5, 0.95, 0.6)
-const C_PARTIAL := Color(1.0, 0.82, 0.35)
-const C_MONEY := Color(0.55, 0.92, 0.62)
-const C_BAD := Color(1.0, 0.45, 0.4)
+const INK := FormTheme.INK
+const TYPED := FormTheme.TYPED
+const C_DONE := Color(0.1, 0.42, 0.22)
+const C_PARTIAL := Color(0.62, 0.4, 0.02)
+const C_BAD := FormTheme.RED
+const C_MONEY := FormTheme.GREEN_INK
 
 var title := ""
 var subtitle := ""
@@ -61,34 +60,43 @@ func _resize() -> void:
 
 
 func _draw() -> void:
-	var font := ThemeDB.fallback_font
+	var lf := FormTheme.label_font(true)
+	var tf := FormTheme.typed_font()
 	var full := Rect2(Vector2.ZERO, size)
-	draw_rect(full, C_BG)
-	draw_rect(full, C_EDGE, false, 1.5)
-	draw_string(font, Vector2(PAD, 24), title, HORIZONTAL_ALIGNMENT_LEFT, WIDTH - 2 * PAD, 18, C_TEXT)
-	draw_string(font, Vector2(PAD, 41), subtitle, HORIZONTAL_ALIGNMENT_LEFT, WIDTH - 2 * PAD, 13, C_DIM)
+	for i in 5:
+		var g := float(i) * 2.5
+		draw_rect(Rect2(Vector2(2, 6) - Vector2(g, g) * 0.8, size + Vector2(g, g) * 1.6), Color(0, 0, 0, 0.07 * (1.0 - i / 5.0)))
+	draw_texture_rect(FormTheme.paper_texture(), full, true, Color(FormTheme.carbon("canary"), 0.96))
+	draw_rect(full, Color(0.3, 0.25, 0.1, 0.4), false, 1.0)
+	draw_string(lf, Vector2(PAD, 20), "WORK ORDER", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, INK)
+	draw_string(lf, Vector2(PAD, 46), title.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, WIDTH - 2 * PAD, 28, INK)
+	var sw := lf.get_string_size(subtitle, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+	draw_string(lf, Vector2(WIDTH - PAD - sw, 20), subtitle, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, INK)
+	draw_line(Vector2(0, TITLE_H - 4), Vector2(WIDTH, TITLE_H - 4), INK, 2.5)
 	var y := TITLE_H
 	for r in rows:
 		var st: String = str(r["state"])
-		var col := C_DONE if st == "done" else (C_PARTIAL if st == "partial" else (C_BAD if st == "fail" else C_TEXT))
-		var box := Rect2(PAD, y + 5, 14, 14)
-		draw_rect(box, Color(0, 0, 0, 0.5))
-		draw_rect(box, col, false, 1.5)
+		var col := C_DONE if st == "done" else (C_PARTIAL if st == "partial" else (C_BAD if st == "fail" else TYPED))
+		var box := Rect2(PAD, y + 6, 18, 18)
+		draw_rect(box, Color(1, 1, 1, 0.45))
+		draw_rect(box, INK, false, 2.0)
 		if st == "done":
-			draw_polyline(PackedVector2Array([box.position + Vector2(3, 7), box.position + Vector2(6, 11), box.position + Vector2(12, 3)]), col, 2.2)
+			FormTheme.draw_tick(self, box, FormTheme.GREASE, 3.0)
 		elif st == "partial":
-			draw_rect(box.grow(-4), col)
-		draw_string(font, Vector2(PAD + 22, y + 18), str(r["text"]), HORIZONTAL_ALIGNMENT_LEFT, 190, 15, col)
+			draw_rect(box.grow(-4), Color(FormTheme.GREASE, 0.8))
+		elif st == "fail":
+			FormTheme.draw_x(self, box, FormTheme.GREASE, 2.5)
+		draw_string(tf, Vector2(PAD + 30, y + 22), str(r["text"]), HORIZONTAL_ALIGNMENT_LEFT, 215, 18, col)
 		var detail := str(r["detail"])
-		var dw := font.get_string_size(detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-		draw_string(font, Vector2(WIDTH - PAD - dw, y + 18), detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, C_DIM)
+		var dw := lf.get_string_size(detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+		draw_string(lf, Vector2(WIDTH - PAD - dw, y + 22), detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, INK)
+		draw_line(Vector2(PAD, y + ROW_H - 1), Vector2(WIDTH - PAD, y + ROW_H - 1), FormTheme.FAINT, 1.0)
 		y += ROW_H
 	y += 6
-	draw_line(Vector2(PAD, y), Vector2(WIDTH - PAD, y), C_EDGE, 1.0)
-	draw_string(font, Vector2(PAD, y + 22), "PAYOUT", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, C_DIM)
+	draw_line(Vector2(0, y), Vector2(WIDTH, y), INK, 2.5)
+	draw_string(lf, Vector2(PAD, y + 27), "PAYOUT", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, INK)
 	var pay_text := ContractRun.money(payout)
-	var pw := font.get_string_size(pay_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
-	draw_string(font, Vector2(WIDTH - PAD - pw, y + 26), pay_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, C_MONEY)
+	var pw := tf.get_string_size(pay_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
+	draw_string(tf, Vector2(WIDTH - PAD - pw, y + 30), pay_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, C_MONEY)
 	if damages > 0:
-		var dt := "property damage -%s" % ContractRun.money(damages)
-		draw_string(font, Vector2(PAD, y + 44), dt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, C_BAD)
+		draw_string(tf, Vector2(PAD, y + 52), "property damage -%s" % ContractRun.money(damages), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, C_BAD)

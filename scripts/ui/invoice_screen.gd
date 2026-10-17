@@ -1,31 +1,31 @@
 class_name InvoiceScreen
 extends Control
-## The end-of-contract summary, drawn as a real invoice: a paper-white document on a dark background
-## with the client's letterhead, invoice number and date, BILL TO, line items per floor (earned), an
-## itemised deductions section with the culprit named, "Damages (capped at contract value)", a
-## subtotal, NET PAYOUT, a deadpan footer note from the client and a 1-3 star rating stamp. To the right
-## on the dark background: the crew debrief (credit and blame) and the button back to the job board.
+## The end-of-contract summary, drawn as FORM 99 (the carbon-copy family, scripts/ui/forms/): a paper invoice
+## with the client's company in the header block, invoice number and date, BILL TO, line items per floor
+## (earned), an itemised deductions section with the culprit named, "Damages (capped at contract value)", a
+## subtotal, NET PAYOUT, a deadpan footer note from the client and a 1-3 star rating stamp. To the right on a
+## canary slip: the crew debrief (credit and blame) and the row back to the job board.
 ##
 ## Data comes from ContractInvoice.build(). Add under a Control (Hud.add_overlay). Emits next_contract.
 
 signal next_contract
 
-const PAPER := Color(0.965, 0.955, 0.925)
-const PAPER_BAND := Color(0.885, 0.875, 0.845)
-const INK := Color(0.11, 0.12, 0.17)
-const INK_DIM := Color(0.4, 0.41, 0.46)
-const RED := Color(0.72, 0.13, 0.15)
-const GREEN := Color(0.12, 0.45, 0.25)
-const BG := Color(0.04, 0.045, 0.065)
-const PAPER_W := 900.0
+const INK := FormTheme.TYPED
+const INK_DIM := Color(0.114, 0.102, 0.149, 0.62)
+const RED := FormTheme.RED
+const GREEN := FormTheme.GREEN_INK
+const BG := Color(0.065, 0.055, 0.07)
+const PAPER_W := 1000.0
 const SIDE_W := 340.0
 
 ## Keys are ignored for this long after the screen appears (so a held key cannot skip it).
 const INPUT_GUARD_MS := 900
 
 var inv: Dictionary = {}
+var next_button: FormRow = null
 var _born_ms := 0
 var _accent := Color(0.2, 0.3, 0.5)
+var _scroll: ScrollContainer = null
 
 
 func _init(data: Dictionary = {}) -> void:
@@ -36,6 +36,7 @@ func _ready() -> void:
 	_born_ms = Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	theme = FormTheme.theme()
 	_accent = ClientArchetype.accent_of(str(inv.get("archetype", "prepper")))
 	var bg := ColorRect.new()
 	bg.color = BG
@@ -51,12 +52,18 @@ func _ready() -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(row)
 
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(PAPER_W + 14.0, 872)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	row.add_child(scroll)
-	scroll.add_child(_build_paper())
+	_scroll = ScrollContainer.new()
+	_scroll.custom_minimum_size = Vector2(PAPER_W + 24.0, 860)
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	row.add_child(_scroll)
+	_scroll.add_child(FormTheme.margin(_build_paper(), 6, 6, 14, 14))
 	row.add_child(_build_side())
+	get_tree().create_timer(INPUT_GUARD_MS / 1000.0, true).timeout.connect(_grab_next)
+
+
+func _grab_next() -> void:
+	if is_inside_tree() and next_button != null and get_viewport().gui_get_focus_owner() == null:
+		next_button.grab_focus()
 
 
 func _input(event: InputEvent) -> void:
@@ -64,53 +71,55 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER or event.keycode == KEY_SPACE:
 			next_contract.emit()
 			get_viewport().set_input_as_handled()
+			return
+	# Up / Down (and the controller's stick) scroll the paper when it is taller than the screen.
+	if _scroll != null and event.is_action_pressed("ui_down", true):
+		_scroll.scroll_vertical += 90
+	elif _scroll != null and event.is_action_pressed("ui_up", true):
+		_scroll.scroll_vertical -= 90
 
 
 # --- The document -----------------------------------------------------------------------------
 
 func _build_paper() -> Control:
-	var paper := PanelContainer.new()
+	var paper := PaperPanel.new(FormTheme.carbon("white"))
 	paper.custom_minimum_size = Vector2(PAPER_W, 0)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = PAPER
-	sb.set_corner_radius_all(2)
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.shadow_size = 12
-	sb.content_margin_left = 40
-	sb.content_margin_right = 40
-	sb.content_margin_top = 18
-	sb.content_margin_bottom = 14
-	paper.add_theme_stylebox_override("panel", sb)
+	paper.set_padding(0, 0, 0, 0)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 5)
+	v.add_theme_constant_override("separation", 0)
 	paper.add_child(v)
 
-	# Letterhead: the client's company on the left, INVOICE + number + date on the right.
-	var head := HBoxContainer.new()
+	# Header block: FORM 99, the client's company, INVOICE and the number.
+	var head := FormHeader.new("99", "Invoice", str(inv["company"]), "No.", str(inv["number"]), 42)
 	v.add_child(head)
-	var lh := VBoxContainer.new()
-	lh.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lh.add_theme_constant_override("separation", 0)
-	head.add_child(lh)
-	lh.add_child(_t(str(inv["company"]), 28, _accent.darkened(0.2)))
-	lh.add_child(_t("%s  |  %s" % [str(inv["dept"]), str(inv["address"])], 13, INK_DIM))
-	lh.add_child(_t("\"%s\"" % str(inv["tagline"]), 13, INK_DIM))
-	var rh := VBoxContainer.new()
-	rh.add_theme_constant_override("separation", 0)
-	head.add_child(rh)
-	rh.add_child(_t("INVOICE", 40, INK, HORIZONTAL_ALIGNMENT_RIGHT))
-	rh.add_child(_t("No. %s" % str(inv["number"]), 16, INK, HORIZONTAL_ALIGNMENT_RIGHT))
-	rh.add_child(_t("Date: %s" % str(inv["date"]), 16, INK, HORIZONTAL_ALIGNMENT_RIGHT))
-	rh.add_child(_t("Terms: net $0 (paid on completion)", 12, INK_DIM, HORIZONTAL_ALIGNMENT_RIGHT))
-	var bar := ColorRect.new()
-	bar.color = _accent
-	bar.custom_minimum_size = Vector2(0, 4)
-	v.add_child(bar)
+	var accent := ColorRect.new()
+	accent.color = _accent
+	accent.custom_minimum_size = Vector2(0, 6)
+	v.add_child(accent)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 3)
+	v.add_child(FormTheme.margin(inner, 36, 12, 36, 14))
+
+	var sub := HBoxContainer.new()
+	var sub_l := FormTheme.typed("%s  |  %s" % [str(inv["dept"]), str(inv["address"])], 15, INK_DIM, false)
+	sub_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sub_l.clip_text = true
+	sub.add_child(sub_l)
+	sub.add_child(FormTheme.typed("Date: %s" % str(inv["date"]), 16, INK, true))
+	inner.add_child(sub)
+	var tag_row := HBoxContainer.new()
+	var tag := FormTheme.typed("\"%s\"" % str(inv["tagline"]), 15, INK_DIM, false)
+	tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tag.clip_text = true
+	tag_row.add_child(tag)
+	tag_row.add_child(FormTheme.typed("Terms: net $0 (paid on completion)", 15, INK_DIM, false))
+	inner.add_child(tag_row)
 
 	# BILL TO / VENDOR / SITE.
 	var meta := HBoxContainer.new()
-	meta.add_theme_constant_override("separation", 20)
-	v.add_child(meta)
+	meta.add_theme_constant_override("separation", 24)
+	inner.add_child(meta)
 	meta.add_child(_meta_box("BILL TO", [str(inv["client"]), str(inv["company"]), "Attn: Accounts Payable"]))
 	meta.add_child(_meta_box("VENDOR", [str(inv["vendor"]), "Licensed sorcery, per diem", "Crew of three, headsets included"]))
 	var status := "Cashed out on floor %d of %d" % [int(inv.get("floor_reached", 1)), ContractRun.FLOOR_COUNT]
@@ -119,9 +128,9 @@ func _build_paper() -> Control:
 	meta.add_child(_meta_box("SITE / STATUS", [str(inv["site"]), status, "Contract value %s" % ContractRun.money(int(inv["contract_value"]))]))
 
 	# Line items.
-	v.add_child(_header_band("LINE ITEMS (EARNED)"))
+	inner.add_child(_header_band("LINE ITEMS (EARNED)"))
 	var grid := _grid()
-	v.add_child(grid)
+	inner.add_child(grid)
 	var floors: Array = inv["floors"]
 	if floors.is_empty():
 		_row(grid, "", "No billable work completed.", "", "$0", INK_DIM)
@@ -130,64 +139,56 @@ func _build_paper() -> Control:
 		for r: Dictionary in sec["rows"]:
 			_row(grid, "FL %d" % int(sec["floor"]) if first else "", str(r["label"]), "x%d" % int(r["qty"]), ContractRun.money(int(r["amount"])), INK)
 			first = false
-	v.add_child(_rule())
-	v.add_child(_total_line("SUBTOTAL (EARNED)", ContractRun.money(int(inv["earned"])), INK, 17))
+	inner.add_child(_rule())
+	inner.add_child(_total_line("SUBTOTAL (EARNED)", ContractRun.money(int(inv["earned"])), INK, 20))
 
 	# Deductions.
-	v.add_child(_header_band("DEDUCTIONS: PROPERTY DAMAGE"))
+	inner.add_child(_header_band("DEDUCTIONS: PROPERTY DAMAGE"))
 	var dgrid := _grid()
-	v.add_child(dgrid)
+	inner.add_child(dgrid)
 	var ded: Array = inv["deductions"]
 	if ded.is_empty():
 		_row(dgrid, "", "No property damage reported. (We checked twice.)", "", "$0", INK_DIM)
 	for d: Dictionary in ded:
 		_row(dgrid, "", "%s - %s" % [str(d["label"]), str(d["who"])], "x%d" % int(d["qty"]), "-" + ContractRun.money(int(d["amount"])), RED)
-	v.add_child(_rule())
+	inner.add_child(_rule())
 	if bool(inv["capped"]):
-		v.add_child(_total_line("Total damages (uncapped)", "-" + ContractRun.money(int(inv["damages"])), INK_DIM, 15))
+		inner.add_child(_total_line("Total damages (uncapped)", "-" + ContractRun.money(int(inv["damages"])), INK_DIM, 18))
 	var cap_text := "Damages (capped at contract value %s)" % ContractRun.money(int(inv["contract_value"]))
-	v.add_child(_total_line(cap_text, "-" + ContractRun.money(int(inv["deducted"])), RED, 17))
+	inner.add_child(_total_line(cap_text, "-" + ContractRun.money(int(inv["deducted"])), RED, 20))
 
 	# NET PAYOUT with the rating stamp.
 	var net_row := HBoxContainer.new()
 	net_row.add_theme_constant_override("separation", 16)
-	v.add_child(net_row)
+	inner.add_child(net_row)
 	var stamp_holder := Control.new()
-	stamp_holder.custom_minimum_size = Vector2(250, 96)
+	stamp_holder.custom_minimum_size = Vector2(280, 124)
 	stamp_holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	net_row.add_child(stamp_holder)
-	var stamp := Stamp.new()
-	stamp.stars = int(inv["stars"])
-	stamp.verdict = _verdict()
-	stamp.size = Vector2(250, 96)
-	stamp.position = Vector2(4, 4)
-	stamp.pivot_offset = stamp.size * 0.5
-	stamp.rotation = -0.13
+	var stamp := FormStamp.new("RATED", 26, -7.5, int(inv["stars"]))
+	stamp.footer = _verdict()
+	stamp.position = Vector2(14, -6)
+	stamp.size = stamp.get_combined_minimum_size()
 	stamp_holder.add_child(stamp)
 	var net := PanelContainer.new()
-	var nsb := StyleBoxFlat.new()
-	nsb.bg_color = Color(1, 1, 1, 0.6)
-	nsb.border_color = INK
-	nsb.set_border_width_all(3)
-	nsb.content_margin_left = 22
-	nsb.content_margin_right = 22
-	nsb.content_margin_top = 8
-	nsb.content_margin_bottom = 8
-	net.add_theme_stylebox_override("panel", nsb)
+	net.add_theme_stylebox_override("panel", FormTheme.box_style(Color(1, 1, 1, 0.45), INK, 3.0, 24.0, 8.0))
 	var nv := VBoxContainer.new()
-	nv.add_theme_constant_override("separation", -2)
+	nv.add_theme_constant_override("separation", -4)
 	net.add_child(nv)
-	nv.add_child(_t("NET PAYOUT", 16, INK_DIM, HORIZONTAL_ALIGNMENT_RIGHT))
-	nv.add_child(_t(ContractRun.money(int(inv["payout"])), 48, GREEN if int(inv["payout"]) > 0 else RED, HORIZONTAL_ALIGNMENT_RIGHT))
+	var nl := FormTheme.label("NET PAYOUT", 20, FormTheme.INK, true)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	nv.add_child(nl)
+	var pay_l := FormTheme.typed(ContractRun.money(int(inv["payout"])), 54, GREEN if int(inv["payout"]) > 0 else RED)
+	pay_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	nv.add_child(pay_l)
 	net_row.add_child(net)
 
 	# Footer: the client's note.
-	v.add_child(_rule())
-	var note := _t("\"%s\"" % str(inv["footer"]), 16, INK)
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(_rule())
+	var note := FormTheme.typed_wrapped("\"%s\"" % str(inv["footer"]), 19, INK, true)
 	note.custom_minimum_size = Vector2(PAPER_W - 90, 0)
-	v.add_child(note)
-	v.add_child(_t("- %s, %s" % [str(inv["client"]), str(inv["dept"])], 13, INK_DIM))
+	inner.add_child(note)
+	inner.add_child(FormTheme.typed("- %s, %s" % [str(inv["client"]), str(inv["dept"])], 16, INK_DIM, false))
 	return paper
 
 
@@ -209,158 +210,115 @@ func _grid() -> GridContainer:
 
 
 func _row(grid: GridContainer, floor_text: String, desc: String, qty: String, amount: String, color: Color) -> void:
-	var f := _t(floor_text, 14, INK_DIM)
-	f.custom_minimum_size = Vector2(54, 0)
+	var f := _t(floor_text, 17, FormTheme.INK)
+	f.custom_minimum_size = Vector2(60, 0)
+	f.add_theme_font_override("font", FormTheme.label_font(true))
 	grid.add_child(f)
-	var d := _t(desc, 15, color)
+	var d := _t(desc, 18, color)
 	d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	d.custom_minimum_size = Vector2(500, 0)
+	d.custom_minimum_size = Vector2(600, 0)
 	d.clip_text = true
 	grid.add_child(d)
-	var q := _t(qty, 15, INK_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+	var q := _t(qty, 18, INK_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
 	q.custom_minimum_size = Vector2(60, 0)
 	grid.add_child(q)
-	var a := _t(amount, 15, color, HORIZONTAL_ALIGNMENT_RIGHT)
-	a.custom_minimum_size = Vector2(130, 0)
+	var a := _t(amount, 18, color, HORIZONTAL_ALIGNMENT_RIGHT)
+	a.custom_minimum_size = Vector2(150, 0)
 	grid.add_child(a)
 
 
-func _total_line(label: String, amount: String, color: Color, size: int) -> Control:
+func _total_line(label_text: String, amount: String, color: Color, size: int) -> Control:
 	var h := HBoxContainer.new()
-	var l := _t(label, size, color, HORIZONTAL_ALIGNMENT_RIGHT)
+	var l := _t(label_text, size, color, HORIZONTAL_ALIGNMENT_RIGHT)
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(l)
 	var a := _t(amount, size, color, HORIZONTAL_ALIGNMENT_RIGHT)
-	a.custom_minimum_size = Vector2(150, 0)
+	a.custom_minimum_size = Vector2(170, 0)
 	h.add_child(a)
 	return h
 
 
 func _header_band(text: String) -> Control:
 	var p := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = PAPER_BAND
-	sb.content_margin_left = 8
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 3
+	var sb := FormTheme.box_style(Color(FormTheme.INK, 0.12), FormTheme.INK, 0.0, 10.0, 3.0)
+	sb.border_width_top = 2
+	sb.border_width_bottom = 2
 	p.add_theme_stylebox_override("panel", sb)
-	p.add_child(_t(text, 14, INK))
+	p.add_child(FormTheme.label(text, 19, FormTheme.INK, true))
 	return p
 
 
 func _rule() -> Control:
-	var r := ColorRect.new()
-	r.color = Color(INK.r, INK.g, INK.b, 0.35)
-	r.custom_minimum_size = Vector2(0, 1)
-	return r
+	return FormTheme.rule(2.0, Color(FormTheme.INK, 0.7))
 
 
 func _meta_box(title: String, lines: Array) -> Control:
 	var b := VBoxContainer.new()
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.add_theme_constant_override("separation", 0)
-	b.add_child(_t(title, 12, _accent.darkened(0.1)))
+	b.add_child(FormTheme.label(title, 18, FormTheme.INK, true))
 	for i in lines.size():
-		var l := _t(str(lines[i]), 15 if i == 0 else 13, INK if i == 0 else INK_DIM)
+		var l := _t(str(lines[i]), 18 if i == 0 else 15, INK if i == 0 else INK_DIM)
 		l.clip_text = true
 		b.add_child(l)
 	return b
 
 
+## A typed line.
 func _t(text: String, size: int, color: Color, align: int = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
+	var l := FormTheme.typed(text, size, color, size >= 18 and color != INK_DIM)
+	l.mouse_filter = Control.MOUSE_FILTER_PASS
 	l.horizontal_alignment = align as HorizontalAlignment
 	return l
 
 
-# --- Crew debrief (dark side) -------------------------------------------------------------------
+# --- Crew debrief (a canary slip) ---------------------------------------------------------------
 
 func _build_side() -> Control:
+	var slip := PaperPanel.new(FormTheme.carbon("canary"))
+	slip.custom_minimum_size = Vector2(SIDE_W + 40.0, 0)
+	slip.set_padding(22, 18, 22, 22)
 	var v := VBoxContainer.new()
-	v.custom_minimum_size = Vector2(SIDE_W, 0)
-	v.add_theme_constant_override("separation", 10)
-	v.add_child(_side_t("CREW DEBRIEF", 28, Color(0.93, 0.94, 0.98)))
-	v.add_child(_side_t("The pot is shared. The blame is not.", 14, Color(0.62, 0.65, 0.76)))
-	v.add_child(_side_gap(6))
-	v.add_child(_side_t("PROPERTY DAMAGE BY CULPRIT", 13, Color(0.62, 0.65, 0.76)))
+	v.add_theme_constant_override("separation", 6)
+	slip.add_child(v)
+	v.add_child(FormTheme.label("FORM 99-B", 18, FormTheme.INK, true))
+	v.add_child(FormTheme.label("CREW DEBRIEF", 38, FormTheme.INK, true))
+	v.add_child(FormTheme.small("The pot is shared. The blame is not.", 18))
+	v.add_child(FormTheme.rule(3.0))
+	v.add_child(FormTheme.gap(4))
+	v.add_child(FormTheme.label("PROPERTY DAMAGE BY CULPRIT", 17, FormTheme.INK, true))
 	var blame: Array = inv["blame"]
 	if blame.is_empty():
-		v.add_child(_side_t("Nobody. Remarkable.", 17, Color(0.55, 0.92, 0.62)))
+		v.add_child(_side_t("Nobody. Remarkable.", 20, GREEN))
 	for b: Dictionary in blame:
 		var h := HBoxContainer.new()
-		var n := _side_t(str(b["who"]), 18, Color(0.93, 0.94, 0.98))
+		var n := _side_t(str(b["who"]), 20, INK)
 		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(n)
-		h.add_child(_side_t("-" + ContractRun.money(int(b["amount"])), 18, Color(1.0, 0.5, 0.45)))
+		h.add_child(_side_t("-" + ContractRun.money(int(b["amount"])), 20, RED))
 		v.add_child(h)
-	v.add_child(_side_gap(6))
-	v.add_child(_side_t("EMPLOYEES", 13, Color(0.62, 0.65, 0.76)))
+	v.add_child(FormTheme.gap(6))
+	v.add_child(FormTheme.label("EMPLOYEES", 17, FormTheme.INK, true))
 	var e: Dictionary = inv["employees"]
-	v.add_child(_side_t("%d extracted ($100 each)" % int(e["extracted"]), 17, Color(0.93, 0.94, 0.98)))
-	v.add_child(_side_t("%d still alive ($10 each)" % int(e["alive"]), 17, Color(0.93, 0.94, 0.98)))
-	var lost_line := _side_t("%d lost" % int(e["lost"]), 17, Color(1.0, 0.5, 0.45) if int(e["lost"]) > 0 else Color(0.93, 0.94, 0.98))
-	v.add_child(lost_line)
+	v.add_child(_side_t("%d extracted ($100 each)" % int(e["extracted"]), 19, INK))
+	v.add_child(_side_t("%d still alive ($10 each)" % int(e["alive"]), 19, INK))
+	v.add_child(_side_t("%d lost" % int(e["lost"]), 19, RED if int(e["lost"]) > 0 else INK))
 	if int(e["lost"]) > 0 and str(e["lost_causes"]) != "":
-		var cause := _side_t("Cause: %s." % str(e["lost_causes"]), 15, Color(0.62, 0.65, 0.76))
+		var cause := _side_t("Cause: %s." % str(e["lost_causes"]), 17, INK_DIM)
 		cause.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		cause.custom_minimum_size = Vector2(SIDE_W, 0)
 		v.add_child(cause)
-	v.add_child(_side_gap(18))
-	var next := Button.new()
-	next.text = "NEXT CONTRACT   [Enter]"
-	next.custom_minimum_size = Vector2(0, 58)
-	next.focus_mode = Control.FOCUS_NONE
-	next.add_theme_font_size_override("font_size", 22)
-	for state in ["normal", "hover", "pressed"]:
-		var s := StyleBoxFlat.new()
-		s.bg_color = Color(0.2, 0.5, 0.3).darkened(0.25 if state == "normal" else 0.05)
-		s.border_color = Color(0.4, 0.8, 0.5)
-		s.set_border_width_all(2)
-		s.set_corner_radius_all(6)
-		next.add_theme_stylebox_override(state, s)
-	next.pressed.connect(func() -> void: next_contract.emit())
-	v.add_child(next)
-	return v
+	v.add_child(FormTheme.gap(18))
+	next_button = FormRow.new("Next contract", "Enter", "")
+	next_button.label_size = 26
+	next_button.row_h = 66.0
+	next_button.pressed.connect(func() -> void: next_contract.emit())
+	v.add_child(next_button)
+	slip.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	return slip
 
 
 func _side_t(text: String, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
+	var l := FormTheme.typed(text, size, color, size >= 19)
+	l.mouse_filter = Control.MOUSE_FILTER_PASS
 	return l
-
-
-func _side_gap(h: float) -> Control:
-	var c := Control.new()
-	c.custom_minimum_size = Vector2(0, h)
-	return c
-
-
-## The rubber stamp: a double border, the verdict and 1-3 stars, tilted.
-class Stamp:
-	extends Control
-	var stars := 1
-	var verdict := ""
-	const INK := Color(0.75, 0.12, 0.18, 0.82)
-
-	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(r, INK, false, 4.0)
-		draw_rect(r.grow(-7), INK, false, 1.5)
-		var font := ThemeDB.fallback_font
-		var t := "RATED"
-		var tw := font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-		draw_string(font, Vector2((size.x - tw) * 0.5, 28), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, INK)
-		var star_size := 26.0
-		var total := star_size * 3.0 + 12.0
-		var x0 := (size.x - total) * 0.5
-		for i in 3:
-			var c := Vector2(x0 + star_size * 0.5 + i * (star_size + 6.0), 48)
-			draw_colored_polygon(JobBoard.StarRow.star_points(c, star_size * 0.5), INK if i < stars else Color(INK.r, INK.g, INK.b, 0.18))
-		var vf := 17 if verdict.length() < 15 else 14
-		var vw := font.get_string_size(verdict, HORIZONTAL_ALIGNMENT_LEFT, -1, vf).x
-		draw_string(font, Vector2((size.x - vw) * 0.5, 82), verdict, HORIZONTAL_ALIGNMENT_LEFT, -1, vf, INK)

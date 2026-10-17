@@ -1,8 +1,9 @@
 class_name PauseMenu
 extends Control
-## The in-contract pause overlay (Esc): Resume, Abandon contract (back to the job board) or Main menu.
-## The game pauses the scene tree while it is open; this overlay runs while paused (process mode ALWAYS).
-## Add it under a CanvasLayer. Esc resumes. Emits resume / abandon / main_menu; the game does the work.
+## The in-contract pause overlay (Esc): Resume, Abandon contract (back to the job board) or Main menu, as
+## FORM 27-B on a clipboard (scripts/ui/forms/). The game pauses the scene tree while it is open; this overlay
+## runs while paused (process mode ALWAYS). Add it under a CanvasLayer. Esc resumes.
+## Emits resume / abandon / main_menu; the game does the work.
 
 signal resume
 signal abandon
@@ -23,41 +24,53 @@ func _ready() -> void:
 	_born_ms = Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(MenuStyle.dim_rect(0.72))
+	theme = FormTheme.theme()
+	add_child(FormTheme.dim_rect(0.6))
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
-	var panel := MenuStyle.panel(MenuStyle.AMBER, 34, 26)
-	panel.custom_minimum_size = Vector2(520, 0)
-	center.add_child(panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	panel.add_child(v)
 
-	var title := MenuStyle.label("PAUSED", 36, MenuStyle.AMBER_HOT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
-	var sub := MenuStyle.label("The crew is standing by.", 16, MenuStyle.DIM)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(sub)
-	v.add_child(MenuStyle.gap(6))
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(640.0, 660.0)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(holder)
+	var board := FormClipboard.new(640.0, 660.0, 1.0)
+	holder.add_child(board)
+	var sheet := FormSheet.new("27-B", "On hold", "CAST  ·  shift paused", "Status", "STANDING BY", "white", 46)
+	board.set_content(sheet)
+	var body := sheet.body
 
-	resume_button = MenuStyle.button("Resume")
+	resume_button = _row(body, "Resume", "01", "esc")
 	resume_button.pressed.connect(func() -> void: resume.emit())
-	v.add_child(resume_button)
-	abandon_button = MenuStyle.button("Abandon contract")
+	abandon_button = _row(body, "Abandon contract", "02", "no invoice")
 	abandon_button.pressed.connect(func() -> void: abandon.emit())
-	v.add_child(abandon_button)
-	menu_button = MenuStyle.button("Main menu")
+	menu_button = _row(body, "Main menu", "03", "")
 	menu_button.pressed.connect(func() -> void: main_menu.emit())
-	v.add_child(menu_button)
-	var hint := MenuStyle.label("Esc resumes.  Abandoning drops this contract: back to the job board, no invoice.", 14, MenuStyle.DIM)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.custom_minimum_size = Vector2(450, 0)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(hint)
+
+	var note := FormTheme.typed_wrapped("The crew is standing by. Esc resumes. Abandoning drops this contract: back to the job board, no invoice.", 19)
+	body.add_child(FormTheme.margin(note, 22, 14, 22, 8))
+	body.add_child(FormTheme.spacer())
+	var build := HBoxContainer.new()
+	build.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	build.add_theme_constant_override("separation", 10)
+	build.add_child(FormTheme.label("BUILD", 16, FormTheme.INK, true))
+	build.add_child(FormTheme.typed(BuildVersion.text(), 16))
+	body.add_child(FormTheme.margin(build, 22, 6, 22, 14))
+
+	var stamp := FormStamp.new("ON HOLD", 34, -9.0)
+	stamp.position = Vector2(350.0, 430.0)
+	board.add_child(stamp)
+
+	FormTheme.chain([resume_button, abandon_button, menu_button])
 	_focus.call_deferred()
+
+
+func _row(parent: Control, text: String, number: String, hint: String) -> FormRow:
+	var r := FormRow.new(text, number, hint)
+	r.row_h = 76.0
+	parent.add_child(r)
+	return r
 
 
 func _input(event: InputEvent) -> void:

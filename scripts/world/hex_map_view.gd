@@ -28,6 +28,13 @@ enum Surf { FLOOR_TOP, WALL_TOP, CRATE_TOP, STAIRS_TOP, CLIFF, WALL_SIDE, CRATE_
 ## Filled by build(): triangles, vertices, surfaces, cells, stair_steps, crates.
 var stats: Dictionary = {}
 var mesh_instance: MeshInstance3D
+## How loud the glowing seams are (read by build()). 1 = the game's look. Menu backdrops turn it down because
+## bright seams under a UI are noisy: `seam_gain` scales every seam / rim glow, and seams closer to the camera than
+## `seam_near_range` (view-space units, 0 = off) are further scaled by `seam_near_gain` (fading back to full at the
+## range), so the foreground floor stays calm while the far floor keeps its glow.
+var seam_gain := 1.0
+var seam_near_gain := 1.0
+var seam_near_range := 0.0
 
 static var _tex_cache: Dictionary = {}
 static var _terrain_shader: Shader
@@ -162,12 +169,15 @@ uniform vec3 glow_color : source_color = vec3(1.0, 0.5, 0.12);
 uniform float glow_energy = 1.8;
 uniform float rough = 0.8;
 uniform float spec = 0.2;
+uniform float near_gain = 1.0;
+uniform float near_range = 0.0;
 void fragment() {
 	vec4 t = texture(tex, UV);
 	ALBEDO = t.rgb * COLOR.rgb;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
-	EMISSION = glow_color * glow_energy * max(t.a, UV2.x);
+	float k = near_range > 0.0 ? mix(near_gain, 1.0, smoothstep(near_range * 0.5, near_range, length(VERTEX))) : 1.0;
+	EMISSION = glow_color * glow_energy * k * max(t.a, UV2.x);
 }
 """
 
@@ -176,8 +186,11 @@ const GLOW_SHADER := """
 shader_type spatial;
 render_mode unshaded;
 uniform float energy = 1.9;
+uniform float near_gain = 1.0;
+uniform float near_range = 0.0;
 void fragment() {
-	ALBEDO = COLOR.rgb * energy;
+	float k = near_range > 0.0 ? mix(near_gain, 1.0, smoothstep(near_range * 0.5, near_range, length(VERTEX))) : 1.0;
+	ALBEDO = COLOR.rgb * energy * k;
 }
 """
 
@@ -189,6 +202,9 @@ func _material(surf: int) -> Material:
 			_glow_shader = Shader.new()
 			_glow_shader.code = GLOW_SHADER
 		m.shader = _glow_shader
+		m.set_shader_parameter("energy", 1.9 * seam_gain)
+		m.set_shader_parameter("near_gain", seam_near_gain)
+		m.set_shader_parameter("near_range", seam_near_range)
 		return m
 	if _terrain_shader == null:
 		_terrain_shader = Shader.new()
@@ -220,7 +236,9 @@ func _material(surf: int) -> Material:
 			rough = 0.9
 			spec = 0.08
 	m.set_shader_parameter("tex", get_texture(tex))
-	m.set_shader_parameter("glow_energy", glow)
+	m.set_shader_parameter("glow_energy", glow * seam_gain)
+	m.set_shader_parameter("near_gain", seam_near_gain)
+	m.set_shader_parameter("near_range", seam_near_range)
 	m.set_shader_parameter("rough", rough)
 	m.set_shader_parameter("spec", spec)
 	return m

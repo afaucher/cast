@@ -9,6 +9,8 @@ extends Node
 ##   --menu-screen <s>   menu: open on "main" (default), "voice" or "settings"
 ##   --menu-after <s>    menu: seconds before --menu-shot fires (default 1.5)
 ##   --menu-say <text>   menu: inject this text into the voice setup's "Try it" (screenshots)
+##   --backdrop-mood <m> menu: force the garage backdrop's mood, dawn | night | after (default: from the clock and the last contract)
+##   --backdrop-hero <h> menu: the hero standing in front in the garage, wick | gasket | rebar (default: the player's hero, Wick)
 ##   --settings-file <p> read and write the game/voice settings at this path instead of user://settings.cfg
 ##   --no-mic            no microphone (the menu's voice setup too); does not skip the menu
 ## Anything else (--seed, --spells, --contract, --floor, --shot, --zoom ... every game.gd flag, and any flag
@@ -17,7 +19,7 @@ extends Node
 const GAME_SCENE := "res://scenes/game.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Flags that belong to the menu and do not mean "jump into the game".
-const MENU_FLAGS: Array[String] = ["--menu", "--menu-shot", "--menu-screen", "--menu-say", "--menu-after", "--settings-file", "--no-mic"]
+const MENU_FLAGS: Array[String] = ["--menu", "--menu-shot", "--menu-screen", "--menu-say", "--menu-after", "--backdrop-mood", "--backdrop-hero", "--settings-file", "--no-mic"]
 
 
 func _ready() -> void:

@@ -30,16 +30,20 @@ window mode and size) and then changes scene to `Boot.route(args)`:
 | `--run-test <name>` | the test (headless harness, nothing else runs) |
 | `--scene <res path>` | that scene |
 | `--menu` | `scenes/main_menu.tscn`, even with other flags (they still reach the game) |
-| no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after` | the main menu |
+| no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after`, `--backdrop-mood` | the main menu |
 | any other `--flag` (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, every `game.gd` flag, flags added later) | `scenes/game.tscn`, as before |
 
-`scripts/ui/main_menu.gd` (`MainMenu`) is the menu: `MenuBackdrop` (a slowly swaying camera over a generated
-HexMapView + DungeonLook hall, the three `*Model` heroes idling and a `HellgateModel` in the distance; no GameWorld,
-no actors) behind the buttons Start, Voice setup, Settings, Quit. Start calls `game.gd`'s `reset_flow()` and loads
+`scripts/ui/main_menu.gd` (`MainMenu`) is the menu: `MenuBackdrop` (`scripts/ui/menu_backdrop.gd`: the crew's bunker
+garage, a slowly drifting camera over the three `*Model` heroes idling around the real `VanModel` on its chalk circle,
+torches, a `HellgateModel` glowing through a breach; mood dawn / night / after, see `MenuBackdrop.pick_mood` and
+`LastContract`; no GameWorld, no actors) behind the buttons Start, Voice setup, Settings, Quit. The job board uses
+the same garage: `game.gd`'s `_show_board` adds its own `MenuBackdrop` (the menu scene is already gone after Start's
+scene change, so it is a fresh one that picks the same mood and hero) and sets `board.backdrop_behind`, which swaps
+the board's opaque dark shade for a light dim. Start calls `game.gd`'s `reset_flow()` and loads
 `Boot.GAME_SCENE`, which opens on the job board. Sub-screens are `VoiceSetupScreen` (runs a real `VoiceCaster`
 with the mic; edits the cast word, strictness and min-voice through the caster, which persists them via
 `VoiceSettings`; live dB meter from `SpeechGate`; "Try it" shows HEARD, the matched spell and its power) and
-`SettingsScreen` (`GameSettings`). Styling is shared in `MenuStyle`. Esc goes back (`pause` input action).
+`SettingsScreen` (`GameSettings`). Styling is the carbon-copy form system in `scripts/ui/forms/` (`FormTheme`, `PaperPanel`, `FormSheet`, `FormRow`, ...; see `docs/design/ui-theme-options.md`). Esc goes back (`pause` input action).
 Dev: `--menu-screen voice|settings`, `--menu-shot <png> [--menu-after s]`, `--menu-say "cast heal"`,
 `--settings-file <path>` (so screenshots never touch the player's settings).
 

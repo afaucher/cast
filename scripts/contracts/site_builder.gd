@@ -17,6 +17,8 @@ extends RefCounted
 ##    doors and corridors stay clear), at least PROP_SPACING (4) apart. Each stands BACK TO THE WALL facing into
 ##    the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw;
 ##  - decor (not priced): each theme's set dressing, vignettes placed as one unit (SitePlan.decor, see RoomThemes);
+##  - the crew's work van (VanPlan, SitePlan.van): parked in the start room on flat floor beside the start cell, planned before
+##    everything else so no prop, note, decor piece or package lands on it; its cells are blocked;
 ##  - mail packages (MailPackage): 4-6 spots a floor, each 1-3 breakable boxes stacked, on room floor within a few
 ##    cells of a room's door (never in a corridor, never within START_CLEAR / EXIT_CLEAR of the start / exit, never
 ##    on a gate, employee, note, prop or decor), backed against a wall so the way through stays open. They roll their
@@ -91,6 +93,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
 	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
 	last_theme_usec = Time.get_ticks_usec() - t0
+	_plan_van(map, p, ctx)
 	t0 = Time.get_ticks_usec()
 	_plan_props(map, run, p, rng, avoid, near_corr, catalog, ctx)
 	_plan_notes(map, run, floor_n, p, near_corr)
@@ -103,6 +106,19 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	_block_cells(p)
 	last_plan_usec = Time.get_ticks_usec() - t_start
 	return p
+
+
+## The crew's work van, parked beside the start cell (VanPlan). Planned before the props, the notes, the decor and the
+## packages, which all see it as a body and a solid footprint in the start room. It draws no random numbers, so
+## nothing else on the floor moves because of it (apart from keeping out of its way).
+static func _plan_van(map: HexMap, p: SitePlan, ctx: ThemeCtx) -> void:
+	p.van = VanPlan.plan(map, p, _corridor_distance(map, 4))
+	if p.van.is_empty() or not ctx.rooms.has(p.start_room):
+		return
+	var room: ThemeCtx.RoomInfo = ctx.rooms[p.start_room]
+	ctx.add_body(room, p.van["pos"], float(p.van["yaw"]), float(p.van["w"]), float(p.van["d"]), -1, "van")
+	for c: Vector2i in p.van["cells"]:
+		ctx.solid[c] = true
 
 
 static func _index_rooms(map: HexMap, p: SitePlan) -> void:
@@ -479,6 +495,8 @@ static func _plan_notes(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan
 		var cell: HexMap.Cell = map.get_cell(c)
 		if d < 4 or cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != level or not cell.tag.begins_with("room:"):
 			continue
+		if VanPlan.near(p.van, ThemeGeo.world(c), 0.9, 1.1, 1.0):
+			continue    # not under the van or in front of its door
 		var score := (10 - absi(d - 5)) * 2 + (0 if near_corr.has(c) else 5)
 		if score > best_score or (score == best_score and _cell_less(c, best)):
 			best_score = score
@@ -630,6 +648,11 @@ static func _block_cells(p: SitePlan) -> void:
 		p.blocked[nt["cell"]] = true
 	for pk in p.packages:
 		p.blocked[pk["cell"]] = true
+	# The work van and the cells the crew steps out onto.
+	for c: Vector2i in (p.van.get("cells", []) as Array):
+		p.blocked[c] = true
+	for c: Vector2i in (p.van.get("crew_cells", []) as Array):
+		p.blocked[c] = true
 	# Walk-blocking decor (racks, bunks, barrels, ...): monsters are not placed inside it.
 	for dc in p.decor:
 		if not bool(dc["blocks"]):

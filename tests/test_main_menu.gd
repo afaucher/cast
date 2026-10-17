@@ -143,13 +143,14 @@ func _check_menu() -> void:
 	eq(menu.settings_button.find_valid_focus_neighbor(SIDE_BOTTOM), menu.quit_button, "Down moves Settings -> Quit")
 	eq(menu.screen, "main", "opens on the main screen")
 
-	# The background: the three heroes, a hellgate, a moving camera.
+	# The background (the garage, scripts/ui/menu_backdrop.gd; test_menu_backdrops covers it in depth): the three heroes, a hellgate, a moving camera.
 	check(menu.backdrop != null, "the 3D backdrop is built")
 	if menu.backdrop != null:
 		check(menu.backdrop.wick is WickModel and menu.backdrop.rebar is RebarModel and menu.backdrop.gasket is GasketModel, "the three heroes idle in the scene")
 		check(menu.backdrop.gate is HellgateModel, "a hellgate glows in the distance")
 		check(menu.backdrop.camera != null and menu.backdrop.camera.current, "a camera is current")
-		check(menu.backdrop.map.cells.size() > 300, "a generated floor")
+		check(menu.backdrop.map.cells.size() > 100, "a generated floor")
+		check(menu.backdrop.van is VanModel and MenuBackdrop.MOODS.has(menu.backdrop.mood), "the garage: the van is parked, in a valid mood (%s)" % menu.backdrop.mood)
 		var p0: Vector3 = menu.backdrop.camera.global_position
 		await frames(60)
 		check(menu.backdrop.camera.global_position.distance_to(p0) > 0.001, "the camera orbits")

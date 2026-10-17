@@ -49,6 +49,8 @@ extends Node3D
 ##   --pause-demo        dev: open the pause overlay 1.5 s into the floor (screenshots)
 ##   --no-grime          dev: no grime / damage decal layer (scripts/world/grime)
 ##   --grime-demo        dev: 1 s in, cast fireball / corn / tentacles 6 cells from the crew and drop teeth / scuff marks (screenshots)
+##   --no-van-intro      dev: skip the van's arrival animation (the van is still parked and the crew stands beside it). Tests (--run-test)
+##                       and --shot screenshots skip it by default; --van-intro plays it anyway (--shot-after 1.2 catches the landing)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
@@ -111,6 +113,7 @@ var _emp_cause: Dictionary = {}     ## employee instance id -> last culprit name
 var _player_down_noted := false
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
+var _arrival: VanArrival = null     ## the work van and its arrival sequence (null when the start room had no room for it)
 
 
 func _ready() -> void:
@@ -182,6 +185,8 @@ func _parse_args() -> void:
 			"--pause-demo": opts["pause_demo"] = true
 			"--no-grime": opts["no_grime"] = true
 			"--grime-demo": opts["grime_demo"] = true
+			"--no-van-intro": opts["no_van_intro"] = true
+			"--van-intro": opts["van_intro"] = true
 
 
 # --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
@@ -222,11 +227,19 @@ func _screens() -> CanvasLayer:
 
 func _show_board() -> void:
 	var board_seed := int(opts.get("seed", randi() % 100000))
-	var board := JobBoard.new(ContractBoard.offers(board_seed))
+	var offers := ContractBoard.offers(board_seed)
+	var board := JobBoard.new(offers)
 	_board = board
+	# The same garage as the main menu behind the cards. The menu scene is already gone (Start changes scene), so
+	# this is a fresh MenuBackdrop; it picks the same mood and featured hero itself (pick_mood, hero_from_args).
+	var backdrop := MenuBackdrop.new()
+	backdrop.name = "Backdrop"
+	add_child(backdrop)
+	board.backdrop_behind = true
 	_screens().add_child(board)
 	board.picked.connect(func(run: ContractRun) -> void:
 		board.queue_free()
+		backdrop.queue_free()
 		_board = null
 		_begin_contract(run)
 		_enter_floor())
@@ -492,6 +505,7 @@ func _start() -> void:
 			h.hp = maxf(1.0, h.hp - float(opts["hurt"]))
 			h._refresh_bar()
 	_populate_site()
+	_arrive_by_van()
 	if not opts.has("no_grime"):
 		GrimeLayer.attach(self, map, _site.plan, _run.floor_seed(_floor_n()))
 		if opts.has("grime_demo"):
@@ -532,6 +546,41 @@ func _start() -> void:
 			Ledger.damage("Zen fountain", 900, allies[0]))
 	if opts.has("shot"):
 		_take_shot_later(str(opts["shot"]), float(opts.get("shot_after", 3.0)))
+
+
+## The crew arrives in the work van: it teleports in over a summoning circle in the start room and the heroes step out
+## beside its door (docs/design/environment.md, "Van arrival"). Player control comes back when they are out (~2.5 s), any
+## key or click skips ahead, and the van stays parked as solid decor. Without room for the van the crew stays at the start.
+func _arrive_by_van() -> void:
+	if _site == null or _site.plan.van.is_empty():
+		return
+	var crew: Array[Hero] = [player]
+	if allies.size() >= 2:
+		crew.append(allies[1])   # Gasket
+		crew.append(allies[0])   # Rebar
+	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit")
+	var play := _van_intro_enabled() and not moved_away and not player.dead
+	_arrival = VanArrival.spawn(_site.plan.van, crew, play)
+	if _arrival == null:
+		return
+	rig.snap()
+	if _arrival.is_running():
+		controller.enabled = false
+		_arrival.finished.connect(_on_arrival_finished)
+
+
+## The animation plays unless --no-van-intro; tests and screenshots skip it unless --van-intro.
+func _van_intro_enabled() -> bool:
+	if opts.has("no_van_intro"):
+		return false
+	if opts.has("van_intro"):
+		return true
+	return not (OS.get_cmdline_user_args().has("--run-test") or opts.has("shot"))
+
+
+func _on_arrival_finished() -> void:
+	if controller != null and player != null and not player.dead and not _ended and _menu == null:
+		controller.enabled = true
 
 
 ## Heroes arrive as the previous floor left them (HP, downed). A downed player hands the camera to a living ally.
@@ -849,6 +898,7 @@ func _end_contract(reason: String) -> void:
 	_freeze(true)
 	_session.finish(reason)
 	var inv := ContractInvoice.build(_session)
+	LastContract.record(inv)   # the main menu's garage shows the morning after a bad job
 	_log("contract over (%s): earned %s, damages %s, payout %s" % [reason, ContractRun.money(int(inv["earned"])), ContractRun.money(int(inv["damages"])), ContractRun.money(int(inv["payout"]))], Color(1.0, 0.9, 0.5))
 	_show_invoice(inv)
 
@@ -962,7 +1012,16 @@ func _process(delta: float) -> void:
 		_update_stats()
 
 
+## A fresh key / click / pad press (not Esc, which opens the pause menu) skips the van's arrival.
+static func _is_skip_press(event: InputEvent) -> bool:
+	if not event.is_pressed() or event.is_echo() or event.is_action_pressed("pause"):
+		return false
+	return event is InputEventKey or event is InputEventMouseButton or event is InputEventJoypadButton
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if _arrival != null and _arrival.is_running() and _is_skip_press(event):
+		_arrival.skip()   # never trap the player: any key or click jumps to the end of the arrival
 	if event.is_action_pressed("restart"):
 		_abandon_to_board()
 	elif event.is_action_pressed("pause"):

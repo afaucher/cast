@@ -56,6 +56,11 @@ var notes: Array[Dictionary] = []
 ## first), twists: Array[float] (yaw offset per level, degrees), shifts: Array[Vector2] (X/Z offset per level)}.
 ## Always on room floor near a room entrance (never a corridor cell, never in the start / exit clear zones).
 var packages: Array[Dictionary] = []
+## The crew's work van (VanPlan, docs/design/environment.md "Van arrival"): {pos: Vector2 (world X/Z), yaw (degrees; nose =
+## +Z, the sliding door on the model's -X side), w, d, cells (blocked), block_points, block_radius, door, door_normal,
+## crew: [Wick, Gasket, Rebar spots] (Vector2), crew_cells, circle_radius, room, level}. Parked beside the start cell in the
+## start room, solid set dressing (not priced). {} when the start room has no flat space for it.
+var van: Dictionary = {}
 ## Rooms ordered by distance from the nearest gate, farthest first (start room left out).
 var ranked_rooms: Array[String] = []
 ## Monster pack budget per room tag (the start room has none).
@@ -73,7 +78,7 @@ func net_fields() -> Dictionary:
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "packages": Net.SPAWN,
 		"room_themes": Net.SPAWN, "decor": Net.SPAWN, "lights": Net.SPAWN, "entrances": Net.SPAWN,
 		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "ranked_rooms": Net.SPAWN,
-		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN,
+		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN, "van": Net.SPAWN,
 	}
 
 

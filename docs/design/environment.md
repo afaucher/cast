@@ -170,3 +170,62 @@ a torn-paper grime mark (`Grime.PAPER`) fades on the same clock.
   not hit by melee or arrows.
 - **Dev:** `--scene res://scenes/package_lab.tscn` (sizes, stacks, every contents spilled; `--shot`),
   `--to-package` puts the crew next to the first stack of the floor.
+
+## Van arrival [built, 2026-10-17]
+**The premise:** the crew are Licensed Budget Sorcery contractors, so they don't walk in: at the start of every floor
+their beat-up work van teleports in over a summoning circle in the start room and they climb out. Then it just sits
+there as set dressing for the rest of the floor.
+
+- **Van** (`VanModel`, `scripts/art/lowpoly/props/van_model.gd`): about 2.0 x 4.2 x 2.2, a boxy white-grey panel van with rust
+  patches, grime and dents, a roof rack (orange ladder, copper / PVC / ABS pipes, ratchet straps, a wand antenna), hose
+  coils, a pipe wrench and a plunger on pegs, a sliding side door (slides rearward, violet glow and a shelving rack
+  inside), headlights and tail lights that can glow, wheels on a bouncing suspension, a wand-and-wrench roundel on both
+  sides and the name as `Label3D` text ("LICENSED BUDGET SORCERY" on the door, "BUDGET SORCERY / LICENSED - 24/7 DISPATCH"
+  on the banner side, "HOW'S MY SORCERY?" on the back). At the game camera the text only reads when zoomed in; the roundel,
+  stripe, ladder and pipes carry the silhouette. Nose = +Z, door on the model's -X side.
+- **Circle** (`VanCircle`, `van_circle.gd`): a shader-drawn pentagram in two rings with tick marks and rune glyphs on a flat
+  quad. It has a glow look (amber HDR lines and halo, so it blooms) and a chalk look (faint broken lines) and blends between
+  them; around it are a column of light, a shock ring, rising sparks and an amber light.
+- **Placement** (`VanPlan`, `scripts/contracts/van_plan.gd`, called from `SiteBuilder._plan_van` right after the themes are
+  dealt; pure data in `SitePlan.van`, deterministic per floor, no random numbers). The pose is searched over every flat
+  start-room cell within 5 cells of the start, 18 yaws:
+  - the whole body plus a 0.4 x 0.55 margin is flat floor of the start room's base level (strictly flat cells first), at
+    least 2 cells from any corridor cell (a cramped room relaxes this to 1 and shrinks the margin; it still fits 600 of 600 floors tried);
+  - the crew's three standing spots beside the door are flat, outside the body and spaced out;
+  - the van's blocked cells never include the start cell, and removing them strands no walkable cell (a BFS around the
+    start before and after);
+  - best score wins: the door faces the iso camera (3.0 x the dot product with `ThemeGeo.CAMERA_DIR`), the nose points toward
+    the elevator, near the start, away from the corridors.
+  It is registered as a body and as solid cells in the start room's `ThemeCtx` before the props, notes, decor and packages
+  are planned, so none of them lands on it (notes also keep a metre away); its cells and the crew spots go into
+  `plan.blocked` so no monster spawns there. Across 5 archetypes x 40 seeds x 3 floors it always fits.
+- **Solid, not priced:** `VanArrival` adds four invisible `DecorBlocker` circles (r 0.98) along its axis, the same actors
+  blocking decor uses, so heroes and monsters walk around it. It is not an `Actor`, not in the priced-prop list and takes
+  no damage (the blockers return 0), so no property damage is ever charged. The elevator and its menu are untouched.
+- **Arrival** (`VanArrival`, `scripts/contracts/van_arrival.gd`, wired in `game.gd`'s `_arrive_by_van()` after the site is
+  built): a plain timeline, every moment a function of `time`:
+
+  | t (s) | what happens |
+  |---|---|
+  | 0.00 | the circle ignites: a ring of amber light draws itself around, then the star; sparks rise, a column of light grows |
+  | 0.80 | POP: flash, smoke, camera nudge; the van appears as a tall thin streak above the circle and drops |
+  | 1.06 | it lands (squash and stretch, dust ring, shake, a shock ring races over the floor); signal `landed` |
+  | 1.22 | two honks and headlight flashes; signal `honked` (the audio hook, no sound assets exist yet) |
+  | 1.32-1.78 | the side door slides open, violet light spills out; signal `door_opened` |
+  | 1.55-2.4 | Wick, Gasket and Rebar step out one after another (0.15 s apart) to their spots beside the door |
+  | 2.50 | `finished`: control goes back to the player; the headlights dim to a parked glow |
+  | 2.1-3.5 | the circle fades from glowing amber to a faint chalk mark that stays for the floor (non-blocking) |
+
+  The crew is hidden and the controller and ally brains are off until then; the player is never stuck: any key, click or
+  pad button calls `skip()` (jumps to the parked state), and the timeline ends by itself at 2.5 s. Pause and the elevator
+  freeze stop it like everything else.
+- **Flags:** `--no-van-intro` skips the animation (the van is still parked and the crew stands beside it); tests (`--run-test`)
+  and `--shot` screenshots skip it by default; `--van-intro` plays it anyway (`--shot-after 1.2` catches the landing). The
+  dev teleports (`--to-gate`, `--to-theme`, ...) also skip it.
+- **Lab:** `--scene res://scenes/van_lab.tscn` (`--shot <png>`, `--t <seconds into the arrival>`, `--view game|close|far|side|other|rear|front|top`,
+  `--van-yaw`, `--no-crew`). Without `--shot` the arrival replays every 8 s.
+- **Networking** (checklist in `networking.md`): shape = a host-arbitrated world object planned from the seed (`SitePlan.van` and
+  the blockers are `SPAWN`, identical on every machine) plus a **cosmetic** arrival (the timeline and every visual are
+  `LOCAL`). Each player's machine walks its own hero out; allies and everything else follow the host as usual. A player who
+  joins mid-floor sees the parked van (`park()`: door open, chalk circle) and no animation. No randomness (the model's
+  noise uses seeded generators).

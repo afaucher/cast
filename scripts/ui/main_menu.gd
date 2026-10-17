@@ -1,8 +1,8 @@
 class_name MainMenu
 extends Node
 ## The main menu (scenes/main_menu.tscn), the default boot target (see Boot.route). A living background
-## (MenuBackdrop: the crew idling in a slate hall with a hellgate glowing in the distance) behind four
-## buttons: Start (the game scene, i.e. the contract job board), Voice setup (VoiceSetupScreen: live mic
+## (MenuBackdrop: the crew idling in a slate hall with a hellgate glowing in the distance) behind a work
+## order (FORM 27-B, scripts/ui/forms/) clipped to a clipboard on the left third, with four rows: Start (the game scene, i.e. the contract job board), Voice setup (VoiceSetupScreen: live mic
 ## test), Settings (SettingsScreen) and Quit. Keyboard (arrows / Tab / Enter) and mouse; Esc backs out of a
 ## sub-screen. Everything is built in code.
 ##
@@ -34,10 +34,15 @@ var start_button: Button
 var voice_button: Button
 var settings_button: Button
 var quit_button: Button
+var clipboard: FormClipboard
+var build_label: Label
 var voice_screen: VoiceSetupScreen = null
 var settings_screen: SettingsScreen = null
 
 var _opened_from: Button = null
+var _info_word: Label
+var _info_strict: Label
+var _info_gate: Label
 
 
 func _ready() -> void:
@@ -116,6 +121,7 @@ func show_screen(which: String) -> void:
 			_grab.call_deferred(settings_screen.first_focus())
 		_:
 			screen = "main"
+			_refresh_info()
 			if _opened_from != null and is_instance_valid(_opened_from):
 				_grab.call_deferred(_opened_from)
 			else:
@@ -154,68 +160,140 @@ func _build_main() -> void:
 	main_panel.name = "Main"
 	main_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	main_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	main_panel.theme = FormTheme.theme()
 	ui.add_child(main_panel)
 
-	# A dark slate wash from the left so the title and buttons read over the scene.
+	# A soft shade down the left edge so the board has something to sit on; the rest is the 3D backdrop's.
 	var grad := Gradient.new()
-	grad.colors = PackedColorArray([Color(0.02, 0.025, 0.04, 0.94), Color(0.02, 0.025, 0.04, 0.78), Color(0.02, 0.025, 0.04, 0.0)])
-	grad.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	grad.colors = PackedColorArray([Color(0.02, 0.015, 0.02, 0.6), Color(0.02, 0.015, 0.02, 0.0)])
 	var tex := GradientTexture2D.new()
 	tex.gradient = grad
 	tex.fill_from = Vector2(0.0, 0.0)
 	tex.fill_to = Vector2(1.0, 0.0)
-	tex.width = 256
-	tex.height = 8
-	var wash := TextureRect.new()
-	wash.texture = tex
-	wash.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	wash.stretch_mode = TextureRect.STRETCH_SCALE
-	wash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	wash.anchor_right = 0.55
-	wash.offset_right = 0.0
-	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	main_panel.add_child(wash)
+	tex.width = 128
+	tex.height = 4
+	var shade := TextureRect.new()
+	shade.texture = tex
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.anchor_right = 0.5
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	main_panel.add_child(shade)
 
-	var col := VBoxContainer.new()
-	col.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
-	col.offset_left = 96.0
-	col.offset_right = 96.0 + 460.0
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_theme_constant_override("separation", 14)
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	main_panel.add_child(col)
+	# The work order on the clipboard, on the left third of the screen.
+	clipboard = FormClipboard.new(600.0, 838.0, -1.2)
+	clipboard.anchor_left = 0.0
+	clipboard.anchor_right = 0.0
+	clipboard.anchor_top = 0.5
+	clipboard.anchor_bottom = 0.5
+	clipboard.offset_left = 58.0
+	clipboard.offset_right = 658.0
+	clipboard.offset_top = -419.0
+	clipboard.offset_bottom = 419.0
+	clipboard.tabs = [
+		{"text": "jobs", "color": FormTheme.carbon("canary")},
+		{"text": "rig", "color": FormTheme.carbon("blue")},
+		{"text": "options", "color": FormTheme.carbon("gold")},
+	]
+	main_panel.add_child(clipboard)
 
-	var title := MenuStyle.label("CAST", 168, MenuStyle.AMBER_HOT)
-	title.add_theme_color_override("font_outline_color", Color(0.25, 0.1, 0.02))
-	title.add_theme_constant_override("outline_size", 14)
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	title.add_theme_constant_override("shadow_offset_x", 0)
-	title.add_theme_constant_override("shadow_offset_y", 8)
-	col.add_child(title)
-	var bar := ColorRect.new()
-	bar.color = MenuStyle.AMBER
-	bar.custom_minimum_size = Vector2(0, 5)
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(bar)
-	col.add_child(MenuStyle.label(TAGLINE, 23, MenuStyle.DIM))
-	col.add_child(MenuStyle.gap(26))
+	var sheet := FormSheet.new("27-B", "Work order", "CAST  ·  " + TAGLINE, "Copy", "OFFICE", "white", 46)
+	clipboard.set_content(sheet)
+	var body := sheet.body
 
-	start_button = _menu_button(col, "Start", func() -> void: start_game())
-	voice_button = _menu_button(col, "Voice setup", func() -> void: _open(voice_button, "voice"))
-	settings_button = _menu_button(col, "Settings", func() -> void: _open(settings_button, "settings"))
-	quit_button = _menu_button(col, "Quit", func() -> void: quit())
+	var strip := HBoxContainer.new()
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var strip_l := FormTheme.label("1-800-LOW-MANA  ·  24/7 EMERGENCY DISPATCH", 17)
+	strip_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	strip.add_child(strip_l)
+	strip.add_child(FormTheme.label("LIC. LBS-0427", 17))
+	body.add_child(FormTheme.margin(strip, 22, 8, 22, 8))
+	body.add_child(FormTheme.rule(2.0))
 
-	col.add_child(MenuStyle.gap(10))
-	col.add_child(MenuStyle.wrapped("First time? Open Voice setup first and make sure the crew can hear you.", 16, MenuStyle.DIM))
-	var keys := MenuStyle.label("Arrows or Tab to move, Enter to choose, Esc to go back.", 14, Color(MenuStyle.DIM, 0.7))
-	col.add_child(keys)
+	start_button = _menu_row(body, "Start", "01", "new contract", func() -> void: start_game())
+	voice_button = _menu_row(body, "Voice setup", "02", "", func() -> void: _open(voice_button, "voice"))
+	settings_button = _menu_row(body, "Settings", "03", "options", func() -> void: _open(settings_button, "settings"))
+	quit_button = _menu_row(body, "Quit", "04", "clock out", func() -> void: quit())
+
+	var note := FormTheme.typed_wrapped("First time? Open Voice setup first and make sure the crew can hear you.", 19, FormTheme.TYPED)
+	body.add_child(FormTheme.margin(note, 22, 12, 22, 6))
+
+	var office_head := HBoxContainer.new()
+	office_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	office_head.add_theme_constant_override("separation", 10)
+	var office_cap := FormTheme.label("FOR OFFICE USE ONLY", 17, FormTheme.INK, true)
+	office_cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	office_head.add_child(office_cap)
+	office_head.add_child(FormTheme.label("BUILD", 16, FormTheme.INK, true))
+	build_label = FormTheme.typed(BuildVersion.text(), 16)
+	build_label.name = "BuildVersion"
+	office_head.add_child(build_label)
+	body.add_child(FormTheme.margin(office_head, 22, 6, 22, 0))
+	var office := GridContainer.new()
+	office.columns = 3
+	office.add_theme_constant_override("h_separation", 12)
+	office.add_theme_constant_override("v_separation", 6)
+	office.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_info_word = _office_field(office, "CAST WORD")
+	_info_strict = _office_field(office, "STRICTNESS")
+	_info_gate = _office_field(office, "MIN VOICE")
+	body.add_child(FormTheme.margin(office, 22, 4, 22, 4))
+	body.add_child(FormTheme.spacer())
+	body.add_child(FormTheme.rule(2.0))
+	var ads := HBoxContainer.new()
+	ads.add_theme_constant_override("separation", 8)
+	ads.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ads.add_child(FormTheme.ad("Contract service", "Gates closed while you wait."))
+	ads.add_child(FormTheme.ad("Local trade", "Hexes, drains, leaks. Free estimates."))
+	ads.add_child(FormTheme.ad("Lost: shark", "Answers to \"Bruce\". Do not hit."))
+	body.add_child(FormTheme.margin(ads, 22, 10, 22, 14))
+
+	var stamp := FormStamp.new("LICENSED · BONDED · MOSTLY", 18, -8.0)
+	stamp.position = Vector2(235.0, 650.0)   # the blank strip above the ads, clear of the BUILD line
+	clipboard.add_child(stamp)
+
+	var keys := KeyHints.new([["Up", "Down", "move"], ["Enter", "sign"], ["Esc", "back"]])
+	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	keys.offset_left = 720.0
+	keys.offset_top = -52.0
+	keys.offset_bottom = -20.0
+	main_panel.add_child(keys)
+
+	FormTheme.chain([start_button, voice_button, settings_button, quit_button])
+	_refresh_info()
 
 
-func _menu_button(parent: Control, text: String, on_press: Callable) -> Button:
-	var b := MenuStyle.button(text)
-	b.pressed.connect(on_press)
-	parent.add_child(b)
-	return b
+func _menu_row(parent: Control, text: String, number: String, hint: String, on_press: Callable) -> FormRow:
+	var r := FormRow.new(text, number, hint)
+	r.row_h = 76.0
+	r.pressed.connect(on_press)
+	parent.add_child(r)
+	return r
+
+
+## One "typed value in a boxed field" cell of the office-use grid; returns the value label.
+func _office_field(grid: GridContainer, caption: String) -> Label:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 0)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_child(FormTheme.label(caption, 15, FormTheme.INK))
+	var val := FormTheme.typed("-", 20)
+	v.add_child(val)
+	grid.add_child(FormTheme.boxed(v, 8, 3))
+	return val
+
+
+## Fill the hint on Voice setup and the office-use fields from the saved voice settings.
+func _refresh_info() -> void:
+	var vs := VoiceSettings.load_settings(_settings_file())
+	var word := str(vs["trigger_word"])
+	var strict := str(vs["strictness"])
+	voice_button.hint = "\"%s\" · %s" % [word, strict]
+	_info_word.text = word
+	_info_strict.text = strict
+	_info_gate.text = "%d dB" % roundi(float(vs["min_voice_db"]))
 
 
 func _open(from: Button, which: String) -> void:
