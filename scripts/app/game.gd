@@ -1,12 +1,21 @@
 extends Node3D
-## The POC game: pick 2 spells -> procedural hex dungeon -> fight to the exit,
-## casting spells by voice. Wires together DungeonGen/HexMapView (terrain),
-## heroes/spells/HUD (HeroFactory, PlayerController, Hud, CameraRig),
-## MonsterFactory (monsters) and VoiceCaster/VoiceDebugPanel (voice).
+## The game: the dispatch JOB BOARD (3 offers) -> spell picker -> three floors of a procedural hex
+## dungeon joined by the freight elevator -> the INVOICE -> back to the board. The crew casts spells by voice.
+## Wires together DungeonGen/HexMapView (terrain), heroes/spells/HUD (HeroFactory, PlayerController, Hud,
+## CameraRig), MonsterFactory (monsters), VoiceCaster/VoiceDebugPanel (voice) and the contract layer
+## (ContractRun/ContractSession/SiteBuilder: hellgates, employees, priced props, objectives, the Ledger).
+##
+## Flow (docs/design/contracts.md): the elevator (the exit cell) opens a menu: go down (more pay, more
+## danger) or cash out; cashing out is always allowed. HP and downed state carry between floors; a new
+## contract resets everything (spells are re-picked). All heroes down ends the contract: "Crew
+## incapacitated" and the invoice shows what was earned so far.
 ##
 ## Command line (after `--`):
-##   --seed N            dungeon seed (default: random)
-##   --spells a,b        skip the picker (e.g. heal,corn)
+##   --seed N            dungeon seed (default: random). Seeds the job board; with --contract N / --spells it is
+##                       the contract's seed and floor 1 is exactly DungeonGen.generate(N)
+##   --contract K        skip the board: take offer K (0-2) of the board, or, for K >= 3, the contract rolled from seed K
+##   --floor N           start on floor N (1-3) of the contract (implies a contract; default offer from --seed)
+##   --spells a,b        skip the picker (e.g. heal,corn); with no --contract it also skips the board
 ##   --no-mic            don't open the mic / load the model (typed casts only)
 ##   --shot <png>        save a screenshot after --shot-after game seconds (default 3) and quit
 ##   --autocast <id>     cast a spell once, 1 s in (for screenshots)
@@ -24,20 +33,31 @@ extends Node3D
 ##   --slay-near         dev: 1.5 s in, kill the --spawn-near monsters (to watch their drops)
 ##   --kit-demo draw|hammer|fist  dev: at 0.8 s Wick starts drawing his bow on the --spawn-near monsters (a drawn shot
 ##                       fires 1.3 s later), or Gasket (hammer) / Rebar (fist) steps up to them and swings once
-## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
+##   --to-gate           dev: put the crew 5 cells from the first hellgate of the floor (the camera follows)
+##   --to-exit           dev: put the crew on the elevator (opens its menu)
+##   --demo-damage       dev: 1 s in, put two property-damage lines on the Ledger (to see the ticker and the tracker)
+##   --show-panel        dev: keep the voice debug panel open in --shot screenshots
+##   --hurt N            dev: every hero starts the floor N hp down (to see the HP carry over between floors)
+##   --auto-elevator down|out  dev: the elevator menu picks that option 1.2 s after it opens ("down" on the last floor cashes out)
+##   --invoice-demo      dev: show a sample invoice (no game), for screenshots
+## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Enter = type an incantation.
 
 ## Every castable spell, straight from SpellBook (new spells need no change here).
 static func all_spells() -> PackedStringArray:
 	return PackedStringArray(SpellBook.ids())
 const PLAYER_COLOR := Color(0.3, 0.55, 0.95)
-const ROOM_BUDGET_BASE := 5
-const ROOM_BUDGET_PER_ROOM := 1
-const ROOM_BUDGET_PER_FLOOR := 3
+const SCREEN_LAYER := 60          ## full-screen screens (board, elevator, invoice) sit above the debug panel (50)
+const ELEVATOR_REARM_DIST := 2    ## after "stay", walk this many cells off the elevator before it asks again
+const OBJECTIVE_INTERVAL := 0.25
+const FOLLOW_EXTRACT_CELLS := 3   ## followers within this many cells of the elevator ride along
+const INCAP_DELAY := 2.2
 
-## Survive scene reloads (F5 / next floor).
-static var _seed := -1
-static var _floor := 1
+## Survive scene reloads (next floor, next contract, F5).
+static var _run: ContractRun = null
+static var _session: ContractSession = null
 static var _spells: Array[String] = []
+static var _dev_released := false   ## F5 pressed: the dev flags that skip the board / picker stop applying
+static var _fade_in := false        ## the next scene fades in from black (arrived by elevator)
 
 var opts := {}
 var map: HexMap
@@ -52,10 +72,25 @@ var debug_panel: Control
 var game_stats: Label
 var subtitle: Label
 var _subtitle_tween: Tween
-var _ended := false
+var _screen_layer: CanvasLayer     ## board / elevator / invoice
+var _tracker: ObjectiveTracker
+var _ticker: Control
+var _banner: Label
+var _banner_tween: Tween
+var _site: SiteBuilder.Site
+var _menu: ElevatorMenu = null
+var _invoice: InvoiceScreen = null
+var _ended := false                ## the contract is over (invoice shown or coming)
+var _ending := false               ## the crew is down, the invoice is a moment away
+var _leaving := false              ## a scene change is under way
+var _elev_armed := true
+var _objective_t := 0.0
 var _stats_timer := 0.0
 var _kills := 0
 var _exit_cell := Vector2i(1 << 20, 1 << 20)
+var _closed_gates: Dictionary = {}  ## instance id -> true, so a gate pays once
+var _emp_cause: Dictionary = {}     ## employee instance id -> last culprit name
+var _player_down_noted := false
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 
@@ -63,12 +98,23 @@ var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 func _ready() -> void:
 	InputSetup.ensure_actions()
 	_parse_args()
-	_build_world()
-	_setup_voice()
-	if _spells.is_empty():
-		_show_picker()
-	else:
-		_start()
+	if opts.has("invoice_demo"):
+		_invoice_demo()
+		return
+	_resolve_run()
+	if _session == null:
+		_show_board()
+		return
+	_enter_floor()
+
+
+## Forget the contract in progress (tests; F5 and "next contract" do the same inline).
+static func reset_flow() -> void:
+	_run = null
+	_session = null
+	_spells.clear()
+	_dev_released = false
+	_fade_in = false
 
 
 func _exit_tree() -> void:
@@ -85,6 +131,8 @@ func _parse_args() -> void:
 		var nxt: String = args[i + 1] if i + 1 < args.size() else ""
 		match a:
 			"--seed": opts["seed"] = int(nxt)
+			"--contract": opts["contract"] = int(nxt)
+			"--floor": opts["floor"] = clampi(int(nxt), 1, ContractRun.FLOOR_COUNT)
 			"--spells": opts["spells"] = nxt
 			"--no-mic": opts["no_mic"] = true
 			"--shot": opts["shot"] = nxt
@@ -102,25 +150,96 @@ func _parse_args() -> void:
 			"--drop-near": opts["drop_near"] = nxt
 			"--slay-near": opts["slay_near"] = true
 			"--kit-demo": opts["kit_demo"] = nxt
-	if _seed < 0:
-		_seed = int(opts.get("seed", randi() % 100000))
-	if _spells.is_empty() and opts.has("spells"):
+			"--to-gate": opts["to_gate"] = true
+			"--to-exit": opts["to_exit"] = true
+			"--demo-damage": opts["demo_damage"] = true
+			"--show-panel": opts["show_panel"] = true
+			"--hurt": opts["hurt"] = float(nxt)
+			"--auto-elevator": opts["auto_elevator"] = nxt
+			"--invoice-demo": opts["invoice_demo"] = true
+
+
+# --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
+
+## Pick up the contract from an earlier floor, or (dev flags) start one directly.
+func _resolve_run() -> void:
+	if _session == null and not _dev_released:
+		var board_seed := int(opts.get("seed", randi() % 100000))
+		var run: ContractRun = null
+		if opts.has("contract"):
+			var k: int = opts["contract"]
+			run = ContractBoard.offers(board_seed)[k] if k >= 0 and k < ContractBoard.OFFER_COUNT else ContractBoard.run_for_seed(k)
+		elif opts.has("spells") or opts.has("floor"):
+			run = ContractBoard.run_for_seed(board_seed)
+		if run != null:
+			_begin_contract(run)
+	if _session != null and _spells.is_empty() and not _dev_released and opts.has("spells"):
 		for s in str(opts["spells"]).split(","):
 			var id := s.strip_edges()
 			if id in all_spells() and not _spells.has(id):
 				_spells.append(id)
 
 
-# --- World --------------------------------------------------------------------
+## A new contract: the Ledger restarts, nothing carries over, spells are picked again.
+func _begin_contract(run: ContractRun) -> void:
+	_run = run
+	_session = ContractSession.begin(run, int(opts.get("floor", 1)) if not _dev_released else 1)
+	_spells.clear()
+
+
+func _screens() -> CanvasLayer:
+	if _screen_layer == null:
+		_screen_layer = CanvasLayer.new()
+		_screen_layer.layer = SCREEN_LAYER
+		add_child(_screen_layer)
+	return _screen_layer
+
+
+func _show_board() -> void:
+	var board_seed := int(opts.get("seed", randi() % 100000))
+	var board := JobBoard.new(ContractBoard.offers(board_seed))
+	_screens().add_child(board)
+	board.picked.connect(func(run: ContractRun) -> void:
+		board.queue_free()
+		_begin_contract(run)
+		_enter_floor())
+	if opts.has("shot"):
+		_take_shot_later(str(opts["shot"]), float(opts.get("shot_after", 1.0)))
+
+
+## Build the current floor of the contract (the scene is fresh: first floor, or arrived by elevator).
+func _enter_floor() -> void:
+	_build_world()
+	_setup_voice()
+	if _fade_in:
+		_fade_in = false
+		_fade(1.0, 0.0, 0.5)
+	if _spells.is_empty():
+		_show_picker()
+	else:
+		_start()
+
+
+func _floor_n() -> int:
+	return _session.floor_number
+
+
+func _heroes() -> Array[Hero]:
+	var out: Array[Hero] = [player]
+	out.append_array(allies)
+	return out
+
+
+# --- World --------------------------------------------------------------------------------------
 
 func _build_world() -> void:
-	map = DungeonGen.generate(_seed)
+	map = DungeonGen.generate(_run.floor_seed(_floor_n()))
 	if opts.has("stage_ledge"):
 		_stage_plateau()
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)
-	GameWorld.begin(map, world, _seed)
+	GameWorld.begin(map, world, _run.floor_seed(_floor_n()))
 	GameWorld.actor_died.connect(_on_actor_died)
 
 	var view := HexMapView.new()
@@ -148,7 +267,6 @@ func _build_world() -> void:
 	var gasket := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Gasket", Color(0.7, 0.4, 0.85), "sword", GasketModel.new() if faceted else null, HeroKit.GASKET)
 	HeroFactory.make_ally(gasket, player, false, 3.9)
 	allies = [rebar, gasket]
-	player.died.connect(func() -> void: _end("You died\nF5 for a new dungeon", Color(1.0, 0.4, 0.35)))
 
 	rig = CameraRig.new()
 	rig.name = "CameraRig"
@@ -185,35 +303,22 @@ func _free_cells_near(c: Vector2i, radius: int) -> Array[Vector2i]:
 	return out
 
 
-## One pack per room except the start room; later rooms and floors get bigger budgets.
-func _populate_monsters() -> void:
-	var rooms := {}
-	for c: Vector2i in map.cells:
-		var tag: String = map.cells[c].tag
-		if tag.begins_with("room:"):
-			if not rooms.has(tag):
-				var cells: Array[Vector2i] = []
-				rooms[tag] = cells
-			rooms[tag].append(c)
-	var start: Vector2i = map.cells_with_tag("start")[0]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = _seed * 31 + _floor
-	var keys := rooms.keys()
-	keys.sort()
-	for tag: String in keys:
-		var cells: Array[Vector2i] = rooms[tag]
-		if _room_has_start(cells, start):
-			continue
-		var idx := int(tag.trim_prefix("room:"))
-		var budget := ROOM_BUDGET_BASE + ROOM_BUDGET_PER_ROOM * idx + ROOM_BUDGET_PER_FLOOR * (_floor - 1)
-		MonsterFactory.spawn_pack(cells, budget, rng)
-
-
-func _room_has_start(cells: Array[Vector2i], start: Vector2i) -> bool:
-	for c in cells:
-		if Hex.distance(c, start) <= 3:
-			return true
-	return false
+## Everything the contract puts on this floor: hellgates, employees, priced props, a clue note, and the
+## monster packs (one per room but the start room, leaning toward the pest). Then the session starts the floor.
+func _populate_site() -> void:
+	_site = SiteBuilder.build(map, _run, _floor_n())
+	var origin := _site.origin_gate != null
+	var small := _site.gates.size() - (1 if origin else 0)
+	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned)
+	for g in _site.gates:
+		if g.has_signal("closed"):
+			g.connect("closed", _on_gate_closed)
+	for e in _site.employees:
+		e.damaged.connect(func(_amount: float, source: Node) -> void: _emp_cause[e.get_instance_id()] = Ledger.culprit_name(source))
+	for n in _site.notes:
+		n.connect("read", _on_note_read)
+	_log("site: %d gates%s, %d employees, %d props, %d monsters (%d pests: %s)" % [small, " + origin" if origin else "", _site.employees.size(),
+		_site.props.size(), _site.monsters.size(), _site.pest_spawned, _run.pest], Color(0.8, 0.8, 1.0))
 
 
 # --- Voice --------------------------------------------------------------------
@@ -327,7 +432,7 @@ func _on_console(text: String) -> void:
 		voice.inject_text(text)
 
 
-# --- Flow ---------------------------------------------------------------------
+# --- Floor start ---------------------------------------------------------------------------------
 
 func _show_picker() -> void:
 	controller.enabled = false
@@ -347,13 +452,21 @@ func _start() -> void:
 	hud.bind(player, allies)
 	hud.enable_console()
 	controller.enabled = true
-	_populate_monsters()
+	_apply_carry()
+	if opts.has("hurt") and not _fade_in_hurt_done():
+		for h in _heroes():
+			h.hp = maxf(1.0, h.hp - float(opts["hurt"]))
+			h._refresh_bar()
+	_populate_site()
 	_spawn_near()
-	if opts.has("shot"):   # keep screenshots clear of the banner and the voice panel
+	_build_contract_ui()
+	_dev_teleports()
+	if opts.has("shot") and not opts.has("show_panel"):   # keep screenshots clear of the banner and the voice panel
 		debug_panel.visible = false
 	else:
-		hud.show_center("Floor %d\nReach the magenta exit" % _floor, Color(0.8, 0.9, 1.0), 2.0)
-	_log("floor %d  seed %d  spells %s" % [_floor, _seed, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
+		hud.show_center("Floor %d of %d" % [_floor_n(), ContractRun.FLOOR_COUNT], Color(0.8, 0.9, 1.0), 2.0)
+	_story_banner()
+	_log("floor %d/%d  seed %d  %s  spells %s" % [_floor_n(), ContractRun.FLOOR_COUNT, _run.floor_seed(_floor_n()), _run.company, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
 	_drop_near()
 	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
 		var marker := Node3D.new()
@@ -371,32 +484,416 @@ func _start() -> void:
 		if centre != Vector3.INF:
 			controller.aim_override = centre
 		_cast(str(opts["autocast"]), 1.0, "autocast")
+	if opts.has("demo_damage"):
+		get_tree().create_timer(1.0).timeout.connect(func() -> void:
+			Ledger.damage("Vintage 1787 wine barrel", 4000, player)
+			Ledger.damage("Zen fountain", 900, allies[0]))
 	if opts.has("shot"):
 		_take_shot_later(str(opts["shot"]), float(opts.get("shot_after", 3.0)))
+
+
+## Heroes arrive as the previous floor left them (HP, downed). A downed player hands the camera to a living ally.
+func _apply_carry() -> void:
+	for h in _heroes():
+		_session.apply_carry(h)
+	if player.dead:
+		controller.enabled = false
+		_follow_living_ally()
+
+
+## --hurt applies on floor 1 of a contract only (so the carry-over on later floors is visible).
+func _fade_in_hurt_done() -> bool:
+	return _floor_n() > 1
+
+
+func _follow_living_ally() -> void:
+	for a in allies:
+		if not a.dead:
+			rig.target = a
+			return
+
+
+func _build_contract_ui() -> void:
+	_tracker = ObjectiveTracker.new()
+	hud.add_overlay(_tracker)
+	_ticker = ContractParts.make_ticker()
+	if _ticker != null:
+		hud.add_overlay(_ticker)
+	_banner = Label.new()
+	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_banner.offset_top = 120
+	_banner.custom_minimum_size = Vector2(500, 0)
+	_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_banner.add_theme_font_size_override("font_size", 22)
+	_banner.add_theme_color_override("font_outline_color", Color.BLACK)
+	_banner.add_theme_constant_override("outline_size", 7)
+	_banner.modulate.a = 0.0
+	hud.add_overlay(_banner)
+	Ledger.line_added.connect(_on_ledger_line)
+	_update_tracker()
+
+
+## The story at the top of each floor: the flavour of how the incident reached here, then (floor 1) the cause.
+func _story_banner() -> void:
+	var notes: Array = _run.story["floor_notes"]
+	var text := str(notes[_floor_n() - 1])
+	if _floor_n() == 1:
+		text = "%s\n%s" % [str(_run.story["event"]), text]
+	_show_banner(text, 7.0)
+
+
+func _show_banner(text: String, hold: float) -> void:
+	if _banner == null:
+		return
+	if _banner_tween:
+		_banner_tween.kill()
+	_banner.text = text
+	_banner.modulate.a = 1.0
+	_banner_tween = create_tween()
+	_banner_tween.tween_interval(hold)
+	_banner_tween.tween_property(_banner, "modulate:a", 0.0, 0.8)
+
+
+func _on_note_read(text: String) -> void:
+	_show_banner("A note: " + text, 8.0)
+	_log("note: " + text, Color(1.0, 0.95, 0.7))
+
+
+# --- Objectives ------------------------------------------------------------------------------------
+
+func _on_gate_closed(gate: Actor) -> void:
+	var id := gate.get_instance_id()
+	if _closed_gates.has(id) or _session == null or _ended:
+		return
+	_closed_gates[id] = true
+	var is_origin := gate == _site.origin_gate
+	var pay := _session.gate_closed(is_origin)
+	if is_origin:
+		hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
+		_show_banner("The origin gate is shut. The site calms down. The invoice does not.", 6.0)
+	_log("%s closed  +%s" % ["ORIGIN gate" if is_origin else "hellgate", ContractRun.money(pay)], Color(0.6, 1.0, 0.7))
+	_objective_t = 0.0   # re-check cleanliness now
+
+
+func _on_ledger_line(line: Dictionary) -> void:
+	if str(line["kind"]) == "earn":
+		var lbl := str(line["label"])
+		if lbl.begins_with("Hellgate") or lbl.begins_with("Pest") or lbl.begins_with("ORIGIN"):
+			hud.show_message("%s  +%s" % [lbl, ContractRun.money(int(line["amount"]))], Color(0.6, 1.0, 0.7))
+	_update_tracker()
+
+
+## Living monsters of the contract's pest kind on this floor ("everything": every monster).
+func _pest_alive() -> int:
+	var n := 0
+	for node in get_tree().get_nodes_in_group("monsters"):
+		var m := node as Monster
+		if m == null or m.dead:
+			continue
+		if _run.pest == "everything" or m.kind == _run.pest:
+			n += 1
+	return n
+
+
+func _check_objectives() -> void:
+	var paid := _session.check_clean(_pest_alive())
+	if paid > 0:
+		hud.show_center("FLOOR CLEAN", Color(0.6, 1.0, 0.8), 1.8)
+		_log("floor clean: %s cleared  +%s" % [ClientArchetype.pest_name(_run.pest), ContractRun.money(paid)], Color(0.6, 1.0, 0.7))
+	_update_tracker()
+
+
+func _update_tracker() -> void:
+	if _tracker == null or _session == null:
+		return
+	var st := _session.state()
+	var rows: Array[Dictionary] = []
+	if not st.is_empty():
+		var total := int(st["gates_total"])
+		if total > 0:
+			var closed := int(st["gates_closed"])
+			rows.append({"text": "Close hellgates", "detail": "%d / %d" % [closed, total], "state": "done" if closed >= total else ("partial" if closed > 0 else "todo")})
+		if bool(st["origin"]):
+			rows.append({"text": "ORIGIN gate", "detail": "closed" if bool(st["origin_closed"]) else "OPEN", "state": "done" if bool(st["origin_closed"]) else "todo"})
+		var left := _pest_alive()
+		var clean := bool(st["pest_paid"])
+		rows.append({"text": "Exterminate %s" % ClientArchetype.pest_name(_run.pest), "detail": "clean" if clean else "%d left" % left, "state": "done" if clean else "todo"})
+		var alive_here := 0
+		var following := 0
+		for e in _site.employees:
+			if is_instance_valid(e) and not e.dead:
+				alive_here += 1
+				if e.has_method("is_following") and bool(e.call("is_following")):
+					following += 1
+		var spawned := int(st["employees"])
+		if spawned > 0:
+			var lost := int(st["lost"])
+			var detail := "%d alive" % alive_here
+			if following > 0:
+				detail += ", %d with you" % following
+			if lost > 0:
+				detail += ", %d lost" % lost
+			rows.append({"text": "Employees", "detail": detail, "state": "fail" if lost > 0 else "todo"})
+	_tracker.show_state("FLOOR %d / %d" % [_floor_n(), ContractRun.FLOOR_COUNT], _run.company, rows, Ledger.payout(), Ledger.deducted())
+	if _ticker != null:
+		_ticker.offset_top = _tracker.offset_bottom + 10.0
+		_ticker.offset_bottom = _ticker.offset_top + 220.0
 
 
 func _on_actor_died(a: Actor) -> void:
 	if a.team == GameWorld.TEAM_MONSTERS:
 		_kills += 1
 		_log("%s died" % a.display_name, Color(0.7, 0.7, 0.7))
-	else:
+	elif a.team == GameWorld.TEAM_HEROES:
 		_log("%s is down!" % a.display_name, Color(1.0, 0.45, 0.45))
+	elif _site != null and _site.employees.has(a):
+		var cause: String = str(_emp_cause.get(a.get_instance_id(), "unknown"))
+		_session.employee_lost(a.display_name, cause)
+		_log("%s was lost (%s)" % [a.display_name, cause], Color(1.0, 0.6, 0.4))
+		hud.show_message("%s lost (%s)  -$10" % [a.display_name, cause], Color(1.0, 0.55, 0.4))
+		_update_tracker()
 
 
-func _end(msg: String, color: Color) -> void:
+# --- The elevator ----------------------------------------------------------------------------------------
+
+func _check_elevator() -> void:
+	if _menu != null or _leaving:
+		return
+	var on_exit := false
+	for h in _heroes():
+		if not h.dead and h.current_cell() == _exit_cell:
+			on_exit = true
+			break
+	if not on_exit:
+		if _elev_armed:
+			return
+		var far := true
+		for h in _heroes():
+			if not h.dead and Hex.distance(h.current_cell(), _exit_cell) <= ELEVATOR_REARM_DIST:
+				far = false
+		_elev_armed = far
+		return
+	if _elev_armed:
+		_open_elevator()
+
+
+## Employees that follow a hero and stand within a few cells of the elevator ride out with the crew.
+func _followers_near_exit() -> Array[Actor]:
+	var out: Array[Actor] = []
+	if _site == null:
+		return out
+	for e in _site.employees:
+		if is_instance_valid(e) and not e.dead and e.has_method("is_following") and bool(e.call("is_following")):
+			if Hex.distance(e.current_cell(), _exit_cell) <= FOLLOW_EXTRACT_CELLS:
+				out.append(e)
+	return out
+
+
+func _elevator_lines() -> Array[String]:
+	var lines: Array[String] = []
+	var st := _session.state()
+	if not st.is_empty():
+		var total := int(st["gates_total"])
+		if total > 0:
+			lines.append("Hellgates closed on this floor: %d of %d." % [int(st["gates_closed"]), total])
+		if bool(st["origin"]):
+			lines.append("Origin gate: %s." % ("closed" if bool(st["origin_closed"]) else "still open (the biggest line on the invoice)"))
+		lines.append("Floor %s." % ("clean" if bool(st["pest_paid"]) else "not clean: %d %s left" % [_pest_alive(), ClientArchetype.pest_name(_run.pest)]))
+	lines.append("Objectives not met do not pay. Damage comes out of what you earned.")
+	return lines
+
+
+func _open_elevator() -> void:
+	var info := {
+		"floor": _floor_n(), "floor_count": ContractRun.FLOOR_COUNT,
+		"payout": Ledger.payout(), "damages": Ledger.deducted(),
+		"followers": _followers_near_exit().size(), "lines": _elevator_lines(),
+	}
+	_menu = ElevatorMenu.new(info)
+	_screens().add_child(_menu)
+	_freeze(true)
+	_menu.go_down.connect(func() -> void: _use_elevator(true))
+	_menu.cash_out.connect(func() -> void: _use_elevator(false))
+	_menu.stay.connect(_close_elevator.bind(true))
+	if opts.has("auto_elevator"):
+		get_tree().create_timer(1.2).timeout.connect(func() -> void:
+			if _menu != null:
+				_use_elevator(str(opts["auto_elevator"]) == "down" and _menu.can_descend()))
+
+
+func _close_elevator(disarm: bool) -> void:
+	if _menu != null:
+		_menu.queue_free()
+		_menu = null
+	_freeze(false)
+	if disarm:
+		_elev_armed = false
+
+
+## Stop (or resume) the simulation and the player's input; the HUD and menus keep running.
+func _freeze(on: bool) -> void:
+	if GameWorld.root != null:
+		GameWorld.root.process_mode = Node.PROCESS_MODE_DISABLED if on else Node.PROCESS_MODE_INHERIT
+	if controller != null and not on:
+		controller.enabled = not player.dead and not _ended
+	elif controller != null:
+		controller.enabled = false
+
+
+func _use_elevator(descend: bool) -> void:
+	if _leaving:
+		return
+	var riders := _followers_near_exit()
+	for e in riders:
+		if e.has_method("extract"):
+			e.call("extract")
+	_session.extract(riders.size(), player)
+	if riders.size() > 0:
+		_log("%d employees extracted  +%s" % [riders.size(), ContractRun.money(riders.size() * ContractRun.EMPLOYEE_EXTRACTED)], Color(0.6, 1.0, 0.7))
+	if not descend:
+		_end_contract(ContractSession.END_CASHED_OUT)
+		return
+	_leaving = true
+	_close_elevator(false)
+	_freeze(true)
+	_session.save_carry(_heroes())
+	_session.floor_number += 1
+	_fade(0.0, 1.0, 0.45, func() -> void:
+		_fade_in = true
+		get_tree().reload_current_scene())
+
+
+## A full-screen black overlay that fades from alpha `a` to `b`.
+func _fade(a: float, b: float, seconds: float, done: Callable = Callable()) -> void:
+	var rect := ColorRect.new()
+	rect.color = Color(0, 0, 0, a)
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_screens().add_child(rect)
+	var tw := create_tween()
+	tw.tween_property(rect, "color:a", b, seconds)
+	if done.is_valid():
+		tw.tween_callback(done)
+	elif b <= 0.0:
+		tw.tween_callback(rect.queue_free)
+
+
+# --- The end: the invoice --------------------------------------------------------------------------------
+
+## All heroes down, or the crew cashed out: pay the employees still alive, then show the invoice.
+func _end_contract(reason: String) -> void:
 	if _ended:
 		return
 	_ended = true
-	hud.show_center(msg, color)
+	_close_elevator(false)
+	_freeze(true)
+	_session.finish(reason)
+	var inv := ContractInvoice.build(_session)
+	_log("contract over (%s): earned %s, damages %s, payout %s" % [reason, ContractRun.money(int(inv["earned"])), ContractRun.money(int(inv["damages"])), ContractRun.money(int(inv["payout"]))], Color(1.0, 0.9, 0.5))
+	_show_invoice(inv)
 
 
-func _physics_process(_delta: float) -> void:
-	if _ended or player == null or player.dead:
+func _show_invoice(inv: Dictionary) -> void:
+	if debug_panel != null:
+		debug_panel.visible = false
+	_invoice = InvoiceScreen.new(inv)
+	_screens().add_child(_invoice)
+	_invoice.next_contract.connect(_on_next_contract)
+	if opts.has("shot") and _session != null:
+		_take_shot_later(str(opts["shot"]), 1.5)
+
+
+func _on_next_contract() -> void:
+	if _leaving:
 		return
-	if player.current_cell() == _exit_cell:
-		_log("exit reached", Color(0.6, 1.0, 1.0))
-		_floor += 1
-		_end("Exit reached!\nF5 for floor %d" % _floor, Color(0.6, 1.0, 0.9))
+	_leaving = true
+	_dev_released = true
+	_run = null
+	_session = null
+	_spells.clear()
+	Ledger.end_contract()
+	get_tree().reload_current_scene()
+
+
+## --invoice-demo: a sample contract with a believable ledger, straight to the invoice.
+func _invoice_demo() -> void:
+	var run := ContractBoard.run_for_seed(int(opts.get("seed", 12)))
+	var s := ContractSession.begin(run, 1)
+	var wick := _demo_hero("Wick")
+	var rebar := _demo_hero("Rebar")
+	var gasket := _demo_hero("Gasket")
+	s.enter_floor(1, run.floor_gates[0], false, run.floor_employees[0], 12)
+	for _i in run.floor_gates[0]:
+		s.gate_closed(false)
+	s.check_clean(0)
+	s.extract(2)
+	Ledger.damage("Wine rack", 1200, wick)
+	s.enter_floor(2, run.floor_gates[1], false, run.floor_employees[1], 14)
+	for _i in run.floor_gates[1]:
+		s.gate_closed(false)
+	s.check_clean(0)
+	Ledger.damage("Zen fountain", 900, rebar)
+	Ledger.damage("Crystal lamp", 600, wick)
+	Ledger.damage("Crystal lamp", 600, gasket)
+	s.employee_lost("Colin (valet)", "Wick")
+	s.enter_floor(3, 0, true, run.floor_employees[2], 18)
+	s.gate_closed(true)
+	s.check_clean(0)
+	s.extract(1)
+	Ledger.damage("Gold toilet", 15000, wick)
+	s.finish(ContractSession.END_CASHED_OUT)
+	var inv := ContractInvoice.build(s)
+	for h in [wick, rebar, gasket]:
+		h.free()
+	_session = s
+	_run = run
+	_show_invoice(inv)
+	_invoice.next_contract.disconnect(_on_next_contract)
+
+
+func _demo_hero(hero_name: String) -> Actor:
+	var a := Actor.new()
+	a.display_name = hero_name
+	return a
+
+
+# --- Crew ------------------------------------------------------------------------------------------------
+
+## All heroes down ends the contract (the invoice still pays what was earned). A downed player hands the
+## camera to a living ally.
+func _check_crew() -> void:
+	var any_alive := false
+	for h in _heroes():
+		if not h.dead:
+			any_alive = true
+	if not any_alive:
+		if not _ending:
+			_ending = true
+			controller.enabled = false
+			hud.show_center("Crew incapacitated", Color(1.0, 0.4, 0.35))
+			get_tree().create_timer(INCAP_DELAY).timeout.connect(func() -> void: _end_contract(ContractSession.END_INCAPACITATED))
+		return
+	if player.dead and not _player_down_noted:
+		_player_down_noted = true
+		controller.enabled = false
+		_follow_living_ally()
+		hud.show_message("You are down. Your crew fights on.", Color(1.0, 0.6, 0.45))
+
+
+func _physics_process(delta: float) -> void:
+	if _ended or _leaving or player == null or _session == null:
+		return
+	_check_crew()
+	if _ending:
+		return
+	_check_elevator()
+	_objective_t -= delta
+	if _objective_t <= 0.0:
+		_objective_t = OBJECTIVE_INTERVAL
+		_check_objectives()
 
 
 func _process(delta: float) -> void:
@@ -410,11 +907,14 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
-		_seed = randi() % 100000
-		if not _ended or player.dead:
-			_floor = 1
+		# Back to the job board: abandon the contract (dev flags that skip the board stop applying).
+		_dev_released = true
+		_run = null
+		_session = null
+		_spells.clear()
+		Ledger.end_contract()
 		get_tree().reload_current_scene()
-	elif event.is_action_pressed("toggle_voice_debug"):
+	elif event.is_action_pressed("toggle_voice_debug") and debug_panel != null and _invoice == null:
 		debug_panel.visible = not debug_panel.visible
 
 
@@ -422,7 +922,7 @@ func _update_stats() -> void:
 	if game_stats == null or player == null:
 		return
 	var lines: Array[String] = []
-	lines.append("fps %d   floor %d   seed %d" % [Engine.get_frames_per_second(), _floor, _seed])
+	lines.append("fps %d   floor %d/%d   seed %d" % [Engine.get_frames_per_second(), _floor_n(), ContractRun.FLOOR_COUNT, _run.floor_seed(_floor_n())])
 	var c := player.current_cell()
 	var cell: HexMap.Cell = map.get_cell(c)
 	lines.append("you  hp %d/%d  cell %s  level %s%s" % [player.hp, player.max_hp, c,
@@ -455,7 +955,9 @@ func _update_stats() -> void:
 	lines.append("monsters %d (%d fighting)  kills %d" % [monsters.size(), active, _kills])
 	if not kinds.is_empty():
 		lines.append("  " + "  ".join(kinds))
-	lines.append("exit %d hexes away" % Hex.distance(c, _exit_cell))
+	lines.append("contract %s  pest %s  value %s" % [_run.invoice_number, _run.pest, ContractRun.money(_run.contract_value)])
+	lines.append("payout %s  earned %s  damages %s" % [ContractRun.money(Ledger.payout()), ContractRun.money(Ledger.earned()), ContractRun.money(Ledger.damages())])
+	lines.append("elevator %d hexes away" % Hex.distance(c, _exit_cell))
 	game_stats.text = "\n".join(lines)
 
 
@@ -471,6 +973,35 @@ func _take_shot_later(path: String, after: float) -> void:
 	get_viewport().get_texture().get_image().save_png(path)
 	print("[game] screenshot saved: ", path)
 	get_tree().quit()
+
+
+## Dev flags --to-gate / --to-exit: move the crew (screenshots).
+func _dev_teleports() -> void:
+	if opts.has("to_gate") and _site != null and not _site.gates.is_empty():
+		var gc: Vector2i = _site.plan.gates[0]["cell"]
+		var best := gc
+		var best_d := 99
+		for c in Hex.ring(gc, 5):
+			var cell: HexMap.Cell = map.get_cell(c)
+			if cell != null and cell.type == HexMap.Tile.FLOOR and absi(cell.level - map.get_cell(gc).level) <= 1:
+				var d := Hex.distance(c, gc)
+				if d < best_d:
+					best_d = d
+					best = c
+		_teleport_crew(best)
+	elif opts.has("to_exit"):
+		_teleport_crew(_exit_cell)
+
+
+func _teleport_crew(cell: Vector2i) -> void:
+	var spots := _free_cells_near(cell, 2)
+	var list := _heroes()
+	for i in list.size():
+		var c := cell if i == 0 else spots[(i - 1) % spots.size()]
+		var lv := map.ground_level(Hex.to_world(c))
+		list[i].global_position = Hex.to_world(c, 0.0 if is_nan(lv) else lv)
+		list[i].snap_to_ground()
+	rig.snap()
 
 
 ## Dev flag --give: "heal:9,corn:3" slots (or tops up) those spells with those charges.

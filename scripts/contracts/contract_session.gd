@@ -1,0 +1,175 @@
+class_name ContractSession
+extends RefCounted
+## The live state of one contract: which floor the crew is on, what carries over between floors, and
+## the objective bookkeeping that turns events (a gate closed, a floor cleaned, employees extracted)
+## into Ledger lines. No scene dependencies, so it is testable without a game running.
+##
+## Rules (docs/design/contracts.md decisions, ContractRun for the pay table):
+##  - everything resets per contract: a new session starts the Ledger over and carries nothing;
+##  - within a contract HP and downed state carry from floor to floor (save_carry / apply_carry);
+##  - leaving early always works: only met objectives were paid, damage comes out of earnings
+##    (capped at the contract value, never below $0) -- that is all Ledger.payout() already does;
+##  - at the end every employee still alive (and not extracted) pays $10, wherever they are.
+
+const END_CASHED_OUT := "cashed_out"
+const END_INCAPACITATED := "incapacitated"
+
+var run: ContractRun
+var floor_number := 1
+var finished := false
+var end_reason := ""
+## hero display_name -> {"hp": float, "dead": bool}
+var carry: Dictionary = {}
+## floor -> {gates_total, gates_closed, origin, origin_closed, employees, extracted, lost, pest_spawned, pest_paid}
+var floors: Dictionary = {}
+## [{name, cause, floor}] employees that died
+var lost: Array[Dictionary] = []
+var extracted_total := 0
+
+
+## Start a contract: the Ledger restarts at the contract value, nothing carries over.
+static func begin(contract: ContractRun, start_floor: int = 1) -> ContractSession:
+	var s := ContractSession.new()
+	s.run = contract
+	s.floor_number = clampi(start_floor, 1, ContractRun.FLOOR_COUNT)
+	Ledger.begin_contract(contract.contract_value)
+	Ledger.floor_number = s.floor_number
+	return s
+
+
+## The crew arrives on floor `f` with what the site builder placed there.
+func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spawned: int) -> void:
+	floor_number = f
+	Ledger.floor_number = f
+	floors[f] = {
+		"gates_total": gates, "gates_closed": 0,
+		"origin": has_origin, "origin_closed": false,
+		"employees": employees, "extracted": 0, "lost": 0,
+		"pest_spawned": pest_spawned, "pest_paid": false,
+	}
+
+
+func state(f: int = -1) -> Dictionary:
+	return floors.get(floor_number if f < 0 else f, {})
+
+
+# --- HP / downed carry-over --------------------------------------------------------------
+
+func save_carry(heroes: Array[Hero]) -> void:
+	carry.clear()
+	for h in heroes:
+		if is_instance_valid(h):
+			carry[h.display_name] = {"hp": h.hp, "dead": h.dead}
+
+
+## Put a hero back as the previous floor left them: same HP, and downed if they were downed.
+## Returns true if the hero is downed.
+func apply_carry(hero: Hero) -> bool:
+	if not carry.has(hero.display_name):
+		return false
+	var c: Dictionary = carry[hero.display_name]
+	if bool(c["dead"]):
+		hero.hp = 0.0
+		hero.die()
+		return true
+	hero.hp = clampf(float(c["hp"]), 1.0, hero.max_hp)
+	hero._refresh_bar()
+	return false
+
+
+# --- Objectives ----------------------------------------------------------------------------
+
+## A hellgate was closed. Pays the small-gate rate, or the origin rate for the origin gate.
+## Returns the pay (0 if it was a stray, already-paid or unknown gate).
+func gate_closed(origin: bool, who: Node = null) -> int:
+	var st := state()
+	if st.is_empty():
+		return 0
+	if origin:
+		if not bool(st["origin"]) or bool(st["origin_closed"]):
+			return 0
+		st["origin_closed"] = true
+		Ledger.earn("ORIGIN gate closed", run.origin_pay, who)
+		return run.origin_pay
+	if int(st["gates_closed"]) >= int(st["gates_total"]):
+		return 0
+	st["gates_closed"] = int(st["gates_closed"]) + 1
+	Ledger.earn("Hellgate closed", run.gate_pay, who)
+	return run.gate_pay
+
+
+func gates_open(f: int = -1) -> int:
+	var st := state(f)
+	if st.is_empty():
+		return 0
+	var open: int = int(st["gates_total"]) - int(st["gates_closed"])
+	if bool(st["origin"]) and not bool(st["origin_closed"]):
+		open += 1
+	return open
+
+
+## A floor is CLEAN when its gates are all closed and no pest-kind monster is left alive on it.
+## Call with the current pest count; pays this floor's share of the pest objective once.
+## A floor that never had any pest on it pays nothing (nothing to exterminate).
+func check_clean(pest_alive: int, who: Node = null) -> int:
+	var st := state()
+	if st.is_empty() or bool(st["pest_paid"]) or int(st["pest_spawned"]) <= 0:
+		return 0
+	if pest_alive > 0 or gates_open() > 0:
+		return 0
+	st["pest_paid"] = true
+	var pay: int = int(run.pest_floor_pay[floor_number - 1])
+	Ledger.earn("Pest cleared (%s)" % ClientArchetype.pest_name(run.pest), pay, who)
+	return pay
+
+
+func floor_clean(f: int = -1) -> bool:
+	var st := state(f)
+	return not st.is_empty() and bool(st["pest_paid"])
+
+
+func employee_lost(emp_name: String, cause: String) -> void:
+	var st := state()
+	if not st.is_empty():
+		st["lost"] = int(st["lost"]) + 1
+	lost.append({"name": emp_name, "cause": cause, "floor": floor_number})
+
+
+## `count` followers rode the elevator out: $100 each (instead of the $10 for being alive).
+func extract(count: int, who: Node = null) -> int:
+	var paid := 0
+	for _i in maxi(0, count):
+		Ledger.earn("Employee extracted", ContractRun.EMPLOYEE_EXTRACTED, who)
+		paid += ContractRun.EMPLOYEE_EXTRACTED
+	var st := state()
+	if not st.is_empty():
+		st["extracted"] = int(st["extracted"]) + maxi(0, count)
+	extracted_total += maxi(0, count)
+	return paid
+
+
+func employees_spawned() -> int:
+	var n := 0
+	for f in floors:
+		n += int(floors[f]["employees"])
+	return n
+
+
+## Employees still alive and not extracted, over every floor visited (an escort elsewhere counts).
+func employees_alive() -> int:
+	return maxi(0, employees_spawned() - lost.size() - extracted_total)
+
+
+## Close the contract: pays $10 per employee still alive, stops the Ledger. Idempotent.
+func finish(reason: String) -> void:
+	if finished:
+		return
+	finished = true
+	end_reason = reason
+	for _i in employees_alive():
+		Ledger.earn("Employee alive at close", ContractRun.EMPLOYEE_ALIVE)
+	Ledger.end_contract()
+
+
+func payout() -> int:
+	return Ledger.payout()
