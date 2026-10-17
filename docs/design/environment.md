@@ -110,3 +110,40 @@ the characters, to lock the look before building.
     theme-specific marks like wine splats in the cellar.
   - **Anything the player causes fades after 30 s:** fireball scorch, corn kernels, teeth debris,
     death stains.
+
+## Implementation of the themes (2026-10-17)
+Built in `scripts/world/themes/` (planner, pure data) and `scripts/art/lowpoly/props/decor_*.gd` (models), wired
+into `SiteBuilder.plan()`; the result is on the `SitePlan` (`room_themes`, `decor`, `lights`, `entrances`).
+- **Themes:** every room gets one from the site's pool; the start room is the **service entrance** (hazard tape,
+  a WET FLOOR sign); the floor-3 **origin room** gets the theme the story names (`RoomThemeDefs.ORIGIN_THEMES`,
+  e.g. "yoga studio" -> spa, "vat room" -> lab). The exit room and rooms with a hellgate in the middle are not
+  dealt a theme whose centrepiece needs the middle (pool).
+- **Placement rules** (`RoomThemeDefs`, `PricedProp.TABLE`): wall (back to the nearest wall, facing into the
+  room), corner (facing the centre), centre (focal point, facing the door, big rooms only), floor, and vignettes
+  placed as ONE unit (`ThemeVignettes`): cinema screen + 2-3 recliner rows, table + chairs, desk + monitor +
+  chair, bunk rows, bench + rack, candles in a ring around the chalk circle (drawn around the hellgate when
+  there is one), barrel clusters. Jitter is at most 8 degrees; a clear lane is kept in front of facing props; nothing
+  within 2 cells of a corridor, 3 of the start / exit / a hellgate; flat floor only; blocking pieces never cut a room
+  in two; decor is capped per room by size (`ThemeCtx`) and blocking pieces stay out of the middle.
+- **Camera:** placement prefers walls whose pieces face the iso camera (signs only on those), so the front of a
+  wall piece is what the player sees.
+- **Lighting:** one accent OmniLight per room (`ThemeLight`), colour per theme (cinema blue flicker, spa candle
+  warm, lab green, torture red, panic-room red pulse ...). `DungeonLook` keeps its own 12 downlights; the themes add
+  at most one per room (8-9 a floor).
+- **Dev flag:** `--to-theme <id>` puts the crew in the middle of the first room with that theme.
+
+## Mail packages (interactive set dressing) [decided, 2026-10-17]
+**The premise:** the client never even opened their mail, so the crew can steal it. Taped-up brown
+boxes, sometimes stacked 2–3 high, sit near room entrances and corridors as if just delivered:
+4–6 per floor. Any hit breaks one: melee, arrows, spells, shoves, Rebar's bowl. It's unopened
+mail, so breaking it is **not** property damage.
+
+| Contents | Chance | Effect |
+|---|---|---|
+| Pile of human skulls | 20% | decorative; tumbles out |
+| Tubs of yogurt | 20% | decorative; rolls around |
+| Loose pickles | 20% | decorative; scatters |
+| Spell component | 25% | a normal component pickup; doesn't count toward the per-floor monster drop cap |
+| Crypto cash | 15% | a random $200–$2,000, earned on the invoice as "Unclaimed crypto (intercepted mail)" |
+
+Spilled decorative contents fade after 30 s, like other player-caused marks.
