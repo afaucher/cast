@@ -28,6 +28,9 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if hero == null or hero.dead or not enabled or _typing():
 		return
+	if hero.is_helpless():
+		hero.climbing = false   # shoved or staggered: no steering, no attacks (voice casts still work)
+		return
 	var cam := _camera()
 	var iv := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var dir := move_direction(iv, cam)

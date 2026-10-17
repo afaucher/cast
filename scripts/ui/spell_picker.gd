@@ -1,7 +1,7 @@
 class_name SpellPicker
 extends Control
-## Pre-game screen: choose exactly 2 of the 4 spells. Click cards (or press
-## 1-4), then Start (or Enter). Add it under a Control (Hud.add_overlay), not a bare CanvasLayer. Emits picked(spells) with the ids in pick order.
+## Pre-game screen: choose exactly 2 of the 5 spells. Click cards (or press
+## 1-5), then Start (or Enter). Add it under a Control (Hud.add_overlay), not a bare CanvasLayer. Emits picked(spells) with the ids in pick order.
 
 signal picked(spells: Array[String])
 

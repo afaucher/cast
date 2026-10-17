@@ -19,6 +19,17 @@ const RANGED_COOLDOWN := 0.6
 const BOLT_SPEED := 16.0
 const BOLT_RANGE := 12.0
 const BOLT_SIZE := 0.13
+const MELEE_SHOVE := 0.7        ## mild outward nudge on every melee hit
+# Secondary attacks (RMB / the AI's ranged use), chosen by secondary_kind.
+const BOWL_COOLDOWN := 2.0
+const BOWL_DAMAGE := 6.0        ## monsters only; heroes are shoved for 0
+const BOWL_SHOVE := 3.5
+const BOWL_SPEED := 7.0
+const BOWL_RANGE := 9.0
+const SPIN_REACH := 1.9
+const SPIN_DAMAGE := 16.0       ## monsters only
+const SPIN_COOLDOWN := 1.4
+const SPIN_SHOVE := 2.2         ## everything in reach, teammates included
 const TURN_RATE := 18.0
 const KEY_MELEE := "_melee"
 const KEY_RANGED := "_ranged"
@@ -26,6 +37,9 @@ const SWING_REST_YAW := -20.0   # degrees; weapon rests slightly to the right of
 
 @export var hero_color := Color(0.3, 0.55, 0.95)
 @export var weapon_kind := "sword"   ## "sword" or "staff" (cosmetic)
+## What shoot() (RMB / the AI's ranged use) does: "bolt" (the weak ranged bolt / arrows),
+## "bowl" (Pebble's rolling boulder) or "spin" (Dagna's 360 degree whirl).
+@export var secondary_kind := "bolt"
 
 var is_player := false:
 	set(v):
@@ -91,7 +105,7 @@ func try_cast(id: String, power: float, aim: Vector3) -> bool:
 
 ## Sword/staff swing toward `dir` (X/Z). Returns false while on cooldown.
 func melee(dir: Vector3) -> bool:
-	if dead or cooldown_left(KEY_MELEE) > 0.0:
+	if dead or is_helpless() or cooldown_left(KEY_MELEE) > 0.0:
 		return false
 	dir.y = 0.0
 	if dir.length() < 0.001:
@@ -101,17 +115,57 @@ func melee(dir: Vector3) -> bool:
 	_ready_at[KEY_MELEE] = GameWorld.time + MELEE_COOLDOWN
 	for foe in GameWorld.actors_in_radius(global_position, MELEE_REACH, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
-	Combat.melee_arc(self, dir, MELEE_REACH, MELEE_ARC, MELEE_DAMAGE)
+	Combat.melee_arc(self, dir, MELEE_REACH, MELEE_ARC, MELEE_DAMAGE, MELEE_SHOVE)
 	Fx.slash_arc(global_position, dir, MELEE_REACH, MELEE_ARC, hero_color.lightened(0.5))
 	_swing_pose()
 	melee_swung.emit()
 	return true
 
 
-## Fire the weak ranged bolt toward `dir` (X/Z). Returns false while on cooldown.
+## The secondary attack toward `dir` (X/Z): the ranged bolt, Pebble's bowl or Dagna's spin,
+## per secondary_kind. Returns false while on cooldown.
 func shoot(dir: Vector3) -> bool:
-	if dead or cooldown_left(KEY_RANGED) > 0.0:
+	if dead or is_helpless() or cooldown_left(KEY_RANGED) > 0.0:
 		return false
+	match secondary_kind:
+		"bowl":
+			return _bowl(dir)
+		"spin":
+			return _spin()
+	return _bolt(dir)
+
+
+## Pebble's bowl: a boulder rolls along the ground toward `dir`, shoving everything it touches.
+func _bowl(dir: Vector3) -> bool:
+	dir.y = 0.0
+	if dir.length() < 0.001:
+		dir = facing
+	dir = dir.normalized()
+	facing = dir
+	_ready_at[KEY_RANGED] = GameWorld.time + BOWL_COOLDOWN
+	BowlBoulder.launch(self, dir, BOWL_SPEED, BOWL_RANGE, BOWL_DAMAGE, BOWL_SHOVE)
+	_bowl_pose()
+	bolt_fired.emit()
+	return true
+
+
+## Dagna's spin: everything within SPIN_REACH is shoved outward; monsters also take damage.
+func _spin() -> bool:
+	_ready_at[KEY_RANGED] = GameWorld.time + SPIN_COOLDOWN
+	for foe in GameWorld.actors_in_radius(global_position, SPIN_REACH, GameWorld.other_team(team)):
+		Fx.attach_hit_feedback(foe)
+	Combat.melee_arc(self, facing, SPIN_REACH, 360.0, SPIN_DAMAGE, SPIN_SHOVE)
+	for mate in GameWorld.actors_in_radius(global_position, SPIN_REACH, team):
+		if mate != self and absf(mate.global_position.y - global_position.y) <= 2.1 * Hex.LEVEL_HEIGHT:
+			mate.shove(mate.global_position - global_position, SPIN_SHOVE, self)
+	Fx.slash_arc(global_position, facing, SPIN_REACH, 360.0, hero_color.lightened(0.5))
+	_spin_pose()
+	bolt_fired.emit()
+	return true
+
+
+## Fire the weak ranged bolt toward `dir` (X/Z).
+func _bolt(dir: Vector3) -> bool:
 	dir.y = 0.0
 	if dir.length() < 0.001:
 		dir = facing
@@ -301,6 +355,27 @@ func _swing_pose() -> void:
 	_swing_tween = create_tween()
 	_swing_tween.tween_property(_weapon, "rotation:y", deg_to_rad(75), 0.11).set_trans(Tween.TRANS_SINE)
 	_swing_tween.tween_property(_weapon, "rotation:y", rest, 0.22).set_trans(Tween.TRANS_SINE)
+
+
+func _bowl_pose() -> void:
+	if visual_override != null and visual_override.has_method("bowl_pose"):
+		visual_override.call("bowl_pose")
+		return
+	_shoot_pose()
+
+
+func _spin_pose() -> void:
+	if visual_override != null and visual_override.has_method("spin"):
+		visual_override.call("spin", 0.5)
+		return
+	if _weapon == null:
+		return
+	if _swing_tween and _swing_tween.is_valid():
+		_swing_tween.kill()
+	_weapon.rotation = Vector3(0, 0, 0)
+	_swing_tween = create_tween()
+	_swing_tween.tween_property(_weapon, "rotation:y", TAU, 0.4).set_trans(Tween.TRANS_SINE)
+	_swing_tween.tween_callback(func() -> void: _weapon.rotation = Vector3(0, deg_to_rad(SWING_REST_YAW), 0))
 
 
 func _shoot_pose() -> void:

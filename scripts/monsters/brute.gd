@@ -11,6 +11,7 @@ const SPEED := 2.2
 const SLAM_DAMAGE := 25.0
 const SLAM_RADIUS := 2.0
 const SLAM_EDGE_MULT := 0.5
+const SLAM_SHOVE := 1.0         ## outward push on everything the slam hits
 const WINDUP := 0.9
 const COOLDOWN := 2.4
 const AGGRO := 9.0
@@ -32,6 +33,7 @@ func _init() -> void:
 	move_speed = SPEED
 	radius = 0.6
 	can_climb = false
+	shove_mult = 0.4
 	aggro_range = AGGRO
 	attack_damage = SLAM_DAMAGE
 	attack_windup = WINDUP
@@ -99,6 +101,7 @@ func _strike() -> void:
 		if d > SLAM_RADIUS + 0.1:
 			continue   # judged by the hero's center, so the ring is honest
 		a.apply_damage(SLAM_DAMAGE * lerpf(1.0, SLAM_EDGE_MULT, clampf(d / SLAM_RADIUS, 0.0, 1.0)), self)
+		a.shove(a.global_position - pos, SLAM_SHOVE, self)
 	slammed.emit(pos)
 	_spawn_shockwave(pos)
 

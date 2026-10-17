@@ -223,3 +223,16 @@ func cast_pose() -> void:
 	_kick_arm("arm_r", 0.0, 0.9, 0.1, 0.1, 0.5)
 
 
+
+
+## An underhand bowling throw (the hero's bowl pose): the right arm swings back, then sweeps
+## forward and low while the body leans into it.
+func bowl_pose() -> void:
+	if not is_inside_tree():
+		return
+	_kick_arm("arm_r", -1.1, 1.3, 0.14, 0.09, 0.4)
+	var body := parts["body"] as MeshInstance3D
+	var lean := create_tween()
+	lean.tween_property(body, "rotation:x", -0.08, 0.14).set_trans(Tween.TRANS_SINE)
+	lean.tween_property(body, "rotation:x", 0.22, 0.09).set_trans(Tween.TRANS_SINE)
+	lean.tween_property(body, "rotation:x", 0.0, 0.4).set_trans(Tween.TRANS_BACK)

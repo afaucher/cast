@@ -26,6 +26,7 @@ const HOME_ARRIVE_DIST := 0.5
 const WINDUP_LOCK_FRACTION := 0.4 ## facing stops tracking the target for the last 40% of the windup
 const WINDUP_TINT := Color(1.0, 0.22, 0.0)
 const DEATH_TIME := 0.9
+const MELEE_SHOVE := 0.35         ## mild outward nudge on every melee hit
 
 # --- Tunables (kinds set these in _init) --------------------------------------------
 var kind := "monster"
@@ -152,6 +153,10 @@ func _physics_process(delta: float) -> void:
 		_home_set = true
 		home = global_position
 		_prog_pos = global_position
+	if is_helpless():
+		# Shoved or staggered: no steering, no attacks (and the leash does not tick).
+		_update_visual(delta)
+		return
 	match state:
 		State.IDLE:
 			_tick_idle(delta)
@@ -244,7 +249,7 @@ func _tick_return(delta: float) -> void:
 
 ## Override: deliver the attack. Default is a melee cone toward `facing`.
 func _strike() -> void:
-	Combat.melee_arc(self, facing, attack_reach, attack_arc_deg, attack_damage)
+	Combat.melee_arc(self, facing, attack_reach, attack_arc_deg, attack_damage, MELEE_SHOVE)
 
 
 func _begin_windup(duration: float) -> void:
@@ -438,6 +443,8 @@ func _on_stuck() -> void:
 
 ## Monsters that cannot climb refuse CLIMB moves (so heroes can escape onto +2 ledges).
 func move(dir: Vector3, delta: float) -> bool:
+	if is_shoved():
+		return false
 	if not can_climb and not dead:
 		var d := dir
 		d.y = 0.0
@@ -465,6 +472,29 @@ func move(dir: Vector3, delta: float) -> bool:
 				facing = d.normalized()
 				return moved
 	return super.move(dir, delta)
+
+
+# --- Shove hooks -------------------------------------------------------------------------------
+
+## A shove or stagger cancels a wind-up (the attack never lands).
+func _on_interrupted() -> void:
+	if state == State.ATTACK:
+		_end_windup()
+		state = State.CHASE
+	_nudge_t = 0.0
+	_prog_t = 0.0
+
+
+## Being shoved away is not leashing: re-home where the monster lands (so it neither walks
+## back and heals to full, nor tries to path up a ledge it was thrown off).
+func _on_shove_ended() -> void:
+	if state != State.RETURN:
+		home = global_position
+	_prog_pos = global_position
+	_prog_t = 0.0
+	_path.clear()
+	_path_goal = Vector2i(1 << 30, 1 << 30)
+	_repath_t = 0.0
 
 
 # --- Damage / death ---------------------------------------------------------------------------

@@ -63,7 +63,7 @@ func is_ready() -> bool
 func get_level() -> float                          # 0..1 mic level for a meter
 func inject_text(text: String) -> void             # debug: act as if `text` was heard (typed console / tests)
 ```
-Spell ids are lowercase: `heal`, `fireball`, `armor`, `corn`. The voice layer listens for **all**
+Spell ids are lowercase: `heal`, `fireball`, `armor`, `corn`, `tentacles`. The voice layer listens for **all**
 spells. The game decides whether the local hero knows the spell (and fizzles it if not).
 
 ### Spells (`scripts/spells/spell_book.gd`, `class_name SpellBook`)
@@ -71,6 +71,23 @@ spells. The game decides whether the local hero knows the spell (and fizzles it 
 const SPELLS := { "heal": {"name": "Heal", "cooldown": 8.0, "color": Color(...), "desc": "..."}, ... }
 static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool
 ```
+
+### Forced movement (`Actor.shove`)
+`Actor.shove(dir, distance, source = null)` starts a short (0.2-0.35 s, ease-out) kinematic slide of
+`distance * shove_mult` along `dir` on X/Z (`shove_mult` 0 = immovable: Pebble; brute 0.4, swarmer 1.5).
+It is driven by the tree's `physics_frame` signal only while active. While `is_shoved()` the actor ignores
+`move()`; `is_helpless()` (shoved or staggered) is what the player controller, `AllyBrain`, `Monster` and the
+training dummy check before steering or attacking (voice casts still work). Terrain rules differ from walking:
+- a wall, or a rise of 2+ levels, stops the slide: "slam", 8 damage + 0.4 s stagger (shoves under 1.0 just stop);
+- drops of up to 3 levels are free; a higher ledge is fine too: the actor falls under gravity and takes 6 damage
+  per level beyond 3 on landing (+ stagger);
+- void: heroes are pulled back to the last cell they stood on (5 damage); everyone else falls in and dies;
+- a shove caused by a hero (`source` team) never takes a hero below 1 HP (slam, fall or pit).
+Monsters cancel a wind-up when shoved and re-home where they land (no leash-heal). Signals: `shoved`, `shove_impact`.
+Built on it: every melee hit nudges (hero 0.7, monster 0.35, brute slam 1.0: `Combat.melee_arc(..., shove)`),
+the Tentacles spell, and the heroes' `secondary_kind`: `"bolt"` (Larkin), `"bowl"` (Pebble: `BowlBoulder` rolls
+through everything, shoving each actor 3.5 sideways/forward, 6 damage to monsters only) and `"spin"` (Dagna: 360 degrees,
+reach 1.9, 16 damage to monsters, everything in reach shoved 2.2, teammates included).
 
 ### Heroes (`scripts/heroes/hero.gd`, `class_name Hero extends Actor`)
 `spell_slots: Array[String]` (2 entries), `try_cast(id, power, aim) -> bool` (checks the slot

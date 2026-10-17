@@ -26,6 +26,7 @@ func _init() -> void:
 	max_hp = HP
 	move_speed = SPEED
 	radius = 0.26
+	shove_mult = 1.5
 	aggro_range = AGGRO
 	attack_damage = DAMAGE
 	attack_windup = WINDUP

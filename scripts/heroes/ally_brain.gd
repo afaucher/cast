@@ -16,6 +16,9 @@ const RANGED_MAX := 7.0
 const REPATH_INTERVAL := 0.6
 const WAYPOINT_REACHED := 0.35
 const PROBE_STEP := 0.4
+const BOWL_MIN := 3.0          ## Pebble bowls at enemies this far ...
+const BOWL_MAX := 9.0          ## ... up to this far
+const BOWL_LANE := 1.0         ## skip a throw that would pass this close to another hero
 
 @export var prefers_ranged := false
 @export var formation_angle := 2.4   ## radians; where around the leader this ally likes to stand
@@ -35,7 +38,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if hero == null or hero.dead:
+	if hero == null or hero.dead or hero.is_helpless():
 		return
 	var foe := _pick_target()
 	if foe:
@@ -66,6 +69,8 @@ func _pick_target() -> Actor:
 
 
 func _fight(foe: Actor, delta: float) -> void:
+	if _try_secondary(foe):
+		return
 	var to := foe.global_position - hero.global_position
 	to.y = 0.0
 	var d := to.length()
@@ -154,4 +159,41 @@ func _direct_clear(from: Vector3, to: Vector3) -> bool:
 		if map.movement_check(prev, p) != HexMap.Move.OK:
 			return false
 		prev = p
+	return true
+
+
+# --- Secondary attacks (bowl / spin) -----------------------------------------------------
+
+## Use the hero's secondary when it makes sense. True if it fired this frame.
+##   spin: 2+ enemies within reach, or 1 in reach and the spin is ready.
+##   bowl: an enemy 3 to 9 away in line of sight, and no other hero standing in the lane.
+func _try_secondary(foe: Actor) -> bool:
+	if hero.secondary_kind == "spin":
+		var reach := Hero.SPIN_REACH
+		var close := GameWorld.actors_in_radius(hero.global_position, reach, GameWorld.TEAM_MONSTERS)
+		if close.size() >= 2 or (close.size() == 1 and hero.cooldown_left(Hero.KEY_RANGED) <= 0.0):
+			return hero.shoot(hero.facing)
+	elif hero.secondary_kind == "bowl":
+		var to := foe.global_position - hero.global_position
+		to.y = 0.0
+		var d := to.length()
+		if d >= BOWL_MIN and d <= BOWL_MAX and _has_los(foe) and _bowl_lane_clear(to / d):
+			hero.face_point(foe.global_position)
+			return hero.shoot(to / d)
+	return false
+
+
+## True when no other living hero stands within BOWL_LANE of the boulder's path.
+func _bowl_lane_clear(dir: Vector3) -> bool:
+	var origin := hero.global_position
+	for h in GameWorld.team_actors(hero.team):
+		if h == hero:
+			continue
+		var rel := h.global_position - origin
+		rel.y = 0.0
+		var along := rel.dot(dir)
+		if along < 0.0 or along > Hero.BOWL_RANGE:
+			continue
+		if (rel - dir * along).length() < BOWL_LANE:
+			return false
 	return true

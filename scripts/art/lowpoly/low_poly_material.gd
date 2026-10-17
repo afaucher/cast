@@ -25,6 +25,8 @@ uniform float amber_rim = 0.30;       // glow at the silhouette edge
 uniform float rim_edge = 0.55;
 uniform float tape_glow = 0.30;       // retro-reflective tape lifts itself (never HDR)
 uniform float desat = 0.0;            // downed pose
+uniform vec4 glow_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);   // neon variant (tentacles): emissive on top
+uniform float glow_strength = 0.0;    // 0 = the normal toon look
 varying vec3 wnormal;
 
 void vertex() {
@@ -44,7 +46,7 @@ void fragment() {
 	vec3 e = c * shade_lift;
 	e += amber.rgb * c * (below * amber_below + rim * amber_rim);
 	e += c * COLOR.a * tape_glow;
-	EMISSION = min(e, vec3(0.95));
+	EMISSION = min(e, vec3(0.95)) + glow_color.rgb * glow_strength;
 }
 
 void light() {
@@ -110,4 +112,15 @@ static func outline(width_px: float = 2.4, color: Color = INK) -> ShaderMaterial
 	m.shader = _outline_shader
 	m.set_shader_parameter("outline_color", color)
 	m.set_shader_parameter("width_px", width_px)
+	return m
+
+
+## The same faceted toon look with a neon emissive on top (glow * strength is added after the
+## usual "never above bloom" clamp, so it blooms). The outline takes `outline_color`.
+static func make_glow(glow: Color, strength: float = 1.0, outline_px: float = 2.4, outline_color: Color = INK) -> ShaderMaterial:
+	var m := make(0.0)
+	m.set_shader_parameter("glow_color", glow)
+	m.set_shader_parameter("glow_strength", strength)
+	if outline_px > 0.0:
+		m.next_pass = outline(outline_px, outline_color)
 	return m

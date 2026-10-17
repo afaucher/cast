@@ -10,20 +10,69 @@ extends Node3D
 signal damaged(amount: float, source: Node)
 signal healed(amount: float)
 signal died
+## A shove began: world direction (X/Z unit) and the distance already scaled by shove_mult.
+signal shoved(dir: Vector3, distance: float)
+## Something happened during forced movement: kind is "slam", "land" or "void"; amount is the
+## damage dealt (may be 0); pos is where. Fx listens to this for dust and numbers.
+signal shove_impact(kind: String, pos: Vector3, amount: float)
 
 @export var team: int = 0
 @export var max_hp: float = 100.0
 @export var move_speed: float = 4.0
 @export var radius: float = 0.4
 @export var display_name: String = "Actor"
+## How far shoves carry this actor: 1 = normal, 0 = immovable, 0.4 = heavy, 1.5 = light.
+@export var shove_mult := 1.0
 
 const CLIMB_SPEED_FACTOR := 0.35
+
+# --- Forced movement (shove) tuning -------------------------------------------------
+const SHOVE_TIME := 0.35          ## slide duration for a full-size shove (shorter for small nudges)
+const SHOVE_TIME_MIN := 0.2
+const SHOVE_FULL_DIST := 2.5      ## distance at which the slide takes the full SHOVE_TIME
+const SHOVE_SUBSTEP := 0.2        ## max distance per collision check (cells are ~1.7 wide)
+const SHOVE_GRAVITY := 24.0       ## world units / s^2 while airborne
+const SHOVE_COAST_SPEED := 2.5    ## horizontal drift kept when a slide ends in mid-air
+const SHOVE_COAST_DRAG := 2.5
+const SLAM_RISE_LEVELS := 1.95    ## a rise of 2+ levels in the path stops the shove
+const WALL_SLAM_DAMAGE := 8.0
+const WALL_SLAM_STAGGER := 0.4
+const WALL_SLAM_MIN_SHOVE := 1.0  ## a shorter nudge (melee) just stops at the wall: no damage, no stagger
+const FALL_SAFE_LEVELS := 3       ## drops up to this are free; walking forbids more, shoves allow it
+const FALL_DAMAGE_PER_LEVEL := 6.0
+const FALL_STAGGER := 0.4
+const VOID_FALL_TIME := 0.7       ## non-heroes fall this long into a pit, then die
+const VOID_TICK_DAMAGE := 5.0     ## heroes pulled back from a pit take this
+const PULL_TIME := 0.3
 
 var hp: float
 var dead := false
 var facing := Vector3.FORWARD     ## unit X/Z vector the actor faces
 var climbing := false             ## true while crossing a climb ledge
 var _modifiers := {}              ## id -> {"mult": float, "until": float}
+
+# Forced movement state. All of it is driven by _forced_tick(), connected to the tree's
+# physics_frame signal only while a shove is active (idle actors pay nothing).
+var _forced := false              ## any forced motion active (slide, fall, pit fall, pull-back)
+var _hooked := false
+var _slide_dir := Vector3.ZERO
+var _slide_dist := 0.0
+var _slide_dur := SHOVE_TIME
+var _slide_t := 0.0
+var _coast := Vector3.ZERO
+var _airborne := false
+var _vy := 0.0
+var _fall_from_y := 0.0
+var _void_fall := false
+var _void_t := 0.0
+var _pull := false
+var _pull_t := 0.0
+var _pull_from := Vector3.ZERO
+var _pull_to := Vector3.ZERO
+var _src_team := -1               ## team of whoever caused the current shove (-1 unknown)
+var _src_ref: WeakRef = null
+var _stagger_until := -1.0
+var _safe_cell := Vector2i(1 << 20, 1 << 20)   ## last cell this actor stood on, for pit rescues
 
 
 func _ready() -> void:
@@ -100,6 +149,8 @@ func _on_death() -> void:
 ## Returns true if the actor moved.
 func move(dir: Vector3, delta: float) -> bool:
 	dir.y = 0.0
+	if _forced:
+		return false   # being shoved: steering is ignored
 	if dir.length() < 0.001 or dead:
 		climbing = false
 		return false
@@ -126,7 +177,319 @@ func move(dir: Vector3, delta: float) -> bool:
 		climbing = false
 	_separate()
 	snap_to_ground(delta)
+	_note_safe()
 	return moved
+
+
+# --- Forced movement: shove / slam / fall / pit ---------------------------------------
+#
+# Kinematic and deterministic, no physics bodies. shove() starts a short ease-out slide on
+# the X/Z plane. While it runs the actor ignores move() (and the controllers skip their
+# input via is_helpless()). Terrain rules differ from walking:
+#   - a rise of 2+ levels (or a wall) stops the slide: "slam", WALL_SLAM_DAMAGE + a stagger
+#   - drops are free up to FALL_SAFE_LEVELS; beyond that the actor falls under gravity and
+#     takes FALL_DAMAGE_PER_LEVEL per extra level on landing (shoves may cross ledges that
+#     walking forbids)
+#   - void: heroes are pulled back to the last cell they stood on (small damage); everyone
+#     else falls in and dies
+#   - a shove caused by a hero can never take a hero below 1 HP (slam, fall or pit)
+
+## Push this actor `distance` world units along `dir` (X/Z, any length) after scaling by
+## shove_mult. `source` is who caused it (used for friendly-fire protection and damage credit).
+func shove(dir: Vector3, distance: float, source: Node = null) -> void:
+	if dead or shove_mult <= 0.0 or distance <= 0.0 or _void_fall or _pull or not is_inside_tree():
+		return
+	dir.y = 0.0
+	if dir.length() < 0.001:
+		dir = facing
+	dir.y = 0.0
+	dir = dir.normalized()
+	if not _forced:
+		_note_safe()
+	var d := distance * shove_mult
+	_slide_dir = dir
+	_slide_dist = d
+	_slide_dur = lerpf(SHOVE_TIME_MIN, SHOVE_TIME, clampf(d / SHOVE_FULL_DIST, 0.0, 1.0))
+	_slide_t = 0.0
+	_coast = Vector3.ZERO
+	var a := source as Actor
+	_src_team = a.team if a != null else -1
+	_src_ref = weakref(source) if source != null else null
+	climbing = false
+	_forced = true
+	if not _hooked:
+		_hooked = true
+		get_tree().physics_frame.connect(_forced_tick)
+	_on_interrupted()
+	shoved.emit(dir, d)
+
+
+## True while forced motion is in progress (sliding, airborne from a shove, falling into a
+## pit, being pulled back).
+func is_shoved() -> bool:
+	return _forced
+
+
+## True during the stagger after a wall slam or a hard landing.
+func is_staggered() -> bool:
+	return _now() < _stagger_until
+
+
+## Shoved or staggered: AI and input should not steer or attack.
+func is_helpless() -> bool:
+	return _forced or _now() < _stagger_until
+
+
+## True while a shove has the actor off the ground.
+func is_airborne() -> bool:
+	return _airborne or _void_fall
+
+
+func stagger(seconds: float) -> void:
+	if dead:
+		return
+	_stagger_until = maxf(_stagger_until, _now() + seconds)
+	_on_interrupted()
+
+
+## Override: a shove or stagger just started (monsters cancel their wind-up here).
+func _on_interrupted() -> void:
+	pass
+
+
+## Override: forced motion finished and the actor is standing again (not called on death).
+func _on_shove_ended() -> void:
+	pass
+
+
+static func _shove_ease(u: float) -> float:
+	var k := 1.0 - clampf(u, 0.0, 1.0)
+	return 1.0 - k * k
+
+
+func _note_safe() -> void:
+	if _airborne or GameWorld.map == null:
+		return
+	var c := Hex.from_world(global_position)
+	if GameWorld.map.is_walkable_cell(c):
+		_safe_cell = c
+
+
+func _safe_position() -> Vector3:
+	var map: HexMap = GameWorld.map
+	if map == null or not map.is_walkable_cell(_safe_cell):
+		return global_position
+	var p := Hex.to_world(_safe_cell)
+	var g := map.ground_height(p)
+	p.y = global_position.y if is_nan(g) else g
+	return p
+
+
+## Damage from forced movement, honouring friendly-fire protection.
+func _forced_damage(amount: float) -> float:
+	if dead or amount <= 0.0:
+		return 0.0
+	if team == GameWorld.TEAM_HEROES and _src_team == GameWorld.TEAM_HEROES:
+		var room := hp - 1.0
+		if room <= 0.0:
+			return 0.0
+		amount = minf(amount, room / maxf(damage_taken_mult(), 0.0001))
+	var src: Node = null
+	if _src_ref != null:
+		src = _src_ref.get_ref() as Node
+	return apply_damage(amount, src)
+
+
+func _end_forced(notify: bool) -> void:
+	_forced = false
+	_slide_t = _slide_dur
+	_coast = Vector3.ZERO
+	_airborne = false
+	_vy = 0.0
+	_pull = false
+	_void_fall = false
+	if _hooked:
+		_hooked = false
+		var tree := get_tree()
+		if tree != null and tree.physics_frame.is_connected(_forced_tick):
+			tree.physics_frame.disconnect(_forced_tick)
+	if notify and not dead:
+		_on_shove_ended()
+
+
+func _forced_tick() -> void:
+	var delta := get_physics_process_delta_time()
+	if dead or not is_inside_tree():
+		_end_forced(false)
+		if dead and is_inside_tree():
+			snap_to_ground()
+		return
+	if _pull:
+		_tick_pull(delta)
+		return
+	# Horizontal: the slide schedule, then any coasting momentum from a mid-air finish.
+	var step := Vector3.ZERO
+	if _slide_t < _slide_dur:
+		var t1 := minf(_slide_dur, _slide_t + delta)
+		step = _slide_dir * _slide_dist * (_shove_ease(t1 / _slide_dur) - _shove_ease(_slide_t / _slide_dur))
+		_slide_t = t1
+		if _slide_t >= _slide_dur and (_airborne or _void_fall):
+			_coast = _slide_dir * SHOVE_COAST_SPEED
+	elif _coast.length() > 0.05:
+		step = _coast * delta
+		_coast *= exp(-SHOVE_COAST_DRAG * delta)
+	else:
+		_coast = Vector3.ZERO
+	var map: HexMap = GameWorld.map
+	if _void_fall:
+		global_position += step
+		_tick_void(delta)
+		return
+	if map == null:
+		global_position += step
+		if _slide_t >= _slide_dur:
+			_end_forced(true)
+		return
+	_advance(step, map)
+	if _void_fall:
+		_tick_void(delta)
+		return
+	if _pull or dead or not _forced:
+		return
+	if not _airborne:
+		_separate()
+	_tick_vertical(delta, map)
+	if _forced and not _airborne and not _void_fall and not _pull and _slide_t >= _slide_dur and _coast == Vector3.ZERO:
+		_end_forced(true)
+
+
+## Move horizontally by `step` in small increments, checking the terrain at each one.
+func _advance(step: Vector3, map: HexMap) -> void:
+	var total := step.length()
+	if total < 0.00001:
+		return
+	var dir := step / total
+	var left := total
+	while left > 0.0001:
+		var s := minf(left, SHOVE_SUBSTEP)
+		left -= s
+		var from := global_position
+		var np := from + dir * s
+		np.y = from.y
+		var cell: HexMap.Cell = map.get_cell(Hex.from_world(np))
+		if cell == null:
+			_enter_void(from, np)
+			return
+		var blocked := cell.type == HexMap.Tile.WALL
+		if not blocked:
+			var probe := np + dir * radius * 0.5
+			var pcell: HexMap.Cell = map.get_cell(Hex.from_world(probe))
+			if pcell != null:
+				if pcell.type == HexMap.Tile.WALL:
+					blocked = true
+				else:
+					var ref_y := from.y
+					if not _airborne:
+						var g0 := map.ground_height(from)
+						if not is_nan(g0):
+							ref_y = g0
+					blocked = (map.ground_height(probe) - ref_y) / Hex.LEVEL_HEIGHT >= SLAM_RISE_LEVELS
+		if blocked:
+			_slam()
+			return
+		global_position = np
+
+
+func _slam() -> void:
+	_slide_t = _slide_dur
+	_coast = Vector3.ZERO
+	if _slide_dist < WALL_SLAM_MIN_SHOVE:
+		return
+	var dealt := _forced_damage(WALL_SLAM_DAMAGE)
+	stagger(WALL_SLAM_STAGGER)
+	shove_impact.emit("slam", global_position, dealt)
+
+
+func _enter_void(from: Vector3, over: Vector3) -> void:
+	_airborne = false
+	if team == GameWorld.TEAM_HEROES:
+		_slide_t = _slide_dur
+		_coast = Vector3.ZERO
+		_pull = true
+		_pull_t = 0.0
+		_pull_from = from
+		_pull_to = _safe_position()
+		global_position = from
+		var dealt := _forced_damage(VOID_TICK_DAMAGE)
+		shove_impact.emit("void", from, dealt)
+	else:
+		global_position = over
+		_void_fall = true
+		_void_t = 0.0
+		_vy = -1.0
+		shove_impact.emit("void", over, 0.0)
+
+
+func _tick_pull(delta: float) -> void:
+	_pull_t += delta
+	var k := clampf(_pull_t / PULL_TIME, 0.0, 1.0)
+	var p := _pull_from.lerp(_pull_to, _shove_ease(k))
+	p.y += sin(k * PI) * 0.9
+	global_position = p
+	if k >= 1.0:
+		global_position = _pull_to
+		_end_forced(true)
+		stagger(0.3)
+		_note_safe()
+
+
+func _tick_void(delta: float) -> void:
+	_void_t += delta
+	_vy -= SHOVE_GRAVITY * 0.8 * delta
+	global_position.y += _vy * delta
+	rotation.x += 5.0 * delta
+	var k := clampf(_void_t / VOID_FALL_TIME, 0.0, 1.0)
+	scale = Vector3.ONE * lerpf(1.0, 0.35, k)
+	if k >= 1.0:
+		_end_forced(false)
+		die()
+
+
+func _tick_vertical(delta: float, map: HexMap) -> void:
+	var g := map.ground_height(global_position)
+	if is_nan(g):
+		_enter_void(global_position, global_position)
+		return
+	if not _airborne:
+		if global_position.y > g + 0.03:
+			_airborne = true
+			_fall_from_y = global_position.y
+			_vy = 0.0
+		else:
+			global_position.y = lerpf(global_position.y, g, clampf(18.0 * delta, 0.0, 1.0))
+			if absf(global_position.y - g) < 0.01:
+				global_position.y = g
+			return
+	_vy -= SHOVE_GRAVITY * delta
+	global_position.y += _vy * delta
+	if global_position.y <= g:
+		_land(g)
+
+
+func _land(g: float) -> void:
+	global_position.y = g
+	var levels := (_fall_from_y - g) / Hex.LEVEL_HEIGHT
+	_airborne = false
+	_vy = 0.0
+	_coast = Vector3.ZERO
+	var over := int(floorf(levels + 0.1)) - FALL_SAFE_LEVELS
+	if over > 0:
+		var dealt := _forced_damage(FALL_DAMAGE_PER_LEVEL * over)
+		stagger(FALL_STAGGER)
+		shove_impact.emit("land", global_position, dealt)
+	elif levels > 0.9:
+		shove_impact.emit("land", global_position, 0.0)
+	_note_safe()
 
 
 ## Keep Y on the ground. With delta, eases (so climbs and drops look smooth).

@@ -4,8 +4,9 @@ extends RefCounted
 
 
 ## Hit every actor of the other team within `reach` of the attacker and
-## inside a cone of `arc_deg` around `dir`. Returns the actors hit.
-static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: float, damage: float) -> Array[Actor]:
+## inside a cone of `arc_deg` around `dir`. Returns the actors hit. `shove` > 0 also pushes
+## each target that distance directly away from the attacker (scaled by its shove_mult).
+static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: float, damage: float, shove: float = 0.0) -> Array[Actor]:
 	dir.y = 0.0
 	dir = dir.normalized()
 	var hit: Array[Actor] = []
@@ -19,8 +20,25 @@ static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: floa
 		if absf(a.global_position.y - attacker.global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
 			continue
 		a.apply_damage(damage, attacker)
+		if shove > 0.0:
+			a.shove(to if to.length() > 0.001 else dir, shove, attacker)
 		hit.append(a)
 	return hit
+
+
+## Push every living actor within `radius` of `pos` (all teams, or `team` only if >= 0)
+## `distance` units directly away from `pos`, scaled by each one's shove_mult. An actor
+## standing on the center goes along its own facing. Returns the actors pushed.
+static func shove_radius(pos: Vector3, radius: float, distance: float, source: Node = null, team: int = -1, skip: Actor = null) -> Array[Actor]:
+	var out: Array[Actor] = []
+	for a in GameWorld.actors_in_radius(pos, radius, team):
+		if a == skip:
+			continue
+		var away := a.global_position - pos
+		away.y = 0.0
+		a.shove(away if away.length() > 0.05 else a.facing, distance, source)
+		out.append(a)
+	return out
 
 
 ## Damage everyone of `team` (-1 = everyone) within radius of pos, with

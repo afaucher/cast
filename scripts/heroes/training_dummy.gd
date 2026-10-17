@@ -12,6 +12,7 @@ const WALK_SPEED := 1.6
 const PUNCH_DAMAGE := 8.0
 const PUNCH_REACH := 1.25
 const PUNCH_COOLDOWN := 1.2
+const PUNCH_SHOVE := 0.35
 const AGGRO_RANGE := 14.0
 
 @export var mode: Mode = Mode.STATIC
@@ -50,7 +51,7 @@ func _physics_process(delta: float) -> void:
 		if _respawn_at >= 0.0 and GameWorld.time >= _respawn_at:
 			_respawn()
 		return
-	if mode != Mode.WALKER:
+	if mode != Mode.WALKER or is_helpless():
 		return
 	var target := GameWorld.nearest_actor(global_position, GameWorld.TEAM_HEROES, AGGRO_RANGE)
 	if target == null:
@@ -62,7 +63,7 @@ func _physics_process(delta: float) -> void:
 		move(to.normalized(), delta)
 	elif GameWorld.time >= _punch_ready_at:
 		_punch_ready_at = GameWorld.time + PUNCH_COOLDOWN
-		Combat.melee_arc(self, facing, PUNCH_REACH, 120.0, PUNCH_DAMAGE)
+		Combat.melee_arc(self, facing, PUNCH_REACH, 120.0, PUNCH_DAMAGE, PUNCH_SHOVE)
 		_punch_anim()
 
 
@@ -89,6 +90,8 @@ func _respawn() -> void:
 	global_position = home
 	snap_to_ground()
 	visible = true
+	scale = Vector3.ONE
+	rotation = Vector3.ZERO
 	_visual.rotation = Vector3(0, _rest_yaw, 0)
 	_bar.visible = true
 	_bar.set_fraction(1.0)

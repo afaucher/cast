@@ -11,9 +11,13 @@ extends Node3D
 ##   --shot <png>        save a screenshot after --shot-after game seconds (default 3) and quit
 ##   --autocast <id>     cast a spell once, 1 s in (for screenshots)
 ##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
+##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer) near the player;
+##                       --autocast then aims at them
+##   --idle-monsters     dev: --spawn-near monsters ignore heroes until hurt
+##   --stage-ledge       dev: raise a 7-cell tower +5 levels near the start; --spawn-near monsters stand on it
 ## Keys: F1 debug panel, F5 new dungeon, Enter = type an incantation.
 
-const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn"]
+const ALL_SPELLS: PackedStringArray = ["heal", "fireball", "armor", "corn", "tentacles"]
 const PLAYER_COLOR := Color(0.3, 0.55, 0.95)
 const ROOM_BUDGET_BASE := 5
 const ROOM_BUDGET_PER_ROOM := 1
@@ -41,6 +45,8 @@ var _ended := false
 var _stats_timer := 0.0
 var _kills := 0
 var _exit_cell := Vector2i(1 << 20, 1 << 20)
+var _dev_monsters: Array[Monster] = []   ## --spawn-near
+var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 
 
 func _ready() -> void:
@@ -74,6 +80,9 @@ func _parse_args() -> void:
 			"--shot-after": opts["shot_after"] = float(nxt)
 			"--autocast": opts["autocast"] = nxt
 			"--proto-heroes": opts["proto_heroes"] = true
+			"--spawn-near": opts["spawn_near"] = nxt
+			"--stage-ledge": opts["stage_ledge"] = true
+			"--idle-monsters": opts["idle_monsters"] = true
 	if _seed < 0:
 		_seed = int(opts.get("seed", randi() % 100000))
 	if _spells.is_empty() and opts.has("spells"):
@@ -87,6 +96,8 @@ func _parse_args() -> void:
 
 func _build_world() -> void:
 	map = DungeonGen.generate(_seed)
+	if opts.has("stage_ledge"):
+		_stage_plateau()
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)
@@ -113,8 +124,11 @@ func _build_world() -> void:
 	controller = HeroFactory.make_player(player, none)
 	var spots := _free_cells_near(start, 2)
 	var pebble := HeroFactory.spawn_hero(spots[0], "Pebble", Color(0.85, 0.5, 0.25), "sword", PebbleModel.new() if faceted else null)
+	pebble.shove_mult = 0.0          # Pebble is immovable (design: he is the one who shoves)
+	pebble.secondary_kind = "bowl"   # RMB / AI: a rolling boulder
 	HeroFactory.make_ally(pebble, player, false, 2.4)
 	var dagna := HeroFactory.spawn_hero(spots[mini(1, spots.size() - 1)], "Dagna", Color(0.7, 0.4, 0.85), "sword", DagnaModel.new() if faceted else null)
+	dagna.secondary_kind = "spin"    # RMB / AI: a 360 degree whirl
 	HeroFactory.make_ally(dagna, player, false, 3.9)
 	allies = [pebble, dagna]
 	player.died.connect(func() -> void: _end("You died\nF5 for a new dungeon", Color(1.0, 0.4, 0.35)))
@@ -303,10 +317,17 @@ func _start() -> void:
 	hud.enable_console()
 	controller.enabled = true
 	_populate_monsters()
-	hud.show_center("Floor %d\nReach the magenta exit" % _floor, Color(0.8, 0.9, 1.0), 2.0)
+	_spawn_near()
+	if opts.has("shot"):   # keep screenshots clear of the banner and the voice panel
+		debug_panel.visible = false
+	else:
+		hud.show_center("Floor %d\nReach the magenta exit" % _floor, Color(0.8, 0.9, 1.0), 2.0)
 	_log("floor %d  seed %d  spells %s" % [_floor, _seed, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
 	if opts.has("autocast"):
 		await get_tree().create_timer(1.0).timeout
+		var centre := _dev_centroid()
+		if centre != Vector3.INF:
+			controller.aim_override = centre
 		_cast(str(opts["autocast"]), 1.0, "autocast")
 	if opts.has("shot"):
 		_take_shot_later(str(opts["shot"]), float(opts.get("shot_after", 3.0)))
@@ -406,3 +427,107 @@ func _take_shot_later(path: String, after: float) -> void:
 	get_viewport().get_texture().get_image().save_png(path)
 	print("[game] screenshot saved: ", path)
 	get_tree().quit()
+
+
+## Dev flag --spawn-near kind,n: n extra monsters of `kind` on open floor 4-5 cells from the player.
+func _spawn_near() -> void:
+	if not opts.has("spawn_near"):
+		return
+	var parts := str(opts["spawn_near"]).split(",")
+	var kind := parts[0].strip_edges()
+	var n := int(parts[1]) if parts.size() > 1 else 3
+	if map.has_cell(_stage_center):
+		for c in Hex.ring(_stage_center, 1):
+			if _dev_monsters.size() >= n:
+				break
+			var tm := MonsterFactory.spawn(kind, c)
+			if tm != null:
+				_dev_monsters.append(tm)
+		_log("spawn-near: %d %s on the tower" % [_dev_monsters.size(), kind], Color(0.8, 0.8, 1.0))
+		return
+	var here := player.current_cell()
+	var base_level: int = map.get_cell(here).level
+	var cands: Array[Vector2i] = []
+	for c in Hex.range_cells(here, 5):
+		var d := Hex.distance(c, here)
+		var cell: HexMap.Cell = map.get_cell(c)
+		if d >= 4 and cell != null and cell.type == HexMap.Tile.FLOOR and absi(cell.level - base_level) <= 1:
+			cands.append(c)
+	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
+	if parts.size() > 2 and parts[2].strip_edges() == "cluster":
+		# Candidates 5-7 cells out with a clear view of the player (so Pebble can bowl at them).
+		cands.clear()
+		for c in Hex.range_cells(here, 7):
+			var cc: HexMap.Cell = map.get_cell(c)
+			if Hex.distance(c, here) >= 5 and cc != null and cc.type == HexMap.Tile.FLOOR and cc.level == base_level:
+				if map.line_of_sight(Combat.chest(player), Hex.to_world(c, cc.level) + Vector3.UP * 0.9):
+					cands.append(c)
+		cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
+	if parts.size() > 2 and parts[2].strip_edges() == "cluster" and not cands.is_empty():
+		# A tight clump: the n candidates nearest to the first one.
+		var anchor := cands[0]
+		cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return Hex.distance(a, anchor) < Hex.distance(b, anchor))
+		for c in cands:
+			if _dev_monsters.size() >= n:
+				break
+			var cm := MonsterFactory.spawn(kind, c)
+			if cm != null:
+				_dev_monsters.append(cm)
+	else:
+		# Spread them: take every k-th candidate.
+		var stride := maxi(1, cands.size() / maxi(n, 1))
+		var i := 0
+		while _dev_monsters.size() < n and i < cands.size():
+			var m := MonsterFactory.spawn(kind, cands[i])
+			if m != null:
+				_dev_monsters.append(m)
+			i += stride
+	if opts.has("idle_monsters"):
+		for im in _dev_monsters:
+			im.aggro_range = 0.0
+	_log("spawn-near: %d %s" % [_dev_monsters.size(), kind], Color(0.8, 0.8, 1.0))
+
+
+## Average position of the living --spawn-near monsters, or Vector3.INF if none.
+func _dev_centroid() -> Vector3:
+	var sum := Vector3.ZERO
+	var count := 0
+	for m in _dev_monsters:
+		if is_instance_valid(m) and not m.dead:
+			sum += m.global_position
+			count += 1
+	return sum / count if count > 0 else Vector3.INF
+
+
+## Dev flag --stage-ledge: a 7-cell tower 5 levels tall on the roomiest flat ground 2-5 cells from
+## the start (so a shove off its edge is a 5-level fall onto open floor). --spawn-near then stands
+## its monsters on top.
+func _stage_plateau() -> void:
+	var start: Vector2i = map.cells_with_tag("start")[0]
+	var base: int = map.get_cell(start).level
+	var best := Vector2i(1 << 20, 1 << 20)
+	var best_score := -1
+	for c in Hex.range_cells(start, 5):
+		if Hex.distance(c, start) < 3:
+			continue
+		var ok := true
+		for n in Hex.range_cells(c, 1):
+			var cell: HexMap.Cell = map.get_cell(n)
+			if cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != base or Hex.distance(n, start) < 2:
+				ok = false
+				break
+		if not ok:
+			continue
+		var score := 0
+		for n in Hex.range_cells(c, 4):
+			var cell: HexMap.Cell = map.get_cell(n)
+			if cell != null and cell.type == HexMap.Tile.FLOOR and cell.level == base:
+				score += 1
+		if score > best_score:
+			best_score = score
+			best = c
+	if best_score < 0:
+		return
+	_stage_center = best
+	for n in Hex.range_cells(best, 1):
+		map.get_cell(n).level = base + 5

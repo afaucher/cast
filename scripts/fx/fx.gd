@@ -268,6 +268,8 @@ static func attach_hit_feedback(actor: Actor) -> void:
 		return
 	actor.set_meta("fx_hit_feedback", true)
 	actor.damaged.connect(_on_actor_damaged.bind(actor))
+	actor.shoved.connect(_on_actor_shoved.bind(actor))
+	actor.shove_impact.connect(_on_shove_impact.bind(actor))
 
 
 ## Attach hit feedback to every actor now and to every actor spawned via GameWorld.spawn later.
@@ -285,6 +287,34 @@ static func _on_actor_damaged(amount: float, _source: Node, actor: Actor) -> voi
 	var col := NUMBER_HERO_HIT if actor.team == GameWorld.TEAM_HEROES else NUMBER_MONSTER_HIT
 	number(head, str(int(roundf(amount))), col, 1.0)
 	flash(actor)
+
+
+## A little scuff of dust at the feet when something gets shoved.
+static func _on_actor_shoved(_dir: Vector3, distance: float, actor: Actor) -> void:
+	if not is_instance_valid(actor) or not actor.is_inside_tree() or distance < 1.0:
+		return
+	var dust: Array[Color] = [Color(0.8, 0.72, 0.58), Color(0.6, 0.52, 0.42)]
+	burst(actor.global_position + Vector3.UP * 0.1, dust, 6, 1.6, 0.08, 0.4, 2.0, Vector3.UP, 70.0, false)
+
+
+## Wall slams, hard landings and pits: dust, a ring, a shake and a word.
+static func _on_shove_impact(kind: String, pos: Vector3, amount: float, actor: Actor) -> void:
+	if not is_instance_valid(actor) or not actor.is_inside_tree():
+		return
+	var dust: Array[Color] = [Color(0.8, 0.72, 0.58), Color(0.6, 0.52, 0.42)]
+	match kind:
+		"slam":
+			burst(pos + Vector3.UP * 0.7, dust, 14, 3.0, 0.1, 0.5, 4.0, Vector3.UP, 120.0, false)
+			number(pos + Vector3(0, 2.6 + actor.radius, 0), "SLAM!", Color(1.0, 0.8, 0.3), 0.8)
+			shake(0.12)
+		"land":
+			burst(pos + Vector3.UP * 0.1, dust, 12, 3.5, 0.11, 0.55, 3.0, Vector3.UP, 85.0, false)
+			ring(pos, 0.9, Color(0.9, 0.8, 0.6, 0.6), 0.35, 0.0, false, 0.3)
+			if amount > 0.0:
+				number(pos + Vector3(0, 2.6 + actor.radius, 0), "THUD!", Color(1.0, 0.7, 0.3), 0.8)
+				shake(0.18)
+		"void":
+			number(pos + Vector3(0, 2.4, 0), "AAAH!", Color(0.8, 0.6, 1.0), 0.8)
 
 
 ## White overlay on every mesh of the actor for a moment.

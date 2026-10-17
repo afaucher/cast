@@ -1,6 +1,6 @@
 class_name SpellBook
 extends RefCounted
-## The four spells: metadata for the UI/voice layer plus the static cast()
+## The five spells: metadata for the UI/voice layer plus the static cast()
 ## entry point. Power is in (0, 1] (voice confidence) and scales the effect.
 ## The spoken trigger word ("cast", "pickle"...) is configurable and only used
 ## for display: see incantation(). Cooldowns are NOT enforced here; Hero.try_cast owns them.
@@ -22,6 +22,10 @@ const SPELLS := {
 		"name": "Corn", "cooldown": 12.0, "color": Color(1.0, 0.9, 0.25),
 		"desc": "A giant corn cob falls from the sky. Hits EVERYONE. You were warned.", "word": "corn",
 	},
+	"tentacles": {
+		"name": "Tentacles", "cooldown": 10.0, "color": Color(0.75, 0.2, 1.0),
+		"desc": "Neon tentacles burst from the floor where you aim and shove EVERYONE outward.", "word": "tentacles",
+	},
 }
 
 # --- Targeting: every spell lands where the player aims, like the ranged bolt.
@@ -42,6 +46,12 @@ const ARMOR_MULT_STRONG := 0.4     ## damage multiplier at power 1
 const ARMOR_DURATION_BASE := 5.0
 const ARMOR_DURATION_POWER := 5.0
 # --- Corn
+# --- Tentacles
+const TENTACLES_RADIUS_BASE := 2.2
+const TENTACLES_RADIUS_POWER := 0.8
+const TENTACLES_SHOVE_BASE := 2.5
+const TENTACLES_SHOVE_POWER := 1.5
+const TENTACLES_DAMAGE := 6.0     ## monsters only, times power
 
 const MIN_POWER := 0.05
 
@@ -109,6 +119,8 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 			_cast_armor(caster, power, target)
 		"corn":
 			_cast_corn(caster, power, target)
+		"tentacles":
+			_cast_tentacles(caster, power, target)
 	return true
 
 
@@ -272,3 +284,26 @@ static func _cast_corn(caster: Actor, power: float, target: Vector3) -> void:
 	strike.source_team = caster.team
 	strike.caster = caster
 	GameWorld.spawn(strike, target)
+
+
+# --- Tentacles -----------------------------------------------------------------------------
+
+static func tentacles_radius(power: float) -> float:
+	return TENTACLES_RADIUS_BASE + TENTACLES_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+## World units everyone in the radius is shoved (before each actor's shove_mult).
+static func tentacles_distance(power: float) -> float:
+	return TENTACLES_SHOVE_BASE + TENTACLES_SHOVE_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+static func tentacles_damage(power: float) -> float:
+	return TENTACLES_DAMAGE * clampf(power, MIN_POWER, 1.0)
+
+
+static func _cast_tentacles(caster: Actor, power: float, target: Vector3) -> void:
+	var t := Tentacles.new()
+	t.power = clampf(power, MIN_POWER, 1.0)
+	t.source_team = caster.team
+	t.caster = caster
+	GameWorld.spawn(t, target)
