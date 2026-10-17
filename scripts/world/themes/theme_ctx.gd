@@ -5,6 +5,10 @@ extends RefCounted
 ## cells that blocking props made solid. It answers "does this prop fit here?" and builds wall-backed /
 ## corner poses, so a prop can never end up facing a wall, on a door, or boxing a corridor in.
 ##
+## Walls are HexMap's midpoint walls: the anchor cells next to a wall are cut cells (half floor, half wall), every
+## footprint point must be off the wall side (HexMap.wall_at) and a wall-backed piece marches to the flat face, so it
+## stands flush against it. Walkability (the room's reach, connected_ok) uses full cells only.
+##
 ## Pure data and queries (no nodes): the plan is deterministic and testable without a running game.
 
 const GATE_CLEAR := 3            ## no decor within this many cells of a hellgate (4 for the origin gate)
@@ -19,6 +23,8 @@ const MAX_BUDGET := 14.0
 const CELLS_PER_BLOCKER := 22    ## ... and one blocking piece per this many
 const MAX_BLOCKERS := 8
 const MIN_ALIGN := 0.3           ## a wall-backed piece must face within ~72 degrees of the nearest wall face's normal
+const BACK_OFF := 0.75           ## a wall pose marches toward the wall from this far inside the anchor (a cut cell's center lies ON the wall line)
+const MARCH := 2.2               ## ... and looks this far for the face
 
 
 class Body:
@@ -67,6 +73,7 @@ var allow_gate := false                ## true while a vignette is built around 
 var _group := 0
 var _walls: Dictionary = {}
 var _reach_cache: Dictionary = {}
+var _faces: Dictionary = {}            ## Vector2i -> the wall faces near that cell (HexMap.segments_near)
 
 
 static func make(map_: HexMap, plan_: SitePlan, avoid_: Dictionary, near_corr_: Dictionary, seed_value: int) -> ThemeCtx:
@@ -131,7 +138,7 @@ func _room_info(tag: String) -> RoomInfo:
 			if nb != null and nb.tag == "corridor":
 				touches = true
 				break
-		if not touches:
+		if not touches or not map.is_walkable_cell(c):
 			continue
 		var dist := Hex.distance(c, target)
 		if dist < best_d or (dist == best_d and (c.x < best.x or (c.x == best.x and c.y < best.y))):
@@ -167,6 +174,8 @@ func _steppable(a: Vector2i, b: Vector2i) -> bool:
 	var cb: HexMap.Cell = map.cells.get(b)
 	if ca == null or cb == null or ca.type != HexMap.Tile.FLOOR or cb.type != HexMap.Tile.FLOOR:
 		return false
+	if not map.is_walkable_cell(a) or not map.is_walkable_cell(b):
+		return false   # a wall-cut cell is not a step on a route (its center is on the wall line)
 	return absi(ca.level - cb.level) <= 1
 
 
@@ -216,30 +225,111 @@ func wall_normal(c: Vector2i) -> Vector2:
 	return sum.normalized()
 
 
+## Unit vector from cell c toward the flat wall FACE a wall-backed piece at c stands against (midpoint walls: the
+## face through c's center; at a corner cell the first of its two faces), or wall_normal(c) on a plain hex map.
+func face_normal(c: Vector2i) -> Vector2:
+	var avg := wall_normal(c)
+	if not map.midpoint_walls or avg == Vector2.ZERO:
+		return avg
+	var segs := map.wall_segments(c)
+	var best := avg
+	var best_dot := -INF
+	var i := 0
+	while i < segs.size():
+		var toward := -segs[i + 2]
+		var dt := toward.dot(avg)
+		if dt > best_dot + 0.0001:
+			best_dot = dt
+			best = toward
+		i += 3
+	return best.normalized()
+
+
 ## Distance along unit vector n from p0 (inside the room's open floor) to the wall face; -1 when the open
-## floor ends against something that is not a wall, -2 when p0 itself is not open floor.
+## floor ends against something that is not a wall, -2 when p0 itself is not open floor. Exact: the first wall
+## face the ray crosses (HexMap's faces), then the room's open floor is checked up to it.
 func wall_hit(room: RoomInfo, p0: Vector2, n: Vector2) -> float:
-	if not room.open.has(ThemeGeo.cell_of(p0)):
+	var c0 := ThemeGeo.cell_of(p0)
+	if not room.open.has(c0) or _wall(p0):
 		return -2.0
-	var step := 0.1
-	var t := 0.0
-	while t < 1.6:
-		var cq := ThemeGeo.cell_of(p0 + n * (t + step))
-		if not room.open.has(cq):
-			var cell: HexMap.Cell = map.get_cell(cq)
-			if cell == null or cell.type != HexMap.Tile.WALL:
-				return -1.0
-			var lo := t
-			var hi := t + step
-			for _i in 5:
-				var mid := (lo + hi) * 0.5
-				if room.open.has(ThemeGeo.cell_of(p0 + n * mid)):
-					lo = mid
-				else:
-					hi = mid
-			return lo
-		t += step
-	return -1.0
+	var segs := _faces_near(c0)
+	var t_wall := INF
+	var i := 0
+	while i < segs.size():
+		var a := segs[i]
+		var e := segs[i + 1] - a
+		var den := n.x * e.y - n.y * e.x
+		if absf(den) > 0.000001:
+			var ao := a - p0
+			var t := (ao.x * e.y - ao.y * e.x) / den
+			var u := (ao.x * n.y - ao.y * n.x) / den
+			if t >= 0.0 and t < t_wall and u >= -0.000001 and u <= 1.000001:
+				t_wall = t
+		i += 3
+	if t_wall > MARCH:
+		return -1.0
+	var tt := 0.15
+	while tt < t_wall - 0.005:
+		if not room.open.has(ThemeGeo.cell_of(p0 + n * tt)):
+			return -1.0
+		tt += 0.15
+	return t_wall
+
+
+## The wall faces within reach of a march from cell c (cached: the map does not change while planning).
+func _faces_near(c: Vector2i) -> PackedVector2Array:
+	if _faces.has(c):
+		return _faces[c]
+	var segs := map.segments_near(Hex.to_world(c), MARCH)
+	_faces[c] = segs
+	return segs
+
+
+## Does no wall face cross the w x d footprint at (pos, yaw)? (The sample points of foot_points() can straddle
+## the tip of a wall that pokes between them.)
+func rect_clear(pos: Vector2, yaw: float, w: float, d: float) -> bool:
+	var lat := ThemeGeo.lateral(yaw)
+	var fac := ThemeGeo.facing(yaw)
+	var hw := w * 0.5 - 0.02
+	var hd := d * 0.5 - 0.02
+	var segs := _faces_near(ThemeGeo.cell_of(pos))
+	var reach := Vector2(w, d).length() * 0.5 + 0.05
+	var i := 0
+	while i < segs.size():
+		var a := segs[i] - pos
+		var b := segs[i + 1] - pos
+		if minf(a.length(), b.length()) < reach + Hex.INNER:
+			if _seg_hits_box(Vector2(a.dot(lat), a.dot(fac)), Vector2(b.dot(lat), b.dot(fac)), hw, hd):
+				return false
+		i += 3
+	return true
+
+
+## Liang-Barsky: does segment a -> b touch the box |x| <= hx, |y| <= hy?
+static func _seg_hits_box(a: Vector2, b: Vector2, hx: float, hy: float) -> bool:
+	var t0 := 0.0
+	var t1 := 1.0
+	var dv := b - a
+	for k in 4:
+		var pk: float = [-dv.x, dv.x, -dv.y, dv.y][k]
+		var qk: float = [a.x + hx, hx - a.x, a.y + hy, hy - a.y][k]
+		if absf(pk) < 0.0000001:
+			if qk < 0.0:
+				return false
+			continue
+		var r := qk / pk
+		if pk < 0.0:
+			t0 = maxf(t0, r)
+		else:
+			t1 = minf(t1, r)
+		if t0 > t1:
+			return false
+	return true
+
+
+## Is world X/Z point p on the wall side (a WALL cell or the wall part of a cut cell)?
+func _wall(p: Vector2) -> bool:
+	return map.wall_at(Vector3(p.x, 0.0, p.y))
 
 
 ## The nearest wall face along n over a line of width `span` through p0 (perpendicular to n): a wide prop
@@ -276,20 +366,31 @@ func free_run(room: RoomInfo, p: Vector2, f: Vector2, limit: float) -> float:
 
 
 ## A wall-backed pose: the prop's back `GAP` from the wall face along normal n (toward the wall), facing
-## away from it, plus `jit` degrees of yaw. p0 is where the march toward the wall starts (inside open floor).
+## away from it, plus `jit` degrees of yaw. The march toward the wall starts BACK_OFF behind p0 (an anchor
+## cell's center lies on the wall line itself), so the prop ends flush against the flat face.
 func wall_pose_at(room: RoomInfo, p0: Vector2, n: Vector2, w: float, d: float, jit: float) -> Dictionary:
+	p0 -= n * BACK_OFF
 	if not room.open.has(ThemeGeo.cell_of(p0)):
 		return {}
 	var t := wall_reach(room, p0, n, w)
 	if t < 0.0:
 		return {}
+	if map.midpoint_walls:
+		# flush or nothing: the face straight behind must be square to n and nothing nearer across the width
+		var tc := wall_hit(room, p0, n)
+		if tc < 0.0 or t < tc - 0.05:
+			return {}
+		var q := p0 + n * tc
+		var hit := map.nearest_wall(Vector3(q.x, 0.0, q.y), 0.1)
+		if hit.is_empty() or (hit["normal"] as Vector2).dot(-n) < 0.98:
+			return {}
 	var gap := ThemeGeo.GAP + absf(sin(deg_to_rad(jit))) * w * 0.5
 	var pos := p0 + n * (t - d * 0.5 - gap)
 	return {"pos": pos, "yaw": ThemeGeo.yaw_of(-n) + jit, "cell": ThemeGeo.cell_of(pos), "normal": n}
 
 
 func wall_pose(room: RoomInfo, c: Vector2i, w: float, d: float, jit: float) -> Dictionary:
-	var n := wall_normal(c)
+	var n := face_normal(c)
 	if n == Vector2.ZERO:
 		return {}
 	return wall_pose_at(room, ThemeGeo.world(c), n, w, d, jit)
@@ -302,7 +403,7 @@ func corner_pose(room: RoomInfo, c: Vector2i, w: float, d: float, jit: float) ->
 	var n := wall_normal(c)
 	if n == Vector2.ZERO or not room.open.has(c):
 		return {}
-	var p0 := ThemeGeo.world(c)
+	var p0 := ThemeGeo.world(c) - n * BACK_OFF            # off the corner point (a cut cell's center is the wall corner)
 	var reach := Vector2(w, d).length() * 0.5 + 0.03     # the half-diagonal: a corner piece may face any way
 	var t := wall_reach(room, p0, n, reach * 2.0)
 	if t < 0.0:
@@ -314,21 +415,22 @@ func corner_pose(room: RoomInfo, c: Vector2i, w: float, d: float, jit: float) ->
 
 
 ## cos of the angle between a facing yaw and the normal of the wall face nearest to `pos` (1 = square to the
-## wall, < 0 = facing the wall). Hex walls are a sawtooth, so a piece squared to the average wall still sees faces
-## up to 60 degrees off its facing.
+## wall, < 0 = facing the wall). Midpoint walls are flat, so a piece squared to its wall is square to the face.
 func wall_alignment(pos: Vector2, yaw: float) -> float:
 	var f := ThemeGeo.facing(yaw)
-	var best := INF
-	var best_n := Vector2.ZERO
-	for c in Hex.range_cells(ThemeGeo.cell_of(pos), 2):
-		var cell: HexMap.Cell = map.get_cell(c)
-		if cell == null or cell.type != HexMap.Tile.WALL:
-			continue
-		var d := ThemeGeo.hex_dist(pos, c)
-		if d < best:
-			best = d
-			best_n = ThemeGeo.nearest_face(pos, c)
-	return f.dot(best_n) if best_n != Vector2.ZERO else -1.0
+	var segs := _faces_near(ThemeGeo.cell_of(pos))
+	var best := 2.0
+	var nrm := Vector2.ZERO
+	var i := 0
+	while i < segs.size():
+		var cp := HexMap._closest(pos, segs[i], segs[i + 1])
+		var dd := pos.distance_to(cp)
+		if dd < best:
+			best = dd
+			var on_seg := cp.distance_squared_to(segs[i]) > 0.0001 and cp.distance_squared_to(segs[i + 1]) > 0.0001
+			nrm = segs[i + 2] if on_seg or dd < 0.0001 else (pos - cp) / dd
+		i += 3
+	return f.dot(nrm) if nrm != Vector2.ZERO else -1.0
 
 
 # --- Fitting and committing ----------------------------------------------------------------------------------
@@ -337,8 +439,10 @@ func wall_alignment(pos: Vector2, yaw: float) -> float:
 ## lanes kept open in front of facing props?
 func fits(room: RoomInfo, pos: Vector2, yaw: float, w: float, d: float, group: int = -1, ignore: Array = []) -> bool:
 	for p in ThemeGeo.foot_points(pos, yaw, w, d):
-		if not cell_free(room, ThemeGeo.cell_of(p)):
+		if not cell_free(room, ThemeGeo.cell_of(p)) or _wall(p):
 			return false
+	if not rect_clear(pos, yaw, w, d):
+		return false
 	for b in room.bodies:
 		if ignore.has(b.kind) or (b.lane and ignore.has("lane")):
 			continue
@@ -357,7 +461,7 @@ func fits(room: RoomInfo, pos: Vector2, yaw: float, w: float, d: float, group: i
 func lane_ok(room: RoomInfo, pos: Vector2, yaw: float, d: float, group: int = -1) -> bool:
 	var lc := pos + ThemeGeo.facing(yaw) * (d * 0.5 + LANE_AHEAD)
 	var cc := ThemeGeo.cell_of(lc)
-	if not room.open.has(cc) or solid.has(cc):
+	if not room.open.has(cc) or solid.has(cc) or _wall(lc):
 		return false
 	for b in room.bodies:
 		if b.lane or (group >= 0 and b.group == group):

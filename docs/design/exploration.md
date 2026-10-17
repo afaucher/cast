@@ -9,6 +9,25 @@ terrain rules that already exist:
 - a drop of more than 3 is blocked;
 - stairs bridge big gaps, and missing cells are void.
 
+## Walls: flat, through the hex centers
+
+Walls don't follow the hex edges. Each wall face runs straight from one hex center to the next, crossing the
+shared edge at its midpoint, so every wall is at 0, 60 or 120 degrees and every corner sits on a hex center.
+The border cells are cut in half: floor on the room side, wall on the other (`HexMap.cut_walls`, see
+ARCHITECTURE.md). What it means on the ground:
+- **Rooms read as clean shapes.** A round room is a hexagon with six straight walls; lobed rooms are polygons.
+  No zigzag, so it is easy to see where a room ends and where the doors are.
+- **Bodies stop at the face.** A hero walking into a wall stops touching it and slides along it; a shove slams
+  against the flat face; arrows hit the face, not a tooth of it. Props stand flush against the walls.
+- **Corridors.** Tree links are 4.5 wide (two full lanes); extra loops, the climb shortcut and the one chokepoint
+  are 3.0 wide. Every corridor has a full centre lane, which is what pathing walks (a cut cell's center is on the
+  wall line, so it is never a path step). Doorways are always a full cell in a flared, clean opening.
+- **The old one-wide chokepoint is gone:** at 3.0 it is still the narrowest passage on a floor and still a place
+  to hold a pack, but two heroes can pass in it. A tighter squeeze would need a corridor with no full lane, which
+  pathing could not use.
+- Pillars and pits keep two cells from the walls, so there is never a gap too thin to walk between a pillar and a
+  wall.
+
 ## The key asymmetry: one-way ledges
 
 You can **drop** 3 levels but you can't **climb** 3. That gives every 3-level edge a

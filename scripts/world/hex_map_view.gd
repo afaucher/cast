@@ -11,6 +11,12 @@ extends Node3D
 ## sides keep a subtle band at every height level (count them to judge step / climb /
 ## blocked) plus a faint glow down the column corners; pits get an amber glow at the
 ## bottom. The "start" / "exit" cells get cyan-green / magenta glowing seams + a ring.
+##
+## Midpoint walls (HexMap.cut_walls): a cut cell is drawn in two parts. Its floor kites are a floor tile (the
+## same inset top, bevel and seam, but only along its hex edges: the floor runs flush into the wall line) and its
+## wall kites are raised to the cell's wall_top with a capped top. The wall FACE is a flat quad on the line from
+## the cell's center to the edge midpoint, so neighbouring cut cells join into one straight face from center to
+## center.
 
 const FLOOR_DEPTH := -2          ## level where columns end (and where pit bottoms are)
 const LH := Hex.LEVEL_HEIGHT
@@ -99,7 +105,16 @@ func build(map: HexMap) -> void:
 
 	for c in map.cells:
 		var cell: HexMap.Cell = map.cells[c]
-		if cell.type == HexMap.Tile.STAIRS:
+		var wm: int = 0 if cell.type == HexMap.Tile.WALL else cell.wall_mask
+		if wm == HexMap.ALL_KITES:
+			_add_wall_part(c, cell, wm)       # a cut cell walled in completely
+		elif wm != 0:
+			if cell.type == HexMap.Tile.STAIRS:
+				_add_stairs(c, cell, HexMap.ALL_KITES & ~wm)
+			else:
+				_add_floor_part(c, cell, HexMap.ALL_KITES & ~wm)
+			_add_wall_part(c, cell, wm)
+		elif cell.type == HexMap.Tile.STAIRS:
 			_add_stairs(c, cell)
 		else:
 			_add_column(c, cell)
@@ -417,6 +432,25 @@ func _bottom_level(nb: Vector2i) -> int:
 	return cell.level
 
 
+## Ground height (levels) of kite k of cell nb: its wall top on the wall side of a cut cell.
+func _kite_level(nb: Vector2i, k: int) -> int:
+	var cell: HexMap.Cell = _map.cells.get(nb)
+	if cell == null:
+		return FLOOR_DEPTH
+	if cell.type != HexMap.Tile.WALL and cell.wall_mask != 0 and (cell.wall_mask >> posmod(k, 6)) & 1 == 1:
+		return cell.wall_top
+	return cell.level
+
+
+## Height (levels) across a hex-edge half of kite k of cell c: `first` is the half from the midpoint of the edge
+## facing DIRS[k] to the kite's corner (it borders kite k + 2 of that neighbour), else the half from the corner to
+## the midpoint of the edge facing DIRS[k + 1] (kite k + 4 of that neighbour).
+func _across(c: Vector2i, k: int, first: bool) -> int:
+	if first:
+		return _kite_level(c + Hex.DIRS[posmod(k, 6)], k + 2)
+	return _kite_level(c + Hex.DIRS[posmod(k + 1, 6)], k + 4)
+
+
 func _shade(level: int) -> Color:
 	var v := lerpf(0.80, 1.0, clampf(level / 10.0, 0.0, 1.0))
 	return Color(v, v, v)
@@ -465,13 +499,27 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 	for j in 6:
 		var nb := c + Hex.DIRS[_edge_dir(j)]
 		var bottom := _bottom_level(nb)
-		if cell.level <= bottom:
-			continue  # hidden by a taller-or-equal neighbor
 		var n := Hex.dir_vector(_edge_dir(j))
 		var y_top := y - SEAM_DROP
-		var y_bot := bottom * LH - SEAM_DROP
 		var p0 := _corner(center, j)
 		var p1 := _corner(center, j + 1)
+		if _map.midpoint_walls:
+			# the two halves of this edge may border different parts of a cut neighbour (its wall or its floor):
+			# corner j is kite e's corner, corner j + 1 is kite e - 1's
+			var e := _edge_dir(j)
+			var b0 := _across(c, e, true)
+			var b1 := _across(c, e - 1, false)
+			if b0 != b1:
+				var mid := center + Hex.edge_mid(e)
+				if cell.level > b0:
+					_side_quad(side_b, p0, mid, y_top, b0 * LH - SEAM_DROP, n, 0.0, 0.5, side_col, SEAM_DROP)
+				if cell.level > b1:
+					_side_quad(side_b, mid, p1, y_top, b1 * LH - SEAM_DROP, n, 0.5, 1.0, side_col, SEAM_DROP)
+				continue
+			bottom = b0
+		if cell.level <= bottom:
+			continue  # hidden by a taller-or-equal neighbor
+		var y_bot := bottom * LH - SEAM_DROP
 		if _pits.has(nb):
 			# warm glow climbing the last stretch of the pit wall
 			var gh := minf(0.9, y_top - y_bot)
@@ -522,8 +570,12 @@ func _add_pit_bottoms() -> void:
 
 # ---------------------------------------------------------------------- stairs
 
-## Stepped treads rising toward stair_dir; tread i sits at the ramp height of its middle.
-func _add_stairs(c: Vector2i, cell: HexMap.Cell) -> void:
+## Stepped treads rising toward stair_dir; tread i sits at the ramp height of its middle. `open` = the kites to draw
+## (a cut staircase only draws its floor side; the wall part is _add_wall_part's).
+func _add_stairs(c: Vector2i, cell: HexMap.Cell, open: int = HexMap.ALL_KITES) -> void:
+	if open != HexMap.ALL_KITES:
+		_add_cut_stairs(c, cell, open)
+		return
 	var center := Hex.to_world(c)
 	var dirv := Hex.dir_vector(cell.stair_dir)
 	var side := Vector3(-dirv.z, 0.0, dirv.x)
@@ -618,4 +670,272 @@ func _clip_half(poly: Array[Vector3], axis: Vector3, limit: float, keep_above: b
 		if a_in != b_in:
 			var t := da / (da - db)
 			out.append(a.lerp(b, t))
+	return out
+
+
+# ---------------------------------------------------------------------- midpoint walls (cut cells)
+
+static func _kpt(center: Vector3, off: Vector3, scale: float, y: float) -> Vector3:
+	return Vector3(center.x + off.x * scale, y, center.z + off.z * scale)
+
+
+## Contiguous runs of the kites set in `mask`, each [first kite, count] (count 6 = the whole hex).
+static func _runs(mask: int) -> Array:
+	var out: Array = []
+	if mask == HexMap.ALL_KITES:
+		out.append([0, 6])
+		return out
+	for k in 6:
+		if (mask >> k) & 1 == 0 or (mask >> posmod(k - 1, 6)) & 1 == 1:
+			continue   # not in the mask, or not the first kite of its run
+		var n := 0
+		while n < 6 and (mask >> ((k + n) % 6)) & 1 == 1:
+			n += 1
+		out.append([k, n])
+	return out
+
+
+## The outline of a run of kites as offsets from the center: [center, mid(k0), corner(k0), mid(k0+1), ...,
+## corner(k1), mid(k1+1)] (star-shaped about the center, so a fan from it is exact), or the six corners for a whole hex.
+static func _run_outline(k0: int, count: int) -> Array[Vector3]:
+	var pts: Array[Vector3] = []
+	if count >= 6:
+		for i in 6:
+			pts.append(Hex.kite_corner(i))
+		return pts
+	pts.append(Vector3.ZERO)
+	for i in count:
+		var k := (k0 + i) % 6
+		pts.append(Hex.edge_mid(k))
+		pts.append(Hex.kite_corner(k))
+	pts.append(Hex.edge_mid((k0 + count) % 6))
+	return pts
+
+
+## A tile top over a run of kites: inset top, bevel along the hex-edge parts only (the radial parts lie on the
+## wall line and stay flush), the full-size seam below.
+func _run_tile(top_b: Batch, center: Vector3, k0: int, count: int, y: float, col: Color, rim: Color, rim_glow: float, seam: Color, world_uv: bool) -> void:
+	var outline := _run_outline(k0, count)
+	var pts: Array = []
+	var uv: Array = []
+	for o in outline:
+		var p := _kpt(center, o, TOP_SCALE, y)
+		pts.append(p)
+		uv.append(_uv_for(center, p, world_uv))
+	top_b.poly(_ccw_fix(pts), Vector3.UP, _ccw_fix(uv), col)
+	var m := outline.size()
+	var whole := count >= 6
+	for i in m:
+		var a := outline[i]
+		var b := outline[(i + 1) % m]
+		if not whole and (a == Vector3.ZERO or b == Vector3.ZERO):
+			continue   # a radial edge: on the wall line
+		var ia := _kpt(center, a, TOP_SCALE, y)
+		var ib := _kpt(center, b, TOP_SCALE, y)
+		var oa := _kpt(center, a, BEVEL_SCALE, y - BEVEL_DROP)
+		var ob := _kpt(center, b, BEVEL_SCALE, y - BEVEL_DROP)
+		var out_n := Hex.dir_vector(_dir_of_offset((a + b) * 0.5))
+		var n := (out_n * 0.75 + Vector3.UP * 0.66).normalized()
+		var quad: Array = [ia, oa, ob, ib]
+		var quv: Array = [_uv_for(center, ia, world_uv), _uv_for(center, oa, world_uv), _uv_for(center, ob, world_uv), _uv_for(center, ib, world_uv)]
+		var qcol: Array = [col, rim, rim, col]
+		var qglow: Array = [0.0, rim_glow, rim_glow, 0.0]
+		top_b.polyv(_ccw_fix(quad), n, _ccw_fix(quv), _ccw_fix(qcol), _ccw_fix(qglow))
+	var sp: Array = []
+	var suv: Array = []
+	for o in outline:
+		sp.append(_kpt(center, o, 1.0, y - SEAM_DROP))
+		suv.append(Vector2.ZERO)
+	var seam_b: Batch = _batches[Surf.SEAM]
+	seam_b.poly(_ccw_fix(sp), Vector3.UP, suv, seam)
+
+
+## _top_tile walks the hex corners in Hex.corner order; a kite outline walks the other way round. Reverse it so
+## every top keeps the same winding (front faces up).
+static func _ccw_fix(a: Array) -> Array:
+	var out := a.duplicate()
+	out.reverse()
+	return out
+
+
+## The hex direction whose edge a point on the hex boundary (offset from the center) lies on.
+static func _dir_of_offset(o: Vector3) -> int:
+	var best := 0
+	var best_d := -INF
+	for d in 6:
+		var v := Hex.dir_vector(d)
+		var dd := o.x * v.x + o.z * v.z
+		if dd > best_d:
+			best_d = dd
+			best = d
+	return best
+
+
+## The floor side of a cut cell: a tile over its open kites, cliff sides on its open half edges.
+func _add_floor_part(c: Vector2i, cell: HexMap.Cell, open: int) -> void:
+	var center := Hex.to_world(c)
+	var is_crate := _crates.has(c)
+	var top_b: Batch = _batches[Surf.CRATE_TOP if is_crate else Surf.FLOOR_TOP]
+	var side_b: Batch = _batches[Surf.CRATE_SIDE if is_crate else Surf.CLIFF]
+	var y := cell.level * LH
+	var hv := _hash2(c)
+	var col: Color
+	var rim: Color
+	var rim_glow := 0.5
+	var seam: Color = _scaled(SEAM_COLOR, 0.8 + 0.3 * hv)
+	if is_crate:
+		col = _scaled(Color.WHITE, 0.9 + 0.12 * hv)
+		rim = _scaled(Color(0.55, 0.32, 0.15), 0.8)
+		rim_glow = 0.10
+		seam = _scaled(seam, 0.45)
+	else:
+		col = _scaled(level_tint(cell.level), 0.93 + 0.12 * hv)
+		rim = col.lerp(Color(0.95, 0.52, 0.22), 0.45)
+	for run: Array in _runs(open):
+		_run_tile(top_b, center, int(run[0]), int(run[1]), y, col, rim, rim_glow, seam, not is_crate)
+	var side_col := _shade(cell.level) if not is_crate else _scaled(Color.WHITE, 0.95)
+	_kite_sides(c, center, open, cell.level, side_b, side_col)
+
+
+## Side faces down from the hex-edge halves of the kites in `mask` (top at `level`) to whatever is across.
+func _kite_sides(c: Vector2i, center: Vector3, mask: int, level: int, side_b: Batch, side_col: Color) -> void:
+	var y_top := level * LH - SEAM_DROP
+	for k in 6:
+		if (mask >> k) & 1 == 0:
+			continue
+		var corner := center + Hex.kite_corner(k)
+		for first: bool in [true, false]:
+			var bottom := _across(c, k, first)
+			if level <= bottom:
+				continue
+			var d := k if first else (k + 1) % 6
+			var mid := center + Hex.edge_mid(d)
+			var y_bot := bottom * LH - SEAM_DROP
+			var n := Hex.dir_vector(d)
+			if first:
+				_side_quad(side_b, mid, corner, y_top, y_bot, n, 0.5, 1.0, side_col, SEAM_DROP)
+			else:
+				_side_quad(side_b, corner, mid, y_top, y_bot, n, 0.0, 0.5, side_col, SEAM_DROP)
+
+
+## The wall side of a cut cell: its wall kites raised to wall_top with a capped, seamed top like a wall column,
+## the flat FACE on each wall line (center -> edge midpoint) down to the floor, and outer sides where the
+## neighbouring wall is lower.
+func _add_wall_part(c: Vector2i, cell: HexMap.Cell, mask: int) -> void:
+	var center := Hex.to_world(c)
+	var top_lv := cell.wall_top
+	var y := top_lv * LH
+	var hv := _hash2(c)
+	var col := _scaled(Color(0.95, 0.97, 1.0), 0.9 + 0.2 * hv)
+	var rim := _scaled(col, 0.7)
+	var seam := _scaled(_scaled(SEAM_COLOR, 0.8 + 0.3 * hv), 0.20)
+	var top_b: Batch = _batches[Surf.WALL_TOP]
+	for run: Array in _runs(mask):
+		_run_tile(top_b, center, int(run[0]), int(run[1]), y, col, rim, 0.12, seam, true)
+	var side_b: Batch = _batches[Surf.WALL_SIDE]
+	var side_col := Color(0.9, 0.9, 0.9)
+	_kite_sides(c, center, mask, top_lv, side_b, side_col)
+	if mask == HexMap.ALL_KITES:
+		return
+	# the faces on the wall lines: spoke d separates kites d - 1 and d
+	var floor_y := cell.level * LH - SEAM_DROP
+	for d in 6:
+		var here := (mask >> d) & 1
+		var prev := (mask >> posmod(d - 1, 6)) & 1
+		if here == prev:
+			continue
+		var mid := center + Hex.edge_mid(d)
+		var t := Hex.dir_vector(d)
+		var n := Vector3(-t.z, 0.0, t.x)
+		var open_k := d if here == 0 else posmod(d - 1, 6)
+		if n.dot(Hex.kite_corner(open_k)) < 0.0:
+			n = -n
+		# world-aligned u along the line, so the faces of neighbouring cells continue the texture
+		var u0 := (center.x * t.x + center.z * t.z) * 0.5
+		var u1 := (mid.x * t.x + mid.z * t.z) * 0.5
+		_side_quad(side_b, center, mid, y - SEAM_DROP, floor_y, n, u0, u1, side_col, SEAM_DROP)
+
+
+## Treads of a cut staircase over its open kites only (each kite clipped to each tread strip), with the outer faces
+## on the open half edges.
+func _add_cut_stairs(c: Vector2i, cell: HexMap.Cell, open: int) -> void:
+	var center := Hex.to_world(c)
+	var dirv := Hex.dir_vector(cell.stair_dir)
+	var side := Vector3(-dirv.z, 0.0, dirv.x)
+	var n := clampi(cell.stair_rise * 2, 2, 8)
+	var top_b: Batch = _batches[Surf.STAIRS_TOP]
+	var side_b: Batch = _batches[Surf.STAIRS_SIDE]
+	var span := 2.0 * Hex.INNER
+	var prev_y := 0.0
+	for s in n:
+		var u0 := -Hex.INNER + span * s / n
+		var u1 := -Hex.INNER + span * (s + 1) / n
+		var y := (cell.level + (s + 0.5) * cell.stair_rise / n) * LH
+		var drew := false
+		for k in 6:
+			if (open >> k) & 1 == 0:
+				continue
+			var kite: Array[Vector3] = [Vector3.ZERO, Hex.edge_mid(k), Hex.kite_corner(k), Hex.edge_mid((k + 1) % 6)]
+			var poly: Array[Vector3] = _clip(kite, dirv, u0, u1)
+			if poly.size() < 3:
+				continue
+			drew = true
+			var pts: Array = []
+			var uv: Array = []
+			for p in poly:
+				pts.append(center + Vector3(p.x, y - center.y, p.z))
+				uv.append(Vector2(p.dot(side) * 0.8, (p.dot(dirv) - u0) / (u1 - u0)))
+			top_b.poly(_ccw_fix(pts), Vector3.UP, _ccw_fix(uv), Color.WHITE)
+			# outer faces on this kite's hex-edge halves
+			for first: bool in [true, false]:
+				var d := k if first else (k + 1) % 6
+				var seg := _strip_seg(Hex.edge_mid(d), Hex.kite_corner(k), dirv, u0, u1)
+				if seg.is_empty():
+					continue
+				var bottom := _across(c, k, first) * LH
+				if y <= bottom + 0.0001:
+					continue
+				_side_quad(side_b, center + seg[0], center + seg[1], y, bottom - SEAM_DROP, Hex.dir_vector(d), 0.0, 1.0, Color.WHITE)
+			# riser between this tread and the lower one behind it
+			if s > 0:
+				var cut: Array[Vector3] = []
+				for p in poly:
+					if absf(p.dot(dirv) - u0) < 0.0001:
+						cut.append(p)
+				if cut.size() >= 2:
+					var lo_p := cut[0]
+					var hi_p := cut[0]
+					for p in cut:
+						if p.dot(side) < lo_p.dot(side):
+							lo_p = p
+						if p.dot(side) > hi_p.dot(side):
+							hi_p = p
+					if lo_p.distance_to(hi_p) > 0.001:
+						_side_quad(side_b, center + lo_p, center + hi_p, y, prev_y, -dirv, 0.0, 1.0, Color(0.9, 0.9, 0.9))
+		if drew:
+			_stair_steps += 1
+		prev_y = y
+
+
+## The part of segment a -> e (offsets) inside the strip u0 <= dot(p, axis) <= u1, as [p0, p1], or [].
+static func _strip_seg(a: Vector3, e: Vector3, axis: Vector3, u0: float, u1: float) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var ua := a.dot(axis)
+	var ue := e.dot(axis)
+	var lo := 0.0
+	var hi := 1.0
+	if absf(ua - ue) < 0.00001:
+		if ua < u0 - 0.0001 or ua > u1 + 0.0001:
+			return out
+	else:
+		lo = clampf(inverse_lerp(ua, ue, u0), 0.0, 1.0)
+		hi = clampf(inverse_lerp(ua, ue, u1), 0.0, 1.0)
+		if lo > hi:
+			var t := lo
+			lo = hi
+			hi = t
+		if hi - lo < 0.0001:
+			return out
+	out.append(a.lerp(e, lo))
+	out.append(a.lerp(e, hi))
 	return out

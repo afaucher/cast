@@ -102,6 +102,29 @@ static func ring(c: Vector2i, radius: int) -> Array[Vector2i]:
 	return out
 
 
+## --- Kites (midpoint walls) ---------------------------------------------------------------
+## A cell splits into six KITES around its center. Kite k is the sector between DIRS[k] and
+## DIRS[k+1]: center -> edge_mid(k) -> kite_corner(k) -> edge_mid(k + 1). It is this cell's share
+## of the triangle of centers (c, c + DIRS[k], c + DIRS[k+1]); the same triangle is kite k + 2 of
+## c + DIRS[k] and kite k + 4 of c + DIRS[k+1]. Midpoint walls block whole triangles, so a wall
+## face always runs from one hex center to the next, through an edge midpoint.
+
+## Offset of the corner between DIRS[k] and DIRS[k+1].
+static func kite_corner(k: int) -> Vector3:
+	return corner((6 - posmod(k, 6)) % 6)
+
+
+## Offset of the midpoint of the edge facing DIRS[d].
+static func edge_mid(d: int) -> Vector3:
+	return dir_vector(d) * INNER
+
+
+## Kite index (0..5) of an X/Z offset from a cell center.
+static func kite_of(off: Vector3) -> int:
+	var a := -atan2(off.z, off.x)
+	return posmod(int(floorf(a / (PI / 3.0))), 6)
+
+
 ## Corner i (0..5) offset from the cell center, pointy-top (corner 0 at 30°... see below).
 ## Corners run counter-clockwise starting at angle -30° (between E and SE edges).
 static func corner(i: int) -> Vector3:

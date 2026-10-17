@@ -82,7 +82,8 @@ func _physics_process(delta: float) -> void:
 			if cell == null:
 				_fall_into_void(np)
 				return
-			if cell.type == HexMap.Tile.WALL:
+			if map.blocks_point(np, RADIUS):   # a wall face (HexMap): stop with the boulder against it
+				global_position = global_position.lerp(np, map.sweep(global_position, np, RADIUS))
 				_stop()
 				return
 			var probe := np + direction * RADIUS * 0.6

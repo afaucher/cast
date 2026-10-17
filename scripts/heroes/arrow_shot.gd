@@ -61,7 +61,7 @@ func _physics_process(delta: float) -> void:
 		var map: HexMap = GameWorld.map
 		var g := map.ground_height(to) if map else NAN
 		if not is_nan(g) and g > to.y:
-			_impact(null, global_position)
+			_impact(null, map.solid_contact(global_position, to))   # at the wall face / cliff, not a step short
 			return
 		global_position = to
 		if _travelled >= max_range:

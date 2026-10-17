@@ -365,7 +365,7 @@ func _check_density(map: HexMap, plan: SitePlan, tag: String) -> void:
 		var start := Vector2i.ZERO
 		var found := false
 		for c in cells_in:
-			if not solid.has(c) and map.cells[c].type == HexMap.Tile.FLOOR:
+			if not solid.has(c) and map.cells[c].type == HexMap.Tile.FLOOR and map.is_walkable_cell(c):
 				start = c
 				found = true
 				break
@@ -389,8 +389,8 @@ func _flood(map: HexMap, set: Dictionary, start: Vector2i, solid: Dictionary) ->
 		qi += 1
 		for d in Hex.DIRS:
 			var nb: Vector2i = c + d
-			if seen.has(nb) or not set.has(nb) or solid.has(nb):
-				continue
+			if seen.has(nb) or not set.has(nb) or solid.has(nb) or not map.is_walkable_cell(nb):
+				continue   # (full cells: a cut cell's center is on the wall line, routes go through full floor)
 			var a: HexMap.Cell = map.cells[c]
 			var b: HexMap.Cell = map.cells[nb]
 			if a.type != HexMap.Tile.FLOOR or b.type != HexMap.Tile.FLOOR or absi(a.level - b.level) > 1:

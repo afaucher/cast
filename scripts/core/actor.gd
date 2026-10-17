@@ -257,10 +257,19 @@ func move(dir: Vector3, delta: float) -> bool:
 	var step := dir * effective_speed() * delta
 	var from := global_position
 	var moved := false
-	for attempt in [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]:
+	for raw in [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]:
+		var attempt: Vector3 = raw
+		if map:
+			# walls (HexMap.clip_move): the body stops touching the face and slides along it
+			attempt = map.clip_move(from, from + raw, radius) - from
+			attempt.y = 0.0
 		if attempt.length() < 0.0001:
+			if map and raw == step:
+				break   # pressed straight into a wall or a corner: stay put (no drift from the per-axis tries)
 			continue
 		var probe: Vector3 = from + attempt + attempt.normalized() * radius * 0.5
+		if map and map.wall_at(probe):
+			probe = from + attempt   # the wall was already handled by clip_move: judge the height where the body goes
 		var mv := map.movement_check(from, probe) if map else HexMap.Move.OK
 		if mv == HexMap.Move.BLOCKED or (mv == HexMap.Move.CLIMB and not _climb_allowed()):
 			continue
@@ -477,21 +486,21 @@ func _advance(step: Vector3, map: HexMap) -> void:
 		if cell == null:
 			_enter_void(from, np)
 			return
-		var blocked := cell.type == HexMap.Tile.WALL
+		var wall := map.blocks_point(np, radius)   # the body would overlap a wall face (HexMap)
+		var blocked := wall
 		if not blocked:
 			var probe := np + dir * radius * 0.5
 			var pcell: HexMap.Cell = map.get_cell(Hex.from_world(probe))
 			if pcell != null:
-				if pcell.type == HexMap.Tile.WALL:
-					blocked = true
-				else:
-					var ref_y := from.y
-					if not _airborne:
-						var g0 := map.ground_height(from)
-						if not is_nan(g0):
-							ref_y = g0
-					blocked = (map.ground_height(probe) - ref_y) / Hex.LEVEL_HEIGHT >= SLAM_RISE_LEVELS
+				var ref_y := from.y
+				if not _airborne:
+					var g0 := map.ground_height(from)
+					if not is_nan(g0):
+						ref_y = g0
+				blocked = (map.ground_height(probe) - ref_y) / Hex.LEVEL_HEIGHT >= SLAM_RISE_LEVELS
 		if blocked:
+			if wall:
+				global_position = from.lerp(np, map.sweep(from, np, radius))   # slam with the body touching the face
 			_slam()
 			return
 		global_position = np
@@ -621,6 +630,8 @@ func _separate() -> void:
 			continue
 		var push := (d.normalized() if d.length() > 0.001 else Vector3.RIGHT) * overlap * 0.5
 		var target := global_position + push
+		if map != null:
+			target = map.clip_move(global_position, target, radius)   # never pushed into a wall face
 		if map == null or map.movement_check(global_position, target) == HexMap.Move.OK:
 			global_position = target
 

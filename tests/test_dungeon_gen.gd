@@ -1,6 +1,7 @@
 extends TestCase
-## DungeonGen invariants (big airy rooms, three-wide corridors, sparse features kept out of room centers,
-## generation time) + HexMapView smoke test + prototype textures.
+## DungeonGen invariants (big airy rooms, corridors with a full centre lane, sparse features kept out of room
+## centers, generation time) + HexMapView smoke test + prototype textures. The midpoint-wall geometry itself
+## (half cells, collision, doorways, placement) is tests/test_midpoint_walls.gd.
 
 const SEEDS: Array[int] = [1, 2, 3, 7, 42, 99, 1234, 31337]
 
@@ -109,7 +110,10 @@ func _check_map(m: HexMap, s: int, deep: bool) -> void:
 			if not rooms.has(cell.tag):
 				rooms[cell.tag] = []
 			rooms[cell.tag].append(c)
-			check(reached.has(c), tag + "room cell reachable " + str(c))
+			if m.is_walkable_cell(c):
+				check(reached.has(c), tag + "room cell reachable " + str(c))
+			else:
+				check(m.is_half(c) and _touches_full(m, c), tag + "cut room cell %s borders the room's floor" % str(c))
 	check(rooms.size() >= 5 and rooms.size() <= 9, tag + "room count %d" % rooms.size())
 	for r in rooms:
 		check(rooms[r].size() >= 5, tag + r + " has floor")
@@ -170,28 +174,36 @@ func _check_map(m: HexMap, s: int, deep: bool) -> void:
 			check(not m.find_path(start, cell0, false).is_empty(), tag + "A* to " + r)
 
 
-## Size of the void component containing v, counting at most `limit`.
-## Corridors are wide except for rare special cases: most corridor cells have at least 3 walkable
-## neighbours (a one-wide hall's cells have only 2, a two-wide hall's have 4), and the tree links are three
-## wide, whose lane cells have 4 and whose middle-lane cells have 5 or 6 walkable neighbours.
+func _touches_full(m: HexMap, c: Vector2i) -> bool:
+	for d in Hex.DIRS:
+		if m.is_walkable_cell(c + d):
+			return true
+	return false
+
+
+## Corridors have a full centre lane with the walls through their outer cells' centers: the outer cells are cut
+## (each touching the full lane), the tree links carry a second full lane (4 cells across, 4.5 wide), so a good
+## share of corridor cells is full and many full ones have a full neighbour beside them, not just ahead / behind.
 func _check_corridor_width(m: HexMap, s: int) -> void:
 	var total := 0
-	var wide := 0
-	var three := 0
+	var full := 0
+	var double := 0
 	for c: Vector2i in m.cells:
 		if m.cells[c].tag != "corridor":
 			continue
 		total += 1
+		if not m.is_walkable_cell(c):
+			check(m.is_half(c) and _touches_full(m, c), "seed %d: cut corridor cell %s borders the full lane" % [s, str(c)])
+			continue
+		full += 1
 		var k := 0
 		for d in Hex.DIRS:
 			if m.is_walkable_cell(c + d):
 				k += 1
-		if k >= 3:
-			wide += 1
-		if k >= 5:
-			three += 1
-	check(total > 0 and float(wide) / total >= 0.75, "seed %d: corridors mostly wide (%d of %d cells)" % [s, wide, total])
-	check(total > 0 and float(three) / total >= 0.2, "seed %d: the main corridors are three wide (%d of %d cells have a lane on both sides)" % [s, three, total])
+		if k >= 4:
+			double += 1
+	check(total > 0 and float(full) / total >= 0.35, "seed %d: corridors have full lanes (%d of %d cells)" % [s, full, total])
+	check(full > 0 and float(double) / full >= 0.3, "seed %d: the main corridors are two full lanes wide (%d of %d full cells)" % [s, double, full])
 
 
 ## Rooms are big: no tiny rooms (radius 5-8 blobs), a decent average, and a real span across.
@@ -247,6 +259,7 @@ func _check_features(seeds: Array[int]) -> void:
 	check(float(off_level) / maxi(1, room_count) <= 9.0, "sparse features: %.1f raised cells a room" % (float(off_level) / maxi(1, room_count)))
 
 
+## Size of the void component containing v, counting at most `limit`.
 func _void_size(m: HexMap, v: Vector2i, limit: int) -> int:
 	var seen := {v: true}
 	var queue: Array[Vector2i] = [v]

@@ -61,6 +61,7 @@ static func _fallback() -> HexMap:
 			m.set_cell(c, 6, HexMap.Tile.WALL)
 	m.get_cell(Vector2i(-2, 0)).tag = "start"
 	m.get_cell(Vector2i(0, 3)).tag = "exit"
+	m.cut_walls()
 	return m
 
 
@@ -106,7 +107,9 @@ class Builder:
 	var room_of: Dictionary = {}        ## cell -> room index
 	var links: Array[Link] = []
 	var corr_cells: Dictionary = {}     ## every corridor cell
-	var corr_buffer: Dictionary = {}    ## cells within 1 of a corridor
+	var corr_buffer: Dictionary = {}    ## cells within 1 of a corridor (no other corridor's cell may go there)
+	var corr_buffer2: Dictionary = {}   ## cells within 2 of a corridor (no other corridor's ROUTE may go there)
+	var near_room: Dictionary = {}      ## cell -> bitmask of the rooms within 2 cells of it
 	var pits: Dictionary = {}
 	var tree_adj: Array = []
 	var stairs_count := 0
@@ -135,6 +138,7 @@ class Builder:
 		_choose_start_exit()
 		_decorate()
 		_add_walls()
+		map.cut_walls()
 		if not _validate_and_tag():
 			return null
 		return map
@@ -172,6 +176,10 @@ class Builder:
 			for c in cells:
 				room_of[c] = room.index
 			rooms.append(room)
+		for room in rooms:
+			for bc in room.boundary:
+				for n in Hex.range_cells(bc, 2):
+					near_room[n] = int(near_room.get(n, 0)) | (1 << room.index)
 		return rooms.size() >= mini(want, 5)
 
 	func _random_cell(radius: int) -> Vector2i:
@@ -203,8 +211,8 @@ class Builder:
 			for _i in rng.randi_range(5, 12):
 				var cand: Array[Vector2i] = []
 				for c in cells:
-					if c == center:
-						continue
+					if Hex.distance(c, center) <= 2:
+						continue   # the middle stays whole (the start / exit stand there)
 					var inside := 0
 					for d in Hex.DIRS:
 						if cells.has(c + d):
@@ -214,7 +222,29 @@ class Builder:
 				if cand.is_empty():
 					break
 				cells.erase(cand[rng.randi_range(0, cand.size() - 1)])
-		return _component(cells, center)
+		return _open_shape(_component(cells, center), center)
+
+	## Morphological opening: the cells with all six neighbours in the shape (the ones that stay FULL once the
+	## walls run through the boundary cells' centers), the part of them connected to the center, grown back by
+	## one ring. Every boundary cell then touches a full cell: no one-cell peninsula or neck turns into a sliver.
+	func _open_shape(cells: Dictionary, center: Vector2i) -> Dictionary:
+		var inner := {}
+		for c: Vector2i in cells:
+			var all_in := true
+			for d in Hex.DIRS:
+				if not cells.has(c + d):
+					all_in = false
+					break
+			if all_in:
+				inner[c] = true
+		if not inner.has(center):
+			return cells
+		var out := {}
+		for c: Vector2i in _component(inner, center):
+			out[c] = true
+			for d in Hex.DIRS:
+				out[c + d] = true
+		return out
 
 	func _component(cells: Dictionary, from: Vector2i) -> Dictionary:
 		var seen := {from: true}
@@ -329,11 +359,15 @@ class Builder:
 	func _key(c: Vector2i, d: int) -> int:
 		return ((c.x + KEY_OFF) * KEY_W + (c.y + KEY_OFF)) * 6 + d
 
-	## Extra cost to enter c, or -1 if a corridor may not use it.
+	## Extra cost to enter c with a corridor's ROUTE, or -1 if it may not. A route keeps 3 cells from other rooms
+	## and other corridors, so the ring of cells _fill() adds around it (its walls run through their centers)
+	## never touches them.
 	func _penalty(c: Vector2i, a_idx: int, b_idx: int) -> int:
-		if room_of.has(c) or corr_buffer.has(c) or map.has_cell(c) or pits.has(c):
+		if room_of.has(c) or corr_buffer2.has(c) or map.has_cell(c) or pits.has(c):
 			return -1
 		if Hex.distance(c, Vector2i.ZERO) > p_size + 14:
+			return -1
+		if int(near_room.get(c, 0)) & ~((1 << a_idx) | (1 << b_idx)) != 0:
 			return -1
 		var pen := 0
 		for d in Hex.DIRS:
@@ -348,7 +382,10 @@ class Builder:
 	## A* with a turn penalty from room a to room b. Returns [door_a, p1..pn, door_b] or [].
 	func _route(a: Room, b: Room) -> Array[Vector2i]:
 		var empty: Array[Vector2i] = []
-		var srcs: Array[Vector2i] = a.boundary.duplicate()
+		var srcs: Array[Vector2i] = []
+		for src in a.boundary:
+			if _door_ok(src, a.index, b.index):
+				srcs.append(src)
 		var bc: Vector2i = b.center
 		srcs.sort_custom(func(x, y): return Hex.distance(x, bc) < Hex.distance(y, bc))
 		if srcs.size() > 10:
@@ -383,7 +420,7 @@ class Builder:
 				var g: int = dist[k]
 				if g + _h(c, b) != f:
 					continue  # stale entry
-				var door := _touching(c, d, b.index)
+				var door := _touching(c, d, b.index, a.index)
 				if door != Vector2i(1 << 20, 0):
 					var path: Array[Vector2i] = []
 					var cur := k
@@ -411,6 +448,31 @@ class Builder:
 			f += 1
 		return empty
 
+	## May a corridor cell that is not on the route (a lane, a fill cell) go at c? It must be empty and keep one
+	## cell (a wall) between itself and other rooms and corridors.
+	func _fill_ok(c: Vector2i, a_idx: int, b_idx: int) -> bool:
+		if room_of.has(c) or corr_buffer.has(c) or map.has_cell(c) or pits.has(c):
+			return false
+		if Hex.distance(c, Vector2i.ZERO) > p_size + 16:
+			return false
+		for d in Hex.DIRS:
+			var ri: int = room_of.get(c + d, -1)
+			if ri != -1 and ri != a_idx and ri != b_idx:
+				return false
+		return true
+
+	## Can room cell `door` be a doorway? Its cells outside the room get filled (so the door cell is FULL and the
+	## corridor joins the room's floor through a clean opening), so they must be free.
+	func _door_ok(door: Vector2i, a_idx: int, b_idx: int) -> bool:
+		var own: int = room_of.get(door, -1)
+		for d in Hex.DIRS:
+			var x: Vector2i = door + d
+			if room_of.get(x, -1) == own:
+				continue
+			if not _fill_ok(x, a_idx, b_idx):
+				return false
+		return true
+
 	func _push(buckets: Array, f: int, k: int) -> void:
 		while buckets.size() <= f:
 			buckets.append([])
@@ -419,13 +481,13 @@ class Builder:
 	func _h(c: Vector2i, b: Room) -> int:
 		return maxi(0, Hex.distance(c, b.center) - b.extent - 1) * 10
 
-	## A cell of room `idx` adjacent to c (preferring straight ahead), or a sentinel.
-	func _touching(c: Vector2i, d: int, idx: int) -> Vector2i:
+	## A cell of room `idx` adjacent to c that can be a doorway (preferring straight ahead), or a sentinel.
+	func _touching(c: Vector2i, d: int, idx: int, other: int) -> Vector2i:
 		var ahead: Vector2i = c + Hex.DIRS[d]
-		if room_of.get(ahead, -1) == idx:
+		if room_of.get(ahead, -1) == idx and _door_ok(ahead, other, idx):
 			return ahead
 		for dd in Hex.DIRS:
-			if room_of.get(c + dd, -1) == idx:
+			if room_of.get(c + dd, -1) == idx and _door_ok(c + dd, other, idx):
 				return c + dd
 		return Vector2i(1 << 20, 0)
 
@@ -439,31 +501,46 @@ class Builder:
 		if steps.is_empty():
 			return false
 		var n := S.size() - 2
+		var added: Array[Vector2i] = []
 		for i in range(1, n + 1):
-			var st: Step = steps[i - 1]
-			var c := S[i]
-			if st.stairs:
-				map.set_stairs(c, st.level, st.dir, st.rise)
-				stairs_count += 1
-			else:
-				map.set_cell(c, st.level)
-			map.get_cell(c).tag = "corridor"
-			corr_cells[c] = true
-		# Tree links are three wide (a parallel lane on each side of the routed path), the extra loops
-		# two wide (one lane), stairs included (each lane gets its own matching staircase). One-wide
-		# passages are reserved for special cases: the climb shortcut and one short chokepoint.
-		var narrow := shortcut
-		if not shortcut and not narrow_used and n <= NARROW_MAX_LEN and rng.randf() < NARROW_CHANCE:
+			_put(S[i], steps[i - 1])
+			added.append(S[i])
+		# Walls run through the centers of a corridor's outer cells, so the route (and, on a tree link, one lane
+		# beside it) is the CORE: every core cell gets all six neighbours (_fill), which makes it a full cell and
+		# the corridor's floor one clean strip. Tree links: route + lane = 4 cells across, 4.5 wide between the
+		# walls. Extra loops, the climb shortcut and the chokepoint: route only = 3 across, 3.0 wide.
+		var narrow := shortcut or loop
+		if not narrow and not narrow_used and n <= NARROW_MAX_LEN and rng.randf() < NARROW_CHANCE:
 			narrow = true
 			narrow_used = true
+		var core: Array[Vector2i] = []
+		var core_idx: Dictionary = {}     # core cell -> index into S (0 and n + 1 are the doors)
+		for i in n + 2:
+			core.append(S[i])
+			core_idx[S[i]] = i
 		if not narrow:
-			_widen(S, steps, ai, bi, 1)
-			if not loop:
-				_widen(S, steps, ai, bi, -1)
-		for c in corr_cells:
-			corr_buffer[c] = true
-			for d in Hex.DIRS:
-				corr_buffer[c + d] = true
+			for i in range(1, n + 1):
+				var lane: Vector2i = S[i] + Hex.DIRS[posmod(Hex.dir_to(S[i], S[i + 1]) + 1, 6)]
+				if core_idx.has(lane):
+					continue
+				if not map.has_cell(lane):
+					if not _fill_ok(lane, ai, bi):
+						continue
+					_put(lane, steps[i - 1])
+					added.append(lane)
+				elif not corr_cells.has(lane) and not added.has(lane):
+					continue   # a room cell
+				core.append(lane)
+				core_idx[lane] = i
+		added.append_array(_fill(core, core_idx, steps, ra, rb, ai, bi))
+		for c in added:
+			map.get_cell(c).tag = "corridor"
+			corr_cells[c] = true
+		for c in added:
+			for nb in Hex.range_cells(c, 2):
+				corr_buffer2[nb] = true
+				if Hex.distance(nb, c) <= 1:
+					corr_buffer[nb] = true
 		var link := Link.new()
 		link.a = ai
 		link.b = bi
@@ -476,36 +553,39 @@ class Builder:
 			climb_features += 1
 		return true
 
-	## Add a side lane: for each path cell S[i], its neighbor one turn to the left (turn +1) or right
-	## (turn -1) of the travel direction, at the same height. A stairs cell's twin is
-	## only added when the lane cells before and after it exist too, so a twin
-	## staircase never dead-ends into a wall.
-	func _widen(S: Array[Vector2i], steps: Array, ai: int, bi: int, turn: int) -> void:
-		var n := S.size() - 2
-		var side := {}   # i -> side cell, for cells whose side is free
-		for i in range(1, n + 1):
-			var d := Hex.dir_to(S[i], S[i + 1])
-			var c: Vector2i = S[i] + Hex.DIRS[posmod(d + turn, 6)]
-			if _penalty(c, ai, bi) >= 0 and not corr_cells.has(c):
-				side[i] = c
-		for i in range(1, n + 1):
-			if not side.has(i):
-				continue
-			var st: Step = steps[i - 1]
-			var c: Vector2i = side[i]
-			if st.stairs:
-				# Lane neighbours along the stairs: before (or room a) and after (or room b).
-				# (cells are processed in order, so a skipped earlier twin is simply absent)
-				var before_ok := i == 1 or (side.has(i - 1) and corr_cells.has(side[i - 1]))
-				var after_ok := i == n or side.has(i + 1)
-				if not (before_ok and after_ok):
+	## One corridor cell from a height-profile step (a flat cell or a staircase).
+	func _put(c: Vector2i, st: Step) -> void:
+		if st.stairs:
+			map.set_stairs(c, st.level, st.dir, st.rise)
+			stairs_count += 1
+		else:
+			map.set_cell(c, st.level)
+
+	## Give every core cell all six neighbours: the empty ones become corridor floor that copies the step of the
+	## EARLIEST core cell it touches (so a cell beside a staircase is its twin, one behind it is the flat floor
+	## before it). Door cells (indices 0 and n + 1) copy their room's level. Returns the cells added.
+	func _fill(core: Array[Vector2i], core_idx: Dictionary, steps: Array, ra: Room, rb: Room, ai: int, bi: int) -> Array[Vector2i]:
+		var out: Array[Vector2i] = []
+		var n := steps.size()
+		for k in core:
+			for d in Hex.DIRS:
+				var x: Vector2i = k + d
+				if map.has_cell(x) or not _fill_ok(x, ai, bi):
 					continue
-				map.set_stairs(c, st.level, st.dir, st.rise)
-				stairs_count += 1
-			else:
-				map.set_cell(c, st.level)
-			map.get_cell(c).tag = "corridor"
-			corr_cells[c] = true
+				var idx := 1 << 20
+				for dd in Hex.DIRS:
+					if core_idx.has(x + dd):
+						idx = mini(idx, int(core_idx[x + dd]))
+				var st := Step.new()
+				if idx <= 0:
+					st.level = ra.level
+				elif idx > n:
+					st.level = rb.level
+				else:
+					st = steps[idx - 1]
+				_put(x, st)
+				out.append(x)
+		return out
 
 	func _straight(S: Array[Vector2i], i: int) -> bool:
 		return Hex.dir_to(S[i - 1], S[i]) == Hex.dir_to(S[i], S[i + 1])
@@ -662,6 +742,17 @@ class Builder:
 					keys.append(c)
 			if keys.is_empty():
 				continue
+			# Pillars and pits keep two cells from the walls: next to a wall line they would leave a strip of
+			# floor too thin to walk (the wall runs through the boundary cells' centers).
+			var deep := {}
+			for c: Vector2i in valid:
+				var ok := true
+				for fc in Hex.range_cells(c, 2):
+					if not room.cells.has(fc):
+						ok = false
+						break
+				if ok:
+					deep[c] = true
 			var plan: Array[int] = []
 			# About half the raised features the rooms used to get, in rooms that are twice the size.
 			var scale := 1 + room.cells.size() / 120
@@ -679,8 +770,9 @@ class Builder:
 					var c: Vector2i = keys[rng.randi_range(0, keys.size() - 1)]
 					var fp := _footprint(kind, c)
 					var ok := true
+					var need_deep := kind == Feature.PILLAR or kind == Feature.PIT
 					for fc in fp:
-						if not valid.has(fc) or occupied.has(fc):
+						if not valid.has(fc) or occupied.has(fc) or (need_deep and not deep.has(fc)):
 							ok = false
 							break
 					if not ok:
@@ -768,10 +860,41 @@ class Builder:
 				return false
 		if map.find_path(start, exit_cell, false).is_empty():
 			return false
+		if not _walls_clean():
+			return false
 		for c in reached:
 			var cell: HexMap.Cell = map.cells[c]
 			if cell.tag == "" and room_of.has(c):
 				cell.tag = "room:%d" % room_of[c]
+		# Cut cells (part floor, part wall) belong to their room too: placement reads the tag, then checks the wall.
+		for c: Vector2i in map.cells:
+			var cell: HexMap.Cell = map.cells[c]
+			if cell.tag == "" and room_of.has(c) and cell.type != HexMap.Tile.WALL and cell.wall_mask != 0:
+				cell.tag = "room:%d" % room_of[c]
 		map.cells[start].tag = "start"
 		map.cells[exit_cell].tag = "exit"
+		return true
+
+
+	## Midpoint walls left the floor in one piece: every doorway cell is full (the corridor meets the room's floor
+	## through an open gap) and every full cell joins the start's through full cells (heights aside), so no
+	## pocket of floor is cut off by a wall line.
+	func _walls_clean() -> bool:
+		for l in links:
+			if not map.is_walkable_cell(l.door_a) or not map.is_walkable_cell(l.door_b):
+				return false
+		var seen := {start: true}
+		var queue: Array[Vector2i] = [start]
+		var qi := 0
+		while qi < queue.size():
+			var c: Vector2i = queue[qi]
+			qi += 1
+			for d in Hex.DIRS:
+				var nb: Vector2i = c + d
+				if not seen.has(nb) and map.is_walkable_cell(nb):
+					seen[nb] = true
+					queue.append(nb)
+		for c: Vector2i in map.cells:
+			if map.is_walkable_cell(c) and not seen.has(c):
+				return false
 		return true

@@ -15,7 +15,10 @@ extends RefCounted
 ##    picked by the room's theme (wine rack in the cellar, projector in the cinema, ...), only on cells next to
 ##    a wall on flat floor, never within 3 of the start or the exit, never within 2 cells of a corridor (so
 ##    doors and corridors stay clear), at least PROP_SPACING (4) apart. Each stands BACK TO THE WALL facing into
-##    the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw;
+##    the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw. The
+##    anchor cells next to a wall are cut by the midpoint wall (HexMap.cut_walls): the prop stands flush against the
+##    flat face and no footprint reaches the wall side (ThemeCtx);
+##  - standing spots (gates, employees, notes, monsters, the van) are FULL cells only (HexMap.is_walkable_cell);
 ##  - notes (ClueNote, docs/design/notes-rethink.md): two a floor, a story note and a hint slip in a side room, their
 ##    text from NoteCopy filled with this floor's facts (NoteFacts), plus the dispatch banner line: SitePlan.notes /
 ##    SitePlan.dispatch. Own RNG, planned after the props and before the decor (which steers around them);
@@ -211,7 +214,7 @@ static func _flat_spot(map: HexMap, p: SitePlan, tag: String, c: Vector2i, radiu
 	var level: int = int(p.base_levels[tag])
 	for n in Hex.range_cells(c, radius):
 		var cell: HexMap.Cell = map.get_cell(n)
-		if cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != level or not cell.tag.begins_with("room:"):
+		if cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != level or not cell.tag.begins_with("room:") or not map.is_walkable_cell(n):
 			return false
 	return true
 
@@ -376,7 +379,7 @@ static func _employee_spot(map: HexMap, p: SitePlan, tag: String, avoid: Diction
 	var cands: Array[Vector2i] = []
 	for c in (p.rooms[tag] as Array[Vector2i]):
 		var cell: HexMap.Cell = map.cells[c]
-		if cell.type != HexMap.Tile.FLOOR or cell.level != level or avoid.has(c):
+		if cell.type != HexMap.Tile.FLOOR or cell.level != level or avoid.has(c) or not map.is_walkable_cell(c):
 			continue
 		var ok := true
 		for g in gate_cells:
@@ -630,7 +633,7 @@ static func _note_spot(map: HexMap, p: SitePlan, ctx: ThemeCtx, tag: String, by_
 	var best_score := -(1 << 30)
 	for c in cells:
 		var cell: HexMap.Cell = map.get_cell(c)
-		if cell == null or cell.type != HexMap.Tile.FLOOR or not cell.tag.begins_with("room:"):
+		if cell == null or cell.type != HexMap.Tile.FLOOR or not cell.tag.begins_with("room:") or not map.is_walkable_cell(c):
 			continue
 		var cr := ctx.room_of(c)
 		if cr == null or not ctx.fits(cr, ThemeGeo.world(c), 0.0, 0.9, 1.1):
@@ -743,6 +746,10 @@ static func _package_fits(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, door_d: Dictio
 		var pc := ThemeGeo.cell_of(pt)
 		if not room.open.has(pc) or ctx.avoid.has(pc) or ctx.gate_zone.has(pc) or ctx.solid.has(pc) or int(door_d.get(pc, 99)) < PACKAGE_DOOR_MIN:
 			return false
+		if ctx.map.blocks_point(Vector3(pt.x, 0.0, pt.y)):
+			return false   # the wall side of a cut cell
+	if not ctx.rect_clear(pos, yaw, w, d):
+		return false
 	for b in room.bodies:
 		if ThemeGeo.overlap(pos, yaw, w, d, b.pos, b.yaw, b.w, b.d, 0.0):
 			return false
@@ -962,7 +969,7 @@ static func room_cap(map: HexMap, room_cells: Array) -> int:
 	var walkable := 0
 	for c: Vector2i in room_cells:
 		var cell := map.get_cell(c)
-		if cell != null and cell.type == HexMap.Tile.FLOOR:
+		if cell != null and cell.type == HexMap.Tile.FLOOR and map.is_walkable_cell(c):
 			walkable += 1
 	return maxi(2, walkable / MonsterFactory.CELLS_PER_MONSTER)
 
@@ -974,7 +981,7 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 	var usable: Array[Vector2i] = []
 	for c in free:
 		var cell := map.get_cell(c)
-		if cell != null and cell.type == HexMap.Tile.FLOOR and not usable.has(c):
+		if cell != null and cell.type == HexMap.Tile.FLOOR and map.is_walkable_cell(c) and not usable.has(c):   # not a wall-cut cell
 			usable.append(c)
 	var placed: Array[Vector2i] = []
 	for kind in kinds:

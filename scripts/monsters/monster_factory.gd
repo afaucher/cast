@@ -97,7 +97,7 @@ static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumb
 			continue
 		if map != null:
 			var cell := map.get_cell(c)
-			if cell == null or cell.type == HexMap.Tile.WALL or cell.type == HexMap.Tile.STAIRS:
+			if cell == null or not map.is_walkable_cell(c) or cell.type == HexMap.Tile.STAIRS:   # full floor only (not a wall-cut cell)
 				continue
 		free.append(c)
 	if free.is_empty() or budget < 2:

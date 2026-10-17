@@ -71,6 +71,27 @@ Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the 
   - Rule (in levels): rise ≤1 walks, rise 2 climbs (slow), rise ≥3 is blocked, and a drop of more than 3 is blocked.
   - STAIRS ramp from `level` at the back edge to `level + stair_rise` at the edge facing `stair_dir`.
   - WALL is a tall cell that blocks movement and line of sight.
+  - **Midpoint walls** (`cut_walls()`, run by `DungeonGen`): wall faces run along the lines that join adjacent hex
+    CENTERS, so every wall is straight (0/60/120 degrees), crosses a hex edge at its midpoint and turns on a hex
+    center. A floor cell next to a WALL cell is **cut** (`is_half(c)`): `Cell.wall_mask` has a bit per kite (the six
+    sectors around the center, `Hex.kite_of`, kite k between `DIRS[k]` and `DIRS[k+1]`) that is wall, `wall_top` is
+    that part's height. A straight wall cuts a cell in half, a room corner leaves a 120-degree floor wedge, an inside
+    corner a 240-degree one. Walls block whole triangles of hex centers, so neighbouring cells always agree; slivers
+    (a floor triangle between two faces, a pocket touching no full cell) are walled in. `Cell.mat_id` is a free
+    material slot (0 = default) for per-room floor / wall looks. Hand-built maps that never call `cut_walls()`
+    (labs, the arena, most tests) keep plain hex walls; every query below works on both.
+  - `is_walkable_cell(c)` means a FULL floor cell (present, not a wall, not cut). Those are the path nodes and the
+    spots for spawns, gates, employees, notes and the van. `find_path` never routes through a cut cell (its center lies
+    on the wall line) but accepts one as the start (the path steps out of it into a full neighbour) or the goal (the path ends at the
+    full cell beside it; the caller steers on to its goal point).
+  - **Collision lives in HexMap only**: `wall_at(p)` (the point is on the wall side), `blocks_point(p, radius)`,
+    `clip_move(from, to, radius)` (a body stops touching the face, slides along it, settles in corners without
+    jitter), `sweep(from, to, radius)` (how far a body gets before contact), `solid_contact(from, to)` (where a
+    projectile meets a face or cliff), `nearest_wall(p, max_dist)`, `wall_segments(c)` / `segments_near(p, r)`
+    (the faces as `[a, b, normal]` triples). `ground_level` returns the wall top on the wall side, so
+    `movement_check`, `line_of_sight` and projectiles already see the wall LINE as the boundary. `Actor.move`,
+    shoves (`_advance`: a slam stops with the body against the face), separation, `Monster.move`, `Projectile`,
+    `ArrowShot`, `BowlBoulder`, `SpellBook.resolve_target` and `ComponentPickup` call these, never `type == WALL`.
 - **`GameWorld`** (autoload, `scripts/core/game_world.gd`): `map`, `root` (parent for
   actors/projectiles/fx), `time` (the game clock; use it, not wall time), `rng` (gameplay rolls),
   `fx_rng` (cosmetic rolls only),
@@ -152,15 +173,30 @@ Monsters idle until a hero is within aggro range with line of sight, then act.
 
 ### Terrain (`scripts/world/dungeon_gen.gd`, `class_name DungeonGen`)
 `DungeonGen.generate(seed: int, params := {}) -> HexMap`. Cells are tagged: `"start"` (one cell),
-`"exit"` (one cell), `"room:<n>"` for room floors (so monsters can be packed per room),
-`"corridor"`. `HexMapView` (`scripts/world/hex_map_view.gd`, extends Node3D): `build(map)`.
+`"exit"` (one cell), `"room:<n>"` for room floors (so monsters can be packed per room; a room's cut border cells
+carry its tag too), `"corridor"`. `HexMapView` (`scripts/world/hex_map_view.gd`, extends Node3D): `build(map)`.
+
+Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
+To keep that clean:
+- room shapes are opened (the full interior grown back by one ring), so no one-cell neck or peninsula becomes a sliver;
+- a corridor's route (and on a tree link one lane beside it) is its CORE, and `_fill` gives every core cell all six
+  neighbours (copying the step of the earliest core cell they touch, so stairs get twins). Tree links are 4 cells
+  across (4.5 units between the walls, two full lanes), loops, the climb shortcut and the chokepoint 3 across (3.0);
+- routes keep 3 cells from other rooms and corridors (`near_room`, `corr_buffer2`) and fill cells 2 (`corr_buffer`),
+  so a wall always separates them; a door cell must have its outside neighbours free (`_door_ok`) and is filled
+  round, so every doorway is a full cell inside a clean flared opening;
+- pillars and pits keep two cells from the room's border (no strip of floor too thin to walk);
+- validation also wants every door cell full and every full cell joined to the start through full cells.
+`HexMapView` draws a cut cell as a floor tile over its open kites (seams and bevels only along its hex edges, flush
+into the wall line) plus a capped wall part at `wall_top` whose face is one flat quad per center-to-midpoint spoke.
 
 Zone layout (tuned so floors are not crowded): 6-9 rooms of radius 5-8 (`DEFAULT_RMIN/RMAX`) at least `DEFAULT_GAP`
-(8) apart in an area of radius `DEFAULT_SIZE` (36); tree-link corridors are three wide, extra loops two wide
-(the climb shortcut and one short chokepoint stay one wide); about half as many raised features per room, never
+(8) apart in an area of radius `DEFAULT_SIZE` (36); tree-link corridors are four cells across (4.5 wide between the
+midpoint walls), extra loops, the climb shortcut and the one short chokepoint three (3.0); about half as many raised features per room, never
 within `FEATURE_CENTER_CLEAR` (2) of a room's center or `FEATURE_DOOR_CLEAR` (3) of a door. Generation takes
-about 80 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder` then puts at most 6 priced props on a floor
-(next to walls, 4+ apart), scales the monster pack budgets by 0.7 and caps a room at one monster per
+about 130 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder` then puts at most 6 priced props on a floor
+(next to walls, 4+ apart, flush and square against the flat face: `ThemeCtx.wall_pose_at` marches to the face and
+refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`), scales the monster pack budgets by 0.7 and caps a room at one monster per
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.
 

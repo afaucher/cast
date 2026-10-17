@@ -176,7 +176,7 @@ func _snap_walkable(p: Vector3) -> Vector3:
 	var best_d := INF
 	for c in Hex.range_cells(cell0, 3):
 		var cell := map.get_cell(c)
-		if cell == null or cell.type != HexMap.Tile.FLOOR or absi(cell.level - base_level) > 1:
+		if cell == null or cell.type != HexMap.Tile.FLOOR or not map.is_walkable_cell(c) or absi(cell.level - base_level) > 1:
 			continue
 		var d := GameWorld.flat_distance(Hex.to_world(c), p)
 		if d < best_d:

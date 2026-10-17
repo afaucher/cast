@@ -59,7 +59,7 @@ static func _floor_spot(pos: Vector3) -> Vector3:
 		if is_nan(h):
 			continue
 		var cell: HexMap.Cell = map.get_cell(Hex.from_world(c))
-		if cell == null or cell.type == HexMap.Tile.WALL:
+		if cell == null or map.blocks_point(c, 0.3):   # not in (or against) a wall, midpoint walls included
 			continue
 		return Vector3(c.x, h, c.z)
 	return Vector3.INF

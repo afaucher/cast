@@ -79,7 +79,7 @@ static func wall_poses(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, kind: String, jit
 			elif shift == 0.0:
 				pose = ctx.wall_pose(room, c, sz.x, sz.y, j)
 			else:
-				var n := ctx.wall_normal(c)
+				var n := ctx.face_normal(c)
 				if n != Vector2.ZERO:
 					pose = ctx.wall_pose_at(room, ThemeGeo.world(c) + Vector2(-n.y, n.x) * shift, n, sz.x, sz.y, j)
 			if pose.is_empty():

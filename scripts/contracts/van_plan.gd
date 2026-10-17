@@ -12,7 +12,7 @@ extends RefCounted
 ##  - the van parks in the start room at most MAX_FROM_START cells from the start cell, its sliding door facing a
 ##    clear strip of floor where the crew steps out (Wick opposite the door, Gasket toward the cab, Rebar toward the
 ##    tail);
-##  - the whole footprint (body + a PAD of clearance) is flat floor of the start room's base level (strictly flat
+##  - the whole footprint (body + a PAD of clearance) is flat FULL floor (never a cell cut by a midpoint wall) of the start room's base level (strictly flat
 ##    cells first, lenient ones if the room has nothing better), at least CORRIDOR_MIN cells from any corridor cell
 ##    (a doorway is never boxed in), and the crew spots are flat and clear of the body too;
 ##  - parking the van may not cut any walkable cell off from the start (a BFS with the van's cells removed must still
@@ -155,8 +155,8 @@ static func _flat_cells(map: HexMap, p: SitePlan, base: int, strict: bool) -> Di
 	var out := {}
 	for c in Hex.range_cells(p.start, 10):
 		var cell: HexMap.Cell = map.get_cell(c)
-		if cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != base:
-			continue
+		if cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != base or not map.is_walkable_cell(c):
+			continue   # (full cells only: a wall-cut cell is half wall, so the van and the crew stay off it)
 		if not (cell.tag == "start" or cell.tag == p.start_room):
 			continue
 		var ok := true

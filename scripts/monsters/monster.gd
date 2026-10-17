@@ -573,10 +573,15 @@ func move(dir: Vector3, delta: float) -> bool:
 				var from := global_position
 				var chosen := Vector3.ZERO
 				for attempt in [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]:
-					var a: Vector3 = attempt
+					var a: Vector3 = map.clip_move(from, from + attempt, radius) - from   # walls: slide along the face
+					a.y = 0.0
 					if a.length() < 0.0001:
+						if attempt == step:
+							break   # pressed into a wall: no per-axis drift (as Actor.move)
 						continue
 					var probe: Vector3 = from + a + a.normalized() * radius * 0.5
+					if map.wall_at(probe):
+						probe = from + a   # (as Actor.move: the wall is clip_move's, judge the height where the body goes)
 					if map.movement_check(from, probe) == HexMap.Move.OK:
 						chosen = a
 						break

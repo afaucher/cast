@@ -235,7 +235,7 @@ static func resolve_target(caster: Actor, aim: Vector3) -> Vector3:
 	var target := from + d
 	var map := GameWorld.map
 	var steps := 0
-	while map != null and is_nan(map.ground_height(target)) and steps < 40:
+	while map != null and (is_nan(map.ground_height(target)) or map.blocks_point(target, 0.3)) and steps < 40:   # off the void and out of the wall
 		target = from + (target - from) * 0.9
 		steps += 1
 	target.y = from.y if map == null or is_nan(map.ground_height(target)) else map.ground_height(target)

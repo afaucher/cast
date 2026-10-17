@@ -191,7 +191,7 @@ func _consider_high_ground(tp: Vector3) -> void:
 	var best := here
 	for c in Hex.range_cells(here, HIGH_GROUND_SEARCH):
 		var cell := map.get_cell(c)
-		if c == here or cell == null or cell.type != HexMap.Tile.FLOOR or float(cell.level) < best_lvl:
+		if c == here or cell == null or cell.type != HexMap.Tile.FLOOR or not map.is_walkable_cell(c) or float(cell.level) < best_lvl:
 			continue
 		var d := GameWorld.flat_distance(Hex.to_world(c), tp)
 		if d < MIN_RANGE or d > MAX_RANGE:
@@ -216,7 +216,7 @@ func _clear_shot() -> bool:
 	var from := Combat.chest(self)
 	var to := Combat.chest(target)
 	to.y = from.y
-	return map.line_of_sight(from, to)
+	return map.line_of_sight(from, to, 0.08)   # fine: an arrow released beside a wall corner must not clip its tip
 
 
 func _strike() -> void:
