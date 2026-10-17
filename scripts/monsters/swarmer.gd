@@ -45,7 +45,15 @@ func _init() -> void:
 
 func _ready() -> void:
 	super._ready()
-	_side = 1.0 if randf() < 0.5 else -1.0
+	_side = 1.0 if GameWorld.rng.randf() < 0.5 else -1.0
+
+
+## Who may write each var (see Net); Monster's come from super(). The circling side and the
+## LOS check are host-side AI choices that nobody else needs.
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({"_side": Net.PRIVATE, "_los_t": Net.PRIVATE, "_los_ok": Net.PRIVATE})
+	return f
 
 
 func _build_visual(root: Node3D) -> void:

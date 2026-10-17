@@ -43,6 +43,17 @@ func _init() -> void:
 	windup_scale = 0.06
 
 
+## Who may write each var (see Net); Monster's come from super().
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		"_string": Net.LOCAL, "_arrow": Net.LOCAL,
+		# The perch search is AI working state.
+		"_hg_goal": Net.PRIVATE, "_hg_time": Net.PRIVATE, "_hg_check_t": Net.PRIVATE,
+	})
+	return f
+
+
 func _build_visual(root: Node3D) -> void:
 	var robe := _mat(Color(0.2, 0.5, 0.26))
 	var hood := _mat(Color(0.1, 0.34, 0.16))

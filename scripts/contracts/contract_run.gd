@@ -45,6 +45,18 @@ var objectives: Array[Dictionary] = []
 var contract_value := 0
 
 
+## Who may write each var (see Net). Built identically on every machine from (archetype, seed,
+## difficulty) by make(), then never written.
+func net_fields() -> Dictionary:
+	return {
+		"seed": Net.SPAWN, "archetype_id": Net.SPAWN, "client_name": Net.SPAWN, "company": Net.SPAWN,
+		"site_type": Net.SPAWN, "difficulty": Net.SPAWN, "pest": Net.SPAWN, "story": Net.SPAWN,
+		"invoice_number": Net.SPAWN, "floor_gates": Net.SPAWN, "floor_employees": Net.SPAWN,
+		"gate_pay": Net.SPAWN, "origin_pay": Net.SPAWN, "pest_pay": Net.SPAWN,
+		"pest_floor_pay": Net.SPAWN, "objectives": Net.SPAWN, "contract_value": Net.SPAWN,
+	}
+
+
 static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 	var r := ContractRun.new()
 	if not ClientArchetype.has(archetype):

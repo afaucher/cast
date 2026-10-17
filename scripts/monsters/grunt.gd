@@ -34,6 +34,13 @@ func _init() -> void:
 	bar_width = 0.8
 
 
+## Who may write each var (see Net); Monster's come from super().
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({"_sword_arm": Net.LOCAL})
+	return f
+
+
 func _build_visual(root: Node3D) -> void:
 	var bone := _mat(Color(0.88, 0.85, 0.74))
 	var dark := _mat(Color(0.2, 0.17, 0.15))

@@ -30,6 +30,15 @@ func _ready() -> void:
 		InputSetup.ensure_actions()
 
 
+## Who may write each var (see Net). Exists only on the machine of the player it controls, so
+## nothing here travels: input and aim are that machine's working state.
+func net_fields() -> Dictionary:
+	return {
+		"hero": Net.LOCAL, "camera": Net.LOCAL, "hud": Net.LOCAL, "interact": Net.LOCAL,
+		"enabled": Net.PRIVATE, "aim_override": Net.PRIVATE,
+	}
+
+
 func _physics_process(delta: float) -> void:
 	if hero == null or hero.dead or not enabled or _typing():
 		return

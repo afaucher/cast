@@ -54,6 +54,18 @@ func _ready() -> void:
 	hero = get_parent() as Hero
 
 
+## Who may write each var (see Net). The host runs every AllyBrain; all of it is its working state.
+func net_fields() -> Dictionary:
+	return {
+		"prefers_ranged": Net.SPAWN, "formation_angle": Net.SPAWN, "formation_dist": Net.SPAWN,
+		"hero": Net.LOCAL,        # the parent node
+		"leader": Net.PRIVATE,    # AI target pick; the host alone steers the ally
+		"_following": Net.PRIVATE, "_heading": Net.PRIVATE, "_leader_prev": Net.PRIVATE,
+		"_leader_walking_until": Net.PRIVATE,
+		"_path": Net.PRIVATE, "_path_goal": Net.PRIVATE, "_path_idx": Net.PRIVATE, "_repath_at": Net.PRIVATE,
+	}
+
+
 func _physics_process(delta: float) -> void:
 	_track_leader()
 	if hero == null or hero.dead or hero.is_helpless():

@@ -283,7 +283,7 @@ static func auto_hit_feedback() -> void:
 static func _on_actor_damaged(amount: float, _source: Node, actor: Actor) -> void:
 	if not is_instance_valid(actor) or not actor.is_inside_tree():
 		return
-	var head := actor.global_position + Vector3(GameWorld.rng.randf_range(-0.25, 0.25), 2.0 + actor.radius, 0)
+	var head := actor.global_position + Vector3(GameWorld.fx_rng.randf_range(-0.25, 0.25), 2.0 + actor.radius, 0)
 	var col := NUMBER_HERO_HIT if actor.team == GameWorld.TEAM_HEROES else NUMBER_MONSTER_HIT
 	number(head, str(int(roundf(amount))), col, 1.0)
 	flash(actor)

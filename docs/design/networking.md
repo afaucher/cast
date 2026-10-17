@@ -1,6 +1,8 @@
 # Networking: lag management for online co-op
 
-Status: **plan, nothing built**, 2026-10-17. Option A below is the chosen architecture **[decided]**.
+Status: **plan**, 2026-10-17. Option A below is the chosen architecture **[decided]**. There's no
+transport yet. The authority declarations and their test are built and enforced now (see "Keeping
+authority straight").
 Numbers marked *(tunable)* are starting points to be set by measurement.
 
 > **North star:** [`north-star.md`](north-star.md). "Overcooked with magic": the chaos comes from the
@@ -155,6 +157,103 @@ minute, host vs clients, and keep them level.
    keys and no review screens.
 8. **A "does a client have this?" checklist** in every system's review: is it owned, is it replicated,
    and how does a late joiner get it.
+
+## Keeping authority straight as content grows
+Content gets added faster than anyone re-reads this doc, so the rules live in code and a test enforces
+them. Option A's silent failure, a machine writing state it doesn't own, is the same one Photon Fusion
+warns "can lead to a permanent desynchronization". Engines that enforce it (Unity Netcode throws on an
+unauthorized write) avoid that; engines that rely on convention (Unreal's `HasAuthority()`) don't. We
+enforce it.
+
+### Five layers
+| Layer | What it is | Status |
+|---|---|---|
+| **1. Declarations** | Every class with gameplay state has `net_fields() -> {var: Net.KIND}` covering **every** script var. The kinds are in `scripts/net/net.gd`. | **Built** |
+| **2. Lint** | `tests/test_net_contract.gd` scans `scripts/` for patterns that break option A. | **Built** |
+| **3. Verbs** | Another entity changes only through `apply_damage`, `heal`, `shove`, `set_modifier`, `die`, spawn/despawn and pickup. Once `Net` exists, each verb applies the change if this machine owns the target and otherwise sends a request to the owner. | Convention now; routing comes with the `Net` layer |
+| **4. Hit resolution in `Combat`** | `Combat.melee_arc`, `explode` and projectiles run on every machine, but each one applies hits only to targets it resolves: the hero's owner for heroes, the attacker's machine for everything else. Content that uses `Combat.*` gets the rules for free. | Comes with the `Net` layer |
+| **5. Runtime guards and agreement tests** | In debug builds, a write to an `OWNER` field on a machine that doesn't own the entity raises a script error, which fails tests. Two-peer headless scenarios with Steam fake lag assert that every peer agrees on HP, deaths and objectives. | Comes with the `Net` layer |
+
+### The four kinds (`Net`)
+| Kind | Meaning | Examples |
+|---|---|---|
+| `SPAWN` | Fixed when the thing is created (spawn or cast event, or the seed). Same everywhere, never streamed | `team`, `max_hp`, a projectile's direction, `ContractRun` |
+| `OWNER` | The owner writes it and everyone else receives it | `hp`, `dead`, `facing`, armor modifiers, a windup others must see |
+| `PRIVATE` | The owner's working state. Not replicated; nobody else uses it for gameplay | AI timers, shove-slide internals, input buffers |
+| `LOCAL` | Every machine keeps its own copy: presentation, or recomputed from `OWNER`/`SPAWN` state and `GameWorld.time` | model nodes, bob phase, a scheduled effect's current position |
+
+A player owns their hero; the host owns everything else. Position and rotation are `OWNER`.
+
+### What the test enforces
+`test_net_contract` fails when:
+- **A var is undeclared.** The checked classes are every `Actor` subclass (found automatically), every
+  script that defines `net_fields()`, and the `NET_SCRIPTS` list in the test (gameplay classes that
+  aren't actors).
+- **A declaration is stale:** it names a var that no longer exists.
+- **`unreliable_ordered`** appears anywhere. GodotSteam sends it reliably.
+- **Network calls appear outside `scripts/net/`:** `@rpc`, `rpc(`, `send_bytes`, `multiplayer_peer`.
+- **`MultiplayerSynchronizer` or `MultiplayerSpawner`** appears anywhere.
+- **Global randomness:** `randf()`, `randi()` and the like. Gameplay rolls use `GameWorld.rng` or a
+  generator seeded from the run. Looks use `GameWorld.fx_rng`.
+- **`GameWorld.rng` appears in presentation folders:** `scripts/fx`, `art`, `ui` and `world/grime`.
+- **Code writes another actor's `.hp` or `.dead`** instead of calling a verb.
+
+Every allowlist entry carries a reason. Adding one is a design decision, not a way to get a test to pass.
+
+### Randomness
+- `GameWorld.rng` is `PRIVATE`: each owner rolls its own and sends the **result**, never the roll.
+- Generation (map, site, contract, themes, grime) uses `RandomNumberGenerator`s seeded from the run, so
+  every machine builds the same thing.
+- `GameWorld.fx_rng` and the effects' own generators are cosmetic. They must never decide anything a
+  test or another player could notice.
+
+### Shapes for new content
+Make new content one of these four shapes. If it fits none of them, design its networking before
+building it.
+
+| Shape | Examples | What it needs |
+|---|---|---|
+| **Scheduled effect**: one broadcast, then every machine computes it from `(SPAWN params, start time)` | corn, tentacles, boulder, fireball, arrows, Gasket's spin | Params `SPAWN`, motion `LOCAL`, hits through `Combat` |
+| **Owned actor** | heroes, monsters, employees | `net_fields()`, changes through verbs |
+| **Host-arbitrated world object** | pickups, doors, elevator, priced props | Host-owned. Players request; the host grants with a reliable event |
+| **Cosmetic** | debris, sparks, grime, decor animation | Nothing: local only, `fx_rng` |
+
+### New-content checklist
+Use this in every spec and review that adds content:
+1. Which shape is it, and who owns it?
+2. Is every new var in `net_fields()`, with the kind that's actually right? An `OWNER` that should be
+   `PRIVATE` costs bandwidth; a `PRIVATE` that should be `OWNER` desyncs.
+3. Does it change other entities only through verbs, and resolve hits only through `Combat`?
+4. Who rolls its randomness?
+5. Could its motion be a function of `(params, start time)` rather than streamed?
+6. What is cosmetic, and what is gameplay?
+7. What does a player who joins mid-floor see?
+8. Which two-peer scenario will cover it, once those exist?
+
+### Known gaps, found while writing the declarations (2026-10-17)
+The declarations pass, but today's solo code does these things directly. Each one becomes a message
+or a `Combat` resolver call when the `Net` layer is built:
+- **Spells and hazards hit every actor in range.** `Tentacles._burst`, `CornStrike` (through
+  `Combat.explode`) and `BowlBoulder._check_hits` call `apply_damage`/`shove` on every actor in range,
+  heroes included. If every machine runs them, a remote hero gets hit once per machine. These need the
+  victim-decides path (layer 4). `Hellgate._fire_shove` shoving heroes from the host is the same case.
+- **`ArmorZone._apply`** calls `set_modifier` on every friendly hero, but `_modifiers` is `OWNER`. Each
+  hero's owner has to apply its own armor.
+- **`Hero._spin`** shoves teammates directly. That should be a shove request to each teammate's owner.
+- **`PricedProp`** reads and writes the shoved actor's private slide state (`_slide_t`, `_coast`,
+  `_slide_dist`, `_src_ref`) to stop it and price the damage. That needs a message to the slider's
+  owner, plus the culprit's id sent with each prop hit.
+- **Pickups.** `ComponentPickup` writes `hero.swap_candidate` and consumes charges on the collecting
+  machine, and `Hero.swap_in_pickup` drops a pickup from a player's machine. Pickups are host-owned:
+  collects and drops become requests the host grants, which also settles two players grabbing at once.
+- **`ContractSession.save_carry` / `apply_carry`** read and write every hero's `hp`/`dead`. Each owner
+  applies its own carried HP, and the host keeps the record.
+- **Scheduled effects start at their own `_ready`.** `ArmorZone`, `CornStrike` and `Tentacles` take
+  their start time from `GameWorld.time` in `_ready`. They should take the cast's timestamp as a
+  `SPAWN` parameter, so every machine runs the same schedule.
+- **Employee mood is computed on the host.** `_hero_near`/`_scared` are `LOCAL` (they only drive the
+  tag, bubble and pose), but today `_scan()` computes them, and `_scan()` will run only on the host.
+  Each screen needs its own recompute.
 
 ## Open risks
 - **Swarmers' 0.15 s windup** is shorter than a remote player sees it (one-way plus buffer is about

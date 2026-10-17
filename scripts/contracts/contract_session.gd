@@ -27,6 +27,15 @@ var lost: Array[Dictionary] = []
 var extracted_total := 0
 
 
+## Who may write each var (see Net). The host runs the contract; `run` is built from the seed.
+func net_fields() -> Dictionary:
+	return {
+		"run": Net.SPAWN,
+		"floor_number": Net.OWNER, "finished": Net.OWNER, "end_reason": Net.OWNER,
+		"carry": Net.OWNER, "floors": Net.OWNER, "lost": Net.OWNER, "extracted_total": Net.OWNER,
+	}
+
+
 ## Start a contract: the Ledger restarts at the contract value, nothing carries over.
 static func begin(contract: ContractRun, start_floor: int = 1) -> ContractSession:
 	var s := ContractSession.new()

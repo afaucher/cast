@@ -68,7 +68,7 @@ static func _floor_spot(pos: Vector3) -> Vector3:
 func _ready() -> void:
 	add_to_group("component_pickups")
 	name = "Pickup_" + spell_id
-	_t = randf() * TAU
+	_t = GameWorld.fx_rng.randf() * TAU
 	var col := SpellBook.color_of(spell_id)
 	_prop = ComponentProps.make(spell_id)
 	_prop.scale = Vector3.ONE * 1.5
@@ -111,6 +111,18 @@ func _ready() -> void:
 	_label.position.y = HOVER + 0.75
 	_label.visible = false
 	add_child(_label)
+
+
+## Who may write each var (see Net). The host owns pickups.
+func net_fields() -> Dictionary:
+	return {
+		"spell_id": Net.SPAWN, "lifetime": Net.SPAWN,
+		# What is left on the floor: every screen shows the count, and a collected or swapped pickup vanishes.
+		"charges": Net.OWNER, "_used": Net.OWNER,
+		# Each machine ages it from the spawn time, for the fade-out blink.
+		"_age": Net.LOCAL,
+		"_prop": Net.LOCAL, "_glow": Net.LOCAL, "_label": Net.LOCAL, "_t": Net.LOCAL, "_ring": Net.LOCAL,
+	}
 
 
 func _exit_tree() -> void:

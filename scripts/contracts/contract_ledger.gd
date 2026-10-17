@@ -16,6 +16,13 @@ var floor_number := 1
 var active := false
 
 
+## Who may write each var (see Net). The host owns the money record; everyone else receives it.
+func net_fields() -> Dictionary:
+	return {
+		"lines": Net.OWNER, "contract_value": Net.OWNER, "floor_number": Net.OWNER, "active": Net.OWNER,
+	}
+
+
 func begin_contract(value: int) -> void:
 	lines.clear()
 	contract_value = maxi(0, value)

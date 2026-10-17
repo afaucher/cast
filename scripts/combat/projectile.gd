@@ -40,6 +40,18 @@ func _ready() -> void:
 	_build_visual.call_deferred()
 
 
+## Who may write each var (see Net). A scheduled effect: the shot is one broadcast event and every
+## machine flies it from these parameters.
+func net_fields() -> Dictionary:
+	return {
+		"source": Net.SPAWN,      # will travel as an entity id in the shot event
+		"target_team": Net.SPAWN, "direction": Net.SPAWN, "speed": Net.SPAWN, "damage": Net.SPAWN,
+		"max_range": Net.SPAWN, "hit_radius": Net.SPAWN, "color": Net.SPAWN, "size": Net.SPAWN,
+		"on_hit": Net.LOCAL,      # local effects (sparks, spell follow-ups), not shipped
+		"_travelled": Net.LOCAL,
+	}
+
+
 func _build_visual() -> void:
 	var mi := MeshInstance3D.new()
 	var sphere := SphereMesh.new()

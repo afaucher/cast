@@ -28,7 +28,7 @@ var _t := 0.0
 
 
 func _ready() -> void:
-	_t = randf() * 6.0     # de-sync neighbouring figures
+	_t = GameWorld.fx_rng.randf() * 6.0     # de-sync neighbouring figures
 
 
 ## An empty named node (a pivot / group) under `parent`.

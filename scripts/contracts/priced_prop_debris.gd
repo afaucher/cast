@@ -2,7 +2,7 @@ class_name PropDebris
 extends Node3D
 ## Faceted shards thrown by a breaking prop: a handful of little low-poly rocks painted in the prop's
 ## colours that fly out, tumble, bounce once on the floor, settle and then shrink away.
-## Purely visual and deterministic enough (uses GameWorld.rng). Cleans itself up.
+## Purely visual and deterministic enough (uses GameWorld.fx_rng). Cleans itself up.
 ##
 ##   PropDebris.burst(pos, PropModels.palette("gold_toilet"), 14, 1.0)
 
@@ -29,7 +29,7 @@ static func burst(pos: Vector3, colors: Array[Color], amount: int = 12, scale: f
 		return null
 	var d := PropDebris.new()
 	d.name = "PropDebris"
-	var rng := GameWorld.rng
+	var rng := GameWorld.fx_rng
 	var mat := PropModels.material()
 	for i in amount:
 		var sh := Shard.new()

@@ -28,6 +28,16 @@ func _ready() -> void:
 	_apply()
 
 
+## Who may write each var (see Net). A scheduled effect: one cast event, then every machine runs
+## the zone from team + power and GameWorld.time.
+func net_fields() -> Dictionary:
+	return {
+		"team": Net.SPAWN, "power": Net.SPAWN,
+		"_end_time": Net.LOCAL, "_next_tick": Net.LOCAL, "_expiring": Net.LOCAL, "_next_pulse": Net.LOCAL,
+		"_dome_mat": Net.LOCAL, "_ring_mat": Net.LOCAL, "_floor_mat": Net.LOCAL, "_visual": Net.LOCAL,
+	}
+
+
 func _physics_process(_delta: float) -> void:
 	if _expiring:
 		return

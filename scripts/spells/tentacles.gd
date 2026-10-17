@@ -30,6 +30,16 @@ func _ready() -> void:
 	add_child(_fx)
 
 
+## Who may write each var (see Net). A scheduled effect: one cast event, then every machine runs
+## the burst from these parameters and GameWorld.time.
+func net_fields() -> Dictionary:
+	return {
+		"power": Net.SPAWN, "source_team": Net.SPAWN,
+		"caster": Net.SPAWN,      # will travel as an entity id in the cast event
+		"_start": Net.LOCAL, "_burst_done": Net.LOCAL, "_fx": Net.LOCAL,
+	}
+
+
 func _physics_process(_delta: float) -> void:
 	var t := GameWorld.time - _start
 	if not _burst_done and t >= TELEGRAPH:

@@ -33,6 +33,17 @@ static func shoot(shooter: Actor, dir: Vector3, dmg: float, spd: float, rng: flo
 	return a
 
 
+## Who may write each var (see Net); Projectile's come from super().
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		"drawn": Net.SPAWN,
+		# Used up as the arrow strikes, so each machine recounts it from its own flight.
+		"pierce": Net.LOCAL, "hits": Net.LOCAL, "_hit_ids": Net.LOCAL,
+	})
+	return f
+
+
 func _physics_process(delta: float) -> void:
 	var left := speed * delta
 	while left > 0.0001:

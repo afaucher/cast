@@ -176,6 +176,22 @@ func _ready() -> void:
 	damaged.connect(_on_damaged)
 
 
+## Who may write each var (see Net); Actor's come from super(). The host owns props and the
+## money they cost, so who broke one is host working state.
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		"kind": Net.SPAWN, "price": Net.SPAWN, "site": Net.SPAWN, "rubble_enabled": Net.SPAWN,
+		"broke": Net.OWNER,
+		"_last_source": Net.PRIVATE,    # the culprit goes into the Ledger line, written on the host
+		"_contacts": Net.PRIVATE,       # shoved actors already counted against this prop
+		# The price tag fades in near each screen's own heroes.
+		"tag_label": Net.LOCAL, "_tag_target": Net.LOCAL, "_tag_tick": Net.LOCAL,
+		"_model": Net.LOCAL, "_rubble": Net.LOCAL, "_wobble": Net.LOCAL,
+	})
+	return f
+
+
 func _physics_process(_delta: float) -> void:
 	if dead:
 		return

@@ -121,10 +121,45 @@ func _ready() -> void:
 		_build_visual(_visual)
 	damaged.connect(_on_damaged)
 	# Stagger timers so a pack never scans/paths on the same frame.
-	_scan_t = randf() * SCAN_INTERVAL
-	_repath_t = randf() * REPATH_MAX
-	_retarget_t = randf() * RETARGET_INTERVAL
+	_scan_t = GameWorld.rng.randf() * SCAN_INTERVAL
+	_repath_t = GameWorld.rng.randf() * REPATH_MAX
+	_retarget_t = GameWorld.rng.randf() * RETARGET_INTERVAL
 	_prev_pos = global_position
+
+
+## Who may write each var (see Net); Actor's come from super(). Monster AI runs on the host only,
+## so its working state is PRIVATE; what other screens draw or react to (state, target, the
+## attack windup) is OWNER.
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		# Stats the kind's _init sets at spawn.
+		"kind": Net.SPAWN, "can_climb": Net.SPAWN, "aggro_range": Net.SPAWN,
+		"alert_radius": Net.SPAWN, "leash_range": Net.SPAWN, "attack_start_range": Net.SPAWN,
+		"attack_reach": Net.SPAWN, "attack_arc_deg": Net.SPAWN, "attack_damage": Net.SPAWN,
+		"attack_windup": Net.SPAWN, "attack_cooldown": Net.SPAWN, "stop_distance": Net.SPAWN,
+		"employee_chance": Net.SPAWN,
+		# Look tuning; _ready rewrites bar_height and windup_scale from the model.
+		"bar_height": Net.LOCAL, "bar_width": Net.LOCAL, "walk_bob": Net.LOCAL,
+		"walk_freq": Net.LOCAL, "windup_scale": Net.LOCAL, "model_windup_scale": Net.LOCAL,
+		"state": Net.OWNER,
+		"target": Net.OWNER,            # will travel as an entity id; the victim's machine needs to know who is being hit
+		"home": Net.PRIVATE, "_home_set": Net.PRIVATE,
+		# Attack windup: players see a swing coming, so the telegraph is OWNER.
+		"_windup_total": Net.OWNER, "_windup_left": Net.OWNER, "_telegraph": Net.OWNER,
+		# AI working state.
+		"_scan_t": Net.PRIVATE, "_retarget_t": Net.PRIVATE, "_next_attack_time": Net.PRIVATE,
+		"_return_t": Net.PRIVATE,
+		"_path": Net.PRIVATE, "_path_i": Net.PRIVATE, "_path_goal": Net.PRIVATE,
+		"_path_age": Net.PRIVATE, "_repath_t": Net.PRIVATE, "_prog_t": Net.PRIVATE,
+		"_prog_pos": Net.PRIVATE, "_nudge_t": Net.PRIVATE, "_nudge_dir": Net.PRIVATE,
+		"_last_nav_frame": Net.PRIVATE,
+		# Presentation: models, bars, materials, animation phases.
+		"model": Net.LOCAL, "_visual": Net.LOCAL, "_bar": Net.LOCAL, "_bar_mat": Net.LOCAL,
+		"_mats": Net.LOCAL, "_flash_t": Net.LOCAL, "_tint_key": Net.LOCAL,
+		"_strike_t": Net.LOCAL, "_prev_pos": Net.LOCAL, "_walk_phase": Net.LOCAL, "_bob": Net.LOCAL,
+	})
+	return f
 
 
 ## Override: build the look from primitives. Use _mat/_box/_sphere/_cyl/_cone.
@@ -324,7 +359,7 @@ func _enter_chase(t: Actor) -> void:
 	state = State.CHASE
 	_path.clear()
 	_path_goal = Vector2i(1 << 30, 1 << 30)
-	_repath_t = randf() * 0.2
+	_repath_t = GameWorld.rng.randf() * 0.2
 	_retarget_t = RETARGET_INTERVAL
 
 
@@ -394,7 +429,7 @@ func _consider_employee() -> bool:
 	if target != null and target.team == GameWorld.TEAM_NEUTRAL:
 		var cur_d := GameWorld.flat_distance(global_position, target.global_position)
 		return _target_alive() and target.is_in_group("employees") and cur_d < hero_d
-	if randf() >= employee_chance:
+	if GameWorld.rng.randf() >= employee_chance:
 		return false
 	var best: Actor = null
 	var best_d := minf(aggro_range, hero_d)
@@ -478,7 +513,7 @@ func _nav_to(goal: Vector3, delta: float) -> bool:
 
 	_repath_t -= delta
 	if _repath_t <= 0.0:
-		_repath_t = randf_range(REPATH_MIN, REPATH_MAX)
+		_repath_t = GameWorld.rng.randf_range(REPATH_MIN, REPATH_MAX)
 		var max_age := 1.5 if not _path.is_empty() else 2.5
 		if goal_cell != _path_goal or _path_age > max_age or _path.find(here) < 0:
 			_path = map.find_path(here, goal_cell, can_climb, PATH_MAX_NODES)
@@ -516,7 +551,7 @@ func _steer_to(pos: Vector3, delta: float) -> bool:
 func _on_stuck() -> void:
 	_repath_t = 0.0
 	_path_age = 99.0
-	var side := 1.0 if randf() < 0.5 else -1.0
+	var side := 1.0 if GameWorld.rng.randf() < 0.5 else -1.0
 	_nudge_dir = Vector3(-facing.z, 0.0, facing.x) * side
 	_nudge_t = 0.35
 
@@ -601,7 +636,7 @@ func _on_death() -> void:
 		var em: StandardMaterial3D = e[0]
 		em.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_apply_tint(Color.WHITE, 0.0)
-	var side := 1.0 if randf() < 0.5 else -1.0
+	var side := 1.0 if GameWorld.fx_rng.randf() < 0.5 else -1.0   # topple side is cosmetic
 	var tw := create_tween()
 	tw.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 	tw.set_parallel(true)

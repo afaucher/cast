@@ -13,13 +13,29 @@ const TEAM_NEUTRAL := 2
 
 var map: HexMap = null
 var root: Node3D = null      ## parent for actors, projectiles, zones, fx
+## Gameplay randomness (AI choices, drops, spawns). Only the machine that owns the thing rolls it;
+## the result travels, the roll never does. Looks use fx_rng instead.
 var rng := RandomNumberGenerator.new()
+## Cosmetic randomness (debris, shake, bob phase). Never decides anything that matters in co-op.
+var fx_rng := RandomNumberGenerator.new()
 var floor_drops := 0         ## component pickups monsters dropped on this floor (SpellComponents.FLOOR_DROP_CAP)
 var time := 0.0              ## game clock (seconds of physics time); use for cooldowns/durations
 
 
 func _physics_process(delta: float) -> void:
 	time += delta
+
+
+## Who may write each var (see Net). The host owns the floor; clients will follow its clock.
+func net_fields() -> Dictionary:
+	return {
+		"map": Net.SPAWN,          # every machine builds it from the seed
+		"root": Net.LOCAL,
+		"rng": Net.PRIVATE,        # each owner's roll stream; results are replicated, not rolls
+		"fx_rng": Net.LOCAL,
+		"floor_drops": Net.OWNER,
+		"time": Net.OWNER,
+	}
 
 
 func begin(new_map: HexMap, new_root: Node3D, seed_value: int = 0) -> void:

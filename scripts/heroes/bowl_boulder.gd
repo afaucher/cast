@@ -54,6 +54,19 @@ func _ready() -> void:
 	_build_visual()
 
 
+## Who may write each var (see Net). A scheduled effect: one launch event, then every machine
+## rolls the boulder itself from these parameters.
+func net_fields() -> Dictionary:
+	return {
+		"source": Net.SPAWN,      # will travel as an entity id in the launch event
+		"direction": Net.SPAWN, "speed": Net.SPAWN, "max_range": Net.SPAWN, "damage": Net.SPAWN,
+		"shove_distance": Net.SPAWN,
+		"_travelled": Net.LOCAL, "_hit": Net.LOCAL, "_vy": Net.LOCAL, "_airborne": Net.LOCAL,
+		"_done": Net.LOCAL, "_flip": Net.LOCAL, "_angle": Net.LOCAL,
+		"_roll": Net.LOCAL, "_dust": Net.LOCAL,
+	}
+
+
 func _physics_process(delta: float) -> void:
 	if _done:
 		return

@@ -141,6 +141,35 @@ func _ready() -> void:
 	_refresh_hold()
 
 
+## Who may write each var (see Net); Actor's come from super(). The hero's owner is its player's
+## machine (AI allies: the host).
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		# Set once from the kit / factory.
+		"hero_color": Net.SPAWN, "weapon_kind": Net.SPAWN, "secondary_kind": Net.SPAWN,
+		"kit_id": Net.SPAWN, "primary_name": Net.SPAWN, "melee_damage": Net.SPAWN,
+		"melee_cooldown": Net.SPAWN, "melee_reach": Net.SPAWN, "melee_arc": Net.SPAWN,
+		"melee_shove": Net.SPAWN, "can_climb": Net.SPAWN,
+		"arrow_tap_damage": Net.SPAWN, "arrow_tap_cooldown": Net.SPAWN, "arrow_tap_range": Net.SPAWN,
+		"arrow_draw_time": Net.SPAWN, "arrow_draw_damage": Net.SPAWN, "arrow_draw_range": Net.SPAWN,
+		"arrow_draw_pierce": Net.SPAWN, "arrow_speed": Net.SPAWN, "draw_move_mult": Net.SPAWN,
+		# Slots, charges and the held spell show on other screens (the component in the hand).
+		"spell_slots": Net.OWNER, "held_slot": Net.OWNER, "_charges": Net.OWNER,
+		"_draw_start": Net.OWNER,         # other screens show the bow drawn
+		# The owner's own bookkeeping; the pickup it stands next to is only used by that machine.
+		"_ready_at": Net.PRIVATE, "swap_candidate": Net.PRIVATE,
+		# True only on the machine that drives this hero (remote copies stay false); it gates the
+		# bar colour, the name label and pickup collection.
+		"is_player": Net.LOCAL,
+		"visual_override": Net.LOCAL, "_held_prop": Net.LOCAL, "_visual": Net.LOCAL, "_weapon": Net.LOCAL,
+		"_body_mat": Net.LOCAL, "_bar": Net.LOCAL, "_name_label": Net.LOCAL, "_shield_icon": Net.LOCAL,
+		"_shield_bubble": Net.LOCAL, "_swing_tween": Net.LOCAL, "_visual_yaw": Net.LOCAL,
+		"_charge_ring": Net.LOCAL, "_charge_mat": Net.LOCAL,
+	})
+	return f
+
+
 # --- Actions ------------------------------------------------------------------------------
 
 func cooldown_left(id: String) -> float:

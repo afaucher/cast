@@ -45,8 +45,8 @@ func _process(delta: float) -> void:
 	if _trauma > 0.0:
 		_trauma = maxf(0.0, _trauma - SHAKE_DECAY * delta)
 		var k := _trauma * _trauma * SHAKE_MAX_OFFSET
-		camera.h_offset = _inset_offset() + randf_range(-k, k)
-		camera.v_offset = randf_range(-k, k)
+		camera.h_offset = _inset_offset() + GameWorld.fx_rng.randf_range(-k, k)
+		camera.v_offset = GameWorld.fx_rng.randf_range(-k, k)
 	else:
 		camera.h_offset = _inset_offset()
 		camera.v_offset = 0.0

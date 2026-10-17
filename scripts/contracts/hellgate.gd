@@ -250,6 +250,26 @@ func _ready() -> void:
 	_update_bar()
 
 
+## Who may write each var (see Net); Actor's come from super(). The host runs the spawner.
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		# Set by spawn() / configure() from the site plan.
+		"difficulty": Net.SPAWN, "depth": Net.SPAWN, "origin": Net.SPAWN, "pest": Net.SPAWN,
+		# What other screens draw: awake, the burst flare, the origin phase and shove windup.
+		"phase": Net.OWNER, "_active": Net.OWNER, "_telegraphing": Net.OWNER,
+		"_next_burst_in": Net.OWNER,    # the flare brightness is computed from it
+		"_shove_t": Net.OWNER,
+		# Only the host spawns bursts. spawn_interval/burst_size/spawn_cap are rebuilt from phase.
+		"spawn_interval": Net.PRIVATE, "burst_size": Net.PRIVATE, "spawn_cap": Net.PRIVATE,
+		"spawned_total": Net.PRIVATE, "_scan_t": Net.PRIVATE, "_spawns": Net.PRIVATE,
+		"_rng": Net.PRIVATE,
+		"fx_enabled": Net.LOCAL, "model": Net.LOCAL, "_bar": Net.LOCAL, "_bar_mat": Net.LOCAL,
+		"_bar_width": Net.LOCAL, "_bar_height": Net.LOCAL,
+	})
+	return f
+
+
 # --- Public state -----------------------------------------------------------------------------
 
 func is_active() -> bool:

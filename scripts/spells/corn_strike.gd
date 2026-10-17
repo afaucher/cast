@@ -31,6 +31,17 @@ func _ready() -> void:
 	_build_cob()
 
 
+## Who may write each var (see Net). A scheduled effect: one cast event, then every machine runs
+## the strike from these parameters and GameWorld.time.
+func net_fields() -> Dictionary:
+	return {
+		"power": Net.SPAWN, "source_team": Net.SPAWN,
+		"caster": Net.SPAWN,      # will travel as an entity id in the cast event
+		"_start": Net.LOCAL, "_slammed": Net.LOCAL,
+		"_telegraph": Net.LOCAL, "_disc_mat": Net.LOCAL, "_ring_mat": Net.LOCAL, "_cob": Net.LOCAL,
+	}
+
+
 func _physics_process(_delta: float) -> void:
 	if not _slammed and GameWorld.time - _start >= DELAY:
 		_slam()

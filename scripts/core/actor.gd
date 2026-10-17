@@ -84,6 +84,26 @@ func _ready() -> void:
 	snap_to_ground()
 
 
+## Who may write each script var (see Net). Subclasses merge theirs into super(). Position and
+## rotation are the owner's too. test_net_contract fails if a var is missing here.
+func net_fields() -> Dictionary:
+	return {
+		"team": Net.SPAWN, "max_hp": Net.SPAWN, "move_speed": Net.SPAWN, "radius": Net.SPAWN,
+		"display_name": Net.SPAWN, "shove_mult": Net.SPAWN, "climb_speed_factor": Net.SPAWN,
+		"hp": Net.OWNER, "dead": Net.OWNER, "facing": Net.OWNER, "climbing": Net.OWNER,
+		"pass_through_until": Net.OWNER,
+		"_modifiers": Net.OWNER,        # armor shows on every screen
+		# The shove slide runs on the owner; everyone else sees the resulting motion.
+		"_forced": Net.PRIVATE, "_hooked": Net.PRIVATE, "_slide_dir": Net.PRIVATE,
+		"_slide_dist": Net.PRIVATE, "_slide_dur": Net.PRIVATE, "_slide_t": Net.PRIVATE,
+		"_coast": Net.PRIVATE, "_airborne": Net.PRIVATE, "_vy": Net.PRIVATE,
+		"_fall_from_y": Net.PRIVATE, "_void_fall": Net.PRIVATE, "_void_t": Net.PRIVATE,
+		"_pull": Net.PRIVATE, "_pull_t": Net.PRIVATE, "_pull_from": Net.PRIVATE,
+		"_pull_to": Net.PRIVATE, "_src_team": Net.PRIVATE, "_src_ref": Net.PRIVATE,
+		"_stagger_until": Net.PRIVATE, "_safe_cell": Net.PRIVATE,
+	}
+
+
 # --- Health -------------------------------------------------------------------
 
 ## Multiplier on incoming damage from active modifiers (e.g. Armor zone 0.5).

@@ -153,6 +153,33 @@ func _ready() -> void:
 	_set_state(State.COWER)
 
 
+## Who may write each var (see Net); Actor's come from super(). Employees are host-owned: the
+## host runs the scan/panic/follow logic, so the working state is PRIVATE; the state, who they
+## follow, the rescue flag and the speech bubble are what every screen shows.
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		"style": Net.SPAWN, "variant": Net.SPAWN,
+		"state": Net.OWNER,
+		"_leader": Net.OWNER,           # will travel as an entity id
+		"_extracted": Net.OWNER,
+		"_say_text": Net.OWNER, "_say_until": Net.OWNER,   # events like "OW!" show on every screen
+		# AI working state (threat memory, scan/replan timers, pathing, stuck detection).
+		"_threat": Net.PRIVATE, "_threat_valid": Net.PRIVATE, "_calm_at": Net.PRIVATE,
+		"_panic_until": Net.PRIVATE, "_next_scan": Net.PRIVATE, "_next_replan": Net.PRIVATE,
+		"_hero_pos": Net.PRIVATE, "_hero_pos_valid": Net.PRIVATE, "_catching": Net.PRIVATE,
+		"_stuck_t": Net.PRIVATE, "_stuck_from": Net.PRIVATE,
+		"_path": Net.PRIVATE, "_path_idx": Net.PRIVATE, "_path_goal": Net.PRIVATE,
+		# Each screen works these out against its own heroes and monsters (name tag, cower
+		# bubble, scared pose).
+		"_hero_near": Net.LOCAL, "_scared": Net.LOCAL,
+		"model": Net.LOCAL, "_visual": Net.LOCAL, "_bar": Net.LOCAL, "_name_label": Net.LOCAL,
+		"_bubble": Net.LOCAL, "_bubble_bg": Net.LOCAL, "_bubble_tail": Net.LOCAL,
+		"_bubble_text": Net.LOCAL, "_bubble_shown": Net.LOCAL,
+	})
+	return f
+
+
 # --- Public API -----------------------------------------------------------------------
 
 ## True while latched onto a hero and trailing them.
@@ -509,7 +536,7 @@ func _on_death() -> void:
 	if _bubble != null:
 		_bubble.visible = false
 	model.set_downed(true)
-	var side := 1.0 if GameWorld.rng.randf() < 0.5 else -1.0
+	var side := 1.0 if GameWorld.fx_rng.randf() < 0.5 else -1.0   # topple side is cosmetic
 	var tw := create_tween()
 	tw.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 	tw.set_parallel(true)

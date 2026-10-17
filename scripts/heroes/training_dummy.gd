@@ -43,6 +43,20 @@ func _ready() -> void:
 	damaged.connect(func(_a: float, _s: Node) -> void: _bar.set_fraction(hp / max_hp))
 
 
+## Who may write each var (see Net); Actor's come from super(). The host owns the dummy.
+func net_fields() -> Dictionary:
+	var f := super()
+	f.merge({
+		"mode": Net.SPAWN,
+		# The host's AI and respawn bookkeeping; others see the result through hp / dead / position.
+		"home": Net.PRIVATE, "_home_set": Net.PRIVATE, "_respawn_at": Net.PRIVATE,
+		"_punch_ready_at": Net.PRIVATE,
+		"_visual": Net.LOCAL, "_bar": Net.LOCAL, "_body_mat": Net.LOCAL,
+		"_base_color": Net.LOCAL, "_rest_yaw": Net.LOCAL,
+	})
+	return f
+
+
 func _physics_process(delta: float) -> void:
 	if not _home_set:
 		home = global_position

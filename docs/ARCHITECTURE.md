@@ -16,6 +16,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Heroes, allies, spells, HUD, camera | `scripts/heroes/*`, `scripts/spells/*`, `scripts/ui/*`, `scripts/fx/*`, `scenes/arena.tscn`, `tests/test_hero*.gd`, `tests/test_spell*.gd` | heroes agent |
 | Monsters | `scripts/monsters/*`, `tests/test_monster*.gd` | monsters agent |
 | Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` | lead |
+| Networking: authority kinds, the net contract test | `scripts/net/*`, `tests/test_net_contract.gd` | lead. Every owner adds `net_fields()` entries for its own vars |
 | Design docs | `docs/design/*` | design agent |
 
 ## Boot flow and the main menu
@@ -67,7 +68,8 @@ Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the 
   - STAIRS ramp from `level` at the back edge to `level + stair_rise` at the edge facing `stair_dir`.
   - WALL is a tall cell that blocks movement and line of sight.
 - **`GameWorld`** (autoload, `scripts/core/game_world.gd`): `map`, `root` (parent for
-  actors/projectiles/fx), `time` (the game clock; use it, not wall time), `rng`,
+  actors/projectiles/fx), `time` (the game clock; use it, not wall time), `rng` (gameplay rolls),
+  `fx_rng` (cosmetic rolls only),
   `spawn(node, at)`, `actors()`, `team_actors(team)`, `actors_in_radius(pos, r, team)`,
   `nearest_actor(pos, team, max_range)`, `flat_distance`, `TEAM_HEROES = 0`, `TEAM_MONSTERS = 1`.
   A test or scene calls `GameWorld.begin(map, root_node3d)` first.
@@ -77,6 +79,9 @@ Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the 
   `heal(amount)`, `set_modifier(id, mult, duration)` (damage-taken multiplier; the same id
   refreshes), `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`.
   Override `_on_death()` for death visuals (the default is `queue_free`). Actors join the group `"actors"`.
+  `net_fields()` says who may write each var (`Net.SPAWN/OWNER/PRIVATE/LOCAL`, `scripts/net/net.gd`);
+  subclasses merge theirs into `super()`, and `test_net_contract` fails on any undeclared var.
+  See `docs/design/networking.md` and `AGENTS.md`.
 - **`Projectile`** (`scripts/combat/projectile.gd`): `Projectile.fire(shooter, from, dir, dmg, speed, range)`.
   Set `color`, `size` or `on_hit` before the first frame for custom behavior.
 - **`Combat`** (`scripts/combat/combat.gd`): `melee_arc(attacker, dir, reach, arc_deg, dmg)`,
