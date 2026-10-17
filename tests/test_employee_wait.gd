@@ -26,6 +26,12 @@ func _pc(h: Hero) -> PlayerController:
 	return h.get_node("PlayerController") as PlayerController
 
 
+## The verb the use prompt would show for what E acts on ("" when E would do nothing).
+func _verb(hero: Hero) -> String:
+	var e := Employee.interact_target(hero)
+	return "" if e == null else e.interact_verb(hero)
+
+
 func setup() -> void:
 	InputSetup.ensure_actions()
 	check(Employee.JOIN_NEEDS_E, "joining needs E (JOIN_NEEDS_E is on)")
@@ -38,13 +44,13 @@ func setup() -> void:
 	await frames(60)
 	check(not emp.is_following() and emp.state == Employee.State.COWER, "walking up to an employee does not recruit them")
 	check(not emp.is_dismissed(), "(they were never dismissed)")
-	eq(Employee.interact_prompt(hero), "E: bring Marguerite", "the prompt offers to bring a cowering employee")
+	eq(_verb(hero), "Bring Marguerite", "the use prompt offers to bring a cowering employee")
 	check(_pc(hero).press_use(), "E near a cowering employee is used")
 	check(emp.is_following() and emp.leader() == hero, "E recruits them: the hero is the leader")
 	await frames(2)
 	eq(emp.bubble_text(), "oh, thank you!", "first contact bark")
 	eq(casts.size(), 0, "no cast")
-	eq(Employee.interact_prompt(hero), "E: tell Marguerite to wait", "the prompt offers to dismiss your follower")
+	eq(_verb(hero), "Tell Marguerite to wait", "the use prompt offers to dismiss your follower")
 	var spot := emp.global_position
 	check(_pc(hero).press_use(), "E near your follower is used")
 	eq(emp.state, Employee.State.WAIT, "the employee waits")
@@ -63,7 +69,7 @@ func setup() -> void:
 	eq(emp.state, Employee.State.WAIT, "still waiting with the hero standing right there")
 	check(emp.leader() == null and emp.is_dismissed(), "no leader, still dismissed")
 	check(emp.global_position.distance_to(spot) < 0.05, "it stays put")
-	eq(Employee.interact_prompt(hero), "E: bring Marguerite", "the prompt offers to bring a waiting one")
+	eq(_verb(hero), "Bring Marguerite", "the use prompt offers to bring a waiting one")
 
 	# --- C: E recalls ---------------------------------------------------------------------------
 	hero.global_position = spot + Vector3(1.9, 0.0, 0.0)          # inside RECALL_RANGE (2.2)
@@ -77,7 +83,7 @@ func setup() -> void:
 	# a waiting employee out of reach is not offered
 	check(_pc(hero).press_use(), "dismissed again")
 	hero.global_position = emp.global_position + Vector3(3.0, 0.0, 0.0)
-	eq(Employee.interact_prompt(hero), "", "no prompt from 3 away")
+	eq(_verb(hero), "", "no prompt from 3 away")
 	check(not Employee.interact(hero), "E from 3 away does nothing to it")
 	eq(emp.state, Employee.State.WAIT, "still waiting")
 
@@ -107,7 +113,7 @@ func setup() -> void:
 	emp = Employee.spawn(Vector2i(6, 0), {"style": "staff"})        # ~10 away: hiding, out of reach
 	_pc(hero).interact = Callable()
 	check(Employee.interact_target(hero) == null, "nothing to talk to")
-	eq(Employee.interact_prompt(hero), "", "no prompt")
+	eq(_verb(hero), "", "no prompt")
 	check(not _pc(hero).press_use(), "E with nothing to use is not used")
 	eq(casts.size(), 0, "and casts nothing")
 	eq(hero.charges_of("heal"), SpellComponents.START_CHARGES, "no charge spent")
@@ -135,7 +141,7 @@ func setup() -> void:
 	check(emp.leader() == other, "it follows the other hero")
 	hero.global_position = emp.global_position + Vector3(0.0, 0.0, 1.0)   # right next to it
 	check(not emp.can_wait(hero) and not emp.can_follow(hero), "not yours to dismiss or take")
-	eq(Employee.interact_prompt(hero), "", "no prompt for somebody else's follower")
+	eq(_verb(hero), "", "no prompt for somebody else's follower")
 	check(not _pc(hero).press_use(), "E does nothing and casts nothing")
 	eq(casts.size(), 0, "no cast")
 	check(emp.is_following() and emp.leader() == other, "the other hero keeps their follower")

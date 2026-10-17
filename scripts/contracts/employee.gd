@@ -309,12 +309,14 @@ static func interact_target(hero: Actor) -> Employee:
 	return best
 
 
-## "E: tell Marguerite to wait" / "E: bring Marguerite" (empty when E would do nothing here).
-static func interact_prompt(hero: Actor) -> String:
-	var e := interact_target(hero)
-	if e == null:
-		return ""
-	return ("E: tell %s to wait" if e.can_wait(hero) else "E: bring %s") % e.display_name
+## The verb for what E does to the employee `e` right now: "Tell Marguerite to wait" / "Bring Marguerite".
+func interact_verb(hero: Actor) -> String:
+	return ("Tell %s to wait" if can_wait(hero) else "Bring %s") % display_name
+
+
+## Where the use prompt floats over this employee (world): above the head, clear of the name tag.
+func prompt_point() -> Vector3:
+	return global_position + Vector3(0.0, model.ui_height + 0.95, 0.0)
 
 
 ## The E press: dismiss or recruit the nearest employee. True when it was used.

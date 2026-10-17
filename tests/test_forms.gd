@@ -198,12 +198,16 @@ func _check_slips() -> void:
 	add_child(e)
 	await frames(2)
 	check(e.can_descend() and e._rows.size() == 3, "go down / cash out / stay on floor 1")
+	for r: Control in e._rows:
+		check(not (r as FormRow).hint.to_lower().contains("always works"), "the elevator slip no longer says it always works (floor 1)")
 	e.queue_free()
 	var last := ElevatorMenu.new({"floor": 3, "floor_count": 3})
 	add_child(last)
 	await frames(2)
 	check(not last.can_descend() and last._rows.size() == 2, "no go-down row on the last floor")
 	check(last._rows[0].number == "1", "on the last floor the exit is row 1")
+	for r: Control in last._rows:
+		check(not (r as FormRow).hint.to_lower().contains("always works"), "the elevator slip no longer says it always works")
 	last.queue_free()
 	await frames(2)
 	var van := VanExitMenu.new(info)
@@ -211,6 +215,7 @@ func _check_slips() -> void:
 	await frames(2)
 	check(van._rows.size() == 2, "the van slip: clock out / cancel")
 	check((van._rows[0] as FormRow).text == "Clock out", "its first row clocks out")
+	check(not (van._rows[0] as FormRow).hint.to_lower().contains("always works"), "the van slip no longer says it always works")
 	van.queue_free()
 	await frames(2)
 
@@ -221,4 +226,90 @@ func _check_slips() -> void:
 	await frames(2)
 	check(tracker.custom_minimum_size.y > 100.0, "the slip sizes to its rows")
 	tracker.queue_free()
+	await frames(2)
+	await _check_tracker_header()
+	await _check_use_prompt_node()
+
+
+## The tracker's header is stacked (WORK ORDER, then the name on its own lines, then the floor), so the longest names
+## ClientArchetype can roll never run into each other: at most two lines, each inside the slip, ellipsis past that.
+func _check_tracker_header() -> void:
+	var font := FormTheme.typed_font()
+	var inner := ObjectiveTracker.WIDTH - 2.0 * ObjectiveTracker.PAD
+	var names := {}   # every company ClientArchetype can produce -> true
+	var longest := ""
+	for id in ClientArchetype.IDS:
+		var d := ClientArchetype.get_data(id)
+		for last: String in d["last"]:
+			for pattern: String in d["company"]:
+				var nm := pattern % last
+				names[nm] = true
+				if nm.length() > longest.length():
+					longest = nm
+			names[last] = true
+	for seed_n in 12:   # and what the rolls actually give, seed by seed
+		for id in ClientArchetype.IDS:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = seed_n
+			var who := ClientArchetype.roll_name(id, rng)
+			names[str(who["company"])] = true
+			names[str(who["name"])] = true
+	check(names.size() > 40, "found the client / company names (%d)" % names.size())
+	var worst_lines := 0
+	var tracker := ObjectiveTracker.new()
+	add_child(tracker)
+	var rows: Array[Dictionary] = [{"text": "Close hellgates", "detail": "1/2", "state": "partial"}]
+	var single_h := 0.0
+	var bad := 0
+	for nm: String in names:
+		tracker.show_state("FLOOR 2 / 3", nm, rows, 100, 0)
+		var lines := tracker.name_lines()
+		worst_lines = maxi(worst_lines, lines.size())
+		var fits := lines.size() >= 1 and lines.size() <= ObjectiveTracker.NAME_LINES
+		for l in lines:
+			if font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, ObjectiveTracker.NAME_SIZE).x > inner:
+				fits = false
+		if not fits:
+			bad += 1
+			print("tracker name did not fit: ", nm, " -> ", lines)
+		# the stacked header: label above the name above the floor line, inside the header
+		if tracker.name_lines().size() > 0 and not (19.0 < tracker._name_baseline(0) - ObjectiveTracker.NAME_SIZE * 0.85 + 4.0 and tracker.floor_baseline() > tracker._name_baseline(lines.size() - 1) + 6.0 and tracker.header_height() > tracker.floor_baseline()):
+			bad += 1
+	eq(bad, 0, "every name wraps to at most 2 lines inside the slip and the header lines are stacked")
+	check(worst_lines == 2, "the longest names do use two lines (the longest is '%s')" % longest)
+	tracker.show_state("FLOOR 1 / 3", "Vanderkeep Labs", rows, 100, 0)
+	single_h = tracker.custom_minimum_size.y
+	tracker.show_state("FLOOR 1 / 3", longest, rows, 100, 0)
+	check(tracker.custom_minimum_size.y > single_h, "a two-line name makes the slip taller instead of overlapping")
+	var tiny: PackedStringArray = ObjectiveTracker.wrap_name("Supercalifragilisticexpialidocious-Supercalifragilisticexpialidocious-Pneumonoultramicroscopic Holdings", font, ObjectiveTracker.NAME_SIZE, inner, 2)
+	check(tiny.size() == 2 and tiny[1].ends_with("…"), "a name that cannot fit ends in an ellipsis")
+	check(ObjectiveTracker.wrap_name("", font, 20, inner, 2).is_empty(), "no name, no lines")
+	tracker.queue_free()
+	await frames(2)
+
+
+## The use prompt node: a keycap and a verb that fade in and out over about 0.15 s.
+func _check_use_prompt_node() -> void:
+	var p := UsePrompt.new()
+	add_child(p)
+	await frames(2)
+	check(not p.wanted and p.alpha == 0.0 and not p._sprite.visible, "starts hidden")
+	p.show_at(Vector3(1, 2, 3), "E", "Clock out")
+	check(p.key == "E" and p.verb == "Clock out" and p.is_showing(), "shows its key and verb")
+	check(p.global_position.is_equal_approx(Vector3(1, 2, 3)), "floats at the given point")
+	await frames(4)
+	check(p.alpha > 0.0 and p.alpha < 1.0, "fading in (alpha %.2f)" % p.alpha)
+	await frames(12)
+	near(p.alpha, 1.0, 0.0001, "fully in after ~0.2 s")
+	check(p._sprite.visible and p._viewport.size.x > p._viewport.size.y, "a wide slip with the verb on it")
+	var narrow := p._viewport.size.x
+	p.show_at(Vector3.ZERO, "F", "Swap in Grave moss")
+	await frames(2)
+	check(p._viewport.size.x > narrow, "a longer verb makes a wider slip")
+	p.hide_prompt()
+	await frames(4)
+	check(p.alpha > 0.0 and p.alpha < 1.0, "fading out")
+	await frames(12)
+	check(p.alpha == 0.0 and not p._sprite.visible, "gone after ~0.2 s")
+	p.queue_free()
 	await frames(2)

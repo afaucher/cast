@@ -58,7 +58,7 @@ func _ready() -> void:
 		facts.box.add_child(fl)
 
 	_rows.clear()
-	var out := FormRow.new("Clock out", "1", "always works")
+	var out := FormRow.new("Clock out", "1", "")
 	out.sub = "drive off and invoice the client"
 	out.pressed.connect(func() -> void: clock_out.emit())
 	body.add_child(out)

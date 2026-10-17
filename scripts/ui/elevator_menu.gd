@@ -70,7 +70,7 @@ func _ready() -> void:
 		down.pressed.connect(func() -> void: go_down.emit())
 		body.add_child(down)
 		_rows.append(down)
-	var out := FormRow.new("Exit", "2" if _can_descend else "1", "always works")
+	var out := FormRow.new("Exit", "2" if _can_descend else "1", "")
 	out.sub = "clock out and invoice the client"
 	out.pressed.connect(func() -> void: cash_out.emit())
 	body.add_child(out)

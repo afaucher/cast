@@ -42,7 +42,7 @@ extends Node3D
 ##   --to-employee       dev: put the crew 1.5 cells from the first employee (it latches on; E prompts "tell X to wait")
 ##   --press-e S         dev: press E (the controller's context key) S seconds in
 ##   --break-crates S    dev: S seconds in, hit every breakable crate stack within 9 units of the player (screenshots)
-##   --to-exit           dev: put the crew on the elevator (shows "E: use elevator"; E opens the menu)
+##   --to-exit           dev: put the crew on the elevator (the use prompt shows over it; E opens the menu)
 ##   --demo-damage       dev: 1 s in, put two property-damage lines on the Ledger (to see the ticker and the tracker)
 ##   --show-panel        dev: keep the voice debug panel open in --shot screenshots
 ##   --hurt N            dev: every hero starts the floor N hp down (to see the HP carry over between floors)
@@ -65,8 +65,9 @@ const PLAYER_COLOR := Color(0.3, 0.55, 0.95)
 const SCREEN_LAYER := 60          ## full-screen screens (board, elevator, invoice) sit above the debug panel (50)
 const ELEVATOR_REARM_DIST := 2    ## --auto-elevator only: after "stay", walk this many cells off before it asks again
 const ELEVATOR_USE_DIST := 1      ## the player can press E at the elevator from this many cells (on it or next to it)
-const ELEVATOR_PROMPT := "E: use elevator"
-const VAN_PROMPT := "E: clock out at the van"
+const PROMPT_ABOVE_VAN := 2.7     ## the use prompt floats this far above the floor in front of the van's side door
+const PROMPT_ABOVE_ELEVATOR := 3.0
+const PROMPT_ABOVE_PICKUP := 1.75 ## above the pickup's own name label
 const VAN_FLOOR := 1              ## the van parks on the top floor only; floors 2 and 3 have no van and no arrival
 const VAN_USE_DIST := 2.8         ## the player can press E at the van from this far (world units) from its side door
 const DROPOFF_DIST := 2.5         ## a FOLLOWING employee this close (world units) to the van door or the elevator leaves right away
@@ -100,6 +101,8 @@ var subtitle: Label
 var _subtitle_tween: Tween
 var _screen_layer: CanvasLayer     ## board / elevator / invoice
 var _tracker: ObjectiveTracker
+var _use_prompt: UsePrompt         ## "[E] verb" over whatever E would act on right now (van, elevator, employee)
+var _swap_prompt: UsePrompt        ## "[F] Swap in ..." over the pickup F would swap in
 var _ticker: Control
 var _banner: Label
 var _banner_tween: Tween
@@ -630,6 +633,11 @@ func _follow_living_ally() -> void:
 
 
 func _build_contract_ui() -> void:
+	_use_prompt = UsePrompt.new()
+	add_child(_use_prompt)
+	_swap_prompt = UsePrompt.new()
+	_swap_prompt.name = "SwapPrompt"
+	add_child(_swap_prompt)
 	_tracker = ObjectiveTracker.new()
 	hud.add_overlay(_tracker)
 	_ticker = ContractParts.make_ticker()
@@ -813,32 +821,88 @@ func _player_at_van() -> bool:
 	return player != null and not player.dead and _near_van(player.global_position, VAN_USE_DIST)
 
 
-## E (the controller calls this first; true = the press is used). Priority: the van exit (at the van), then the elevator
-## (at it); otherwise false and the controller tries the employees. E never casts.
-func _use_key() -> bool:
+## What E would act on right now. UseTarget.kind: "van" (clock out), "elevator" or "employee" (bring / tell to wait).
+## `verb` is the short caption for the use prompt and `pos` the world point it floats at. This is the ONE place that
+## decides the priority (the van exit, then the elevator, then the employee next to the hero), shared by the E press
+## (_use_key, press_use) and the prompt (_update_use_prompts), so the prompt can never promise something else.
+## null when E would do nothing: no contract, a slip open, the contract ending, or nothing in reach.
+class UseTarget extends RefCounted:
+	var kind := ""
+	var verb := ""
+	var pos := Vector3.ZERO
+	var employee: Employee = null
+
+
+func use_target() -> UseTarget:
 	if _menu != null or _van_menu != null or _leaving or _ended or _ending or _session == null:
-		return false
+		return null
+	if player == null or player.dead:
+		return null
+	var t := UseTarget.new()
 	if _player_at_van():
-		_open_van_exit()
-		return true
-	if _player_at_elevator():
-		_open_elevator()
-		return true
-	return false
+		var door := _van_door_pos()
+		t.kind = "van"
+		t.verb = "Clock out"
+		t.pos = Vector3(door.x, _floor_y(door.x, door.y) + PROMPT_ABOVE_VAN, door.y)
+	elif _player_at_elevator():
+		var ex := Hex.to_world(_exit_cell)
+		t.kind = "elevator"
+		t.verb = "Elevator"
+		t.pos = Vector3(ex.x, _floor_y(ex.x, ex.z) + PROMPT_ABOVE_ELEVATOR, ex.z)
+	else:
+		var e := Employee.interact_target(player)
+		if e == null:
+			return null
+		t.kind = "employee"
+		t.verb = e.interact_verb(player)
+		t.pos = e.prompt_point()
+		t.employee = e
+	return t
+
+
+## The ground height under world (x, z), falling back to the player's feet when there is no cell there.
+func _floor_y(x: float, z: float) -> float:
+	var h := map.ground_height(Vector3(x, 0.0, z)) if map != null else NAN
+	return player.global_position.y if is_nan(h) else h
+
+
+## E (the controller calls this first; true = the press is used). Acts on use_target(): the van and elevator open their
+## slips; an employee is dismissed or recruited (Employee.interact picks the same one). E never casts.
+func _use_key() -> bool:
+	var t := use_target()
+	if t == null:
+		return false
+	match t.kind:
+		"van":
+			_open_van_exit()
+			return true
+		"elevator":
+			_open_elevator()
+			return true
+	return Employee.interact(player)
+
+
+## Point the two use prompts: E at use_target(), F at the pickup the hero would swap in. Each frame.
+func _update_use_prompts() -> void:
+	if _use_prompt == null or _swap_prompt == null:
+		return
+	var t := use_target()
+	if t == null:
+		_use_prompt.hide_prompt()
+	else:
+		_use_prompt.show_at(t.pos, "E", t.verb)
+	var pickup: ComponentPickup = null
+	if player != null and is_instance_valid(player) and not (_ended or _ending or _leaving or _menu != null or _van_menu != null):
+		pickup = player.swap_target()
+	if pickup == null:
+		_swap_prompt.hide_prompt()
+	else:
+		_swap_prompt.show_at(pickup.global_position + Vector3(0.0, PROMPT_ABOVE_PICKUP, 0.0), "F", "Swap in %s" % SpellBook.component_name(pickup.spell_id))
 
 
 func _check_elevator() -> void:
-	var slip_free := _menu == null and _van_menu == null and not _leaving
-	if hud != null:
-		hud.context_prompt = ""
-		if slip_free and _player_at_van():
-			hud.context_prompt = VAN_PROMPT
-		elif slip_free and _player_at_elevator():
-			hud.context_prompt = ELEVATOR_PROMPT
-		elif slip_free:
-			hud.context_prompt = Employee.interact_prompt(player)   # "E: tell Marguerite to wait" / "E: bring Marguerite"
 	if _menu != null or _van_menu != null or _leaving or not opts.has("auto_elevator"):
-		return   # without --auto-elevator the menu opens only on E (see _use_elevator_key)
+		return   # without --auto-elevator the menu opens only on E (see _use_key)
 	var on_exit := false
 	for h in _heroes():
 		if not h.dead and h.current_cell() == _exit_cell:
@@ -1145,6 +1209,7 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	if voice:
 		hud.set_mic_level(voice.get_level())
+	_update_use_prompts()
 	_stats_timer -= delta
 	if _stats_timer <= 0.0:
 		_stats_timer = 0.25

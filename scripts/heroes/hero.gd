@@ -288,13 +288,22 @@ func collect_component(id: String, amount: int) -> Dictionary:
 	return out
 
 
+## The pickup F would swap into the held slot right now, or null. The one place that decides it: swap_in_pickup()
+## acts on it and the game's F prompt floats over it.
+func swap_target() -> ComponentPickup:
+	var cand := swap_candidate
+	if dead or cand == null or not is_instance_valid(cand) or cand.is_queued_for_deletion():
+		return null
+	if component_outcome(cand.spell_id) != "swap":
+		return null
+	return cand
+
+
 ## F: swap the pickup we are standing next to into the held slot. The old spell is dropped as a pickup
 ## carrying its remaining charges (nothing is dropped if it had none). False if there is nothing to swap.
 func swap_in_pickup() -> bool:
-	var cand := swap_candidate
-	if dead or cand == null or not is_instance_valid(cand) or cand.is_queued_for_deletion():
-		return false
-	if component_outcome(cand.spell_id) != "swap":
+	var cand := swap_target()
+	if cand == null:
 		return false
 	var slot := held_slot
 	var old := slot_spell(slot)

@@ -2,7 +2,7 @@ class_name Hud
 extends CanvasLayer
 ## The in-game HUD, built in code: player HP bar, ally mini bars, two spell
 ## cards (name, incantation, key, cooldown sweep, charges, an empty-slot look and a HELD
-## highlight), toasts for casts / fizzles / pickups / out-of-component, the swap prompt, a mic
+## highlight), toasts for casts / fizzles / pickups / out-of-component, a mic
 ## level meter, a big center message, and an optional typed-spell console (stand-in for voice;
 ## Enter focuses it).
 ##
@@ -32,8 +32,6 @@ var _ally_bars: Array[HudBar] = []
 var _cards: Array[SpellCard] = []
 var _card_box: HBoxContainer
 var _toast: Label
-var _prompt: Label
-var context_prompt := ""   ## a world prompt ("E: use elevator"); the swap prompt wins when both apply
 var _toast_tween: Tween
 var _center: Label
 var _center_tween: Tween
@@ -56,7 +54,6 @@ func _ready() -> void:
 	_build_ally_panel()
 	_build_cards()
 	_build_toasts()
-	_build_prompt()
 	_build_mic()
 
 
@@ -107,7 +104,6 @@ func _process(delta: float) -> void:
 			_ally_bars[i].fill = BAR_COLOR_ALLY if not a.dead else Color(0.4, 0.4, 0.42)
 			_ally_bars[i].set_value(a.hp / a.max_hp, "DOWN" if a.dead else "%d / %d" % [int(ceilf(a.hp)), int(a.max_hp)])
 	_mic_bar.set_value(lerpf(_mic_bar.value, _mic_target, clampf(18.0 * delta, 0.0, 1.0)), "")
-	_update_prompt()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -164,17 +160,6 @@ func show_pickup(id: String, amount: int, slot: int = -1) -> void:
 	if slot >= 0:
 		t += "  (%s, slot %d)" % [SpellBook.spell_name(id), slot + 1]
 	_show_toast(t, SpellBook.color_of(id).lightened(0.2))
-
-
-## The text of the swap prompt for the pickup the player stands by, or "" when there is none:
-## "F: swap Fireball into slot 2 (held)".
-func swap_prompt_text() -> String:
-	if player == null or not is_instance_valid(player) or player.dead:
-		return ""
-	var cand := player.swap_candidate
-	if cand == null or not is_instance_valid(cand) or cand.is_queued_for_deletion():
-		return ""
-	return "F: swap %s into slot %d (held)" % [SpellBook.spell_name(cand.spell_id), player.held_slot + 1]
 
 
 func show_cooldown(id: String, seconds_left: float) -> void:
@@ -250,21 +235,6 @@ func _on_component_collected(id: String, amount: int, kind: String) -> void:
 			c.flash = 1.0
 
 
-func _update_prompt() -> void:
-	if _prompt == null:
-		return
-	var t := swap_prompt_text()
-	if t == "" and context_prompt != "":
-		_prompt.visible = true
-		_prompt.text = context_prompt
-		_prompt.modulate = Color(1.0, 0.92, 0.6)
-		return
-	_prompt.visible = t != ""
-	if t != "":
-		_prompt.text = t
-		_prompt.modulate = SpellBook.color_of(player.swap_candidate.spell_id).lerp(Color.WHITE, 0.75)
-
-
 # --- Building ----------------------------------------------------------------------------
 
 func _build_player_panel() -> void:
@@ -304,20 +274,6 @@ func _build_cards() -> void:
 	_card_box.add_theme_constant_override("separation", 12)
 	_card_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_card_box)
-
-
-func _build_prompt() -> void:
-	_prompt = Label.new()
-	_prompt.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_prompt.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_prompt.offset_bottom = -140
-	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_label(_prompt, 28)
-	_prompt.add_theme_constant_override("outline_size", 10)
-	_prompt.visible = false
-	_root.add_child(_prompt)
 
 
 func _build_toasts() -> void:
