@@ -4,6 +4,10 @@
 pitch-contract-sorcery.md. Numbers are relative to today's `Hero`: sword 20 dmg / 0.45 s /
 1.6 reach / 100°, bolt 8 dmg / 0.6 s / 12 range, 100 HP, speed 4.5, climb ×0.35.*
 
+> **Names (2026-10-16): the stone golem is REBAR (was Pebble), the dwarf is GASKET (was Dagna),
+> and the human archer is WICK (was Larkin).** The rename in code and UI is still to do. Old names
+> below are kept for history.
+>
 > **Roster update (2026-10-16): the crew is three heroes: Pebble, Dagna and Larkin.**
 > Sir Rattles and Gulp were dropped. Their sections below are kept for reference only.
 > The art direction changed too: faceted low-poly "contractor wizards"
