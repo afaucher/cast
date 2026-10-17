@@ -1,0 +1,8 @@
+﻿Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+streams 0, phases 1, flush 0 ms (quiet 100 ms), 30 clips
+main-thread probe (fixed work): p50 1233 us, p90 1458 us, p99 1592 us (n 1374)
+
+
+process: wall 30.3 s, cpu 2.0 s, mean cores busy 0.07
+

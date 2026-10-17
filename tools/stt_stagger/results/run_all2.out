@@ -1,0 +1,67 @@
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
+streams 1, phases 4, flush 1000 ms (quiet 100 ms), 30 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\flush1000-q100-s15.csv
+stream 0: audio 388.1 s, busy 15.56 s, rtf 0.040, max decode 69.8 ms, flushes 120
+wall 356.3 s
+main-thread probe (fixed work): p50 1246 us, p90 1451 us, p99 1610 us (n 15744)
+push+poll per 20 ms buffer, all streams: p50 69 us, p90 96 us, p99 179 us
+process: wall 359.0 s, cpu 124.7 s, mean cores busy 0.35
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
+streams 1, phases 4, flush 1000 ms (quiet 100 ms), 30 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\flush1000-q100-s6.csv
+stream 0: audio 388.1 s, busy 16.66 s, rtf 0.043, max decode 84.5 ms, flushes 120
+wall 356.4 s
+main-thread probe (fixed work): p50 1261 us, p90 1543 us, p99 1679 us (n 15744)
+push+poll per 20 ms buffer, all streams: p50 76 us, p90 102 us, p99 181 us
+process: wall 359.0 s, cpu 130.8 s, mean cores busy 0.36
+WARNING: 4 other Godot process(es) running; numbers will be skewed.
+streams 1, phases 4, flush 0 ms (quiet 100 ms), 27 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\hs-base.csv
+stream 0: audio 399.5 s, busy 15.86 s, rtf 0.040, max decode 20.6 ms, flushes 0
+wall 370.7 s
+hypothesis arrival after the last decode point: p10 13.1, p50 14.0, p90 15.6, max 21.3 ms (n 589)
+main-thread probe (fixed work): p50 1250 us, p90 1532 us, p99 1626 us (n 16668)
+push+poll per 20 ms buffer, all streams: p50 62 us, p90 83 us, p99 104 us
+process: wall 373.3 s, cpu 141.7 s, mean cores busy 0.38
+WARNING: 4 other Godot process(es) running; numbers will be skewed.
+streams 1, phases 4, flush 1000 ms (quiet 100 ms), 27 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\hs-flush1000-q100-s15.csv
+stream 0: audio 424.4 s, busy 16.63 s, rtf 0.039, max decode 68.6 ms, flushes 148
+wall 370.6 s
+main-thread probe (fixed work): p50 1244 us, p90 1462 us, p99 1602 us (n 16668)
+push+poll per 20 ms buffer, all streams: p50 62 us, p90 90 us, p99 206 us
+process: wall 373.3 s, cpu 132.1 s, mean cores busy 0.35
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
+streams 1, phases 4, flush 1000 ms (quiet 100 ms), 27 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\hs-flush1000-q100-s6.csv
+stream 0: audio 423.9 s, busy 15.69 s, rtf 0.037, max decode 51.4 ms, flushes 148
+wall 370.6 s
+main-thread probe (fixed work): p50 1233 us, p90 1426 us, p99 1588 us (n 16668)
+push+poll per 20 ms buffer, all streams: p50 58 us, p90 83 us, p99 207 us
+process: wall 373.2 s, cpu 127.0 s, mean cores busy 0.34
+streams 1, phases 4, flush 1000 ms (quiet 60 ms), 27 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\hs-flush1000-q60-s15.csv
+stream 0: audio 427.3 s, busy 16.02 s, rtf 0.037, max decode 58.8 ms, flushes 152
+wall 370.7 s
+main-thread probe (fixed work): p50 1235 us, p90 1445 us, p99 1595 us (n 16668)
+push+poll per 20 ms buffer, all streams: p50 59 us, p90 85 us, p99 217 us
+process: wall 373.2 s, cpu 128.3 s, mean cores busy 0.34
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
+streams 1, phases 4, flush 1400 ms (quiet 100 ms), 27 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\hs-flush1400-q100-s15.csv
+stream 0: audio 438.8 s, busy 18.24 s, rtf 0.042, max decode 95.2 ms, flushes 148
+wall 370.7 s
+main-thread probe (fixed work): p50 1247 us, p90 1503 us, p99 1622 us (n 16668)
+push+poll per 20 ms buffer, all streams: p50 64 us, p90 94 us, p99 225 us
+process: wall 373.1 s, cpu 134.0 s, mean cores busy 0.36
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
+streams 2, phases 2, flush 0 ms (quiet 100 ms), 27 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\hs-n2.csv
+stream 0: audio 195.4 s, busy 9.10 s, rtf 0.047, max decode 21.2 ms, flushes 0
+stream 1: audio 204.1 s, busy 9.42 s, rtf 0.046, max decode 20.4 ms, flushes 0
+wall 185.4 s
+hypothesis arrival after the last decode point: p10 14.2, p50 16.9, p90 18.7, max 20.6 ms (n 588)
+main-thread probe (fixed work): p50 1298 us, p90 1531 us, p99 1667 us (n 8334)
+push+poll per 20 ms buffer, all streams: p50 113 us, p90 136 us, p99 179 us
+process: wall 190.2 s, cpu 148.0 s, mean cores busy 0.78
+ALL DONE

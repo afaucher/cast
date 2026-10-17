@@ -1,0 +1,36 @@
+﻿Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+streams 1, phases 2, flush 1200 ms (quiet 100 ms), 12 clips
+clean_cast_heal_a0                 ph   0.0  merged heal         142.0 ms  ok
+clean_cast_heal_a0                 ph 160.0  merged heal         130.6 ms  ok
+clean_cast_fireball_a0             ph   0.0  merged fireball     147.0 ms  ok
+clean_cast_fireball_a0             ph 160.0  merged fireball     133.9 ms  ok
+clean_cast_armor_a0                ph   0.0  merged armor        148.4 ms  ok
+clean_cast_armor_a0                ph 160.0  merged armor        149.9 ms  ok
+clean_cast_corn_a0                 ph   0.0  merged corn         157.9 ms  ok
+clean_cast_corn_a0                 ph 160.0  merged corn         147.9 ms  ok
+clean_cast_tentacles_a0            ph   0.0  merged tentacles    135.2 ms  ok
+clean_cast_tentacles_a0            ph 160.0  merged tentacles    134.6 ms  ok
+clean_cast_teeth_a0                ph   0.0  merged teeth        141.1 ms  ok
+clean_cast_teeth_a0                ph 160.0  merged teeth        128.5 ms  ok
+clean_cast_heal_b0                 ph   0.0  merged heal         162.7 ms  ok
+clean_cast_heal_b0                 ph 160.0  merged heal         149.3 ms  ok
+clean_cast_fireball_b0             ph   0.0  merged fireball     154.9 ms  ok
+clean_cast_fireball_b0             ph 160.0  merged fireball     143.0 ms  ok
+clean_cast_armor_b0                ph   0.0  merged armor        154.1 ms  ok
+clean_cast_armor_b0                ph 160.0  merged armor        153.8 ms  ok
+clean_cast_corn_b0                 ph   0.0  merged corn         135.7 ms  ok
+clean_cast_corn_b0                 ph 160.0  merged corn         137.7 ms  ok
+clean_cast_tentacles_b0            ph   0.0  merged tentacles    140.9 ms  ok
+clean_cast_tentacles_b0            ph 160.0  merged tentacles    140.6 ms  ok
+clean_cast_teeth_b0                ph   0.0  merged teeth         56.8 ms  ok
+clean_cast_teeth_b0                ph 160.0  merged teeth         57.8 ms  ok
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\fsweep-1200.csv
+stream 0: audio 76.5 s, busy 2.84 s, rtf 0.037, max decode 51.2 ms, flushes 24
+wall 71.0 s
+main-thread probe (fixed work): p50 1230 us, p90 1337 us, p99 1582 us (n 3138)
+push+poll per 20 ms buffer, all streams: p50 70 us, p90 89 us, p99 197 us
+
+
+process: wall 73.5 s, cpu 24.1 s, mean cores busy 0.33
+

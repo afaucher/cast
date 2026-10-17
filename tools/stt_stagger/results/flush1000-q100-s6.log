@@ -1,0 +1,132 @@
+﻿Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+streams 1, phases 4, flush 1000 ms (quiet 100 ms), 30 clips
+clean_cast_heal_a0                 ph   0.0  merged heal         155.1 ms  ok
+clean_cast_heal_a0                 ph  80.0  merged heal         151.6 ms  ok
+clean_cast_heal_a0                 ph 160.0  merged heal         129.2 ms  ok
+clean_cast_heal_a0                 ph 240.0  merged heal         141.9 ms  ok
+clean_cast_fireball_a0             ph   0.0  merged fireball     146.0 ms  ok
+clean_cast_fireball_a0             ph  80.0  merged fireball     141.6 ms  ok
+clean_cast_fireball_a0             ph 160.0  merged fireball     143.1 ms  ok
+clean_cast_fireball_a0             ph 240.0  merged fireball     137.4 ms  ok
+clean_cast_armor_a0                ph   0.0  merged armor        159.0 ms  ok
+clean_cast_armor_a0                ph  80.0  merged armor        158.0 ms  ok
+clean_cast_armor_a0                ph 160.0  merged armor        170.3 ms  ok
+clean_cast_armor_a0                ph 240.0  merged armor        169.7 ms  ok
+clean_cast_corn_a0                 ph   0.0  merged corn         185.1 ms  ok
+clean_cast_corn_a0                 ph  80.0  merged corn         166.5 ms  ok
+clean_cast_corn_a0                 ph 160.0  merged corn         171.5 ms  ok
+clean_cast_corn_a0                 ph 240.0  merged corn         179.3 ms  ok
+clean_cast_tentacles_a0            ph   0.0  merged tentacles    160.7 ms  ok
+clean_cast_tentacles_a0            ph  80.0  merged tentacles    163.6 ms  ok
+clean_cast_tentacles_a0            ph 160.0  merged tentacles    155.5 ms  ok
+clean_cast_tentacles_a0            ph 240.0  merged tentacles    163.1 ms  ok
+clean_cast_teeth_a0                ph   0.0  merged teeth        160.8 ms  ok
+clean_cast_teeth_a0                ph  80.0  merged teeth        160.4 ms  ok
+clean_cast_teeth_a0                ph 160.0  merged teeth        159.4 ms  ok
+clean_cast_teeth_a0                ph 240.0  merged teeth        159.5 ms  ok
+clean_cast_heal_b0                 ph   0.0  merged heal         182.6 ms  ok
+clean_cast_heal_b0                 ph  80.0  merged heal         178.4 ms  ok
+clean_cast_heal_b0                 ph 160.0  merged heal         171.0 ms  ok
+clean_cast_heal_b0                 ph 240.0  merged heal         169.9 ms  ok
+clean_cast_fireball_b0             ph   0.0  merged fireball     157.6 ms  ok
+clean_cast_fireball_b0             ph  80.0  merged fireball     144.9 ms  ok
+clean_cast_fireball_b0             ph 160.0  merged fireball     145.1 ms  ok
+clean_cast_fireball_b0             ph 240.0  merged fireball     143.9 ms  ok
+clean_cast_armor_b0                ph   0.0  merged armor        154.6 ms  ok
+clean_cast_armor_b0                ph  80.0  merged armor        153.5 ms  ok
+clean_cast_armor_b0                ph 160.0  merged armor        155.1 ms  ok
+clean_cast_armor_b0                ph 240.0  merged armor        166.4 ms  ok
+clean_cast_corn_b0                 ph   0.0  merged corn         155.5 ms  ok
+clean_cast_corn_b0                 ph  80.0  merged corn         156.7 ms  ok
+clean_cast_corn_b0                 ph 160.0  merged corn         156.6 ms  ok
+clean_cast_corn_b0                 ph 240.0  merged corn         167.7 ms  ok
+clean_cast_tentacles_b0            ph   0.0  merged tentacles    140.2 ms  ok
+clean_cast_tentacles_b0            ph  80.0  merged tentacles    143.8 ms  ok
+clean_cast_tentacles_b0            ph 160.0  merged tentacles    142.4 ms  ok
+clean_cast_tentacles_b0            ph 240.0  merged tentacles    143.4 ms  ok
+clean_cast_teeth_b0                ph   0.0  merged teeth        159.9 ms  ok
+clean_cast_teeth_b0                ph  80.0  merged teeth        147.0 ms  ok
+clean_cast_teeth_b0                ph 160.0  merged teeth        159.7 ms  ok
+clean_cast_teeth_b0                ph 240.0  merged teeth        159.9 ms  ok
+rate_cast_heal_a-3                 ph   0.0  merged heal         143.8 ms  ok
+rate_cast_heal_a-3                 ph  80.0  merged heal         154.2 ms  ok
+rate_cast_heal_a-3                 ph 160.0  merged heal         139.6 ms  ok
+rate_cast_heal_a-3                 ph 240.0  merged heal         142.2 ms  ok
+rate_cast_fireball_a-3             ph   0.0  merged fireball     140.2 ms  ok
+rate_cast_fireball_a-3             ph  80.0  merged fireball     139.9 ms  ok
+rate_cast_fireball_a-3             ph 160.0  merged fireball     151.1 ms  ok
+rate_cast_fireball_a-3             ph 240.0  merged fireball     140.5 ms  ok
+rate_cast_armor_a-3                ph   0.0  merged armor        173.1 ms  ok
+rate_cast_armor_a-3                ph  80.0  merged armor        157.7 ms  ok
+rate_cast_armor_a-3                ph 160.0  merged armor        155.8 ms  ok
+rate_cast_armor_a-3                ph 240.0  merged armor        174.0 ms  ok
+rate_cast_corn_a-3                 ph   0.0  merged corn         155.9 ms  ok
+rate_cast_corn_a-3                 ph  80.0  merged corn         150.0 ms  ok
+rate_cast_corn_a-3                 ph 160.0  merged corn         144.5 ms  ok
+rate_cast_corn_a-3                 ph 240.0  merged -                  ms  MISS
+rate_cast_tentacles_a-3            ph   0.0  merged tentacles    154.9 ms  ok
+rate_cast_tentacles_a-3            ph  80.0  merged tentacles    134.8 ms  ok
+rate_cast_tentacles_a-3            ph 160.0  merged tentacles    154.0 ms  ok
+rate_cast_tentacles_a-3            ph 240.0  merged tentacles    152.5 ms  ok
+rate_cast_teeth_a-3                ph   0.0  merged teeth        158.7 ms  ok
+rate_cast_teeth_a-3                ph  80.0  merged teeth        152.0 ms  ok
+rate_cast_teeth_a-3                ph 160.0  merged teeth        157.1 ms  ok
+rate_cast_teeth_a-3                ph 240.0  merged teeth        152.3 ms  ok
+rate_cast_heal_a3                  ph   0.0  merged heal         161.8 ms  ok
+rate_cast_heal_a3                  ph  80.0  merged heal         147.2 ms  ok
+rate_cast_heal_a3                  ph 160.0  merged heal         173.7 ms  ok
+rate_cast_heal_a3                  ph 240.0  merged heal         174.6 ms  ok
+rate_cast_fireball_a3              ph   0.0  merged fireball     163.4 ms  ok
+rate_cast_fireball_a3              ph  80.0  merged fireball     145.1 ms  ok
+rate_cast_fireball_a3              ph 160.0  merged fireball     143.5 ms  ok
+rate_cast_fireball_a3              ph 240.0  merged fireball     155.4 ms  ok
+rate_cast_armor_a3                 ph   0.0  merged armor        163.8 ms  ok
+rate_cast_armor_a3                 ph  80.0  merged armor        174.9 ms  ok
+rate_cast_armor_a3                 ph 160.0  merged armor        173.7 ms  ok
+rate_cast_armor_a3                 ph 240.0  merged armor        169.9 ms  ok
+rate_cast_corn_a3                  ph   0.0  merged -                  ms  MISS
+rate_cast_corn_a3                  ph  80.0  merged -                  ms  MISS
+rate_cast_corn_a3                  ph 160.0  merged -                  ms  MISS
+rate_cast_corn_a3                  ph 240.0  merged corn         177.8 ms  ok
+rate_cast_tentacles_a3             ph   0.0  merged tentacles    185.8 ms  ok
+rate_cast_tentacles_a3             ph  80.0  merged -                  ms  MISS
+rate_cast_tentacles_a3             ph 160.0  merged -                  ms  MISS
+rate_cast_tentacles_a3             ph 240.0  merged tentacles   1258.2 ms  ok
+rate_cast_teeth_a3                 ph   0.0  merged teeth        160.9 ms  ok
+rate_cast_teeth_a3                 ph  80.0  merged teeth        156.7 ms  ok
+rate_cast_teeth_a3                 ph 160.0  merged teeth        156.6 ms  ok
+rate_cast_teeth_a3                 ph 240.0  merged teeth        159.8 ms  ok
+rate_cast_tentacles_b-3            ph   0.0  merged tentacles    136.5 ms  ok
+rate_cast_tentacles_b-3            ph  80.0  merged tentacles    146.2 ms  ok
+rate_cast_tentacles_b-3            ph 160.0  merged tentacles    149.0 ms  ok
+rate_cast_tentacles_b-3            ph 240.0  merged tentacles    137.7 ms  ok
+rate_cast_tentacles_b3             ph   0.0  merged tentacles    144.4 ms  ok
+rate_cast_tentacles_b3             ph  80.0  merged tentacles    143.1 ms  ok
+rate_cast_tentacles_b3             ph 160.0  merged tentacles    145.3 ms  ok
+rate_cast_tentacles_b3             ph 240.0  merged tentacles    145.0 ms  ok
+rate_cast_tentacle_a3              ph   0.0  merged tentacles   1271.3 ms  ok
+rate_cast_tentacle_a3              ph  80.0  merged tentacles    169.4 ms  ok
+rate_cast_tentacle_a3              ph 160.0  merged tentacles    170.2 ms  ok
+rate_cast_tentacle_a3              ph 240.0  merged tentacles    161.2 ms  ok
+rate_cast_teeth_b-3                ph   0.0  merged teeth        192.1 ms  ok
+rate_cast_teeth_b-3                ph  80.0  merged teeth        172.7 ms  ok
+rate_cast_teeth_b-3                ph 160.0  merged teeth        173.2 ms  ok
+rate_cast_teeth_b-3                ph 240.0  merged teeth        196.7 ms  ok
+rate_cast_teeth_b3                 ph   0.0  merged teeth        175.3 ms  ok
+rate_cast_teeth_b3                 ph  80.0  merged teeth        189.4 ms  ok
+rate_cast_teeth_b3                 ph 160.0  merged teeth        189.4 ms  ok
+rate_cast_teeth_b3                 ph 240.0  merged teeth        189.9 ms  ok
+rate_cast_tooth_a3                 ph   0.0  merged teeth        183.8 ms  ok
+rate_cast_tooth_a3                 ph  80.0  merged teeth        169.5 ms  ok
+rate_cast_tooth_a3                 ph 160.0  merged teeth       1255.9 ms  ok
+rate_cast_tooth_a3                 ph 240.0  merged teeth        182.3 ms  ok
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\flush1000-q100-s6.csv
+stream 0: audio 388.1 s, busy 16.66 s, rtf 0.043, max decode 84.5 ms, flushes 120
+wall 356.4 s
+main-thread probe (fixed work): p50 1261 us, p90 1543 us, p99 1679 us (n 15744)
+push+poll per 20 ms buffer, all streams: p50 76 us, p90 102 us, p99 181 us
+
+
+process: wall 359.0 s, cpu 130.8 s, mean cores busy 0.36
+

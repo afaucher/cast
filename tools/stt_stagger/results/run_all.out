@@ -1,0 +1,49 @@
+streams 0, phases 1, flush 0 ms (quiet 100 ms), 30 clips
+main-thread probe (fixed work): p50 1233 us, p90 1458 us, p99 1592 us (n 1374)
+process: wall 30.3 s, cpu 2.0 s, mean cores busy 0.07
+streams 1, phases 12, flush 0 ms (quiet 100 ms), 30 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\n1-sweep.csv
+stream 0: audio 1173.2 s, busy 45.63 s, rtf 0.039, max decode 19.9 ms, flushes 0
+wall 1068.8 s
+hypothesis arrival after the last decode point: p10 13.1, p50 13.9, p90 15.1, max 20.3 ms (n 1526)
+main-thread probe (fixed work): p50 1237 us, p90 1381 us, p99 1588 us (n 47232)
+push+poll per 20 ms buffer, all streams: p50 66 us, p90 84 us, p99 107 us
+process: wall 1071.5 s, cpu 396.1 s, mean cores busy 0.37
+WARNING: 4 other Godot process(es) running; numbers will be skewed.
+streams 2, phases 6, flush 0 ms (quiet 100 ms), 30 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\n2.csv
+stream 0: audio 572.2 s, busy 22.98 s, rtf 0.040, max decode 22.9 ms, flushes 0
+stream 1: audio 601.0 s, busy 23.68 s, rtf 0.039, max decode 22.0 ms, flushes 0
+wall 534.6 s
+hypothesis arrival after the last decode point: p10 13.1, p50 14.2, p90 15.7, max 20.4 ms (n 1527)
+main-thread probe (fixed work): p50 1247 us, p90 1456 us, p99 1600 us (n 23616)
+push+poll per 20 ms buffer, all streams: p50 100 us, p90 130 us, p99 162 us
+process: wall 539.8 s, cpu 373.7 s, mean cores busy 0.69
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
+streams 3, phases 4, flush 0 ms (quiet 100 ms), 30 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\n3.csv
+stream 0: audio 378.3 s, busy 14.85 s, rtf 0.039, max decode 20.2 ms, flushes 0
+stream 1: audio 391.0 s, busy 15.65 s, rtf 0.040, max decode 18.4 ms, flushes 0
+stream 2: audio 403.8 s, busy 15.43 s, rtf 0.038, max decode 19.8 ms, flushes 0
+wall 356.5 s
+hypothesis arrival after the last decode point: p10 13.1, p50 14.1, p90 15.1, max 21.1 ms (n 1522)
+main-thread probe (fixed work): p50 1245 us, p90 1370 us, p99 1581 us (n 15744)
+push+poll per 20 ms buffer, all streams: p50 131 us, p90 166 us, p99 200 us
+process: wall 363.1 s, cpu 356.3 s, mean cores busy 0.98
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
+streams 1, phases 4, flush 1000 ms (quiet 100 ms), 30 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\flush1000-q100.csv
+stream 0: audio 400.1 s, busy 15.47 s, rtf 0.039, max decode 68.9 ms, flushes 132
+wall 356.4 s
+main-thread probe (fixed work): p50 1243 us, p90 1446 us, p99 1596 us (n 15744)
+push+poll per 20 ms buffer, all streams: p50 73 us, p90 96 us, p99 208 us
+process: wall 358.8 s, cpu 125.1 s, mean cores busy 0.35
+streams 1, phases 4, flush 0 ms (quiet 100 ms), 27 clips
+wrote C:\Users\alexa\.gemini\antigravity\scratch\cast\tools\stt_stagger\results\hs-base.csv
+stream 0: audio 399.5 s, busy 15.90 s, rtf 0.040, max decode 18.2 ms, flushes 0
+wall 370.6 s
+hypothesis arrival after the last decode point: p10 13.1, p50 14.1, p90 15.2, max 19.3 ms (n 588)
+main-thread probe (fixed work): p50 1239 us, p90 1461 us, p99 1599 us (n 16668)
+push+poll per 20 ms buffer, all streams: p50 65 us, p90 84 us, p99 106 us
+process: wall 373.2 s, cpu 139.8 s, mean cores busy 0.37
+WARNING: 2 other Godot process(es) running; numbers will be skewed.
