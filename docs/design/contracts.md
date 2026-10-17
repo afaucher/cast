@@ -134,4 +134,4 @@ How they fit together, from the top down:
     don't carry over.
   - **Money:** decided: it has no purpose yet. The invoice total is the score.
   - **Reputation:** decided: none.
-  - **Still open:** does the board refresh every time? (Proposed: yes, 3 new offers per pick.)
+  - **Job board:** decided: always 3 new offers each time.
