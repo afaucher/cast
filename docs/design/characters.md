@@ -4,6 +4,11 @@
 pitch-contract-sorcery.md. Numbers are relative to today's `Hero`: sword 20 dmg / 0.45 s /
 1.6 reach / 100°, bolt 8 dmg / 0.6 s / 12 range, 100 HP, speed 4.5, climb ×0.35.*
 
+> **Roster update (2026-10-16): the crew is three heroes: Pebble, Dagna and Larkin.**
+> Sir Rattles and Gulp were dropped. Their sections below are kept for reference only.
+> The art direction changed too: faceted low-poly "contractor wizards"
+> (`docs/design/concepts/contractor_wizards_v1.webp`), not the chunky toy toon in section 4.
+
 ## 1. The crew concept
 
 The dispatch platform hires anyone who passes the **voice check**, and species isn't on
@@ -119,7 +124,7 @@ second.*
   - Climbs +2 at ×0.6, and is the only hero who **can shoot while climbing**.
   - A shove sends Larkin **3 hexes**.
 
-### Sir Rattles: the armor
+### Sir Rattles: the armor (DROPPED)
 *An empty suit of armor honoring a 400-year-old contract. Very polite, very literal.*
 
 - **Silhouette:** medium height.
@@ -139,7 +144,7 @@ second.*
     damage meanwhile.
   - Downed, it's a pile of plates; a revive puts the helmet back on.
 
-### Gulp: the frog (stretch)
+### Gulp: the frog (stretch, DROPPED)
 *A damp, unbothered frogfolk who joined for the dental plan.*
 - **Tongue,** within 5 hexes. It pulls one of these 2 hexes toward Gulp:
   - an enemy;
