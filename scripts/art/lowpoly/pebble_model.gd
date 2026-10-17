@@ -4,8 +4,9 @@ extends Node3D
 ## faded jeans, with giant leather work gloves. Built entirely in code from LowPoly soups (flat
 ## shaded, per-face painted colours) with the LowPolyMaterial toon + amber rim + ink outline.
 ##
-## Faces local -Z, +X is its right. Origin is at the feet. About 2.5 units tall, ~2.1 wide with
-## the gloves (the prototype hero is ~1.9 tall and 0.8 wide).
+## Faces local -Z, +X is its right. Origin is at the feet. About 2.9 units tall, ~1.7 wide with
+## the gloves (the prototype hero is ~1.9 tall and 0.8 wide). Kept taller than wide, with the head
+## poking up above the shoulders, so he reads as standing from the steep game camera.
 ##
 ## Rigid named parts (all MeshInstance3D): body, head, vest, belt, arm_l, arm_r, glove_l, glove_r,
 ## leg_l, leg_r. head / vest / belt / arms hang under body; gloves under their arm; legs under root.
@@ -38,7 +39,7 @@ const GLOVE_DARK := Color(0.42, 0.29, 0.17)
 const DARK := Color(0.12, 0.08, 0.06)
 
 ## Height of the top of the head, so a hero can park its health bar above.
-var ui_height := 2.5 * MODEL_SCALE
+var ui_height := 2.95 * MODEL_SCALE
 
 var parts: Dictionary = {}                 ## name -> MeshInstance3D
 var idle_enabled := true
@@ -51,8 +52,8 @@ var _speed := 0.0
 var _swing_tween: Tween
 var _swing_next_right := true
 var _arm_kick := {"arm_l": 0.0, "arm_r": 0.0}   ## extra x rotation from swings / casts
-var _body_base_y := 1.25
-var _head_base_y := 1.0
+var _body_base_y := 1.55
+var _head_base_y := 1.24
 
 
 func _init() -> void:
@@ -103,27 +104,29 @@ func _build() -> void:
 	_add_part("belt", _belt_soup(), body, Vector3(0, -0.27, 0))
 	for s in [-1, 1]:
 		var side := "l" if s < 0 else "r"
-		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(0.78 * s, 0.66, 0.0))
-		arm.rotation = Vector3(ARM_FWD, 0.0, deg_to_rad(13.0 * s))   # hangs down at his sides, splayed clear of the belly
-		_add_part("glove_" + side, _glove_soup(s), arm, Vector3(0.12 * s, -1.28, -0.02))
-		_add_part("leg_" + side, _leg_soup(s), self, Vector3(0.27 * s, 0.9, 0.0))
+		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(0.60 * s, 0.64, 0.0))
+		arm.rotation = Vector3(ARM_FWD, 0.0, deg_to_rad(10.0 * s))   # hangs down at his sides, splayed clear of the belly
+		_add_part("glove_" + side, _glove_soup(s), arm, Vector3(0.10 * s, -1.22, -0.02))
+		_add_part("leg_" + side, _leg_soup(s), self, Vector3(0.23 * s, 1.2, 0.0))
 
 
 ## Stone torso (hidden mostly by the vest, but the belly, the traps behind the head and the chest
 ## edges show) plus the jeans pelvis.
 func _body_soup() -> LowPoly.Soup:
-	var s := LowPoly.boulder(Vector3(0.62, 0.50, 0.33), 0, 0.16, STONE, 11, 0.11)
-	s.merge(LowPoly.boulder(Vector3(0.52, 0.34, 0.33), 0, 0.14, STONE_DARK, 12, 0.11), LowPoly.at(Vector3(0, -0.28, 0)))
-	# trapezius hump behind / around the neck: reads from above as a stone yoke
-	s.merge(LowPoly.boulder(Vector3(0.50, 0.28, 0.30), 0, 0.12, STONE_LIGHT, 13), LowPoly.at(Vector3(0, 0.50, 0.08)))
+	var s := LowPoly.boulder(Vector3(0.50, 0.50, 0.31), 0, 0.16, STONE, 11, 0.11)
+	s.merge(LowPoly.boulder(Vector3(0.44, 0.34, 0.31), 0, 0.14, STONE_DARK, 12, 0.11), LowPoly.at(Vector3(0, -0.28, 0)))
+	# low trapezius yoke behind the neck (kept low so the head clears it)
+	s.merge(LowPoly.boulder(Vector3(0.36, 0.18, 0.26), 0, 0.12, STONE_LIGHT, 13), LowPoly.at(Vector3(0, 0.46, 0.10)))
+	# a short stone neck so the head pokes up above the shoulders
+	s.merge(LowPoly.boulder(Vector3(0.19, 0.20, 0.19), 0, 0.12, STONE_DARK, 15), LowPoly.at(Vector3(0, 0.98, -0.04)))
 	# jeans pelvis under the belt
-	s.merge(LowPoly.frustum(Vector2(0.98, 0.70), Vector2(0.92, 0.66), 0.34, DENIM, 14, 0.015), LowPoly.at(Vector3(0, -0.50, 0)))
+	s.merge(LowPoly.frustum(Vector2(0.80, 0.62), Vector2(0.76, 0.60), 0.34, DENIM, 14, 0.015), LowPoly.at(Vector3(0, -0.50, 0)))
 	return s
 
 
 func _head_soup() -> LowPoly.Soup:
 	# a small blocky head with a heavy brow, sunk between the shoulders (no neck)
-	var s := LowPoly.box(Vector3(0.46, 0.40, 0.44), STONE, 21, 0.045, 2)
+	var s := LowPoly.box(Vector3(0.50, 0.44, 0.46), STONE, 21, 0.045, 2)
 	s.merge(LowPoly.frustum(Vector2(0.44, 0.40), Vector2(0.50, 0.40), 0.16, STONE_DARK, 22, 0.03, 1), LowPoly.at(Vector3(0, -0.24, -0.02)))   # jaw
 	# heavy brow ridge, a dark shelf over the eyes
 	s.merge(LowPoly.box(Vector3(0.54, 0.11, 0.17), STONE_DARK, 23, 0.025), LowPoly.at(Vector3(0, 0.08, -0.24), Vector3(12, 0, 0)))
@@ -141,15 +144,15 @@ func _head_soup() -> LowPoly.Soup:
 func _vest_soup() -> LowPoly.Soup:
 	var y0 := -0.12     # local to body origin (body at world y 1.25): vest from y 1.13 to 1.98
 	var h := 0.85
-	var wb := 1.12
-	var wt := 1.36
-	var d := 0.82
+	var wb := 0.92
+	var wt := 1.08
+	var d := 0.74
 	var cy := y0 + h * 0.5
 	var s := LowPoly.frustum(Vector2(wb, d), Vector2(wt, d), h, VEST, 31, 0.03, 2, Vector2.ZERO, 0.10)
-	s.merge(LowPoly.box(Vector3(1.02, 0.07, d + 0.02), VEST_DARK, 32, 0.008), LowPoly.at(Vector3(0, y0 + 0.02, 0)))   # hem
+	s.merge(LowPoly.box(Vector3(0.86, 0.07, d + 0.02), VEST_DARK, 32, 0.008), LowPoly.at(Vector3(0, y0 + 0.02, 0)))   # hem
 	# two vertical tape stripes front and back, standing off the surface a little
 	var half := d * 0.5 + 0.012
-	for sx in [-0.28, 0.28]:
+	for sx in [-0.22, 0.22]:
 		for sz in [-1.0, 1.0]:
 			s.merge(LowPoly.box(Vector3(0.12, h - 0.10, 0.03), TAPE, 33, 0.0, 1, 0.03), LowPoly.at(Vector3(sx, cy - 0.02, half * sz)))
 	# horizontal band wrapping the vest, at about a third up
@@ -160,23 +163,23 @@ func _vest_soup() -> LowPoly.Soup:
 	# top plate: from above the vest is one big orange field with the tape stripes running over it
 	s.merge(LowPoly.box(Vector3(wt - 0.10, 0.06, d - 0.02), VEST, 39, 0.012, 2, 0.10), LowPoly.at(Vector3(0, y0 + h - 0.01, 0)))
 	# shoulder straps over the tops: orange with a tape stripe running over
-	for sx in [-0.28, 0.28]:
-		s.merge(LowPoly.box(Vector3(0.26, 0.06, d + 0.04), VEST, 35 + int(sx * 10), 0.01), LowPoly.at(Vector3(sx, y0 + h + 0.0, 0)))
+	for sx in [-0.22, 0.22]:
+		s.merge(LowPoly.box(Vector3(0.22, 0.06, d + 0.04), VEST, 35 + int(sx * 10), 0.01), LowPoly.at(Vector3(sx, y0 + h + 0.0, 0)))
 		s.merge(LowPoly.box(Vector3(0.13, 0.03, d + 0.05), TAPE, 36, 0.0, 1, 0.03), LowPoly.at(Vector3(sx, y0 + h + 0.035, 0)))
 	# collar plate between the straps (what shows around the head from above)
 	s.merge(LowPoly.cylinder(0.30, 0.34, 0.07, 8, VEST_DARK, 37, 0.01), LowPoly.at(Vector3(0, y0 + h + 0.0, -0.02)))
 	# chest pocket
-	s.merge(LowPoly.box(Vector3(0.22, 0.2, 0.05), VEST_DARK, 38, 0.01), LowPoly.at(Vector3(-0.45, y0 + 0.5, -half - 0.01)))
+	s.merge(LowPoly.box(Vector3(0.22, 0.2, 0.05), VEST_DARK, 38, 0.01), LowPoly.at(Vector3(-0.36, y0 + 0.5, -half - 0.01)))
 	return s
 
 
 func _belt_soup() -> LowPoly.Soup:
-	var d := 0.78
-	var s := LowPoly.box(Vector3(1.06, 0.14, d), LEATHER, 41, 0.01, 2)
+	var d := 0.70
+	var s := LowPoly.box(Vector3(0.88, 0.14, d), LEATHER, 41, 0.01, 2)
 	s.merge(LowPoly.box(Vector3(0.20, 0.13, 0.05), BRASS, 42, 0.005, 1, 0.03), LowPoly.at(Vector3(0, 0, -d * 0.5 - 0.015)))   # buckle
 	s.merge(LowPoly.box(Vector3(0.10, 0.07, 0.06), LEATHER, 43, 0.0), LowPoly.at(Vector3(0, 0, -d * 0.5 - 0.02)))
 	# pouches
-	for p in [[-0.40, -0.31, 0.20, 0.24], [0.42, -0.30, 0.22, 0.20], [-0.22, 0.20, 0.26, 0.22]]:
+	for p in [[-0.33, -0.31, 0.18, 0.24], [0.35, -0.30, 0.20, 0.20], [-0.18, 0.20, 0.24, 0.22]]:
 		var px: float = p[0]
 		var pz: float = p[1]
 		var pw: float = p[2]
@@ -188,38 +191,38 @@ func _belt_soup() -> LowPoly.Soup:
 		s.merge(LowPoly.box(Vector3(pw, ph, 0.12), LEATHER_LIGHT, 44 + int(px * 20), 0.012), LowPoly.at(Vector3(px, -0.14, zz)))
 		s.merge(LowPoly.box(Vector3(pw + 0.02, 0.06, 0.14), LEATHER, 45, 0.008), LowPoly.at(Vector3(px, -0.14 + ph * 0.5, zz)))   # flap
 	# a wrench handle sticking out of the right pouch, a hammer loop on the left hip
-	s.merge(LowPoly.box(Vector3(0.05, 0.30, 0.05), Color(0.55, 0.57, 0.6), 46, 0.0), LowPoly.at(Vector3(0.45, -0.02, -0.33), Vector3(0, 0, -14)))
-	s.merge(LowPoly.box(Vector3(0.07, 0.26, 0.07), LEATHER_LIGHT, 47, 0.0), LowPoly.at(Vector3(-0.56, -0.10, 0.0)))
+	s.merge(LowPoly.box(Vector3(0.05, 0.30, 0.05), Color(0.55, 0.57, 0.6), 46, 0.0), LowPoly.at(Vector3(0.37, -0.02, -0.30), Vector3(0, 0, -14)))
+	s.merge(LowPoly.box(Vector3(0.07, 0.26, 0.07), LEATHER_LIGHT, 47, 0.0), LowPoly.at(Vector3(-0.47, -0.10, 0.0)))
 	return s
 
 
 ## Shoulder boulder + upper arm + forearm, all stone. Pivot at the shoulder.
 func _arm_soup(side: int) -> LowPoly.Soup:
-	var s := LowPoly.boulder(Vector3(0.42, 0.37, 0.40), 0, 0.22, STONE_LIGHT, 51 + side, 0.12)   # the big shoulder
-	s.merge(LowPoly.boulder(Vector3(0.32, 0.42, 0.32), 0, 0.2, STONE, 53 + side, 0.12), LowPoly.at(Vector3(0.05 * side, -0.46, 0.0)))
-	s.merge(LowPoly.boulder(Vector3(0.35, 0.40, 0.35), 0, 0.2, STONE_DARK, 55 + side, 0.12), LowPoly.at(Vector3(0.09 * side, -0.90, 0.0)))
+	var s := LowPoly.boulder(Vector3(0.33, 0.31, 0.33), 0, 0.22, STONE_LIGHT, 51 + side, 0.12)   # the shoulder
+	s.merge(LowPoly.boulder(Vector3(0.27, 0.40, 0.27), 0, 0.2, STONE, 53 + side, 0.12), LowPoly.at(Vector3(0.04 * side, -0.44, 0.0)))
+	s.merge(LowPoly.boulder(Vector3(0.29, 0.38, 0.29), 0, 0.2, STONE_DARK, 55 + side, 0.12), LowPoly.at(Vector3(0.07 * side, -0.86, 0.0)))
 	return s
 
 
 ## Giant work glove: a huge tan leather mitt with a heavy cuff, a thumb and knuckle bumps.
 ## Local origin is the middle of the fist.
 func _glove_soup(side: int) -> LowPoly.Soup:
-	var s := LowPoly.boulder(Vector3(0.47, 0.50, 0.48), 0, 0.15, GLOVE, 61 + side, 0.11)
-	s.merge(LowPoly.cylinder(0.30, 0.33, 0.22, 8, GLOVE_DARK, 62, 0.025), LowPoly.at(Vector3(0, 0.44, 0.0)))   # cuff
-	s.merge(LowPoly.cylinder(0.335, 0.335, 0.05, 8, LEATHER, 68, 0.0), LowPoly.at(Vector3(0, 0.40, 0.0)))   # cuff strap
-	s.merge(LowPoly.boulder(Vector3(0.17, 0.26, 0.17), 0, 0.15, GLOVE, 63), LowPoly.at(Vector3(-0.38 * side, 0.08, -0.20), Vector3(0, 0, 22 * side)))   # thumb
+	var s := LowPoly.boulder(Vector3(0.40, 0.44, 0.41), 0, 0.15, GLOVE, 61 + side, 0.11)
+	s.merge(LowPoly.cylinder(0.26, 0.29, 0.20, 8, GLOVE_DARK, 62, 0.025), LowPoly.at(Vector3(0, 0.39, 0.0)))   # cuff
+	s.merge(LowPoly.cylinder(0.29, 0.29, 0.05, 8, LEATHER, 68, 0.0), LowPoly.at(Vector3(0, 0.35, 0.0)))   # cuff strap
+	s.merge(LowPoly.boulder(Vector3(0.15, 0.23, 0.15), 0, 0.15, GLOVE, 63), LowPoly.at(Vector3(-0.33 * side, 0.07, -0.17), Vector3(0, 0, 22 * side)))   # thumb
 	for i in 3:
-		s.merge(LowPoly.boulder(Vector3(0.14, 0.12, 0.12), 0, 0.15, GLOVE_DARK, 64 + i), LowPoly.at(Vector3((i - 1) * 0.24, -0.04, -0.44)))   # knuckles
+		s.merge(LowPoly.boulder(Vector3(0.12, 0.11, 0.11), 0, 0.15, GLOVE_DARK, 64 + i), LowPoly.at(Vector3((i - 1) * 0.20, -0.04, -0.38)))   # knuckles
 	return s
 
 
 ## Stubby leg: faded jeans, a lighter turn-up cuff, chunky stone foot. Pivot at the hip.
 func _leg_soup(side: int) -> LowPoly.Soup:
 	var out := LowPoly.Soup.new(73, 0.07)
-	out.merge(LowPoly.frustum(Vector2(0.44, 0.46), Vector2(0.38, 0.40), 0.60, DENIM, 71 + side, 0.02, 2, Vector2.ZERO, 0.08), LowPoly.at(Vector3(0, -0.33, 0)))
-	out.merge(LowPoly.frustum(Vector2(0.40, 0.42), Vector2(0.38, 0.40), 0.12, DENIM_LIGHT, 72, 0.015), LowPoly.at(Vector3(0, -0.60, 0)))
+	out.merge(LowPoly.frustum(Vector2(0.38, 0.40), Vector2(0.33, 0.36), 0.92, DENIM, 71 + side, 0.02, 2, Vector2.ZERO, 0.08), LowPoly.at(Vector3(0, -0.48, 0)))
+	out.merge(LowPoly.frustum(Vector2(0.36, 0.38), Vector2(0.34, 0.36), 0.12, DENIM_LIGHT, 72, 0.015), LowPoly.at(Vector3(0, -0.92, 0)))
 	# stone foot, pushed forward so it reads from the front and overhead
-	out.merge(LowPoly.boulder(Vector3(0.27, 0.15, 0.36), 0, 0.14, STONE_DARK, 74 + side, 0.1), LowPoly.at(Vector3(0.0, -0.76, -0.08)))
+	out.merge(LowPoly.boulder(Vector3(0.24, 0.15, 0.33), 0, 0.14, STONE_DARK, 74 + side, 0.1), LowPoly.at(Vector3(0.0, -1.06, -0.08)))
 	return out
 
 
