@@ -78,7 +78,12 @@ The comedy and the "well-oiled team" score live here, and payout could later buy
 ### Open
 - **What the cap is based on:** a share of the contract's total value (so leaving early with nothing
   earned can still leave you owing up to the cap), or a share of earnings?
-- **Hellgate spawning model:** one of the options in decision 3.
+- ~~**Hellgate spawning model**~~ **Decided:** hellgates DO spawn monsters, and the **spawn rate scales
+  up progressively with contract difficulty**. Easy contracts have slow, sparse gates and hard ones
+  pump out waves, so balance is a difficulty curve rather than an on/off switch.
+  - **Proposal:** the rate also rises with floor depth inside a contract.
+  - **Proposal:** each gate has a cap on living spawns, so an ignored gate builds pressure without
+    flooding the level.
 
 ## Contract generation [decided directions: 1 client, 2 story, 3 descent, 6 job board]
 How they fit together, from the top down:
@@ -116,8 +121,8 @@ How they fit together, from the top down:
    - **The invoice** at the end totals every floor.
 
 ### Open questions
-- **Floors:** how many per contract (2–4?), and do floors loop back up (taking employees up the
-  elevator)?
+- ~~**Floors:** how many per contract?~~ **Decided: 3 floors per contract.** Still open: do floors
+  loop back up (taking employees up the elevator)?
 - **Per-floor contents:** does every floor need its own hellgate, or can the origin floor hold the
   "boss" gate?
 - **Board refresh:** does the board refresh each time, and is there any persistence between
