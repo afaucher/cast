@@ -201,7 +201,7 @@ a stand-in block van. All the captures except `garage_realvan_clean.png` use the
 
 | Option | What it is | Cost | Changes by context | Verdict |
 |---|---|---|---|---|
-| **The garage** | The concept, built: stone-block garage over the hex floor, the van on its arrival circle with the side door open, the crew idling, torches, dusty grate shafts, a hellgate glowing through a breach in the back wall, signs ("24/7 EMERGENCY DISPATCH! WE FIX YOUR HEXES OR IT'S FREE!", "DAYS SINCE LAST CORN INCIDENT: 0", neon "CAST / WE FIX HEXES" with a dead H) | Low: everything exists except a wall kit piece, a torch prop, the van (in progress) and some crew lean/sit idles | Time of day (dawn/night prototyped); the last contract's results ("after a bad job": scorch, corn, smoke, prototyped); the real corn counter; live van paint, decals and uniforms; bought items on shelves | **Main menu.** It is the business and a persistent home, and it doubles as the cosmetics preview |
+| **The garage** | The concept, built: stone-block garage over the hex floor, the van on its arrival circle with the side door open, the crew idling, torches, dusty grate shafts, a hellgate glowing through a breach in the back wall, signs ("24/7 EMERGENCY DISPATCH! WE FIX YOUR HEXES OR IT'S FREE!", "JOBS SINCE LAST CORN INCIDENT", neon "CAST / WE FIX HEXES" with a dead H) | Low: everything exists except a wall kit piece, a torch prop, the van (in progress) and some crew lean/sit idles | Time of day (dawn/night prototyped); the last contract's results ("after a bad job": scorch, corn, smoke, prototyped); the real corn counter; live van paint, decals and uniforms; bought items on shelves | **Main menu.** It is the business and a persistent home, and it doubles as the cosmetics preview |
 | **Site diorama** | The highlighted offer's site as a miniature on the dispatcher's desk: a cut-out hex chunk on a swaying brass turntable with the client's priced props and tags, the gate, demons, a cowering employee and the tiny crew, under depth of field | Very low: all existing models; the real version can run `SiteBuilder` on a small radius from the offer's seed | Per offer: client, origin theme, pest and props (prepper, villain and founder prototyped); danger; the wreck after a contract | **Job board.** It makes the text concrete. Too crew-less for the main menu |
 | **The storefront** | The business at night: a cinder-block unit with the roll-up door half open on a lit shop, rooftop neon CAST, a 1-800-LOW-MANA board, the van in a "RESERVED: VAN" pentagram bay, a sodium lamp, and a manhole leaking red behind cones | Highest new geometry (facade, sign, lamp, skyline), and an outdoor look the game never uses | Weather (rain prototyped); OPEN/CLOSED; window display | Title or attract screen, or the supply-house backdrop |
 | Dispatch office (not built) | A corkboard, radio and coffee, with a window onto the garage | High; diegetic UI is hard to read | | Its parts are folded into the garage and the diorama |
@@ -228,7 +228,7 @@ and settings share it, as before). Kit pieces (torches, signs, neon, light shaft
 `scripts/ui/backdrops/backdrop_kit.gd`.
 - **Scene:** Wick, Gasket and Rebar around the real `VanModel` (side door open, violet cargo glow) on a `VanCircle`
   chalk pentagram; torches, a ceiling-grate spot with dusty shafts, the hellgate through the breach with hazard tape,
-  the dispatch sign, "DAYS SINCE LAST CORN INCIDENT: 0" and the neon CAST with its dead H. The camera orbits its focus
+  the dispatch sign, "JOBS SINCE LAST CORN INCIDENT" and the neon CAST with its dead H. The camera orbits its focus
   by about 3 degrees (a 52 s sway).
 - **Crew:** the player's hero stands in FRONT, large and three-quarter to the camera, left of the van's open cargo door;
   the other two stand back (one by the cab with a tool, one beyond the nose) in a loose triangle, all right of the
@@ -249,7 +249,7 @@ and settings share it, as before). Kit pieces (torches, signs, neon, light shaft
      records it (`LastContract.record(invoice)`); it lives for the process only, nothing is saved;
   3. `night` when the local clock is 20:00 to 04:59;
   4. else `dawn`.
-  `set_mood()` switches live. `corn_days` drives the sign; nothing counts corn incidents yet, so it stays 0.
+  `set_mood()` switches live. `corn_jobs` drives the sign, now "JOBS SINCE LAST CORN INCIDENT": finished contracts in a row that were not bad (`LastContract.clean_jobs`, saved in user://garage.cfg); a bad job resets it, and the after mood pastes a red 0 over it.
 - **Cost:** 7 positional lights (grate spot, work light, two torches, breach, the van's cargo glow, the gate) and no
   shadows; about 236 draw calls and 58k primitives in the lab at 1600x900, against about 311 draw calls and 242k
   primitives on a game floor. Nothing allocates per frame (tested).

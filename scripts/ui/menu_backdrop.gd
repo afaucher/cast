@@ -4,7 +4,7 @@ extends Node3D
 ## (the real VanModel, side door open) parked on its chalk pentagram, in a stone-block garage over the hex floor.
 ## Torches flicker, dusty light shafts fall from a ceiling grate, a hellgate glows red through a breach in the back
 ## wall behind hazard tape, and the signs tell the story ("24/7 EMERGENCY DISPATCH! WE FIX YOUR HEXES OR IT'S
-## FREE!", "DAYS SINCE LAST CORN INCIDENT: 0", a neon CAST with a dead letter). The camera drifts slowly.
+## FREE!", "JOBS SINCE LAST CORN INCIDENT", a neon CAST with a dead letter). The camera drifts slowly.
 ## It needs none of the game systems (no GameWorld, no actors, no physics): one terrain mesh, the walls and props
 ## as a few meshes, three models, one van, one gate and about six lights, and nothing allocates per frame.
 ##
@@ -88,15 +88,13 @@ var mood := ""
 ## The hero standing in front ("wick", "gasket" or "rebar"). "" = the player's hero (`--backdrop-hero` overrides).
 ## Change it any time with set_featured_hero().
 var featured_hero := ""
-## The number on the "DAYS SINCE LAST CORN INCIDENT" sign. Nothing counts corn incidents yet, so it reads 0.
-var corn_days := 0:
+## The number on the "JOBS SINCE LAST CORN INCIDENT" sign: finished contracts in a row that were not bad
+## (LastContract.clean_jobs). After a bad job it is 0, and the "after" mood pastes a huge red 0 over it whatever it says.
+var corn_jobs := LastContract.clean_jobs():
 	set(v):
-		corn_days = v
+		corn_jobs = v
 		if _corn_sign_label != null:
 			_corn_sign_label.text = _corn_text()
-		var zero := get_node_or_null("Mood/CornZero/Number") as Label3D
-		if zero != null:
-			zero.text = str(v)
 
 var map: HexMap
 var terrain: HexMapView
@@ -446,7 +444,7 @@ func _build_dressing() -> void:
 
 
 func _corn_text() -> String:
-	return "DAYS SINCE LAST\nCORN INCIDENT\n%d" % corn_days
+	return "JOBS SINCE LAST\nCORN INCIDENT\n%d" % corn_jobs
 
 
 # --- Mood -------------------------------------------------------------------------------------------
@@ -652,5 +650,5 @@ func _after_job() -> void:
 		_corn_sign_node.scale = Vector3.ONE * 1.5
 		_corn_sign_node.rotation.z = deg_to_rad(9.0)
 		_corn_sign_label.modulate = After.SOOT_RED
-		After.corn_sign_zero(_mood_root, _corn_sign_node, str(corn_days))
+		After.corn_sign_zero(_mood_root, _corn_sign_node, "0")
 	_crew_extras = After.dress_crew([wick, gasket, rebar])

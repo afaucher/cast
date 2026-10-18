@@ -61,6 +61,35 @@ func _check_mood_logic() -> void:
 	check(not LastContract.was_bad(), "a $0 payout alone is not (the old rules decide)")
 	LastContract.clear()
 	check(not LastContract.was_bad(), "cleared")
+	_check_clean_jobs(run)
+
+
+## The corn sign counts finished jobs in a row that were not bad; a bad one puts it back to 0. It is saved.
+func _check_clean_jobs(run: ContractRun) -> void:
+	var path := "user://test_garage.cfg"
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	LastContract.save_path = path
+	LastContract.persist = true
+	LastContract.clear()
+	eq(LastContract.clean_jobs(), 0, "no file: 0 jobs")
+	var good := {"damages": 0, "contract_value": run.contract_value, "reason": ContractSession.END_CASHED_OUT, "payout": 5000}
+	var bad := {"damages": 0, "contract_value": run.contract_value, "reason": ContractSession.END_INCAPACITATED}
+	LastContract.record(good)
+	LastContract.record(good)
+	eq(LastContract.clean_jobs(), 2, "two good jobs in a row")
+	LastContract.clear()   # (a new session: loads from the file)
+	eq(LastContract.clean_jobs(), 2, "the streak is saved")
+	LastContract.record(good)
+	eq(LastContract.clean_jobs(), 3, "and keeps counting")
+	LastContract.record(bad)
+	eq(LastContract.clean_jobs(), 0, "a bad job resets it")
+	LastContract.clear()
+	eq(LastContract.clean_jobs(), 0, "the reset is saved too")
+	LastContract.persist = false
+	LastContract.save_path = LastContract.SAVE_PATH
+	LastContract.clear()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 # --- The garage -----------------------------------------------------------------------------------------
@@ -104,10 +133,10 @@ func _check_garage_moods() -> void:
 		check((mood_root != null and mood_root.get_node_or_null("AfterMess") != null) == (m == "after"), "%s: corn and scorch only after a bad job" % m)
 		check(mood_root != null and mood_root.find_children("*", "SpotLight3D", true, false).size() == 1, "%s: one overhead spot (the grate by day, the work lamp at night)" % m)
 		# the corn sign
-		check(g.corn_days == 0, "the corn counter reads 0")
+		check(g.corn_jobs == 0, "the corn counter reads 0 (nothing recorded)")
 		var found_sign := false
 		for l in g.find_children("*", "Label3D", true, false):
-			if (l as Label3D).text.begins_with("DAYS SINCE LAST"):
+			if (l as Label3D).text.begins_with("JOBS SINCE LAST"):
 				found_sign = true
 				check((l as Label3D).text.ends_with("0"), "the corn sign says 0")
 		check(found_sign, "the corn sign is on the wall")
@@ -134,10 +163,14 @@ func _check_garage_switching() -> void:
 	eq(g.get_child_count(), children, "switching moods rebuilds, it does not pile up nodes")
 	g.set_mood("bogus")
 	eq(g.mood, "dawn", "an unknown mood is refused")
-	g.corn_days = 3
+	g.corn_jobs = 3
 	for l in g.find_children("*", "Label3D", true, false):
-		if (l as Label3D).text.begins_with("DAYS SINCE LAST"):
+		if (l as Label3D).text.begins_with("JOBS SINCE LAST"):
 			check((l as Label3D).text.ends_with("3"), "the corn counter is wired to the sign")
+	g.set_mood("after")
+	var zero := g.get_node_or_null("Mood/CornZero/Number") as Label3D
+	check(zero != null and zero.text == "0", "after a bad job a red 0 is pasted over the count")
+	g.set_mood("dawn")
 	g.queue_free()
 	await frames(2)
 
