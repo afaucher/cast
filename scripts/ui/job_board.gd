@@ -18,6 +18,8 @@ extends Control
 ## cards, and then only a light vignette sits over it.
 
 signal picked(run: ContractRun)
+## The highlighted card changed (the host's board tells the crew which one it is looking at).
+signal highlight_changed(index: int)
 
 const CARD_W := 480.0
 const LIFT := 12.0
@@ -26,6 +28,9 @@ const SHADE_OPAQUE := Color(0.06, 0.05, 0.07, 1.0)   ## no backdrop: a plain dar
 const SHADE_LIGHT := Color(0.03, 0.025, 0.035, 0.22) ## garage behind: a light dim only
 
 var offers: Array[ContractRun] = []
+## A client's board in a shared run: the host picks, so keys and clicks do nothing here (the host's highlighted
+## card is set from outside with set_highlight). Esc (through the game) leaves the crew.
+var read_only := false
 ## True when a 3D backdrop (the garage) is rendered behind the board: the opaque dark shade goes and a light
 ## vignette stays. Set it any time.
 var backdrop_behind := false:
@@ -83,13 +88,22 @@ func _ready() -> void:
 	side.add_theme_constant_override("separation", 6)
 	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	side.add_child(KeyHints.new([["1", "3", "or"], ["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "back"]]))
+	if read_only:
+		side.add_child(KeyHints.new([["Esc", "leave the crew"]]))
+	else:
+		side.add_child(KeyHints.new([["1", "3", "or"], ["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "back"]]))
 	var rules := FormTheme.label("LEAVING EARLY ALWAYS WORKS  ·  UNMET OBJECTIVES DO NOT PAY", 18, Color(1, 1, 1, 0.85))
 	rules.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	rules.add_theme_constant_override("outline_size", 5)
 	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rules.custom_minimum_size = Vector2(300, 0)
 	side.add_child(rules)
+	if read_only:
+		var host_note := FormTheme.label("THE HOST PICKS THE JOB", 22, Color(1.0, 0.9, 0.45, 0.95), true)
+		host_note.name = "HostPicks"
+		host_note.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		host_note.add_theme_constant_override("outline_size", 6)
+		side.add_child(host_note)
 	top.add_child(side)
 
 	var row := HBoxContainer.new()
@@ -107,7 +121,8 @@ func _ready() -> void:
 	crew_strip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(crew_strip)
 	Session.roster_changed.connect(refresh_crew)
-	Session.set_crew_state("board")
+	if not read_only:
+		Session.set_crew_state("board")
 	refresh_crew()
 
 	_hi = clampi(_hi, 0, maxi(offers.size() - 1, 0))
@@ -115,6 +130,8 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if read_only:
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var idx: int = int((event as InputEventKey).keycode) - KEY_1
 		if idx >= 0 and idx < offers.size():
@@ -136,6 +153,8 @@ func _input(event: InputEvent) -> void:
 
 ## Take offer `index` (mouse click or the key).
 func choose(index: int) -> void:
+	if read_only:
+		return
 	if index >= 0 and index < offers.size():
 		Session.set_crew_state("job")
 		picked.emit(offers[index])
@@ -173,6 +192,7 @@ func set_highlight(index: int) -> void:
 		return
 	_hi = index
 	_apply_highlight(true)
+	highlight_changed.emit(index)
 
 
 ## The shade behind the cards: opaque dark with no 3D backdrop, a light dim when the garage is behind.
@@ -231,7 +251,9 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	card.gui_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 			choose(index))
-	card.mouse_entered.connect(func() -> void: set_highlight(index))
+	card.mouse_entered.connect(func() -> void:
+		if not read_only:
+			set_highlight(index))
 
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 0)

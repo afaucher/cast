@@ -1,5 +1,6 @@
 extends TestCase
-## Ledger payout rule: damages capped at contract value, taken from earnings, never negative.
+## Ledger payout rule: damages capped at contract value and taken from earnings (that part never below $0), then
+## $10,000 per hero down at the end is subtracted, uncapped, so the payout can go negative through revival fees only.
 
 
 func setup() -> void:
@@ -12,10 +13,40 @@ func setup() -> void:
 	eq(Ledger.payout(), 1900, "payout = earned - damages")
 	Ledger.damage("Gold toilet", 50000)
 	eq(Ledger.deducted(), 10000, "deductions capped at contract value")
-	eq(Ledger.payout(), 0, "never negative")
+	eq(Ledger.payout(), 0, "damages alone never push the pay below $0")
 	Ledger.begin_contract(5000)
 	eq(Ledger.lines.size(), 0, "new contract clears the ledger")
 	Ledger.damage("Vase", 900)
 	eq(Ledger.payout(), 0, "leaving early with damage and nothing earned pays $0, owes nothing")
 	eq(Ledger.damage_by_who().get("", -1), 900, "unattributed damage grouped")
+
+	# Revival fees: $10,000 per downed hero, uncapped, subtracted after the $0 floor.
+	Ledger.begin_contract(10000)
+	eq(Ledger.revival_fees(), 0, "no revival fees yet")
+	Ledger.earn("Hellgate closed", 3000)
+	Ledger.revival("Gasket")
+	eq(Ledger.revival_fees(), 10000, "one downed hero is billed $10,000")
+	eq(Ledger.payout(), 3000 - 10000, "payout = earned - revival fee, and it can be negative")
+	eq(Ledger.damages(), 0, "a revival is not property damage")
+	eq(Ledger.earned(), 3000, "and it is not earnings")
+	var rev: Dictionary = Ledger.lines[Ledger.lines.size() - 1]
+	eq(str(rev["kind"]), "revival", "it is its own line kind")
+	eq(str(rev["who"]), "Gasket", "the line names the hero")
+	eq(str(rev["label"]), "Revival - Gasket", "with a readable label")
+	eq(int(rev["amount"]), 10000, "at $10,000")
+	Ledger.revival("Wick")
+	Ledger.revival("Rebar")
+	eq(Ledger.revival_fees(), 30000, "three downed heroes: $30,000")
+	eq(Ledger.payout(), 3000 - 30000, "the whole crew down is a net loss")
+	Ledger.damage("Gold toilet", 50000)
+	eq(Ledger.deducted(), 10000, "damages are still capped at the contract value")
+	eq(Ledger.payout(), -30000, "earned $3,000 minus capped damages floors at $0, then the fees come off")
+	Ledger.revival("Nobody", 0)
+	eq(Ledger.revival_fees(), 30000, "a zero fee adds no line")
+	Ledger.begin_contract(10000)
+	eq(Ledger.revival_fees(), 0, "a new contract clears the revival fees")
+	Ledger.earn("Hellgate closed", 3000)
+	Ledger.damage("Vase", 1000)
+	Ledger.revival("Wick")
+	eq(Ledger.payout(), 3000 - 1000 - 10000, "damages, then fees")
 	finish()

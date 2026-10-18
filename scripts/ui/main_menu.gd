@@ -10,8 +10,8 @@ extends Node
 ##                    crew it reads "Leave the crew".
 ##   03 Voice setup (VoiceSetupScreen: live mic test), 04 Settings (SettingsScreen), 05 Quit.
 ## A typed status line under the rows says what the session is doing or why it ended ("Crew is full", "The
-## host clocked out", ...). A joined client waits HERE in M0 (there is no shared run until M1): the status says
-## "Connected to <host>'s crew. Shared jobs arrive in a later build." and the crew list shows the roster.
+## host clocked out", ...). A joined client does not stay here: it goes straight to the shared run's job board (the
+## host picks the job; game.gd, scripts/net/crew_flow.gd), and comes back with the reason when the session ends.
 ## Opening the menu as a host closes the crew (the host left the job). The menu only ASKS Session (the
 ## autoload in scripts/net/); it never touches the network or Steam itself.
 ## Keyboard (arrows / Tab / Enter) and mouse; Esc backs out of a sub-screen. Everything is built in code.
@@ -21,7 +21,7 @@ extends Node
 
 const GAME_SCRIPT := preload("res://scripts/app/game.gd")
 const TAGLINE := "Licensed Budget Sorcery"
-const WAITING_NOTE := "Shared jobs arrive in a later build."
+const WAITING_NOTE := "Opening the job board..."
 
 signal screen_changed(screen_name: String)
 
@@ -57,6 +57,7 @@ var settings_screen: SettingsScreen = null
 
 var _opened_from: Button = null
 var _hosting_attempt := false   ## Start a job is waiting for the Steam lobby
+var _entering := false          ## a joined client is on its way to the shared run
 var _status_box: Control = null
 var _crew_box: Control = null
 var _stamp: Control = null   ## gives way to the session notice, which uses the same strip
@@ -338,6 +339,8 @@ func _wire_session() -> void:
 	if Session.last_reason != "" and not Session.online():
 		_set_status(Session.last_reason)
 	_refresh_net()
+	if Session.is_client():
+		_enter_shared_run.call_deferred()   # joined before the menu was up (--net-join, an invite)
 
 
 func _on_net_status(text: String) -> void:
@@ -354,9 +357,21 @@ func _on_session_started(as_host: bool) -> void:
 		_go(Boot.GAME_SCENE)
 		return
 	_refresh_net()
+	if not as_host:
+		_enter_shared_run()
+
+
+## A joined client goes to the host's job board (the shared run).
+func _enter_shared_run() -> void:
+	if _entering or not Session.is_client():
+		return
+	_entering = true
+	GAME_SCRIPT.reset_flow()
+	_go(Boot.GAME_SCENE)
 
 
 func _on_session_ended(reason: String) -> void:
+	_entering = false
 	if _hosting_attempt:
 		# Steam couldn't open a lobby: play anyway, solo (the board says why).
 		_hosting_attempt = false

@@ -9,12 +9,13 @@ so four agents can build in parallel without touching each other's files.
   target `TEAM_HEROES` only, unless the employees agent extends that.
 - **Autoload `Ledger`** (`scripts/contracts/contract_ledger.gd`):
   - `begin_contract(value)`, `end_contract()`;
-  - `earn(label, amount, who)`, `damage(label, amount, culprit)`;
-  - `earned()`, `damages()`, `deducted()`, `payout()`, `damage_by_who()`;
+  - `earn(label, amount, who)`, `damage(label, amount, culprit)`, `revival(hero_name)`;
+  - `earned()`, `damages()`, `deducted()`, `revival_fees()`, `payout()`, `damage_by_who()`;
   - `lines`, `floor_number`;
   - signals `changed`, `line_added`.
 
-  Payout = `max(0, earned - min(damages, contract_value))`.
+  Payout = `max(0, earned - min(damages, contract_value)) - revival_fees` (revival fees: $10,000 per hero down at the
+  end, uncapped, so the payout can be negative; see `docs/design/contracts.md`, Decisions 9).
 
 ## Ownership (only edit your own files; everything else is read-only)
 | Agent | Owns |

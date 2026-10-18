@@ -180,6 +180,6 @@ func _draw() -> void:
 	draw_string(lf, Vector2(PAD, y + 27), "PAYOUT", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, INK)
 	var pay_text := ContractRun.money(payout)
 	var pw := tf.get_string_size(pay_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
-	draw_string(tf, Vector2(WIDTH - PAD - pw, y + 30), pay_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, C_MONEY)
+	draw_string(tf, Vector2(WIDTH - PAD - pw, y + 30), pay_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, C_MONEY if payout >= 0 else C_BAD)   # money() prints a minus sign when negative
 	if damages > 0:
 		draw_string(tf, Vector2(PAD, y + 52), "property damage -%s" % ContractRun.money(damages), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, C_BAD)

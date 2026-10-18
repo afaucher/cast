@@ -78,6 +78,7 @@ func setup() -> void:
 	Session.send_event(1, "probe.done", {})
 	check(await until(func() -> bool: return ended, 20.0), "the session ends after the test (the host leaves)")
 	eq(ended_reason, expect_end, "the session ended for the expected reason")
+	await after_end()
 	finish()
 
 
@@ -95,6 +96,11 @@ func run_host() -> void:
 
 ## Override: a client's script.
 func run_client() -> void:
+	pass
+
+
+## Override: a client, after its session ended as expected (check what the game did about it).
+func after_end() -> void:
 	pass
 
 

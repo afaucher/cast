@@ -49,6 +49,16 @@ func _check_mood_logic() -> void:
 	eq(MenuBackdrop.pick_mood(PackedStringArray(["--backdrop-mood", "night"]), 12), "night", "the flag beats the mess")
 	LastContract.record({"damages": 0, "contract_value": run.contract_value, "reason": ContractSession.END_INCAPACITATED})
 	check(LastContract.was_bad(), "an incapacitated crew is a bad job")
+	# crew revival: any hero left down, or a negative net payout, is a bad job even with no damage
+	LastContract.record({"damages": 0, "contract_value": run.contract_value, "reason": ContractSession.END_CASHED_OUT, "revival_fees": 0, "payout": 5000})
+	check(not LastContract.was_bad(), "no revival and a positive payout: a good job")
+	LastContract.record({"damages": 0, "contract_value": run.contract_value, "reason": ContractSession.END_CASHED_OUT, "revival_fees": Ledger.REVIVAL_FEE, "payout": 5000})
+	check(LastContract.was_bad(), "any crew revival is a bad job, even with a positive payout")
+	eq(MenuBackdrop.pick_mood(none, 12), "after", "after a revival: the mess")
+	LastContract.record({"damages": 0, "contract_value": run.contract_value, "reason": ContractSession.END_CASHED_OUT, "revival_fees": 0, "payout": -1})
+	check(LastContract.was_bad(), "a negative net payout is a bad job")
+	LastContract.record({"damages": 0, "contract_value": run.contract_value, "reason": ContractSession.END_CASHED_OUT, "payout": 0})
+	check(not LastContract.was_bad(), "a $0 payout alone is not (the old rules decide)")
 	LastContract.clear()
 	check(not LastContract.was_bad(), "cleared")
 

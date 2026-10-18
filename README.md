@@ -29,31 +29,44 @@ The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc 
 3. **Start a job** opens the job board.
 
 ### Online play (in progress)
-Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M0) a crew can form,
-but there is no shared run yet**: a player who joins sees "Connected to <host>'s crew. Shared jobs arrive in a later
-build." and the crew list (seat, name, character) on the menu, while the host plays on. The host's job board shows
-the crew under the cards. Up to 3 players (one per crew slot); a 4th is told "Crew is full", a different build is
-refused, and when the host leaves everyone else is told "The host clocked out". Invites from the Steam overlay join
-directly.
+Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M1) a crew shares one
+run, frozen**: the host rolls the job board and its three offers appear on every player's board (read-only for
+the others, "the host picks the job"); the host takes a job; everyone signs **their own** license checkout (that is
+the "ready" step, and the others see "waiting for <name>"); every machine builds the same floor from the contract
+seed behind a load barrier, checks that it is the same floor (a floor that differs is refused with "Desync:
+different floor"), and the van arrival plays on every screen from the same moment. After that the other players are
+standing still: **heroes and monsters are not synced yet** (M2 and M3), so what each screen shows of the others is
+a frozen copy. Exits (elevator, van) and the pause are not shared yet either: while a crew is on a floor, Esc opens
+the menu without pausing, and the only way out is Main menu (a client leaves the crew; the host asks first, because
+it ends the job for everyone).
+
+Up to 3 players (one per crew slot); a 4th is told "Crew is full", a different build is refused, a crew already on a
+job is closed ("That crew is already on a job"), and when the host leaves everyone else is told "The host clocked
+out". Invites from the Steam overlay join directly. A host with nobody else in the crew plays exactly the solo game.
 
 **Two or three instances on one PC** (ENet on localhost, no Steam needed):
 
 ```powershell
-.un.ps1 -Crew 2                 # a host window (job board) and a joiner window (menu, connected)
-.un.ps1 -Crew 3 -Link coast     # three players, each window simulating a coast-to-coast link
+.\run.ps1 -Crew 2                 # a host window (job board) and a joiner window (the same board, read-only)
+.\run.ps1 -Crew 3 -Link coast     # three players, each window simulating a coast-to-coast link
+.\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # the host takes offer 2 once both are in; both sign heal+corn
+.\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn -ShotDir C:\shots   # ... and each window saves <Name>.png and quits
 ```
 
 Or by hand, in two terminals:
 
 ```powershell
-.un.ps1 --net-host --net-name Alex                         # host over ENet on port 24600, opens the job board
-.un.ps1 --net-join 127.0.0.1 --net-name Sam --no-mic       # join it; waits on the menu with the crew
+.\run.ps1 --net-host --net-name Alex                         # host over ENet on port 24600, opens the job board
+.\run.ps1 --net-join 127.0.0.1 --net-name Sam --no-mic       # join it: you land on the host's job board
 ```
 
 Online dev flags (after `--`): `--net-host` (host over ENet), `--net-join <ip[:port]>`, `--net-port <P>` (default
 24600), `--net-link off|coast|rough` (simulated lag and loss on everything this process receives: coast is 45 ms each
 way, ±15 ms, 1.5% loss), `--net-name <name>` (the roster name; Steam's name otherwise), `--net-steam-probe` (create one
-real Steam lobby through the host path, print it, leave and quit: the quick Steam check).
+real Steam lobby through the host path, print it, leave and quit: the quick Steam check), `--net-wait N` (the host stays
+on the board until the crew has N members, then takes offer `--contract`, default the first). `--spells a,b` signs
+that license without the checkout, in every window. `--shot <png>` saves a screenshot 3 s after the shared start and
+quits (`--shot-after S` to change it); `run.ps1 -ShotDir <dir>` gives each window its own file.
 
 **Network telemetry** is passive: one CSV row a second per machine in `%APPDATA%\Godot\app_userdata\Cast\net\`
 (the host's file also holds every client's rows). Read a gap as "missing", never as zero.
@@ -72,7 +85,9 @@ real Steam lobby through the host path, print it, leave and quit: the quick Stea
    (floor 3: exit only). The **van** (press **E** at its side door, floor 1 only) clocks out and invoices
    the client. Leaving early always works: unfinished objectives simply do not pay.
 5. **The invoice** bills the client: what you earned, minus property damage (capped at the
-   contract's value, and never below $0), with the culprit named on every broken gold toilet.
+   contract's value; that part never goes below $0), with the culprit named on every broken gold toilet.
+   Then corporate bills **$10,000 for every crew member still down at the end** (revived for you, uncapped),
+   so a bad enough job pays a negative NET PAYOUT. If you die, you pay.
 
 HP carries between floors; everything resets between contracts.
 

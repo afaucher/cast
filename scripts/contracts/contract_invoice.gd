@@ -2,7 +2,8 @@ class_name ContractInvoice
 extends RefCounted
 ## Builds the end-of-job invoice (the summary screen's data) from a finished ContractSession and the
 ## Ledger. Everything the screen prints comes from here, so the totals provably match the Ledger:
-##   earned (sum of the floor sections) - deducted (damages capped at the contract value) = payout.
+##   max(0, earned (sum of the floor sections) - deducted (damages capped at the contract value)) - revival fees = payout
+## (the payout is negative when the crew left heroes down: revival fees are billed uncapped).
 
 const MONTHS: Array[String] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const VENDOR := "Cast Budget Sorcery"
@@ -17,6 +18,7 @@ static func build(session: ContractSession) -> Dictionary:
 	var earned := Ledger.earned()
 	var damages := Ledger.damages()
 	var deducted := Ledger.deducted()
+	var revivals := _revival_rows()
 	var payout := Ledger.payout()
 	var inv := {
 		"number": run.invoice_number,
@@ -36,6 +38,8 @@ static func build(session: ContractSession) -> Dictionary:
 		"damages": damages,
 		"deducted": deducted,
 		"capped": damages > run.contract_value,
+		"revival_fees": Ledger.revival_fees(),
+		"revivals": revivals,
 		"payout": payout,
 		"floors": _floor_sections(),
 		"deductions": _deduction_rows(),
@@ -133,6 +137,15 @@ static func _deduction_rows() -> Array[Dictionary]:
 		keep.append({"label": "%d other items" % (rows.size() - MAX_DEDUCTION_ROWS + 1), "who": "various", "qty": n, "amount": rest})
 		rows = keep
 	return rows
+
+
+## [{who, label, amount}] one row per hero who was down at the end (the revival fee corporate billed), in ledger order.
+static func _revival_rows() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for l in Ledger.lines:
+		if l["kind"] == "revival":
+			out.append({"who": str(l["who"]), "label": str(l["label"]), "amount": int(l["amount"])})
+	return out
 
 
 ## [{who, amount}] biggest culprit first (the team pot stays shared; this is credit and blame).

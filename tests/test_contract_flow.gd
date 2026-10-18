@@ -13,6 +13,7 @@ func setup() -> void:
 	_check_extraction()
 	_check_invoice_matches_ledger()
 	_check_incapacitated()
+	_check_revival()
 	_check_stars_and_text()
 	finish()
 
@@ -149,8 +150,7 @@ func _check_cash_out_early() -> void:
 	Ledger.damage("Zen fountain", run2.contract_value * 3)
 	eq(Ledger.deducted(), run2.contract_value, "damage is capped at the contract value")
 	s2.finish(ContractSession.END_CASHED_OUT)
-	eq(Ledger.payout(), 0, "pay never goes below $0")
-	check(Ledger.payout() >= 0, "and the crew never owes anything")
+	eq(Ledger.payout(), 0, "property damage alone never takes the pay below $0")
 
 	# Leaving at once with nothing done: $0, not negative, even with damage.
 	var s3 := ContractSession.begin(ContractRun.make("founder", 23, 0.4))
@@ -297,6 +297,55 @@ func _check_incapacitated() -> void:
 	eq(str(inv["footer"]), str(ClientArchetype.get_data("supervillain")["footers"]["incap"]), "and the client's incapacitated footer")
 	eq(int(inv["earned"]), run.gate_pay + 3 * ContractRun.EMPLOYEE_ALIVE, "it still shows what was earned so far")
 	eq(int(inv["payout"]), run.gate_pay + 30 - 500, "minus the damage")
+
+
+## Corporate revives every hero still down at the end and bills the client $10,000 each, uncapped.
+func _check_revival() -> void:
+	# An incapacitated ending: all three heroes down.
+	var run := ContractRun.make("supervillain", 62, 0.7)
+	var s := ContractSession.begin(run)
+	s.enter_floor(1, 2, false, 3, 10)
+	s.gate_closed(false)
+	Ledger.damage("Throne", 500)
+	s.finish(ContractSession.END_INCAPACITATED, ["Wick", "Rebar", "Gasket"])
+	var inv := ContractInvoice.build(s)
+	eq(int(inv["revival_fees"]), 3 * Ledger.REVIVAL_FEE, "an incapacitated ending bills 3 x $10,000")
+	eq((inv["revivals"] as Array).size(), 3, "one revival row per downed hero")
+	eq(str((inv["revivals"] as Array)[0]["who"]), "Wick", "named")
+	eq(int(inv["payout"]), run.gate_pay + 30 - 500 - 30000, "payout = earned - damage - revival fees")
+	check(int(inv["payout"]) < 0, "so the net payout is negative")
+	eq(int(inv["payout"]), Ledger.payout(), "and it matches the Ledger")
+	eq(int(inv["stars"]), 1, "one star")
+
+	# A cash-out with one ally down.
+	var run2 := ContractRun.make("prepper", 63, 0.5)
+	var s2 := ContractSession.begin(run2)
+	s2.enter_floor(1, 2, false, 3, 10)
+	s2.gate_closed(false)
+	s2.finish(ContractSession.END_CASHED_OUT, ["Gasket"])
+	var inv2 := ContractInvoice.build(s2)
+	eq(int(inv2["revival_fees"]), 10000, "a cash-out with one ally down bills $10,000")
+	eq((inv2["revivals"] as Array).size(), 1, "one revival row")
+	eq(int(inv2["payout"]), run2.gate_pay + 30 - 10000, "payout = earned - $10,000")
+
+	# Nobody down: no fee, no rows, and the pay is unchanged.
+	var s3 := ContractSession.begin(ContractRun.make("prepper", 64, 0.5))
+	s3.enter_floor(1, 1, false, 2, 10)
+	s3.finish(ContractSession.END_CASHED_OUT)
+	var inv3 := ContractInvoice.build(s3)
+	eq(int(inv3["revival_fees"]), 0, "nobody down: no revival fee")
+	check((inv3["revivals"] as Array).is_empty(), "and no revival rows")
+
+	# Finishing twice bills once; revival fees are not capped by the contract value.
+	var run4 := ContractRun.make("prepper", 65, 0.5)
+	var s4 := ContractSession.begin(run4)
+	s4.enter_floor(1, 1, false, 2, 10)
+	Ledger.damage("Gold toilet", run4.contract_value * 2)
+	s4.finish(ContractSession.END_INCAPACITATED, ["Wick", "Rebar", "Gasket"])
+	s4.finish(ContractSession.END_INCAPACITATED, ["Wick", "Rebar", "Gasket"])
+	eq(Ledger.revival_fees(), 30000, "finishing twice bills once")
+	eq(Ledger.deducted(), run4.contract_value, "damages are still capped at the contract value")
+	eq(Ledger.payout(), -30000, "damages floor the pay at $0, then the revival fees come off in full")
 
 
 func _check_stars_and_text() -> void:

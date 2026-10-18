@@ -5,7 +5,8 @@ extends RefCounted
 ## disk (it lives as long as the process), and the Game records it once, when the invoice is built.
 ##
 ##   LastContract.record(invoice)        # Game._end_contract
-##   LastContract.was_bad()              # damages over AFTER_DAMAGE_RATIO of the contract's value, or the crew went down
+##   LastContract.was_bad()              # damages over AFTER_DAMAGE_RATIO of the contract's value, the crew went down,
+##                                       # corporate had to revive anyone (crew revival fees), or the net payout was negative
 ##   LastContract.corn_incidents         # corn casts in the last contract; nothing counts them yet, so it stays 0
 
 ## A job went badly when the damages reach this share of the contract's value.
@@ -15,6 +16,8 @@ static var has_result := false
 static var damages := 0
 static var contract_value := 0
 static var incapacitated := false
+static var revival_fees := 0
+static var payout := 0
 static var corn_incidents := 0
 
 
@@ -24,13 +27,16 @@ static func record(invoice: Dictionary) -> void:
 	damages = int(invoice.get("damages", 0))
 	contract_value = int(invoice.get("contract_value", 0))
 	incapacitated = str(invoice.get("reason", "")) == ContractSession.END_INCAPACITATED
+	revival_fees = int(invoice.get("revival_fees", 0))
+	payout = int(invoice.get("payout", 0))
 
 
-## True when the last contract ended in a mess: the whole crew incapacitated, or damages over the threshold.
+## True when the last contract ended in a mess: the whole crew incapacitated, any crew member left down (a
+## revival fee was billed), a negative net payout, or damages over the threshold.
 static func was_bad() -> bool:
 	if not has_result:
 		return false
-	return incapacitated or float(damages) >= float(contract_value) * AFTER_DAMAGE_RATIO
+	return incapacitated or revival_fees > 0 or payout < 0 or float(damages) >= float(contract_value) * AFTER_DAMAGE_RATIO
 
 
 static func clear() -> void:
@@ -38,4 +44,6 @@ static func clear() -> void:
 	damages = 0
 	contract_value = 0
 	incapacitated = false
+	revival_fees = 0
+	payout = 0
 	corn_incidents = 0

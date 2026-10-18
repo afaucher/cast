@@ -231,10 +231,15 @@ func _check_van_exit() -> void:
 	await _press_e()
 	check(g.get("_van_menu") != null and g.get("_menu") == null, "E opens the van slip first, not the elevator menu")
 	vm = g.get("_van_menu")
+	var van_allies: Array[Hero] = g.get("allies")
+	van_allies[0].apply_damage(99999.0)   # one ally is down when the crew clocks out: corporate revives them, the client pays
+	await frames(2)
 	vm.clock_out.emit()
 	await frames(3)
 	var inv: InvoiceScreen = g.get("_invoice")
 	if check(inv != null, "clocking out at the van shows the invoice"):
+		eq(int(inv.inv["revival_fees"]), Ledger.REVIVAL_FEE, "a cash-out with one ally down bills $10,000")
+		eq((inv.inv["revivals"] as Array).size(), 1, "one revival row, naming the downed ally")
 		eq(str(inv.inv["reason"]), ContractSession.END_CASHED_OUT, "the van's exit ends the contract like the elevator's")
 		eq(int(inv.inv["payout"]), Ledger.payout(), "the invoice matches the Ledger")
 		eq(int(inv.inv["earned"]), run.gate_pay + site.employees.size() * ContractRun.EMPLOYEE_ALIVE, "the closed gate plus $10 per employee left alive; unfinished objectives pay nothing")
@@ -422,6 +427,9 @@ func _check_incapacitated() -> void:
 	if inv != null:
 		eq(str(inv.inv["reason"]), ContractSession.END_INCAPACITATED, "the reason is 'crew incapacitated'")
 		eq(int(inv.inv["stars"]), 1, "one star")
+		eq(int(inv.inv["revival_fees"]), 3 * Ledger.REVIVAL_FEE, "all three heroes down: corporate bills 3 x $10,000")
+		eq((inv.inv["revivals"] as Array).size(), 3, "one revival row per hero, the player's included")
+		check(int(inv.inv["payout"]) < 0, "so the net payout is negative")
 		eq(int(inv.inv["payout"]), Ledger.payout(), "and it matches the Ledger")
 	g.queue_free()
 	await frames(3)

@@ -3,13 +3,18 @@ extends Node
 ## earns or costs money reports here; the invoice reads it.
 ##
 ## Payout rule (docs/design/contracts.md): damages are capped at the contract's
-## value and come out of earnings; pay never goes below $0.
-##   payout = max(0, earned - min(damages, contract_value))
+## value and come out of earnings, and that part never goes below $0. Then corporate bills the client
+## REVIVAL_FEE for every hero still down when the contract ends: not capped, not floored, so the net
+## payout can go negative, but only through revival fees.
+##   payout = max(0, earned - min(damages, contract_value)) - revival_fees
 
 signal changed
 signal line_added(line: Dictionary)
 
-## {kind: "earn"|"damage", label, amount (int dollars, positive), who (hero name or ""), floor}
+## What corporate bills the client for each crew member who is down when the contract ends.
+const REVIVAL_FEE := 10000
+
+## {kind: "earn"|"damage"|"revival", label, amount (int dollars, positive), who (hero name or ""), floor}
 var lines: Array[Dictionary] = []
 var contract_value := 0
 var floor_number := 1
@@ -47,6 +52,17 @@ func damage(label: String, amount: int, culprit: Node = null) -> void:
 	_add("damage", label, amount, culprit)
 
 
+## Corporate revives a hero who is down at the end of the contract; the client is billed. `hero_name` is the
+## hero's display name. Not capped by the contract value.
+func revival(hero_name: String, amount: int = REVIVAL_FEE) -> void:
+	if amount <= 0:
+		return
+	var line := {"kind": "revival", "label": "Revival - %s" % hero_name, "amount": amount, "who": hero_name, "floor": floor_number}
+	lines.append(line)
+	line_added.emit(line)
+	changed.emit()
+
+
 func earned() -> int:
 	return _sum("earn")
 
@@ -60,8 +76,19 @@ func deducted() -> int:
 	return mini(damages(), contract_value)
 
 
-func payout() -> int:
+## Total revival fees (uncapped).
+func revival_fees() -> int:
+	return _sum("revival")
+
+
+## The earned-minus-capped-damages part, which never goes below $0 (revival fees come off after it).
+func payout_before_revival() -> int:
 	return maxi(0, earned() - deducted())
+
+
+## Net payout: can be negative, only through revival fees.
+func payout() -> int:
+	return payout_before_revival() - revival_fees()
 
 
 ## Damage per culprit name, for the invoice's blame section.

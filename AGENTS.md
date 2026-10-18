@@ -13,8 +13,11 @@ machine owns that player's hero and streams its state, and the host owns everyth
 4 (run the tests) still applies; see Tests below.
 
 ## Networking rules (enforced by `tests/test_net_contract.gd`)
-The transport, lobby, crew roster, clock and telemetry exist (M0 of `docs/design/networking-build-plan.md`; the
-`Session` autoload), but there is no shared run yet. Every change has to keep co-op possible:
+The transport, lobby, crew roster, clock and telemetry (M0) and the shared run (M1: the host's board and job, every
+player's license checkout, the same floor from the seed behind a load barrier with a checksum, the floor clock) exist
+(`docs/design/networking-build-plan.md`; the `Session` autoload and its `Flow`). Heroes and the host's world are not
+synced yet: on a client everything the host owns is a non-acting copy (`Net.simulates(node)`, `Net.make_copy`; M2 and
+M3 sync them). Every change has to keep co-op possible:
 1. **Declare authority.** A class with gameplay state has `net_fields()` classifying **every** script
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.

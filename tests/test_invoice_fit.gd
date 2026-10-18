@@ -32,6 +32,18 @@ func setup() -> void:
 	eq(int(out_ded[1]["amount"]), 1800, "Wick's two items summed")
 	eq(int(out_ded[1]["qty"]), 2, "Wick's item count")
 	eq(_damages(out_ded), _damages(ded), "damage total unchanged")
+
+	# The crew revival section (header + 3 rows) never folds, but it makes the earned / damage rows fold sooner.
+	f = InvoiceScreen.fit_rows(short_floors, short_ded, InvoiceScreen.ROW_BUDGET, 4)
+	eq((f["floors"] as Array), short_floors, "short + revivals: floors untouched")
+	f = InvoiceScreen.fit_rows(floors, ded, InvoiceScreen.ROW_BUDGET, 4)
+	out_floors = f["floors"]
+	out_ded = f["deductions"]
+	for sec: Dictionary in out_floors:
+		eq((sec["rows"] as Array).size(), 1, "revivals: floor %d folded" % int(sec["floor"]))
+	eq(_earned(out_floors), _earned(floors), "revivals: earned total unchanged")
+	check(out_floors.size() + out_ded.size() + 4 <= InvoiceScreen.ROW_BUDGET, "earned + damage + 4 revival rows fit the budget (%d)" % (out_floors.size() + out_ded.size() + 4))
+	eq(_damages(out_ded), _damages(ded), "revivals: damage total unchanged")
 	finish()
 
 

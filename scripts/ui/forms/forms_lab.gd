@@ -7,6 +7,7 @@ extends Control
 ## --screen <s>    board | picker | pause | elevator | elevator_last | van | invoice | tracker | gallery
 ## --lab-shot <p>  save a screenshot after --lab-after seconds (default 1.2) and quit
 ## --lab-after <s>
+## --invoice-seed <n> / --invoice-down <n>   invoice: the contract's seed, and how many heroes are still down (revival fees)
 ## --lab-focus <n> board: which offer is highlighted (default 0)
 ## --lab-down <n>  press Down n times first (focus walk), for the picker / pause / elevator
 ## --lab-card <i> picker: focus card i (0-based) after the first two are ticked
@@ -146,7 +147,12 @@ func _demo_invoice() -> Dictionary:
 	s.check_clean(0)
 	s.extract(1)
 	Ledger.damage("Gold toilet", 15000, gasket)
-	s.finish(ContractSession.END_CASHED_OUT)
+	# --invoice-down <n>: n heroes (Gasket, Rebar, Wick in that order) are still down, so corporate bills the revival fee.
+	var down_arg := Boot.arg_value(OS.get_cmdline_user_args(), "--invoice-down")
+	var downed: Array[String] = []
+	for nm: String in ["Gasket", "Rebar", "Wick"].slice(0, clampi(int(down_arg) if down_arg != "" else 0, 0, 3)):
+		downed.append(nm)
+	s.finish(ContractSession.END_CASHED_OUT, downed)
 	var inv := ContractInvoice.build(s)
 	for h in [wick, rebar, gasket]:
 		h.free()

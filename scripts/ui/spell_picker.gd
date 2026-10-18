@@ -32,6 +32,10 @@ var trigger_word := "cast"
 var spell_ids: Array[String] = []
 ## Extra data for ids SpellBook does not know (test hook): id -> {name, color, desc, cooldown, component, word}.
 var spell_meta := {}
+## The row at the bottom (and what it says it does): "Back to the board" for a host or solo, "Leave the crew" for a
+## client, who has no board of its own to go back to. Set before adding to the tree.
+var back_text := "Back to the board"
+var back_hint := "pick another job"
 
 var _ids: Array[String] = []
 var _selected: Array[String] = []
@@ -129,7 +133,7 @@ func _ready() -> void:
 	_start.label_size = 34
 	_start.pressed.connect(confirm)
 	body.add_child(_start)
-	_back = FormRow.new("Back to the board", "ESC", "pick another job")
+	_back = FormRow.new(back_text, "ESC", back_hint)
 	_back.row_h = 52.0
 	_back.show_box = false
 	_back.pressed.connect(func() -> void: cancelled.emit())

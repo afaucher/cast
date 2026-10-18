@@ -3,7 +3,8 @@ extends Control
 ## The end-of-contract summary, drawn as FORM 99 (the carbon-copy family, scripts/ui/forms/): a paper invoice
 ## with the client's company in the header block, invoice number and date, BILL TO, line items per floor
 ## (earned), an itemised deductions section with the culprit named, "Damages (capped at contract value)", a
-## subtotal, NET PAYOUT, a deadpan footer note from the client and a 1-3 star rating stamp. To the right on a
+## subtotal, the crew revival fee (corporate revives every hero still down at the end; billed to the client,
+## uncapped, so NET PAYOUT can be negative and then prints in red with a minus sign), NET PAYOUT, a deadpan footer note from the client and a 1-3 star rating stamp. To the right on a
 ## canary slip: the crew debrief (credit and blame) and the row back to the job board.
 ##
 ## Data comes from ContractInvoice.build(). Add under a Control (Hud.add_overlay). Emits next_contract.
@@ -18,8 +19,8 @@ const BG := Color(0.065, 0.055, 0.07)
 const PAPER_W := 1000.0
 const SIDE_W := 340.0
 
-## Earned + damage rows that fit on one screen with NET PAYOUT in view (1280x720). Over this, each floor's earned
-## lines fold into one row per floor, then (if still over) the damages fold into one row per culprit (fit_rows).
+## Earned + damage + revival rows that fit on one screen with NET PAYOUT in view (1280x720). Over this, each floor's
+## earned lines fold into one row per floor, then (if still over) the damages fold into one row per culprit (fit_rows).
 const ROW_BUDGET := 13
 
 ## Keys are ignored for this long after the screen appears (so a held key cannot skip it).
@@ -135,7 +136,8 @@ func _build_paper() -> Control:
 	inner.add_child(_header_band("LINE ITEMS (EARNED)"))
 	var grid := _grid()
 	inner.add_child(grid)
-	var fitted := fit_rows(inv["floors"], inv["deductions"])
+	var revivals: Array = inv.get("revivals", [])
+	var fitted := fit_rows(inv["floors"], inv["deductions"], ROW_BUDGET, revivals.size() + 1 if not revivals.is_empty() else 0)
 	var floors: Array = fitted["floors"]
 	if floors.is_empty():
 		_row(grid, "", "No billable work completed.", "", "$0", INK_DIM)
@@ -162,6 +164,17 @@ func _build_paper() -> Control:
 	var cap_text := "Damages (capped at contract value %s)" % ContractRun.money(int(inv["contract_value"]))
 	inner.add_child(_total_line(cap_text, "-" + ContractRun.money(int(inv["deducted"])), RED, 20))
 
+	# Crew revival: corporate revives each hero still down at the end and bills the client. Not capped.
+	if not revivals.is_empty():
+		if int(inv["earned"]) < int(inv["deducted"]):   # the $0 floor bit: say so, or the net below would not add up
+			inner.add_child(_total_line("Pay after damages (never below $0)", "$0", INK_DIM, 18))
+		inner.add_child(_header_band("CREW REVIVAL (CORPORATE)"))
+		var rgrid := _grid()
+		inner.add_child(rgrid)
+		for rv: Dictionary in revivals:
+			_row(rgrid, "", str(rv["label"]), "x1", "-" + ContractRun.money(int(rv["amount"])), RED)
+		inner.add_child(_total_line("Revival fees (billed in full, no cap)", "-" + ContractRun.money(int(inv["revival_fees"])), RED, 20))
+
 	# NET PAYOUT with the rating stamp.
 	var net_row := HBoxContainer.new()
 	net_row.add_theme_constant_override("separation", 16)
@@ -183,7 +196,7 @@ func _build_paper() -> Control:
 	var nl := FormTheme.label("NET PAYOUT", 20, FormTheme.INK, true)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	nv.add_child(nl)
-	var pay_l := FormTheme.typed(ContractRun.money(int(inv["payout"])), 54, GREEN if int(inv["payout"]) > 0 else RED)
+	var pay_l := FormTheme.typed(ContractRun.money(int(inv["payout"])), 54, GREEN if int(inv["payout"]) > 0 else RED)   # money() prints the minus sign
 	pay_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	nv.add_child(pay_l)
 	net_row.add_child(net)
@@ -269,15 +282,16 @@ func _meta_box(title: String, lines: Array) -> Control:
 	return b
 
 
-## Fold the invoice's rows so earned + damage rows fit ROW_BUDGET: first each floor's earned lines become one
-## "Floor n work" row (qty = items, amount = the floor's total), then the damages become one row per culprit.
+## Fold the invoice's rows so earned + damage rows (plus `extra_rows`, the revival section's header and rows, which
+## never fold) fit ROW_BUDGET: first each floor's earned lines become one "Floor n work" row (qty = items, amount =
+## the floor's total), then the damages become one row per culprit.
 ## Totals never change. Returns {floors, deductions} in the same shapes ContractInvoice.build() uses.
-static func fit_rows(floors: Array, ded: Array, budget: int = ROW_BUDGET) -> Dictionary:
+static func fit_rows(floors: Array, ded: Array, budget: int = ROW_BUDGET, extra_rows: int = 0) -> Dictionary:
 	var earned_rows := 0
 	for sec: Dictionary in floors:
 		earned_rows += (sec["rows"] as Array).size()
 	var out_floors := floors
-	if earned_rows + ded.size() > budget:
+	if earned_rows + ded.size() + extra_rows > budget:
 		out_floors = []
 		for sec: Dictionary in floors:
 			var qty := 0
@@ -288,7 +302,7 @@ static func fit_rows(floors: Array, ded: Array, budget: int = ROW_BUDGET) -> Dic
 			out_floors.append({"floor": sec["floor"], "rows": [{"label": "Floor %d work" % int(sec["floor"]), "qty": qty, "amount": amount}]})
 		earned_rows = out_floors.size()
 	var out_ded := ded
-	if earned_rows + ded.size() > budget:
+	if earned_rows + ded.size() + extra_rows > budget:
 		var by_who: Dictionary = {}
 		var order: Array[String] = []
 		for d: Dictionary in ded:
@@ -339,6 +353,17 @@ func _build_side() -> Control:
 		h.add_child(n)
 		h.add_child(_side_t("-" + ContractRun.money(int(b["amount"])), 20, RED))
 		v.add_child(h)
+	var downed: Array = inv.get("revivals", [])
+	if not downed.is_empty():
+		v.add_child(FormTheme.gap(6))
+		v.add_child(FormTheme.label("DOWN AT THE END", 17, FormTheme.INK, true))
+		for rv: Dictionary in downed:
+			var rh := HBoxContainer.new()
+			var rn := _side_t("%s (revived)" % str(rv["who"]), 20, INK)
+			rn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			rh.add_child(rn)
+			rh.add_child(_side_t("-" + ContractRun.money(int(rv["amount"])), 20, RED))
+			v.add_child(rh)
 	v.add_child(FormTheme.gap(6))
 	v.add_child(FormTheme.label("EMPLOYEES", 17, FormTheme.INK, true))
 	var e: Dictionary = inv["employees"]

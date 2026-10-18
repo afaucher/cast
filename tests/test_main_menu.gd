@@ -246,13 +246,16 @@ func _check_crew_view() -> void:
 	if not check(await _until(func() -> bool: return Session.online(), 5.0), "the menu's Session joins it"):
 		return
 	var menu := _make_menu(false)
+	var went: Array[String] = []
+	menu.change_scene = func(p: String) -> void: went.append(p)
 	add_child(menu)
 	await frames(2)
+	eq(went, [Boot.GAME_SCENE] as Array[String], "a joined client goes to the shared run's job board (M1)")
 	eq(menu.join_button.text, "Leave the crew", "joined: Join becomes Leave the crew")
 	check(not menu.join_button.disabled, "and is enabled")
 	check(menu.start_button.disabled, "Start a job is greyed out while in a crew")
 	check(menu.status_label.text.begins_with("Connected to Hana's crew."), "the status says whose crew (%s)" % menu.status_label.text)
-	check(menu.status_label.text.contains(MainMenu.WAITING_NOTE), "and that shared jobs come later")
+	check(menu.status_label.text.contains(MainMenu.WAITING_NOTE), "and that the job board is opening")
 	var lines := menu.crew_label.text.split("\n")
 	eq(lines.size(), 2, "the crew list has both players")
 	check(lines[0].contains("Hana") and lines[0].begins_with("1") and lines[0].contains("Wick"), "seat 1: the host and its character (%s)" % lines[0])

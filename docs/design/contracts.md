@@ -12,6 +12,7 @@ end; the north-star "consistently pretty good" team should clear most objectives
 | **Disinfect the wine cellar** | **$10k** | Clear the room's infestation: the nest, goo and spawners. |
 | **Close all hellgates** | **$3k each** | Hellgates are the spawners (summoning circles / portals). |
 | **Property damage** | **deducted from pay** | Every broken prop has a price tag. |
+| **Crew revival (corporate)** | **-$10,000 per hero down at the end** | Not capped. The one way pay goes negative (see Decisions, 9). |
 
 ## How each one plays [proposal]
 - **Employees:** NPCs (staff in uniforms, or henchmen in a villain lair) hide in rooms. They panic,
@@ -48,7 +49,8 @@ end; the north-star "consistently pretty good" team should clear most objectives
 The run ends at the exit with an **invoice** screen:
 - line items earned;
 - deductions with the culprit named ("Wick: corn, -$900");
-- the net payout;
+- a **CREW REVIVAL (CORPORATE)** section, one row per hero still down at the end ("Revival - Gasket, -$10,000");
+- the net payout (red with a minus sign when negative);
 - a star rating.
 
 The comedy and the "well-oiled team" score live here, and payout could later buy gear or unlock spells.
@@ -70,7 +72,7 @@ The comedy and the "well-oiled team" score live here, and payout could later buy
 
 ## Decisions (user, 2026-10-16)
 1. **Leaving early always works.** Objectives you haven't met don't pay, and damages come out of
-   whatever you did earn (see 6). Pay never goes below $0.
+   whatever you did earn (see 6). Property damage never takes the pay below $0; only crew revival fees can (see 9).
 2. **The invoice IS the summary screen**, and it looks like a real invoice: letterhead, line items,
    deductions, net total due.
 3. **Hellgates take damage like anything else.** Auto-spawning only if the balance stays under
@@ -83,10 +85,27 @@ The comedy and the "well-oiled team" score live here, and payout could later buy
    **exterminate the pest you were hired for**: either *everything* on site, or a *specific* pest
    (e.g. "imps only"). It stays on the magic side of the line.
 6. **The property penalty is capped at the contract's value and comes out of earnings. No negative
-   money.** `payout = max(0, earned - min(damages, contract_value))`. A wrecked run can earn $0, but
-   the crew never owes anything.
+   money for property damage.** A wrecked run can earn $0, and damage alone never makes the crew owe
+   anything. (Revival fees are the exception, see 9.)
+   `payout = max(0, earned - min(damages, contract_value)) - revival_fees`.
 7. **Team pot.** The invoice still names credit and blame per hero.
 8. **Generation:** the room-tagging approach is too small. Bigger options are under discussion.
+9. **Crew revival fee [decided, user, 2026-10-17]:** corporate revives every crew member who is **down when the contract
+   ends**, and bills the client **$10,000 each**. It covers every hero, the player's own included (online every hero is
+   a player), and it is charged only at the end: cashing out at the elevator or the van with an ally down bills that
+   ally, and an incapacitated ending (all three down) bills 3 x $10,000. There is no mid-contract revival.
+   - **Not capped, not floored.** It does not share the property-damage cap and it is not clamped at $0, so the
+     **net payout can go negative**. This deliberately changes the old "pay never goes below $0" rule, for revival fees
+     only. If you die, you pay.
+   - The earned-minus-capped-damages part still floors at $0; the revival fees come off after that floor:
+     `payout = max(0, earned - min(damages, contract_value)) - revival_fees`.
+   - Built: `Ledger.revival(hero_name)` (line kind `"revival"`, `Ledger.REVIVAL_FEE`), `Ledger.revival_fees()`,
+     `ContractSession.finish(reason, downed_heroes)` (called by `Game._end_contract` with the heroes whose `dead` is true;
+     it bills once), the invoice's `revivals` / `revival_fees`. FORM 99 prints the "CREW REVIVAL (CORPORATE)"
+     section after property damage (only when someone was down) and NET PAYOUT turns red with a minus sign; the
+     debrief slip (FORM 99-B) lists "DOWN AT THE END". The running payout in the HUD never shows the fee: it only
+     exists once the contract is over. A negative payout is a 1-star job.
+   - The garage's "after a bad job" mood (`LastContract.was_bad`) also triggers on any revival fee or a negative net payout.
 
 ### Open
 - ~~**What the cap is based on**~~ **Decided:** capped at the contract's value and taken out of
@@ -131,7 +150,7 @@ How they fit together, from the top down:
    - **The elevator is always available** (the early-exit rule). It needs a key press: while the player
      stands on or next to the exit cell the HUD says "E: use elevator" and E opens its menu (E never casts). At each floor the crew decides:
      go down for more pay and more risk, or exit. Unmet objectives don't pay, and damage is
-     taken out of earnings (never below $0).
+     taken out of earnings (that part never below $0; revival fees for heroes left down can still make the net negative, see Decisions 9).
    - **The invoice** at the end totals every floor.
 
 ### Mission structure [decided, user, 2026-10-17]

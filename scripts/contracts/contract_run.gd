@@ -13,7 +13,8 @@ extends RefCounted
 ##   employees ................................... $10 each alive at the end, $100 each extracted
 ##       (an extracted employee pays the $100 instead of the $10)
 ## contract_value = the most the crew could earn = every objective + every employee extracted.
-## It is the cap on property damage (payout = max(0, earned - min(damages, contract_value))).
+## It is the cap on property damage (payout = max(0, earned - min(damages, contract_value)) - revival_fees; the
+## revival fee, $10,000 per hero down at the end, is not capped, see Ledger).
 
 const FLOOR_COUNT := 3
 const GATE_PAY := 3000

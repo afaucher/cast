@@ -8,7 +8,9 @@ extends RefCounted
 ##  - everything resets per contract: a new session starts the Ledger over and carries nothing;
 ##  - within a contract HP and downed state carry from floor to floor (save_carry / apply_carry);
 ##  - leaving early always works: only met objectives were paid, damage comes out of earnings
-##    (capped at the contract value, never below $0) -- that is all Ledger.payout() already does;
+##    (capped at the contract value, that part never below $0) -- that is what Ledger.payout() does;
+##  - the client is billed Ledger.REVIVAL_FEE for every hero still down at the end (finish(reason, downed)); that fee is
+##    not capped or floored, so the net payout can go negative, but only through revival fees;
 ##  - at the end every employee still alive (and not extracted) pays $10, wherever they are.
 
 const END_CASHED_OUT := "cashed_out"
@@ -169,14 +171,17 @@ func employees_alive() -> int:
 	return maxi(0, employees_spawned() - lost.size() - extracted_total)
 
 
-## Close the contract: pays $10 per employee still alive, stops the Ledger. Idempotent.
-func finish(reason: String) -> void:
+## Close the contract: pays $10 per employee still alive, bills the revival fee for each hero in `downed_heroes`
+## (display names of the heroes still down), stops the Ledger. Idempotent.
+func finish(reason: String, downed_heroes: Array[String] = []) -> void:
 	if finished:
 		return
 	finished = true
 	end_reason = reason
 	for _i in employees_alive():
 		Ledger.earn("Employee alive at close", ContractRun.EMPLOYEE_ALIVE)
+	for hero_name in downed_heroes:
+		Ledger.revival(hero_name)
 	Ledger.end_contract()
 
 

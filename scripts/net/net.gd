@@ -38,6 +38,45 @@ static func online() -> bool:
 	return s != null and s.online()
 
 
+## In a crew session with someone else in it (the shared-run rules apply: no local pause, no exits yet).
+## A host alone in an online session is NOT crewed: solo play stays exactly as it is offline.
+static func crewed() -> bool:
+	var s := session()
+	return s != null and s.online() and s.roster.size() > 1
+
+
+## The shared-run state machine (board, job, checkout, floor barrier, floor clock), or null.
+static func flow() -> CrewFlow:
+	var s := session()
+	return s.flow if s != null else null
+
+
+# --- Who simulates what (M1: the first half; M3 builds the rest on it) ------------------------------------
+# Host-owned actors (monsters, hellgates, employees, props, packages, crates, the AI heroes) are SIMULATED by
+# the host only. On a client they are COPIES: built from the same seed, standing where the plan puts them, but
+# with no AI, no logic and no damage taken, until M3 syncs them. `simulates(node)` is the one question every
+# system asks ("do I run this?"); it is true everywhere offline and on the host, and on a client for
+# everything that is not a copy (its own hero, spells it cast, effects). It never changes solo play.
+
+const COPY_META := "net_copy"
+
+
+## True when this machine simulates `node` (everything, unless it was made a copy).
+static func simulates(node: Object) -> bool:
+	return not is_copy(node)
+
+
+## True for a non-acting copy of a host-owned thing (see above).
+static func is_copy(node: Object) -> bool:
+	return node != null and node.has_meta(COPY_META)
+
+
+## Make `node` a copy: it stops its physics process (AI and logic) and stops taking damage and shoves.
+static func make_copy(node: Node) -> void:
+	node.set_meta(COPY_META, true)
+	node.set_physics_process(false)
+
+
 ## The Session autoload, or null (a bare test tree without autoloads).
 static func session() -> NetSession:
 	var tree := Engine.get_main_loop() as SceneTree

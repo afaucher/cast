@@ -2,8 +2,9 @@
 
 Co-op, voice-cast, isometric hex dungeon crawler. This is the **proof of concept**:
 one PC, one mic, one keyboard/mouse player plus AI allies. Online co-op is being built in milestones
-(`docs/design/networking-build-plan.md`); M0 (transport, lobby, crew roster, clock, telemetry) is in, so players
-can form a crew, but there is no shared run yet.
+(`docs/design/networking-build-plan.md`); M0 (transport, lobby, crew roster, clock, telemetry) and M1 (the shared run:
+the host's board and job, each player's license checkout, the same floor from the seed behind a load barrier, the floor
+clock) are in, so a crew can stand on one frozen floor; heroes and monsters are not synced yet.
 
 Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 **kinematic on a hex heightfield** (no physics bodies for terrain or actors).
@@ -33,7 +34,7 @@ window mode and size) and then changes scene to `Boot.route(args)`:
 | `--scene <res path>` | that scene |
 | `--menu` | `scenes/main_menu.tscn`, even with other flags (they still reach the game) |
 | no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after`, `--backdrop-mood` | the main menu |
-| `--net-join <ip[:port]>`, `--net-port`, `--net-link`, `--net-name` (online dev flags, see Networking) | the main menu (a joiner waits there in M0) |
+| `--net-join <ip[:port]>`, `--net-port`, `--net-link`, `--net-name` (online dev flags, see Networking) | the main menu (a joiner goes on to the host's job board; with other game flags it goes straight to the game scene and waits for the connection there) |
 | any other `--flag` (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, every `game.gd` flag, `--net-host`, `--net-steam-probe`, flags added later) | `scenes/game.tscn`, as before |
 
 `scripts/ui/main_menu.gd` (`MainMenu`) is the menu: `MenuBackdrop` (`scripts/ui/menu_backdrop.gd`: the crew's bunker
@@ -71,14 +72,30 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 
 | File | What |
 |---|---|
-| `net.gd` (`Net`) | the authority kinds (`net_fields()`) and the static facade |
+| `net.gd` (`Net`) | the authority kinds (`net_fields()`) and the static facade: `is_host`, `online`, `crewed` (someone else is in the crew), and `simulates(node)` / `is_copy` / `make_copy` (M1: on a client the host's things are inert copies) |
 | `net_session.gd` (autoload **Session**, `NetSession`) | the crew session: ENet or Steam transport, hello handshake, roster, refusals, leaving, clock pings, telemetry rows, dev flags |
 | `net_wire.gd` (`NetWire`, child `Session/Wire`) | the reliable event RPC (its own channel) and unreliable `send_bytes` packets with our own u16 sequence numbers; stale packets are dropped |
 | `net_link.gd` (`NetLink`) | the lag/loss simulator on each process's inbound side (presets `off`, `coast`, `rough`) |
 | `net_clock.gd` (`NetClock`) | `host_time()`: NTP-style pings, interval intersection of the window's bounds, slewed (never backwards) |
 | `net_telemetry.gd` (`NetTelemetry`) | one CSV row a second per machine, clients' rows collected on the host (`user://net/`) |
+| `crew_flow.gd` (`CrewFlow`, child `Session/Flow`, `Session.flow`) | the shared run's state machine: board, job, license checkout, load barrier, floor start and the floor clock (`crew.*` events); see below |
+| `net_floor.gd` (`NetFloor`) | net ids in build order, the floor checksum (map, site plan, contract, spawn table) and `freeze_copies` |
 | `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
 | `steam_lobby.gd` (`SteamLobby`, child `Session/Lobby`) | lobbies: create, list, join, leave, invites, lobby data |
+
+**The shared run (M1).** With another player in the crew (`Net.crewed()`; a host alone plays the plain solo game) `game.gd`
+runs a SHARED run: the host rolls the board seed and every machine draws the same three offers (`JobBoard.read_only`
+on clients; the host's highlighted card follows); the host's pick (`crew.job`) opens everyone's own license checkout
+(`SpellPicker`; a client's back row is "Leave the crew"); signing is the ready step (`crew.signed`, the roster entries
+gain `signed`, `spells`, `ready`); when all have signed (`crew.load`) every machine builds the floor from the contract seed
+behind a barrier (`game.gd` `_start` then `_enter_barrier`: ids, copies, world frozen, `NetFloor.checksum`,
+`crew.ready`); the host compares the checksums (a client that built another floor is sent out with "Desync: different
+floor") and sends `crew.go {start_at, floor_start}`; at `start_at` on the shared clock every machine unfreezes and the
+van arrival plays (`CrewFlow.floor_started`), and each client's `GameWorld.time` is slewed to `host_time() - floor_start`.
+Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero, the host runs the
+rest as AI; on a client every host-owned actor is a copy (`Net.make_copy`: no physics process, no damage, no shove, no E).
+While crewed there is no local pause and no exit (M5). `NetFloor`, `CrewFlow`, `CrewConfirm` (the host's leave question)
+and `NetGameTest` are the pieces to read first.
 
 RPC endpoints live under the autoload (`/root/Session/Wire`), never in `game.tscn`, because every floor change is a
 scene reload and an RPC needs the same node path on every peer. `Session` runs with process mode ALWAYS, so pausing
@@ -264,6 +281,10 @@ durations. Logs go to `test_logs/<name>.log` and `.err.log`. **Read the .err.log
 (`--max-fps 60`, not `--fixed-fps`). The host is the judge: clients `report()` what they saw; the host asserts and
 prints the PASS marker. Every process must exit 0. Logs: `test_logs/<name>.<link>.host.log`, `.c1.log`, ...
 Single-process network tests that need wall time stop the TestCase timer and keep their own (see `test_net_session`).
+A test that extends `NetGameTest` (`scripts/test_support/net_game_test.gd`) also puts a real `game.gd` node under the test on every
+process and drives it through its own screens (job board, license checkout): `make_game()`, `sign_license()`, `truth()` (the
+shared clock as the one machine's wall clock sees it), `scene_changes` (the game's scene changer is a seam, so a test sees
+"back to the menu" without losing the process). `NetTest.after_end()` runs after a client's session ended as expected.
 
 Run the game: `.\run.ps1` (or `--scene res://scenes/arena.tscn` after `--`).
 Engine: `$env:CAST_GODOT`, else `..\Hero-Reader\third_party\godot\Godot_v4.7-stable_win64_console.exe`.

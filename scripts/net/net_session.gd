@@ -24,6 +24,9 @@ extends Node
 ## ROSTER: peer id -> {peer, seat, name, character, steam_id}. The host is seat 1; a joiner takes the lowest
 ## free seat. `character` is each player's character id (the default character until a character select sets
 ## `character_id`). Same list on every machine (the host broadcasts it).
+## The shared run (CrewFlow, M1) adds the fields "signed", "spells" and "ready" to an entry through set_members();
+## kick() sends a member out with a reason. A crew on a job (crew_state "job") refuses new hellos with JOB_RUNNING
+## until M6 brings joining mid-contract.
 ##
 ## LEAVING. A client leaves: the host drops it from the roster. The host leaves (or dies, or goes silent for
 ## HOST_SILENCE): every client's session ends with "The host clocked out". No host migration.
@@ -66,6 +69,8 @@ const HELLO_TIMEOUT := 10.0     ## connected, waiting for the host's welcome (or
 const HOST_SILENCE := 6.0       ## a client hears nothing from the host this long: the host is gone
 const CLIENT_SILENCE := 10.0    ## the host hears nothing from a client this long: drop it
 const REFUSE_GRACE := 1.0       ## a refused joiner is dropped this long after being told why
+const ENET_THROTTLE_INTERVAL_MS := 5000   ## ENet's own defaults, except that the throttle never goes down (see _tune_enet)
+const ENET_THROTTLE_UP := 2
 
 const CREW_FULL := "Crew is full"
 const DIFFERENT_BUILD := "Different build"
@@ -76,6 +81,8 @@ const CONNECT_FAILED := "Couldn't reach the crew"
 const NO_ANSWER := "The crew never answered"
 const NO_CREWS := "No crews hiring right now"
 const STEAM_OFF := "Steam not running"
+const JOB_RUNNING := "That crew is already on a job"
+const DESYNC := "Desync: different floor"
 
 var state := State.OFFLINE
 var transport := Transport.NONE
@@ -103,6 +110,8 @@ var refusals: Array = []
 
 var wire: NetWire = null
 var lobby: SteamLobby = null
+## The shared run (board, job, license checkout, floor barrier, floor clock): scripts/net/crew_flow.gd, child "Flow".
+var flow: CrewFlow = null
 var clock := NetClock.new()
 var telemetry: NetTelemetry = null
 
@@ -125,6 +134,9 @@ func _ready() -> void:
 	add_child(wire)
 	wire.event_received.connect(_on_event)
 	wire.packet_received.connect(_on_packet)
+	flow = CrewFlow.new()
+	flow.name = "Flow"
+	add_child(flow)
 	lobby = SteamLobby.new()
 	lobby.name = "Lobby"
 	add_child(lobby)
@@ -326,6 +338,30 @@ func set_crew_state(s: String) -> void:
 		_publish_lobby()
 
 
+## Host: send a crew member out with a reason ("Desync: different floor"). It is told why (sys.refuse ends its
+## session with that reason), dropped from the roster at once and disconnected REFUSE_GRACE later.
+func kick(peer: int, reason: String) -> void:
+	if not hosting or state != State.ONLINE or peer == 1 or not roster.has(peer):
+		return
+	wire.send_event(peer, "sys.refuse", {"reason": reason})
+	wire.flush()
+	_refused[peer] = Time.get_ticks_usec() + int(REFUSE_GRACE * 1e6)
+	_drop(peer, "was sent out: %s" % reason)
+
+
+## Host: set fields on roster entries (the shared run keeps "signed", "spells" and "ready" there) and send the
+## roster to the crew, so every machine reads the same entries. `peer` 0 = every member.
+func set_members(peer: int, fields: Dictionary) -> void:
+	if not hosting or state != State.ONLINE:
+		return
+	for p: int in roster:
+		if peer == 0 or p == peer:
+			for k: String in fields:
+				(roster[p] as Dictionary)[k] = fields[k]
+	_to_crew("sys.roster", {"entries": crew()})
+	roster_changed.emit()
+
+
 func _can_start() -> bool:
 	if state != State.OFFLINE:
 		push_warning("[Net] already in a session")
@@ -338,6 +374,7 @@ func _begin_host(peer: MultiplayerPeer, via: Transport) -> void:
 	_set_peer(peer)
 	transport = via
 	hosting = true
+	crew_state = "board"
 	roster.clear()
 	refusals.clear()
 	clock.start_host(Time.get_ticks_usec())
@@ -410,6 +447,7 @@ func _close_peer(peer: MultiplayerPeer) -> void:
 func _on_peer_connected(id: int) -> void:
 	if not hosting or state != State.ONLINE:
 		return
+	_tune_enet(id)
 	_pending[id] = Time.get_ticks_usec()
 	_last_heard[id] = Time.get_ticks_usec()
 	wire.send_event(id, "sys.ask", {"protocol": protocol, "build": _build()})
@@ -430,8 +468,22 @@ func _on_peer_disconnected(id: int) -> void:
 func _on_connected_to_server() -> void:
 	if state != State.CONNECTING:
 		return
+	_tune_enet(1)
 	_last_heard[1] = Time.get_ticks_usec()
 	_set_state(State.HELLO, HELLO_TIMEOUT, "Connected. Saying hello...")
+
+
+## ENet throttles a connection whose round trips vary: it starts dropping UNRELIABLE packets on purpose (its congestion
+## control). The lag link (NetLink, jitter) provokes exactly that, and it would hide behind the simulated loss; the
+## snapshots of M2 are unreliable too. So the throttle is not allowed to fall: unreliable loss on ENet is the link's alone.
+## (Steam has its own congestion control; this is the dev and test transport only.)
+func _tune_enet(peer_id: int) -> void:
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet == null:
+		return
+	var pp := enet.get_peer(peer_id)
+	if pp != null:
+		pp.throttle_configure(ENET_THROTTLE_INTERVAL_MS, ENET_THROTTLE_UP, 0)
 
 
 func _on_connection_failed() -> void:
@@ -546,6 +598,9 @@ func _host_sys(from: int, kind: String, data: Dictionary) -> void:
 		return
 	if roster.size() >= MAX_CREW:
 		_refuse(from, name_, CREW_FULL)
+		return
+	if crew_state == "job":
+		_refuse(from, name_, JOB_RUNNING)   # joining mid-contract is M6; until then a crew on a job is closed
 		return
 	var seat := 1
 	var taken: Array[int] = []

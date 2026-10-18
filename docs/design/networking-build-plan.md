@@ -1,7 +1,7 @@
 # Networking build plan: online co-op, step by step
 
-Status: **M0 built** 2026-10-17 (see [M0 as built](#m0-as-built-2026-10-17) after the milestones); M1 onward is
-still the plan. The architecture is fixed by
+Status: **M0 and M1 built** 2026-10-17 (see [M0 as built](#m0-as-built-2026-10-17) and [M1 as built](#m1-as-built-2026-10-17)
+after the milestones); M2 onward is still the plan. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -118,7 +118,7 @@ The **multi-process harness** (§3).
 with no backward jumps; `test_net_link` measures about 1.5% loss and the expected delay; and telemetry CSVs appear
 for host and clients with RTT about 90 ms under `coast`.
 
-### M1 Shared run *(2 sessions)*
+### M1 Shared run *(2 sessions)* — built, see [M1 as built](#m1-as-built-2026-10-17)
 **M1a Board, contract, seed.** The host rolls the board seed (the `global_random` allowlist entry for `game.gd`
 already says this) and sends it. Every machine renders the same 3 offers from `ContractBoard.offers(seed)`. Only the
 host picks; clients see the host's highlighted card. The pick sends `contract(seed, k)`, and each machine builds the
@@ -414,6 +414,142 @@ connection are only proven by the two-account checklist (§3)**. M0 items for th
    `send_packet` on type 16 with the planned hand-packed codec.
 6. `+connect_lobby` only matters once Cast has its own app id (on 480 Steam launches Spacewar).
 
+### M1 as built (2026-10-17)
+One session (M1a and M1b together). Everything in M1's "done when" passes (the plan's three tests, plus the leave, desync and
+host-leave cases below); the run is playable as the plan says: everyone sees the same board, signs their own license and
+stands on the same floor, frozen and unsynced.
+
+**Files.** `scripts/net/`: `crew_flow.gd` (`CrewFlow`, child `Session/Flow`, `Session.flow` / `Net.flow()`: the state machine
+and the floor clock slew), `net_floor.gd` (`NetFloor`: ids in build order, the checksum, `freeze_copies`), and in `net.gd`
+`Net.crewed()`, `Net.simulates(node)`, `Net.is_copy(node)`, `Net.make_copy(node)`; `net_session.gd` gained `kick(peer, reason)`,
+`set_members(peer, fields)`, `JOB_RUNNING` / `DESYNC`, the `flow` child and `_tune_enet` (note 11). The plan's `crew_flow.gd` is this one (it owns the
+whole run state, not just the barrier); `net_ids.gd` became `NetFloor.assign_ids` (below). UI: `crew_confirm.gd` (`CrewConfirm`,
+the host's "this ends the job for everyone"), `job_board.gd` (`read_only`, `highlight_changed`, the "THE HOST PICKS THE JOB"
+note), `spell_picker.gd` (`back_text` / `back_hint`: a client's back row says "Leave the crew"), `main_menu.gd` (a joined client
+goes straight to the game scene; `WAITING_NOTE` now says "Opening the job board..."). Game: `game.gd` (the shared run, below;
+`Actor` also learned `Net.is_copy` in `apply_damage`, `die` and `shove`). Test support: `scripts/test_support/net_game_test.gd`
+(`NetGameTest`) and `NetTest.after_end()`. Tests: `test_net_m1_floor`, `test_net_m1_desync`, `test_net_m1_leave`,
+`test_net_m1_hostleft` (3 processes each), `test_net_floor`, `test_net_puppets`, `test_net_board` (single process);
+`test_main_menu` changed (a joined client now asks to go to the game scene). `run.ps1`: `-ShotDir`. Dev flags in `game.gd`:
+`--net-wait N`, `--shot-at board|license|wait|floor`.
+
+**New protocol events (all reliable, `Session.send_event`).** The protocol version stays 1 (the handshake did not change).
+| Event | From → to | Data |
+|---|---|---|
+| `crew.board` | host → clients (on every `host_board`, and to a member who joins while the board is up) | `seed` (the board seed), `hi` (highlighted card) |
+| `crew.hi` | host → clients | `i` |
+| `crew.job` | host → clients | `archetype`, `seed`, `difficulty`: `ContractRun.make(...)` rebuilds the contract anywhere |
+| `crew.signed` | client → host | `spells` (exactly 2 available ids; anything else is ignored with a warning) |
+| `crew.load` | host → clients, once every roster member has signed | (empty): build the floor behind the barrier |
+| `crew.ready` | client → host | `sums` (the `NetFloor.checksum` dict) |
+| `crew.go` | host → clients, once every remaining member is ready and none differs | `start_at` (host_time, `START_LEAD` = 0.5 s ahead; 0 for a crew of one), `floor_start` (host_time minus the host's `GameWorld.time`) |
+| `sys.refuse {reason}` (reused) | host → one client | "Desync: different floor" for a floor that does not match; "That crew is already on a job" for a hello once the host has taken a job |
+| `sys.roster` entries gain | host → crew | `signed` (bool), `spells` (array), `ready` (bool), reset on every `crew.board` / `crew.job` |
+
+Only the host decides; clients draw what they are told. Nothing else changed on the wire.
+
+**The shared run.**
+- **Who is "shared".** `Net.crewed()` = online with someone else in the roster. A host alone (a Steam lobby nobody joined) takes
+  the plain solo path through every function below, unchanged; `_shared` is decided when the host picks the job, and a
+  client's is always true. While `_crewed()` (shared and someone still in the crew): no local pause (Esc opens the menu with the
+  world running: M5b's rule, built early because a paused tree stops `GameWorld.time` and would break the clock), no exits (the
+  elevator and van prompts do not show and `_open_elevator` is a no-op: M5), and no host-only checks on clients
+  (`_check_objectives`, drop-offs, the elevator).
+- **Board.** `game.gd` `_show_board` rolls the seed (the allowlisted `randi()`) and the host calls `Flow.host_board(seed, hi)`;
+  a client's `_start_as_client` waits for `crew.board`, then draws `ContractBoard.offers(seed)` read-only. Hover, keys and clicks do
+  nothing on a client's board; the host's highlight follows. `--net-wait N` (dev) makes the host wait for the crew.
+- **Job and checkout.** The host's pick (`board.picked` -> `_begin_contract` -> `Flow.host_pick(run)`) reaches each client as
+  `crew.job`, which builds the same `ContractRun` and opens that player's license checkout (`_build_world`, voice, picker).
+  Signing sends `crew.signed`; the roster flags drive "License signed. Waiting for <names>..." (`CrewFlow.waiting_text()`, the
+  label `_wait_label`). `--spells` signs at once on every machine.
+- **Esc.** On a client's board or checkout (or while it still waits for the board) it leaves the crew (`_request_leave` ->
+  `_to_main_menu` -> `Session.leave()`; the menu shows "You left the crew"). On the host's board, and from the pause menu's Main
+  menu, a host with a crew gets the `CrewConfirm` ("Stay" is the default, "End the job"); a host alone just goes. Esc on the host's
+  checkout goes back to the board and takes the whole crew with it (`crew.board`: a client mid-checkout or mid-floor reloads to the
+  board); F5 / "Abandon contract" on the host does the same with a new board; for a client both mean leave. When the session ends
+  under a client (the host left, it was sent out) its game asks for the main menu, which shows `Session.last_reason`.
+- **Load barrier.** `crew.load` runs `_start()` on every machine: slots, the other seats' spells from the roster, `_populate_site`,
+  `_arrive_by_van` (held at its first frame), grime, dev flags; then `_enter_barrier()` assigns ids (`NetFloor.assign_ids`), makes the
+  host's things copies on a client (`NetFloor.freeze_copies`), freezes the world (`_freeze(true)`, which also stops the controller),
+  takes the checksum (11-12 ms for about 2,000 cells and 80 actors) and reports `crew.ready`. The floor line, the dispatch banner
+  and the `--shot` timer wait for the start.
+- **Checksum.** `NetFloor.checksum` hashes four parts: `map` (every cell: level, type, stairs, tag, midpoint-wall mask and top,
+  material), `plan` (every `SitePlan.net_fields()` field: rooms, themes, notes, props, decor, the van, ...; a hash per field is kept
+  for diagnostics), `run` (every `ContractRun.net_fields()` field) and `spawn` (net id, script, name, team, cell, position to 1 cm and
+  max HP of every actor in build order). The text is canonical (sorted dictionary keys, fixed decimals, `-0` is `0`). The host
+  compares each client's `all` with its own: a different one is printed (`[Net] DESYNC: <name> built a different floor (differs: map,
+  plan / plan fields: ...)`), recorded in `Flow.desyncs`, and the client is sent out with "Desync: different floor"; the rest
+  start without it.
+- **Floor clock.** `crew.go` carries `start_at` and `floor_start`. At `start_at` (`CrewFlow._process`, `floor_started(elapsed)`) every
+  machine unfreezes and the van arrival plays from `elapsed` (`VanArrival.time`). `GameWorld.time` is written in one place,
+  `CrewFlow._physics_process` (after `GameWorld`'s own tick), on clients only: it JUMPS once when `crew.go` arrives (`first_adjust`
+  says by how much), then follows `host_time() - floor_start` at up to 5% (a snap past 1 s). The host's clock is not touched:
+  `floor_start` is `host_time() - GameWorld.time` at the moment of `crew.go`, so nothing the host stamped during the build moves.
+- **Seats and heroes.** `_crew_seats()` / `_spawn_crew()` build three heroes by seat on every machine: seat 1 is the host's, a human
+  takes their seat with the character id from the roster (Wick for everyone today: two or three Wicks is right), an empty seat is an
+  AI ally (seat 2 Rebar, seat 3 Gasket, the same formation numbers as solo). `player` is the hero this machine controls (the one with
+  a `PlayerController`; on a client its own seat's), `allies` the other two in seat order, `heroes_by_seat` the map. On the host every
+  other hero gets an `AllyBrain` following seat 1's hero (a client's seat is an AI until M2); on a client they are copies. Solo builds
+  exactly Wick, Rebar and Gasket as before.
+- **Copies.** `Net.make_copy(node)` sets the meta `net_copy` and stops `_physics_process` (AI and logic); `Actor.apply_damage`, `die`
+  and `shove` refuse on a copy. `NetFloor.freeze_copies(root, keep)` marks every actor under the world except the local hero, and the
+  component pickups. The employee prompt skips copies (no E on a frozen employee). `Net.simulates(node)` is the check M3 builds on:
+  true for everything offline and on the host.
+
+**What the tests prove** (timings are this machine's).
+- `test_net_m1_floor` (3 processes, `off` and `coast`): all three draw the same offers (read-only, "host picks", a click picks nothing),
+  follow the host's highlight, build the same contract, sign different licenses (the host last: the first signers read "License signed.
+  Waiting for host..."), and every process's roster holds all three licenses and each machine's heroes hold them; the four checksum
+  parts and the cell and actor counts match on all three; each client's `GameWorld.time` tracks the shared clock within 33 ms (`off`) /
+  50 ms (`coast`) over the first 3.2 s (measured 1-6 ms in both), and so does the van arrival's own time; every host-owned actor on a
+  client is a copy that did not move or change; each machine controls exactly one hero, in its own seat, and only the host runs AI heroes.
+- `test_net_m1_desync` (3): c2 builds another seed (`CrewFlow.debug_seed_shift`): the host logs it and sends c2 out with "Desync:
+  different floor", c2's game goes back to the menu and never starts the floor, the host and c1 start theirs without it.
+- `test_net_m1_leave` (3): c2 leaves in its checkout through the row, nobody waits for it, the two who stay start with matching
+  checksums; then the host's process exits and c1's session ends with "The host clocked out" and its game asks for the menu.
+- `test_net_m1_hostleft` (3): Esc on a client's board leaves with no question; the host takes a job, backs out of its checkout and the
+  remaining client is back on the board with the same offers; Esc on the host's board asks, "Stay" keeps the crew, "End the job" ends it
+  and the client is told "The host clocked out".
+- `test_net_floor` (1 process): the checksum is the same for two builds and differs in the right part for one changed cell, a material,
+  a monster moved 5 cm, a plan field (it names the field) and a contract field; ids come in build order, are the same on a rebuild, and
+  heroes get their seat. `test_net_puppets`: over 120 frames no PRIVATE or OWNER field of any copy changes and none takes damage, while a
+  control floor does change. `test_net_board`: the read-only board, the leave row, the confirm.
+
+**Notes for M2 (what M1 changes in its plan).**
+1. **Hero copies on a client are inert today** (`Net.make_copy`: physics process off, no damage). M2 must turn them into puppets that
+   apply the interpolated state each frame and keep animating (`Hero._process` still runs); `make_copy` is the M1 stand-in, and
+   `Net.simulates()` stays the question.
+2. **The host's AI heroes for human seats.** `_spawn_crew` puts an `AllyBrain` on every non-local hero on the host. M2a must not keep one
+   on a client's seat: that hero becomes a puppet of the client's stream, and only unfilled seats keep their brain; a dropped player's
+   seat gets it back (M2b). `AI_SEATS` (seat 2 Rebar, seat 3 Gasket, the formation numbers) is the "original character" table the drop
+   story needs; a human seat spawns the roster's character (Wick) but uses that seat's AI formation numbers.
+3. **Ids exist.** `NetFloor.assign_ids` (at the barrier) gives heroes 1-3 by seat and every other actor 100+ in build order, as the meta
+   `net_id` (`NetFloor.id_of`); M3's runtime spawns start at 10000 as planned. There is no registry yet (no id -> node map); M2 needs one for
+   the snapshot manifest. The spawn table is in the checksum, so a different id order is a desync.
+4. **Seats and spells are on every machine.** The roster entries carry `spells` per seat, so M4's "heal aimed at B" can read them; `signed`
+   and `ready` are floor-start bookkeeping.
+5. **`GameWorld.time` is on the floor clock from `crew.go`.** A client jumps once, then slews, so a time stamp a client made BEFORE `crew.go`
+   (nothing in M1 does) is in its own pre-floor time. Scheduled effects (M4) may treat `GameWorld.time` as shared. The slew is in
+   `CrewFlow`, not `GameWorld`; if M5's floor changes reuse the barrier, send a fresh `crew.go` (a new `floor_start`) per floor.
+6. **The barrier is reusable.** `crew.load` / `ready` / `go` and `_enter_barrier` / `_begin_floor` are what M5's floor change needs;
+   missing: a way to start a barrier without the board (`Flow.phase` only goes BOARD -> LICENSE -> LOADING -> PENDING -> FLOOR) and a
+   per-floor `crew.go`. The static vars in `game.gd` survive a reload as before; `_shared` does not (recomputed in `_begin_contract`: a
+   reloaded host with a crew in the roster is shared again, and a client's `_start_as_client` follows the flow).
+7. **A joiner mid-contract is refused** with "That crew is already on a job" (`NetSession._host_sys`, when `crew_state == "job"`) until
+   M6; the lobby `state` was already published. `crew_state` goes back to "board" with the board.
+8. **Pause and exits are off while crewed.** `_crewed()` gates them; M5 replaces both. Esc opens the pause menu without pausing, which is
+   already the M5b rule.
+9. **Accuracy.** The measured error of `GameWorld.time` and of the arrival against the shared wall clock is 1-6 ms (the clock's own 2-17 ms
+   band), so M2's interpolation can trust `host_time()`; the tests allow one frame plus the link (33 / 50 ms).
+10. **Test pattern.** `NetGameTest` gives M2 a bot with a real game scene (`make_game()`, `my_hero()`, `hero_at(seat)`, `truth()`); it
+    needs only the plan's scripted move intent. A client that was sent out cannot report to the host any more, so it checks its own side
+    (its exit code carries the failed checks).
+11. **ENet throttles unreliable packets under jitter, on purpose.** Found because `test_net_link` [coast] had been failing about half of its runs on this machine (the baseline M0 build too: 6 of 6 failed in isolation today): ENet's congestion control lowers a connection's packet throttle when round trips vary and then drops unreliable packets, so the receiver lost more than the simulated 1.5%. `NetSession._tune_enet` now configures every ENet packet peer so its throttle never falls (`throttle_configure(5000, 2, 0)`); unreliable loss on ENet is the link simulator's alone, and `test_net_link` passed 6 of 6 after it. M2's snapshot tests ride the same path: keep it. (Steam has its own congestion control; this is the dev and test transport only.)
+12. **Left out on purpose (M1 scope):** no hero movement sync, no puppet interpolation, no `net_codec` / `net_snapshot`, no pause or exit
+    sharing, no mid-contract join. A client's attacks and spells act on copies and do nothing (copies take no damage), so combat on a
+    client is silent until M3/M4.
+
+
 ---
 
 ## 3. Test strategy
@@ -444,13 +580,16 @@ Godot process**, which is also what the user wants agents to be able to run.
   `press_use()`, `cast_spell()`, `VoiceCaster.inject_text`) plus one new seam: a scripted move intent. Instances use
   `--no-mic` (one mic and three speech models on one box is neither realistic nor cheap).
 
+`NetGameTest` (M1, `scripts/test_support/net_game_test.gd`) is `NetTest` with a real `game.gd` under the test on every process: the board and
+the license checkout are driven through their own screens, scene changes are recorded (a seam) instead of done.
+
 ### Agent and manual local play
 `run.ps1 -Crew 2|3 [-Link coast]` launches 2-3 **windowed** instances over ENet localhost, tiled, with `--no-mic` on
 all but the first. `--shot` works per instance, so an agent can screenshot every screen at the same `host_time`.
 
 ### Single-process tests (cheap, run in the normal parallel batch)
-`test_enet_loopback`, `test_net_session`, `test_net_puppets` (a non-owner never writes `PRIVATE`/`OWNER`),
-`test_net_codec` (round trips and budgets), `test_net_floor_checksum` (two builds from one seed agree).
+`test_enet_loopback`, `test_net_session`, `test_net_puppets` (built in M1: a copy never changes a `PRIVATE`/`OWNER` field),
+`test_net_codec` (round trips and budgets), `test_net_floor` (built in M1: the checksum and ids), `test_net_board` (M1: the read-only board, the confirm).
 
 ### Lag and loss
 - **ENet:** `net_link.gd` on every process's inbound side, covering both directions: `coast` = 45 ms ±15 ms, 1.5%

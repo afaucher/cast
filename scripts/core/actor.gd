@@ -200,7 +200,7 @@ func stat_mult_present(stat: String) -> bool:
 
 ## Returns the damage actually dealt.
 func apply_damage(amount: float, source: Node = null) -> float:
-	if dead or amount <= 0.0:
+	if dead or amount <= 0.0 or Net.is_copy(self):   # a copy of a host-owned thing takes no damage on this machine (Net.simulates)
 		return 0.0
 	var dealt := amount * damage_taken_mult()
 	hp = maxf(0.0, hp - dealt)
@@ -222,7 +222,7 @@ func heal(amount: float) -> float:
 
 
 func die() -> void:
-	if dead:
+	if dead or Net.is_copy(self):
 		return
 	dead = true
 	died.emit()
@@ -303,7 +303,7 @@ func move(dir: Vector3, delta: float) -> bool:
 ## shove_mult (and by a wet floor, Damp.slide_mult). A rooted actor (vines) is not pushed at all.
 ## `source` is who caused it (used for friendly-fire protection and damage credit).
 func shove(dir: Vector3, distance: float, source: Node = null) -> void:
-	if dead or shove_mult <= 0.0 or distance <= 0.0 or _void_fall or _pull or not is_inside_tree() or is_rooted():
+	if dead or shove_mult <= 0.0 or distance <= 0.0 or _void_fall or _pull or not is_inside_tree() or is_rooted() or Net.is_copy(self):
 		return   # (a rooted actor ignores every shove: tentacles, the bowl, the spin, melee, props)
 	dir.y = 0.0
 	if dir.length() < 0.001:

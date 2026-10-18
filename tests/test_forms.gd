@@ -12,6 +12,7 @@ func setup() -> void:
 	await _check_job_board()
 	await _check_picker()
 	await _check_slips()
+	await _check_invoice_revival()
 	finish()
 
 
@@ -366,3 +367,63 @@ func _check_use_prompt_zoom(p: UsePrompt) -> void:
 	hero.queue_free()
 	cam.queue_free()
 	await frames(2)
+
+
+## FORM 99 bills corporate's crew revival: a section after property damage, one row per downed hero, the side slip names
+## them, and a negative NET PAYOUT prints in red with a minus sign.
+func _check_invoice_revival() -> void:
+	var run := ContractRun.make("prepper", 71, 0.5)
+	var session := ContractSession.begin(run)
+	session.enter_floor(1, 1, false, 2, 10)
+	session.gate_closed(false)
+	session.finish(ContractSession.END_CASHED_OUT, ["Wick", "Gasket"])
+	var inv := ContractInvoice.build(session)
+	check(int(inv["payout"]) < 0, "two revivals outweigh the gate: the net payout is negative")
+	var screen := InvoiceScreen.new(inv)
+	add_child(screen)
+	await frames(3)
+	var texts: Array[String] = []
+	_collect_text(screen, texts)
+	check(texts.has("CREW REVIVAL (CORPORATE)"), "the invoice has the crew revival section")
+	check(texts.has("Revival - Wick") and texts.has("Revival - Gasket"), "one row per downed hero")
+	check(texts.has("-$10,000"), "each row bills -$10,000")
+	check(texts.has("NET PAYOUT"), "NET PAYOUT is on the invoice")
+	var net_text := ContractRun.money(int(inv["payout"]))
+	check(net_text.begins_with("-$") and texts.has(net_text), "NET PAYOUT prints with a minus sign (%s)" % net_text)
+	var net_label := _find_label(screen, net_text)
+	check(net_label != null and net_label.get_theme_color("font_color") == FormTheme.RED, "and in red")
+	check(texts.has("Wick (revived)"), "the crew debrief slip notes who went down")
+	screen.queue_free()
+	await frames(2)
+
+	# Nobody down: no revival section at all.
+	var run2 := ContractRun.make("prepper", 72, 0.5)
+	var s2 := ContractSession.begin(run2)
+	s2.enter_floor(1, 1, false, 2, 10)
+	s2.gate_closed(false)
+	s2.finish(ContractSession.END_CASHED_OUT)
+	var screen2 := InvoiceScreen.new(ContractInvoice.build(s2))
+	add_child(screen2)
+	await frames(3)
+	var texts2: Array[String] = []
+	_collect_text(screen2, texts2)
+	check(not texts2.has("CREW REVIVAL (CORPORATE)"), "no revival section when nobody is down")
+	screen2.queue_free()
+	await frames(2)
+
+
+func _collect_text(n: Node, out: Array[String]) -> void:
+	if n is Label:
+		out.append((n as Label).text)
+	for c in n.get_children():
+		_collect_text(c, out)
+
+
+func _find_label(n: Node, text: String) -> Label:
+	if n is Label and (n as Label).text == text:
+		return n as Label
+	for c in n.get_children():
+		var f := _find_label(c, text)
+		if f != null:
+			return f
+	return null
