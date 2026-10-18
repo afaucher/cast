@@ -61,10 +61,13 @@ extends Node3D
 ##                       (default 0) after a second (two-window local play: README "Online play")
 ##   --net-bot           dev, online: this window's hero walks a loop of the start area by itself once the floor has started
 ##                       (a scripted PlayerController walk, so the other windows see it move; the keyboard is ignored)
-##   --shot-at board|license|wait|floor|pause|invoice  dev, online: which screen --shot takes (a client's read-only board, its
-##                       license checkout, the waiting-for-the-crew overlay, the floor 3 s after the shared start (the default),
-##                       the pause overlay (with --pause-demo) or the invoice)
+##   --shot-at board|license|wait|floor|pause|invoice|clockin  dev, online: which screen --shot takes (a client's read-only
+##                       board, its license checkout, the waiting-for-the-crew overlay, the floor 3 s after the shared start (the
+##                       default), the pause overlay (with --pause-demo), the invoice, a late joiner's "Clocking in..." form, or
+##                       `takeover`: every window --shot-after S (default 2) after a joiner took an AI's seat (M6)
 ##   --shot-floor N      dev, online: with --shot-at floor, take it on floor N (after the elevator) instead of the first
+##   --join-hold S       dev, online (M6): a player joining a crew on the job holds its "Clocking in..." form S seconds after
+##                       building the floor before reporting ready (screenshots: --shot-at clockin)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
@@ -84,6 +87,11 @@ extends Node3D
 ## the invoice, takes the whole crew back to the host's board (a client asks the host: CrewFlow crew.abandon / crew.again).
 ## The host decides "crew incapacitated" from every hero's replicated `dead` and bills the revivals on its Ledger. Esc on a
 ## client's board or checkout leaves the crew; the host confirms first (it ends the job for all).
+## M6: a player can join a crew on the job. They see "Clocking in..." (ClockInSlip) until the crew is on a running floor,
+## then build that floor from the seed exactly as it was at its barrier (Session.join's seat table, their own seat being an
+## AI's), report the checksum, apply the host's late-join snapshot and take the AI's seat: the same hero node becomes their
+## character at full health with the AI's spells, charges and spot (SeatHandover). Everyone sees "<name> takes over Gasket's
+## seat". A joiner during a floor change arrives on the next floor; one on the invoice starts with the crew at the next board.
 
 ## Every castable spell, straight from SpellBook (new spells need no change here).
 static func all_spells() -> PackedStringArray:
@@ -186,6 +194,14 @@ var heroes_by_seat: Dictionary = {} ## seat (1-3) -> Hero
 var _seat_info: Array[Dictionary] = []   ## _crew_seats() as the floor was built: who sat where (a player may drop later)
 var _bot: NetBot = null             ## --net-bot: a scripted walker on the local hero (two-window local play)
 var _names: Dictionary = {}         ## peer -> roster name (for "X left the crew")
+# --- Joining mid-contract (M6) ---
+var _joining := false               ## this machine is a late joiner building the crew's floor; it has no seat until the snapshot
+var _join_ticket := -1              ## the join.go this scene is building (a new one reloads the scene)
+var _join_seats: Array = []         ## the seat table the host's floor was built with (join.go), for _crew_seats()
+var _join_seat := 0                 ## the seat this joiner takes
+var _join_slip: ClockInSlip = null  ## "Clocking in..."
+var _join_wired := false
+var _seat_notices: Array[String] = []   ## every "takes over" line this screen showed (tests)
 
 
 func _ready() -> void:
@@ -208,6 +224,11 @@ func _ready() -> void:
 		Session.objects.exit_decided.connect(_on_exit_decided)
 		Session.objects.contract_received.connect(_on_contract_mirror)
 		Session.objects.end_received.connect(_end_from_host)
+		Session.seats.to_player.connect(_on_seat_to_player)
+		Session.join.built_ready.connect(_on_join_ready)
+		Session.join.changed.connect(_on_join_changed)
+		Session.join.snapshot_received.connect(_on_join_snapshot)
+		_join_wired = true
 		_note_names()
 	if Session.is_client():
 		_start_as_client()
@@ -248,6 +269,12 @@ func _exit_tree() -> void:
 		Session.roster_changed.disconnect(_note_names)
 	if Session.seats != null and Session.seats.to_ai.is_connected(_on_seat_to_ai):
 		Session.seats.to_ai.disconnect(_on_seat_to_ai)
+	if _join_wired and Session.join != null:
+		_join_wired = false
+		Session.seats.to_player.disconnect(_on_seat_to_player)
+		Session.join.built_ready.disconnect(_on_join_ready)
+		Session.join.changed.disconnect(_on_join_changed)
+		Session.join.snapshot_received.disconnect(_on_join_snapshot)
 	if Session.objects != null and Session.objects.exit_decided.is_connected(_on_exit_decided):
 		Session.objects.exit_decided.disconnect(_on_exit_decided)
 		Session.objects.contract_received.disconnect(_on_contract_mirror)
@@ -321,6 +348,7 @@ func _parse_args() -> void:
 			"--grime-demo": opts["grime_demo"] = true
 			"--no-van-intro": opts["no_van_intro"] = true
 			"--van-intro": opts["van_intro"] = true
+			"--join-hold": opts["join_hold"] = float(nxt)
 
 
 # --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
@@ -473,6 +501,9 @@ func _unwire_flow() -> void:
 
 ## Show whatever the host's flow says right now (this scene may have been loaded after the events arrived).
 func _sync_with_flow() -> void:
+	if Session.join != null and Session.join.waiting:
+		_on_join_changed()   # (M6: a joiner of a crew on the job)
+		return
 	if _session != null and _flow.floor_change:
 		if _flow.phase == CrewFlow.LOADING:
 			_enter_floor()   # the crew took the elevator: the next floor, behind the barrier
@@ -500,6 +531,7 @@ func _on_flow_board() -> void:
 		return
 	_drop_board()
 	_hide_wait()
+	_close_join_slip()
 	var board := _make_board(_flow.board_seed, true, _flow.board_note)
 	board.set_highlight(_flow.board_hi)
 	_shot_stage("board", 1.0)
@@ -525,10 +557,10 @@ func _enter_floor() -> void:
 	if _fade_in:
 		_fade_in = false
 		_fade(1.0, 0.0, 0.5)
-	if _spells.is_empty():
+	if _shared and _flow != null and _flow.floor_change:
+		_start()   # a floor change (the elevator down): no license, straight to the barrier (M6: a joiner may hold no spells)
+	elif _spells.is_empty():
 		_show_picker()
-	elif _shared and _flow != null and _flow.floor_change:
-		_start()   # a floor change (the elevator down): no license, straight to the barrier
 	elif _shared:
 		_sign_license()
 	else:
@@ -613,9 +645,13 @@ func _build_world() -> void:
 ## Who sits where: [{seat, character, local, peer, name}] for seats 1-3, in seat order. Solo: Wick (you) and the
 ## AI allies Rebar and Gasket. A shared run: every human at their roster seat with their character id, the rest AI.
 func _crew_seats() -> Array[Dictionary]:
+	if _joining and not _join_seats.is_empty():
+		return _joined_seats()
 	var by_seat: Dictionary = {}
 	if _shared:
 		for e: Dictionary in Session.crew():
+			if CrewFlow.is_joining(e):
+				continue   # (M6: still joining: its seat is the AI's on this floor until it takes it)
 			by_seat[int(e["seat"])] = e
 	var out: Array[Dictionary] = []
 	for seat in range(1, NetSession.MAX_CREW + 1):
@@ -1007,7 +1043,7 @@ func _van_intro_enabled() -> bool:
 
 
 func _on_arrival_finished() -> void:
-	if controller != null and player != null and not player.dead and not _ended and _menu == null and _van_menu == null:
+	if controller != null and player != null and not player.dead and not _ended and _menu == null and _van_menu == null and not _joining:
 		controller.enabled = true
 	_update_hero_sync()
 
@@ -1028,7 +1064,7 @@ func _assign_crew_spells() -> void:
 		return
 	for e: Dictionary in Session.crew():
 		var hero: Hero = heroes_by_seat.get(int(e["seat"]))
-		if hero == null or hero == player:
+		if hero == null or hero == player or CrewFlow.is_joining(e) or _joining:
 			continue
 		var slots: Array[String] = []
 		for s: Variant in e.get("spells", []) as Array:
@@ -1046,7 +1082,7 @@ func _enter_barrier() -> void:
 	_barrier_up = true
 	NetFloor.assign_ids(GameWorld.root, heroes_by_seat)
 	if not Net.is_host():
-		NetFloor.freeze_copies(GameWorld.root, [player])
+		NetFloor.freeze_copies(GameWorld.root, [] if _joining else [player])   # (M6: a joiner's seat is still the AI's)
 	_begin_hero_sync()
 	Session.world.begin()           # M3: the host streams its monsters, gates and employees; a client shows them
 	Session.objects.begin(player)   # M3: props, crates, mail, pickups, the Ledger and the exits are the host's
@@ -1056,6 +1092,25 @@ func _enter_barrier() -> void:
 	var t0 := Time.get_ticks_usec()
 	var sums := NetFloor.checksum(map, _plan, _run, GameWorld.root)
 	_log("floor checksum %s (map %s, plan %s, spawns %s; %d cells, %d actors; %.1f ms)" % [sums["all"], sums["map"], sums["plan"], sums["spawn"], sums["cells"], sums["actors"], float(Time.get_ticks_usec() - t0) / 1000.0], Color(0.8, 0.8, 1.0))
+	if _joining:
+		# M6: the same floor the crew is on (the same checksum as at its barrier). The van has long landed; the host's
+		# snapshot brings the rest and the seat.
+		if _arrival != null:
+			_arrival_held = false
+			_arrival.skip()
+		_flow.local_sums = sums
+		_refresh_join_slip("Catching up with the crew...")
+		if opts.has("join_hold"):
+			await get_tree().create_timer(float(opts["join_hold"])).timeout   # (dev: hold "Clocking in..." up for a picture)
+			if not is_inside_tree() or not _joining:
+				return
+		Session.join.report_built(sums)
+		return
+	if Net.is_host():
+		var table: Array = []
+		for s: Dictionary in _seat_info:
+			table.append({"seat": int(s["seat"]), "character": str(s["character"]), "peer": int(s["peer"]), "name": str(s["name"])})
+		_flow.note_floor(_floor_n(), table)   # (M6: a late joiner builds this floor with this seat table)
 	_flow.report_built(sums)
 	_update_waiting()
 
@@ -1067,6 +1122,11 @@ func _begin_floor(elapsed: float) -> void:
 		return
 	_floor_begun = true
 	_hide_wait()
+	if _joining:
+		_joining = false   # (M6: the seat is ours; from here this is an ordinary crew member's floor)
+		_spells = player.spell_slots.duplicate()
+		_close_join_slip()
+		hud.bind(player, allies)
 	_freeze(false)
 	if _arrival != null and _arrival_held:
 		_arrival.time = elapsed
@@ -1085,7 +1145,8 @@ func _begin_floor(elapsed: float) -> void:
 ## Remote heroes become puppets (Net.make_puppet) and, on the host, the AI seats stay live. Streaming starts at the
 ## shared start (_update_hero_sync).
 func _begin_hero_sync() -> void:
-	_drop_departed_seats()
+	if not _joining:
+		_drop_departed_seats()   # (a joiner builds the barrier's table as it was; the snapshot says who sits where now)
 	var owners := {}
 	for s: Dictionary in _seat_info:
 		owners[int(s["seat"])] = int(s["peer"])
@@ -1093,7 +1154,7 @@ func _begin_hero_sync() -> void:
 	for seat: int in AI_SEATS:
 		originals[seat] = str((AI_SEATS[seat] as Dictionary)["character"])
 	Session.seats.begin(owners, originals)
-	Session.snap.begin(heroes_by_seat, _seat_of(player))
+	Session.snap.begin(heroes_by_seat, 0 if _joining else _seat_of(player))
 
 
 ## The heroes were built when the job was picked, from the roster of that moment. A player who left during the license
@@ -1137,6 +1198,165 @@ func _on_seat_to_ai(seat: int, character: String) -> void:
 		HeroFactory.make_ally(hero, heroes_by_seat[1], false, float(ai["angle"]), float(ai["hexes"]))
 	if hud != null and player != null:
 		hud.bind(player, allies)   # the ally rows read the new name
+
+
+# --- Joining mid-contract (M6) ------------------------------------------------------------------------------------
+
+## Every machine: a joiner (`peer`) took `seat` from the AI (SeatHandover). The same hero node becomes their character at
+## full health (decided), the AllyBrain goes, and the crew is told. On the joiner this is its own hero (its player).
+func _on_seat_to_player(seat: int, peer: int, character: String) -> void:
+	var hero: Hero = heroes_by_seat.get(seat)
+	if hero == null or not is_instance_valid(hero):
+		return
+	var kit := character if CREW_LOOKS.has(character) else NetSession.DEFAULT_CHARACTER
+	var look: Dictionary = CREW_LOOKS[kit]
+	var was := hero.display_name
+	hero.become(kit, str(look["name"]), look["color"], _model_for(kit) if not bool(opts.get("proto_heroes", false)) else null, true)
+	var brain := hero.get_node_or_null("AllyBrain")
+	if brain != null:
+		hero.remove_child(brain)   # (the AI stops this frame: the joiner's machine drives it from here)
+		brain.queue_free()
+	_note_names()
+	var who := str(_names.get(peer, "A player"))
+	var mine := peer == Session.local_id()
+	if not mine:
+		hero.set_player_name(who)
+	for s: Dictionary in _seat_info:
+		if int(s["seat"]) == seat:
+			s["peer"] = peer
+			s["name"] = who
+			s["character"] = kit
+			s["local"] = mine
+	_log("seat %d: %s over %s's seat as %s" % [seat, "you take" if mine else who + " takes", was, kit], Color(0.6, 0.9, 1.0))
+	var notice := "You take over %s's seat." % was if mine else "%s takes over %s's seat." % [who, was]
+	_seat_notices.append(notice)
+	_shot_stage("takeover", 2.0)   # (dev: --shot-at takeover, every window at the same moment after a seat changes hands)
+	if hud != null and player != null:
+		hud.bind(player, allies)
+		hud.show_message(notice, Color(0.6, 0.9, 1.0))
+
+
+## Host: a joiner built this floor with the right checksum: send it the snapshot and hand it the seat now.
+func _on_join_ready(peer: int) -> void:
+	if not Net.is_host() or _leaving or _ended or _session == null or not _floor_begun:
+		return
+	Session.join.admit(peer, {"contract": _session.mirror_state()})
+
+
+## A joiner: the host said what the crew is doing (wait), sent us onto a floor (go), or the board came.
+func _on_join_changed() -> void:
+	var j := Session.join
+	if j == null or _leaving or j.arrived or not j.waiting:
+		return   # (arrived: the floor starts through the flow; not waiting any more: the board came, _on_flow_board)
+	var go := j.go
+	if not go.is_empty():
+		if int(go.get("ticket", -1)) == _join_ticket:
+			return
+		if _session != null or map != null:
+			_leaving = true   # (this scene already holds a floor: build the new one in a fresh scene)
+			_change_scene("")
+			return
+		_join_floor()
+		return
+	if _session != null or map != null:
+		_leaving = true   # (the crew left the floor this joiner was building: wait in a fresh scene)
+		_change_scene("")
+		return
+	_hide_wait()
+	_refresh_join_slip(j.note)
+
+
+## A joiner: build the crew's floor exactly as the host built it at its barrier (its seat table, with the seat we are taking
+## as this machine's hero, still the AI's), behind our own barrier; _enter_barrier reports the checksum to the host.
+func _join_floor() -> void:
+	var go := Session.join.go
+	var job := go.get("job", {}) as Dictionary
+	if job.is_empty():
+		return
+	_join_ticket = int(go.get("ticket", 0))
+	_joining = true
+	_shared = true
+	_join_seats = (go.get("seats", []) as Array).duplicate(true)
+	_join_seat = int(go.get("seat", 0))
+	_hide_wait()
+	_drop_board()
+	_run = ContractRun.make(str(job["archetype"]), int(job["seed"]), float(job["difficulty"]))
+	_session = ContractSession.begin(_run, int(go.get("floor", 1)))
+	_spells.clear()
+	Ledger.mirror = true
+	_refresh_join_slip("Building floor %d..." % _floor_n())
+	_log("clocking in: floor %d of %s, seat %d" % [_floor_n(), _run.company, _join_seat], Color(0.6, 0.9, 1.0))
+	_build_world()
+	_setup_voice()
+	_start()
+
+
+## The seats as the host's floor was built (join.go): [{seat, character, local, peer, name}].
+func _joined_seats() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for row: Variant in _join_seats:
+		var d := row as Dictionary
+		var seat := int(d.get("seat", 0))
+		var character := str(d.get("character", NetSession.DEFAULT_CHARACTER))
+		out.append({"seat": seat, "character": character if CREW_LOOKS.has(character) else NetSession.DEFAULT_CHARACTER,
+			"local": seat == _join_seat, "peer": int(d.get("peer", 0)), "name": str(d.get("name", ""))})
+	return out
+
+
+## A joiner: the host's snapshot (Session.join applies the world, the Ledger and our seat): the objective bookkeeping, and
+## every other seat's character and player as they are NOW (players may have come and gone since the barrier).
+func _on_join_snapshot(d: Dictionary) -> void:
+	if not _joining or _session == null:
+		return
+	_session.apply_mirror(d.get("contract", {}) as Dictionary)
+	var own := int((d.get("take", {}) as Dictionary).get("seat", 0))
+	var kits := d.get("kits", {}) as Dictionary
+	for k: Variant in kits:
+		var seat := int(k)
+		var hero: Hero = heroes_by_seat.get(seat)
+		var row := kits[k] as Array
+		if seat == own or hero == null or row == null or row.size() < 2:
+			continue
+		var kit := str(row[0])
+		if CREW_LOOKS.has(kit) and hero.kit_id != kit:
+			var look: Dictionary = CREW_LOOKS[kit]
+			hero.become(kit, str(look["name"]), look["color"], _model_for(kit) if not bool(opts.get("proto_heroes", false)) else null)
+		if str(row[1]) != "":
+			hero.set_player_name(str(row[1]))
+		for s: Dictionary in _seat_info:
+			if int(s["seat"]) == seat:
+				s["character"] = kit
+				s["name"] = str(row[1])
+				s["peer"] = Session.seats.owner_of(seat)
+	_update_tracker()
+
+
+func _refresh_join_slip(step: String) -> void:
+	if _join_slip == null:
+		_join_slip = ClockInSlip.new()
+		_join_slip.name = "ClockIn"
+		_screens().add_child(_join_slip)
+		_join_slip.leave.connect(_request_leave)
+		_shot_stage("clockin", 0.8)
+	var j := Session.join
+	var job_text := ""
+	if not j.wait_job.is_empty():
+		var run := ContractRun.make(str(j.wait_job["archetype"]), int(j.wait_job["seed"]), float(j.wait_job["difficulty"]))
+		job_text = run.company
+	var floor_text := "%d of %d" % [j.wait_floor, ContractRun.FLOOR_COUNT] if j.wait_floor > 0 else ""
+	var seat_text := ""
+	for row: Variant in j.go.get("seats", []) as Array:
+		var d := row as Dictionary
+		if int(d.get("seat", 0)) == int(j.go.get("seat", -1)):
+			var ch := str(d.get("character", ""))
+			seat_text = "%s's (seat %d)" % [str((CREW_LOOKS.get(ch, {"name": ch}) as Dictionary)["name"]), int(d["seat"])]
+	_join_slip.set_values("%s's crew" % Session.host_name(), job_text, floor_text, seat_text, step)
+
+
+func _close_join_slip() -> void:
+	if _join_slip != null:
+		_join_slip.queue_free()
+		_join_slip = null
 
 
 ## "License signed. Waiting for Sam..." while the crew catches up (the host's flow knows who is missing).
@@ -1272,6 +1492,8 @@ func _on_gate_closed(gate: Actor) -> void:
 		return
 	_closed_gates[id] = true
 	var is_origin := gate == _site.origin_gate
+	if _joining:
+		return   # (M6: a late joiner sees the gates the crew closed before it came as closed, with no fanfare)
 	if not _keeps_books():
 		# A client: the host closed it (world.die). Its bookkeeping and pay arrive from the host (obj.contract, obj.ledger).
 		if is_origin:
@@ -1384,6 +1606,8 @@ func _on_actor_died(a: Actor) -> void:
 		_log("%s died" % a.display_name, Color(0.7, 0.7, 0.7))
 	elif a.team == GameWorld.TEAM_HEROES:
 		_log("%s is down!" % a.display_name, Color(1.0, 0.45, 0.45))
+	elif _site != null and _site.employees.has(a) and _joining:
+		pass   # (M6: lost before this joiner arrived)
 	elif _site != null and _site.employees.has(a):
 		var cause: String = str(_emp_cause.get(a.get_instance_id(), "unknown"))
 		if _keeps_books():
@@ -1711,8 +1935,8 @@ func _choose_exit(choice: String) -> void:
 
 ## The crew's exit was decided (every machine, M3): by whoever chose first. The host does it; a client follows.
 func _on_exit_decided(choice: String, seat: int) -> void:
-	if _leaving or _ended or _session == null:
-		return
+	if _leaving or _ended or _session == null or _joining:
+		return   # (M6: a joiner still building follows the crew through Session.join instead)
 	_close_pause()
 	_close_elevator(false)
 	var who := str(_names.get(Session.seats.owners.get(seat, 0), "")) if Session.seats != null else ""
@@ -1810,6 +2034,8 @@ func _end_contract(reason: String) -> void:
 		if h.dead:
 			downed.append(_crew_label(h))
 	_session.finish(reason, downed)
+	if Net.is_host() and _flow != null:
+		_flow.host_job_ended()   # (M6: a player joining now starts with the crew at the next board)
 	var inv := ContractInvoice.build(_session)
 	if _crewed() and Net.is_host():
 		Session.objects.send_end(inv)   # M3: every client shows the host's invoice
@@ -1820,7 +2046,7 @@ func _end_contract(reason: String) -> void:
 
 ## Client: the host ended the job (cashed out, or the crew went down); its invoice is the one.
 func _end_from_host(inv: Dictionary) -> void:
-	if _ended or _session == null or _keeps_books():
+	if _ended or _session == null or _keeps_books() or _joining:
 		return
 	_ended = true
 	_close_pause()
@@ -1939,7 +2165,7 @@ func _check_crew() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _ended or _leaving or player == null or _session == null:
+	if _ended or _leaving or player == null or _session == null or _joining:
 		return
 	_check_crew()
 	if _ending:
@@ -1978,9 +2204,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _confirm != null:
 		return   # the leave question has the keys
 	if event.is_action_pressed("restart"):
+		if _joining or _join_slip != null:
+			return   # (M6: not on the job yet)
 		_abandon_to_board()
 	elif event.is_action_pressed("pause"):
-		if _board != null:
+		if _join_slip != null:
+			_request_leave()   # (M6: still clocking in: leave the crew)
+		elif _board != null:
 			_request_leave()   # Esc on the job board: back to the menu (a crew host confirms first)
 		elif _picker != null:
 			_back_to_board()  # Esc on the license checkout: back to the same three offers (a client leaves the crew)
@@ -2151,7 +2381,7 @@ func _on_peer_left(peer: int) -> void:
 	if hud != null:
 		var note := "%s left the crew" % str(_names.get(peer, "A player"))
 		for h: Dictionary in Session.seats.history:
-			if int(h["peer"]) == peer and CREW_LOOKS.has(str(h["character"])):
+			if str(h.get("kind", "ai")) == "ai" and int(h["peer"]) == peer and CREW_LOOKS.has(str(h["character"])):
 				note += ". %s takes the seat." % str((CREW_LOOKS[str(h["character"])] as Dictionary)["name"])
 		hud.show_message(note, Color(1.0, 0.75, 0.45))
 	_note_names()

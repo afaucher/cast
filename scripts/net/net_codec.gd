@@ -9,7 +9,8 @@ extends RefCounted
 ##
 ## ENTRY (16 bytes, 17 with the bow drawn)
 ##   u8  head    seat (bits 0-1, 1-3) | held_slot (bits 2-3) | teleport counter (bits 4-7)
-##   u8  flags   dead 1 | climbing 2 | ghost 4 | drawing 8
+##   u8  flags   dead 1 | climbing 2 | ghost 4 | drawing 8 | the seat's ownership EPOCH mod 16 (bits 4-7, M6: a sample from
+##               the seat's previous owner is dropped by everyone once the seat has changed hands)
 ##   u8  age     ms between the sample and the packet's stamp: 0 for the sender's own hero, more for a client's hero
 ##               the host FORWARDS (the sample time is stamp - age, so everyone shares one timeline)
 ##   i16 x, z, y   centimetres
@@ -77,6 +78,7 @@ static func _put_entry(b: StreamPeerBuffer, s: NetHeroState, sent_at: float) -> 
 		flags |= FLAG_GHOST
 	if s.drawing:
 		flags |= FLAG_DRAWING
+	flags |= (s.epoch & 15) << 4
 	b.put_u8(flags)
 	b.put_u8(clampi(roundi((sent_at - s.t) * 1000.0), 0, 255))
 	b.put_16(_cm(s.pos.x))
@@ -120,6 +122,7 @@ static func decode_from(b: StreamPeerBuffer, stamp: float) -> Array[NetHeroState
 		s.climbing = (flags & FLAG_CLIMBING) != 0
 		s.ghost = (flags & FLAG_GHOST) != 0
 		s.drawing = (flags & FLAG_DRAWING) != 0
+		s.epoch = (flags >> 4) & 15
 		s.t = stamp - float(b.get_u8()) / 1000.0
 		s.pos = Vector3(float(b.get_16()) / 100.0, 0.0, float(b.get_16()) / 100.0)
 		s.pos.y = float(b.get_16()) / 100.0

@@ -40,6 +40,7 @@ func _state(rng: RandomNumberGenerator, seat: int) -> NetHeroState:
 	s.drawing = rng.randf() < 0.3
 	s.draw_age = rng.randf_range(0.0, 2.5) if s.drawing else 0.0
 	s.tp = rng.randi_range(0, 15)
+	s.epoch = rng.randi_range(0, 15)
 	return s
 
 
@@ -80,6 +81,7 @@ func _check_round_trips() -> void:
 		eq(d.ghost, s.ghost, "ghost")
 		eq(d.drawing, s.drawing, "drawing")
 		eq(d.tp, s.tp, "teleport counter")
+		eq(d.epoch, s.epoch, "ownership epoch (M6, in the flags byte: no extra byte)")
 		worst["pos"] = maxf(float(worst["pos"]), maxf(absf(d.pos.x - s.pos.x), maxf(absf(d.pos.y - s.pos.y), absf(d.pos.z - s.pos.z))))
 		worst["vel"] = maxf(float(worst["vel"]), maxf(absf(d.vel.x - s.vel.x), absf(d.vel.y - s.vel.y)))
 		worst["angle"] = maxf(float(worst["angle"]), absf(angle_difference(d.angle, s.angle)))

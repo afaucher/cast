@@ -364,6 +364,104 @@ func _entry(tr: Track, now: float) -> PackedByteArray:
 	return NetWorldCodec.employee_bytes(st)
 
 
+# --- M6: the late joiner's keyframe ------------------------------------------------------------------------------
+
+## Host: a world section with EVERY surviving host-owned mover in it (no budget: it rides the late-join snapshot, a reliable
+## event, not a datagram). Sampled now, without touching the stream's own bookkeeping.
+func keyframe(now: float) -> PackedByteArray:
+	var mons: Array[PackedByteArray] = []
+	var emps: Array[PackedByteArray] = []
+	var gates: Array[PackedByteArray] = []
+	for id: int in _tracks:
+		var tr: Track = _tracks[id]
+		if not is_instance_valid(tr.node) or tr.node.dead or (tr.kind == EMPLOYEE and (tr.node as Employee).is_extracted()):
+			continue
+		match tr.kind:
+			MONSTER:
+				var st := _state_now(tr, now)
+				NetWorldCodec.read_monster(tr.node as Monster, st)
+				mons.append(NetWorldCodec.monster_bytes(st))
+			EMPLOYEE:
+				var st := _state_now(tr, now)
+				NetWorldCodec.read_employee(tr.node as Employee, st)
+				emps.append(NetWorldCodec.employee_bytes(st))
+			_:
+				var g := NetWorldCodec.GateState.new()
+				g.id = tr.id
+				NetWorldCodec.read_gate(tr.node as Hellgate, g)
+				gates.append(NetWorldCodec.gate_bytes(g))
+	return NetWorldCodec.encode(mons, emps, gates)
+
+
+func _state_now(tr: Track, now: float) -> NetHeroState:
+	var st := NetHeroState.new()
+	st.id = tr.id
+	st.t = now
+	st.pos = tr.node.global_position
+	st.vel = tr.vel
+	st.tp = tr.tp
+	return st
+
+
+## Host: every runtime monster alive (a gate's burst, a dev spawn), as a world.spawn replay: [[id, kind, x, y, z, gate id]].
+func runtime_spawns() -> Array:
+	var out: Array = []
+	for id: int in _tracks:
+		var tr: Track = _tracks[id]
+		if id < NetRegistry.RUNTIME_BASE or tr.kind != MONSTER or not is_instance_valid(tr.node) or tr.node.dead:
+			continue
+		var m := tr.node as Monster
+		var gate_node: Variant = m.get_meta("from_gate") if m.has_meta("from_gate") else null
+		var gate := NetFloor.id_of(gate_node as Node) if gate_node != null and is_instance_valid(gate_node) else 0
+		var p := m.global_position
+		out.append([id, m.kind, p.x, p.y, p.z, gate])
+	return out
+
+
+## The late joiner: build the host's runtime monsters (no burst to watch: they came out a while ago).
+func apply_spawns(list: Array) -> void:
+	var by_gate := {}
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 6:
+			continue
+		var g := int(row[5])
+		if not by_gate.has(g):
+			by_gate[g] = []
+		(by_gate[g] as Array).append(row.slice(0, 5))
+	for g: int in by_gate:
+		_receive_spawn(g, by_gate[g], true)
+
+
+## The late joiner: the host's keyframe (keyframe()). Every mover's sample goes into its buffer (the puppet shows it from
+## the first frame the world is live; the stream carries on from there) and the gates take their state at once. The stream's
+## delay is not fed from it: it arrived as a reliable event, not on the stream.
+func apply_keyframe(bytes: PackedByteArray, stamp: float) -> int:
+	if bytes.is_empty():
+		return 0
+	var b := StreamPeerBuffer.new()
+	b.data_array = bytes
+	var sec := NetWorldCodec.decode(b, stamp)
+	var n := 0
+	for list: Array[NetHeroState] in [sec.monsters, sec.employees]:
+		for st in list:
+			var sh: Shown = _shown.get(st.id)
+			if sh == null or not is_instance_valid(sh.node) or sh.node.dead:
+				continue
+			sh.interp.push(st, stamp)
+			sh.node.global_position = st.pos   # (where it stands now, also while the floor is still frozen here)
+			sh.node.reset_physics_interpolation()
+			n += 1
+	for g in sec.gates:
+		var sh: Shown = _shown.get(g.id)
+		if sh == null or not is_instance_valid(sh.node) or sh.node.dead:
+			continue
+		sh.gate_t = g.t
+		NetWorldCodec.write_gate(sh.node as Hellgate, g)
+		n += 1
+	return n
+
+
 # --- Host: events ---------------------------------------------------------------------------------------------
 
 func _on_actor_spawned(a: Actor) -> void:
@@ -385,7 +483,7 @@ func _flush_spawns() -> void:
 		var m := NetRegistry.node(id) as Monster
 		if m == null:
 			continue
-		var gate_node: Variant = m.get_meta("from_gate", null)
+		var gate_node: Variant = m.get_meta("from_gate") if m.has_meta("from_gate") else null
 		var gate := NetFloor.id_of(gate_node as Node) if gate_node != null and is_instance_valid(gate_node) else 0
 		if not by_gate.has(gate):
 			by_gate[gate] = []
@@ -515,7 +613,7 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 				g.net_shove_fx()
 
 
-func _receive_spawn(gate_id: int, list: Array) -> void:
+func _receive_spawn(gate_id: int, list: Array, quiet: bool = false) -> void:
 	if GameWorld.root == null:
 		return
 	var gate := NetRegistry.node(gate_id) as Hellgate if gate_id != 0 else null
@@ -538,7 +636,7 @@ func _receive_spawn(gate_id: int, list: Array) -> void:
 		_show(id, m, MONSTER)
 		m.reset_physics_interpolation()
 		ids.append(id)
-	if gate != null and not gate.dead:
+	if gate != null and not gate.dead and not quiet:
 		gate.net_burst_fx(ids.map(func(i: int) -> Node: return NetRegistry.node(i)))
 	stats["spawns"] = int(stats["spawns"]) + ids.size()
 	if not ids.is_empty():

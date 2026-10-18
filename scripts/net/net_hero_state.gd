@@ -27,6 +27,8 @@ var drawing := false
 var draw_age := 0.0
 ## Teleport counter (0-15): it changes when the hero jumps, so a receiver never blends across the gap.
 var tp := 0
+## M6: the seat's ownership epoch (mod 16) when the sample was taken; a receiver drops a sample from an older owner.
+var epoch := 0
 ## M3, host-owned movers: the net id, the state machine's state, a wind-up 0..1 (interpolated), a byte the class uses
 ## (a monster's strike count, an employee's leader seat) and a flag (a monster is helpless, an employee dismissed).
 var id := 0
@@ -60,6 +62,7 @@ func copy() -> NetHeroState:
 	s.drawing = drawing
 	s.draw_age = draw_age
 	s.tp = tp
+	s.epoch = epoch
 	s.id = id
 	s.mode = mode
 	s.telegraph = telegraph

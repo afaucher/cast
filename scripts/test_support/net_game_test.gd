@@ -337,3 +337,42 @@ static func peer_named(who: String) -> int:
 		if str(e["name"]) == who:
 			return int(e["peer"])
 	return 0
+
+
+# --- M6: a player who joins a crew already on the job ------------------------------------------------------------
+
+## A flag the processes of one run share: a file in user:// (one directory for every process of the project), named by the
+## run's port. A late joiner is not connected yet, so it cannot be sent a command: the host raises a flag instead.
+func flag_path(flag: String) -> String:
+	return "user://net_tests/flag_%d_%s" % [port, flag]
+
+
+func raise_flag(flag: String) -> void:
+	DirAccess.make_dir_recursive_absolute("user://net_tests")
+	var f := FileAccess.open(flag_path(flag), FileAccess.WRITE)
+	if f != null:
+		f.store_string(str(Time.get_unix_time_from_system()))
+		f.close()
+
+
+func clear_flag(flag: String) -> void:
+	if FileAccess.file_exists(flag_path(flag)):
+		DirAccess.remove_absolute(flag_path(flag))
+
+
+## Wait for a flag raised AFTER `since` (unix seconds; a stale file from an earlier run on the same port does not count).
+func wait_flag(flag: String, since: float, seconds: float) -> bool:
+	return await until(func() -> bool:
+		if not FileAccess.file_exists(flag_path(flag)):
+			return false
+		var f := FileAccess.open(flag_path(flag), FileAccess.READ)
+		if f == null:
+			return false
+		var t := float(f.get_as_text())
+		f.close()
+		return t >= since, seconds)
+
+
+## Every host-owned actor alive here (NetJoin.living_ids) as a comparable string.
+static func living_text() -> String:
+	return str(NetJoin.living_ids())

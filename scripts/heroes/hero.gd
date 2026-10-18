@@ -648,9 +648,10 @@ func _on_death() -> void:
 ## the model change; the node, its position, its net id and everything that refers to it stay. HP keeps its
 ## FRACTION (a downed hero stays downed). Used when a player drops and the AI takes the seat back as its original
 ## character, and (M6) when a joiner takes over an AI. The one place a SPAWN field is written after the hero exists.
-func become(kit: String, new_name: String, color: Color, model: Node3D) -> void:
-	var fraction := clampf(hp / max_hp, 0.0, 1.0) if max_hp > 0.0 else 1.0
-	var was_dead := dead
+## `full` (M6, decided: a joiner always arrives at 100%): the hero comes back at full health, standing, even from downed.
+func become(kit: String, new_name: String, color: Color, model: Node3D, full: bool = false) -> void:
+	var fraction := 1.0 if full else (clampf(hp / max_hp, 0.0, 1.0) if max_hp > 0.0 else 1.0)
+	var was_dead := dead and not full
 	cancel_draw()
 	if _swing_tween and _swing_tween.is_valid():
 		_swing_tween.kill()

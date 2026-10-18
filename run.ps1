@@ -6,6 +6,7 @@
 #   .\run.ps1 -Crew 3 -Link coast     # three players, every window simulating a coast-to-coast link
 #   .\run.ps1 -Crew 2 -Bot 2          # window 2's hero walks a loop by itself (--net-bot); -Bot 1,2 for both windows
 #   .\run.ps1 -Crew 2 -Size 1280x720  # bigger windows (default 800x450)
+#   .\run.ps1 -Crew 3 -JoinLate 25    # the last window joins 25 s later: mid-contract, it takes an AI's seat (M6)
 #   .\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn -ShotDir C:\shots
 #                                     # the host takes offer 2 once both are in, both sign heal+corn, and each
 #                                     # window saves <Name>.png 3 s after the shared floor start and quits
@@ -13,12 +14,13 @@
 .  "$PSScriptRoot\godot_env.ps1"
 $godot = Resolve-CastGodot
 
-$crew = 0; $link = ""; $shotDir = ""; $bots = @(); $size = "800x450"; $rest = @()
+$crew = 0; $link = ""; $shotDir = ""; $bots = @(); $size = "800x450"; $late = 0.0; $rest = @()
 for ($i = 0; $i -lt $args.Count; $i++) {
     if ($args[$i] -eq "-Crew" -and $i + 1 -lt $args.Count) { $crew = [int]$args[$i + 1]; $i++ }
     elseif ($args[$i] -eq "-Link" -and $i + 1 -lt $args.Count) { $link = [string]$args[$i + 1]; $i++ }
     elseif ($args[$i] -eq "-ShotDir" -and $i + 1 -lt $args.Count) { $shotDir = [string]$args[$i + 1]; $i++ }
     elseif ($args[$i] -eq "-Size" -and $i + 1 -lt $args.Count) { $size = [string]$args[$i + 1]; $i++ }
+    elseif ($args[$i] -eq "-JoinLate" -and $i + 1 -lt $args.Count) { $late = [double]$args[$i + 1]; $i++ }
     elseif ($args[$i] -eq "-Bot" -and $i + 1 -lt $args.Count) { $bots = @(([string]$args[$i + 1]) -split "[, ]+" | Where-Object { $_ -ne "" } | ForEach-Object { [int]$_ }); $i++ }
     elseif ($args[$i] -is [array]) { $rest += ($args[$i] -join ",") }   # (heal,corn reaches a script as an array)
     else { $rest += $args[$i] }
@@ -43,6 +45,10 @@ function Start-Player([int]$n, [string[]]$gameArgs, [string]$who) {
 $procs = @(Start-Player 1 @("--net-host", "--net-name", "Host") "Host")
 Start-Sleep -Seconds 2
 for ($n = 2; $n -le $crew; $n++) {
+    if ($late -gt 0 -and $n -eq $crew) {
+        Write-Host "Window $n joins the crew in $late s (mid-contract: it takes an AI's seat)..."
+        Start-Sleep -Milliseconds ([int]($late * 1000))
+    }
     $procs += Start-Player $n @("--net-join", "127.0.0.1:$port", "--net-name", "Crew$n", "--no-mic") "Crew$n"
 }
 Write-Host "Started $crew windows on port $port$(if ($link) { " (link: $link)" }). Close them to stop."

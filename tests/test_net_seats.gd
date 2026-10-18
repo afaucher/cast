@@ -5,7 +5,8 @@ extends TestCase
 ##   outside the crew is still keyed by name: the old API);
 ## - Hero.become(): a seat handed back to the AI is the SAME node as another character (position, id, references stay;
 ##   kit, name, colour and model change; HP keeps its fraction; a downed hero stays downed);
-## - SeatHandover's table, offline: who owns what, which seat a peer sat in, and that release is a host-only verb.
+## - SeatHandover's table, offline: who owns what, which seat a peer sat in, and that release is a host-only verb;
+## - M6: which AI seat a joiner takes (SeatHandover.pick_seat, the plan's order).
 
 var root: Node3D
 
@@ -118,6 +119,10 @@ func _check_become() -> void:
 	hero.become(HeroKit.GASKET, "Gasket", Color(0.7, 0.4, 0.85), GasketModel.new())
 	check(hero.dead and hero.hp == 0.0, "a downed hero stays downed when the seat changes character")
 	eq(hero.kit_id, HeroKit.GASKET, "and is now Gasket")
+	hero.become("wick", "Wick", Color(0.3, 0.55, 0.95), WickModel.new(), true)
+	check(not hero.dead, "M6: a joiner takes the seat at full health: a downed AI's hero stands up")
+	eq(hero.hp, hero.max_hp, "... at 100%% HP (%.0f)" % hero.max_hp)
+	eq(hero.kit_id, "wick", "... as the joiner's character")
 	hero.free()
 
 
@@ -136,3 +141,20 @@ func _check_seat_table() -> void:
 	eq(seats.owner_of(2), 5, "release is a host-only verb: offline it does nothing")
 	seats.reset()
 	eq(seats.owner_of(2), 0, "reset() forgets the table")
+	_check_seat_order()
+
+
+## M6: which AI a joiner replaces (the plan's order): an AI already playing the joiner's character, then the LIVING AI with
+## the most HP (tie: the lower seat), a downed AI only when none is alive; between floors, the lowest free seat.
+func _check_seat_order() -> void:
+	var rebar := {"kit": "rebar", "hp": 80.0, "dead": false}
+	var gasket := {"kit": "gasket", "hp": 95.0, "dead": false}
+	eq(SeatHandover.pick_seat("wick", [2, 3], {2: rebar, 3: gasket}), 3, "the living AI with the most HP (Gasket 95 > Rebar 80)")
+	eq(SeatHandover.pick_seat("wick", [2, 3], {2: rebar, 3: {"kit": "gasket", "hp": 80.0, "dead": false}}), 2, "a tie: the lower seat")
+	eq(SeatHandover.pick_seat("rebar", [2, 3], {2: rebar, 3: gasket}), 2, "an AI already playing the joiner's character comes first")
+	eq(SeatHandover.pick_seat("wick", [2, 3], {2: rebar, 3: {"kit": "gasket", "hp": 0.0, "dead": true}}), 2, "a downed AI is passed over...")
+	eq(SeatHandover.pick_seat("wick", [2, 3], {2: {"kit": "rebar", "hp": 0.0, "dead": true}, 3: {"kit": "gasket", "hp": 0.0, "dead": true}}), 2, "... unless none is alive (then the lower seat)")
+	eq(SeatHandover.pick_seat("wick", [3, 2], {}), 2, "no floor running: the lowest free seat")
+	eq(SeatHandover.pick_seat("wick", [], {}), 0, "no free seat: none (the crew is full)")
+	var mid := SeatHandover.pick_seat("wick", [2, 3], {2: rebar, 3: {"kit": "gasket", "hp": 95.0, "dead": true}})
+	eq(mid, 2, "the downed AI with more HP on paper is still passed over")

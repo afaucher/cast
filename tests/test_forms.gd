@@ -1,7 +1,7 @@
 extends TestCase
 ## The carbon-copy form components (scripts/ui/forms/) and the screens built on them: theme and fonts, the box
 ## scale, rows and focus, the job board's highlight and backdrop shade, the spell picker's flow, the pause and
-## elevator slips, the invoice and the objective slip. Presentation only: no simulation state.
+## elevator slips, the "Clocking in..." form (M6), the invoice and the objective slip. Presentation only: no simulation state.
 
 
 func setup() -> void:
@@ -222,6 +222,24 @@ func _check_slips() -> void:
 	check((van._rows[0] as FormRow).text == "Clock out", "its first row clocks out")
 	check(not (van._rows[0] as FormRow).hint.to_lower().contains("always works"), "the van slip no longer says it always works")
 	van.queue_free()
+	await frames(2)
+
+	# M6: a late joiner's "Clocking in..." form.
+	var clock := ClockInSlip.new()
+	add_child(clock)
+	await frames(3)
+	check(clock.leave_button.has_focus(), "Clocking in focuses its one row, Leave the crew")
+	clock.set_values("host's crew", "Hollis-Crane Continuity Holdings Of A Very Long Name", "2 of 3", "", "Building floor 2...")
+	await frames(2)
+	eq(clock.floor_value.text, "2 of 3", "the floor is typed in")
+	eq(clock.seat_value.text, "-", "a value not known yet is a dash")
+	eq(clock.step_label.text, "Building floor 2...", "the one line says what is happening")
+	check(clock.job_value.clip_text, "a long job name is trimmed on the form")
+	var left := [false]
+	clock.leave.connect(func() -> void: left[0] = true)
+	clock.leave_button.pressed.emit()
+	check(left[0], "Leave the crew leaves")
+	clock.queue_free()
 	await frames(2)
 
 	var tracker := ObjectiveTracker.new()

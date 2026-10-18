@@ -300,6 +300,48 @@ func _on_mail_broken(pkg: MailPackage, _culprit: Node, contents: String, id: int
 	stats["breaks"] = int(stats["breaks"]) + 1
 
 
+# --- M6: a late joiner's share of the snapshot ------------------------------------------------------------------
+
+## Host: what a player joining this floor needs from here: every pickup on the floor (an obj.pickup replay, with its charges
+## and age now) and every dented prop's HP (an obj.hurt replay). Broken things are gone ids (NetJoin).
+func late_join_state() -> Dictionary:
+	_host_pickups()   # (anything new is numbered and announced first)
+	var picks: Array = []
+	for id: int in _pickups:
+		var e: Array = _pickups[id]
+		var p: ComponentPickup = e[0] if is_instance_valid(e[0]) else null
+		if p == null or p._used or p.is_queued_for_deletion() or p.charges <= 0:
+			continue
+		picks.append([id, p.spell_id, p.charges, p.global_position, p.lifetime, p._age])
+	var dents: Array = []
+	for id in NetRegistry.ids():
+		var prop := NetRegistry.node(id) as PricedProp
+		if prop != null and not prop.dead and prop.hp < prop.max_hp - 0.001:
+			dents.append([id, prop.hp])
+	return {"pickups": picks, "dents": dents}
+
+
+## The late joiner: the host's pickups and dents (late_join_state()). A seed-built pickup it already has takes the host's
+## charges; any other is created as a copy, exactly as obj.pickup would.
+func apply_late_join(d: Dictionary) -> void:
+	for e: Variant in d.get("pickups", []) as Array:
+		var row := e as Array
+		if row == null or row.size() < 6:
+			continue
+		var id := int(row[0])
+		var have := NetRegistry.node(id) as ComponentPickup
+		if have != null:
+			have.charges = int(row[2])
+			_pickups[id] = have
+			continue
+		_client_pickup({"id": id, "s": row[1], "n": row[2], "at": row[3], "l": row[4], "age": row[5]})
+	for e: Variant in d.get("dents", []) as Array:
+		var row := e as Array
+		var prop := NetRegistry.node(int(row[0])) as PricedProp if row != null and row.size() >= 2 else null
+		if prop != null and not prop.dead:
+			prop.hp = float(row[1])
+
+
 # --- Every frame ---------------------------------------------------------------------------------------------
 
 func _process(delta: float) -> void:

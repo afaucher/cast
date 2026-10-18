@@ -1,8 +1,9 @@
 # Networking build plan: online co-op, step by step
 
-Status: **M0, M1 and M2 built** 2026-10-17, **M3, M4 and M5 built** 2026-10-18 (see [M0 as built](#m0-as-built-2026-10-17),
-[M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17), [M3 as built](#m3-as-built-2026-10-18),
-[M4 as built](#m4-as-built-2026-10-18) and [M5 as built](#m5-as-built-2026-10-18) after the milestones); M6 onward is still the plan. The architecture is fixed by
+Status: **M0, M1 and M2 built** 2026-10-17, **M3, M4 and M5 built** 2026-10-18, **M6 built** 2026-10-18 (see
+[M0 as built](#m0-as-built-2026-10-17), [M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17),
+[M3 as built](#m3-as-built-2026-10-18), [M4 as built](#m4-as-built-2026-10-18), [M5 as built](#m5-as-built-2026-10-18) and
+[M6 as built](#m6-as-built-2026-10-18) after the milestones); M7 is still the plan. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -236,7 +237,7 @@ hero (`_freeze` today stops the whole world). Solo keeps the real pause.
 ends it for everyone. Two players pressing E at the elevator in the same frame produce one floor change.
 *Playable:* **a full contract online**, from the board to the invoice, for a crew that started together.
 
-### M6 Join mid-contract and seat handover *(2 sessions)* — **Risk**
+### M6 Join mid-contract and seat handover *(2 sessions)* — **Risk** — built, see [M6 as built](#m6-as-built-2026-10-18)
 Its own milestone: it needs everything above, and it is the part the user decided most recently.
 - **Which AI gets replaced** *(proposal)*: first an AI already playing the joiner's character, then the **living**
   AI with the most HP (tie: lower seat), and a downed AI only if none is alive. **No AI left → the join is refused
@@ -1180,6 +1181,192 @@ the floor checksum).
 5. **Test pattern.** `test_net_m5_*` drive whole contracts through the game's own keys in about 20 s; `NetGameTest.place_hero`,
    `cell_at`, `invoice_text` / `ledger_text` (canonical JSON) and the reload-safe getters are there for the late-join test.
 
+### M6 as built (2026-10-18)
+One session. Everything in M6's "done when" passes under `off` and `coast`, and the run is playable as the plan says:
+**drop-in, drop-out co-op**. A player who joins a crew on the job sees "Clocking in..." until the crew is on a running floor,
+then arrives in one of the AI's seats: the same hero node becomes their character at full health, with the AI's spells,
+charges and spot, and every screen says "<name> takes over Gasket's seat." A fourth player is told "Crew is full"; a player
+who leaves gives the seat back to the AI (M2b).
+
+**Files.** `scripts/net/`: `net_join.gd` (new: `NetJoin`, child `Session/Join`, `Session.join`: the joiner's wait, the floor
+it is sent onto, the checksum check and the late-join snapshot), `seat_handover.gd` (`choose_seat` / `pick_seat`, `take`,
+`take_local`, `hero_state` / `apply_state`, `apply_table` / `table`, the `to_player` signal, `seat.take`, `kind` in
+`history`), `net_session.gd` (a hello mid-job is admitted as a joiner instead of refused; `seats_free()`; the `join` child),
+`crew_flow.gd` (`is_joining`; joiners are skipped by every wait and get none of the barrier's events, `_to_members`;
+`job_ended` / `host_job_ended`; `floor_n` / `floor_seats` / `note_floor`; `join_floor`), `net_snapshot.gd` (`seat_taken`, the
+epoch on every sample and `epoch_current`), `net_codec.gd` / `net_hero_state.gd` (the epoch in the flags byte),
+`net_world.gd` (`keyframe`, `runtime_spawns`, `apply_spawns`, `apply_keyframe`; a quiet spawn replay; a monster spawned
+outside a gate no longer errors on its missing `from_gate` meta), `net_objects.gd` and `net_status.gd` (`late_join_state` /
+`apply_late_join`), `net_registry.gd` (`seed_top`, set by `NetFloor.assign_ids`), `net_events.gd` (`KIND_SEAT_TAKE`,
+`LATE_JOIN`). Gameplay: `Hero.become(..., full)` (a joiner arrives at 100%, standing even from downed),
+`Ledger.mirror_all`. UI: `scripts/ui/clock_in_slip.gd` (new: `ClockInSlip`, FORM 12-C "Clocking in..."). Game: `game.gd`
+(the joiner's path: `_on_join_changed`, `_join_floor`, `_joined_seats`, `_on_join_snapshot`, `_refresh_join_slip`; every
+machine's `_on_seat_to_player`; the host's `_on_join_ready` and `note_floor` at its barrier; joiners skipped in `_crew_seats`
+and `_assign_crew_spells`; a shared floor change no longer opens the license picker for a player who holds no spells; dev flags
+`--join-hold S`, `--shot-at clockin|takeover`; `_seat_notices` test seam). `run.ps1 -JoinLate S`. Test support:
+`NetGameTest` flag files (`raise_flag`, `wait_flag`, `clear_flag`: a player who has not joined cannot be sent a command) and
+`living_text`. Tests: `test_net_m6_late_join`, `test_net_m6_join_flow` (4 processes), `test_net_m6_join_license`;
+`test_net_seats` (the seat order, `become(full)`), `test_net_codec` (the epoch), `test_net_contract` (late-join coverage), `test_forms` (the
+"Clocking in..." form).
+
+**Where a joiner can arrive (decided here).** The hello is admitted whenever the roster has room and the crew is on a job
+(`crew_state == "job"`; on the board it is M1's plain join). The joiner is a roster member with `joining` true and a seat
+that is still the AI's. Nobody waits for it (CrewFlow's license and barrier waits skip it) and it gets none of the barrier's
+events (`crew.job`, `crew.load`, `crew.next`, `crew.go`), so every floor built meanwhile builds its seat as the AI on every
+machine (`_crew_seats` skips joiners: the checksums agree). NetJoin sends it onto a floor only when the crew is on a RUNNING
+one: CrewFlow FLOOR, the hero sync live (the van arrival is over, so the AI is out of the van), the job not over, no exit
+taken. So:
+| The crew is... | The joiner |
+|---|---|
+| on the board | joins the board as in M1 (an ordinary member) |
+| signing licenses | waits ("signing licenses"); arrives on floor 1 after the van arrival; signs no license |
+| on a floor (after the van arrival) | arrives within a second or so |
+| in the van arrival | waits ("stepping out of the van") until it is over |
+| changing floors | waits ("riding the elevator"); arrives on the NEW floor once it has started (a build for the old floor is dropped: its ticket is stale) |
+| on the invoice | waits ("reading the invoice"); the next `crew.board` (anyone's Next contract) makes it an ordinary member on the board |
+| a host playing solo (no crew when it picked) | waits ("on a job alone"); starts together at the next board |
+An abandon sends the joiner to the board with everyone (`crew.board`); a joiner that leaves while waiting is simply
+forgotten; a joiner whose checksum differs is sent out with "Desync: different floor" as at a barrier.
+
+**Which AI.** `SeatHandover.choose_seat`, the plan's order: an AI already playing the joiner's character, then the LIVING AI
+with the most HP (absolute; tie: the lower seat), a downed AI only when none is alive. It is applied when the hello is
+admitted (the roster needs a seat) and AGAIN when the joiner is sent onto a floor (`join.go`), so the order holds at the
+moment the seat is reserved; the roster seat follows (`set_members`). Between floors (no heroes to look at) it is the lowest
+free seat. The joiner keeps its character id (Wick today; duplicates are fine).
+
+**The handover.**
+1. `join.go {ticket, job, floor, seat, seats, start_at, floor_start}`: the seat table is the one the host built THIS floor
+   with at its barrier (`CrewFlow.floor_seats`, after any departed player's seat went to the AI), with the joiner's seat as
+   its own hero. The joiner builds the floor from the seed exactly as at the barrier (dev flags included; the van parked and
+   skipped after the checksum), every hero a puppet of the host's stream (its own too: the AI still has it) and every
+   host-owned thing a copy, and takes the checksum.
+2. `join.built {ticket, sums}`, sent only once the joiner's clock has synced (a fast joiner builds before its first pong). The
+   host compares with ITS barrier checksum (`CrewFlow.local_sums`).
+3. On a match the host's game answers `built_ready` with `NetJoin.admit(peer, {contract})`: in ONE frame it takes the AI hero's
+   state (`SeatHandover.hero_state`: position, facing, slots, charges, cooldowns left, held slot, modifiers, fire, soak),
+   sends the snapshot to the joiner, then `SeatHandover.take`: the epoch goes up, `to_player` re-kits the same node as the
+   joiner's character at full health and frees the `AllyBrain` (the AI stops at this tick), NetSnapshot makes the hero a
+   puppet of the joiner's stream, every other client gets `seat.take {seat, peer, character, epoch, state}`, and the roster
+   entry becomes an ordinary member (`joining` false, `spells` the AI's, so the next floor's build agrees everywhere).
+4. The joiner applies the snapshot in order: the floor clock first (`CrewFlow.join_floor`: one jump of `GameWorld.time`, then
+   the slew), the seat table, the game's part (`snapshot_received`: the objective mirror, every other seat's kit and player
+   name as it is NOW), the other heroes' states, the gone ids, runtime monsters, the keyframe, the employees' wait spots,
+   pickups, dents, statuses, the Ledger, and last its own seat (`take_local`: the same re-kit, then the hero is live here with
+   the handed-over state). The floor starts on the next frame (`floor_started`, start_at is in the past); control comes back
+   then.
+**The ownership epoch** rides every hero sample in the flags byte's free high nibble (bits 4-7, mod 16: no extra byte, the
+24 / 40-byte packets are unchanged). A receiver drops a sample from an OLDER epoch than it knows for that seat (wrap-aware,
+`NetSnapshot.epoch_current`); a newer one is taken (the reliable handover event is behind it). The host also still takes a
+client's state only for the seat that client owns. On a handover every other screen empties the puppet's buffer.
+
+**The late-join snapshot (`join.snapshot`, one reliable event).**
+| Part | What |
+|---|---|
+| `start_at`, `floor_start`, `at`, `job` | the floor clock and the moment (every time below is on it) |
+| `seats` | seat -> [owner, epoch] |
+| `kits`, `heroes` | each seat's kit and player name; every other hero's position, facing, HP, downed, slots, charges, held slot |
+| `gone` | the seed-built ids (ID_BASE .. `NetRegistry.seed_top`) gone on the host: `die` (show it dead: a closed gate, a broken prop or crate, a lost employee) or `free` (remove it quietly: a dead monster, an extracted employee, an opened mail box, a used pickup) |
+| `spawns` | every runtime monster alive: a quiet `world.spawn` replay (no burst); a runtime monster the joiner heard spawn but that is not listed died before the snapshot and is removed |
+| `world` | a full NetWorldCodec section of every surviving monster, employee and hellgate (`NetWorld.keyframe`, no budget); it goes into the puppets' buffers (not the stream's delay) and the positions are set at once |
+| `waits` | the employees told to wait: their wait spots |
+| `objects` | every pickup on the floor (an `obj.pickup` replay with charges and age; a seed-built one keeps its id) and every dented prop's HP |
+| `status` | every live status as its owner last announced it: `[id, mods, burn, soak]` |
+| `ledger` | every Ledger line (`Ledger.mirror_all` replaces the mirror: lines that came before the snapshot are in it) |
+| `take` | the joiner's own seat: seat, character, epoch, the hero's state |
+| `contract` (the game's) | `ContractSession.mirror_state()` |
+Not in it, as planned: scheduled effects in flight and monsters' wind-ups (under 2 s; a wind-up in progress is simply not
+resolved on the joiner), grime decals. Events about the floor that reach the joiner before the snapshot (it is in the roster
+while it builds) are harmless: the snapshot is later on the same ordered channel and replaces or skips what they did.
+**Measured size** (as `var_to_bytes`, before the transport's header): 3.9 KB on floor 2 of `test_net_m6_late_join` (45
+keyframe entries, 5 gone ids, 2 runtime monsters, 2 Ledger lines), 2.8 KB at the start of a floor (`test_net_m6_join_flow`).
+The keyframe costs 16 / 15 / 7 bytes an entry; a gone id about 20; a Ledger line about 150. A worst floor (85 entries, every
+seed-built id gone, 40 Ledger lines) stays near 10 KB: one reliable message, which ENet fragments and Steam's 512 KB message
+limit should take whole (to confirm on real Steam, M7), so no fragmentation of our own was needed. **Ready to seat:** 47-62 ms (`off`), 127-171 ms (`coast`):
+one round trip plus a frame.
+
+**Events (all reliable; the protocol version did not change).**
+| Event | From -> to | Data |
+|---|---|---|
+| `join.wait` | host -> a joiner (on its hello, and whenever the reason changes) | `note` (what the crew is doing, for the form), `job`, `floor` |
+| `join.go` | host -> a joiner | `ticket`, `job`, `floor`, `seat`, `seats` (the barrier's table), `start_at`, `floor_start` |
+| `join.built` | joiner -> host | `ticket`, `sums` (NetFloor.checksum) |
+| `join.snapshot` | host -> the joiner | above |
+| `seat.take` | host -> every other client | `seat`, `peer`, `character`, `epoch`, `state` |
+| `sys.roster` entries gain | host -> crew | `joining` (true until the seat is taken; cleared by `crew.board` too) |
+`sys.refuse {reason: "That crew is already on a job"}` is no longer sent (the constant stays for the logs); "Crew is full" is
+unchanged. The lobby's `seats_free` is `NetSession.seats_free()` (every member holds a seat; 0 = full), published on every
+join and leave, and "Join a crew" already skips `seats_free == "0"` (M0).
+
+**UI.** "Clocking in..." is a white FORM 12-C on a clipboard (`ClockInSlip`, like the pause form): the crew ("host's crew"),
+the job (company and invoice number), the floor ("2 of 3"), the seat ("Gasket's, seat 3"), typed in as they become known, and
+one short line: what the crew is doing, "Building floor 2...", "Catching up with the crew...". Its only row is "Leave the
+crew" (Esc). Every screen shows "<name> takes over <character>'s seat." in the HUD's message line when a seat changes hands
+("You take over Gasket's seat." on the joiner's).
+
+**What the tests prove** (real-time processes; this machine's timings).
+- `test_net_m6_late_join` [off 31 s, coast 33 s] (3 processes): the host and c1 go down to floor 2 and play it for 15 s (two
+  monsters killed, a prop broken and one dented, a hellgate closed, an employee lost, two monsters spawned at run time, a
+  pickup dropped, the host armored, the AI in seat 3 hurt and given heal and vines); then c2 joins. c2 showed "Clocking in...";
+  its checksum is the host's floor-2 barrier checksum; its gone ids and its living host-owned actors equal the host's at the
+  snapshot (the runtime monsters included); it controls seat 3 (live, its controller on) where the AI stood (within 1 cm), at
+  100% HP, standing, as Wick, with the AI's spells and charges, 47-152 ms after reporting ready (limit 1 s); it shows the host's
+  armor, the pickup and the dent; the host's AllyBrain is gone and it shows seat 3 as c2's puppet (Wick, "c2", full HP); the
+  host, c1 and c2 each say who took Gasket's seat. A second later the living actors and the Ledger are equal line for line and
+  c2 shows the host's monsters within 1.2 units (the render delay); c2 walks and the host shows seat 3 where c2 has it (0.3).
+  c2 leaves: seat 3 is Gasket again on the host (AllyBrain, live) within a fraction of a second, and on c1.
+- `test_net_m6_join_flow` [off 16 s, coast 17 s] (4 processes): c2's connection opens and the host takes the elevator at once,
+  so c2's hello is admitted while the crew is LOADING floor 2: c2 is joining, floor 2 starts without waiting for it, c2's form
+  said the crew was riding the elevator, and it arrives on floor 2 (not 1) with the host's checksum, in seat 3. With three in,
+  c3's hello is refused "Crew is full", `seats_free` is 0, and nothing on the floor changes (owners, kits, names, epochs). c2
+  leaves (Gasket back, `seats_free` 1); the crew cashes out; c3 joins on the invoice: it waits ("reading the invoice"), builds
+  no floor and is not admitted to the finished job; the host's Next contract puts c1 and c3 on the same new board, c3 an
+  ordinary member.
+- `test_net_m6_join_license` [off 12 s, coast 13 s] (3 processes): c2 joins while the host and c1 are in their license checkouts: nobody
+  waits for it, floor 1 starts with seat 3 as Gasket, c2 is not sent in during the van arrival, then arrives on floor 1 with
+  the host's checksum (its van parked, the arrival skipped), in seat 3; it never opened a license checkout.
+- `test_net_seats`: the seat order on plain data (most HP, the tie, the joiner's character first, downed passed over unless all
+  are, the lowest free seat between floors, none when full); `become(..., full)` stands a downed hero up at 100%.
+- `test_net_codec`: the epoch survives every round trip (the packet sizes are unchanged).
+- `test_net_contract`: rule 7, late-join coverage (`NetEvents.LATE_JOIN` names a way for every replicated class; run against
+  tables that must fail). No allowlist was widened.
+- `test_forms`: the "Clocking in..." form (focus on its one row, values typed in, a dash for unknown, Leave the crew).
+- Unchanged and passing: every M0-M5 net test and the single-player suite. One flake seen: `test_net_m3_objects` [coast]
+  failed 2 of 21 runs on this build at "c1's second E told it to wait, on the host" (the employee's wait request is judged
+  from where c1 says it stands, next to a follower that is ~150 ms behind on c1's screen); the baseline (M5) passed 10 of 10,
+  and no M6 path runs in that test (no joiner, every epoch 0), so it is noted rather than changed.
+  Full run: **All 112 test(s) passed.**
+
+**Try it.** `.\run.ps1 -Crew 3 -JoinLate 25 --seed 13 --net-wait 2 --contract 1 --spells heal,corn` (add `-Link coast`): the
+host and Crew2 take the job; 25 s later the third window joins mid-floor, shows "Clocking in...", and takes over the AI's seat
+(every window says so). Close the third window: the AI takes the seat back. Start it again while the crew rides the elevator, or
+sits on the invoice, to see it wait. Screenshots: `-ShotDir <dir> --shot-at takeover --shot-after 2.5` (every window, 2.5 s
+after the handover; add `-Bot 3` to see the joiner walk) or `--shot-at clockin --join-hold 4` (the joiner's form).
+
+**Known gaps (left for later, on purpose).**
+1. **A joiner inherits the AI's spells** (the plan: no license mid-contract). The AI heroes cast nothing and usually hold no
+   spells, so a joiner usually arrives with empty slots until a pickup, a later contract's license, or the dev `--give-allies`.
+   A license on arrival (or giving the AI seats licenses) is a design call for the user.
+2. Scheduled effects in flight and monster wind-ups are not in the snapshot (planned: under 2 s); grime decals are missing;
+   an opened mail box's spill debris is not rebuilt (the box is just gone); the kill counter and logs start at the join.
+3. A joiner's build must reproduce the barrier exactly, dev flags included (`--spawn-near`, `--to-*`, `--drop-near` pickups are
+   placed next to the joiner's own hero, not the host's: their positions differ, which only a dev run notices). Real play has
+   none of them. A different checksum sends the joiner out with "Desync: different floor".
+4. A hard-crashed joiner is noticed after `CLIENT_SILENCE` (10 s), as for any client (M2 note 6).
+5. The epoch is mod 16 on the wire: more than 7 handovers of one seat while a stale packet is in flight would be misread; a
+   floor has a handful at most.
+6. Invites (`join_requested` mid-game) still leave the current session and join without asking (M7), but a crew on the job now
+   takes the invited player in.
+
+**Notes for M7.**
+1. **Steam checklist item 4** ("B joins mid-floor 2 and takes an AI seat; B quits and the AI takes it back") is now buildable;
+   check the lobby's `seats_free` filter there (a full crew must not be listed) and the snapshot's size over Steam's relays.
+2. **Character select** only has to set `Session.character_id`: the hello and the roster carry it, `choose_seat`'s first rule
+   (an AI already playing that character) and the re-kit (`CREW_LOOKS`) use it.
+3. **Voice debug per player**: a joiner builds its voice caster with the floor; nothing in M6 touches it.
+4. **Telemetry**: a join could log its wait, build and ready-to-seat times on the host (`NetJoin.admitted` has them).
+5. **Reuse**: a new replicated class needs a `NetEvents.LATE_JOIN` entry and, if it has state the seed does not rebuild, a
+   part in the snapshot (`late_join_state` / `apply_late_join` is the pattern in NetObjects and NetStatus).
+
 ---
 
 ## 3. Test strategy
@@ -1239,7 +1426,7 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 | M3 (built) | Size budget: the host's packet fits 1.2 KB by construction (test_net_contract); test_net_world_codec fills it with the worst floor 3 it finds (every actor alive and moving: 1194 B) |
 | M3 (built) | Carrier coverage for the host-owned world: every monster kind, hellgate, employee, priced prop, crate, mail box and pickup (NetWorldCodec field tables, NetEvents.WORLD_CARRIES) |
 | M4 (built) | Lint: an area loop over actors that calls `apply_damage`/`shove`/`set_modifier`/`heal` must ask `Combat.resolves` / `Net.resolves` (rule 6; no allowlist) |
-| M6 | Late-join coverage: every host-owned class declares how a joiner gets its state (keyframe, gone-id, or event replay) |
+| M6 (built) | Late-join coverage: every replicated class declares how a joiner gets its state (`NetEvents.LATE_JOIN`: keyframe, gone ids, an event replay or the seat handover); run against tables that must fail |
 
 ### Real Steam (manual checklist, two PCs and two accounts)
 1. Both on the same build; A: **Start a job**; B: **Join a crew** finds it. A different build is refused with a reason.

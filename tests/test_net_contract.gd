@@ -19,6 +19,9 @@ extends TestCase
 ##    team_actors / actors, the "actors" group) that calls a verb on them (apply_damage, shove, set_modifier, heal) must ask
 ##    who resolves each one (Combat.resolves / Net.resolves / Net.resolves_hit / Net.owns) in that loop: effects run on
 ##    every machine, and a verb applied by every machine lands once per machine. Run against loops that must fail too.
+## 7. Late-join coverage (M6): every replicated class (REPLICATED, and every class NetEvents.WORLD_CARRIES names) declares in
+##    NetEvents.LATE_JOIN how a player who joins a running floor gets its state (keyframe, gone ids, an event replay, the
+##    seat handover). A new replicated class without an entry would be wrong on a late joiner's screen.
 
 ## Gameplay scripts that aren't Actors but hold state that matters in co-op. A new one goes here.
 const NET_SCRIPTS := [
@@ -116,6 +119,7 @@ func setup() -> void:
 	_check_budget()
 	_check_area_loops(scripts)
 	_check_area_samples()
+	_check_late_join()
 	finish()
 
 
@@ -393,3 +397,34 @@ func _check_carriers() -> void:
 	check(_carrier_gaps(fake, {"carried": "x", "gone": "x"}, {"event_carried": "m"}).any(func(g: String) -> bool: return g.contains("gone")), "... a stale name")
 	check(_carrier_gaps(fake, {"carried": "x", "event_carried": "x"}, {"event_carried": "m"}).any(func(g: String) -> bool: return g.contains("one carrier")), "a var with two carriers is flagged")
 	eq(_carrier_gaps({"a": Net.OWNER}, {"a": "x"}, {}).size(), 0, "a carried OWNER var is clean")
+
+
+# --- 7. Late-join coverage (M6) ----------------------------------------------------------------------------
+
+## The problems with a late-join table against the replicated classes: a class with no entry, an entry with no way named, an
+## entry for a class nobody replicates.
+static func _late_join_gaps(classes: Array, table: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for p: String in classes:
+		if not table.has(p):
+			out.append("%s has no NetEvents.LATE_JOIN entry: say how a late joiner gets its state" % p)
+		elif not ["keyframe", "gone", "replay", "handover", "as "].any(func(w: String) -> bool: return str(table[p]).contains(w)):
+			out.append("%s: its LATE_JOIN entry names no way (keyframe, gone ids, replay, handover)" % p)
+	for p: String in table:
+		if not classes.has(p):
+			out.append("NetEvents.LATE_JOIN names %s, which is not replicated (stale?)" % p)
+	return out
+
+
+func _check_late_join() -> void:
+	var classes: Array = REPLICATED.keys()
+	for p: String in NetEvents.WORLD_CARRIES:
+		if not classes.has(p):
+			classes.append(p)
+	for g in _late_join_gaps(classes, NetEvents.LATE_JOIN):
+		_fail(g)
+	# Run against tables that must fail.
+	eq(_late_join_gaps(["a.gd", "b.gd"], {"a.gd": "keyframe"}).size(), 1, "a replicated class with no late-join entry is flagged")
+	eq(_late_join_gaps(["a.gd"], {"a.gd": "somehow"}).size(), 1, "an entry that names no way is flagged")
+	eq(_late_join_gaps(["a.gd"], {"a.gd": "gone ids", "z.gd": "replay"}).size(), 1, "a stale entry is flagged")
+	eq(_late_join_gaps(["a.gd"], {"a.gd": "replay of obj.x"}).size(), 0, "a covered class is clean")

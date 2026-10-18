@@ -41,6 +41,7 @@ static func assign_ids(root: Node, heroes: Dictionary) -> int:
 	for p in pickups_under(root):
 		NetRegistry.register(next, p)
 		next += 1
+	NetRegistry.seed_top = next
 	return actors
 
 

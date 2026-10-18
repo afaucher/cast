@@ -75,4 +75,30 @@ const WORLD_CARRIES := {
 ##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
 ##   cast, act (reliable, M4)  NetCasts: a cast (lands LEAD later everywhere) / a hero's attack, owner -> host -> others
 ##   st (reliable, M4)     NetStatus: an actor's modifiers, fire or soak, owner -> host -> others
+##   seat.take (reliable, M6)  host -> clients: a joiner took an AI's seat {seat, peer, character, epoch, state}
+##   join.* (reliable, M6) NetJoin: wait, go, built, snapshot (the late joiner's way onto a running floor)
 const KIND_SEAT_AI := "seat.ai"
+const KIND_SEAT_TAKE := "seat.take"
+
+## M6, late-join coverage (test_net_contract holds every replicated class to it): how a player who joins a running floor
+## gets each class's state. The joiner builds the floor from the seed (so everything SPAWN is there) and the host's
+## late-join snapshot (NetJoin) brings the rest:
+##   keyframe  a full world section of every surviving host-owned mover (NetWorld.keyframe), then the stream as usual
+##   gone      the seed-built ids that are gone on the host (dead, broken, opened, extracted, used): removed or shown dead
+##   replay    the events that made it (runtime spawns, pickups on the floor, statuses, dents), replayed once
+##   handover  the heroes: the seat table, each seat's kit and player, its state (NetJoin heroes + SeatHandover.take)
+## A new replicated class without an entry here fails the build: it would be wrong on a late joiner's screen.
+const LATE_JOIN := {
+	"res://scripts/heroes/hero.gd": "handover: kit, player name, owner and epoch per seat; position, HP, slots, charges, held slot (heroes); the joiner's own seat: SeatHandover.hero_state; statuses: replay",
+	"res://scripts/monsters/monster.gd": "keyframe (seed-built and runtime); gone ids; runtime spawns: replay of world.spawn; statuses: replay; wind-ups: skipped (under a second)",
+	"res://scripts/monsters/grunt.gd": "as monster.gd",
+	"res://scripts/monsters/archer.gd": "as monster.gd",
+	"res://scripts/monsters/brute.gd": "as monster.gd",
+	"res://scripts/monsters/swarmer.gd": "as monster.gd",
+	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
+	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
+	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",
+	"res://scripts/world/themes/breakable_crate.gd": "gone ids (broken)",
+	"res://scripts/contracts/mail_package.gd": "gone ids (opened: removed; its prize is a pickup, replayed)",
+	"res://scripts/spells/component_pickup.gd": "replay of obj.pickup for every pickup on the floor (charges and age); a used seed-built one: gone ids",
+}

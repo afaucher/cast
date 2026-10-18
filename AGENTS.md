@@ -26,7 +26,11 @@ elevator and van are first-to-choose and every floor change goes back through th
 extraction and "crew incapacitated" (from every hero's replicated `dead`) and its invoice is everyone's; there is no pause
 while crewed (Esc opens the menu, the tree runs: the floor clock and casts run on `host_time()`); any player's "Abandon
 contract" or "Next contract" takes the whole crew back to the host's board (`CrewFlow`, `crew.abandon` / `crew.again`); the
-host leaving ends the session for everyone (no host migration). Combat crosses owners (M4): a cast is an event that lands `NetCasts.LEAD` later on every machine
+host leaving ends the session for everyone (no host migration). A player can join a crew on the job (M6, `Session.join`):
+they wait at "Clocking in..." (a joining roster member nobody waits for) until the crew is on a running floor, build that floor
+as it was at its barrier (same checksum), get the host's late-join snapshot and take an AI's seat (`SeatHandover.take`: the same
+hero node, their character, full HP, the AI's spells and spot; hero snapshots carry an ownership epoch); a 4th gets "Crew is
+full"; leaving gives the seat back to the AI. Combat crosses owners (M4): a cast is an event that lands `NetCasts.LEAD` later on every machine
 (`Session.casts`, `SpellBook.apply`; scheduled effects take their start time as a `SPAWN` param), a hero's attack is
 replayed on its puppet everywhere (`act`), and every effect runs on every machine but each machine applies only what it
 RESOLVES: a hero's hits by its owner (the victim decides), anything else's hits by the attacker's machine
@@ -35,7 +39,8 @@ fires, soaks, heals, coffee) by the target's owner (`Net.resolves`), which annou
 wind-up is an event and each client resolves the strike on its own hero (`world.windup`, `Monster.net_strike`). A debug
 guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). A new `OWNER`
 var of `Hero` or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELDS`, `NetWorldCodec.*_FIELDS`,
-`NetEvents.CARRIES` or `NetEvents.WORLD_CARRIES`). Every change has to keep co-op possible:
+`NetEvents.CARRIES` or `NetEvents.WORLD_CARRIES`), and a new replicated class says how a late joiner gets its state
+(`NetEvents.LATE_JOIN`: keyframe, gone ids, an event replay or the seat handover). Every change has to keep co-op possible:
 1. **Declare authority.** A class with gameplay state has `net_fields()` classifying **every** script
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.

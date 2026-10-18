@@ -132,8 +132,46 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 	if a == null or not is_instance_valid(a) or a.dead or Net.owns(a):
 		return
 	stats["in"] = int(stats["in"]) + 1
-	var v: Variant = data.get("v")
-	match str(data.get("k", "")):
+	_show(a, str(data.get("k", "")), data.get("v"))
+
+
+# --- M6: a late joiner sees the statuses already running -----------------------------------------------------------
+
+## Host: every live status on the floor as the owners last announced it (the host's own actors as they are; a player's hero
+## as its copy shows it): [[id, mods, burn seconds, soak seconds]] for the actors that have any.
+func late_join_state() -> Array:
+	var out: Array = []
+	for id in NetRegistry.ids():
+		var a := NetRegistry.node(id) as Actor
+		if a == null or a.dead:
+			continue
+		var mods := a.modifiers_snapshot()
+		var burn := Burning.remaining(a)
+		var soak := Burning.soaked_left(a)
+		if not mods.is_empty() or burn > 0.0 or soak > 0.0:
+			out.append([id, mods, burn, soak])
+	return out
+
+
+## The late joiner: show them (each status's owner keeps announcing changes from here on, as for everyone).
+func apply_late_join(list: Array) -> void:
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 4:
+			continue
+		var a := NetRegistry.node(int(row[0])) as Actor
+		if a == null or not is_instance_valid(a) or a.dead or Net.owns(a):
+			continue
+		if not (row[1] as Dictionary).is_empty():
+			_show(a, "mods", row[1])
+		if float(row[2]) > 0.0:
+			_show(a, "burn", row[2])
+		if float(row[3]) > 0.0:
+			_show(a, "soak", row[3])
+
+
+func _show(a: Actor, kind: String, v: Variant) -> void:
+	match kind:
 		"mods":
 			var had_root := a.has_modifier("vines")
 			a.net_set_modifiers(v as Dictionary if v is Dictionary else {}, GRACE)

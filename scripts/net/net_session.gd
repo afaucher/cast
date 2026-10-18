@@ -25,8 +25,9 @@ extends Node
 ## free seat. `character` is each player's character id (the default character until a character select sets
 ## `character_id`). Same list on every machine (the host broadcasts it).
 ## The shared run (CrewFlow, M1) adds the fields "signed", "spells" and "ready" to an entry through set_members();
-## kick() sends a member out with a reason. A crew on a job (crew_state "job") refuses new hellos with JOB_RUNNING
-## until M6 brings joining mid-contract.
+## kick() sends a member out with a reason. M6: a hello while the crew is on a job (crew_state "job") is admitted as a
+## JOINING member ("joining" true, the seat chosen by SeatHandover.choose_seat: one of the AI's) that NetJoin brings onto
+## the next running floor; the 4th is still refused with "Crew is full" (and the lobby's seats_free is 0 by then).
 ##
 ## LEAVING. A client leaves: the host drops it from the roster. The host leaves (or dies, or goes silent for
 ## HOST_SILENCE): every client's session ends with "The host clocked out". No host migration.
@@ -38,6 +39,8 @@ extends Node
 ## THE WORLD (M3): `world` (NetWorld) streams the host's monsters, hellgates and employees in the same packets and shows
 ## them as puppets on clients; `objects` (NetObjects) arbitrates props, crates, mail, pickups, employee requests, the
 ## Ledger and the exits (requests from players, one decision on the host).
+## JOINING MID-CONTRACT (M6): `join` (NetJoin) brings a player who joined a crew on the job onto a running floor (the
+## late-join snapshot) and into an AI's seat (SeatHandover).
 ##
 ## CLOCK: NetClock, pinged over unreliable packets; `host_time()` is the shared clock.
 ## TELEMETRY: NetTelemetry, one row a second, clients' rows collected on the host.
@@ -88,6 +91,7 @@ const CONNECT_FAILED := "Couldn't reach the crew"
 const NO_ANSWER := "The crew never answered"
 const NO_CREWS := "No crews hiring right now"
 const STEAM_OFF := "Steam not running"
+## (M0-M5: a crew on a job refused new hellos with this; from M6 a hello mid-job is admitted as a joiner. Kept for the logs.)
 const JOB_RUNNING := "That crew is already on a job"
 const DESYNC := "Desync: different floor"
 
@@ -132,6 +136,8 @@ var objects: NetObjects = null
 var casts: NetCasts = null
 ## Statuses (modifiers, fires, soaks) from their owners to every screen (M4b): child "Status".
 var status: NetStatus = null
+## Joining mid-contract (M6): the late-join snapshot and the way onto a running floor: child "Join".
+var join: NetJoin = null
 ## Hits this machine's own heroes took since the last telemetry row (the `hits` column, M4).
 var hits_taken := 0
 var clock := NetClock.new()
@@ -177,6 +183,9 @@ func _ready() -> void:
 	status = NetStatus.new()
 	status.name = "Status"
 	add_child(status)
+	join = NetJoin.new()
+	join.name = "Join"
+	add_child(join)
 	lobby = SteamLobby.new()
 	lobby.name = "Lobby"
 	add_child(lobby)
@@ -641,24 +650,35 @@ func _host_sys(from: int, kind: String, data: Dictionary) -> void:
 	if roster.size() >= MAX_CREW:
 		_refuse(from, name_, CREW_FULL)
 		return
-	if crew_state == "job":
-		_refuse(from, name_, JOB_RUNNING)   # joining mid-contract is M6; until then a crew on a job is closed
-		return
+	var character := str(data.get("character", DEFAULT_CHARACTER))
 	var seat := 1
 	var taken: Array[int] = []
 	for e: Dictionary in roster.values():
 		taken.append(int(e["seat"]))
 	while taken.has(seat):
 		seat += 1
+	# M6: mid-job the joiner takes one of the AI's seats (the plan's order when a floor is running; NetJoin decides again
+	# when it sends the joiner onto a floor, so the order is applied at the moment the seat changes hands).
+	var joining := crew_state == "job"
+	if joining and seats != null:
+		var free: Array = []
+		for s in range(1, MAX_CREW + 1):
+			if not taken.has(s):
+				free.append(s)
+		var chosen := seats.choose_seat(character, free)
+		if chosen != 0:
+			seat = chosen
 	if name_ == "":
 		name_ = "Crew %d" % seat
-	roster[from] = {"peer": from, "seat": seat, "name": name_, "character": str(data.get("character", DEFAULT_CHARACTER)),
+	roster[from] = {"peer": from, "seat": seat, "name": name_, "character": character,
 		"steam_id": int(data.get("steam_id", 0))}
+	if joining:
+		roster[from]["joining"] = true
 	wire.send_event(from, "sys.welcome", {"seat": seat, "peer": from, "entries": crew(),
 		"host_unix": Time.get_unix_time_from_system() - host_time()})
 	_to_crew("sys.roster", {"entries": crew()})
 	_publish_lobby()
-	_log("%s clocked in (peer %d, seat %d)" % [name_, from, seat])
+	_log("%s clocked in (peer %d, seat %d%s)" % [name_, from, seat, ", joining the job" if joining else ""])
 	status_changed.emit("%s clocked in." % name_)
 	peer_joined.emit(from)
 	roster_changed.emit()
@@ -844,10 +864,16 @@ func _telemetry_row() -> void:
 
 # --- Lobby data, names, flags ------------------------------------------------------------------------
 
+## Seats a joiner could still take (M6: every member holds a seat, the rest are the AI's): what the lobby publishes, so
+## "Join a crew" only finds crews with an AI seat left; 0 = the crew is full.
+func seats_free() -> int:
+	return maxi(MAX_CREW - roster.size(), 0)
+
+
 func _publish_lobby() -> void:
 	if transport != Transport.STEAM or not hosting:
 		return
-	lobby.set_data("seats_free", str(maxi(MAX_CREW - roster.size(), 0)))
+	lobby.set_data("seats_free", str(seats_free()))
 	lobby.set_data("state", crew_state)
 
 

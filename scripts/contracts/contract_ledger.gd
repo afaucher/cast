@@ -54,6 +54,18 @@ func mirror_line(line: Dictionary) -> void:
 	changed.emit()
 
 
+## Every line the host has written so far, at once (M6: a late joiner's Ledger, from the host's snapshot). Replaces what
+## this mirror held (lines that arrived before the snapshot are in it too). No line_added: nothing new was earned.
+func mirror_all(all_lines: Array, value: int, floor_n: int) -> void:
+	lines.clear()
+	for l: Variant in all_lines:
+		lines.append((l as Dictionary).duplicate())
+	contract_value = maxi(0, value)
+	floor_number = floor_n
+	active = true
+	changed.emit()
+
+
 ## Money earned (an objective met, an employee extracted, ...).
 func earn(label: String, amount: int, who: Node = null) -> void:
 	_add("earn", label, amount, who)

@@ -37,8 +37,14 @@ extends Node
 ##             crew.board brings everyone (with `note`, e.g. "c1 abandoned the job", shown on every board).
 ##
 ## The host is the only one that decides; clients only draw what they are told. A client that leaves, or is
-## sent out, just stops being waited for. Joining mid-contract is M6 (until then a crew on a job is closed to
-## new hellos: NetSession.JOB_RUNNING).
+## sent out, just stops being waited for.
+##
+##   JOINING   (M6) a player who says hello while the crew is on a job is in the roster with `joining` true until it has
+##             taken a seat (NetJoin): nobody waits for it (no license to sign, no barrier to report to), it gets none of the
+##             barrier's events (crew.job / load / next / go: it would build a floor it is not on), and the game builds
+##             its seat as the AI's. It arrives on a running floor through NetJoin's late-join snapshot; a joiner during a
+##             floor change waits for the next floor to start, one on the invoice waits for the next board (which every
+##             member gets, and which makes it an ordinary member).
 
 signal board_changed()                     ## the host's board seed or highlighted card
 signal job_changed()                       ## the host took a job: open the license checkout
@@ -80,6 +86,12 @@ var debug_seed_shift := 0
 var first_adjust := 0.0
 ## The barrier in progress is a floor change (the elevator down, M3), not the contract's first floor.
 var floor_change := false
+## Host (M6): the job is over (the invoice is up): a joiner waits for the next board.
+var job_ended := false
+## Host (M6): the floor number and the seat table this floor was built with at its barrier ([{seat, character, peer, name}],
+## after any seat a departed player had went back to the AI), so a late joiner builds the same floor (the same checksum).
+var floor_n := 0
+var floor_seats: Array = []
 
 var _session: NetSession = null
 var _sums: Dictionary = {}          ## host: peer -> checksum dict
@@ -115,6 +127,9 @@ func reset() -> void:
 	desyncs = []
 	first_adjust = 0.0
 	floor_change = false
+	job_ended = false
+	floor_n = 0
+	floor_seats = []
 	_sums = {}
 	_local_signed = false
 	_local_ready = false
@@ -144,12 +159,13 @@ func host_board(seed_value: int, highlight: int = 0, note: String = "") -> void:
 		return
 	phase = BOARD
 	floor_change = false
+	job_ended = false
 	board_seed = seed_value
 	board_hi = highlight
 	board_note = note
 	job = {}
 	_clear_run_state()
-	_session.set_members(0, {"signed": false, "ready": false, "spells": []})
+	_session.set_members(0, {"signed": false, "ready": false, "spells": [], "joining": false})   # (M6: a joiner is a member now)
 	_session.send_event(0, "crew.board", {"seed": seed_value, "hi": highlight, "note": note})
 	board_changed.emit()
 	waiting_changed.emit()
@@ -170,11 +186,12 @@ func host_pick(run: ContractRun) -> void:
 		return
 	phase = LICENSE
 	floor_change = false
+	job_ended = false
 	board_note = ""
 	job = {"archetype": run.archetype_id, "seed": run.seed, "difficulty": run.difficulty}
 	_clear_run_state()
 	_session.set_members(0, {"signed": false, "ready": false, "spells": []})
-	_session.send_event(0, "crew.job", job)
+	_to_members("crew.job", job)
 	job_changed.emit()
 	waiting_changed.emit()
 	_check_progress()
@@ -190,8 +207,39 @@ func host_next_floor() -> void:
 	_clear_run_state()
 	_local_signed = true
 	_session.set_members(0, {"ready": false})
-	_session.send_event(0, "crew.next", {})
+	_to_members("crew.next", {})
 	waiting_changed.emit()
+
+
+## Host (M6): the job ended (the invoice is up). A joiner waits for the next board.
+func host_job_ended() -> void:
+	if _hosting():
+		job_ended = true
+
+
+## Host (M6): the floor that just passed its barrier: its number and the seat table it was built with.
+func note_floor(n: int, seats: Array) -> void:
+	floor_n = n
+	floor_seats = seats.duplicate(true)
+
+
+## The late joiner (M6, NetJoin): this machine is on the crew's running floor now. The job, and the floor clock as crew.go
+## would have set it (one jump of GameWorld.time, then the slew); the floor starts on the next frame (start_at has passed).
+func join_floor(the_job: Dictionary, start: float, epoch: float) -> void:
+	var sums := local_sums   # (this machine's own checksum of the floor it built: kept)
+	job = the_job.duplicate()
+	floor_change = false
+	board_note = ""
+	_clear_run_state()
+	local_sums = sums
+	_local_signed = true
+	_local_ready = true
+	_receive_go(start, epoch)
+
+
+## True for a roster entry that is still joining (M6): nobody waits for it.
+static func is_joining(e: Dictionary) -> bool:
+	return bool(e.get("joining", false))
 
 
 ## The contract this machine builds from the job (null before one is known). debug_seed_shift applies here only.
@@ -264,7 +312,7 @@ func waiting_names() -> Array[String]:
 	if key == "" or _session == null:
 		return out
 	for e: Dictionary in _session.crew():
-		if int(e["peer"]) != _session.local_id() and not bool(e.get(key, false)):
+		if int(e["peer"]) != _session.local_id() and not bool(e.get(key, false)) and not is_joining(e):
 			out.append(str(e["name"]))
 	return out
 
@@ -321,10 +369,11 @@ func _host_event(from: int, kind: String, data: Dictionary) -> void:
 			_session.set_members(from, {"ready": true})
 			_check_progress()
 		"crew.abandon":
-			if phase != BOARD and phase != IDLE:
+			if phase != BOARD and phase != IDLE and not is_joining(_entry(from)):
 				abandon_requested.emit(from)
 		"crew.again":
-			again_requested.emit(from)
+			if not is_joining(_entry(from)):
+				again_requested.emit(from)
 
 
 func _client_event(kind: String, data: Dictionary) -> void:
@@ -365,9 +414,10 @@ func _client_event(kind: String, data: Dictionary) -> void:
 			_receive_go(float(data.get("start_at", 0.0)), float(data.get("floor_start", 0.0)))
 
 
-## Host: a new member on the board gets the board (the offers and the highlighted card) at once.
+## Host: a new member on the board gets the board (the offers and the highlighted card) at once. (M6: one who joined
+## mid-job is NetJoin's until the next board.)
 func _on_peer_joined(peer: int) -> void:
-	if _hosting() and phase == BOARD and board_seed >= 0:
+	if _hosting() and phase == BOARD and board_seed >= 0 and not is_joining(_entry(peer)):
 		_session.send_event(peer, "crew.board", {"seed": board_seed, "hi": board_hi, "note": board_note})
 
 
@@ -391,9 +441,16 @@ func _clear_run_state() -> void:
 
 func _all_flag(key: String) -> bool:
 	for e: Dictionary in _session.roster.values():
-		if not bool(e.get(key, false)):
+		if not bool(e.get(key, false)) and not is_joining(e):
 			return false
 	return not _session.roster.is_empty()
+
+
+## Host: an event to every crew member that is not still joining (M6: the barrier's events are for the crew on the job).
+func _to_members(kind: String, data: Dictionary) -> void:
+	for p: int in _session.roster:
+		if p != 1 and not is_joining(_entry(p)):
+			_session.send_event(p, kind, data)
 
 
 func _check_progress() -> void:
@@ -404,7 +461,7 @@ func _check_progress() -> void:
 		LICENSE:
 			if _all_flag("signed"):
 				phase = LOADING
-				_session.send_event(0, "crew.load", {})
+				_to_members("crew.load", {})
 				load_requested.emit()
 				waiting_changed.emit()
 		LOADING:
@@ -441,7 +498,7 @@ func _judge() -> void:
 		_sums.erase(p)
 		_session.kick(p, NetSession.DESYNC)
 	for p: int in _session.roster.keys():
-		if not _sums.has(p):
+		if not _sums.has(p) and not is_joining(_entry(p)):
 			return   # someone is still building
 	_send_go()
 
@@ -453,7 +510,7 @@ func _send_go() -> void:
 	floor_known = true
 	phase = PENDING
 	_started = false
-	_session.send_event(0, "crew.go", {"start_at": start_at, "floor_start": floor_start})
+	_to_members("crew.go", {"start_at": start_at, "floor_start": floor_start})
 	waiting_changed.emit()
 
 

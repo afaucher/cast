@@ -55,7 +55,7 @@ var active := false
 var local_seat := 0
 ## Counters (tests and the report): packets and bytes sent and received on T_SNAP, entries refused as not newer.
 var stats := {"out_packets": 0, "out_bytes": 0, "out_max": 0, "world_out_bytes": 0, "packet_max": 0, "in_world_bytes": 0, "in_packets": 0, "in_bytes": 0, "in_entries": 0,
-	"in_foreign": 0, "since": 0.0}
+	"in_foreign": 0, "in_stale_epoch": 0, "since": 0.0}
 
 var _session: NetSession = null
 var _live: Dictionary = {}        ## seat -> Track (heroes this machine owns and streams)
@@ -99,7 +99,7 @@ func begin(heroes_by_seat: Dictionary, own_seat: int) -> void:
 
 func _reset_stats() -> void:
 	stats = {"out_packets": 0, "out_bytes": 0, "out_max": 0, "world_out_bytes": 0, "packet_max": 0, "in_world_bytes": 0, "in_packets": 0, "in_bytes": 0, "in_entries": 0, "in_foreign": 0,
-		"since": _now()}
+		"in_stale_epoch": 0, "since": _now()}
 
 
 ## Forget the floor (the scene is going, or the session ended).
@@ -129,6 +129,41 @@ func set_active(on: bool) -> void:
 		tr.vel = Vector2.ZERO
 	for seat: int in _puppets:
 		(_puppets[seat] as Puppet).applied = false
+
+
+## M6: `seat` changed hands to `peer` (SeatHandover.take / take_local / seat.take). On the joiner (peer is this machine) the
+## puppet becomes its own live hero; on the host the AI's live hero becomes a puppet of the joiner's stream; anywhere else
+## the puppet stays a puppet and forgets the old owner's samples (the epoch already drops any still on their way).
+func seat_taken(seat: int, peer: int) -> void:
+	if _session == null:
+		return
+	if peer == _session.local_id():
+		var pp: Puppet = _puppets.get(seat)
+		_puppets.erase(seat)
+		var hero: Hero = pp.hero if pp != null else NetRegistry.hero(seat)
+		if hero == null or not is_instance_valid(hero):
+			return
+		Net.release_copy(hero)
+		hero.reset_physics_interpolation()
+		var tr := Track.new()
+		tr.hero = hero
+		_live[seat] = tr
+		local_seat = seat
+		return
+	if _live.has(seat):
+		var tr: Track = _live[seat]
+		_live.erase(seat)
+		if not is_instance_valid(tr.hero):
+			return
+		Net.make_puppet(tr.hero)
+		var pp := Puppet.new()
+		pp.hero = tr.hero
+		_puppets[seat] = pp
+		return
+	var old: Puppet = _puppets.get(seat)
+	if old != null:
+		old.interp.clear()
+		old.applied = false
 
 
 ## Host: the player of `seat` left (SeatHandover). The puppet becomes a live hero at the last state received: it
@@ -264,6 +299,7 @@ func _live_state(seat: int, now: float) -> NetHeroState:
 		st.vel = Vector2.ZERO
 	tr.sent_pos = st.pos
 	st.tp = tr.tp
+	st.epoch = _session.seats.epoch_of(seat) & 15 if _session.seats != null else 0
 	NetCodec.read_hero(tr.hero, st)
 	var aim := _aim_of(tr) - st.pos
 	st.aim = Vector2(clampf(aim.x, -NetCodec.AIM_MAX, NetCodec.AIM_MAX), clampf(aim.z, -NetCodec.AIM_MAX, NetCodec.AIM_MAX))
@@ -397,7 +433,19 @@ func _on_packet(from: int, type: int, _seq: int, stamp_ms: int, payload: PackedB
 		if _session.hosting and _session.seats.owner_of(st.seat) != from:
 			stats["in_foreign"] = int(stats["in_foreign"]) + 1
 			continue
+		# M6: a state the seat's PREVIOUS owner sent (an older epoch, before a handover) is dropped everywhere. A newer one
+		# is taken: the reliable handover event is on its way behind it.
+		if _session.seats != null and not epoch_current(st.epoch, _session.seats.epoch_of(st.seat)):
+			stats["in_stale_epoch"] = int(stats.get("in_stale_epoch", 0)) + 1
+			continue
 		(_puppets[st.seat] as Puppet).interp.push(st, arrival)
+
+
+## True when a sample stamped with `sample_epoch` (mod 16) is not from an earlier owner than the seat's `known` epoch: the
+## same epoch, or up to 7 handovers newer (wrap-aware, like the wire's sequence numbers).
+static func epoch_current(sample_epoch: int, known: int) -> bool:
+	var ahead := (sample_epoch - known) & 15
+	return ahead < 8
 
 
 func _now() -> float:

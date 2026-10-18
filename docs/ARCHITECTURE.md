@@ -5,8 +5,10 @@ one PC, one mic, one keyboard/mouse player plus AI allies. Online co-op is being
 (`docs/design/networking-build-plan.md`); M0 (transport, lobby, crew roster, clock, telemetry) and M1 (the shared run:
 the host's board and job, each player's license checkout, the same floor from the seed behind a load barrier, the floor
 clock), M2 (hero sync) and M3 (the host's world: monsters, hellgates, employees, props, crates, mail, pickups, the Ledger, the
-exits) and M4 (combat across machines: casts and attacks as events, hits resolved by the victim or the attacker, statuses by
-their owner, monster wind-ups resolved on the victim's machine, the OWNER-write guard) are in; M5 (the contract flow polish) is next.
+exits), M4 (combat across machines: casts and attacks as events, hits resolved by the victim or the attacker, statuses by
+their owner, monster wind-ups resolved on the victim's machine, the OWNER-write guard), M5 (the whole contract online: exits,
+floor changes, the shared invoice, pause and abandon) and M6 (joining a crew on the job: a late joiner takes an AI's seat) are
+in; M7 (polish, real Steam) is next.
 
 Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 **kinematic on a hex heightfield** (no physics bodies for terrain or actors).
@@ -85,7 +87,8 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_snapshot.gd` (`NetSnapshot`, child `Session/Snap`, `Session.snap`) | hero sync (M2): streams the heroes this machine owns at 30 Hz (`NetWire.T_SNAP`, unreliable) and shows everyone else's as puppets |
 | `net_codec.gd` (`NetCodec`), `net_hero_state.gd` (`NetHeroState`) | the hand-packed hero snapshot (16 bytes a hero) and how a hero's OWNER fields go in and out; `HERO_FIELDS` is what the contract test holds it to |
 | `net_interp.gd` (`NetInterp`) | the buffer behind a puppet: Hermite on position and velocity, about 100 ms behind `host_time()`, an adaptive delay, extrapolation up to 120 ms, teleports never blend |
-| `seat_handover.gd` (`SeatHandover`, child `Session/Seats`, `Session.seats`) | who owns each seat's hero; a dropped player's seat goes back to the AI as the seat's original character (`to_ai`) |
+| `seat_handover.gd` (`SeatHandover`, child `Session/Seats`, `Session.seats`) | who owns each seat's hero and its ownership epoch (in every hero snapshot); a dropped player's seat goes back to the AI as the seat's original character (`to_ai`); M6: which AI seat a joiner takes (`choose_seat`) and the handover to it (`take`, `to_player`) |
+| `net_join.gd` (`NetJoin`, child `Session/Join`, `Session.join`) | joining mid-contract (M6): a joiner waits (`join.wait`) until the crew is on a running floor, builds that floor as it was at its barrier (`join.go`), reports its checksum (`join.built`) and gets the late-join snapshot (`join.snapshot`: the seat table, gone ids, a world keyframe, runtime spawns, pickups, dents, statuses, the Ledger, its own seat's state) |
 | `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (runtime spawns and pickups get host ids from 10000); the tables of OWNER fields an event carries instead of a snapshot (`CARRIES` for heroes, `WORLD_CARRIES` for the host-owned classes) |
 | `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events |
 | `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice |
@@ -148,6 +151,17 @@ else's hits by the attacker's machine (a client's hit, shove or modifier on the 
 strike on a client's hero is resolved on that client when its screen shows the strike (`world.windup`, `Monster.net_strike`); a
 shoved hero's own machine sees it hit a prop (`Net.hit_object`). In debug builds a write to a copy's `hp`/`dead` outside the net
 layer raises a script error (`Net.guard_write`, layer 5).
+
+**Joining mid-contract (M6).** A hello while the crew is on a job is admitted as a JOINING roster member (`joining` true, an AI's
+seat): nobody waits for it (`CrewFlow` skips it at the license and the barrier and sends it none of their events) and its seat
+stays the AI's on every floor built meanwhile. `Session.join` holds it at "Clocking in..." (`ClockInSlip`) until the crew is on
+a running floor (a floor change: the next floor; the invoice: the next board, which makes it an ordinary member), then sends
+the floor and the seat table the host built it with at its barrier (`CrewFlow.floor_seats`), so the joiner's fresh build has
+the barrier's checksum. On a match the host sends the late-join snapshot and hands the seat over (`SeatHandover.take`): the
+SAME hero node becomes the joiner's character at full health (`Hero.become(..., full)`), the AllyBrain stops, the epoch goes
+up (hero snapshots carry it, `NetCodec` flags bits 4-7, so a sample from the old owner is dropped), and everyone sees "<name>
+takes over Gasket's seat". Leaving is the M2 drop. Every replicated class names how a joiner gets its state in
+`NetEvents.LATE_JOIN` (test_net_contract).
 
 RPC endpoints live under the autoload (`/root/Session/Wire`), never in `game.tscn`, because every floor change is a
 scene reload and an RPC needs the same node path on every peer. `Session` runs with process mode ALWAYS, so pausing

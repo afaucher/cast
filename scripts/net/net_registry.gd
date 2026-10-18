@@ -14,12 +14,16 @@ const RUNTIME_BASE := 10000
 
 static var _nodes: Dictionary = {}       ## id -> Node
 static var _next_runtime := RUNTIME_BASE
+## M6: the first id past the seed-built ones (NetFloor.assign_ids): ids ID_BASE..seed_top-1 were built from the seed on
+## every machine, so the ones that are gone on the host are what a late joiner removes from its own fresh build.
+static var seed_top := NetFloor.ID_BASE
 
 
 ## Forget everything (a new floor).
 static func clear() -> void:
 	_nodes.clear()
 	_next_runtime = RUNTIME_BASE
+	seed_top = NetFloor.ID_BASE
 
 
 ## Register `node` under `id` (also stamps its meta). Replaces whatever held the id.
