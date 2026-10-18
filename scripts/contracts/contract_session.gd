@@ -15,12 +15,14 @@ extends RefCounted
 
 const END_CASHED_OUT := "cashed_out"
 const END_INCAPACITATED := "incapacitated"
+## The meta a crew hero carries: the seat (1-3) it sits in. The carry is keyed by it, because two players may both play Wick.
+const CREW_SEAT_META := "crew_seat"
 
 var run: ContractRun
 var floor_number := 1
 var finished := false
 var end_reason := ""
-## hero display_name -> {"hp": float, "dead": bool}
+## crew seat (1-3) -> {"hp": float, "dead": bool}; a hero without a seat (tests, the arena) is keyed by its display_name
 var carry: Dictionary = {}
 ## floor -> {gates_total, gates_closed, origin, origin_closed, employees, extracted, lost, pest_spawned, pest_paid}
 var floors: Dictionary = {}
@@ -66,19 +68,25 @@ func state(f: int = -1) -> Dictionary:
 
 # --- HP / downed carry-over --------------------------------------------------------------
 
+## The key a hero's carry is filed under: its crew seat, else (a hero outside the crew) its name.
+static func carry_key(hero: Hero) -> Variant:
+	return hero.get_meta(CREW_SEAT_META, hero.display_name)
+
+
 func save_carry(heroes: Array[Hero]) -> void:
 	carry.clear()
 	for h in heroes:
 		if is_instance_valid(h):
-			carry[h.display_name] = {"hp": h.hp, "dead": h.dead}
+			carry[carry_key(h)] = {"hp": h.hp, "dead": h.dead}
 
 
 ## Put a hero back as the previous floor left them: same HP, and downed if they were downed.
 ## Returns true if the hero is downed.
 func apply_carry(hero: Hero) -> bool:
-	if not carry.has(hero.display_name):
+	var key: Variant = carry_key(hero)
+	if not carry.has(key):
 		return false
-	var c: Dictionary = carry[hero.display_name]
+	var c: Dictionary = carry[key]
 	if bool(c["dead"]):
 		hero.hp = 0.0
 		hero.die()

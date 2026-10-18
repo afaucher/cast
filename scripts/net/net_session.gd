@@ -30,7 +30,11 @@ extends Node
 ##
 ## LEAVING. A client leaves: the host drops it from the roster. The host leaves (or dies, or goes silent for
 ## HOST_SILENCE): every client's session ends with "The host clocked out". No host migration.
-## session_ended(reason) fires for every way a session (or an attempt at one) ends.
+## session_ended(reason) fires for every way a session (or an attempt at one) ends. A client that leaves mid-floor
+## also hands its seat's hero to the AI (SeatHandover, M2).
+##
+## HEROES (M2): `snap` (NetSnapshot) streams the heroes this machine owns and shows the others as puppets over
+## NetWire.T_SNAP; `seats` (SeatHandover) says who owns which seat and runs the hand-back to the AI.
 ##
 ## CLOCK: NetClock, pinged over unreliable packets; `host_time()` is the shared clock.
 ## TELEMETRY: NetTelemetry, one row a second, clients' rows collected on the host.
@@ -112,6 +116,10 @@ var wire: NetWire = null
 var lobby: SteamLobby = null
 ## The shared run (board, job, license checkout, floor barrier, floor clock): scripts/net/crew_flow.gd, child "Flow".
 var flow: CrewFlow = null
+## Who owns each seat's hero, and the handover to the AI when a player drops (scripts/net/seat_handover.gd), child "Seats".
+var seats: SeatHandover = null
+## Hero sync (M2): streams the heroes this machine owns and shows the others as puppets (scripts/net/net_snapshot.gd), child "Snap".
+var snap: NetSnapshot = null
 var clock := NetClock.new()
 var telemetry: NetTelemetry = null
 
@@ -137,6 +145,12 @@ func _ready() -> void:
 	flow = CrewFlow.new()
 	flow.name = "Flow"
 	add_child(flow)
+	seats = SeatHandover.new()
+	seats.name = "Seats"
+	add_child(seats)
+	snap = NetSnapshot.new()
+	snap.name = "Snap"
+	add_child(snap)
 	lobby = SteamLobby.new()
 	lobby.name = "Lobby"
 	add_child(lobby)

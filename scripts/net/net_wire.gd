@@ -25,7 +25,7 @@ const HEADER := 7
 const T_PING := 1
 const T_PONG := 2
 const T_ROW := 3          ## a client's telemetry row for the host's file
-const T_SNAP := 16        ## snapshots (M2/M3); the M0 tests stream numbered dummies on it
+const T_SNAP := 16        ## hero snapshots (M2: NetCodec, NetSnapshot; M3 appends the world); the M0 tests stream numbered dummies on it
 const T_TEST := 15        ## tests only
 
 var link := NetLink.new()

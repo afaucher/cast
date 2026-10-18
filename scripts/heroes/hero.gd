@@ -582,6 +582,56 @@ func _on_death() -> void:
 		tw.tween_property(_visual, "position:y", 0.3, 0.35)
 
 
+# --- Seat handover (docs/design/networking-build-plan.md M2b / M6) -----------------------------
+
+## This hero node becomes another character IN PLACE: the kit (stats, primary, secondary), the name, the colour and
+## the model change; the node, its position, its net id and everything that refers to it stay. HP keeps its
+## FRACTION (a downed hero stays downed). Used when a player drops and the AI takes the seat back as its original
+## character, and (M6) when a joiner takes over an AI. The one place a SPAWN field is written after the hero exists.
+func become(kit: String, new_name: String, color: Color, model: Node3D) -> void:
+	var fraction := clampf(hp / max_hp, 0.0, 1.0) if max_hp > 0.0 else 1.0
+	var was_dead := dead
+	cancel_draw()
+	if _swing_tween and _swing_tween.is_valid():
+		_swing_tween.kill()
+	for n: Node in [_visual, _bar, _name_label, _shield_icon, _shield_bubble, _charge_ring]:
+		if n != null and is_instance_valid(n):
+			remove_child(n)
+			n.queue_free()
+	_visual = null
+	_bar = null
+	_name_label = null
+	_shield_icon = null
+	_shield_bubble = null
+	_charge_ring = null
+	_charge_mat = null
+	_held_prop = null
+	_weapon = null
+	_body_mat = null
+	HeroKit.apply_to(self, kit)
+	display_name = new_name
+	hero_color = color
+	visual_override = model
+	if has_meta(Net.NAME_META):
+		remove_meta(Net.NAME_META)   # a seat the AI plays shows its character's name
+	_build_visuals()
+	dead = false
+	hp = max_hp * fraction
+	if was_dead:
+		hp = 0.0
+		dead = true
+		_on_death()
+	_refresh_bar()
+	_refresh_hold()
+
+
+## Show a player's name over this hero instead of the character's (an online crew: two players may both be Wick).
+func set_player_name(player_name: String) -> void:
+	set_meta(Net.NAME_META, player_name)
+	if _name_label != null:
+		_name_label.text = player_name
+
+
 # --- Visuals -------------------------------------------------------------------------------
 
 func _build_visuals() -> void:

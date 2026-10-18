@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ## - ids: every seed-built actor gets a net id in BUILD order (the order the scene tree holds them, which is the
 ##   order SiteBuilder.spawn created them). Heroes get theirs from their seat (1-3). Ids start at ID_BASE for
-##   everything else, so M3's runtime spawns can take 10000 and up.
+##   everything else, so M3's runtime spawns can take 10000 and up. The ids are kept in NetRegistry (id -> node).
 ## - the CHECKSUM: a hash of the map (every cell, the midpoint-wall masks, the materials), the site plan (every
 ##   SitePlan field: rooms, themes, materials, notes, props, decor, the van), the contract, and the SPAWN TABLE
 ##   (id, kind, name, team, cell and position of every actor). Each machine computes it after building and the
@@ -23,17 +23,18 @@ const ID_META := "net_id"
 ## Give the seed-built actors under `root` their ids, in tree order; `heroes` maps a seat (1-3) to its hero.
 ## Returns how many seed-built actors got one.
 static func assign_ids(root: Node, heroes: Dictionary) -> int:
+	NetRegistry.clear()   # a new floor: the registry (id -> node) is rebuilt with the ids
 	var seat_of: Dictionary = {}
 	for seat: int in heroes:
 		var h: Node = heroes[seat]
 		if h != null:
-			h.set_meta(ID_META, seat)
+			NetRegistry.register(seat, h)
 			seat_of[h] = seat
 	var next := ID_BASE
 	for a in actors_under(root):
 		if seat_of.has(a):
 			continue
-		a.set_meta(ID_META, next)
+		NetRegistry.register(next, a)
 		next += 1
 	return next - ID_BASE
 

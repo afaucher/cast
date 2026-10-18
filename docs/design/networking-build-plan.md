@@ -1,7 +1,7 @@
 # Networking build plan: online co-op, step by step
 
-Status: **M0 and M1 built** 2026-10-17 (see [M0 as built](#m0-as-built-2026-10-17) and [M1 as built](#m1-as-built-2026-10-17)
-after the milestones); M2 onward is still the plan. The architecture is fixed by
+Status: **M0, M1 and M2 built** 2026-10-17 (see [M0 as built](#m0-as-built-2026-10-17), [M1 as built](#m1-as-built-2026-10-17) and
+[M2 as built](#m2-as-built-2026-10-17) after the milestones); M3 onward is still the plan. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -136,7 +136,7 @@ matching checksums; each process's roster has its own spells; and the single-pro
 monster/employee/hellgate with `owns = false` run 120 frames with no change to any `PRIVATE` field.
 *Playable:* everyone sees the same board, picks spells and stands on the same floor, frozen and unsynced.
 
-### M2 Hero sync *(2 sessions)*
+### M2 Hero sync *(2 sessions)* — built, see [M2 as built](#m2-as-built-2026-10-17)
 **M2a Owner-authoritative heroes.** Seats: the host takes seat 1, and a player who joins on the board takes the next
 seat. Each human seat spawns that player's **character id** from the roster (Wick for everyone today, and duplicates
 are fine). Unfilled seats stay **AI allies owned by the host** (Rebar, Gasket; `AllyBrain` runs only there). Every machine spawns all three heroes. The local hero keeps its
@@ -550,6 +550,135 @@ Only the host decides; clients draw what they are told. Nothing else changed on 
     client is silent until M3/M4.
 
 
+### M2 as built (2026-10-17)
+One session (M2a and M2b together). Everything in M2's "done when" passes under `off` and `coast`, and the run is playable as
+the plan says: **two or three players walk around the same floor together**, each moving their own hero with no lag on their own
+screen, seeing the others walk, turn and animate about a tenth of a second behind, with the player's name over them; a player
+who drops is replaced by the seat's AI. Monsters are still the host's frozen copies on a client (M3).
+
+**Files.** `scripts/net/`: `net_snapshot.gd` (`NetSnapshot`, child `Session/Snap`, `Session.snap`: the streams and the puppets),
+`net_codec.gd` (`NetCodec`) and `net_hero_state.gd` (`NetHeroState`) (the bytes), `net_interp.gd` (`NetInterp`),
+`seat_handover.gd` (`SeatHandover`, child `Session/Seats`, `Session.seats`), `net_registry.gd` (`NetRegistry`), `net_events.gd`
+(`NetEvents.CARRIES`); `net.gd` gained `owns`, `is_puppet`, `make_puppet`, `release_copy`, `label_of`; `net_floor.gd`
+`assign_ids` fills the registry. Game: `game.gd` (`_begin_hero_sync`, `_update_hero_sync`, `_drop_departed_seats`,
+`_on_seat_to_ai`, `--net-bot`), `Hero.become()` / `Hero.set_player_name()`, `PlayerController.move_override`,
+`ContractSession.carry_key`; the HUD ally rows read `Net.label_of`. Test support: `net_bot.gd` (`NetBot`) and the recorder in
+`NetGameTest` (`enter_floor`, `wait_sync`, `start_bot`, `record`, `series_error`). Tests: `test_net_m2_walk`, `test_net_m2_drop` (3
+processes each), `test_net_codec`, `test_net_interp`, `test_net_seats` (single process), and the carrier checks in
+`test_net_contract`. `run.ps1`: `-Bot N`, `-Size WxH`, and a fix: `--spells heal,corn` reached the game as two arguments (PowerShell hands a script `heal,corn` as an array), so the M1 README example never signed the license; it is joined back now.
+
+**Ownership.** Each machine owns its own seat's hero (its `PlayerController`) and streams it; on the host the AI heroes of EMPTY
+seats (`AllyBrain`, the seat's original character: seat 2 Rebar, seat 3 Gasket) are streamed too. Every other hero is a **puppet**
+(`Net.make_puppet`: a copy with no controller, brain, damage or shoves, plus the meta `net_puppet`). The host keeps no brain on a
+human's seat any more (M1's host ran `AllyBrain` on every other hero). No input crosses the wire.
+
+**The snapshot (`NetWire.T_SNAP` = 16, unreliable, with the wire's u16 sequence and stale-drop as for every packet).**
+The payload after the 7-byte wire header is `u8 count`, then per hero a 16-byte entry (17 with the bow drawn):
+
+| bytes | field |
+|---|---|
+| 1 | `head`: seat (bits 0-1), held slot (2-3), **teleport counter** (4-7) |
+| 1 | `flags`: dead 1, climbing 2, ghost (passing through other heroes) 4, drawing 8 |
+| 1 | `age`: ms between the sample and the packet's stamp (0 for the sender's own hero, more for a hero the host forwards), so every sample keeps its moment on `host_time()` |
+| 6 | position x, z, y: i16 centimetres each |
+| 2 | velocity x, z: i8 in 1/8 u/s (+-15.9): the Hermite tangents and the extrapolation |
+| 1 | facing: u8, 256 steps of a turn |
+| 2 | aim point relative to the hero: i8 in 1/4 unit (+-31.75) |
+| 2 | hp: u16, tenths |
+| (1) | bow draw time: u8 centiseconds, only with the drawing flag |
+
+**Sizes (measured):** a client's packet is **24 bytes** (7 + 1 + 16); the host's to a client, with two heroes, is **40 bytes**. At
+30 Hz that is **725 B/s up** from a client and **1.2 KB/s down** to each (2.4 KB/s out of the host to two clients); the plan's
+budget is 3 KB/s per client. Quantisation error: position under 5 mm, facing under 0.7 degrees.
+Direction: a client sends only its own hero to the host (clients never talk to each other); the host sends each client every hero
+but that client's own: its own, the AI ones (live), and the OTHER client's, forwarded as the newest state received (left out when
+older than 0.3 s). The first payload byte is a hero count; M3 appends the world after the heroes.
+
+**Which `Hero` OWNER vars are carried.** In the snapshot (`NetCodec.HERO_FIELDS`): `hp`, `dead`, `facing`, `climbing`,
+`pass_through_until` (as the ghost flag), `held_slot`, `_draw_start` (as the draw time); plus position, velocity, aim and the
+teleport counter, which are not vars. **Not in M2** (`NetEvents.CARRIES`, each naming its carrier): `spell_slots` and `_charges` (the
+roster has them at the floor start; pickups in M3 and casts in M4 are events) and `_modifiers` (armor, coffee, vines: M4). A puppet
+therefore shows its owner's HP, death, held spell and drawn bow, but not a swing, a cast or a status until M4.
+
+**Showing it (`NetInterp`).** Each puppet has a buffer of samples and shows the hero at `host_time() - delay`: Hermite on x and z
+(positions and velocities), linear on height, the short way round for facing, a step for hp/dead/the bow. Past the newest sample
+it extrapolates along the velocity for up to 120 ms, then holds. The delay starts at 100 ms and follows the 90th percentile of how
+late the samples arrive (+30 ms), slewed at 10% a second: measured **100 ms on a clean link, 100-120 ms for a direct stream over
+`coast`, 170-190 ms for the other client's hero (two hops)**. A **teleport** is a jump of more than 3 units between two samples,
+decided where the sample is taken, never from a physics-frame difference (the first version did that, and under `coast` one sample
+could carry the new place with the old counter, so the puppet smeared for a frame); the counter changes, the receiver empties the
+buffer and calls `reset_physics_interpolation()`, and the puppet jumps in one frame.
+
+**Arrival and floor start.** Streaming and showing start at the shared start and only when this machine's own van arrival is over
+(`_update_hero_sync`: `VanArrival` places and hides the heroes itself for 2.5 s, and skipping it with a key is local). The first frame
+of a puppet is a jump (it was standing at the van door a moment ago).
+
+**A player drops** (`SeatHandover`, event `seat.ai`). The host's `peer_left` for a seat's owner: the table's owner for the seat becomes
+0 and its epoch goes up; `NetSnapshot.seat_released` lets go of the puppet (the hero stands where the newest sample put it and acts
+again, `Net.release_copy`); `to_ai(seat, character)` fires and the game re-kits **the same hero node** in place (`Hero.become`: kit,
+name, colour, model; HP keeps its fraction; a downed hero stays downed) and attaches an `AllyBrain` with the seat's formation numbers;
+the host sends `seat.ai {seat, character, epoch}` (reliable) to the clients, whose `to_ai` re-kits their copy of the node (a puppet
+still, now of the host's stream). The node and the net id never change, so followers, the HUD and every reference stay valid (M6's
+join will run the same `become` the other way). A player who left **before the barrier** (during the license checkout, after the
+heroes were built at the job pick) is converted by every machine at the barrier from its own roster (`_drop_departed_seats`; the host's
+roster update travels ahead of `crew.load` on the same ordered channel, so all of them see the same roster and the checksum agrees:
+`test_net_m1_leave` caught the first version, which converted on the host only). The **floor carry is keyed by seat**
+(`ContractSession.carry_key`, the meta `crew_seat`; a hero outside the crew keeps its name key, so the old tests are unchanged).
+
+**Registry.** `NetRegistry`: `register(id, node)`, `node(id)` (never a freed node), `hero(seat)`, `id_of`, `ids()`, and
+`next_runtime_id()` from 10000 (the host will hand those out in M3). `NetFloor.assign_ids` clears and fills it at every barrier.
+
+**What the tests prove** (timings are this machine's; three real-time processes).
+- `test_net_m2_walk` [off, coast]: roles (each machine simulates exactly its own hero and shows the other two as puppets with the
+  roster names `host` / `c1` / `c2`; nobody runs an AI); then 9 s of all three walking a scripted loop at once (a `NetBot` steering the
+  real controller; routes avoid the van and the furniture): for every pair, about 500 frames each, the puppet is within **0.07 units** of
+  where the hero really was at the time shown (limit 0.35) under `off` and `coast`, and the biggest step beyond what walking covers
+  in the frame gap is 0.04 (limit 0.6), including the pairs that go through the host's forward; the budget (24 / 40 bytes, 725 B/s,
+  under 3 KB/s); `coast` really lost snapshots (4-16 gaps a process, 1-2 refused as stale) and the walk held; a teleport of 15 units
+  is ONE jump on the host's screen and on the other client's, with no frame anywhere between the two ends; HP, the held spell and a
+  death arrive on every screen and agree with the owner.
+- `test_net_m2_drop` [off, coast]: c2 walks away, stands still, tells the host where and quits its process; the host drops it and
+  seat 3's hero is the same node, now Gasket (kit, name, model, nameplate, id 3, registry), simulated, with an AllyBrain, at c2's
+  spot, with its HP fraction, **about 40 ms after the process quit** (the limit is 1 s; ENet's disconnect is not delayed by the link
+  simulator); the AI walks it 7 units back toward the crew; c1 is told, re-kits the same node, keeps it a puppet, and its picture of
+  the AI's walk stays within 0.03 units of where the AI really was.
+- `test_net_codec`: sizes, 400 randomised round trips within one quantum, clamping, ages, truncated or random packets, and every var
+  in `HERO_FIELDS` through hero -> bytes -> hero (the test names them, so a codec field without a test fails).
+- `test_net_interp`: a known zig-zag path with stops, sampled through the real codec and delivered the way a link would: `coast`
+  direct 0.09 max error (0.155 step), forwarded through the host 0.05 (the delay grew to 214 ms), `rough` 0.05, six packets lost in a
+  row 0.21 (0.29 step), a perfect link exact; a teleport never shows a position on the way; silence holds the hero.
+- `test_net_seats`: the registry, the carry keyed by seat (two Wicks, one downed), `Hero.become`, the seat table.
+- `test_net_contract`: **carrier coverage** driven by `net_fields()`: every OWNER var of `Hero` is in `NetCodec.HERO_FIELDS` or
+  `NetEvents.CARRIES`, the codec streams only OWNER vars (a SPAWN / PRIVATE / LOCAL var, a stale name or a var with two carriers
+  fails), and the check is run against declarations that must fail.
+- `test_net_m1_floor` changed in one place: the host runs no AI when all three seats are players.
+
+**Notes for M3.**
+1. **Monsters are still `make_copy` on a client**, so a monster on the host that attacks a client's hero hits a puppet, which takes no
+   damage. That is by design until M4 ("the victim decides"). The host's monsters do chase and hurt the host's hero and the AI heroes,
+   and the AI heroes' HP reaches the clients through the snapshot.
+2. **Reuse:** `NetRegistry` (ids); `NetInterp` (it works on `NetHeroState`; M3 needs the same buffer over a monster state: generalise
+   the sample class or add a second one, the delay logic and Hermite carry over); `NetWire.T_SNAP` and the packet shape (the first
+   byte is a hero count, put the world sections after the heroes and add a section byte if the layout needs it); the teleport
+   counter (a spawn or a respawn is a discontinuity); the age field for forwarded state.
+3. **`Net.owns(node)` is `simulates(node)` for now.** M3 must answer it for the host-owned world too (monsters on a client are copies,
+   not puppets of a stream yet); `Net.make_puppet` is what a monster that applies a snapshot should become.
+4. **Sampling happens in `_process`** (render frame, 30 Hz on the wall clock) from the latest physics state, with the velocity of the
+   last physics frame. What M3 streams from the host should be sampled at the same place so a hero and a monster share one moment.
+5. **Pickups:** `ComponentPickup` collects only for `is_player` heroes, and a puppet is never one, so the host does not collect for a
+   client's hero. M3b's request / grant is still needed (a client's pickups are frozen copies today).
+6. **A hard kill takes 10 s to notice.** A process that quits (and, to be checked on Steam, a clean leave) is dropped at once, but a
+   crash or a pulled cable is dropped by `CLIENT_SILENCE` (10 s); with a 30 Hz stream the host could tighten that for a hero that was
+   streaming (M7).
+7. **The roster at the job pick still decides who is a person** (heroes are built in `_build_world` when the job is picked, before the
+   license); `_drop_departed_seats` covers the ones who left since. A *joiner* during the checkout is refused anyway (`JOB_RUNNING`).
+8. **The van arrival** is the only thing that moves a hero other than its owner (the dev warps are detected as teleports). If M5 adds
+   an arrival on floor changes it must gate `_update_hero_sync` the same way.
+9. **Revival** (the invoice's "revived for you") is not a snapshot concern yet: `NetCodec.write_hero` ignores a dead -> alive flip.
+10. **Test pattern for M3/M4:** `NetGameTest.enter_floor()` + `wait_sync()` put three processes on a running floor in about 8 s with
+    the game's own dev flags; `start_bot()` walks a hero; `record()` / `series_error()` hold what a viewer showed against the owner's
+    truth at the shared time shown. A monster's render error (M3's "under 0.5 units") can use the same recorder with the host's ring.
+
 ---
 
 ## 3. Test strategy
@@ -589,7 +718,7 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 
 ### Single-process tests (cheap, run in the normal parallel batch)
 `test_enet_loopback`, `test_net_session`, `test_net_puppets` (built in M1: a copy never changes a `PRIVATE`/`OWNER` field),
-`test_net_codec` (round trips and budgets), `test_net_floor` (built in M1: the checksum and ids), `test_net_board` (M1: the read-only board, the confirm).
+`test_net_codec` (M2: round trips, budgets, every carried field), `test_net_interp` and `test_net_seats` (M2), `test_net_floor` (built in M1: the checksum and ids), `test_net_board` (M1: the read-only board, the confirm).
 
 ### Lag and loss
 - **ENet:** `net_link.gd` on every process's inbound side, covering both directions: `coast` = 45 ms ±15 ms, 1.5%
@@ -604,8 +733,8 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 | Added in | Check |
 |---|---|
 | M0 | `Steam` singleton / `ClassDB` Steam use only in `scripts/net/`; `send_bytes` must name `TRANSFER_MODE_UNRELIABLE` |
-| M2 | **Carrier coverage, driven by `net_fields()`**: every `OWNER` field of every checked class has a carrier, either in that class's codec field list or in `NetEvents.CARRIES` (event-carried, e.g. `dead`). A codec that streams a `SPAWN`/`PRIVATE`/`LOCAL` field fails. A new `OWNER` var without a carrier fails the build, so content can't silently go unreplicated. |
-| M2 | Codec round trip for every codec (randomised entity, pack then unpack, equal within its quantum) |
+| M2 (built) | **Carrier coverage, driven by `net_fields()`**: every `OWNER` field of every checked class has a carrier, either in that class's codec field list or in `NetEvents.CARRIES` (event-carried, e.g. `dead`). A codec that streams a `SPAWN`/`PRIVATE`/`LOCAL` field fails. A new `OWNER` var without a carrier fails the build, so content can't silently go unreplicated. |
+| M2 (built) | Codec round trip for every codec (randomised entity, pack then unpack, equal within its quantum): `test_net_codec` |
 | M3 | Size budget: a worst-case snapshot (floor 3, hardest contract, every actor alive) under 1.2 KB |
 | M4 | Lint: no `apply_damage`/`shove`/`set_modifier` loops outside `Combat` and the verbs (closes the known gaps) |
 | M6 | Late-join coverage: every host-owned class declares how a joiner gets its state (keyframe, gone-id, or event replay) |

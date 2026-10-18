@@ -29,15 +29,18 @@ The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc 
 3. **Start a job** opens the job board.
 
 ### Online play (in progress)
-Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M1) a crew shares one
-run, frozen**: the host rolls the job board and its three offers appear on every player's board (read-only for
+Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M2) a crew shares one
+run and walks it together**: the host rolls the job board and its three offers appear on every player's board (read-only for
 the others, "the host picks the job"); the host takes a job; everyone signs **their own** license checkout (that is
 the "ready" step, and the others see "waiting for <name>"); every machine builds the same floor from the contract
 seed behind a load barrier, checks that it is the same floor (a floor that differs is refused with "Desync:
-different floor"), and the van arrival plays on every screen from the same moment. After that the other players are
-standing still: **heroes and monsters are not synced yet** (M2 and M3), so what each screen shows of the others is
-a frozen copy. Exits (elevator, van) and the pause are not shared yet either: while a crew is on a floor, Esc opens
-the menu without pausing, and the only way out is Main menu (a client leaves the crew; the host asks first, because
+different floor"), and the van arrival plays on every screen from the same moment. Then **every player moves their own
+hero, with no lag on their own screen, and sees the others walk, turn and animate** (about a tenth of a second behind),
+each with the player's name over their head. If a player drops, the AI takes their seat back as the character that seat
+started as (Rebar or Gasket), right where they stood. **Monsters, hellgates, employees and pickups are not synced yet**
+(M3), and casts, hits and damage across machines come in M4, so on a client the host's world is a frozen copy and
+fighting is for later. Exits (elevator, van) and the pause are not shared yet either: while a crew is on a floor, Esc
+opens the menu without pausing, and the only way out is Main menu (a client leaves the crew; the host asks first, because
 it ends the job for everyone).
 
 Up to 3 players (one per crew slot); a 4th is told "Crew is full", a different build is refused, a crew already on a
@@ -51,6 +54,7 @@ out". Invites from the Steam overlay join directly. A host with nobody else in t
 .\run.ps1 -Crew 3 -Link coast     # three players, each window simulating a coast-to-coast link
 .\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # the host takes offer 2 once both are in; both sign heal+corn
 .\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn -ShotDir C:\shots   # ... and each window saves <Name>.png and quits
+.\run.ps1 -Crew 2 -Bot 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # window 2's hero walks a loop by itself (--net-bot); walk window 1 with WASD and watch it move there
 ```
 
 Or by hand, in two terminals:
@@ -65,7 +69,8 @@ Online dev flags (after `--`): `--net-host` (host over ENet), `--net-join <ip[:p
 way, ±15 ms, 1.5% loss), `--net-name <name>` (the roster name; Steam's name otherwise), `--net-steam-probe` (create one
 real Steam lobby through the host path, print it, leave and quit: the quick Steam check), `--net-wait N` (the host stays
 on the board until the crew has N members, then takes offer `--contract`, default the first). `--spells a,b` signs
-that license without the checkout, in every window. `--shot <png>` saves a screenshot 3 s after the shared start and
+that license without the checkout, in every window. `--net-bot` makes this window's hero walk a loop of the start area by itself
+(`run.ps1 -Bot N` gives it to window N only; the others see it move). `--shot <png>` saves a screenshot 3 s after the shared start and
 quits (`--shot-after S` to change it); `run.ps1 -ShotDir <dir>` gives each window its own file.
 
 **Network telemetry** is passive: one CSV row a second per machine in `%APPDATA%\Godot\app_userdata\Cast\net\`

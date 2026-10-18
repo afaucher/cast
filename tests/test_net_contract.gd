@@ -9,6 +9,9 @@ extends TestCase
 ##    outside scripts/net/; the transport rules (no unreliable_ordered, no high-level sync) apply
 ##    everywhere, and NET_RULES hold scripts/net/ itself to the wire contract (M0).
 ## 3. The lint is run against lines that must fail (LINT_SAMPLES), so a broken regex can't pass silently.
+## 4. Carriers (M2): every OWNER var of a replicated class (REPLICATED: Hero) rides the snapshot (NetCodec.HERO_FIELDS) or is
+##    named, with its carrier, in NetEvents.CARRIES; a codec never streams a SPAWN / PRIVATE / LOCAL var. Run against
+##    declarations that must fail too.
 
 ## Gameplay scripts that aren't Actors but hold state that matters in co-op. A new one goes here.
 const NET_SCRIPTS := [
@@ -102,6 +105,7 @@ func setup() -> void:
 	_check_declarations(scripts)
 	_check_lint(scripts)
 	_check_lint_samples()
+	_check_carriers()
 	finish()
 
 
@@ -247,3 +251,53 @@ func _all_scripts(dir: String) -> Array[String]:
 	for d in DirAccess.get_directories_at(dir):
 		out.append_array(_all_scripts(dir + d + "/"))
 	return out
+
+
+# --- 3. Carriers (M2): nothing owned by a player goes unreplicated ---------------------------
+
+## Classes whose OWNER vars travel: script -> [the codec's field list, the event table]. M3 adds the monsters.
+const REPLICATED := {
+	"res://scripts/heroes/hero.gd": [NetCodec.HERO_FIELDS, NetEvents.CARRIES],
+}
+
+
+## The problems with a class's carrier tables, for its net_fields(): an OWNER var nobody carries, a codec that streams a
+## var that is not OWNER (SPAWN / PRIVATE / LOCAL never travel in a snapshot), a stale name, and a var with two carriers.
+func _carrier_gaps(fields: Dictionary, codec: Dictionary, events: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for f: String in fields:
+		if int(fields[f]) == Net.OWNER and not codec.has(f) and not events.has(f):
+			out.append("OWNER var `%s` has no carrier: add it to the codec's field list or to NetEvents.CARRIES" % f)
+	for f: String in codec:
+		if not fields.has(f):
+			out.append("the codec names `%s`, which is not a var (stale?)" % f)
+		elif int(fields[f]) != Net.OWNER:
+			out.append("the codec streams `%s`, which is %s: only OWNER vars travel" % [f, Net.NAMES[int(fields[f])]])
+		if events.has(f):
+			out.append("`%s` is in the codec AND in NetEvents.CARRIES: one carrier" % f)
+	for f: String in events:
+		if not fields.has(f):
+			out.append("NetEvents.CARRIES names `%s`, which is not a var (stale?)" % f)
+		elif int(fields[f]) != Net.OWNER:
+			out.append("NetEvents.CARRIES names `%s`, which is %s: only OWNER vars need a carrier" % [f, Net.NAMES[int(fields[f])]])
+	return out
+
+
+func _check_carriers() -> void:
+	for p: String in REPLICATED:
+		var tables: Array = REPLICATED[p]
+		var obj: Object = (load(p) as GDScript).new()
+		var gaps := _carrier_gaps(obj.net_fields(), tables[0] as Dictionary, tables[1] as Dictionary)
+		for g in gaps:
+			_fail("%s: %s" % [p, g])
+		check((tables[0] as Dictionary).size() >= 6, p + ": the codec carries the hero's state")
+		_free(obj)
+	# The rule is run against declarations that must fail, so a broken check can't pass silently.
+	var fake := {"carried": Net.OWNER, "event_carried": Net.OWNER, "dropped": Net.OWNER, "secret": Net.PRIVATE, "look": Net.LOCAL, "fixed": Net.SPAWN}
+	eq(_carrier_gaps(fake, {"carried": "x"}, {"event_carried": "later"}).size(), 1, "an OWNER var with no carrier is flagged (and only it)")
+	check(_carrier_gaps(fake, {"carried": "x", "secret": "x"}, {"event_carried": "m"}).any(func(g: String) -> bool: return g.contains("secret") and g.contains("PRIVATE")), "a codec that streams a PRIVATE var is flagged")
+	check(_carrier_gaps(fake, {"carried": "x", "look": "x"}, {"event_carried": "m"}).any(func(g: String) -> bool: return g.contains("look") and g.contains("LOCAL")), "... a LOCAL one")
+	check(_carrier_gaps(fake, {"carried": "x", "fixed": "x"}, {"event_carried": "m"}).any(func(g: String) -> bool: return g.contains("fixed") and g.contains("SPAWN")), "... a SPAWN one")
+	check(_carrier_gaps(fake, {"carried": "x", "gone": "x"}, {"event_carried": "m"}).any(func(g: String) -> bool: return g.contains("gone")), "... a stale name")
+	check(_carrier_gaps(fake, {"carried": "x", "event_carried": "x"}, {"event_carried": "m"}).any(func(g: String) -> bool: return g.contains("one carrier")), "a var with two carriers is flagged")
+	eq(_carrier_gaps({"a": Net.OWNER}, {"a": "x"}, {}).size(), 0, "a carried OWNER var is clean")

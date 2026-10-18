@@ -15,9 +15,11 @@ machine owns that player's hero and streams its state, and the host owns everyth
 ## Networking rules (enforced by `tests/test_net_contract.gd`)
 The transport, lobby, crew roster, clock and telemetry (M0) and the shared run (M1: the host's board and job, every
 player's license checkout, the same floor from the seed behind a load barrier with a checksum, the floor clock) exist
-(`docs/design/networking-build-plan.md`; the `Session` autoload and its `Flow`). Heroes and the host's world are not
-synced yet: on a client everything the host owns is a non-acting copy (`Net.simulates(node)`, `Net.make_copy`; M2 and
-M3 sync them). Every change has to keep co-op possible:
+(`docs/design/networking-build-plan.md`; the `Session` autoload and its `Flow`). Heroes are synced (M2: each machine owns
+its own seat's hero and streams it, `Session.snap`; the others are puppets, `Net.is_puppet`; a dropped player's seat goes
+back to the AI, `Session.seats`). The host's world is not synced yet: on a client everything the host owns is a non-acting
+copy (`Net.simulates(node)`, `Net.make_copy`; M3 syncs it). A new `OWNER` var of `Hero` needs a carrier too
+(`NetCodec.HERO_FIELDS` or `NetEvents.CARRIES`). Every change has to keep co-op possible:
 1. **Declare authority.** A class with gameplay state has `net_fields()` classifying **every** script
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.

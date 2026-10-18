@@ -72,7 +72,7 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 
 | File | What |
 |---|---|
-| `net.gd` (`Net`) | the authority kinds (`net_fields()`) and the static facade: `is_host`, `online`, `crewed` (someone else is in the crew), and `simulates(node)` / `is_copy` / `make_copy` (M1: on a client the host's things are inert copies) |
+| `net.gd` (`Net`) | the authority kinds (`net_fields()`) and the static facade: `is_host`, `online`, `crewed` (someone else is in the crew), `simulates(node)` / `owns(node)` / `is_copy` / `make_copy` (M1: on a client the host's things are inert copies) and `is_puppet` / `make_puppet` / `label_of(hero)` (M2: a hero another player owns) |
 | `net_session.gd` (autoload **Session**, `NetSession`) | the crew session: ENet or Steam transport, hello handshake, roster, refusals, leaving, clock pings, telemetry rows, dev flags |
 | `net_wire.gd` (`NetWire`, child `Session/Wire`) | the reliable event RPC (its own channel) and unreliable `send_bytes` packets with our own u16 sequence numbers; stale packets are dropped |
 | `net_link.gd` (`NetLink`) | the lag/loss simulator on each process's inbound side (presets `off`, `coast`, `rough`) |
@@ -80,6 +80,11 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_telemetry.gd` (`NetTelemetry`) | one CSV row a second per machine, clients' rows collected on the host (`user://net/`) |
 | `crew_flow.gd` (`CrewFlow`, child `Session/Flow`, `Session.flow`) | the shared run's state machine: board, job, license checkout, load barrier, floor start and the floor clock (`crew.*` events); see below |
 | `net_floor.gd` (`NetFloor`) | net ids in build order, the floor checksum (map, site plan, contract, spawn table) and `freeze_copies` |
+| `net_snapshot.gd` (`NetSnapshot`, child `Session/Snap`, `Session.snap`) | hero sync (M2): streams the heroes this machine owns at 30 Hz (`NetWire.T_SNAP`, unreliable) and shows everyone else's as puppets |
+| `net_codec.gd` (`NetCodec`), `net_hero_state.gd` (`NetHeroState`) | the hand-packed hero snapshot (16 bytes a hero) and how a hero's OWNER fields go in and out; `HERO_FIELDS` is what the contract test holds it to |
+| `net_interp.gd` (`NetInterp`) | the buffer behind a puppet: Hermite on position and velocity, about 100 ms behind `host_time()`, an adaptive delay, extrapolation up to 120 ms, teleports never blend |
+| `seat_handover.gd` (`SeatHandover`, child `Session/Seats`, `Session.seats`) | who owns each seat's hero; a dropped player's seat goes back to the AI as the seat's original character (`to_ai`) |
+| `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (M3 reuses it); the table of OWNER fields an event carries instead of the snapshot |
 | `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
 | `steam_lobby.gd` (`SteamLobby`, child `Session/Lobby`) | lobbies: create, list, join, leave, invites, lobby data |
 
@@ -92,10 +97,27 @@ behind a barrier (`game.gd` `_start` then `_enter_barrier`: ids, copies, world f
 `crew.ready`); the host compares the checksums (a client that built another floor is sent out with "Desync: different
 floor") and sends `crew.go {start_at, floor_start}`; at `start_at` on the shared clock every machine unfreezes and the
 van arrival plays (`CrewFlow.floor_started`), and each client's `GameWorld.time` is slewed to `host_time() - floor_start`.
-Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero, the host runs the
-rest as AI; on a client every host-owned actor is a copy (`Net.make_copy`: no physics process, no damage, no shove, no E).
+Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero; an EMPTY seat is an
+AI ally (seat 2 Rebar, seat 3 Gasket: `AI_SEATS`, the seat's original character) that only the host runs; on a client every
+host-owned actor is a copy (`Net.make_copy`: no physics process, no damage, no shove, no E).
 While crewed there is no local pause and no exit (M5). `NetFloor`, `CrewFlow`, `CrewConfirm` (the host's leave question)
 and `NetGameTest` are the pieces to read first.
+
+**Hero sync (M2).** Each machine OWNS its own seat's hero and moves it locally, with full responsiveness; no input crosses
+the wire. From the shared start (and once its own van arrival is over: the arrival places the heroes itself) `Session.snap`
+sends the state of every hero it owns 30 times a second as an unreliable, sequence-numbered `T_SNAP` packet: a client to
+the host (24 bytes: position, velocity, facing, aim point, HP, dead, climbing, the held slot, the bow draw, a teleport
+counter), the host to each client (the host's hero, the AI ones and the OTHER client's, forwarded with its age so every
+sample keeps its moment on `host_time()`; 40 bytes for two heroes). Every other hero is a PUPPET (`Net.make_puppet`): a
+copy that applies the interpolated state (`NetInterp`) about 100 ms behind the shared clock and keeps animating
+(the model tracks its own walk from the movement; the aim reticle belongs to the local controller, so a puppet has none).
+Its nameplate and HUD row read the player's roster name (`Net.label_of`). The hero a puppet shows is the same node
+the game built from the seed, with an id equal to its seat (`NetRegistry.hero(seat)`).
+**A player drops:** the host's `SeatHandover` lets go of the puppet and the game re-kits the SAME hero node in place as the
+seat's original character (`Hero.become`: kit, name, colour, model; HP keeps its fraction; a downed hero stays downed) and
+attaches an `AllyBrain`; the clients get `seat.ai` and re-kit the same node on their screens, and show the host's stream
+from then on. The floor carry is keyed by seat (`ContractSession.carry_key`): two players may both be Wick. New `OWNER`
+vars of `Hero` must be in `NetCodec.HERO_FIELDS` or `NetEvents.CARRIES` (test_net_contract).
 
 RPC endpoints live under the autoload (`/root/Session/Wire`), never in `game.tscn`, because every floor change is a
 scene reload and an RPC needs the same node path on every peer. `Session` runs with process mode ALWAYS, so pausing
@@ -285,6 +307,11 @@ A test that extends `NetGameTest` (`scripts/test_support/net_game_test.gd`) also
 process and drives it through its own screens (job board, license checkout): `make_game()`, `sign_license()`, `truth()` (the
 shared clock as the one machine's wall clock sees it), `scene_changes` (the game's scene changer is a seam, so a test sees
 "back to the menu" without losing the process). `NetTest.after_end()` runs after a client's session ended as expected.
+M2 added to it: `enter_floor(seed)` (the whole crew onto a running floor through the game's own `--net-wait` / `--spells` dev
+flags), `wait_sync()`, `start_bot()` (a `NetBot`, `scripts/test_support/net_bot.gd`: steers the real `PlayerController` through
+its `move_override` seam along a route of real floor), and a recorder: `record(true)` keeps every frame of this machine's own hero
+(the TRUTH) and of what each puppet showed with the shared time it showed (`render_time`); `series_error(ring, series)` holds
+a viewer's series against the owner's ring (error, biggest step, and the step beyond what walking covers in the frame gap).
 
 Run the game: `.\run.ps1` (or `--scene res://scenes/arena.tscn` after `--`).
 Engine: `$env:CAST_GODOT`, else `..\Hero-Reader\third_party\godot\Godot_v4.7-stable_win64_console.exe`.

@@ -73,7 +73,7 @@ func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		var lbl := Label.new()
-		lbl.text = a.display_name
+		lbl.text = Net.label_of(a)   # the player's name for a seat a person plays
 		lbl.custom_minimum_size = Vector2(70, 0)
 		_style_label(lbl, 16)
 		row.add_child(lbl)

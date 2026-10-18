@@ -90,7 +90,7 @@ func run_host() -> void:
 		eq(int(r["seat"]), int(Session.roster[p]["seat"]), "peer %d controls the hero in its own seat" % p)
 		eq(r["spells"], ours["spells"], "peer %d's roster holds everyone's spells, the same as the host's" % p)
 	eq(int(ours["controllers"]), 1, "the host controls one hero")
-	eq(int(ours["brains"]), 2, "the host runs the AI for the two other heroes")
+	eq(int(ours["brains"]), 0, "the host runs no AI: all three seats are players (M2: an AI only plays an empty seat)")
 	eq(int(ours["seat"]), 1, "the host sits in seat 1")
 	check(bool(ours["host_simulates"]), "the host simulates the monsters, gates and employees")
 	# Everyone's own license is in the roster, and on the hero this machine holds for that seat.

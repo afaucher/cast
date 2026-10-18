@@ -6,8 +6,8 @@ class_name Net
 ## snapshot packer and the debug write guards will be driven by the same declarations.
 ##
 ## It is also the facade gameplay code asks (it never sends anything itself; that is scripts/net/):
-## `Net.is_host()`, `Net.online()`. The transport is the Session autoload (NetSession, M0); `owns()` and
-## `request()` arrive with hero sync (M2).
+## `Net.is_host()`, `Net.online()`, `Net.owns(node)`, `Net.is_puppet(node)`. The transport is the Session autoload
+## (NetSession, M0); `request()` arrives with the host-owned world (M3).
 ##
 ## Owner: a hero's player owns that hero; the host owns everything else (monsters, hellgates,
 ## employees, props, pickups, the contract). "Owner" below means that machine.
@@ -75,6 +75,44 @@ static func is_copy(node: Object) -> bool:
 static func make_copy(node: Node) -> void:
 	node.set_meta(COPY_META, true)
 	node.set_physics_process(false)
+
+
+## Make a copy act again (a seat handed back to the AI: the hero was a puppet of a player who left).
+static func release_copy(node: Node) -> void:
+	node.remove_meta(COPY_META)
+	if node.has_meta(PUPPET_META):
+		node.remove_meta(PUPPET_META)
+	node.set_physics_process(true)
+
+
+# --- Heroes (M2): every machine owns its own seat's hero and shows the others as puppets -----------------------
+# A PUPPET is a hero copy that applies the state its owner streams (NetSnapshot): it is not simulated here (no
+# controller, no AI, no damage taken, no shoves) but keeps animating from the state it is shown. The local player's
+# hero and, on the host, the AI heroes of empty seats are simulated here and streamed to the others.
+
+const PUPPET_META := "net_puppet"
+const NAME_META := "net_player_name"
+
+
+## Make `node` a puppet: a copy that a snapshot stream moves.
+static func make_puppet(node: Node) -> void:
+	make_copy(node)
+	node.set_meta(PUPPET_META, true)
+
+
+static func is_puppet(node: Object) -> bool:
+	return node != null and node.has_meta(PUPPET_META)
+
+
+## True when this machine is the owner of `node` (the authority for its OWNER fields): offline, everything; online,
+## whatever is not a copy of somebody else's. (M3 extends this to the host-owned world.)
+static func owns(node: Object) -> bool:
+	return simulates(node)
+
+
+## What to call a hero on screen: the player's roster name for a seat a person plays, else the hero's own name.
+static func label_of(hero: Actor) -> String:
+	return str(hero.get_meta(NAME_META, hero.display_name))
 
 
 ## The Session autoload, or null (a bare test tree without autoloads).

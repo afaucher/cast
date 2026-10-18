@@ -18,6 +18,8 @@ var camera: Camera3D = null     ## defaults to the viewport's current Camera3D
 var hud: Hud = null             ## optional: receives cast / cooldown toasts
 var enabled := true
 var aim_override := Vector3.INF ## scripted aim (autocast, tests); INF = use the mouse
+## Scripted walk (tests and the --net-bot dev flag): a world-space X/Z direction, length <= 1. INF = use the keys.
+var move_override := Vector3.INF
 ## Context action on E: called with no arguments when E is pressed, it returns true when it used the
 ## press (the game opens the elevator when the hero stands at it).
 var interact: Callable = Callable()
@@ -36,7 +38,7 @@ func _ready() -> void:
 func net_fields() -> Dictionary:
 	return {
 		"hero": Net.LOCAL, "camera": Net.LOCAL, "hud": Net.LOCAL, "interact": Net.LOCAL,
-		"enabled": Net.PRIVATE, "aim_override": Net.PRIVATE,
+		"enabled": Net.PRIVATE, "aim_override": Net.PRIVATE, "move_override": Net.PRIVATE,
 	}
 
 
@@ -49,8 +51,9 @@ func _physics_process(delta: float) -> void:
 		_slot_keys()
 		return
 	var cam := _camera()
-	var iv := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	var dir := move_direction(iv, cam)
+	var dir := move_override
+	if dir == Vector3.INF:
+		dir = move_direction(Input.get_vector("move_left", "move_right", "move_up", "move_down"), cam)
 	if dir.length() > 0.01:
 		hero.move(dir, delta)
 	else:

@@ -58,6 +58,8 @@ extends Node3D
 ##                       and --shot screenshots skip it by default; --van-intro plays it anyway (--shot-after 1.2 catches the landing)
 ##   --net-wait N        dev, online host: stay on the job board until the crew has N members, then take offer --contract
 ##                       (default 0) after a second (two-window local play: README "Online play")
+##   --net-bot           dev, online: this window's hero walks a loop of the start area by itself once the floor has started
+##                       (a scripted PlayerController walk, so the other windows see it move; the keyboard is ignored)
 ##   --shot-at board|license|wait|floor  dev, online: which screen --shot takes (a client's read-only board, its license checkout, 
 ##                       the waiting-for-the-crew overlay, or the floor 3 s after the shared start, the default)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
@@ -169,6 +171,8 @@ var _arrival_held := false          ## the van arrival is parked at its first fr
 var _barrier_up := false            ## the floor is built and frozen, waiting for the shared start
 var _floor_begun := false
 var heroes_by_seat: Dictionary = {} ## seat (1-3) -> Hero
+var _seat_info: Array[Dictionary] = []   ## _crew_seats() as the floor was built: who sat where (a player may drop later)
+var _bot: NetBot = null             ## --net-bot: a scripted walker on the local hero (two-window local play)
 var _names: Dictionary = {}         ## peer -> roster name (for "X left the crew")
 
 
@@ -188,6 +192,7 @@ func _ready() -> void:
 		Session.session_ended.connect(_on_session_ended)
 		Session.peer_left.connect(_on_peer_left)
 		Session.roster_changed.connect(_note_names)
+		Session.seats.to_ai.connect(_on_seat_to_ai)
 		_note_names()
 	if Session.is_client():
 		_start_as_client()
@@ -222,6 +227,10 @@ func _exit_tree() -> void:
 		Session.session_ended.disconnect(_on_session_ended)
 		Session.peer_left.disconnect(_on_peer_left)
 		Session.roster_changed.disconnect(_note_names)
+	if Session.seats != null and Session.seats.to_ai.is_connected(_on_seat_to_ai):
+		Session.seats.to_ai.disconnect(_on_seat_to_ai)
+	if Session.snap != null:
+		Session.snap.end()   # the heroes are going with the scene
 	if _pause != null:
 		get_tree().paused = false   # never leave the next scene frozen
 	if GameWorld.actor_died.is_connected(_on_actor_died):
@@ -238,6 +247,7 @@ func _parse_args() -> void:
 		match a:
 			"--seed": opts["seed"] = int(nxt)
 			"--net-wait": opts["net_wait"] = int(nxt)
+			"--net-bot": opts["net_bot"] = true
 			"--shot-at": opts["shot_at"] = nxt
 			"--contract": opts["contract"] = int(nxt)
 			"--floor": opts["floor"] = clampi(int(nxt), 1, ContractRun.FLOOR_COUNT)
@@ -587,9 +597,10 @@ func _model_for(character: String) -> Node3D:
 func _spawn_crew(start: Vector2i, spots: Array[Vector2i], faceted: bool) -> void:
 	heroes_by_seat.clear()
 	allies = []
+	_seat_info = _crew_seats()
 	var leader: Hero = null
-	var brains: Array[Hero] = []
-	for s: Dictionary in _crew_seats():
+	var ai_heroes: Array[Hero] = []
+	for s: Dictionary in _seat_info:
 		var seat: int = s["seat"]
 		var character: String = s["character"]
 		var look: Dictionary = CREW_LOOKS[character]
@@ -597,6 +608,7 @@ func _spawn_crew(start: Vector2i, spots: Array[Vector2i], faceted: bool) -> void
 		# Each hero's kit (HP, primary, secondary, quirks) comes from HeroKit; --proto-heroes keeps the kits.
 		var hero := HeroFactory.spawn_hero(cell, str(look["name"]), look["color"], "sword", _model_for(character) if faceted else null, character)
 		heroes_by_seat[seat] = hero
+		hero.set_meta(ContractSession.CREW_SEAT_META, seat)   # (the HP carry between floors is keyed by seat: two players may both be Wick)
 		if seat == 1:
 			leader = hero
 		if bool(s["local"]):
@@ -605,9 +617,12 @@ func _spawn_crew(start: Vector2i, spots: Array[Vector2i], faceted: bool) -> void
 			controller = HeroFactory.make_player(hero, none)
 			controller.interact = _use_key
 		else:
-			brains.append(hero)
-	for h in brains:
-		allies.append(h)
+			allies.append(hero)
+			if int(s["peer"]) == 0:
+				ai_heroes.append(hero)   # an empty seat: an AI ally, run by the host
+			else:
+				hero.set_player_name(str(s["name"]))   # a person plays it: a puppet here, their name over its head
+	for h in ai_heroes:
 		if Net.is_host():
 			var ai: Dictionary = AI_SEATS[_seat_of(h)]
 			HeroFactory.make_ally(h, leader, false, float(ai["angle"]), float(ai["hexes"]))
@@ -915,6 +930,7 @@ func _van_intro_enabled() -> bool:
 func _on_arrival_finished() -> void:
 	if controller != null and player != null and not player.dead and not _ended and _menu == null and _van_menu == null:
 		controller.enabled = true
+	_update_hero_sync()
 
 
 ## The floor line on the headset, the dispatch banner, and (screenshots) the panel put away.
@@ -952,6 +968,7 @@ func _enter_barrier() -> void:
 	NetFloor.assign_ids(GameWorld.root, heroes_by_seat)
 	if not Net.is_host():
 		NetFloor.freeze_copies(GameWorld.root, [player])
+	_begin_hero_sync()
 	_freeze(true)
 	var t0 := Time.get_ticks_usec()
 	var sums := NetFloor.checksum(map, _plan, _run, GameWorld.root)
@@ -976,6 +993,67 @@ func _begin_floor(elapsed: float) -> void:
 	_log("floor started (%.3f s past the shared start)" % elapsed, Color(0.6, 0.9, 1.0))
 	if opts.get("shot_at", "floor") == "floor":
 		_shot_stage("floor", 3.0)
+	_update_hero_sync()
+
+
+# --- Hero sync (M2): every machine owns its own seat's hero and shows the others as puppets -----------------------
+
+## The floor is built: tell the net layer who owns which seat (AI seats are 0) and which heroes are this machine's.
+## Remote heroes become puppets (Net.make_puppet) and, on the host, the AI seats stay live. Streaming starts at the
+## shared start (_update_hero_sync).
+func _begin_hero_sync() -> void:
+	_drop_departed_seats()
+	var owners := {}
+	for s: Dictionary in _seat_info:
+		owners[int(s["seat"])] = int(s["peer"])
+	var originals := {}
+	for seat: int in AI_SEATS:
+		originals[seat] = str((AI_SEATS[seat] as Dictionary)["character"])
+	Session.seats.begin(owners, originals)
+	Session.snap.begin(heroes_by_seat, _seat_of(player))
+
+
+## The heroes were built when the job was picked, from the roster of that moment. A player who left during the license
+## checkout is not on the roster any more: their seat is the AI's, as its original character, like a player who drops
+## later. Every machine reads the same roster here (the host's roster update travels ahead of `crew.load` on the same
+## ordered channel), so all of them convert the same seats and the floor checksum still agrees.
+func _drop_departed_seats() -> void:
+	for s: Dictionary in _seat_info:
+		var seat := int(s["seat"])
+		if int(s["peer"]) != 0 and not Session.roster.has(int(s["peer"])) and AI_SEATS.has(seat):
+			s["peer"] = 0
+			_on_seat_to_ai(seat, str((AI_SEATS[seat] as Dictionary)["character"]))
+
+
+## Streaming and showing run once the floor has started AND this machine's own van arrival is over (the arrival
+## places the heroes itself, hidden, so a puppet must not fight it).
+func _update_hero_sync() -> void:
+	if not _shared or Session.snap == null:
+		return
+	var on := _floor_begun and (_arrival == null or _arrival.is_done()) and not _leaving
+	Session.snap.set_active(on)
+	if on and opts.has("net_bot") and _bot == null and player != null and controller != null and not player.dead:
+		_bot = NetBot.new()
+		_bot.name = "NetBot"
+		add_child(_bot)
+		_bot.start(player, controller, NetBot.route_from(map, player.current_cell(), 7, player.can_climb))
+		_log("net-bot: walking a loop of %d waypoints" % _bot.route.size(), Color(0.8, 1.0, 0.8))
+
+
+## A player's seat went back to the AI (host: they dropped; client: the host says so): the same hero node becomes the
+## seat's original character in place, and on the host an AllyBrain plays it (SeatHandover has already let go of the
+## puppet). Clients keep showing it as a puppet, now of the host's stream.
+func _on_seat_to_ai(seat: int, character: String) -> void:
+	var hero: Hero = heroes_by_seat.get(seat)
+	if hero == null or not is_instance_valid(hero) or hero == player or not CREW_LOOKS.has(character):
+		return
+	var look: Dictionary = CREW_LOOKS[character]
+	hero.become(character, str(look["name"]), look["color"], _model_for(character) if not bool(opts.get("proto_heroes", false)) else null)
+	if Net.is_host() and AI_SEATS.has(seat) and heroes_by_seat.has(1):
+		var ai: Dictionary = AI_SEATS[seat]
+		HeroFactory.make_ally(hero, heroes_by_seat[1], false, float(ai["angle"]), float(ai["hexes"]))
+	if hud != null and player != null:
+		hud.bind(player, allies)   # the ally rows read the new name
 
 
 ## "License signed. Waiting for Sam..." while the crew catches up (the host's flow knows who is missing).
@@ -1819,7 +1897,11 @@ func _on_session_ended(_reason: String) -> void:
 
 func _on_peer_left(peer: int) -> void:
 	if hud != null:
-		hud.show_message("%s left the crew" % str(_names.get(peer, "A player")), Color(1.0, 0.75, 0.45))
+		var note := "%s left the crew" % str(_names.get(peer, "A player"))
+		for h: Dictionary in Session.seats.history:
+			if int(h["peer"]) == peer and CREW_LOOKS.has(str(h["character"])):
+				note += ". %s takes the seat." % str((CREW_LOOKS[str(h["character"])] as Dictionary)["name"])
+		hud.show_message(note, Color(1.0, 0.75, 0.45))
 	_note_names()
 
 

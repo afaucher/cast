@@ -96,3 +96,166 @@ func my_hero() -> Hero:
 
 func hero_at(seat: int) -> Hero:
 	return (game.get("heroes_by_seat") as Dictionary).get(seat) as Hero
+
+
+# --- M2: heroes walking, and what each machine saw of the others ------------------------------------------------
+
+## A bot walking this machine's hero, if started.
+var bot: NetBot = null
+## Recording: every frame, this machine's own hero ([host_time, x, y, z] flattened) and what each puppet is showing
+## ([render_time, x, y, z, host_time] flattened, per seat). The owner's ring is the TRUTH the viewers' series are held to.
+var recording := false
+var ring := PackedFloat64Array()
+var seen: Dictionary = {}
+## The heroes this machine streams that are not its own (the host's AI seats): seat -> ring.
+var live_rings: Dictionary = {}
+
+const FLOOR_OPTS := {"spells": "heal,corn"}
+## A walking hero's top speed in units per second (Hero.move_speed 4.5, a little over for rounding).
+const WALK_SPEED := 4.6
+
+
+func my_seat() -> int:
+	return int(Session.local_entry().get("seat", 0))
+
+
+## Everyone gets to a running floor: the host waits for the crew, takes offer 1 (the game's own --net-wait / --spells
+## dev flags, as run.ps1 -Crew does) and every machine signs. False (and a failed check) when anyone does not get there.
+func enter_floor(seed_value: int, contract: int = 1, extra: Dictionary = {}) -> bool:
+	var opts: Dictionary = FLOOR_OPTS.duplicate()
+	opts.merge(extra, true)
+	if is_host():
+		if not check(await until(func() -> bool: return Session.roster.size() == peers, 20.0), "all %d join" % peers):
+			return false
+		opts.merge({"seed": seed_value, "contract": contract, "net_wait": peers}, true)
+		make_game(opts)
+	else:
+		if not check(await connect_client() == "", "joined"):
+			return false
+		make_game(opts)
+	return check(await wait_floor(45.0), "the floor starts")
+
+
+## Hero sync on (the floor has started and this machine's van arrival is over).
+func wait_sync(seconds: float = 20.0) -> bool:
+	return check(await until(func() -> bool: return Session.snap.active, seconds), "the hero sync is running")
+
+
+## Start the scripted walk (NetBot) on this machine's hero.
+func start_bot() -> NetBot:
+	if bot != null:
+		bot.queue_free()
+	bot = NetBot.new()
+	game.add_child(bot)
+	var hero := my_hero()
+	var controller := game.get("controller") as PlayerController
+	bot.start(hero, controller, NetBot.route_from(game.get("map") as HexMap, hero.current_cell(), 7, hero.can_climb))
+	return bot
+
+
+func record(on: bool) -> void:
+	if on:
+		ring = PackedFloat64Array()
+		seen = {}
+		live_rings = {}
+	recording = on
+
+
+func _process(delta: float) -> void:
+	super._process(delta)
+	if not recording or game == null or Session.snap == null:
+		return
+	var now := Session.host_time()
+	var me := my_hero()
+	if me != null:
+		var p := me.global_position
+		ring.append_array(PackedFloat64Array([now, p.x, p.y, p.z]))
+	for seat in Session.snap.puppet_seats():
+		var pp := Session.snap.puppet(seat)
+		if pp.shown == null:
+			continue
+		var q := pp.hero.global_position
+		var series: PackedFloat64Array = seen.get(seat, PackedFloat64Array())
+		series.append_array(PackedFloat64Array([pp.render_t, q.x, q.y, q.z, now]))
+		seen[seat] = series
+	for seat in Session.snap.live_seats():
+		if seat == my_seat():
+			continue
+		var h := hero_at(seat)
+		var lr: PackedFloat64Array = live_rings.get(seat, PackedFloat64Array())
+		lr.append_array(PackedFloat64Array([now, h.global_position.x, h.global_position.y, h.global_position.z]))
+		live_rings[seat] = lr
+
+
+## Where a recorded ring ([t, x, y, z]*) had the hero at time `t` (linear between frames); Vector3.INF outside it.
+static func ring_at(r: PackedFloat64Array, t: float) -> Vector3:
+	var n := r.size() >> 2
+	if n < 2 or t < r[0] or t > r[(n - 1) * 4]:
+		return Vector3.INF
+	var lo := 0
+	var hi := n - 1
+	while hi - lo > 1:
+		var mid := (lo + hi) >> 1
+		if r[mid * 4] <= t:
+			lo = mid
+		else:
+			hi = mid
+	var t0 := r[lo * 4]
+	var t1 := r[hi * 4]
+	var u := 0.0 if t1 <= t0 else (t - t0) / (t1 - t0)
+	var a := Vector3(r[lo * 4 + 1], r[lo * 4 + 2], r[lo * 4 + 3])
+	var b := Vector3(r[hi * 4 + 1], r[hi * 4 + 2], r[hi * 4 + 3])
+	return a.lerp(b, u)
+
+
+## A viewer's series ([render_t, x, y, z, now]*) held against the owner's ring: {n, max_err, mean_err, max_step,
+## max_excess} over the frames the ring covers (from `skip` seconds after its start: the puppet's buffer fills first).
+## Flat distances. max_step is the biggest move between two frames; max_excess is the same less what a hero could
+## really walk in the time between those frames (WALK_SPEED x the frames' real gap), so a frame hitch is not a snap.
+static func series_error(owner_ring: PackedFloat64Array, series: PackedFloat64Array, skip: float = 0.5) -> Dictionary:
+	var n := 0
+	var worst := 0.0
+	var total := 0.0
+	var max_step := 0.0
+	var max_excess := 0.0
+	var prev := Vector2.INF
+	var prev_now := 0.0
+	if owner_ring.size() < 8:
+		return {"n": 0, "max_err": INF, "mean_err": INF, "max_step": INF, "max_excess": INF}
+	var t_lo := owner_ring[0] + skip
+	for i in floori(float(series.size()) / 5.0):
+		var q := Vector2(series[i * 5 + 1], series[i * 5 + 3])
+		var t := series[i * 5]
+		var now := series[i * 5 + 4]
+		var inside := t >= t_lo
+		if inside and prev != Vector2.INF:
+			var step := q.distance_to(prev)
+			max_step = maxf(max_step, step)
+			max_excess = maxf(max_excess, step - WALK_SPEED * (now - prev_now))
+		prev = q
+		prev_now = now
+		if not inside:
+			continue
+		var truth := ring_at(owner_ring, t)
+		if truth == Vector3.INF:
+			continue
+		var e := q.distance_to(Vector2(truth.x, truth.z))
+		worst = maxf(worst, e)
+		total += e
+		n += 1
+	return {"n": n, "max_err": worst, "mean_err": total / maxf(float(n), 1.0), "max_step": max_step, "max_excess": max_excess}
+
+
+## The wire's counts for the snapshot packets this process got: [accepted, stale, gaps].
+func snap_wire() -> Array:
+	var ts: Array = Session.wire.type_stats.get(NetWire.T_SNAP, [0, 0, 0])
+	return [int(ts[0]), int(ts[1]), int(ts[2])]
+
+
+## Every client's peer id (host only).
+func client_peers() -> Array[int]:
+	var out: Array[int] = []
+	for p: int in Session.roster:
+		if p != 1:
+			out.append(p)
+	return out
