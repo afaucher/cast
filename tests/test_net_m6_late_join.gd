@@ -325,10 +325,7 @@ func _late_joiner() -> void:
 	var sign_cmd := await wait_command(30.0)
 	if not check(str(sign_cmd.get("cmd", "")) == "sign", "the host says sign"):
 		return
-	check(sign_license(sign_cmd["spells"] as Array), "c2 signs %s" % str(sign_cmd["spells"]))
-	await get_tree().process_frame
-	slip = game.get("_join_slip") as ClockInSlip
-	var license_on_form := slip.license_value.text if slip != null and slip.visible else "(no form)"
+	# (hooked before signing, so the arrival is caught however long the name stamp holds)
 	Session.join.changed.connect(func() -> void:
 		if Session.join.arrived and arrival.is_empty():
 			var h := my_hero()
@@ -339,6 +336,10 @@ func _late_joiner() -> void:
 			arrival["dead"] = h.dead
 			arrival["slots"] = str(Array(h.spell_slots))
 			arrival["charges"] = str(h._charges))
+	check(await sign_license(sign_cmd["spells"] as Array), "c2 signs %s" % str(sign_cmd["spells"]))
+	await get_tree().process_frame
+	slip = game.get("_join_slip") as ClockInSlip
+	var license_on_form := slip.license_value.text if slip != null and slip.visible else "(no form)"
 	var waited := await until(func() -> bool:
 		if game != null and game.get("_join_slip") != null:
 			saw_slip[0] = true

@@ -928,6 +928,8 @@ func _show_picker() -> void:
 	if _shared and not Net.is_host():
 		picker.back_text = "Leave the crew"
 		picker.back_hint = "back to the menu"
+	if _run != null:
+		picker.job = {"job": _run.invoice_number.replace("INV-", ""), "client": _run.company}
 	hud.add_overlay(picker)
 	picker.cancelled.connect(_back_to_board)
 	_shot_stage("license", 1.0)
@@ -1364,8 +1366,9 @@ func _dev_join_spells() -> Array[String]:
 	return out
 
 
-## The joiner's license checkout: the same FORM 15 as at a contract start, in place of "Clocking in..." (the form comes back
-## with the license typed in once it is signed). Its back row and Esc leave the crew, as the form's own row does.
+## The joiner's license requisition: FORM 15-S, the supplemental variant of the FORM 15 a contract start opens, in place of
+## "Clocking in..." (the form comes back with the license typed in once it is signed). Its back row and Esc leave the crew,
+## as the form's own row does.
 func _open_join_picker() -> void:
 	if _join_picker != null:
 		return
@@ -1392,7 +1395,7 @@ func _open_join_picker() -> void:
 	_shot_stage("license", 1.0)
 
 
-## What the joiner's FORM 15-S types across its top: the job in progress and the seat it relieves.
+## What the joiner's FORM 15-S types in its header: the job in progress (number, client, floor) and the seat it relieves.
 func _join_requisition() -> Dictionary:
 	var j := Session.join
 	var out := {"job": "", "client": "", "floor": "", "relieving": ""}

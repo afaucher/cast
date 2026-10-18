@@ -262,7 +262,7 @@ func _check_seam() -> void:
 	await frames(2)
 
 
-## The key strips under the forms say "void" for Esc, never "back".
+## The key strips under the forms say where Esc goes ("back", "leave the crew"), not "void": the VOID stamp shows itself.
 func _check_hints() -> void:
 	for spec: Dictionary in _screens():
 		var s: Control = (spec["make"] as Callable).call()
@@ -275,6 +275,6 @@ func _check_hints() -> void:
 					if l is Label:
 						caps.append((l as Label).text)
 		if not caps.is_empty():
-			check(caps.has("VOID") and not caps.has("BACK") and not caps.has("LEAVE THE CREW"), "%s: Esc reads VOID in the key strip (%s)" % [str(spec["name"]), caps])
+			check(not caps.has("VOID") and (caps.has("BACK") or caps.has("LEAVE THE CREW")), "%s: the key strip says where Esc goes, not VOID (%s)" % [str(spec["name"]), caps])
 		s.queue_free()
 		await frames(2)

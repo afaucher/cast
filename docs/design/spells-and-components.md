@@ -17,15 +17,19 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 | Hand attachment | `LowPolyModel.hold_item()` (`scripts/art/lowpoly/`), `rebar_model.gd`, `gasket_model.gd`, `wick_model.gd` |
 | Drop hook | `Monster._on_death` -> `SpellComponents.drop_for` |
 
-## The license checkout [implemented, 2026-10-17]
-`SpellPicker` (FORM 15) lists every spell from `SpellBook.ids()` as a compact **licence card** in a three-column grid
-(`LicenseCard`), with nothing hard-coded per spell, so a new spell appears without a picker change. The details of the
-focused card (description, "say: cast X", cooldown, component) are in a panel on the right, plus your two picks. The
-grid is at least 5 and at most 7 rows tall and **scrolls** past that (focus keeps the card in view), so the sheet fits
-1600 x 900 canvas units (1280 x 720 and the Steam Deck's 1280 x 800) from nine spells to a hundred. Arrows and the
-D-pad move in 2D, Enter ticks, **1-9** tick the first nine cards (optional: later cards are reached with the arrows),
-Esc goes back. Test hook: set `spell_ids` / `spell_meta` (`SpellPicker.fake_ids(24)`) before adding it to the tree;
-`tests/test_license_checkout.gd` covers 9, 24 and 100 spells.
+## The license requisition [implemented, 2026-10-17; as a requisition 2026-10-18]
+`SpellPicker` is paperwork: FORM 15 "License requisition" at a contract start, FORM 15-S "Supplemental requisition" for a
+player joining a job in progress (one component, two variants). The player requisitions 2 licenses for this job (later,
+per-mission spending lives here; no prices or stock yet). Every spell from `SpellBook.ids()` is a **line item**
+(`RequisitionLine`: a printed box, the license with its colour tag, its component and cooldown), with nothing hard-coded
+per spell, so a new spell appears without a picker change. The list is at least 5 and at most 9 lines tall and
+**scrolls** past that (focus keeps the line in view). Beside it lies FORM 15-A, a separate **spec sheet** (`SpecSheet`)
+for the focused line: what to say ("cast heal", with the player's trigger word), component, cooldown and what it does.
+Both pages fit 1600 x 900 canvas units (1280 x 720) and the Steam Deck's 1600 x 1000, from nine spells to a hundred.
+Up / Down and the D-pad move line to line, Enter or a click ticks (the red tick is the record), and with two ticked
+Enter or a click on "Requested by" stamps the player's name and submits (`picked`). Esc voids. Test hook: set
+`spell_ids` / `spell_meta` (`SpellPicker.fake_ids(24)`) before adding it to the tree; `tests/test_license_checkout.gd`
+covers 9, 24 and 100 spells and both variants.
 
 ## Slots [decided, implemented]
 - Each hero has **4 spell slots** (`SpellComponents.SLOT_COUNT`). The start-of-game picker still
@@ -154,7 +158,7 @@ small floating label ("Ember horn x3") when a player is within 4 units.
 
 ## Still open
 - How many distinct spells for the vertical slice? There are nine now (vines, damp and coffee are the seventh to ninth);
-  the license checkout (FORM 15) is a scrolling catalog that is meant to grow past 20.
+  the license requisition (FORM 15) is a scrolling catalog that is meant to grow past 20.
 - Exploration secrets and vantage points holding rarer components (`exploration.md`).
 - Handing a component to a teammate; allies casting and collecting.
 - ~~Whether a dropped pickup should eventually despawn~~ Yes: 60 s, blinking for the last 5 (see Drops).

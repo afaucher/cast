@@ -34,7 +34,7 @@ func run_host() -> void:
 	check(not flow().waiting_names().has("c2"), "nobody waits for c2's license")
 	command(c1, "sign")
 	await sleep(0.5)
-	sign_license(my_license())
+	await sign_license(my_license())
 	if not check(await wait_floor(40.0), "floor 1 starts without c2 (still in its checkout)"):
 		return
 	eq(Session.seats.owner_of(3), 0, "seat 3 was built as the AI")
@@ -74,7 +74,7 @@ func run_client() -> void:
 	var cmd := await wait_command(40.0)
 	if str(cmd.get("cmd", "")) == "sign":
 		check(await wait_picker(), "c1's license checkout opens")
-		check(sign_license(my_license()), "c1 signs")
+		check(await sign_license(my_license()), "c1 signs")
 		check(await wait_floor(40.0), "floor 1 starts for c1")
 	cmd = await wait_command(60.0)
 	if str(cmd.get("cmd", "")) == "slots":
@@ -101,7 +101,7 @@ func _joiner() -> void:
 	var cmd := await wait_command(60.0)
 	if not check(str(cmd.get("cmd", "")) == "sign", "the host says sign"):
 		return
-	check(sign_license(my_license()), "c2 signs %s" % str(my_license()))
+	check(await sign_license(my_license()), "c2 signs %s" % str(my_license()))
 	var arrived := await until(func() -> bool: return Session.join.arrived, 50.0)
 	if not check(arrived, "c2 arrived on floor 1"):
 		return

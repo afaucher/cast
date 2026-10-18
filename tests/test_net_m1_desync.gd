@@ -17,7 +17,7 @@ func run_host() -> void:
 	await sleep(0.8)   # let the clients draw it
 	board().choose(0)
 	check(await wait_picker(), "the host has a checkout")
-	check(sign_license(my_license()), "the host signs")
+	check(await sign_license(my_license()), "the host signs")
 	check(await wait_floor(40.0), "the host's floor starts without waiting for the client that built another floor")
 	var f := flow()
 	eq(f.desyncs.size(), 1, "exactly one client built a different floor")
@@ -47,7 +47,7 @@ func run_client() -> void:
 	if not check(await wait_picker(40.0), "a license checkout opens"):
 		return
 	await sleep(0.4 * index)
-	check(sign_license(my_license()), "signs")
+	check(await sign_license(my_license()), "signs")
 	if _bad:
 		check(await until(func() -> bool: return ended, 30.0), "c2 is sent out")
 		eq(ended_reason, NetSession.DESYNC, "with the reason \"Desync: different floor\"")

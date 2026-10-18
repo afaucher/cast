@@ -74,7 +74,7 @@ func run_host() -> void:
 		command(p, "sign", {"key": "signed2"})
 	if not check(await wait_picker(), "the host's license checkout opens"):
 		return
-	sign_license(my_license())
+	await sign_license(my_license())
 	if not check(await wait_floor(45.0), "contract 2's floor 1 starts for the host"):
 		return
 	if not await wait_sync():
@@ -186,7 +186,7 @@ func run_client() -> void:
 					"crew": Session.roster.size(), "reloads": reloads, "n": n})
 			"sign":
 				check(await wait_picker(), "this client's license checkout opens")
-				check(sign_license(my_license()), "this client signs its license")
+				check(await sign_license(my_license()), "this client signs its license")
 				check(await wait_floor(45.0), "contract 2's floor 1 starts here")
 				await wait_sync()
 				report(str(cmd["key"]), true)

@@ -6,7 +6,7 @@ each other. They come from the user's review of the main menu, job board, invoic
 (2026-10-17/18). When a rule and a quick fix disagree, the rule wins; when a new case doesn't fit a rule, ask.
 
 Forms built before these rules may still break some of them (the invoice's large green totals, number keys printed on
-the elevator slip and the license cards, the settings and voice setup forms). Bring a form into line when you next
+the elevator slip and the back rows, the settings and voice setup forms). Bring a form into line when you next
 touch it.
 
 ## 1. Pick the right form
@@ -14,7 +14,7 @@ touch it.
    a work order, a dispatch sheet, a license, an invoice, a requisition, a phone slip. The screen's premise comes from
    that document.
 2. **A new situation is a new form, not a relabelled one.** Joining a job in progress is not a fresh license
-   checkout: it is FORM 15-S, a supplemental requisition for the ongoing job. Use a variant number (`15-S`, `27-C`,
+   requisition (FORM 15): it is FORM 15-S, a supplemental requisition for the ongoing job. Use a variant number (`15-S`, `27-C`,
    `99-B`) for a sibling of an existing form.
 3. **Every form has a number and a carbon.** The carbon follows the family (`FormTheme.CARBONS`): white for the office,
    canary for dispatch and the job site, pink for the shop, gold for settings, green for the crew. Add the form to the
@@ -91,11 +91,29 @@ A real form has three layers, made by three different hands. Keep them apart.
 form screen's `void_back()` calls it, from Esc and from its back row alike: a FormStamp reading VOID (132 px, -9 degrees)
 lands on the sheet in 0.1 s (scale 1.3 to 1, fading in), and the screen's back runs once `FormVoid.HOLD_S` (0.3 s) after
 the press. While it holds, every key and click on that screen stops at the void. The job board stamps each of its three
-parts. Key strips read "Esc VOID". Screens: job board, license checkout (15 and 15-S), voice setup (7), settings (3), pause
+parts. Key strips still say where Esc goes ("Esc back", "Esc leave the crew"), not VOID. Screens: job board, license requisition (15 and 15-S), voice setup (7), settings (3), pause
 (27-B, back = resume), elevator (E-1, stay), van (E-2, cancel), crew confirm (27-B, stay), invite (27-C, stay), clocking
 in (12-C, leave the crew). The invoice has no back. Test: `tests/test_form_void.gd`.
 
-## 7. Before shipping a form
+## 7. Submitting and reference pages
+As built on the license requisition (FORM 15 / 15-S / 15-A, user, 2026-10-18).
+
+29. **Submitting is signing.** A form the player submits ends in a printed signature line ("Requested by ______", the
+   job board's "Take ______"), never a GO / Start / Submit row. It is inert until the form is complete. Enter or a click
+   on it stamps the player's name in red (rule 9; one stamp everywhere: `SignLine.draw_stamp`, and `SignRow` for a line
+   you can focus), the stamp holds a moment (0.6 s) so it is seen, and then the form goes in. While it holds nothing on
+   the form changes and it can't be voided. The name comes from `JobBoard.signer_name()`.
+30. **The marks are the record.** Don't echo the player's marks back as state copy: no "Picks 2 / 2" box, no "your
+   picks" list, no "Enter to tick" line. A limit the paperwork imposes is one printed rule, once ("Limit 2 licenses
+   per crew member, per job.").
+31. **A catalog is line items.** One ruled line per item: a printed box for the red tick, the item's name, and only the
+   columns a buyer would compare (component, cooldown), all typed. No key numbers on the lines (rule 15).
+32. **Reference is a separate page.** What the reader needs about the item in focus (how to say it, what it does) goes
+   on its own small sheet lying beside the form: a `SpecSheet` with its own number (`15-A`: the form's number plus a
+   letter), header and carbon, a little lower than the form, never a panel inside it. It swaps to the line that has
+   focus. Both pages together fit the canvas (rule 24); VOID stamps the form, not the reference page.
+
+## 8. Before shipping a form
 - Build it from `FormSheet` / `FormRow` / `FormField` with `theme = FormTheme.theme()`; no one-off colours or fonts.
 - Read it as the clerk who typed it: is every variable typed, every caption printed, every player mark red?
 - Read it as the player: is there any line you could delete without losing anything? Delete it.

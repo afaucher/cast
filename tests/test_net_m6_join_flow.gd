@@ -131,7 +131,7 @@ func run_host() -> void:
 	for p in [c1, c3]:
 		command(p, "license")
 	if check(await wait_picker(15.0), "the host's license checkout opens for the next job"):
-		sign_license(my_license())
+		await sign_license(my_license())
 	if check(await wait_floor(40.0), "the next job's floor 1 starts with the whole crew"):
 		var seat3 := int(Session.roster[c3]["seat"])
 		eq(Session.seats.owner_of(seat3), c3, "c3 holds seat %d from the barrier" % seat3)
@@ -203,7 +203,7 @@ func _commands() -> void:
 				var opened := await wait_picker(15.0)
 				var info := {"picker": opened, "joiner": game.get("_join_picker") != null, "back": picker().back_text if opened else ""}
 				if opened:
-					check(sign_license(C3_SPELLS if index == 3 else my_license()), "signed the next job's license")
+					check(await sign_license(C3_SPELLS if index == 3 else my_license()), "signed the next job's license")
 				check(await wait_floor(40.0), "the next job's floor starts here")
 				report("license", info)
 			"leave":

@@ -12,6 +12,7 @@ func setup() -> void:
 
 	# --- Picker: exactly 2 spells, third pick replaces the oldest.
 	var picker := SpellPicker.new()
+	picker.sign_hold = 0.0   # (submit as soon as it is signed)
 	add_child(picker)
 	var got: Array = []
 	picker.picked.connect(func(s: Array[String]) -> void: got.append(s))
@@ -92,8 +93,8 @@ func setup() -> void:
 	check(arena.player != null and arena.hud != null and arena.picker != null, "arena built with the picker waiting")
 	arena.picker.toggle("heal")
 	arena.picker.toggle("armor")
-	arena.picker.confirm()
-	await frames(5)
+	check(arena.picker.confirm(), "the arena's requisition signs")
+	await frames(ceili(SpellPicker.SIGN_HOLD * Engine.physics_ticks_per_second) + 5)
 	eq(arena.player.spell_slots, ["heal", "armor"] as Array[String], "picked spells land in the slots")
 	check(GameWorld.team_actors(GameWorld.TEAM_MONSTERS).size() >= 4, "monsters spawned after picking")
 	await frames(60)

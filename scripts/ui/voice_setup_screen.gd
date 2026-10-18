@@ -170,7 +170,7 @@ func _build() -> void:
 	root.add_child(FormTheme.rule(3.0))
 	root.add_child(FormTheme.margin(_build_try_it(), 26, 10, 26, 14))
 
-	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "void"]])
+	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "back"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 58.0
 	keys.offset_top = -48.0

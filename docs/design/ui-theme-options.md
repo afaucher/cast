@@ -26,7 +26,7 @@ the backdrop be?
 | Settings | yes (`settings_screen.gd`) | volume slider, fullscreen toggle, window size, debug-panel toggle | medium | slider, toggle, dropdown |
 | Pause | yes (`pause_menu.gd`) | Resume, Abandon contract, Main menu | low | list focus |
 | Job board | yes (`job_board.gd`) | 3 offers: client, site, story, objectives with $, floors, danger, property warning, value | **high, comparative** | 1-3, left/right |
-| Spell picker | yes (`spell_picker.gd`) | choose 2 of 6, incantation hint | medium | multi-select |
+| Spell picker | yes (`spell_picker.gd`) | requisition 2 of 9 licenses, a spec sheet for the focused one | medium | multi-select |
 | Elevator | yes (`elevator_menu.gd`) | floor N of 3, payout so far, damage so far, Go down or Cash out | low | 2 choices |
 | Invoice | yes (`invoice_screen.gd`) | already a real paper invoice: letterhead, line items, deductions, net, stars | high | continue |
 | HUD | yes (`hud.gd`, `objective_tracker.gd`, damage ticker) | HP, spell cards, toasts, mic meter, objectives, "-$1,200 wine rack" | in play | none (must not block play) |
@@ -83,7 +83,7 @@ be compared across columns. Focus is always the same yellow highlighter band plu
 | Main / pause | FORM 27-B Work order, on the clipboard |
 | Voice setup | FORM 7 Rig calibration (the live meter sits in a boxed field) |
 | Job board | FORM 12 Dispatch offers, a 3-part tear-off set |
-| Spell picker | FORM 15 License checkout |
+| Spell picker | FORM 15 License requisition (15-S Supplemental requisition; 15-A Spec sheet beside it) |
 | Elevator | "While you were out" slip |
 | Invoice | FORM 99 (the existing invoice, aligned to the grid) |
 | Shop | FORM 40 Supply requisition |
@@ -283,12 +283,17 @@ Option B is in the game. Every screen in `scripts/ui/` is a form; `MenuStyle` is
   `FormField` (label + any controls, drawing the band when one has focus), `FormCheck` (typed X), `BoxScale`
   (a `Range`: 10 boxes, Left/Right one box, Shift one step, mouse click/drag), `FormStamp`, `FormClipboard` (wood
   board, metal clip, index tabs, 1 degree tilt), `KeyHints` (paper keycaps).
+- Signing and reference pages (`form-rules.md` §7): `SignLine` (the ruled line and the red name stamp, shared by the job
+  board's Take line and the requisition), `SignRow` (a focusable "Requested by" SignLine: Enter / click signs, inert
+  while disabled), `RequisitionLine` (a requisition line item: printed box with the red tick, typed name with its colour
+  tag, typed columns; `RequisitionLine.Captions` prints the column heads) and `SpecSheet` (a separate small FormSheet of
+  caption-over-typed-value cells that lies beside a form and follows its focus).
 - Focus is one language: the mouse grabs focus on hover, so only one thing is ever highlighted, and the focused
   row gets the yellow band plus a red tick (or, on a toggle row, the band alone, with a red X in the box once ticked).
 - Back is one language too (`form-rules.md` §6): `FormVoid` (2026-10-18). Esc or a form's back row stamps a red VOID on
   the sheet (each part of the job board's set), holds 0.3 s (`FormVoid.HOLD_S`) with the screen's input blocked, then runs
-  that screen's back. Each screen exposes `void_back()`; game.gd and the main menu call it on Esc. The key strips say
-  "Esc VOID". Test seam: `FormVoid.hold_s`; tests wait it out with `TestCase.after_void()`.
+  that screen's back. Each screen exposes `void_back()`; game.gd and the main menu call it on Esc. The key strips still say
+  where Esc goes ("Esc back", "Esc leave the crew"), not VOID. Test seam: `FormVoid.hold_s`; tests wait it out with `TestCase.after_void()`.
 - `forms_lab.gd` / `scenes/forms_lab.tscn`: the screenshot lab (see Screenshots below).
 
 **Fonts:** the real OFL files in `assets/fonts/` (Barlow Condensed, Courier Prime, Black Ops One, Caveat variable
@@ -303,7 +308,7 @@ Impact, Segoe Print). Swap fonts in `FormTheme._font()` callers only.
 | `SettingsScreen` | FORM 3 Options (goldenrod): box scale, boxed checks, boxed picker |
 | `PauseMenu` | FORM 27-B "On hold" on a clipboard, with the build |
 | `JobBoard` | FORM 12 header strip + a 3-part set (white, canary, pink), same fields in the same places. Left/Right (or hover) highlights, Enter or 1-3 takes. No full-screen paper: the garage (`MenuBackdrop`) shows between and around the cards. `backdrop_behind` (set by the game) swaps the opaque dark shade for a light dim |
-| `SpellPicker` | FORM 15 License checkout: a ticked-box row per spell; the second pick moves focus to Start |
+| `SpellPicker` | FORM 15 License requisition (white) and, for a player joining a job in progress, FORM 15-S Supplemental requisition (canary): one component, two variants. Job # in the copy box; typed Client / Issued to (15-S adds Floor and Relieving); a line item per spell (box, license, component, cooldown; scrolls past 9); "Limit 2 licenses per crew member, per job."; "Requested by", signed with the red name stamp, then `picked`; the back row. Beside it, FORM 15-A Spec sheet (blue): Say, Component, Cooldown, What it does, for the focused line |
 | `ElevatorMenu` | FORM E-1 canary "while you were out" slip with three rows (the old keys 1, 2, Esc work as before) |
 | `InvoiceScreen` | FORM 99, same content and logic; the crew debrief is a canary slip (FORM 99-B) with a "Next contract" row |
 | `ObjectiveTracker` (HUD) | a small canary work-order slip; the only HUD change |
@@ -320,8 +325,10 @@ Button ignores the script's).
 
 **Screenshots:** the menu screens use the menu's own flags (`--menu-screen main|voice|settings --menu-shot`); the
 rest use the lab: `godot --path . --resolution 1280x720 -- --scene res://scenes/forms_lab.tscn --screen
-board|picker|pause|elevator|elevator_last|invoice|tracker --shot x --lab-shot <abs.png> [--lab-focus n]` (the `--shot x`
-only stops `Boot` from changing the window size). Add `--lab-void` (lab) or `--menu-void` (menu sub-screens) to void the
+board|picker|picker_s|pause|elevator|elevator_last|invoice|tracker --shot x --lab-shot <abs.png> [--lab-focus n]`
+(the requisition: `--lab-picks n` ticks the first n lines, `--lab-sign` stamps "Requested by" and holds, `--lab-card i`
+focuses line i, `--lab-fake n` offers n made-up spells). The `--shot x`
+only stops `Boot` from changing the window size. Add `--lab-void` (lab) or `--menu-void` (menu sub-screens) to void the
 screen just before the shot and hold the VOID stamp. Tests: `tests/test_forms.gd`, `tests/test_form_void.gd`.
 
 ## 5. Files

@@ -112,9 +112,9 @@ func _ready() -> void:
 	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if read_only:
-		side.add_child(KeyHints.new([["Esc", "void"]]))
+		side.add_child(KeyHints.new([["Esc", "leave the crew"]]))
 	else:
-		side.add_child(KeyHints.new([["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "void"]]))
+		side.add_child(KeyHints.new([["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "back"]]))
 	var rules := FormTheme.label("LEAVING EARLY ALWAYS WORKS  ·  UNMET OBJECTIVES DO NOT PAY", 18, Color(1, 1, 1, 0.85))
 	rules.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	rules.add_theme_constant_override("outline_size", 5)
@@ -458,7 +458,7 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	var take := FormTheme.label("TAKE", 20, FormTheme.INK, true)
 	take.size_flags_vertical = Control.SIZE_SHRINK_END
 	sign.add_child(take)
-	var line := SignLine.new()
+	var line := SignLine.new()   # (scripts/ui/forms/sign_line.gd: the same name stamp signs the requisition)
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.custom_minimum_size = Vector2(0, 34)
 	line.style = SIGN_STYLE
@@ -550,44 +550,3 @@ class DangerBoxes:
 			var w: Vector3 = WOBBLE[i % WOBBLE.size()]
 			var b := Rect2(i * 32.0 + 4.0 + w.x, 9.0 + w.y, 17.0 + w.z, 17.0 + w.z)
 			FormTheme.draw_tick(self, b, FormTheme.GREASE, 3.5)
-
-
-## The ruled line you sign on; `signature` is written on it in the red grease pencil, like every mark the player
-## makes on a form.
-class SignLine:
-	extends Control
-	var signature := "":
-		set(v):
-			signature = v
-			queue_redraw()
-	var style := "pen"
-
-	func _init() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		draw_line(Vector2(0, size.y - 3.0), Vector2(size.x, size.y - 3.0), FormTheme.INK, 2.0)
-		if signature == "":
-			return
-		if style == "stamp":
-			_draw_stamp()
-			return
-		# A hand signature runs a little uphill.
-		var f := FormTheme.hand_font()
-		draw_set_transform(Vector2(12.0, size.y - 7.0), deg_to_rad(-4.0))
-		draw_string(f, Vector2.ZERO, signature, HORIZONTAL_ALIGNMENT_LEFT, size.x - 12.0, 34, FormTheme.GREASE)
-		draw_set_transform(Vector2.ZERO)
-
-	## A red rubber name stamp sitting on the line, double-bordered and a touch crooked.
-	func _draw_stamp() -> void:
-		var f := FormTheme.stamp_font()
-		var fs := 22
-		var text := signature.to_upper()
-		var tw := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		var box := Rect2(Vector2(-tw * 0.5 - 14.0, -f.get_height(fs) * 0.5 - 6.0), Vector2(tw + 28.0, f.get_height(fs) + 12.0))
-		var ink := Color(FormTheme.RED, 0.85)
-		draw_set_transform(Vector2(box.size.x * 0.5 + 18.0, size.y - 14.0), deg_to_rad(-3.0))
-		draw_rect(box, ink, false, 3.0)
-		draw_rect(box.grow(-5.0), ink, false, 1.5)
-		draw_string(f, Vector2(-tw * 0.5, f.get_ascent(fs) - f.get_height(fs) * 0.5), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
-		draw_set_transform(Vector2.ZERO)

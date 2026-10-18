@@ -84,7 +84,8 @@ quits (`--shot-after S` to change it); `run.ps1 -ShotDir <dir>` gives each windo
 1. **Job board:** dispatch offers three jobs from different clients (prepper billionaire,
    supervillain, wellness guru, tech founder, influencer). Each shows objectives, pay, danger and a
    property warning.
-2. **Pick two spells** at the license checkout (a scrolling catalog of every spell with its details), then go down.
+2. **Pick two spells** on the license requisition (a scrolling catalog of every spell, with a spec sheet beside it),
+   sign it, then go down.
 3. **Three floors, only ever down.** The crew's work van teleports in on floor 1 and stays parked there;
    floors 2 and 3 have no van, you just start. Close hellgates, exterminate the pest you were hired for, and
    rescue employees. Press **E** next to one to bring them along; once a follower reaches an exit (the van's

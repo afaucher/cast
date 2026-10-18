@@ -53,7 +53,7 @@ func run_host() -> void:
 	check(await wait_picker(), "the host has a license checkout")
 	check(not picker().back_text.begins_with("Leave"), "the host's checkout goes back to the board")
 	await sleep(SIGN_AT[0])
-	check(sign_license(my_license()), "the host signs its license last")
+	check(await sign_license(my_license()), "the host signs its license last")
 	check(await wait_reports("waited", 2), "both clients report what they saw while waiting")
 	for p in peers_with("waited"):
 		check(bool(reported(p, "waited")), "peer %d saw 'waiting for ...' while the others signed" % p)
@@ -134,7 +134,7 @@ func run_client() -> void:
 		return
 	check(picker().back_text == "Leave the crew", "a client's checkout leaves the crew instead of going back")
 	await sleep(SIGN_AT[index])
-	check(sign_license(my_license()), "this player signs their own license")
+	check(await sign_license(my_license()), "this player signs their own license")
 	await sleep(0.3)
 	var label: Label = game.get("_wait_label")
 	var waited := label != null and label.visible and label.text.begins_with("License signed. Waiting for") and label.text.contains("host")

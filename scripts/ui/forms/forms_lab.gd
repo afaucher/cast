@@ -4,13 +4,16 @@ extends Control
 ##
 ##   godot --path . --resolution 1280x720 -- --scene res://scenes/forms_lab.tscn --screen board --lab-shot <abs.png>
 ##
-## --screen <s>    board | picker | pause | elevator | elevator_last | van | invoice | tracker | gallery
+## --screen <s>    board | picker | picker_s | pause | elevator | elevator_last | van | invoice | tracker | gallery
+##                 (picker: FORM 15, the license requisition; picker_s: FORM 15-S, a joiner's supplemental requisition)
 ## --lab-shot <p>  save a screenshot after --lab-after seconds (default 1.2) and quit
 ## --lab-after <s>
 ## --invoice-seed <n> / --invoice-down <n>   invoice: the contract's seed, and how many heroes are still down (revival fees)
 ## --lab-focus <n> board: which offer is highlighted (default 0)
 ## --lab-down <n>  press Down n times first (focus walk), for the picker / pause / elevator
-## --lab-card <i> picker: focus card i (0-based) after the first two are ticked
+## --lab-card <i> picker: focus line i (0-based) after the first lines are ticked
+## --lab-picks <n> picker: tick the first n lines (default 2)
+## --lab-sign      picker: sign it (the name stamp on "Requested by") and hold there
 ## --lab-fake <n>  picker: offer n made-up spells instead of the real ones (checks a long catalog)
 ## --lab-void      void the screen (its void_back(), as Esc does) 0.4 s before the shot and hold the VOID stamp there
 ##                 (board, picker, pause, elevator, elevator_last, van; FormVoid)
@@ -66,20 +69,29 @@ func _open(which: String, a: PackedStringArray) -> void:
 			var f := Boot.arg_value(a, "--lab-focus")
 			if f != "":
 				board.set_highlight(int(f))
-		"picker":
+		"picker", "picker_s":
 			var p := SpellPicker.new()
 			var fake := int(Boot.arg_value(a, "--lab-fake"))   # a made-up list of this many spells (0 = the real ones)
 			if fake > 0:
 				p.spell_ids = SpellPicker.fake_ids(fake)
 				p.spell_meta = SpellPicker.fake_meta(p.spell_ids)
+			if which == "picker_s":
+				p.back_text = "Leave the crew"
+				p.back_hint = "back to the menu"
+				p.requisition = {"job": "08137-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3", "relieving": "Gasket"}
+			else:
+				p.job = {"job": "08137-PR", "client": "Hollis-Crane Continuity Holdings"}
 			add_child(p)
 			opened = p
 			var offered := p.offered()
-			if offered.size() >= 2:
-				p.toggle(offered[0])
-				p.toggle(offered[1])
+			var picks := int(Boot.arg_value(a, "--lab-picks")) if Boot.arg_value(a, "--lab-picks") != "" else 2
+			for i in mini(picks, offered.size()):
+				p.toggle(offered[i])
 			if Boot.arg_value(a, "--lab-card") != "":
-				p.focus_card.call_deferred(int(Boot.arg_value(a, "--lab-card")))
+				p.focus_line.call_deferred(int(Boot.arg_value(a, "--lab-card")))
+			if a.has("--lab-sign"):
+				p.sign_hold = 3600.0   # hold the stamp: the shot catches it before `picked`
+				p.confirm()
 			_walk(a)
 		"pause":
 			var p := PauseMenu.new()

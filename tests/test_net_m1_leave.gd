@@ -32,7 +32,7 @@ func run_host() -> void:
 	check(await until(func() -> bool: return Session.roster.size() == 2, 10.0), "the host drops the client who left the checkout")
 	check(not Session.roster.has(c2), "c2 is off the roster")
 	check(flow().waiting_names().all(func(n: String) -> bool: return n != "c2"), "nobody waits for c2")
-	check(sign_license(my_license()), "the host signs")
+	check(await sign_license(my_license()), "the host signs")
 	check(await wait_floor(40.0), "the floor starts for the two who stay")
 	check(await wait_reports("floor", 1, 20.0), "c1 reports its floor")
 	for p in peers_with("floor"):
@@ -64,7 +64,7 @@ func run_client() -> void:
 		eq(scene_changes, [Boot.MENU_SCENE] as Array[String], "c2's game goes back to the menu")
 		return
 	await sleep(1.5)
-	check(sign_license(my_license()), "c1 signs and waits for the host")
+	check(await sign_license(my_license()), "c1 signs and waits for the host")
 	var label: Label = game.get("_wait_label")
 	check(label != null and label.visible, "c1 is shown the wait")
 	if not check(await wait_floor(40.0), "c1's floor starts"):

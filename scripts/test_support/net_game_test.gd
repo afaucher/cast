@@ -87,14 +87,21 @@ static func run_signature(r: ContractRun) -> String:
 	return "%s|%s|%d|%.4f|%d|%s" % [r.invoice_number, r.archetype_id, r.seed, r.difficulty, r.contract_value, r.story["event"]]
 
 
-## Tick two spells in the license checkout and sign. False if there is no checkout open.
+## Tick two spells on the license requisition and sign it (await it): the name stamp holds SpellPicker.SIGN_HOLD as it
+## does for a player, and this returns once the form has gone in (picked). False if there is no requisition open or it
+## did not sign.
 func sign_license(ids: Array) -> bool:
 	var p := picker()
 	if p == null:
 		return false
 	for id: String in ids:
 		p.toggle(id)
-	return p.confirm()
+	var went := [false]
+	p.picked.connect(func(_s: Array[String]) -> void: went[0] = true)
+	if not p.confirm():
+		return false
+	await until(func() -> bool: return went[0], p.sign_hold + 5.0)
+	return went[0]
 
 
 func my_license() -> Array:

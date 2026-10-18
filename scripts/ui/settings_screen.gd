@@ -201,7 +201,7 @@ func _build() -> void:
 	foot_row.add_child(back_button)
 	foot.box.add_child(foot_row)
 
-	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "void"]])
+	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "back"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 58.0
 	keys.offset_top = -52.0

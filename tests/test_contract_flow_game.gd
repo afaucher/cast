@@ -44,6 +44,7 @@ func _check_board() -> void:
 		eq(board.offers.size(), 3, "three offers on the board")
 		check(Ledger.active == false or Ledger.lines.is_empty(), "no contract is running on the board")
 		var first_value: int = board.offers[0].contract_value
+		var first_run: ContractRun = board.offers[0]
 		var names: Array[String] = []
 		for o in board.offers:
 			names.append(o.client_name)
@@ -56,7 +57,12 @@ func _check_board() -> void:
 		check(g.get("hud") != null, "the world was built after picking")
 		# Back out of the license checkout: the job is dropped and the board comes back with the same offers.
 		var picker: SpellPicker = g.get("_picker")
-		check(picker != null, "the license checkout is open")
+		check(picker != null, "the license requisition is open")
+		if picker != null:
+			eq(picker._sheet.header.form_no_label.text, "15", "FORM 15 at a contract start")
+			eq(picker._sheet.header.copy_value.text, first_run.invoice_number.replace("INV-", ""), "the job number is typed in")
+			eq((picker._fields["client"] as Label).text, first_run.company, "and the client")
+			eq((picker._fields["issued_to"] as Label).text, JobBoard.signer_name(), "issued to the player")
 		var went: Array[String] = []
 		g.set("scene_changer", func(path: String) -> void: went.append(path))
 		if picker != null:
