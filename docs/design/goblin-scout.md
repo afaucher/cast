@@ -332,3 +332,13 @@ The lab views are written as `<base>_<view>.png` at the resolution given:
    for a future flare or fireworks spell?
 9. **Does he hear voices?** Crew speech within about 6 counting as a noise (the "hush zones" idea; awareness doc question 8).
 10. **His name in the HUD:** "Goblin Scout", "Lookout", or something else?
+
+## Decisions (user, 2026-10-18)
+- **Timing is right** ("!" 0.6 s + lighting 1.4 s + fuse 1.6 s): a good intercept window; confirm in playtest.
+- **Killed once the fuse is lit: the fireworks still go off** (the full alarm), unless the rack is soaked (damp)
+  first. Only a stop before the fuse catches is silent.
+- **No sneak-attack bonus damage.**
+- **He restocks** about 60 s after a volley (not one volley per floor).
+- **One per floor, sometimes two** (1-2).
+- **HUD name: "Goblin Scout".**
+- Not answered yet: "fireball lights the rack" and "vines stop him lighting" stay as designed until the playtest says otherwise.
