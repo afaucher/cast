@@ -13,6 +13,7 @@ func setup() -> void:
 	await _real_spells()
 	await _long_list()
 	await _empty_and_tiny_lists()
+	await _requisition()
 	finish()
 
 
@@ -200,4 +201,26 @@ func _empty_and_tiny_lists() -> void:
 	p3._back.pressed.emit()
 	eq(cancelled[0], 1, "the Back row cancels")
 	p3.queue_free()
+	await frames(2)
+
+
+## A player joining a job under way files FORM 15-S, a supplemental requisition: canary, the job typed across the top,
+## "Submit requisition" to sign; still fits 1600 x 900.
+func _requisition() -> void:
+	var p := SpellPicker.new()
+	p.requisition = {"job": "08323-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3", "relieving": "Gasket"}
+	p.back_text = "Leave the crew"
+	add_child(p)
+	await frames(4)
+	eq(p._sheet.header.form_no_label.text, "15-S", "a joiner's form is 15-S")
+	check(p._sheet.header.title_label.text.to_lower().contains("supplemental requisition"), "titled Supplemental requisition")
+	eq(p._start.text, "Submit requisition", "signing is Submit requisition")
+	var typed: Array[String] = []
+	for l in p._sheet.body.find_children("*", "Label", true, false):
+		typed.append((l as Label).text)
+	for v in ["08323-PR", "Hollis-Crane Continuity Holdings", "2 of 3", "Gasket"]:
+		check(typed.has(v), "the requisition types %s" % v)
+	var min_size := p._sheet.get_combined_minimum_size()
+	check(min_size.x <= CANVAS_W and min_size.y <= CANVAS_H - 60.0, "15-S fits 1600 x 900 (%s)" % str(min_size))
+	p.queue_free()
 	await frames(2)

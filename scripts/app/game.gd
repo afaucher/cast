@@ -1376,6 +1376,7 @@ func _open_join_picker() -> void:
 	picker.set_trigger_word(str(VoiceSettings.load_settings(GameSettings.path).get("trigger_word", "cast")))
 	picker.back_text = "Leave the crew"
 	picker.back_hint = "back to the menu"
+	picker.requisition = _join_requisition()
 	holder.add_child(picker)
 	_screens().add_child(holder)
 	_join_picker = holder
@@ -1388,6 +1389,29 @@ func _open_join_picker() -> void:
 		Session.join.sign(chosen))
 	_log("clocking in: sign your license (the AI holds your seat)", Color(0.6, 0.9, 1.0))
 	_shot_stage("license", 1.0)
+
+
+## What the joiner's FORM 15-S types across its top: the job in progress and the seat it relieves.
+func _join_requisition() -> Dictionary:
+	var j := Session.join
+	var out := {"job": "", "client": "", "floor": "", "relieving": ""}
+	if not j.wait_job.is_empty():
+		var run := ContractRun.make(str(j.wait_job["archetype"]), int(j.wait_job["seed"]), float(j.wait_job["difficulty"]))
+		out["job"] = run.invoice_number.replace("INV-", "")
+		out["client"] = run.company
+	if j.wait_floor > 0:
+		out["floor"] = "%d of %d" % [j.wait_floor, ContractRun.FLOOR_COUNT]
+	var seat := int(j.go.get("seat", Session.local_entry().get("seat", -1)))
+	if seat > 0:
+		out["relieving"] = "seat %d" % seat
+	if j.wait_relieving != "":
+		out["relieving"] = str((CREW_LOOKS.get(j.wait_relieving, {"name": j.wait_relieving}) as Dictionary)["name"])
+	for row: Variant in j.go.get("seats", []) as Array:
+		var d := row as Dictionary
+		if int(d.get("seat", 0)) == seat:
+			var ch := str(d.get("character", ""))
+			out["relieving"] = str((CREW_LOOKS.get(ch, {"name": ch}) as Dictionary)["name"])
+	return out
 
 
 ## Close the joiner's checkout; `show_slip`: "Clocking in..." comes back (with the license on it).

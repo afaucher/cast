@@ -36,6 +36,11 @@ var spell_meta := {}
 ## client, who has no board of its own to go back to. Set before adding to the tree.
 var back_text := "Back to the board"
 var back_hint := "pick another job"
+## A player joining a job already under way (user, 2026-10-18) files a supplemental requisition for the job in progress
+## instead of a fresh license checkout: FORM 15-S on canary, the job's details typed across the top, "Submit
+## requisition" to sign. Keys (all typed values, "" leaves a dash): job (number), client, floor, relieving (the seat's
+## hero). Empty = the ordinary FORM 15. Set before adding to the tree.
+var requisition := {}
 
 var _ids: Array[String] = []
 var _selected: Array[String] = []
@@ -90,11 +95,17 @@ func _ready() -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
-	_sheet = FormSheet.new("15", "License checkout", "Spell licensing office  ·  pick %d" % PICK_COUNT, "Picks", "0 / %d" % PICK_COUNT, "white", 44)
+	if requisition.is_empty():
+		_sheet = FormSheet.new("15", "License checkout", "Spell licensing office  ·  pick %d" % PICK_COUNT, "Picks", "0 / %d" % PICK_COUNT, "white", 44)
+	else:
+		_sheet = FormSheet.new("15-S", "Supplemental requisition", "Added crew  ·  job in progress  ·  request %d licenses" % PICK_COUNT, "Requested", "0 / %d" % PICK_COUNT, "canary", 44)
 	_sheet.custom_minimum_size = Vector2(SHEET_W, 0)
 	center.add_child(_sheet)
 	var body := _sheet.body
 
+	if not requisition.is_empty():
+		body.add_child(_requisition_strip())
+		body.add_child(FormTheme.rule(2.0))
 	_sub = FormTheme.typed("", 21)
 	body.add_child(FormTheme.margin(_sub, 22, 10, 22, 8))
 	_sub_text()
@@ -127,7 +138,7 @@ func _ready() -> void:
 		_cards.append(c)
 	body.add_child(FormTheme.rule(2.0))
 
-	_start = FormRow.new("Start", "GO", "")
+	_start = FormRow.new("Start" if requisition.is_empty() else "Submit requisition", "GO", "")
 	_start.row_h = 62.0
 	_start.show_box = false
 	_start.label_size = 34
@@ -153,6 +164,26 @@ func _ready() -> void:
 	if not _cards.is_empty():
 		focus_first = _cards[0]
 	_initial_focus.call_deferred(focus_first)
+
+
+## The job in progress, typed across the top of a supplemental requisition: printed captions, typed values.
+func _requisition_strip() -> Control:
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", 34)
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for f: Array in [["JOB #", "job"], ["CLIENT", "client"], ["FLOOR", "floor"], ["RELIEVING", "relieving"]]:
+		var cell := HBoxContainer.new()
+		cell.add_theme_constant_override("separation", 10)
+		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var cap := FormTheme.label(str(f[0]), 18, FormTheme.INK, true)
+		cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		cell.add_child(cap)
+		var v := str(requisition.get(f[1], ""))
+		var val := FormTheme.typed(v if v != "" else "-", 21)
+		val.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		cell.add_child(val)
+		strip.add_child(cell)
+	return FormTheme.margin(strip, 22, 10, 22, 10)
 
 
 func _detail_panel() -> Control:
@@ -269,6 +300,8 @@ func _sub_text() -> void:
 	var a := _ids[0] if _ids.size() > 0 else "heal"
 	var b := _ids[1] if _ids.size() > 1 else a
 	_sub.text = "You will say them out loud: \"%s\", \"%s\"..." % [_incantation_of(a).to_lower(), _incantation_of(b).to_lower()]
+	if not requisition.is_empty():
+		_sub.text = "The AI covers your seat until this is approved. " + _sub.text
 
 
 func _hint_for(id: String) -> String:
