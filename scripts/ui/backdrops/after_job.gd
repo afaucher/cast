@@ -7,7 +7,7 @@ extends RefCounted
 ##   - CORN: a giant smug cob wedged in the van roof, whole cobs lying about (kernel-bumped, husked, one scorched),
 ##     one planted in the floor, kernels and popcorn in clumps, loose husk leaves. Never a word about corn but the sign.
 ##   - DAMAGE: big char-black scorch marks (brown halo) on the floor and up the back wall, a popped hood with a small fire
-##     and a thick smoke column, soot on the van's side and a door hanging crooked, a failing work lamp.
+##     and a thick smoke column and a door hanging crooked, a failing work lamp.
 ##   - STORY: an invoice nailed to the wall stamped PAST DUE, the corn sign reading a big red 0, an extinguisher on its
 ##     side in a puddle of foam, the crew scuffed, sooty, patched and slumping.
 ##
@@ -185,7 +185,7 @@ static func scorch_wall(s: LowPoly.Soup, pos: Vector3, rx: float, ry: float, see
 # --- The van -----------------------------------------------------------------------------------------
 
 ## Damage layered on the van (`root` has the van's transform, so these are in van-local coordinates: nose +Z, camera side -X,
-## roof at y 1.9): a popped, bent hood over a small fire, soot up the side, a scorched hole in the roof the cob went through.
+## roof at y 1.9): a popped, bent hood over a small fire, a scorched hole in the roof the cob went through.
 static func van_damage(root: Node3D) -> void:
 	var s := LowPoly.Soup.new(4242, 0.06)
 	# the popped hood: hinged at the windscreen base, thrown up and skewed so the charred underside shows to the camera
@@ -200,34 +200,6 @@ static func van_damage(root: Node3D) -> void:
 		var fx := -0.32 + 0.32 * float(i)
 		Kit.rod(s, Vector3(fx, 1.3, 1.93), Vector3(fx * 0.7 + 0.04, 2.15 + 0.25 * float(i % 2), 1.93), 0.22 - 0.05 * float(i % 2), 0.0, 5, Kit.glow(Color(1.0, 0.48, 0.1)))
 	Kit.rod(s, Vector3(0.0, 1.31, 1.93), Vector3(0.02, 1.85, 1.93), 0.12, 0.0, 5, Kit.glow(Color(1.0, 0.85, 0.4)))
-	# soot: broad, ragged smudges low on the camera side (over the front wheel arch and the rear corner). Flat blobs
-	# lying on the panel, not flame-lick spikes: thin dark triangles read as spikes at the menu camera.
-	var soot := LowPoly.Soup.new(4251, 0.05)
-	for blob: Array in [[1.55, 0.78, 0.55, 0.32, 0.17], [1.0, 1.02, 0.36, 0.22, 0.2], [-1.75, 0.75, 0.45, 0.28, 0.18]]:
-		var bz: float = blob[0]
-		var by: float = blob[1]
-		var rz: float = blob[2]
-		var ry: float = blob[3]
-		var dark: float = blob[4]
-		var seed_v := 4260 + int(bz * 10.0)
-		# a soft grey halo under a darker core, both flat on the side panel (x = -1.07), jittered so the edge is ragged
-		soot.merge(LowPoly.cylinder(1.0, 1.0, 0.01, 12, Color(0.4, 0.37, 0.34), seed_v, 0.0, 1, 0.0).jitter(0.18, seed_v, Vector3(1.0, 0.0, 1.0)),
-				_xf(Vector3(-1.075, by, bz), Vector3(0.0, 0.0, 90.0), Vector3(ry * 1.25, 1.0, rz * 1.25)))
-		soot.merge(LowPoly.cylinder(1.0, 1.0, 0.01, 10, Color(dark, dark * 0.9, dark * 0.85), seed_v + 1, 0.0, 1, 0.0).jitter(0.22, seed_v + 1, Vector3(1.0, 0.0, 1.0)),
-				_xf(Vector3(-1.085, by - ry * 0.15, bz), Vector3(0.0, 0.0, 90.0), Vector3(ry, 1.0, rz)))
-	# translucent: soot darkens the paint, it doesn't cover it
-	var soot_mi := MeshInstance3D.new()
-	soot_mi.name = "VanSoot"
-	soot_mi.mesh = soot.to_mesh()
-	var soot_mat := StandardMaterial3D.new()
-	soot_mat.vertex_color_use_as_albedo = true
-	soot_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	soot_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.38)
-	soot_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	soot_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	soot_mi.material_override = soot_mat
-	soot_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(soot_mi)
 	# the hole in the roof the cob went through: a black ring, torn flaps of roof turned up
 	s.merge(LowPoly.cylinder(0.62, 0.62, 0.03, 12, CHAR, 4250, 0.0, 1, 0.08).jitter(0.07, 4250, Vector3(1.0, 0.0, 1.0)), LowPoly.at(Vector3(-0.1, 1.93, -1.3)))
 	for i in 6:
