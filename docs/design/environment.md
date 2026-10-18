@@ -176,6 +176,11 @@ wooden crates, stairs stay warm planks, cliff sides keep their slate bands (heig
   still tints each hex by height and per-hex variation, so heights and the hex grid read on every material.
 - **Readability:** materials stay mid-dark (wall caps are darker than floors, like the slate caps); aim ring, grime
   decals, scorch, puddles and stairs were checked on each theme under its accent light.
+- **Mesh rules** (`tests/test_wall_mesh.gd`): every vertical face maps its texture at one repeat per world unit
+  across and one per level up, whatever its length or height (midpoint wall faces, half edges, stair sides and
+  risers included; the material shader maps walls in world units from the face normal). Cap outlines of 4 or 5
+  kites (a room's 120-degree corner seen from the wall side, an inside corner seen from the floor) are concave, so
+  caps and seams fan from the hex center; all 63 wall masks are checked.
 - **Dev flags:** `--to-theme <id> --zoom 11` (any theme), `--to-corridor` (the middle of the floor's corridors).
 
 ## Mail packages (interactive set dressing) [built, 2026-10-17]
