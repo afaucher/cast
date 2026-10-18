@@ -461,3 +461,16 @@ resolve. For seeds [1, 2, 3, 7, 42, 99, 1234, 555] x floors 1-3 (archetypes cycl
 - the walkable cells within 9 hexes, in line of sight, split by the bands (0, aggro], (aggro, 12] and (12, 14].
 
 It ran against the working tree of 2026-10-18 (including the in-progress pool and theme changes) and took about 15 s.
+
+## Decisions (user, 2026-10-18)
+- **No invoice changes.** Monster-caused prop damage is not treated specially on the invoice. (Props already survive
+  small hits: HP 25-140, partial damage is free, only breaking bills; an archer arrow does 8.)
+- **Brute fights are shoves**, and shoves can break props like any other shove (billed to whoever caused the shove, as
+  today). Rare, ramping with time on the floor.
+- **No visual indicator** for suspicious/alert monsters for now (no "?"/"!"; turning and behaviour only).
+- **A floor takes about 8 minutes**, so the 2 min -> 8 min restlessness ramp stands. Every real play now writes
+  `user://play_log.csv` (PlayLog: per-floor game seconds, how it ended, the money) to confirm it.
+- **A hit wakes monsters within a distance** (the exact radius is not important to the user; ~10 is fine).
+- **Fireworks wake a hellgate that is ready to spawn.**
+- **Open, not defined yet:** what a fully restless floor does (hunters).
+- **Deferred:** speech as noise. Idea to keep: yelling a spell could have its own alert component.

@@ -11,7 +11,8 @@ extends RefCounted
 ##    (capped at the contract value, that part never below $0) -- that is what Ledger.payout() does;
 ##  - the client is billed Ledger.REVIVAL_FEE for every hero still down at the end (finish(reason, downed)); that fee is
 ##    not capped or floored, so the net payout can go negative, but only through revival fees;
-##  - at the end every employee still alive (and not extracted) pays $10, wherever they are.
+##  - employees pay only when extracted ($100 each); one left behind pays nothing;
+##  - every real play is written to PlayLog (contract start, each floor's time, the end), passively.
 
 const END_CASHED_OUT := "cashed_out"
 const END_INCAPACITATED := "incapacitated"
@@ -29,6 +30,9 @@ var floors: Dictionary = {}
 ## [{name, cause, floor}] employees that died
 var lost: Array[Dictionary] = []
 var extracted_total := 0
+## PlayLog: this contract's id and when (GameWorld.time) the crew arrived on the current floor (-1 = not on one).
+var run_id := ""
+var _floor_t0 := -1.0
 
 
 ## Who may write each var (see Net). The host runs the contract; `run` is built from the seed.
@@ -37,6 +41,7 @@ func net_fields() -> Dictionary:
 		"run": Net.SPAWN,
 		"floor_number": Net.OWNER, "finished": Net.OWNER, "end_reason": Net.OWNER,
 		"carry": Net.OWNER, "floors": Net.OWNER, "lost": Net.OWNER, "extracted_total": Net.OWNER,
+		"run_id": Net.LOCAL, "_floor_t0": Net.LOCAL,   # (PlayLog: each machine logs its own play)
 	}
 
 
@@ -47,11 +52,15 @@ static func begin(contract: ContractRun, start_floor: int = 1) -> ContractSessio
 	s.floor_number = clampi(start_floor, 1, ContractRun.FLOOR_COUNT)
 	Ledger.begin_contract(contract.contract_value)
 	Ledger.floor_number = s.floor_number
+	s.run_id = "%s-%d" % [Time.get_datetime_string_from_system().replace(":", ""), contract.seed]
+	PlayLog.contract_started(s.run_id, contract, s.floor_number)
 	return s
 
 
 ## The crew arrives on floor `f` with what the site builder placed there.
 func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spawned: int) -> void:
+	_log_floor_done("elevator")
+	_floor_t0 = GameWorld.time
 	floor_number = f
 	Ledger.floor_number = f
 	floors[f] = {
@@ -189,6 +198,16 @@ func finish(reason: String, downed_heroes: Array[String] = []) -> void:
 	for hero_name in downed_heroes:
 		Ledger.revival(hero_name)
 	Ledger.end_contract()
+	_log_floor_done(reason)
+	PlayLog.contract_ended(run_id, run, floor_number, reason, extracted_total, lost.size())
+
+
+## PlayLog: the floor the crew is on is done (it left by the elevator, or the contract ended there).
+func _log_floor_done(reason: String) -> void:
+	if _floor_t0 < 0.0 or not floors.has(floor_number):
+		return
+	PlayLog.floor_done(run_id, run, floor_number, GameWorld.time - _floor_t0, reason, floors[floor_number])
+	_floor_t0 = -1.0
 
 
 func payout() -> int:
