@@ -19,7 +19,9 @@ extends Node3D
 ## MOODS (`mood`, `set_mood()`):
 ##   dawn   cool light through the ceiling grate over warm work lights and torches (the default)
 ##   night  no grate light, a colour grade (cool, dark), the van's headlights on, the gate runs hotter
-##   after  the morning after a bad job: smoke from the van, scorch marks, corn kernels everywhere
+##   after  the morning after a bad job (scripts/ui/backdrops/after_job.gd): a giant corn cob wedged in the van roof, the hood
+##          popped over a small fire and a smoke column, scorch marks on the floor and up the wall, cobs, kernels and husks
+##          about, an invoice stamped PAST DUE, a failing work lamp, the crew sooty, patched and slumping
 ## Left empty, the mood comes from context (`pick_mood()`): `--backdrop-mood dawn|night|after` wins; otherwise
 ## "after" when the last finished contract went badly (LastContract.was_bad), "night" when the local clock is
 ## between 20:00 and 05:00, else "dawn".
@@ -28,6 +30,7 @@ extends Node3D
 ## `--option garage`) shows this scene too.
 
 const Kit := preload("res://scripts/ui/backdrops/backdrop_kit.gd")
+const After := preload("res://scripts/ui/backdrops/after_job.gd")
 
 const MOODS: Array[String] = ["dawn", "night", "after"]
 const NIGHT_FROM_HOUR := 20          ## local clock: night from 20:00 ...
@@ -67,6 +70,8 @@ const CAB_ORDER: Array[String] = ["gasket", "wick", "rebar"]
 ## Camera slide (Camera3D.h_offset, world units, sideways without turning) that moves the picture toward the right so the
 ## clipboard on the left third does not sit on the van.
 const FRAME_SHIFT := -2.7
+## Roll (degrees) of each hero's slump after a bad job, so the three do not lean the same way.
+const SLUMP_ROLL := {"wick": 5.0, "gasket": -4.0, "rebar": 3.0}
 const SWAY_DEG := 3.2                ## the camera orbits its focus by +- this
 const SWAY_SPEED := 0.12             ## rad/s: a full sway takes ~52 s
 
@@ -89,6 +94,9 @@ var corn_days := 0:
 		corn_days = v
 		if _corn_sign_label != null:
 			_corn_sign_label.text = _corn_text()
+		var zero := get_node_or_null("Mood/CornZero/Number") as Label3D
+		if zero != null:
+			zero.text = str(v)
 
 var map: HexMap
 var terrain: HexMapView
@@ -109,6 +117,9 @@ var _breach_flicker: Kit.Flicker
 var _gate_light: OmniLight3D
 var _van_holder: Node3D
 var _corn_sign_label: Label3D
+var _corn_sign_node: Node3D
+var _work_lamp: OmniLight3D            ## the overhead work lamp of the day moods (it fails after a bad job)
+var _crew_extras: Array[Node] = []     ## plasters and soot smudges on the crew's faces (the after mood), freed with the mood
 var _face_yaw := 0.0                  ## yaw (degrees) that turns a model to face the camera
 
 
@@ -388,6 +399,10 @@ func _place(id: String, offset: Vector3, yaw: float) -> void:
 		return
 	m.position = VAN_AT + offset
 	m.rotation.y = deg_to_rad(_face_yaw + yaw)
+	# after a bad job they slump: the weight forward onto the feet, a little askew
+	var slump := mood == "after"
+	m.rotation.x = deg_to_rad(-12.0) if slump else 0.0
+	m.rotation.z = deg_to_rad(SLUMP_ROLL.get(id, 4.0)) if slump else 0.0
 
 
 func _build_dressing() -> void:
@@ -406,6 +421,7 @@ func _build_dressing() -> void:
 	var corn := Kit.paper_sign(_corn_text(), Vector2(1.1, 1.05), 34, Kit.PAPER_OLD)
 	Kit.put(self, corn, Vector3(3.6, 3.5, WALL_Z + 0.53))
 	corn.rotation.z = deg_to_rad(3.0)
+	_corn_sign_node = corn
 	for ch in corn.get_children():
 		if ch is Label3D:
 			_corn_sign_label = ch as Label3D
@@ -446,6 +462,7 @@ func _apply_mood() -> void:
 	add_child(_mood_root)
 	var night := mood == "night"
 	var after := mood == "after"
+	_reset_after_pieces()
 	_grade(night, after)
 	if key_light != null:
 		key_light.light_energy = 0.22 if night else (0.38 if after else 0.5)
@@ -483,7 +500,7 @@ func _apply_mood() -> void:
 		_mood_root.add_child(cone)
 	else:
 		# warm work light over the van, and a cool spot through the ceiling grate with dusty shafts
-		Kit.omni(_mood_root, VAN_AT + Vector3(-1.0, 4.4, 2.4), Color(1.0, 0.74, 0.46), 5.5 if not after else 4.2, 9.5)
+		_work_lamp = Kit.omni(_mood_root, VAN_AT + Vector3(-1.0, 4.4, 2.4), Color(1.0, 0.74, 0.46), 5.5 if not after else 4.2, 9.5)
 		var sp := SpotLight3D.new()
 		sp.position = VAN_AT + Vector3(-1.5, 11.0, 2.0)
 		sp.rotation_degrees = Vector3(-78, 12, 0)
@@ -503,6 +520,26 @@ func _apply_mood() -> void:
 	_mood_root.add_child(motes)
 	if after:
 		_after_job()
+
+
+## Undo what the after mood does to the pieces that outlive the mood node (the crew, the van's door, the corn sign), so
+## switching back to dawn or night leaves them as built. Also repositions the crew for the mood.
+func _reset_after_pieces() -> void:
+	for n in _crew_extras:
+		if is_instance_valid(n):
+			n.get_parent().remove_child(n)
+			n.free()
+	_crew_extras.clear()
+	After.clean_crew([wick, gasket, rebar])
+	_work_lamp = null
+	van.door.rotation = Vector3.ZERO
+	van.set_door_open(1.0)
+	if _corn_sign_node != null:
+		_corn_sign_node.scale = Vector3.ONE
+		_corn_sign_node.rotation.z = deg_to_rad(3.0)
+	if _corn_sign_label != null:
+		_corn_sign_label.modulate = Kit.INK
+	_pose_crew()
 
 
 ## The colour grade: the Environment's own adjustments plus a 1-D lookup table (a per-channel tone curve), because
@@ -564,63 +601,56 @@ static func _tone_curve(top: Color) -> GradientTexture1D:
 	return tex
 
 
-## "After a bad job": smoke from the van, scorch marks, kernels of corn everywhere (it is never explained).
+## "After a bad job" (the pieces are in after_job.gd): the corn bomb in the van roof and the popped hood over a fire, smoke
+## columns, scorch marks, cobs and kernels, the invoice, the red 0, a failing lamp, the crew scuffed up.
 func _after_job() -> void:
-	var smoke := CPUParticles3D.new()
-	smoke.name = "Smoke"
-	smoke.amount = 48
-	smoke.lifetime = 4.0
-	smoke.preprocess = 4.0
-	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	smoke.emission_sphere_radius = 0.35
-	smoke.direction = Vector3(-0.1, 1, 0.1)
-	smoke.spread = 30.0
-	smoke.gravity = Vector3(-0.2, 0.3, 0.05)
-	smoke.initial_velocity_min = 0.5
-	smoke.initial_velocity_max = 1.0
-	smoke.scale_amount_min = 1.4
-	smoke.scale_amount_max = 2.6
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(1, 1, 1, 1.0))
-	ramp.set_color(1, Color(1, 1, 1, 0.0))
-	smoke.color_ramp = ramp
-	var qm := QuadMesh.new()
-	qm.size = Vector2(1.0, 1.0)
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.vertex_color_use_as_albedo = true
-	m.albedo_color = Color(0.1, 0.095, 0.095, 1.0)
-	m.albedo_texture = _puff_texture()
-	qm.material = m
-	smoke.mesh = qm
-	smoke.position = _van_holder.transform * Vector3(2.0, 1.5, 0.2)
-	_mood_root.add_child(smoke)
-	var s := LowPoly.Soup.new(77, 0.15)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 9
-	for i in 160:
-		var a := rng.randf() * TAU
-		var r := sqrt(rng.randf()) * 6.0
-		var p := VAN_AT + Vector3(cos(a) * r + 0.5, 0.05, sin(a) * r * 0.6 + 2.0)
-		Kit.box(s, Vector3(0.1, 0.08, 0.08), p, Color(1.0, 0.86, 0.35) if rng.randf() < 0.7 else Color(0.98, 0.97, 0.9), Vector3(rng.randf() * 90, rng.randf() * 180, 0))
-	for i in 5:
-		var p2 := VAN_AT + Vector3(rng.randf_range(-4, 4), 0.01, rng.randf_range(0.5, 3.5))
-		Kit.cyl(s, rng.randf_range(0.4, 0.8), rng.randf_range(0.4, 0.8), 0.01, 7, p2, Color(0.08, 0.06, 0.06))
-	_mood_root.add_child(Kit.mesh(s, 0.0, "AfterMess"))
-
-
-## A soft round puff for the smoke (a radial alpha falloff).
-static func _puff_texture() -> GradientTexture2D:
-	var g := Gradient.new()
-	g.offsets = PackedFloat32Array([0.0, 0.4, 1.0])
-	g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.75), Color(1, 1, 1, 0)])
-	var tex := GradientTexture2D.new()
-	tex.gradient = g
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = Vector2(0.5, 0.5)
-	tex.fill_to = Vector2(0.5, 0.0)
-	tex.width = 64
-	tex.height = 64
-	return tex
+	# the van's own pieces: the side door hangs off its track
+	van.door.rotation = Vector3(deg_to_rad(-5.0), 0.0, deg_to_rad(8.0))
+	van.door.position += Vector3(-0.04, -0.06, 0.0)
+	var vroot := Node3D.new()
+	vroot.name = "VanDamage"
+	vroot.transform = _van_holder.transform * van.transform
+	_mood_root.add_child(vroot)
+	After.van_damage(vroot)
+	After.mess(_mood_root, VAN_AT, WALL_Z)
+	# smoke: a thick column from under the hood, a thinner one from the hole in the roof
+	var hood_smoke := After.smoke("Smoke", 70, 0.4, 1.5, 2.2, 0.8, 1.3)
+	hood_smoke.position = vroot.transform * Vector3(0.0, 1.45, 1.95)
+	_mood_root.add_child(hood_smoke)
+	var roof_smoke := After.smoke("RoofSmoke", 14, 0.25, 0.7, 1.1, 0.4, 0.7)
+	roof_smoke.position = vroot.transform * Vector3(-0.1, 2.0, -1.3)
+	_mood_root.add_child(roof_smoke)
+	# the fire under the hood lights the cab and the smoke
+	var fire := Kit.omni(_mood_root, vroot.transform * Vector3(0.0, 1.5, 2.2), Color(1.0, 0.42, 0.1), 2.6, 4.8)
+	fire.name = "HoodFire"
+	var fire_flicker := Kit.Flicker.new()
+	fire_flicker.light = fire
+	fire_flicker.base = fire.light_energy
+	fire_flicker.amount = 0.35
+	fire_flicker.speed = 11.0
+	_mood_root.add_child(fire_flicker)
+	# the work lamp is failing: a bare bulb on a cord, swinging a little, dimmed and flickering with it
+	var bulb := After.hanging_bulb(Vector3(VAN_AT.x - 1.0, 9.0, VAN_AT.z + 2.4), 4.6)
+	_mood_root.add_child(bulb)
+	var swing := Kit.Swing.new()
+	swing.amount_deg = 1.6
+	swing.speed = 0.7
+	bulb.add_child(swing)
+	var lamp := After.FailingLamp.new()
+	lamp.light = _work_lamp
+	lamp.base = 4.4
+	var bm := bulb.get_node_or_null("Bulb") as MeshInstance3D
+	if bm != null:
+		lamp.bulb_mat = bm.material_override as ShaderMaterial
+	_mood_root.add_child(lamp)
+	var ash := After.ash(Vector3(7.0, 0.2, 5.0))
+	ash.position = VAN_AT + Vector3(2.0, 7.0, 1.0)
+	_mood_root.add_child(ash)
+	# story: the invoice on the wall, the corn sign reading a huge red 0
+	After.invoice(_mood_root, Vector3(5.3, 5.55, WALL_Z + 0.05))
+	if _corn_sign_node != null:
+		_corn_sign_node.scale = Vector3.ONE * 1.5
+		_corn_sign_node.rotation.z = deg_to_rad(9.0)
+		_corn_sign_label.modulate = After.SOOT_RED
+		After.corn_sign_zero(_mood_root, _corn_sign_node, str(corn_days))
+	_crew_extras = After.dress_crew([wick, gasket, rebar])
