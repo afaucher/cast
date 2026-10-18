@@ -81,7 +81,7 @@ func _alive_lines() -> int:
 	return n
 
 
-## At the end, whoever was extracted was paid $100 once and every other living employee $10, and the invoice agrees.
+## At the end, whoever was extracted was paid $100 once, nobody else was paid, and the invoice agrees.
 func _check_invoice(extracted: int, tag: String) -> void:
 	var s := _session()
 	var inv: InvoiceScreen = _g.get("_invoice")
@@ -90,8 +90,8 @@ func _check_invoice(extracted: int, tag: String) -> void:
 	eq(str(inv.inv["reason"]), ContractSession.END_CASHED_OUT, tag + ": reason: cashed out")
 	eq(s.extracted_total, extracted, tag + ": the session counted %d extracted" % extracted)
 	eq(_extracted_lines(), extracted, tag + ": one $100 line per extracted employee")
-	eq(_alive_lines(), s.employees_spawned() - extracted, tag + ": every other living employee pays $10 once")
-	eq(Ledger.earned(), extracted * ContractRun.EMPLOYEE_EXTRACTED + (s.employees_spawned() - extracted) * ContractRun.EMPLOYEE_ALIVE, tag + ": no double count in the total")
+	eq(_alive_lines(), 0, tag + ": staff left behind pay nothing")
+	eq(Ledger.earned(), extracted * ContractRun.EMPLOYEE_EXTRACTED, tag + ": no double count in the total")
 	eq(int(inv.inv["payout"]), Ledger.payout(), tag + ": the invoice matches the Ledger")
 
 

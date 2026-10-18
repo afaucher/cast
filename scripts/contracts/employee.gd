@@ -1,7 +1,7 @@
 class_name Employee
 extends Actor
-## A client's employee: a neutral, fragile civilian the crew can escort out for $100 (or just leave
-## alive for $10). Team TEAM_NEUTRAL, ~30 hp, slow-ish. Area spells (corn, teeth, tentacle shoves) hit
+## A client's employee: a neutral, fragile civilian the crew can escort out for $100 (one left
+## behind pays nothing). Team TEAM_NEUTRAL, ~30 hp, slow-ish. Area spells (corn, teeth, tentacle shoves) hit
 ## it like anyone else, with NO hero friendly-fire floor: protecting it is the skill test.
 ##
 ## A small deterministic state machine (timers are GameWorld.time based):

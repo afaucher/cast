@@ -179,15 +179,13 @@ func employees_alive() -> int:
 	return maxi(0, employees_spawned() - lost.size() - extracted_total)
 
 
-## Close the contract: pays $10 per employee still alive, bills the revival fee for each hero in `downed_heroes`
+## Close the contract: bills the revival fee for each hero in `downed_heroes`
 ## (display names of the heroes still down), stops the Ledger. Idempotent.
 func finish(reason: String, downed_heroes: Array[String] = []) -> void:
 	if finished:
 		return
 	finished = true
 	end_reason = reason
-	for _i in employees_alive():
-		Ledger.earn("Employee alive at close", ContractRun.EMPLOYEE_ALIVE)
 	for hero_name in downed_heroes:
 		Ledger.revival(hero_name)
 	Ledger.end_contract()

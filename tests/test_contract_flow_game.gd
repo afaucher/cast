@@ -47,6 +47,7 @@ func _check_board() -> void:
 		var names: Array[String] = []
 		for o in board.offers:
 			names.append(o.client_name)
+		board.sign_hold = 0.0
 		board.choose(0)
 		await frames(3)
 		check(g.get("_session") != null, "taking an offer starts the contract")
@@ -242,7 +243,7 @@ func _check_van_exit() -> void:
 		eq((inv.inv["revivals"] as Array).size(), 1, "one revival row, naming the downed ally")
 		eq(str(inv.inv["reason"]), ContractSession.END_CASHED_OUT, "the van's exit ends the contract like the elevator's")
 		eq(int(inv.inv["payout"]), Ledger.payout(), "the invoice matches the Ledger")
-		eq(int(inv.inv["earned"]), run.gate_pay + site.employees.size() * ContractRun.EMPLOYEE_ALIVE, "the closed gate plus $10 per employee left alive; unfinished objectives pay nothing")
+		eq(int(inv.inv["earned"]), run.gate_pay, "the closed gate only; staff left behind and unfinished objectives pay nothing")
 	check(session.finished, "the session is finished")
 	g.queue_free()
 	await frames(3)

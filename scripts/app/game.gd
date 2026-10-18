@@ -1277,7 +1277,7 @@ func _on_actor_died(a: Actor) -> void:
 		var cause: String = str(_emp_cause.get(a.get_instance_id(), "unknown"))
 		_session.employee_lost(a.display_name, cause)
 		_log("%s was lost (%s)" % [a.display_name, cause], Color(1.0, 0.6, 0.4))
-		hud.show_message("%s lost (%s)  -$10" % [a.display_name, cause], Color(1.0, 0.55, 0.4))
+		hud.show_message("%s lost (%s)" % [a.display_name, cause], Color(1.0, 0.55, 0.4))
 		_update_tracker()
 
 
@@ -1464,7 +1464,7 @@ func _followers_near_van() -> Array[Actor]:
 
 ## Extract these employees now: the exit animation and bark, then $100 each in the Ledger (ContractSession.extract). An
 ## employee extracted here is out of the "employees" group and no longer following, so nothing counts them again (not as a
-## follower at the exit, not as one of the $10 left alive at the close). Used by the drop-off and by taking an exit.
+## follower at the exit). Used by the drop-off and by taking an exit.
 func _extract_followers(riders: Array[Actor], line: String) -> void:
 	if riders.is_empty():
 		return

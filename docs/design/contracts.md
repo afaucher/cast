@@ -8,7 +8,7 @@ end; the north-star "consistently pretty good" team should clear most objectives
 ## Objectives and pay [decided examples]
 | Objective | Pay | Notes |
 |---|---|---|
-| **Protect my employees** | **$10 each** (alive at the end) | The client values staff at $10. That's the satire. |
+| **Extract my employees** | **$100 each** (escorted to an exit) | Staff left behind pay nothing (user, 2026-10-18: the $10 "alive at the end" pay was dropped). |
 | **Disinfect the wine cellar** | **$10k** | Clear the room's infestation: the nest, goo and spawners. |
 | **Close all hellgates** | **$3k each** | Hellgates are the spawners (summoning circles / portals). |
 | **Property damage** | **deducted from pay** | Every broken prop has a price tag. |
@@ -24,7 +24,7 @@ end; the north-star "consistently pretty good" team should clear most objectives
     (nearest within 2.2) brings them along ("E: bring Marguerite" shows on the HUD); E next to your own
     follower tells them to wait ("E: tell Marguerite to wait"). A waiting employee crouches where they were
     told, still panics at monsters and then walks back, and never rejoins by proximity, so they do not
-    chase you into a fight. A waiting employee still counts alive ($10); extraction only takes followers
+    chase you into a fight. A waiting employee pays nothing unless extracted; extraction only takes followers
     (see the drop-off and the exits below), so one left behind is not extracted. E (Use) priority: the van exit
     (at the van), then the elevator (at it), then the employee, then nothing; E never casts, so a follower
     inside 2.2 never costs you a spell.
@@ -80,7 +80,7 @@ The comedy and the "well-oiled team" score live here, and payout could later buy
    - a finite reserve per gate;
    - spawning only when heroes are near or the gate is hit;
    - no spawning (guarded only).
-4. **Employees:** $10 each alive, **$100 each extracted** (escorted to the exit).
+4. **Employees:** **$100 each extracted** (escorted to the exit); nothing for one left behind.
 5. **No goo cleaning.** It's janitor work, not magic-user work. "Disinfect" becomes
    **exterminate the pest you were hired for**: either *everything* on site, or a *specific* pest
    (e.g. "imps only"). It stays on the magic side of the line.
@@ -176,7 +176,7 @@ How they fit together, from the top down:
   `Employee.extract()` (the exit animation) with the bark "I'm out, thanks!" and the usual HUD money line. It is recorded
   once: the Ledger line "Employee extracted" is written at drop-off time through `ContractSession.extract`, an employee that
   left is no longer a follower (nothing extracts it again at the exit) and `ContractSession.employees_alive()` already
-  excludes it (nothing pays its $10). The objective tracker's employee row shows it at once ("1 rescued · 2 alive").
+  excludes it. The objective tracker's employee row shows it at once ("1 rescued · 2 alive").
   Tests: `tests/test_exit_dropoff.gd`.
 - **Not part of this:** restocking spell components at the van (see `poc-backlog.md`).
 

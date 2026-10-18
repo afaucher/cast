@@ -132,6 +132,7 @@ func _check_job_board() -> void:
 	board._input(_action("ui_left"))
 	eq(board.highlighted(), 2, "Left wraps")
 	var got: Array[ContractRun] = []
+	board.sign_hold = 0.0   # emit at once (the hold only keeps the signature on screen)
 	board.picked.connect(func(r: ContractRun) -> void: got.append(r))
 	board._input(_action("ui_accept"))
 	eq(got.size(), 1, "Enter takes the highlighted offer")
@@ -142,7 +143,10 @@ func _check_job_board() -> void:
 	key.keycode = KEY_2
 	key.pressed = true
 	board._input(key)
-	check(got.size() == 3 and got[2] == offers[1], "the key 2 takes offer 2")
+	eq(got.size(), 2, "number keys don't pick (no key bindings on the cards)")
+	var signed: String = board._sign_lines[0].signature
+	eq(signed, JobBoard.signer_name(), "taking an offer signs its Take line with the player's name")
+	check(signed != "", "the signature isn't blank")
 	board.set_highlight(0)
 	await frames(8)
 	check(board._cards[0].outline_color.a > 0.0 and board._cards[1].outline_color.a == 0.0, "only the highlighted card has the yellow outline")

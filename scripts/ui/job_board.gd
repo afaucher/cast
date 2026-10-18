@@ -3,9 +3,10 @@ extends Control
 ## The dispatch job board, drawn as FORM 12 "Dispatch offers" (scripts/ui/forms/): a header strip and a 3-part
 ## tear-off set (white / canary / pink) with the SAME fields in the SAME places on every part, so the crew can
 ## compare across columns: client, site and danger boxes, what happened, an objectives table with $, a
-## red-boxed property warning, the contract value and a "Take [n]" signature line.
+## red-boxed property warning, the contract value and a "Take" line the player signs.
 ##
-## Pick one with the mouse, the keys 1-3, or Left / Right then Enter (A on a controller). The highlighted offer
+## Pick one with the mouse, or Left / Right then Enter (A on a controller): the player's name is written on its
+## Take line, and `picked` follows SIGN_HOLD seconds later so the signature is seen. The highlighted offer
 ## lifts a little and gets a yellow outline. Add it under a Control (Hud.add_overlay) or a CanvasLayer's root
 ## Control. Emits picked(run).
 ##
@@ -24,6 +25,12 @@ signal highlight_changed(index: int)
 const CARD_W := 480.0
 const LIFT := 12.0
 const PARTS := ["white", "canary", "pink"]
+## Seconds the signed card stays up before `picked` (tests set `sign_hold` to 0).
+const SIGN_HOLD := 0.6
+## One typewriter: every typed value on the card is the same face, weight, size and ribbon.
+const TYPE_SIZE := 19
+## How the Take line is signed: "pen" (the red grease pencil, a slight tilt) or "stamp" (a red name stamp).
+const SIGN_STYLE := "stamp"
 const SHADE_OPAQUE := Color(0.06, 0.05, 0.07, 1.0)   ## no backdrop: a plain dark screen
 const SHADE_LIGHT := Color(0.03, 0.025, 0.035, 0.22) ## garage behind: a light dim only
 
@@ -42,6 +49,9 @@ var _cards: Array[PaperPanel] = []
 var _slots: Array[Control] = []
 var _lifts: Dictionary = {}
 var _hi := 0
+var sign_hold := SIGN_HOLD
+var _signing := false
+var _sign_lines: Array[SignLine] = []
 var _fallback: ColorRect = null
 var _lift_tweens: Dictionary = {}
 ## The crew strip under the cards (hidden when there's nothing to say).
@@ -91,7 +101,7 @@ func _ready() -> void:
 	if read_only:
 		side.add_child(KeyHints.new([["Esc", "leave the crew"]]))
 	else:
-		side.add_child(KeyHints.new([["1", "3", "or"], ["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "back"]]))
+		side.add_child(KeyHints.new([["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "back"]]))
 	var rules := FormTheme.label("LEAVING EARLY ALWAYS WORKS  ·  UNMET OBJECTIVES DO NOT PAY", 18, Color(1, 1, 1, 0.85))
 	rules.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	rules.add_theme_constant_override("outline_size", 5)
@@ -132,12 +142,6 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if read_only:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		var idx: int = int((event as InputEventKey).keycode) - KEY_1
-		if idx >= 0 and idx < offers.size():
-			choose(idx)
-			get_viewport().set_input_as_handled()
-			return
 	if offers.is_empty():
 		return
 	if event.is_action_pressed("ui_left") and not (event is InputEventMouse):
@@ -151,13 +155,29 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Take offer `index` (mouse click or the key).
+## Take offer `index` (mouse click or Enter): sign its Take line, then emit `picked` after `sign_hold`.
 func choose(index: int) -> void:
-	if read_only:
+	if read_only or _signing:
 		return
-	if index >= 0 and index < offers.size():
-		Session.set_crew_state("job")
-		picked.emit(offers[index])
+	if index < 0 or index >= offers.size():
+		return
+	set_highlight(index)
+	if index < _sign_lines.size():
+		_sign_lines[index].signature = signer_name()
+	Session.set_crew_state("job")
+	if sign_hold > 0.0 and is_inside_tree():
+		_signing = true
+		await get_tree().create_timer(sign_hold).timeout
+		_signing = false
+		if not is_inside_tree():
+			return
+	picked.emit(offers[index])
+
+
+## Who signs: the player's crew / Steam name, else their character's name.
+static func signer_name() -> String:
+	var n := str(Session.local_entry().get("name", ""))
+	return n if n != "" else SteamIdentity.player_name(Session.local_character().capitalize())
 
 
 ## The crew strip's text: the roster while hosting, else why it's solo, else nothing.
@@ -260,13 +280,17 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(v)
 
-	# Stub: part and job number, above the tear-off line.
+	# Stub: the job number (printed "JOB #", the number typed in), above the tear-off line.
 	var stub := HBoxContainer.new()
+	stub.add_theme_constant_override("separation", 6)
+	stub.alignment = BoxContainer.ALIGNMENT_END
 	stub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var part_l := FormTheme.label("PART %d  ·  %s" % [index + 1, part.to_upper()], 18, FormTheme.INK, true)
-	part_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stub.add_child(part_l)
-	stub.add_child(FormTheme.label(run.invoice_number.replace("INV-", "JOB #"), 18, FormTheme.INK, true))
+	var job_l := FormTheme.label("JOB #", 18, FormTheme.INK, true)
+	job_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	stub.add_child(job_l)
+	var job_n := _typed(run.invoice_number.replace("INV-", ""))
+	job_n.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	stub.add_child(job_n)
 	var stub_box := FormTheme.margin(stub, 16, 0, 16, 0)
 	stub_box.custom_minimum_size = Vector2(0, 40)
 	v.add_child(stub_box)
@@ -274,12 +298,11 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	# Client.
 	var client := _cell()
 	client.add_child(_cap("CLIENT"))
-	var name_l := FormTheme.typed(run.client_name, 24)
+	var name_l := _typed(run.client_name)
 	name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_l.custom_minimum_size = Vector2(CARD_W - 36, 0)
 	client.add_child(name_l)
-	var who := FormTheme.label("%s  ·  %s" % [run.archetype_title().to_upper(), run.company], 18)
-	who.add_theme_font_override("font", FormTheme.label_font(false, true))
+	var who := _typed("%s  ·  %s" % [run.archetype_title(), run.company])
 	who.clip_text = true
 	who.custom_minimum_size = Vector2(CARD_W - 36, 0)
 	client.add_child(who)
@@ -291,7 +314,7 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	two.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var site := _cell()
 	site.add_child(_cap("SITE"))
-	site.add_child(FormTheme.typed("Survival bunker" if run.site_type == "bunker" else "Villain lair", 20))
+	site.add_child(_typed("Survival bunker" if run.site_type == "bunker" else "Villain lair"))
 	var site_cell := _boxed_cell(site, 0.0, true)
 	site_cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	two.add_child(site_cell)
@@ -303,7 +326,6 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	var boxes := DangerBoxes.new()
 	boxes.value = run.difficulty_stars()
 	dr.add_child(boxes)
-	dr.add_child(FormTheme.typed("3 floors", 19))
 	danger.add_child(dr)
 	var danger_cell := _boxed_cell(danger, 0.0, false)
 	danger_cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -313,10 +335,18 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	# What happened.
 	var story := _cell()
 	story.add_child(_cap("WHAT HAPPENED"))
-	var ev := FormTheme.typed_wrapped(str(run.story["event"]), 19, FormTheme.TYPED, false)
+	var ev := _typed(str(run.story["event"]), true)
 	ev.custom_minimum_size = Vector2(CARD_W - 36, 78)
 	story.add_child(ev)
-	story.add_child(FormTheme.small("Origin: the %s (floor 3)." % str(run.story["origin"]), 18))
+	# "Origin:" is printed; where it is (the room and its floor) is typed in.
+	var origin := HBoxContainer.new()
+	origin.add_theme_constant_override("separation", 8)
+	origin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var origin_cap := FormTheme.small("Origin:", 18)
+	origin_cap.autowrap_mode = TextServer.AUTOWRAP_OFF
+	origin.add_child(origin_cap)
+	origin.add_child(_typed("%s, floor %d" % [str(run.story["origin"]).capitalize(), ContractRun.FLOOR_COUNT]))
+	story.add_child(origin)
 	v.add_child(_boxed_cell(story))
 
 	# Objectives table.
@@ -331,7 +361,7 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	warn_v.add_theme_constant_override("separation", 0)
 	warn_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	warn_v.add_child(FormTheme.label("PROPERTY WARNING", 17, FormTheme.RED, true))
-	var wl := FormTheme.typed_wrapped(str(ClientArchetype.get_data(run.archetype_id)["warning"]), 18, Color("6a1a14"), true)
+	var wl := _typed(str(ClientArchetype.get_data(run.archetype_id)["warning"]), true)
 	wl.custom_minimum_size = Vector2(CARD_W - 70, 66)
 	warn_v.add_child(wl)
 	var warn := PanelContainer.new()
@@ -339,7 +369,7 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	warn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	warn.add_child(warn_v)
 	v.add_child(FormTheme.margin(warn, 16, 8, 16, 4))
-	v.add_child(FormTheme.margin(FormTheme.small("Damages are deducted, up to %s." % ContractRun.money(run.contract_value), 17), 16, 0, 16, 4))
+	v.add_child(FormTheme.margin(FormTheme.small("Damages are deducted, up to the contract value.", 17), 16, 0, 16, 4))
 
 	# Contract value.
 	var total := HBoxContainer.new()
@@ -348,7 +378,9 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	total.add_child(tl)
-	total.add_child(FormTheme.typed(ContractRun.money(run.contract_value), 34, FormTheme.GREEN_INK))
+	var value_l := _typed(ContractRun.money(run.contract_value))
+	value_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	total.add_child(value_l)
 	var total_box := FormTheme.margin(total, 16, 4, 16, 4)
 	var total_panel := PanelContainer.new()
 	var tsb := FormTheme.box_style(Color(0, 0, 0, 0), FormTheme.INK, 0.0, 0.0, 0.0)
@@ -358,7 +390,7 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	total_panel.add_child(total_box)
 	v.add_child(total_panel)
 
-	# Signature line: "Take ______ [1]".
+	# Signature line: "Take ______", signed with the player's name when taken.
 	var sign := HBoxContainer.new()
 	sign.add_theme_constant_override("separation", 10)
 	sign.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -368,12 +400,19 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	var line := SignLine.new()
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.custom_minimum_size = Vector2(0, 34)
+	line.style = SIGN_STYLE
 	sign.add_child(line)
-	var key := FormTheme.typed("[%d]" % (index + 1), 24)
-	key.size_flags_vertical = Control.SIZE_SHRINK_END
-	sign.add_child(key)
+	_sign_lines.append(line)
 	v.add_child(FormTheme.margin(sign, 16, 4, 16, 12))
 	return card
+
+
+## A typed value from the board's one typewriter (wrapping for running text).
+func _typed(text: String, wrap: bool = false) -> Label:
+	var l := FormTheme.typed(text, TYPE_SIZE, FormTheme.TYPED, true)
+	if wrap:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
 
 
 func _cell() -> VBoxContainer:
@@ -406,19 +445,16 @@ func _objective_row(line: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := FormTheme.label(str(line["label"]), 21, FormTheme.TYPED)
-	l.add_theme_font_override("font", FormTheme.label_font(false, false))
+	var l := _typed(str(line["label"]))
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(150, 0)
 	row.add_child(l)
 	var pay := ContractRun.money(int(line["pay"]))
-	if line.has("alive"):
-		pay = "%s/%s" % [ContractRun.money(int(line["alive"])), ContractRun.money(int(line["pay"]))]
-	elif bool(line["each"]):
+	if bool(line["each"]):
 		pay += " ea"
-	var pl := FormTheme.typed(pay, 20)
+	var pl := _typed(pay)
 	pl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(pl)
 	var p := PanelContainer.new()
@@ -430,33 +466,67 @@ func _objective_row(line: Dictionary) -> Control:
 	return p
 
 
-## Five small boxes, `value` of them inked red: the danger rating.
+## Five printed boxes, `value` of them ticked in the red grease pencil (the same tick as every other form): the
+## danger rating.
 class DangerBoxes:
 	extends Control
 	var value := 0
 	var count := 5
+	## A tick never lands quite the same twice: a small fixed wobble per box (x, y, size).
+	const WOBBLE := [Vector3(0.0, 0.5, 0.0), Vector3(1.0, -0.5, 1.0), Vector3(-0.5, 1.0, -0.5), Vector3(0.5, 0.0, 1.5), Vector3(-1.0, 0.5, 0.0)]
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(count * 23.0, 24.0)
+		custom_minimum_size = Vector2(count * 32.0, 30.0)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	func _draw() -> void:
 		for i in count:
-			var r := Rect2(i * 23.0, 2.0, 19.0, 19.0)
-			if i < value:
-				draw_rect(r, FormTheme.RED)
-			else:
-				draw_rect(r, FormTheme.FIELD_FILL)
-				draw_rect(r, FormTheme.INK, false, 2.0)
+			var r := Rect2(i * 32.0 + 2.0, 8.0, 20.0, 20.0)
+			draw_rect(r, FormTheme.FIELD_FILL)
+			draw_rect(r, FormTheme.INK, false, 2.0)
+		for i in mini(value, count):
+			var w: Vector3 = WOBBLE[i % WOBBLE.size()]
+			var b := Rect2(i * 32.0 + 4.0 + w.x, 9.0 + w.y, 17.0 + w.z, 17.0 + w.z)
+			FormTheme.draw_tick(self, b, FormTheme.GREASE, 3.5)
 
 
-## The ruled line you sign on.
+## The ruled line you sign on; `signature` is written on it in the red grease pencil, like every mark the player
+## makes on a form.
 class SignLine:
 	extends Control
+	var signature := "":
+		set(v):
+			signature = v
+			queue_redraw()
+	var style := "pen"
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
 		draw_line(Vector2(0, size.y - 3.0), Vector2(size.x, size.y - 3.0), FormTheme.INK, 2.0)
+		if signature == "":
+			return
+		if style == "stamp":
+			_draw_stamp()
+			return
+		# A hand signature runs a little uphill.
+		var f := FormTheme.hand_font()
+		draw_set_transform(Vector2(12.0, size.y - 7.0), deg_to_rad(-4.0))
+		draw_string(f, Vector2.ZERO, signature, HORIZONTAL_ALIGNMENT_LEFT, size.x - 12.0, 34, FormTheme.GREASE)
+		draw_set_transform(Vector2.ZERO)
+
+	## A red rubber name stamp sitting on the line, double-bordered and a touch crooked.
+	func _draw_stamp() -> void:
+		var f := FormTheme.stamp_font()
+		var fs := 22
+		var text := signature.to_upper()
+		var tw := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var box := Rect2(Vector2(-tw * 0.5 - 14.0, -f.get_height(fs) * 0.5 - 6.0), Vector2(tw + 28.0, f.get_height(fs) + 12.0))
+		var ink := Color(FormTheme.RED, 0.85)
+		draw_set_transform(Vector2(box.size.x * 0.5 + 18.0, size.y - 14.0), deg_to_rad(-3.0))
+		draw_rect(box, ink, false, 3.0)
+		draw_rect(box.grow(-5.0), ink, false, 1.5)
+		draw_string(f, Vector2(-tw * 0.5, f.get_ascent(fs) - f.get_height(fs) * 0.5), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
+		draw_set_transform(Vector2.ZERO)

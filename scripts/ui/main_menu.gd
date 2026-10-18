@@ -21,6 +21,9 @@ extends Node
 
 const GAME_SCRIPT := preload("res://scripts/app/game.gd")
 const TAGLINE := "Licensed Budget Sorcery"
+## The printed foot of the work order: the company motto, then its sales line.
+const FOOTER_MOTTO := "IN. OUT. INVOICED."
+const FOOTER_LINE := "Hexes, demons and portals  ·  Free estimates  ·  Referrals welcome"
 const WAITING_NOTE := "Opening the job board..."
 
 signal screen_changed(screen_name: String)
@@ -257,11 +260,12 @@ func _build_main() -> void:
 	body.add_child(FormTheme.margin(strip, 22, 8, 22, 8))
 	body.add_child(FormTheme.rule(2.0))
 
-	start_button = _menu_row(body, "Start a job", "01", "crew can join", func() -> void: start_game())
-	join_button = _menu_row(body, "Join a crew", "02", "first crew hiring", func() -> void: join_crew())
+	# Only Voice setup carries a hint (the word and strictness); the others would just restate the row.
+	start_button = _menu_row(body, "Start a job", "01", "", func() -> void: start_game())
+	join_button = _menu_row(body, "Join a crew", "02", "", func() -> void: join_crew())
 	voice_button = _menu_row(body, "Voice setup", "03", "", func() -> void: _open(voice_button, "voice"))
-	settings_button = _menu_row(body, "Settings", "04", "options", func() -> void: _open(settings_button, "settings"))
-	quit_button = _menu_row(body, "Quit", "05", "clock out", func() -> void: quit())
+	settings_button = _menu_row(body, "Settings", "04", "", func() -> void: _open(settings_button, "settings"))
+	quit_button = _menu_row(body, "Quit", "05", "", func() -> void: quit())
 
 	var note := FormTheme.typed_wrapped("First time? Open Voice setup first and make sure the crew can hear you.", 19, FormTheme.TYPED)
 	body.add_child(FormTheme.margin(note, 22, 10, 22, 4))
@@ -288,13 +292,17 @@ func _build_main() -> void:
 	body.add_child(_crew_box)
 	body.add_child(FormTheme.spacer())
 	body.add_child(FormTheme.rule(2.0))
-	var ads := HBoxContainer.new()
-	ads.add_theme_constant_override("separation", 8)
-	ads.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ads.add_child(FormTheme.ad("Contract service", "Gates closed while you wait."))
-	ads.add_child(FormTheme.ad("Local trade", "Hexes, drains, leaks. Free estimates."))
-	ads.add_child(FormTheme.ad("Lost: shark", "Answers to \"Bruce\". Do not hit."))
-	body.add_child(FormTheme.margin(ads, 22, 10, 22, 14))
+	var foot := VBoxContainer.new()
+	foot.add_theme_constant_override("separation", 2)
+	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var motto := FormTheme.label(FOOTER_MOTTO, 30, FormTheme.INK, true)
+	motto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	foot.add_child(motto)
+	var sales := FormTheme.small(FOOTER_LINE, 17)
+	sales.autowrap_mode = TextServer.AUTOWRAP_OFF   # one printed line
+	sales.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	foot.add_child(sales)
+	body.add_child(FormTheme.margin(foot, 22, 10, 22, 14))
 
 	_stamp = FormStamp.new("LICENSED · BONDED · MOSTLY", 18, -8.0)
 	_stamp.position = Vector2(235.0, 650.0)   # the blank strip above the ads, clear of the BUILD line
@@ -404,14 +412,14 @@ func _refresh_net() -> void:
 	var joined := Session.is_client()
 	var busy := Session.busy()
 	start_button.disabled = joined or (busy and not _hosting_attempt)
-	start_button.hint = "in a crew" if joined else ("opening..." if _hosting_attempt else ("crew can join" if steam else "solo"))
+	start_button.hint = "opening..." if _hosting_attempt and not joined else ""
 	if joined or (busy and not _hosting_attempt):
 		join_button.text = "Leave the crew" if joined else "Stop looking"
-		join_button.hint = "clock out" if joined else "cancel"
+		join_button.hint = ""
 		join_button.disabled = false
 	else:
 		join_button.text = "Join a crew"
-		join_button.hint = "first crew hiring" if steam else NetSession.STEAM_OFF
+		join_button.hint = "" if steam else NetSession.STEAM_OFF   # why the row is greyed out
 		join_button.disabled = not steam
 	join_button.focus_mode = Control.FOCUS_NONE if join_button.disabled else Control.FOCUS_ALL
 	start_button.focus_mode = Control.FOCUS_NONE if start_button.disabled else Control.FOCUS_ALL

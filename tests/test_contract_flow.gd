@@ -136,9 +136,8 @@ func _check_cash_out_early() -> void:
 	eq(Ledger.earned(), run.gate_pay, "a closed gate pays the gate rate")
 	# Unmet objectives pay nothing: no pest pay, no second gate, no origin.
 	s.finish(ContractSession.END_CASHED_OUT)
-	var alive_pay := 3 * ContractRun.EMPLOYEE_ALIVE
-	eq(Ledger.earned(), run.gate_pay + alive_pay, "leaving early pays only the met objective plus $10 per living employee")
-	eq(Ledger.payout(), run.gate_pay + alive_pay, "no damage, no deduction")
+	eq(Ledger.earned(), run.gate_pay, "leaving early pays only the met objective (staff left behind pay nothing)")
+	eq(Ledger.payout(), run.gate_pay, "no damage, no deduction")
 
 	# Damage comes out of earnings, capped at the contract value, never below $0.
 	var run2 := ContractRun.make("prepper", 22, 0.5)
@@ -212,9 +211,9 @@ func _check_extraction() -> void:
 	s2.enter_floor(2, 1, false, 2, 10)
 	eq(s2.employees_alive(), 4, "an escort elsewhere counts as alive")
 	s2.finish(ContractSession.END_CASHED_OUT)
-	eq(Ledger.earned(), 100 + 4 * ContractRun.EMPLOYEE_ALIVE, "$100 for the extracted one, $10 for each of the four still alive")
+	eq(Ledger.earned(), 100, "$100 for the extracted one, nothing for the four left behind")
 	s2.finish(ContractSession.END_CASHED_OUT)
-	eq(Ledger.earned(), 100 + 4 * ContractRun.EMPLOYEE_ALIVE, "finishing twice pays once")
+	eq(Ledger.earned(), 100, "finishing twice pays once")
 
 
 # --- the invoice -------------------------------------------------------------------------------------------
@@ -295,8 +294,8 @@ func _check_incapacitated() -> void:
 	eq(str(inv["reason"]), ContractSession.END_INCAPACITATED, "the invoice says why the contract ended")
 	eq(int(inv["stars"]), 1, "an incapacitated crew gets one star")
 	eq(str(inv["footer"]), str(ClientArchetype.get_data("supervillain")["footers"]["incap"]), "and the client's incapacitated footer")
-	eq(int(inv["earned"]), run.gate_pay + 3 * ContractRun.EMPLOYEE_ALIVE, "it still shows what was earned so far")
-	eq(int(inv["payout"]), run.gate_pay + 30 - 500, "minus the damage")
+	eq(int(inv["earned"]), run.gate_pay, "it still shows what was earned so far")
+	eq(int(inv["payout"]), run.gate_pay - 500, "minus the damage")
 
 
 ## Corporate revives every hero still down at the end and bills the client $10,000 each, uncapped.
@@ -312,7 +311,7 @@ func _check_revival() -> void:
 	eq(int(inv["revival_fees"]), 3 * Ledger.REVIVAL_FEE, "an incapacitated ending bills 3 x $10,000")
 	eq((inv["revivals"] as Array).size(), 3, "one revival row per downed hero")
 	eq(str((inv["revivals"] as Array)[0]["who"]), "Wick", "named")
-	eq(int(inv["payout"]), run.gate_pay + 30 - 500 - 30000, "payout = earned - damage - revival fees")
+	eq(int(inv["payout"]), run.gate_pay - 500 - 30000, "payout = earned - damage - revival fees")
 	check(int(inv["payout"]) < 0, "so the net payout is negative")
 	eq(int(inv["payout"]), Ledger.payout(), "and it matches the Ledger")
 	eq(int(inv["stars"]), 1, "one star")
@@ -326,7 +325,7 @@ func _check_revival() -> void:
 	var inv2 := ContractInvoice.build(s2)
 	eq(int(inv2["revival_fees"]), 10000, "a cash-out with one ally down bills $10,000")
 	eq((inv2["revivals"] as Array).size(), 1, "one revival row")
-	eq(int(inv2["payout"]), run2.gate_pay + 30 - 10000, "payout = earned - $10,000")
+	eq(int(inv2["payout"]), run2.gate_pay - 10000, "payout = earned - $10,000")
 
 	# Nobody down: no fee, no rows, and the pay is unchanged.
 	var s3 := ContractSession.begin(ContractRun.make("prepper", 64, 0.5))

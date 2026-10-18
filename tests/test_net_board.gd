@@ -24,6 +24,7 @@ func _check_board() -> void:
 	host_board.set_highlight(2)
 	host_board.set_highlight(2)
 	eq(moves, [2] as Array[int], "a highlight change is announced once")
+	host_board.sign_hold = 0.0
 	host_board.choose(1)
 	eq(picks, [1] as Array[int], "the host's board picks")
 	host_board.queue_free()

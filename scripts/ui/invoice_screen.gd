@@ -368,7 +368,7 @@ func _build_side() -> Control:
 	v.add_child(FormTheme.label("EMPLOYEES", 17, FormTheme.INK, true))
 	var e: Dictionary = inv["employees"]
 	v.add_child(_side_t("%d extracted ($100 each)" % int(e["extracted"]), 19, INK))
-	v.add_child(_side_t("%d still alive ($10 each)" % int(e["alive"]), 19, INK))
+	v.add_child(_side_t("%d left behind" % int(e["alive"]), 19, INK))
 	v.add_child(_side_t("%d lost" % int(e["lost"]), 19, RED if int(e["lost"]) > 0 else INK))
 	if int(e["lost"]) > 0 and str(e["lost_causes"]) != "":
 		var cause := _side_t("Cause: %s." % str(e["lost_causes"]), 17, INK_DIM)

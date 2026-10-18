@@ -150,7 +150,7 @@ func _check_menu() -> void:
 	# No Steam in a test run: Join is greyed out and says why; Start plays solo.
 	check(menu.join_button.disabled, "Join a crew is greyed out without Steam")
 	eq(menu.join_button.hint, NetSession.STEAM_OFF, "and says Steam isn't running")
-	eq(menu.start_button.hint, "solo", "Start a job says it will be solo")
+	eq(menu.start_button.hint, "", "Start a job carries no hint (only Voice setup does)")
 	check(menu.start_button.has_focus(), "keyboard focus starts on Start a job")
 	eq(menu.start_button.find_valid_focus_neighbor(SIDE_BOTTOM), menu.voice_button, "Down skips the greyed Join: Start -> Voice setup")
 	eq(menu.settings_button.find_valid_focus_neighbor(SIDE_BOTTOM), menu.quit_button, "Down moves Settings -> Quit")

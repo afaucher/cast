@@ -10,8 +10,7 @@ extends RefCounted
 ##   exterminate the pest ........................ $10,000 in total    (PEST_PAY) -- x1.4 for "everything"
 ##       paid per floor as that floor becomes clean: 30% / 30% / 40%
 ##       (clean = every hellgate on the floor closed AND no pest-kind monster left alive on it)
-##   employees ................................... $10 each alive at the end, $100 each extracted
-##       (an extracted employee pays the $100 instead of the $10)
+##   employees ................................... $100 each extracted (one left behind pays nothing)
 ## contract_value = the most the crew could earn = every objective + every employee extracted.
 ## It is the cap on property damage (payout = max(0, earned - min(damages, contract_value)) - revival_fees; the
 ## revival fee, $10,000 per hero down at the end, is not capped, see Ledger).
@@ -22,7 +21,6 @@ const ORIGIN_PAY := 10000
 const PEST_PAY := 10000
 const EVERYTHING_MULT := 1.4
 const PEST_SPLIT: Array[float] = [0.3, 0.3, 0.4]   ## share of the pest pay per floor (floor 1, 2, 3)
-const EMPLOYEE_ALIVE := 10
 const EMPLOYEE_EXTRACTED := 100
 
 var seed := 0
@@ -158,10 +156,10 @@ func archetype_title() -> String:
 ## The objective summary a job card prints: [{label, pay_text, note}], pay in whole dollars (text).
 func card_lines() -> Array[Dictionary]:
 	var lines: Array[Dictionary] = []
-	lines.append({"label": "Close %d hellgates (floors 1-2)" % (floor_gates[0] + floor_gates[1]), "pay": gate_pay, "each": true})
-	lines.append({"label": "Close the ORIGIN gate (floor 3)", "pay": origin_pay, "each": false})
-	lines.append({"label": "%s, all floors" % pest_label(), "pay": pest_pay, "each": false})
-	lines.append({"label": "Staff: %d to protect (alive / extracted)" % total_employees(), "pay": EMPLOYEE_EXTRACTED, "each": true, "alive": EMPLOYEE_ALIVE})
+	lines.append({"label": "Close %d hellgates" % (floor_gates[0] + floor_gates[1]), "pay": gate_pay, "each": true})
+	lines.append({"label": "Close the ORIGIN gate", "pay": origin_pay, "each": false})
+	lines.append({"label": pest_label(), "pay": pest_pay, "each": false})
+	lines.append({"label": "Staff: %d to extract" % total_employees(), "pay": EMPLOYEE_EXTRACTED, "each": true})
 	return lines
 
 
