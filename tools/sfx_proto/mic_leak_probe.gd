@@ -3,7 +3,9 @@ extends SceneTree
 ## recognizer as if it leaked from speakers into the mic, and checks that
 ##   A. a cue on its own produces no words and no casts (gate on and off), and
 ##   B. the "cast heard" chime, overlapping the spell word, does not break a real "cast <spell>".
-##   Godot --path . --headless --script res://tools/sfx_proto/mic_leak_probe.gd
+##   C. a "cast <spell>" said over a teammate's loud cue starting with the voice still casts.
+##   Godot --path . --headless --script res://tools/sfx_proto/mic_leak_probe.gd [-- v2 | -- <cue> ...]
+## With cues given, A runs them, B runs the cast_armed* ones among them and C the others.
 ## Needs the model and the TTS clips (tests/voice_clips). Not part of the test suite.
 const Synth = preload("res://tools/sfx_proto/sfx_synth.gd")
 const RATE := 16000
@@ -42,8 +44,15 @@ func _run() -> void:
 	_rng.seed = 11
 	var synth := Synth.new()
 
+	var args := OS.get_cmdline_user_args()
+	var cues: Array = Synth.CUES if args.is_empty() else (Synth.V2 if Array(args) == ["v2"] else Array(args))
+	var armed: Array = cues.filter(func(c: String) -> bool: return c.begins_with("cast_armed"))
+	var others: Array = ["spell_whoosh", "spell_heal", "fizzle_pfft", "accidental_sting", "pickup_bloop",
+			"typewriter_clack"] if args.is_empty() else cues.filter(func(c: String) -> bool: return not c.begins_with("cast_armed"))
+	var offsets := [0.25, 0.4] if args.is_empty() else [0.15, 0.3]
+
 	print("A. each cue alone (peak 0.5 = a loud speaker leak), 3 plays in a row")
-	for cue: String in Synth.CUES:
+	for cue: String in cues:
 		var s := _resample(synth.make(cue), 0.5)
 		var stream := _hiss(0.8)
 		for k in 3:
@@ -71,9 +80,9 @@ func _run() -> void:
 				continue
 			var onset := _onset(speech)
 			var line := "  %-9s %s:" % [spell, voice]
-			for cue in ["", "cast_armed_a", "cast_armed_b"]:
+			for cue: String in [""] + armed:
 				for level in ([0.0] if cue == "" else [0.15, 0.4]):
-					for at in ([0.0] if cue == "" else [0.25, 0.4]):
+					for at in ([0.0] if cue == "" else offsets):
 						var mix := _hiss(0.6)
 						var body := speech.duplicate()
 						body.append_array(_hiss(0.2))
@@ -89,7 +98,7 @@ func _run() -> void:
 						_heard.clear()
 						_casts.clear()
 						_feed(mix)
-						var tag := "clean" if cue == "" else "%s@%.2f+%.2fs" % [cue.right(1), level, at]
+						var tag := "clean" if cue == "" else "%s@%.2f+%.2fs" % [cue.trim_prefix("cast_armed_"), level, at]
 						line += "  %s=%s" % [tag, ",".join(_casts) if not _casts.is_empty() else "MISS(" + " / ".join(_heard) + ")"]
 			print(line)
 
@@ -100,7 +109,7 @@ func _run() -> void:
 			continue
 		var onset := _onset(speech)
 		var line := "  %-9s:" % spell
-		for cue in ["spell_whoosh", "spell_heal", "fizzle_pfft", "accidental_sting", "pickup_bloop", "typewriter_clack"]:
+		for cue: String in others:
 			var body := speech.duplicate()
 			body.append_array(_hiss(0.3))
 			var sfx := _resample(synth.make(cue), 0.4)

@@ -101,6 +101,69 @@ func _add_crackle(out: PackedFloat32Array, start: float, length: float, per_sec:
 			out[i0 + i + j] += a * _noise() * exp(-j / 18.0)
 
 
+## Filtered noise with a free-form envelope: `cut(k)` in Hz and `env(k)` in 0..1, k = 0..1 across `length`.
+func _add_noise(out: PackedFloat32Array, start: float, length: float, cut: Callable, q: float, mode: int, amp: float,
+		env: Callable) -> void:
+	var i0 := _n(start)
+	var n := mini(_n(length), out.size() - i0)
+	var low := 0.0
+	var band := 0.0
+	var damp := 1.0 / maxf(q, 0.5)
+	for i in n:
+		var k := float(i) / n
+		var fc: float = clampf(cut.call(k), 20.0, RATE * 0.2)
+		var fk := 2.0 * sin(PI * fc / RATE)
+		low += fk * band
+		var high := _noise() - low - damp * band
+		band += fk * high
+		var y := low if mode == 0 else (band if mode == 1 else high)
+		out[i0 + i] += amp * y * float(env.call(k))
+
+
+## An oscillator with free-form frequency and envelope (k = 0..1 across `length`). shape: 0 sine, 1 saw.
+func _add_tone(out: PackedFloat32Array, start: float, length: float, freq: Callable, amp: float, env: Callable,
+		shape: int = 0) -> void:
+	var i0 := _n(start)
+	var n := mini(_n(length), out.size() - i0)
+	var phase := 0.0
+	for i in n:
+		var k := float(i) / n
+		phase += float(freq.call(k)) / RATE
+		phase -= floorf(phase)
+		var w := sin(TAU * phase) if shape == 0 else 2.0 * phase - 1.0
+		out[i0 + i] += amp * w * float(env.call(k))
+
+
+## Low-passed crackle: like _add_crackle but each tick goes through a one-pole low-pass at `lp_hz` (no metallic fizz).
+func _add_soft_crackle(out: PackedFloat32Array, start: float, length: float, per_sec: float, amp: float,
+		lp_hz: float) -> void:
+	var i0 := _n(start)
+	var n := mini(_n(length), out.size() - i0)
+	var a_lp := 1.0 - exp(-TAU * lp_hz / RATE)
+	var i := 0
+	while i < n:
+		i += int(RATE / per_sec * _rng.randf_range(0.3, 1.7))
+		var a := amp * _rng.randf_range(0.2, 1.0) * (1.0 - float(i) / n)
+		var y := 0.0
+		for j in 300:
+			if i + j >= n:
+				break
+			y += a_lp * (_noise() * exp(-j / 40.0) - y)
+			out[i0 + i + j] += a * y * 3.0
+
+
+## Irregular short bursts of band-passed noise whose gaps grow and level falls: a sputter that dies.
+func _add_sputter(out: PackedFloat32Array, start: float, length: float, fc_lo: float, fc_hi: float, amp: float) -> void:
+	var t := 0.0
+	while t < length:
+		var k := t / length
+		var burst := _rng.randf_range(0.008, 0.035)
+		var fc := _rng.randf_range(fc_lo, fc_hi)
+		var a := amp * (1.0 - k) * _rng.randf_range(0.4, 1.0)
+		_add_filtered_noise(out, start + t, burst, func(_k: float) -> float: return fc, 1.4, 1, a, 0.001, burst * 0.4)
+		t += burst + _rng.randf_range(0.01, 0.03) + 0.12 * k * k   # gaps lengthen as it dies
+
+
 func _fade_out(out: PackedFloat32Array, sec: float) -> void:
 	var n := mini(_n(sec), out.size())
 	for i in n:
@@ -136,7 +199,14 @@ func to_wav(samples: PackedFloat32Array) -> AudioStreamWAV:
 
 const CUES := ["cast_armed_a", "cast_armed_b", "spell_whoosh", "spell_fireball", "spell_heal", "fizzle_pfft",
 		"out_of_component", "accidental_sting", "elevator_ding", "stamp_thunk", "typewriter_clack", "cha_ching",
-		"pickup_bloop", "fuse_hiss"]
+		"pickup_bloop", "fuse_hiss",
+		# v2, after the user's listen (2026-10-18): two variants each where it helps.
+		"cast_armed_v2", "cast_armed_v2b", "fizzle_pfft_v2", "fizzle_pfft_v2b", "spell_fireball_v2",
+		"spell_fireball_v2b", "stamp_thunk_v2", "stamp_thunk_v2b", "elevator_ding_v2", "elevator_ding_v2b",
+		"accidental_sting_v2", "cast_armed_v3", "cast_armed_v3b"]
+const V2 := ["cast_armed_v2", "cast_armed_v2b", "fizzle_pfft_v2", "fizzle_pfft_v2b", "spell_fireball_v2",
+		"spell_fireball_v2b", "stamp_thunk_v2", "stamp_thunk_v2b", "elevator_ding_v2", "elevator_ding_v2b",
+		"accidental_sting_v2"]
 
 
 func make(cue: String) -> PackedFloat32Array:
@@ -265,3 +335,201 @@ func _fuse_hiss() -> PackedFloat32Array:
 			0.5, 0.05, 100.0)
 	_add_crackle(o, 0.0, 1.5, 30.0, 0.6)
 	return _normalize(o, -10.0)
+
+
+# ---------------------------------------------------------------- v2 recipes (user feedback, 2026-10-18)
+
+## Swell: rises as k^p, then a quick release over the last `rel` of the length.
+static func _swell(k: float, p: float = 2.0, rel: float = 0.08) -> float:
+	var up := pow(k, p)
+	return up if k < 1.0 - rel else up * (1.0 - k) / rel
+
+
+## #1 cast heard, v2: a magical charge-up, 0.42 s. Band-passed noise rising 500 Hz -> 5 kHz and swelling, a quiet
+## high tone pair (a fifth apart, 1.4 -> 4.2 kHz, kept above the voice's formants) with a flutter that speeds up, and
+## a soft shimmer as it tops out. Not twinkly: the swell is the sound, the shimmer only an accent.
+func _cast_armed_v2() -> PackedFloat32Array:
+	var o := _buf(0.5)
+	var dur := 0.42
+	_add_noise(o, 0.0, dur, func(k: float) -> float: return 500.0 * pow(10.0, k), 2.0, 1, 1.0,
+			func(k: float) -> float: return _swell(k, 1.6))
+	var flutter := func(k: float) -> float:
+		var ph := TAU * dur * (14.0 * k + 15.0 * k * k)   # 14 Hz -> 44 Hz
+		return _swell(k, 2.2) * (0.65 + 0.35 * sin(ph))
+	_add_tone(o, 0.0, dur, func(k: float) -> float: return 1400.0 * pow(3.0, k), 0.22, flutter)
+	_add_tone(o, 0.0, dur, func(k: float) -> float: return 2100.0 * pow(3.0, k), 0.12, flutter)
+	_add_filtered_noise(o, dur - 0.03, 0.08, func(_k: float) -> float: return 7000.0, 3.0, 1, 0.35, 0.004, 0.025)
+	_add_bell(o, dur - 0.02, 4186.0, 0.12, 0.05, [1.0, 1.5], [1.0, 0.4])
+	return _normalize(o, -10.0)
+
+
+## #1 cast heard, v2b: a shorter "zhzhzh" capacitor charge, 0.34 s. High-passed noise whose pulses speed up
+## (12 -> 48 Hz) as it swells, over a quiet airy band rising to 6 kHz; it ends in a soft puff, no bell.
+func _cast_armed_v2b() -> PackedFloat32Array:
+	var o := _buf(0.4)
+	var dur := 0.34
+	var pulses := func(k: float) -> float:
+		var ph := TAU * dur * (12.0 * k + 18.0 * k * k)
+		return _swell(k, 1.8, 0.06) * pow(0.5 + 0.5 * sin(ph), 2.0)
+	_add_noise(o, 0.0, dur, func(k: float) -> float: return 1500.0 + 2500.0 * k, 1.0, 2, 0.9, pulses)
+	_add_noise(o, 0.0, dur, func(k: float) -> float: return 1200.0 * pow(5.0, k), 3.0, 1, 0.5,
+			func(k: float) -> float: return _swell(k, 1.4, 0.06))
+	_add_filtered_noise(o, dur - 0.02, 0.06, func(k: float) -> float: return 6000.0 * pow(0.4, k), 1.0, 1, 0.4,
+			0.003, 0.02)
+	return _normalize(o, -10.0)
+
+
+## #1 cast heard, v3: the charge-up with the speech band left empty, 0.42 s. The mic-leak probe showed v2's 1-4 kHz
+## noise masks the start of the spell word ("heal" heard as "meal"/"yale"), so this one is built from two layers only:
+## a sub swell (a sine rising 70 -> 210 Hz with a speeding pulse: body you feel) and "air" above 5 kHz (high-passed
+## noise and a faint tone rising 5 -> 7.5 kHz), with a soft top-out puff. Nothing between ~300 Hz and ~4.5 kHz.
+func _cast_armed_v3() -> PackedFloat32Array:
+	var o := _buf(0.5)
+	var dur := 0.42
+	var pulse := func(k: float) -> float:
+		var ph := TAU * dur * (10.0 * k + 15.0 * k * k)
+		return _swell(k, 1.5) * (0.7 + 0.3 * sin(ph))
+	_add_tone(o, 0.0, dur, func(k: float) -> float: return 70.0 * pow(3.0, k), 0.9, pulse)
+	_add_noise(o, 0.0, dur, func(k: float) -> float: return 5000.0 + 3000.0 * k, 0.8, 2, 0.8,
+			func(k: float) -> float: return _swell(k, 1.8))
+	_add_tone(o, 0.0, dur, func(k: float) -> float: return 5000.0 * pow(1.5, k), 0.08, func(k: float) -> float: return _swell(k, 2.5))
+	_add_filtered_noise(o, dur - 0.02, 0.06, func(_k: float) -> float: return 8000.0, 1.0, 2, 0.4, 0.002, 0.02)
+	return _normalize(o, -9.0)
+
+
+## #1 cast heard, v3b: v2's shape moved up out of the speech band, 0.38 s: band-passed noise rising 4.5 -> 10 kHz,
+## a tone pair rising 4.2 -> 6.3 kHz with the speeding flutter, and a low sine swell underneath for weight.
+func _cast_armed_v3b() -> PackedFloat32Array:
+	var o := _buf(0.45)
+	var dur := 0.38
+	_add_noise(o, 0.0, dur, func(k: float) -> float: return 4500.0 * pow(2.2, k), 2.0, 1, 1.0,
+			func(k: float) -> float: return _swell(k, 1.6))
+	var flutter := func(k: float) -> float:
+		var ph := TAU * dur * (14.0 * k + 15.0 * k * k)
+		return _swell(k, 2.2) * (0.65 + 0.35 * sin(ph))
+	_add_tone(o, 0.0, dur, func(k: float) -> float: return 4200.0 * pow(1.5, k), 0.15, flutter)
+	_add_tone(o, 0.0, dur, func(k: float) -> float: return 90.0 * pow(2.0, k), 0.6, func(k: float) -> float: return _swell(k, 1.4))
+	return _normalize(o, -10.0)
+
+
+## #3 fizzle, v2: the spell tries, spits and chokes, 0.75 s. A charge that starts and stalls (0.12 s), spitting
+## bursts with growing gaps, soft crackle, a spark falling from 2 kHz that loses its pitch, and a dull thud as it dies.
+func _fizzle_pfft_v2() -> PackedFloat32Array:
+	var o := _buf(0.8)
+	_add_noise(o, 0.0, 0.12, func(k: float) -> float: return 700.0 * pow(3.0, k), 2.0, 1, 0.5,
+			func(k: float) -> float: return k * (1.0 - k) * 4.0)
+	_add_sputter(o, 0.06, 0.55, 1200.0, 3500.0, 0.9)
+	_add_soft_crackle(o, 0.08, 0.5, 35.0, 0.6, 3000.0)
+	_add_tone(o, 0.08, 0.4, func(k: float) -> float: return 2000.0 * pow(0.12, k) * (1.0 + 0.08 * _rng.randf_range(-1.0, 1.0)),
+			0.12, func(k: float) -> float: return (1.0 - k) * (1.0 - k))
+	_add_glide(o, 0.5, 0.25, 130.0, 50.0, 0.7, 0.004, 0.06)
+	_add_noise(o, 0.5, 0.25, func(_k: float) -> float: return 300.0, 0.7, 0, 0.6,
+			func(k: float) -> float: return exp(-k * 8.0))
+	return _normalize(o, -8.0)
+
+
+## #3 fizzle, v2b: an electrical short, 0.7 s. A low buzz that cuts in and out (zaps) with a spark at each cut,
+## then a dying low-passed puff and a soft thud.
+func _fizzle_pfft_v2b() -> PackedFloat32Array:
+	var o := _buf(0.75)
+	var gate: Array = []
+	var t := 0.0
+	while t < 0.45:
+		var on := _rng.randf_range(0.02, 0.07)
+		gate.append([t / 0.45, (t + on) / 0.45])
+		t += on + _rng.randf_range(0.02, 0.06) + 0.1 * t
+	var zap := func(k: float) -> float:
+		for g: Array in gate:
+			if k >= float(g[0]) and k < float(g[1]):
+				return 1.0 - 0.6 * k
+		return 0.0
+	_add_tone(o, 0.0, 0.45, func(k: float) -> float: return 95.0 * (1.0 - 0.25 * k), 0.35, zap, 1)
+	_add_noise(o, 0.0, 0.45, func(_k: float) -> float: return 2500.0, 1.5, 1, 0.5, zap)
+	for g: Array in gate:
+		_add_filtered_noise(o, minf(float(g[1]), 1.0) * 0.45, 0.02, func(_k: float) -> float: return 4500.0, 1.0, 2,
+				0.5, 0.0005, 0.004)
+	_add_filtered_noise(o, 0.45, 0.25, func(k: float) -> float: return 1500.0 * pow(0.15, k), 0.8, 0, 0.6, 0.005, 0.07)
+	_add_glide(o, 0.47, 0.2, 110.0, 45.0, 0.5, 0.004, 0.05)
+	return _normalize(o, -8.0)
+
+
+## #2 fireball, v2: a fire WHOOMPH, 0.8 s. A short suck of air rising into the burst, a deep low-passed boom with a
+## sub thump, then a flickering low roar and soft (low-passed) crackle. Nothing bright rings.
+func _spell_fireball_v2() -> PackedFloat32Array:
+	var o := _buf(0.85)
+	_add_noise(o, 0.0, 0.1, func(k: float) -> float: return 200.0 * pow(6.0, k), 0.8, 0, 0.5,
+			func(k: float) -> float: return k * k)
+	_add_filtered_noise(o, 0.09, 0.6, func(k: float) -> float: return 1400.0 * pow(0.25, k), 0.7, 0, 1.6, 0.008, 0.16)
+	_add_glide(o, 0.09, 0.4, 75.0, 38.0, 1.0, 0.005, 0.12)
+	_add_noise(o, 0.12, 0.7, func(_k: float) -> float: return 520.0, 0.7, 0, 0.9,
+			func(k: float) -> float: return minf(k * 12.0, 1.0) * exp(-k * 3.5) * (0.75 + 0.25 * sin(TAU * 5.0 * k) * sin(TAU * 8.0 * k)))
+	_add_soft_crackle(o, 0.15, 0.65, 22.0, 0.45, 2200.0)
+	return _normalize(o, -4.0)
+
+
+## #2 fireball, v2b: no suck-in, a bigger boom and a longer burning tail with more crackle, 1.1 s.
+func _spell_fireball_v2b() -> PackedFloat32Array:
+	var o := _buf(1.1)
+	_add_filtered_noise(o, 0.0, 0.7, func(k: float) -> float: return 1100.0 * pow(0.3, k), 0.7, 0, 1.8, 0.006, 0.2)
+	_add_glide(o, 0.0, 0.5, 65.0, 32.0, 1.1, 0.004, 0.16)
+	_add_noise(o, 0.03, 1.05, func(k: float) -> float: return 650.0 - 250.0 * k, 0.7, 0, 1.0,
+			func(k: float) -> float: return minf(k * 15.0, 1.0) * exp(-k * 2.2) * (0.75 + 0.25 * sin(TAU * 9.0 * k)))
+	_add_soft_crackle(o, 0.08, 1.0, 34.0, 0.5, 2500.0)
+	return _normalize(o, -4.0)
+
+
+## #8 stamp, v2: a heavy wooden thunk, 0.25 s. A very short click, a deep thud (120 -> 48 Hz), a low-passed impact
+## body, three short desk resonances (165/240/410 Hz) and a small rubber/ink slap on top.
+func _stamp_thunk_v2() -> PackedFloat32Array:
+	var o := _buf(0.25)
+	_add_filtered_noise(o, 0.0, 0.006, func(_k: float) -> float: return 3000.0, 0.7, 0, 0.35, 0.0002, 0.0012)
+	_add_glide(o, 0.0, 0.22, 120.0, 48.0, 1.2, 0.0015, 0.07)
+	_add_filtered_noise(o, 0.0, 0.1, func(_k: float) -> float: return 400.0, 0.7, 0, 1.6, 0.001, 0.02)
+	_add_glide(o, 0.0, 0.15, 165.0, 165.0, 0.45, 0.001, 0.05)
+	_add_glide(o, 0.0, 0.12, 240.0, 240.0, 0.3, 0.001, 0.035)
+	_add_glide(o, 0.0, 0.08, 410.0, 410.0, 0.18, 0.001, 0.02)
+	_add_filtered_noise(o, 0.002, 0.05, func(_k: float) -> float: return 1600.0, 1.2, 1, 0.25, 0.0008, 0.012)
+	return _normalize(o, -2.0)
+
+
+## #8 stamp, v2b: heavier and woodier: a lower thud (100 -> 40 Hz) plus a hollow handle knock (720/1130 Hz).
+func _stamp_thunk_v2b() -> PackedFloat32Array:
+	var o := _buf(0.28)
+	_add_filtered_noise(o, 0.0, 0.006, func(_k: float) -> float: return 2500.0, 0.7, 0, 0.3, 0.0002, 0.0012)
+	_add_glide(o, 0.0, 0.25, 100.0, 40.0, 1.3, 0.0015, 0.085)
+	_add_filtered_noise(o, 0.0, 0.12, func(_k: float) -> float: return 350.0, 0.7, 0, 1.8, 0.001, 0.025)
+	_add_glide(o, 0.0, 0.15, 150.0, 150.0, 0.5, 0.001, 0.055)
+	_add_glide(o, 0.0, 0.12, 225.0, 225.0, 0.3, 0.001, 0.04)
+	_add_glide(o, 0.0, 0.06, 720.0, 720.0, 0.22, 0.0008, 0.016)
+	_add_glide(o, 0.0, 0.05, 1130.0, 1130.0, 0.12, 0.0008, 0.011)
+	_add_filtered_noise(o, 0.002, 0.05, func(_k: float) -> float: return 1500.0, 1.2, 1, 0.2, 0.0008, 0.01)
+	return _normalize(o, -2.0)
+
+
+## #10 elevator, v2: ding-ding, two struck bells a major third apart, rising (C6 then E6, 0.32 s later), 1.8 s.
+func _elevator_ding_v2() -> PackedFloat32Array:
+	var o := _buf(1.8)
+	_add_bell(o, 0.0, 1046.5, 0.9, 0.85)
+	_add_bell(o, 0.32, 1318.5, 1.0, 0.9)
+	return _normalize(o, -8.0)
+
+
+## #10 elevator, v2b: the classic falling "ding-dong" (E6 then C6, 0.38 s later), warmer (quieter upper partials).
+func _elevator_ding_v2b() -> PackedFloat32Array:
+	var o := _buf(1.9)
+	var warm := [1.0, 0.3, 0.18, 0.08, 0.04]
+	_add_bell(o, 0.0, 1318.5, 1.0, 0.9, [1.0, 2.0, 2.76, 4.07, 5.4], warm)
+	_add_bell(o, 0.38, 1046.5, 1.0, 1.0, [1.0, 2.0, 2.76, 4.07, 5.4], warm)
+	return _normalize(o, -8.0)
+
+
+## #6 accidental, v2 (an alternative, not a replacement): a record scratch ("wait, what?") and the woodblock bonk, 0.6 s.
+func _accidental_sting_v2() -> PackedFloat32Array:
+	var o := _buf(0.62)
+	_add_noise(o, 0.0, 0.09, func(k: float) -> float: return 600.0 * pow(5.0, k), 2.5, 1, 1.0,
+			func(k: float) -> float: return sin(PI * k))
+	_add_noise(o, 0.09, 0.13, func(k: float) -> float: return 3000.0 * pow(0.15, k), 2.5, 1, 1.0,
+			func(k: float) -> float: return sin(PI * k))
+	_add_soft_crackle(o, 0.0, 0.25, 40.0, 0.25, 4000.0)
+	_add_bell(o, 0.36, 760.0, 0.8, 0.04, [1.0, 2.6, 4.1], [1.0, 0.4, 0.15])
+	return _normalize(o, -8.0)

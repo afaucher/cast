@@ -179,6 +179,16 @@ Cues: `cast_armed_a`, `cast_armed_b`, `spell_whoosh`, `spell_fireball`, `spell_h
 `pickup_bloop`, `fuse_hiss`. Each recipe seeds its own `RandomNumberGenerator`, so every run makes identical files and
 no global randomness is used. Nothing in the game loads these files.
 
+**Round 2 (the user's listen, 2026-10-18)**: `make_sfx.gd -- <out_dir> v2` writes the revisions next to the originals:
+| Feedback | New cues |
+|---|---|
+| cast heard "too twinkly, should be a magical charge-up" | `cast_armed_v2` (noise swell 0.5 -> 5 kHz + a high tone pair with a speeding flutter + a small top-out shimmer), `cast_armed_v2b` ("zhzhzh" capacitor pulses speeding up), and after the probe `cast_armed_v3` (sub swell 70 -> 210 Hz + "air" above 5 kHz, nothing in the speech band) and `cast_armed_v3b` (v2's shape moved above 4.5 kHz, a low swell underneath) |
+| fizzle "more broken, unsuccessful" | `fizzle_pfft_v2` (a charge that stalls, spitting bursts with growing gaps, a falling spark, a dull thud), `fizzle_pfft_v2b` (an electrical short: a buzz cutting in and out with sparks, then a dying puff and thud) |
+| fireball "too brassy, a cymbal not a fire" | `spell_fireball_v2` (a suck of air into a low-passed WHOOMPH with a sub thump, a flickering low roar, low-passed crackle), `spell_fireball_v2b` (bigger boom, longer burning tail). Energy above 3 kHz fell from 23% to 2-3% |
+| stamp "not weighty enough" | `stamp_thunk_v2` (short click, 120 -> 48 Hz thud, low impact body, desk resonances, a small ink slap), `stamp_thunk_v2b` (lower and woodier, a hollow handle knock). Energy below 200 Hz rose from 41% to 59-68% |
+| elevator "do 2 dings" | `elevator_ding_v2` (rising major third, C6 then E6), `elevator_ding_v2b` (the falling "ding-dong", E6 then C6, warmer) |
+| accidental sting (not understood) | the original stays; `accidental_sting_v2` is a record scratch + bonk alternative, **rejected by the probe** (heard as "OH WHAT", and it broke 2 of 3 casts in C) |
+
 ### Which of the top 10 suit procedural
 | Sound | Procedural? | Why |
 |---|---|---|
@@ -216,13 +226,35 @@ if it leaked from speakers into the mic. The TTS voice clips peak at about -0.5 
 - Caveats: a digital mix with no room, speaker or mic coloration; TTS voices; one recognizer model. It shows the
   direction, not the real-world rate.
 
+**Round 2 (the charge-up and other revisions, `mic_leak_probe.gd -- v2`; B now starts the cue 0.15 or 0.3 s into the
+voice, i.e. while "cast" or the spell word's onset is still being said):**
+- **A:** no revised cue casts alone. The charge-ups read as "SH"/"HUSH"/"HUMPH", the record scratch as "OH WHAT"; the
+  fireballs, stamps and dings produce nothing or one stray word.
+- **B, the charge-up over the spell word (5 spells x 2 voices x 2 levels x 2 offsets = 40 each):**
+
+  | Cue | Misses | At the realistic leak (0.15) | Pattern |
+  |---|---|---|---|
+  | `cast_armed_a` (round 1, twinkly) | 0 / 80 | 0 | - |
+  | `cast_armed_v2` | 4 / 40 | 1 | "heal" heard as "meal", "yale", "field"; "corn" once |
+  | `cast_armed_v2b` | 3 / 40 | 1 | "heal" as "yale", "veal" |
+  | `cast_armed_v3` (speech band empty) | **1 / 40** | **0** | only loud and early |
+  | `cast_armed_v3b` (above 4.5 kHz) | 2 / 40 | **0** | only loud and early |
+
+  A broadband 1-4 kHz noise swell masks the soft "h" of "heal" (the fricative band), so the charge-up has to leave the
+  speech band empty: **use `cast_armed_v3` or `v3b`**, not v2/v2b. Their misses were all at the loud (0.4) leak with
+  the swell starting 0.15 s into the voice; starting at 0.3 s (closer to when the trigger is actually armed) they had
+  none (v2 none, v2b one).
+- **C, said over a teammate's loud revised cue:** 23/27 cast. Misses: `accidental_sting_v2` 2 (rejected),
+  `elevator_ding_v2` 1, `fizzle_pfft_v2b` 1 ("CASCORD"); the fireballs and stamps never broke a cast.
+
 ### Rules that follow
 1. **No voices in any sound effect.** No spoken words, no grunts or "ahh"s, no mouth pops, no Voiceover packs, no
    trombone "wah". Monsters stay non-vocal (scrapes, creaks, thuds) or get heavily processed and short.
 2. **Frequent cues are struck, not sung:** bells, clicks, thumps and short noise bursts. Keep sustained pitch glides and
    formant-like noise sweeps (100 Hz-3 kHz) short and rare.
-3. **The "cast heard" chime is `cast_armed_a`:** short (0.2 s), quiet, energy above ~1.7 kHz. It plays the instant
-   the trigger is armed, not delayed: B shows that is safe.
+3. **The "cast heard" cue leaves the speech band (~300 Hz-4.5 kHz) nearly empty**: a charge-up built from a sub swell
+   and "air" above 5 kHz (`cast_armed_v3`, after the user found the round-1 chime too twinkly), quiet, ~0.4 s. It plays
+   the instant the trigger is armed, not delayed: B shows that is safe at a realistic leak.
 4. **Duck the game while the local player speaks.** On `VoiceCaster.voice_activity(true)` tween the SFX and Music buses
    down ~8 dB (attack 30 ms, release 250 ms after `false`); UI and Voice-feedback stay. The gate's look-ahead means the
    first ~100 ms of the trigger word is not ducked, which is the C-case risk, so ducking reduces it, not removes it.
