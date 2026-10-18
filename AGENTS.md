@@ -22,16 +22,24 @@ and streams them after the heroes (`Session.world`, `NetWorldCodec`); on a clien
 crates, mail and pickups are copies the host arbitrates (`Session.objects`): a client's hit on a breakable, its pickups, its E on
 an employee and its exit choice are requests (`Net.request`, `Net.route_hit`), the host decides once and tells everyone, and a
 client's Ledger and objectives mirror the host's (`Ledger.mirror`, `game._keeps_books`). The elevator and van are
-first-to-choose. Hits on monsters from a client and monster hits on a client's hero are still M4. A new `OWNER` var of `Hero`
-or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELDS`, `NetWorldCodec.*_FIELDS`, `NetEvents.CARRIES` or
-`NetEvents.WORLD_CARRIES`). Every change has to keep co-op possible:
+first-to-choose. Combat crosses owners (M4): a cast is an event that lands `NetCasts.LEAD` later on every machine
+(`Session.casts`, `SpellBook.apply`; scheduled effects take their start time as a `SPAWN` param), a hero's attack is
+replayed on its puppet everywhere (`act`), and every effect runs on every machine but each machine applies only what it
+RESOLVES: a hero's hits by its owner (the victim decides), anything else's hits by the attacker's machine
+(`Net.resolves_hit`, `Combat.resolves`; a client's hit or shove on the host's actor becomes a request), statuses (modifiers,
+fires, soaks, heals, coffee) by the target's owner (`Net.resolves`), which announces them (`Session.status`). A monster's
+wind-up is an event and each client resolves the strike on its own hero (`world.windup`, `Monster.net_strike`). A debug
+guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). A new `OWNER`
+var of `Hero` or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELDS`, `NetWorldCodec.*_FIELDS`,
+`NetEvents.CARRIES` or `NetEvents.WORLD_CARRIES`). Every change has to keep co-op possible:
 1. **Declare authority.** A class with gameplay state has `net_fields()` classifying **every** script
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.
 2. **Change other entities only through verbs:** `apply_damage`, `heal`, `shove`, `set_modifier` and
    `die`. Never write another actor's `hp`, `dead` or position.
-3. **Resolve hits through `Combat`** (`melee_arc`, `explode`, `Projectile`) rather than your own loop
-   over actors.
+3. **Resolve hits through `Combat`** (`melee_arc`, `explode`, `slam`, `shove_radius`, `hits_in_radius`, `each_in_radius`,
+   `Projectile`) rather than your own loop over actors. A loop of your own that calls a verb must ask
+   `Combat.resolves` / `Net.resolves` for each actor (the test checks it): effects run on every machine.
 4. **Randomness:** gameplay rolls use `GameWorld.rng` or a generator seeded from the run; looks use
    `GameWorld.fx_rng`. Never use global `randf()`/`randi()`, and never use `GameWorld.rng` in `fx/`,
    `art/`, `ui/` or `world/grime/`.

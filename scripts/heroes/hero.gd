@@ -384,13 +384,49 @@ func melee(dir: Vector3) -> bool:
 	facing = dir
 	cancel_draw()
 	_ready_at[KEY_MELEE] = GameWorld.time + scaled_cooldown(melee_cooldown)
+	_melee_effect(dir)
+	Net.hero_acted(self, "melee", dir)   # (online: the other screens replay the swing on this hero's puppet)
+	melee_swung.emit()
+	return true
+
+
+## The swing itself (here, or replayed on another machine's puppet: Combat applies only what that machine resolves).
+func _melee_effect(dir: Vector3) -> void:
 	for foe in GameWorld.actors_in_radius(global_position, melee_reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
 	Combat.melee_arc(self, dir, melee_reach, melee_arc, melee_damage, melee_shove)
 	Fx.slash_arc(global_position, dir, melee_reach, melee_arc, hero_color.lightened(0.5))
 	_swing_pose()
-	melee_swung.emit()
-	return true
+
+
+## Another machine's hero attacked (NetCasts replays its `act` event on this puppet, at the moment the puppet shows): the
+## swing, the shot, the bowl or the spin plays here from where this screen shows the hero, and Combat applies only what
+## this machine resolves (its own hero against a teammate's spin or bowl; the attacker's machine already decided the
+## monsters). Writes nothing the owner owns (no cooldowns, no facing).
+func net_act(kind: String, dir: Vector3, drawn: bool) -> void:
+	if dead:
+		return
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.001 else facing
+	match kind:
+		"melee":
+			_melee_effect(dir)
+			melee_swung.emit()
+		"arrow":
+			_arrow_effect(dir, drawn)
+			bolt_fired.emit()
+		"bolt":
+			_bolt_effect(dir)
+			bolt_fired.emit()
+		"bowl":
+			BowlBoulder.launch(self, dir, BOWL_SPEED, BOWL_RANGE, BOWL_DAMAGE, BOWL_SHOVE)
+			_bowl_pose()
+			bolt_fired.emit()
+		"spin":
+			_spin_effect(dir)
+			bolt_fired.emit()
+		"cast":
+			_cast_pose()
 
 
 ## The secondary attack toward `dir` (X/Z): the ranged bolt, Rebar's bowl or Gasket's spin,
@@ -464,13 +500,18 @@ func fire_arrow(dir: Vector3, drawn: bool) -> bool:
 	facing = dir
 	cancel_draw()
 	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(arrow_tap_cooldown)
+	_arrow_effect(dir, drawn)
+	Net.hero_acted(self, "arrow", dir, drawn)
+	bolt_fired.emit()
+	return true
+
+
+func _arrow_effect(dir: Vector3, drawn: bool) -> void:
 	var dmg := arrow_draw_damage if drawn else arrow_tap_damage
 	var rng := arrow_draw_range if drawn else arrow_tap_range
 	var pierce := arrow_draw_pierce if drawn else 1
 	ArrowShot.shoot(self, dir, dmg, arrow_speed, rng, pierce, drawn, hero_color.lightened(0.5))
 	_shoot_pose()
-	bolt_fired.emit()
-	return true
 
 
 ## Move at draw_move_mult speed while the bow is drawn.
@@ -535,6 +576,7 @@ func _bowl(dir: Vector3) -> bool:
 	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(BOWL_COOLDOWN)
 	BowlBoulder.launch(self, dir, BOWL_SPEED, BOWL_RANGE, BOWL_DAMAGE, BOWL_SHOVE)
 	_bowl_pose()
+	Net.hero_acted(self, "bowl", dir)   # (the boulder rolls on every screen; each machine shoves its own hero)
 	bolt_fired.emit()
 	return true
 
@@ -542,16 +584,19 @@ func _bowl(dir: Vector3) -> bool:
 ## Gasket's spin: everything within SPIN_REACH is shoved outward; monsters also take damage.
 func _spin() -> bool:
 	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(SPIN_COOLDOWN)
-	for foe in GameWorld.actors_in_radius(global_position, SPIN_REACH, GameWorld.other_team(team)):
-		Fx.attach_hit_feedback(foe)
-	Combat.melee_arc(self, facing, SPIN_REACH, 360.0, SPIN_DAMAGE, SPIN_SHOVE)
-	for mate in GameWorld.actors_in_radius(global_position, SPIN_REACH, team):
-		if mate != self and absf(mate.global_position.y - global_position.y) <= 2.1 * Hex.LEVEL_HEIGHT:
-			mate.shove(mate.global_position - global_position, SPIN_SHOVE, self)
-	Fx.slash_arc(global_position, facing, SPIN_REACH, 360.0, hero_color.lightened(0.5))
-	_spin_pose()
+	_spin_effect(facing)
+	Net.hero_acted(self, "spin", facing)   # (a teammate's machine shoves its own hero: rule 5, the victim applies it)
 	bolt_fired.emit()
 	return true
+
+
+func _spin_effect(dir: Vector3) -> void:
+	for foe in GameWorld.actors_in_radius(global_position, SPIN_REACH, GameWorld.other_team(team)):
+		Fx.attach_hit_feedback(foe)
+	Combat.melee_arc(self, dir, SPIN_REACH, 360.0, SPIN_DAMAGE, SPIN_SHOVE)
+	Combat.shove_radius(global_position, SPIN_REACH, SPIN_SHOVE, self, team, self, 2.1 * Hex.LEVEL_HEIGHT)   # teammates too
+	Fx.slash_arc(global_position, dir, SPIN_REACH, 360.0, hero_color.lightened(0.5))
+	_spin_pose()
 
 
 ## Fire the weak ranged bolt toward `dir` (X/Z).
@@ -562,6 +607,13 @@ func _bolt(dir: Vector3) -> bool:
 	dir = dir.normalized()
 	facing = dir
 	_ready_at[KEY_RANGED] = GameWorld.time + scaled_cooldown(RANGED_COOLDOWN)
+	_bolt_effect(dir)
+	Net.hero_acted(self, "bolt", dir)
+	bolt_fired.emit()
+	return true
+
+
+func _bolt_effect(dir: Vector3) -> void:
 	var on_hit := func(_p: Projectile, hit: Actor, pos: Vector3) -> void:
 		if hit:
 			Fx.attach_hit_feedback(hit)
@@ -569,8 +621,6 @@ func _bolt(dir: Vector3) -> bool:
 		Fx.burst(pos, sparks, 6, 2.0, 0.06, 0.25, 4.0)
 	Fx.make_projectile(self, Combat.chest(self) + dir * 0.5, dir, RANGED_DAMAGE, BOLT_SPEED, BOLT_RANGE, hero_color.lightened(0.5), BOLT_SIZE, on_hit)
 	_shoot_pose()
-	bolt_fired.emit()
-	return true
 
 
 func _on_death() -> void:

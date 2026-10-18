@@ -20,6 +20,12 @@ extends Actor
 
 enum State { IDLE, CHASE, ATTACK, RETURN, DEAD }
 
+## A wind-up began (`length` seconds to the strike). Online the host sends it to every client (NetWorld world.windup), and
+## each player's machine resolves the strike against its own hero (the victim decides, M4).
+signal windup_begun(length: float)
+## The wind-up ended without a strike (shoved, staggered, the target gone).
+signal windup_dropped
+
 const SCAN_INTERVAL := 0.25       ## idle LOS scan period (seconds)
 const FLASH_TIME := 0.12
 const REPATH_MIN := 0.4
@@ -94,6 +100,9 @@ var _mats: Array = []             ## [StandardMaterial3D, base emission Color, b
 var _prev_pos := Vector3.ZERO
 var _walk_phase := 0.0
 var _bob := 0.0
+## A puppet (M4): GameWorld.time this screen last resolved one of this monster's strikes from the wind-up event (so the
+## strike count arriving in the snapshot does not play the swing's effect twice).
+var _net_struck_at := -INF
 
 const BAR_SHADER_PATH := "res://scripts/monsters/hp_bar.gdshader"
 const MODEL_BAR_GAP := 0.25       ## HP bar floats this far above the model's ui_height
@@ -161,6 +170,7 @@ func net_fields() -> Dictionary:
 		"model": Net.LOCAL, "_visual": Net.LOCAL, "_bar": Net.LOCAL, "_bar_mat": Net.LOCAL,
 		"_mats": Net.LOCAL, "_flash_t": Net.LOCAL, "_tint_key": Net.LOCAL,
 		"_strike_t": Net.LOCAL, "_prev_pos": Net.LOCAL, "_walk_phase": Net.LOCAL, "_bob": Net.LOCAL,
+		"_net_struck_at": Net.LOCAL,
 	})
 	return f
 
@@ -282,6 +292,7 @@ func _tick_attack(delta: float) -> void:
 	if target == null or not is_instance_valid(target) or target.dead:
 		_end_windup()
 		state = State.CHASE
+		windup_dropped.emit()
 		return
 	_windup_left -= delta
 	if _windup_left > _windup_total * WINDUP_LOCK_FRACTION:
@@ -326,6 +337,7 @@ func _begin_windup(duration: float) -> void:
 	_windup_left = _windup_total
 	_telegraph = 0.0
 	_on_windup_begin()
+	windup_begun.emit(_windup_total)
 
 
 func _end_windup() -> void:
@@ -613,6 +625,7 @@ func _on_interrupted() -> void:
 	if state == State.ATTACK:
 		_end_windup()
 		state = State.CHASE
+		windup_dropped.emit()
 	_nudge_t = 0.0
 	_prog_t = 0.0
 
@@ -765,7 +778,25 @@ func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: 
 		_strike_t = 1.0
 		if model != null:
 			model.attack_swing()
-		_on_strike_visual()
+		if GameWorld.time - _net_struck_at > 0.4:
+			_on_strike_visual()   # (unless this screen just resolved the strike itself: it already played it)
+
+
+## A puppet (M4): the host's wind-up has reached its strike on THIS screen's clock, so this machine resolves the strike
+## against its own hero (the victim decides, rule 1). `victim` is the host's target (an archer aims at it). _strike runs
+## the kind's own blow (a cleave, the brute's slam, an arrow); Combat applies it only to what this machine resolves, so
+## here that is this player's hero and nothing else (the host decided everyone else at its own strike).
+func net_strike(victim: Actor) -> void:
+	if dead:
+		return
+	target = victim
+	_net_struck_at = GameWorld.time
+	_strike()
+
+
+## A puppet (M4): this machine's player hit it (the hit is on its way to the host): flash now rather than a round trip later.
+func net_flash() -> void:
+	_flash_t = FLASH_TIME
 
 
 ## A puppet's look each frame (on the host the physics process does it).

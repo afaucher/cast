@@ -14,7 +14,7 @@ extends RefCounted
 ##
 ## Columns (networking.md item 7): RTT, jitter (computed ourselves), a quality figure (the share of unreliable
 ## packets that arrived), bytes per second, pending reliable bytes (blank until the Steam status is wired in
-## M7), and hits taken (blank until M4).
+## M7), and hits taken (M4: hits this machine's own heroes took in that second).
 
 const DIR := "user://net"
 const KEEP_FILES := 40      ## older telemetry files are pruned when a new one opens

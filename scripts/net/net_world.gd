@@ -20,6 +20,12 @@ extends Node
 ##   - a death is shown when the render time reaches the moment the host stamped it, so it lands on the same beat as
 ##     the movement that led to it (and at once if the actor has no samples).
 ##
+## WIND-UPS (M4, the victim decides): a monster's wind-up on the host is an event, `world.windup {id, s start, l length,
+## v victim}` (and `world.unwind {id}` when it is called off: shoved, staggered, the target gone). The host's own strike
+## hits only the heroes the host owns (Combat skips a player's hero); each client resolves the strike against ITS OWN
+## hero when its screen shows the strike's moment (render time >= s + l: Monster.net_strike), from where it shows the
+## monster and where its own hero really is. What a player dodged on their screen did not hit them.
+##
 ## The game calls begin() at the floor's barrier (after NetFloor.assign_ids and freeze_copies) and set_active() with
 ## the hero sync (NetSnapshot.set_active). Nothing here knows about game.gd.
 
@@ -37,6 +43,8 @@ const REFRESH := 30         ## every entry at least once per this many ticks (1 
 const TELEPORT_DIST := 3.0
 const HOLD_GAP := 0.09      ## a sample this long after the last one of a STILL actor gets a "held still" sample before it
 const DEATH_WAIT_MAX := 0.6 ## a death is shown at the latest this long after it arrived
+const STRIKE_EARLY := 0.02  ## a client resolves a strike this much before its render time reaches it (so the strike count
+                            ## in the snapshot, sampled a moment after the blow, never plays it first)
 ## Host -> client packet: the wire header, the hero count and two heroes (drawing) come first.
 const WORLD_BUDGET := NetWorldCodec.PACKET_BUDGET - NetWire.HEADER - 1 - 2 * NetCodec.ENTRY_SIZE_DRAWING
 
@@ -79,6 +87,9 @@ var _pending_spawns: Array[int] = []
 var _shown: Dictionary = {}         ## client: id -> Shown
 var _timing := NetInterp.new()      ## client: the world stream's own delay (one per stream, so the whole floor is shown at one moment)
 var _deaths: Array = []             ## client: [id, stamp, arrival]
+var _windups: Dictionary = {}       ## client: monster id -> [strike time (host_time), victim id]
+## Client, tests: every strike this screen resolved: [monster id, victim id, host_time, damage its own hero took].
+var resolved: Array = []
 var _links: Array = []              ## [Signal, Callable] connected in begin(), disconnected in end()
 var _world_section := PackedByteArray()
 
@@ -95,7 +106,7 @@ func _ready() -> void:
 
 func _reset_stats() -> void:
 	stats = {"sections": 0, "bytes": 0, "max": 0, "entries": 0, "monsters_max": 0, "in_sections": 0, "in_entries": 0,
-		"unknown": 0, "spawns": 0, "deaths": 0, "events_out": 0, "since": _now()}
+		"unknown": 0, "spawns": 0, "deaths": 0, "events_out": 0, "windups": 0, "unwinds": 0, "strikes": 0, "since": _now()}
 
 
 # --- Setup -----------------------------------------------------------------------------------------------
@@ -136,6 +147,8 @@ func end() -> void:
 	_tracks.clear()
 	_shown.clear()
 	_deaths.clear()
+	_windups.clear()
+	resolved.clear()
 	_pending_spawns.clear()
 	_timing.clear()
 	_tick = 0
@@ -179,6 +192,9 @@ func _track(id: int, n: Actor, kind: int) -> void:
 	elif n is Hellgate:
 		_link((n as Hellgate).phase_changed, _on_gate_phase.bind(id))
 		_link((n as Hellgate).shove_burst, _on_gate_shove.bind(id))
+	elif n is Monster:
+		_link((n as Monster).windup_begun, _on_windup.bind(id))
+		_link((n as Monster).windup_dropped, _on_unwind.bind(id))
 
 
 func _show(id: int, n: Actor, kind: int) -> void:
@@ -408,6 +424,21 @@ func _on_gate_shove(_radius: float, id: int) -> void:
 	_send("world.shove", {"id": id})
 
 
+## Host: a monster began a wind-up: every client resolves the strike against its own hero (the victim decides).
+func _on_windup(length: float, id: int) -> void:
+	var m := NetRegistry.node(id) as Monster
+	if m == null:
+		return
+	var victim := NetFloor.id_of(m.target) if m.target != null and is_instance_valid(m.target) else 0
+	_send("world.windup", {"id": id, "s": _now(), "l": length, "v": victim})
+	stats["windups"] = int(stats["windups"]) + 1
+
+
+func _on_unwind(id: int) -> void:
+	_send("world.unwind", {"id": id})
+	stats["unwinds"] = int(stats["unwinds"]) + 1
+
+
 func _send(kind: String, data: Dictionary) -> void:
 	if _session == null or not _session.online() or _session.roster.size() < 2:
 		return
@@ -458,6 +489,13 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 			_receive_spawn(int(data.get("g", 0)), data.get("m", []) as Array)
 		"world.die":
 			_deaths.append([int(data.get("id", 0)), stamp, _now()])
+			_windups.erase(int(data.get("id", 0)))
+		"world.windup":
+			_windups[int(data.get("id", 0))] = [float(data.get("s", stamp)) + float(data.get("l", 0.0)), int(data.get("v", 0))]
+			stats["windups"] = int(stats["windups"]) + 1
+		"world.unwind":
+			_windups.erase(int(data.get("id", 0)))
+			stats["unwinds"] = int(stats["unwinds"]) + 1
 		"world.say":
 			var e := NetRegistry.node(int(data.get("id", 0))) as Employee
 			if e != null and not e.dead:
@@ -517,7 +555,52 @@ func _process(delta: float) -> void:
 	var now := _now()
 	_timing.step_delay(delta)
 	var t_r := now - _timing.delay
+	_resolve_strikes(t_r)   # (gameplay on this machine's own hero: outside the net layer's apply scope, so the guard watches it)
+	Net.apply_begin()
 	_apply_deaths(t_r, now)
+	_show_world(t_r, delta)
+	Net.apply_end()
+
+
+## Client: the shared time a monster's announced strike falls on (its wind-up's start + length), or -1 when none is due.
+func pending_strike(id: int) -> float:
+	return float((_windups[id] as Array)[0]) if _windups.has(id) else -1.0
+
+
+## Client: the strikes whose moment this screen now shows hit this machine's hero, if they reach it here.
+func _resolve_strikes(t_r: float) -> void:
+	if _windups.is_empty():
+		return
+	for id: int in _windups.keys():
+		var w: Array = _windups[id]
+		if t_r < float(w[0]) - STRIKE_EARLY:
+			continue
+		_windups.erase(id)
+		var m := NetRegistry.node(id) as Monster
+		if m == null or not is_instance_valid(m) or m.dead or not m.is_inside_tree():
+			continue
+		var mine := _own_heroes()
+		var before := 0.0
+		for h in mine:
+			before += h.hp
+		m.net_strike(NetRegistry.node(int(w[1])) as Actor)
+		var after := 0.0
+		for h in mine:
+			after += h.hp
+		resolved.append([id, int(w[1]), _now(), before - after])
+		stats["strikes"] = int(stats["strikes"]) + 1
+
+
+func _own_heroes() -> Array[Hero]:
+	var out: Array[Hero] = []
+	for seat in [1, 2, 3]:
+		var h := NetRegistry.hero(seat)
+		if h != null and Net.owns(h):
+			out.append(h)
+	return out
+
+
+func _show_world(t_r: float, delta: float) -> void:
 	for id: int in _shown.keys():
 		var sh: Shown = _shown[id]
 		if not is_instance_valid(sh.node):

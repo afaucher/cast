@@ -61,8 +61,16 @@ const VOID_FALL_TIME := 0.7       ## non-heroes fall this long into a pit, then 
 const VOID_TICK_DAMAGE := 5.0     ## heroes pulled back from a pit take this
 const PULL_TIME := 0.3
 
-var hp: float
-var dead := false
+var hp: float:
+	set(v):
+		if v != hp and Net.is_copy(self):
+			Net.guard_write(self, "hp")   # (M4c: only the owner, or the net layer applying the owner's state, writes it)
+		hp = v
+var dead := false:
+	set(v):
+		if v != dead and Net.is_copy(self):
+			Net.guard_write(self, "dead")
+		dead = v
 var facing := Vector3.FORWARD     ## unit X/Z vector the actor faces
 var climbing := false             ## true while crossing a climb ledge
 var pass_through_until := 0.0     ## GameWorld.time until which this actor does not push or get pushed by others
@@ -130,12 +138,42 @@ func damage_taken_mult() -> float:
 ## spell and a status stack sensibly. This is the verb for every timed buff or debuff: once the Net layer exists
 ## it applies here if this machine owns the actor and is sent to the owner otherwise.
 func set_modifier(id: String, mult: float, duration: float, stat: String = STAT_DAMAGE_TAKEN) -> void:
+	if Net.is_copy(self):
+		Net.route_modifier(self, id, mult, duration, stat)   # (M4: its owner applies it)
+		return
 	_modifiers[id] = {"mult": mult, "until": _now() + duration, "stat": stat}
+	Net.status_changed(self, "mods")   # (online: the other screens are told)
 
 
 ## Drop a modifier early (a re-dose of coffee cancels its crash). Part of the set_modifier verb.
 func clear_modifier(id: String) -> void:
+	if Net.is_copy(self) or not _modifiers.has(id):
+		return
 	_modifiers.erase(id)
+	Net.status_changed(self, "mods")
+
+
+## The modifiers this actor's owner announced (NetStatus, M4), on a copy: replaces the whole set. `mods` is id ->
+## [mult, seconds left, stat]; `grace` keeps each one a little past its end, so a buff the owner keeps refreshing
+## (armor) does not blink between two announcements.
+func net_set_modifiers(mods: Dictionary, grace: float) -> void:
+	_modifiers.clear()
+	for id: Variant in mods:
+		var e := mods[id] as Array
+		if e == null or e.size() < 3:
+			continue
+		_modifiers[str(id)] = {"mult": float(e[0]), "until": _now() + float(e[1]) + grace, "stat": str(e[2])}
+
+
+## The live modifiers as id -> [mult, seconds left, stat] (what the owner announces).
+func modifiers_snapshot() -> Dictionary:
+	var out := {}
+	var now := _now()
+	for id: String in _modifiers:
+		var e: Dictionary = _modifiers[id]
+		if float(e["until"]) >= now:
+			out[id] = [float(e["mult"]), float(e["until"]) - now, str(e.get("stat", STAT_DAMAGE_TAKEN))]
+	return out
 
 
 func has_modifier(id: String) -> bool:
@@ -209,6 +247,8 @@ func apply_damage(amount: float, source: Node = null) -> float:
 		return 0.0
 	var dealt := amount * damage_taken_mult()
 	hp = maxf(0.0, hp - dealt)
+	if dealt > 0.0 and self is Hero:
+		Net.note_hit(self)   # (telemetry: hits taken per player)
 	damaged.emit(dealt, source)
 	if hp <= 0.0:
 		die()
@@ -217,8 +257,8 @@ func apply_damage(amount: float, source: Node = null) -> float:
 
 ## Returns the HP actually restored.
 func heal(amount: float) -> float:
-	if dead or amount <= 0.0:
-		return 0.0
+	if dead or amount <= 0.0 or Net.is_copy(self):
+		return 0.0   # (a copy: its owner heals it, M4: the heal is a cast every machine runs, layer 4)
 	var before := hp
 	hp = minf(max_hp, hp + amount)
 	if hp > before:
@@ -308,7 +348,11 @@ func move(dir: Vector3, delta: float) -> bool:
 ## shove_mult (and by a wet floor, Damp.slide_mult). A rooted actor (vines) is not pushed at all.
 ## `source` is who caused it (used for friendly-fire protection and damage credit).
 func shove(dir: Vector3, distance: float, source: Node = null) -> void:
-	if dead or shove_mult <= 0.0 or distance <= 0.0 or _void_fall or _pull or not is_inside_tree() or is_rooted() or Net.is_copy(self):
+	if Net.is_copy(self):
+		if not dead and distance > 0.0:
+			Net.route_shove(self, dir, distance, source)   # (M4: a request to its owner, which runs the slide itself)
+		return
+	if dead or shove_mult <= 0.0 or distance <= 0.0 or _void_fall or _pull or not is_inside_tree() or is_rooted():
 		return   # (a rooted actor ignores every shove: tentacles, the bowl, the spin, melee, props)
 	dir.y = 0.0
 	if dir.length() < 0.001:
@@ -339,6 +383,26 @@ func shove(dir: Vector3, distance: float, source: Node = null) -> void:
 ## pit, being pulled back).
 func is_shoved() -> bool:
 	return _forced
+
+
+## How hard this slide would hit something now: the slide's distance times the share of it still to go (0.3 at least),
+## 0 when only coasting. A priced prop prices the impact from it, on this actor's own machine (the slide is its owner's).
+func slide_impact() -> float:
+	if not _forced or _slide_t >= _slide_dur:
+		return 0.0
+	return _slide_dist * clampf(1.0 - _slide_t / maxf(_slide_dur, 0.001), 0.3, 1.0)
+
+
+## Stop the slide dead against an obstacle (a prop), like a wall slam without the damage.
+func stop_slide() -> void:
+	_slide_t = _slide_dur
+	_coast = Vector3.ZERO
+	shove_impact.emit("slam", global_position, 0.0)
+
+
+## Who caused the current shove (null if unknown or gone).
+func shove_source() -> Node:
+	return _src_ref.get_ref() as Node if _src_ref != null else null
 
 
 ## True during the stagger after a wall slam or a hard landing.

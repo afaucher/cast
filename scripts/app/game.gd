@@ -19,7 +19,8 @@ extends Node3D
 ##   --spells a,b        skip the picker (e.g. heal,corn); with no --contract it also skips the board
 ##   --no-mic            don't open the mic / load the model (typed casts only)
 ##   --shot <png>        save a screenshot after --shot-after game seconds (default 3) and quit
-##   --autocast <id>     cast a spell once, 1 s in (for screenshots)
+##   --autocast <id>     cast a spell once, 1 s in (for screenshots); in a shared run once the floor has started and the
+##                       crew is out of the van, plus --autocast-after S (default 0.5)
 ##   --aim-offset x,z    dev: --autocast aims at the player's position plus this offset (world units) instead of at the monsters
 ##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
 ##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer) near the player;
@@ -250,6 +251,10 @@ func _exit_tree() -> void:
 		Session.world.end()
 	if Session.objects != null:
 		Session.objects.end()
+	if Session.casts != null:
+		Session.casts.end()
+	if Session.status != null:
+		Session.status.end()
 	if _pause != null:
 		get_tree().paused = false   # never leave the next scene frozen
 	if GameWorld.actor_died.is_connected(_on_actor_died):
@@ -275,6 +280,7 @@ func _parse_args() -> void:
 			"--shot": opts["shot"] = nxt
 			"--shot-after": opts["shot_after"] = float(nxt)
 			"--autocast": opts["autocast"] = nxt
+			"--autocast-after": opts["autocast_after"] = float(nxt)
 			"--aim-offset": opts["aim_offset"] = nxt
 			"--proto-heroes": opts["proto_heroes"] = true
 			"--spawn-near": opts["spawn_near"] = nxt
@@ -892,6 +898,14 @@ func _start() -> void:
 		_kit_demo(str(opts["kit_demo"]))
 	if opts.has("autocast"):
 		await get_tree().create_timer(1.0).timeout
+		if _shared:
+			# A shared run (M4): the world is frozen behind the barrier, so cast once the floor runs and the crew is out of
+			# the van (the cast is an event that lands on every screen).
+			while is_inside_tree() and not (_floor_begun and (_arrival == null or _arrival.is_done())):
+				await get_tree().process_frame
+			await get_tree().create_timer(float(opts.get("autocast_after", 0.5))).timeout
+			if not is_inside_tree() or player == null:
+				return
 		var centre := _dev_centroid()
 		if opts.has("aim_offset"):
 			var off := str(opts["aim_offset"]).split(",")
@@ -1003,6 +1017,8 @@ func _enter_barrier() -> void:
 	_begin_hero_sync()
 	Session.world.begin()           # M3: the host streams its monsters, gates and employees; a client shows them
 	Session.objects.begin(player)   # M3: props, crates, mail, pickups, the Ledger and the exits are the host's
+	Session.casts.begin()           # M4: casts and attacks are events; every machine applies what it resolves
+	Session.status.begin()          # M4: modifiers, fires and soaks shown on every screen by their owners
 	_freeze(true)
 	var t0 := Time.get_ticks_usec()
 	var sums := NetFloor.checksum(map, _plan, _run, GameWorld.root)

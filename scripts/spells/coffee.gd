@@ -47,6 +47,9 @@ var _steam_fx: CPUParticles3D = null      ## the wisps off the head
 var _steam_body: CPUParticles3D = null    ## ... and off the shoulders
 var _ring: MeshInstance3D = null
 var _ring_mat: StandardMaterial3D = null
+## A copy's look only (M4): the target's owner runs the status; on another machine this node just draws the steam and the
+## ring from the modifiers the owner announced (NetStatus), and goes when they do.
+var _remote := false
 
 
 ## Who may write each var (see Net). A status of the target, so it lives where the target's owner runs it.
@@ -56,6 +59,7 @@ func net_fields() -> Dictionary:
 		"_haste_end": Net.OWNER, "_crash_end": Net.OWNER,
 		"_next_twitch": Net.PRIVATE, "_twitch_left": Net.PRIVATE, "_twitch_dir": Net.PRIVATE,
 		"_steam_fx": Net.LOCAL, "_steam_body": Net.LOCAL, "_ring": Net.LOCAL, "_ring_mat": Net.LOCAL,
+		"_remote": Net.LOCAL,
 	}
 
 
@@ -125,6 +129,20 @@ static func jitter_aim(a: Actor, aim: Vector3) -> Vector3:
 	return Vector3(a.global_position.x + d.x, aim.y, a.global_position.z + d.z)
 
 
+## Draw coffee on a copy whose owner announced the haste (NetStatus): steam and the ring, nothing else (no schedule, no
+## twitch, no modifiers: those are the owner's).
+static func show_remote(a: Actor) -> void:
+	if a == null or not is_instance_valid(a) or a.dead or not a.is_inside_tree() or _of(a) != null:
+		return
+	if a is Hellgate or a is PricedProp or a.is_in_group("breakables"):
+		return
+	var c := Coffee.new()
+	c.name = "Coffee"
+	c.target = a
+	c._remote = true
+	a.add_child(c)
+
+
 static func _of(a: Actor) -> Coffee:
 	var c := a.get_node_or_null("Coffee") as Coffee
 	return c if c != null and not c.is_queued_for_deletion() else null
@@ -133,7 +151,8 @@ static func _of(a: Actor) -> Coffee:
 # --- The status ---------------------------------------------------------------------------------
 
 func _ready() -> void:
-	_next_twitch = GameWorld.time + GameWorld.rng.randf_range(TWITCH_MIN_GAP, TWITCH_MAX_GAP)
+	if not _remote:
+		_next_twitch = GameWorld.time + GameWorld.rng.randf_range(TWITCH_MIN_GAP, TWITCH_MAX_GAP)
 	_build_steam()
 	_build_ring()
 	if not target.died.is_connected(queue_free):
@@ -171,6 +190,9 @@ func _physics_process(delta: float) -> void:
 	if target == null or not is_instance_valid(target) or target.dead:
 		queue_free()
 		return
+	if _remote:
+		_show_remote_phase()
+		return
 	var now := GameWorld.time
 	if _crash_end < 0.0:
 		if now >= _haste_end:
@@ -179,6 +201,21 @@ func _physics_process(delta: float) -> void:
 			_twitch(now, delta)
 	elif now >= _crash_end:
 		queue_free()
+
+
+## A copy: follow the announced modifiers (haste, then the crash, then gone).
+func _show_remote_phase() -> void:
+	if not Coffee.is_caffeinated(target):
+		queue_free()
+		return
+	if Coffee.is_crashing(target) and _crash_end < 0.0:
+		_crash_end = GameWorld.time
+		if _steam_fx != null:
+			_steam_fx.emitting = false
+		if _steam_body != null:
+			_steam_body.emitting = false
+		if _ring_mat != null:
+			_ring_mat.albedo_color = RING_CRASH
 
 
 func _start_crash(now: float) -> void:

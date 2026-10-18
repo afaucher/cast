@@ -131,6 +131,7 @@ static func set_fireproof(a: Actor, on: bool) -> void:
 static func soak(a: Actor, seconds: float) -> void:
 	a.set_meta(META_SOAKED_UNTIL, GameWorld.time + seconds)
 	extinguish(a)
+	Net.status_changed(a, "soak")   # (online, on the owner: the other screens draw it damp)
 
 
 static func is_burning(a: Actor) -> bool:
@@ -152,9 +153,12 @@ static func ignite(target: Actor, source: Node, duration: float) -> Burning:
 	var b := _of(target)
 	var ends := GameWorld.time + duration
 	if b != null:
+		var was := b._ends_at
 		b._ends_at = maxf(b._ends_at, ends)
 		if source != null:
 			b._source = weakref(source)
+		if b._ends_at > was + 0.5:
+			Net.status_changed(target, "burn")
 		return b
 	b = Burning.new()
 	b.name = "Burning"
@@ -166,7 +170,31 @@ static func ignite(target: Actor, source: Node, duration: float) -> Burning:
 	target.add_child(b)
 	Fx.attach_hit_feedback(target)
 	Fx.number(target.global_position + Vector3(0, 2.4 + target.radius, 0), "FIRE!", OUTER.lightened(0.15), 0.8)
+	Net.status_changed(target, "burn")   # (online, on the owner: the other screens show the flames)
 	return b
+
+
+## Show a fire its owner announced (NetStatus, M4) on this machine's copy of `target`: the flames for `seconds`. It
+## deals nothing here (only the owner ticks a fire); the owner's "out" ends it early.
+static func show_remote(target: Actor, seconds: float) -> void:
+	if seconds <= 0.0:
+		var b := _of(target)
+		if b != null:
+			b._finish("extinguished")
+		return
+	if not can_burn(target):
+		return
+	var b := _of(target)
+	if b != null:
+		b._ends_at = GameWorld.time + seconds
+		return
+	b = Burning.new()
+	b.name = "Burning"
+	b.target = target
+	b._ends_at = GameWorld.time + seconds
+	b._next_tick = GameWorld.time + TICK
+	b._next_scorch = GameWorld.time + 1.0
+	target.add_child(b)
 
 
 ## Put out the fire. True if there was one.
@@ -182,7 +210,7 @@ static func extinguish(a: Actor) -> bool:
 static func extinguish_in_radius(pos: Vector3, radius: float, team: int = -1) -> int:
 	var n := 0
 	for a in GameWorld.actors_in_radius(pos, radius, team):
-		if extinguish(a):
+		if Net.resolves(a) and extinguish(a):   # (online: each fire's owner puts it out; the others are told, NetStatus)
 			n += 1
 	return n
 
@@ -196,6 +224,8 @@ static func on_blast(pos: Vector3, radius: float, power: float, source: Node) ->
 			if is_soaked(a) and not a.dead:
 				_fizzle(a)   # damp: the blast hisses out on a soaked actor (no roll, so the rng stream is unchanged)
 			continue
+		if not Net.resolves(a):
+			continue   # (online: each actor's owner rolls its own ignition, with its own GameWorld.rng)
 		var frac := GameWorld.flat_distance(a.global_position, pos) / maxf(radius, 0.001)
 		if GameWorld.rng.randf() < ignite_chance(power, frac):
 			if ignite(a, source, roll_duration()) != null:
@@ -236,9 +266,11 @@ func _physics_process(_delta: float) -> void:
 		_finish("extinguished")
 		return
 	var last := minf(now, _ends_at)
+	var owned := Net.owns(target)   # (online: only the burning actor's owner ticks the damage; the rest show the flames)
 	while _next_tick <= last and not _over:
 		_next_tick += TICK
-		_burn()
+		if owned:
+			_burn()
 	if _over:
 		return
 	if now >= _ends_at:
@@ -282,6 +314,8 @@ func _finish(reason: String) -> void:
 	_over = true
 	remove_from_group(GROUP)
 	ended.emit(reason)
+	if target != null and is_instance_valid(target) and reason != "died":
+		Net.status_changed(target, "burn")   # (the owner: the fire is out on every screen)
 	queue_free()
 
 

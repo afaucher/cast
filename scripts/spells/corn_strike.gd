@@ -16,8 +16,13 @@ const COB_RADIUS := 0.8
 var power := 1.0
 var source_team := GameWorld.TEAM_HEROES
 var caster: Actor = null
+## The cast's GameWorld.time (SPAWN): the telegraph runs from it and the cob lands DELAY after it, on every machine alike
+## (M4a: the cast event carries the moment). -1 = start now.
+var start_time := -1.0
 
-var _start := 0.0
+## The cob hit the floor (the damage was dealt where this machine resolves it). Tests and screen effects.
+signal landed(pos: Vector3)
+
 var _slammed := false
 var _telegraph: Node3D
 var _disc_mat: StandardMaterial3D
@@ -26,7 +31,8 @@ var _cob: Node3D
 
 
 func _ready() -> void:
-	_start = GameWorld.time
+	if start_time < 0.0:
+		start_time = GameWorld.time
 	_build_telegraph()
 	_build_cob()
 
@@ -36,21 +42,22 @@ func _ready() -> void:
 func net_fields() -> Dictionary:
 	return {
 		"power": Net.SPAWN, "source_team": Net.SPAWN,
-		"caster": Net.SPAWN,      # will travel as an entity id in the cast event
-		"_start": Net.LOCAL, "_slammed": Net.LOCAL,
+		"caster": Net.SPAWN,      # travels as the caster's net id in the cast event (NetCasts)
+		"start_time": Net.SPAWN,  # the cast's moment, from the cast event
+		"_slammed": Net.LOCAL,
 		"_telegraph": Net.LOCAL, "_disc_mat": Net.LOCAL, "_ring_mat": Net.LOCAL, "_cob": Net.LOCAL,
 	}
 
 
 func _physics_process(_delta: float) -> void:
-	if not _slammed and GameWorld.time - _start >= DELAY:
+	if not _slammed and GameWorld.time - start_time >= DELAY:
 		_slam()
 
 
 func _process(_delta: float) -> void:
 	if _slammed or _telegraph == null:
 		return
-	var t := GameWorld.time - _start
+	var t := GameWorld.time - start_time
 	var k := clampf(t / DELAY, 0.0, 1.0)
 	_telegraph.scale = Vector3.ONE * lerpf(0.15, 1.0, 1.0 - pow(1.0 - k, 3.0))
 	var flicker := 0.5 + 0.5 * sin(t * (6.0 + 22.0 * k))
@@ -71,7 +78,8 @@ func _slam() -> void:
 	for a in GameWorld.actors_in_radius(pos, RADIUS, team_arg):
 		Fx.attach_hit_feedback(a)
 	var src: Node = caster if is_instance_valid(caster) else null
-	Combat.explode(pos, RADIUS, SpellBook.corn_damage(power), team_arg, src, 1.0)
+	Combat.explode(pos, RADIUS, SpellBook.corn_damage(power), team_arg, src, 1.0)   # (each machine: what it resolves)
+	landed.emit(pos)
 	Fx.shake(1.0)
 	_telegraph.visible = false
 	# Squash, then pop into popcorn.

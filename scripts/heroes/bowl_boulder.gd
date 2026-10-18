@@ -145,6 +145,9 @@ func _check_hits() -> void:
 		if side.length() < 0.2:
 			side = Vector3(-direction.z, 0.0, direction.x) * _flip
 			_flip = -_flip
+		Fx.burst(a.global_position + Vector3.UP * 0.4, _dust_colors(), 8, 2.5, 0.09, 0.45, 3.0, Vector3.UP, 70.0, false)
+		if not Combat.resolves(a, source):
+			continue   # (online: the boulder rolls on every screen; the victim decides a hero, the bowler the rest)
 		var push := (side.normalized() * 0.85 + direction * 0.5).normalized()
 		if a.team == GameWorld.TEAM_MONSTERS:
 			Fx.attach_hit_feedback(a)
@@ -154,7 +157,6 @@ func _check_hits() -> void:
 		elif a.is_in_group("breakables"):
 			a.apply_damage(damage, source)                      # and through the client's mail
 		a.shove(push, shove_distance, source)
-		Fx.burst(a.global_position + Vector3.UP * 0.4, _dust_colors(), 8, 2.5, 0.09, 0.45, 3.0, Vector3.UP, 70.0, false)
 
 
 func _stop() -> void:

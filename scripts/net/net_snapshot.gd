@@ -143,7 +143,9 @@ func seat_released(seat: int) -> void:
 		return
 	var last := pp.interp.newest()
 	if last != null:
+		Net.apply_begin()
 		NetCodec.write_hero(hero, last)
+		Net.apply_end()
 		hero.reset_physics_interpolation()
 	Net.release_copy(hero)
 	var tr := Track.new()
@@ -283,7 +285,9 @@ func _process(delta: float) -> void:
 	if not active or _session == null or not _session.online():
 		return
 	var now := _session.host_time()
+	Net.apply_begin()   # (M4c: the puppets show their owners' state)
 	_show_puppets(now, delta)
+	Net.apply_end()
 	if now >= _next_send:
 		_next_send += SEND_INTERVAL
 		if _next_send < now - SEND_INTERVAL:

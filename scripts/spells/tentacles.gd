@@ -15,14 +15,16 @@ const TELEGRAPH := 0.25
 var power := 1.0
 var source_team := GameWorld.TEAM_HEROES
 var caster: Actor = null
+## The cast's GameWorld.time (SPAWN, from the cast event, M4a): the burst is TELEGRAPH after it. -1 = start now.
+var start_time := -1.0
 
-var _start := 0.0
 var _burst_done := false
 var _fx: TentaclesFx = null
 
 
 func _ready() -> void:
-	_start = GameWorld.time
+	if start_time < 0.0:
+		start_time = GameWorld.time
 	_fx = TentaclesFx.new()
 	_fx.radius = SpellBook.tentacles_radius(power)
 	_fx.telegraph = TELEGRAPH
@@ -35,13 +37,14 @@ func _ready() -> void:
 func net_fields() -> Dictionary:
 	return {
 		"power": Net.SPAWN, "source_team": Net.SPAWN,
-		"caster": Net.SPAWN,      # will travel as an entity id in the cast event
-		"_start": Net.LOCAL, "_burst_done": Net.LOCAL, "_fx": Net.LOCAL,
+		"caster": Net.SPAWN,      # travels as the caster's net id in the cast event (NetCasts)
+		"start_time": Net.SPAWN,
+		"_burst_done": Net.LOCAL, "_fx": Net.LOCAL,
 	}
 
 
 func _physics_process(_delta: float) -> void:
-	var t := GameWorld.time - _start
+	var t := GameWorld.time - start_time
 	if not _burst_done and t >= TELEGRAPH:
 		_burst()
 	elif _burst_done and t >= TELEGRAPH + TentaclesFx.LIFETIME:
@@ -56,11 +59,13 @@ func _burst() -> void:
 	var dmg := SpellBook.tentacles_damage(power)
 	Grime.mark(Grime.CRACKS, global_position, radius)   # floor cracks that fade after 30 s
 	for a in GameWorld.actors_in_radius(global_position, radius):
+		if a.team == GameWorld.TEAM_MONSTERS:
+			Fx.attach_hit_feedback(a)
+	for a in Combat.hits_in_radius(global_position, radius, src):   # (online: the victim decides a hero, the caster the rest)
 		var away := a.global_position - global_position
 		away.y = 0.0
 		a.shove(away if away.length() > 0.05 else a.facing, dist, src)
 		if a.team == GameWorld.TEAM_MONSTERS:
-			Fx.attach_hit_feedback(a)
 			a.apply_damage(dmg, src)
 		elif a.is_in_group("breakables"):
 			a.apply_damage(dmg, src)   # mail packages burst when the tentacles come up under them

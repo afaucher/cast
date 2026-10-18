@@ -242,19 +242,23 @@ func _on_damaged(_amount: float, source: Node) -> void:
 func _check_shove_contacts() -> void:
 	for n in get_tree().get_nodes_in_group("actors"):
 		var a := n as Actor
-		if a == null or a == self or a.dead or not a.is_shoved():
+		if a == null or a == self or a.dead or not a.is_shoved() or not Net.owns(a):   # (M4: the slider's machine sees it)
 			continue
 		if GameWorld.flat_distance(a.global_position, global_position) > radius + a.radius - SHOVE_REACH:
 			continue
 		if a.global_position.y - global_position.y > top_height():
 			continue
-		var src: Node = null
-		if a._src_ref != null:
-			src = a._src_ref.get_ref() as Node
+		var src: Node = a.shove_source()
 		if src == null:
 			src = a    # an unknown shover: the thing that was thrown is to blame
-		apply_damage(1.0, src)
+		Net.hit_object(self, 1.0, src)
 		return
+
+
+## A client (M4): run the contact check for this machine's own sliders on the host's copy (NetObjects).
+func net_contacts() -> void:
+	if not dead:
+		_check_shove_contacts()
 
 
 # --- Breaking ----------------------------------------------------------------------------

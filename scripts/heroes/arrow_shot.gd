@@ -74,7 +74,8 @@ func _strike(a: Actor, pos: Vector3) -> void:
 	hits.append(a)
 	pierce -= 1
 	Fx.attach_hit_feedback(a)
-	a.apply_damage(damage, source)
+	if Net.resolves_hit(a, source):   # (online: the arrow flies on every screen; the archer's machine decides the hit)
+		a.apply_damage(damage, source)
 	var sparks: Array[Color] = [color.lightened(0.6), Color.WHITE]
 	Fx.burst(pos, sparks, 10 if drawn else 6, 2.4, 0.07, 0.25, 4.0)
 	if on_hit.is_valid():

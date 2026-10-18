@@ -1,8 +1,8 @@
 # Networking build plan: online co-op, step by step
 
-Status: **M0, M1 and M2 built** 2026-10-17, **M3 built** 2026-10-18 (see [M0 as built](#m0-as-built-2026-10-17),
-[M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17) and [M3 as built](#m3-as-built-2026-10-18) after the
-milestones); M4 onward is still the plan. The architecture is fixed by
+Status: **M0, M1 and M2 built** 2026-10-17, **M3 and M4 built** 2026-10-18 (see [M0 as built](#m0-as-built-2026-10-17),
+[M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17), [M3 as built](#m3-as-built-2026-10-18) and
+[M4 as built](#m4-as-built-2026-10-18) after the milestones); M5 onward is still the plan. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -175,7 +175,7 @@ within 250 ms of every death, and a hellgate's spawned imps exist on the client 
 prop shows up on both Ledgers once. `test_net_contract` budget check: a worst-case floor-3 snapshot is under 1.2 KB.
 *Playable:* players walk among live monsters that fight back (only on the host's hero until M4), and pick things up.
 
-### M4 Spells and combat across owners *(3 sessions)* — **Risk (the biggest)**
+### M4 Spells and combat across owners *(3 sessions)* — **Risk (the biggest)** — built, see [M4 as built](#m4-as-built-2026-10-18)
 **M4a Casts as events.** Voice recognition stays local, and a cast sends `cast(spell, power, target_id | point,
 onset_host_time)`. The caster plays the start of the cast at once, and the gameplay effect lands **150-250 ms**
 *(tunable)* later on every machine. Scheduled effects take their start time as a `SPAWN` parameter instead of reading
@@ -871,6 +871,189 @@ takes the crew. `-ShotDir <dir> --shot-after 5.5` saves each window's picture.
 6. **Exits** (built here, early): M5 still owns the load-barrier polish (a fade on every machine at once, joining during a floor
    change) and the pause rules; the elevator's first-to-choose and the shared invoice are done.
 
+### M4 as built (2026-10-18)
+One session (M4a, M4b and M4c together). Everything in M4's "done when" passes under `off` and `coast`, and the run is playable
+as the plan says: **the real game for two or three, on one floor**: every player's casts land on every screen at the same
+moment, a client's swings, arrows and spells hurt the host's monsters (once), the host's monsters hurt a client's hero (decided on
+that client, so what it dodged on its screen does not hit it), heals and support land once on the teammate they were aimed at,
+teammates' corn, tentacles, spins and boulders throw each other around (into pits and props), and burning, damp, vines, coffee
+and armor zones show on every screen as their owner has them.
+
+**The one rule (layer 4).** Effects run on EVERY machine (a cast is scheduled everywhere, a hero's attack is replayed on its
+puppet, a monster's wind-up is an event), and each machine applies only what it RESOLVES:
+| Target | Hits (damage, a shove) | Statuses (modifiers, a heal, a fire, a soak, coffee) |
+|---|---|---|
+| a hero | its owner: **the victim decides** (rule 1) | its owner |
+| anything else (monsters, gates, employees, props, crates, mail) | **the attacker's machine**, the owner of the source (rule 2); the host when the source is gone | its owner: the host |
+
+`Net.resolves_hit(target, source)` and `Net.resolves(target)` are the two questions; every `Combat` helper (`melee_arc`,
+`explode`, `shove_radius`, `each_in_radius`/`modify_radius`, the new `slam`, `heal_radius`, `hits_in_radius`) and
+`Projectile`/`ArrowShot` ask them, and so do the spells' own loops (tentacles, teeth, the boulder, burning's ignition and
+extinguish). Offline everything resolves, so solo play is unchanged. A hit the attacker's machine decides on something the host
+owns goes through the verbs on the copy: `Actor.apply_damage` -> `Net.route_hit` (widened from M3's breakables to every
+non-hero actor), `Actor.shove` -> `Net.route_shove`, `Actor.set_modifier` -> `Net.route_modifier`; the host applies its own and
+passes a shove or modifier aimed at a player's hero on to that player's machine (rule 5; a rooted hero drops it there). A hit is
+never routed to a hero: its owner decides it.
+
+**Files.** `scripts/net/`: `net_casts.gd` (`NetCasts`, child `Session/Casts`: casts and hero attacks as events),
+`net_status.gd` (`NetStatus`, child `Session/Status`: statuses from their owners); `net.gd` (`resolves`, `resolves_hit`,
+`routes_hits` widened, `route_shove`, `route_modifier`, `hit_object`, `shares_cast`, `send_cast`, `hero_acted`,
+`status_changed`, `note_hit`, and the guard: `apply_begin`/`apply_end`, `guard_write`, `guard_capture`, `guard_hits`);
+`net_world.gd` (`world.windup`/`world.unwind`, client strike resolution, `pending_strike`, `resolved`); `net_objects.gd`
+(hit requests on any host-owned actor, `shove`/`mod` requests and their pass-on, the client's prop-contact check, `hit_reqs`);
+`net_session.gd` (the two children, the apply scope around every event and packet, the telemetry `hits` column);
+`net_snapshot.gd` (apply scope); `net_events.gd` (carriers). Gameplay: `Actor` (guarded `hp`/`dead` setters, verbs that route
+on a copy, `net_set_modifiers`/`modifiers_snapshot`, `slide_impact`/`stop_slide`/`shove_source`), `Combat` (the filter and
+the new helpers), `Projectile`, `ArrowShot`, `BowlBoulder`, `Hero` (`_melee_effect`/`_arrow_effect`/`_bolt_effect`/
+`_spin_effect` split out, `net_act`, `Net.hero_acted`; the spin's teammate shove is `Combat.shove_radius`), `SpellBook`
+(`cast` resolves once and either sends or applies; `apply(caster, spec, start)`; `FOLLOWS`), `CornStrike`/`Tentacles`/
+`ArmorZone` (`start_time` SPAWN; corn's `landed` signal), `Teeth`, `Burning` (owner rolls and ticks, `show_remote`,
+announcements), `Coffee` (`show_remote`, `_remote`), `Monster` (`windup_begun`/`windup_dropped`, `net_strike`, `net_flash`,
+the strike-visual dedupe), `Brute` (`Combat.slam`), `Hellgate` (a client throws its own hero at the gate's shove),
+`PricedProp`/`MailPackage`/`BreakableCrate` (contacts checked by the slider's owner, `net_contacts`, `Net.hit_object`),
+`VanArrival` (once the crew is out the van no longer pins them: it held every hero, puppets included, for another second, which
+overrode a teleport or a puppet's stream), `game.gd` (begins/ends the two children; `--autocast` waits for the shared start,
+`--autocast-after S`). Tests: `test_net_m4_casts`, `test_net_m4_hits`, `test_net_m4_status` (3 processes each);
+`test_net_contract` (the area-loop rule).
+
+**Casts as events (M4a, `NetCasts`).** The caster's machine resolves the cast once (`SpellBook.cast`: the target point, the
+teammate the aim snapped onto, a fireball's launch point, direction and reach) and sends
+`cast {c caster id, s spell, p power, t target, h followed hero id, x extra, at, ch}` (client -> host -> the other clients;
+the host checks a client speaks only for its own seat). The caster plays the cast pose at once (and every other screen
+does on arrival); the effect lands at `at` = the cast's host_time + `NetCasts.LEAD` (**0.2 s**, tunable) on every machine,
+the caster's too, through `SpellBook.apply(caster, spec, start)` with `start` = the cast's moment in that machine's
+`GameWorld.time` (a late arrival starts in the past: scheduled effects catch up, as Vines and Damp already did). `ArmorZone`,
+`CornStrike` and `Tentacles` now take `start_time` as a SPAWN parameter like Vines and Damp. `heal` and `coffee` FOLLOW the
+teammate the aim snapped onto (`SpellBook.FOLLOWS`: the effect lands where that teammate's owner has it, rule 3); every other
+spell lands on the point (a teammate who sidesteps a corn is fine, rule 4). `ch` carries the caster's charges after the spend
+(the `_charges` carrier for casts). Measured (`test_net_m4_casts`): a corn cast by a client lands on all three machines
+2-17 ms after `at + LEAD + DELAY` on each one's own clock (a frame), and 3-13 ms apart in real time; no cast arrived late on
+the host (max 11 ms after `at`, i.e. inside the frame) under `coast`.
+
+**Hero attacks (`act`).** A swing, an arrow, a bolt, Rebar's bowl and Gasket's spin from a hero this machine owns (the
+player's, and the host's AI heroes) go out as `act {c, a kind, d direction, r drawn, t}`; every other machine replays it on its
+puppet when the puppet shows the moment `t` (`Hero.net_act`: the swing and the shot show; no cooldown, facing or other OWNER
+field is touched). The attacker already decided every monster (rule 2), so the replay resolves only this machine's own hero:
+that is how a teammate's spin or boulder throws you (rule 5: the victim applies the shove).
+
+**Monster strikes: the victim decides (M4b).** `Monster.windup_begun(length)` / `windup_dropped` (shoved, staggered, the
+target gone) become `world.windup {id, s, l, v victim}` / `world.unwind {id}` to every client. The host's own strike applies
+only to the heroes the host owns (`Combat` skips a player's hero). Each client resolves the strike when ITS screen shows the
+strike's moment (render time >= `s + l`, 20 ms early so the snapshot's strike count never plays it first): `Monster.net_strike`
+runs the kind's own blow (a cleave, the brute's slam, the archer's real arrow) against its own hero only, from where it shows the
+monster and where its own hero really is. The strike count in the snapshot then skips the look it already played.
+Measured (`test_net_m4_hits`): the brute's slam on a client was resolved on that client (it lost 17.5, exactly one slam at that
+distance, all of it in its own resolution); a second slam that client walked out of on its screen (2.45 from the brute there) did
+not hit it, although the host showed it 1.47 from the brute at its strike. In 24 s of fighting the clients resolved 26-29 strikes
+of 28-33 wind-ups in three runs (the rest were called off: shoved, staggered or the target gone).
+
+**Statuses (`NetStatus`).** The target's owner applies and runs a status: a modifier (`Combat.each_in_radius` /
+`modify_radius` filter by owner), a fire (`Burning.on_blast` rolls ignition only for the actors this machine owns, with its own
+`GameWorld.rng`; only the owner ticks the damage), a soak and extinguishing (`Wet.douse_in_radius`,
+`Burning.extinguish_in_radius`), coffee (its schedule and twitch on the owner), a heal (`Combat.heal_radius`). The owner announces
+`st {id, k: "mods" | "burn" | "soak", v}` (owner -> host -> the others), flushed once a physics frame; a modifier is re-announced
+only when its end moves by more than 0.2 s (an armor zone renews armor every 0.25 s), and copies keep each one 0.35 s past its
+announced end, so nothing blinks. On a copy: the armor shield, a show-only `Coffee` (steam and ring), the vines' leg wraps,
+flames that deal nothing (`Burning.show_remote`), drips (`Wet.douse`). Damp's puddles stay a pure function of the cast
+(`Damp.plan_cells`), and `Damp.slide_mult` applies where the shove is applied (the shoved actor's owner).
+
+**Props and shoves (`PricedProp` stops a slider).** A slide is its owner's, so the contact check runs on the machine that owns
+the slider: the host for its actors (as before), a client for its own hero (the host's props, crates and mail are copies with no
+physics there, so `NetObjects` calls their `net_contacts` while the hero is shoved). The hero stops dead against the prop on its
+own screen (`Actor.stop_slide`; the prop no longer writes the actor's private slide state) and the impact goes to the host
+(`Net.hit_object`, with the shove's culprit), which dents or breaks and bills the prop once. This replaces the plan's "message to
+the slider's owner": the owner sees the contact itself, so nothing has to travel back.
+
+**Runtime guard and agreement (M4c).** `Actor.hp` and `Actor.dead` have setters that, in a debug build while online, call
+`Net.guard_write` when a COPY's value changes outside the net layer applying its owner's state (`Net.apply_begin/end` wrap
+`NetSession`'s event and packet emission, the puppets' and the world's per-frame showing, the copies' look and a released seat's
+last state). A violation is a `push_error` plus a failed `assert` (a SCRIPT ERROR: every test fails on it); `Net.guard_capture`
+(a test seam) records it instead. The client-side strike resolution, the cast application and the attack replays run OUTSIDE
+that scope on purpose, so the guard watches them. It never fired in any test run; the negative test trips it on both sides.
+
+**Packets and events (all reliable; nothing new is unreliable).**
+| Event | From -> to | Data |
+|---|---|---|
+| `cast` | caster -> host -> the other clients | `c`, `s`, `p`, `t` (Vector3), `h`, `x` (fireball: `o` origin, `d` dir, `r` reach), `at`, `ch` |
+| `act` | owner -> host -> the other clients | `c`, `a` (melee / arrow / bolt / bowl / spin), `d` (Vector2), `r`, `t` |
+| `st` | owner -> host -> the other clients | `id`, `k` (mods / burn / soak), `v` (`{mod: [mult, left, stat]}` or seconds) |
+| `world.windup` / `world.unwind` | host -> clients | `id`, `s` (start), `l` (length), `v` (victim id) / `id` |
+| `obj.req` gains | client -> host | `hit` on any host-owned actor; `shove {id, d, n, by}`; `mod {id, m, x, u, s}` |
+| `obj.shove` / `obj.mod` | host -> the owner of a player's hero | the request, passed on |
+The snapshot did not change. Telemetry's `hits` column (blank since M0) now counts the hits this machine's own heroes took.
+
+**Bandwidth (measured, `test_net_m4_hits` under `coast`: three players fighting about 18 monsters sent at them for 24 s; the
+host's telemetry CSV).** The snapshot is unchanged: **heroes 1.2 KB/s + world 1.9 KB/s down to each client** on average over the
+test (the biggest packet stays under the 1.2 KB budget). Everything the host sends, events included, rose from about 5.5 KB/s
+(two clients, quiet) to **7-13 KB/s during the fight, i.e. 3.5-6.6 KB/s per client**, at up to 26 reliable events a second out
+of the host at the peak (casts, `act`s, wind-ups, statuses, Ledger lines and their relays). As serialised by `NetWire` (a Variant
+dictionary, before the transport's own header): a cast 216 B (a fireball 300 B), an `act` 156 B, a status 172 B, a wind-up
+136 B, a hit request 128 B. A client sends about **1.25 KB/s** up (its hero at 30 Hz plus its
+casts, attacks and hit requests). The fight's totals: about 38 replayed attacks, 30 wind-ups, 13 casts, 44 hit requests, 7
+statuses; the clients' telemetry counted 39 hits taken. The reliable events are Variant dictionaries (`NetWire`); if M7's
+Steam measurements show the event rate matters, `act` and `world.windup` are the ones to hand-pack.
+
+**What the tests prove** (three real-time processes each, `off` and `coast`).
+- `test_net_m4_casts`: client A's corn at client B lands on all three within a frame of `at + LEAD + DELAY` on each machine's
+  clock (measured 2-17 ms), within 13 ms of each other in real time; B, standing in it, loses exactly one corn (60) and takes one
+  hit; every screen shows B's HP; the host is untouched; the host shows A's charges. A's heal aimed at B heals B once, by one
+  heal (35), and nobody else. A's second corn: B walks out on its own screen 0.7 s before it lands; the host and A still SHOW B
+  inside the ring (2.3-2.6 from the cob, the ring reaches 2.9) when it lands, B (3.15 away on its own screen) is not hit. The
+  guard never fired.
+- `test_net_m4_hits`: A's swing and arrow on a frozen grunt of the host's each reach the host once (exactly the swing's and the
+  arrow's damage; one hit request each) and B shows the grunt's HP; the brute's slam on A is resolved on A, and A dodges the
+  second on its screen (above); A's corn breaks a priced prop, billed once; then 24 s of all three fighting (swings, arrows,
+  corn, fireball, heals) against monsters the host keeps sending: afterwards every machine shows every hero's HP and downed state
+  as its owner has it, the same living monsters with the host's HP, the Ledger line for line, and every hit request a client
+  sent arrived at the host once (40-42 of them); the guard never fired, and a deliberate write to a copy's HP trips it on the
+  host and on a client.
+- `test_net_m4_status`: the host's vines root B on B's machine and the others show the root and its wraps; the host's tentacles
+  cannot move rooted B, and once the root is gone shove B once, out of the burst, where every screen shows it; B's fire (its own
+  ignite) shows everywhere and ticks only on B (whole ticks); A's damp puts it out on B's machine and soaks B, shown everywhere;
+  A's coffee hastes B (1.6x) on B's machine, shown with steam everywhere; the host's armor zone armors B, shown everywhere; B
+  thrown into a priced prop on its own screen stops against it (0.95 from its centre instead of sliding on) and the host's prop
+  takes the impact once.
+- `test_net_contract`: rule 6, the area-loop rule (the M4 row of the table below): a loop over the actors in an area that calls a
+  verb on them must ask `Combat.resolves` / `Net.resolves` in that loop; run against loops that must fail too. **No allowlist**:
+  every loop in `scripts/` asks.
+- Unchanged and passing: every M0-M3 net test and the whole solo suite (the guard is online-only, so the single-process tests
+  that stand in for the net layer, like `test_net_world_codec`, are not affected).
+
+**Try it.** `.\run.ps1 -Crew 3 -Size 1280x720 --seed 7 --net-wait 3 --contract 1 --spells corn,fireball --spawn-near grunt,5
+--autocast fireball --autocast-after 1.0 --zoom 11` (add `-Link coast`): five skeletons come for the crew; once everyone is out of
+the van every window casts a fireball at them (each lands on all three screens; the skeletons' damage is decided by the window
+that cast it), and the skeletons' swings hurt whichever hero they reach, decided on that hero's own window: every window's HUD
+shows the same HP for each player. `--autocast corn` instead drops three cobs on the pack, and on the crew standing in it
+(friendly fire, each hero's own window deciding). In a live crew type `cast heal` (Enter) with the cursor on a teammate, or
+`cast tentacles` beside them, and watch their window. `-ShotDir <dir> --shot-after 3.9` saves each window's picture.
+
+**Known gaps (left for later, on purpose).**
+1. **Disagreement is near misses, by design**: a fireball explodes on whatever it meets on each screen, so a monster the
+   caster's screen showed in its path may be a step aside on the host's; the caster's screen decides the damage (rule 2) and the
+   host's the ignition (the owner rolls). Teeth sprout on whoever each screen sees in the circle (the pop is resolved as a hit).
+2. **The lead is fixed** (0.2 s). A cast that arrives later than that on some machine (a `rough` link) starts in the past there
+   and catches up (a corn still lands on time; an instant spell lands late on that machine only). Measured lateness: none.
+3. **A swarmer's 0.15 s wind-up** is still shorter than a client sees (the networking.md open risk): it is resolved fairly on the
+   victim's machine, but the telegraph is mostly invisible there. M7 decides.
+4. **A routed hit's HP drop** shows on the attacker's screen a round trip later (the hit flash is immediate, `Monster.net_flash`).
+5. **No dedupe id on hit requests**: reliable events never duplicate, and only the attacker's machine routes (the filter), so
+   the plan's "id per spell/attack" was not needed; the test counts requests sent against requests received.
+6. **Coffee on a copy** shows the steam and the ring, not the twitch (that is the owner's motion, which the stream carries).
+7. **The guard covers `hp` and `dead`** (the two fields the lint protects); other OWNER fields of a copy are only written by the
+   net layer by construction, not checked at run time.
+8. Late join (M6) must replay live statuses (`st`), pending wind-ups (they last under a second: skip) and active scheduled
+   effects (skipped, as the plan says).
+
+**Notes for M5.**
+1. **Floor changes and casts**: `NetCasts`/`NetStatus` begin at the barrier and end with the scene, like `NetWorld`; a cast whose
+   `at` falls after a floor change is dropped with the scene (fine). A load barrier per floor must call `Session.casts.begin()`
+   and `Session.status.begin()` again (`game._enter_barrier` already does).
+2. **Pause online** stays off (M3): the cast schedule runs on `host_time()`, which a paused tree would not stop.
+3. **Hits taken per player** are now in telemetry (`hits`); M7's "keep them level" can read them.
+4. **Reuse**: a new spell is a `SpellBook.apply` case plus, if it is scheduled, a `start_time` SPAWN param; a new status is a
+   `Net.status_changed(actor, kind)` on the owner and a case in `NetStatus._on_event`; a new monster attack only needs `_strike()`
+   to go through `Combat` (the wind-up event and the client resolution come with `Monster`).
+
 ---
 
 ## 3. Test strategy
@@ -929,7 +1112,7 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 | M2 (built) | Codec round trip for every codec (randomised entity, pack then unpack, equal within its quantum): `test_net_codec` |
 | M3 (built) | Size budget: the host's packet fits 1.2 KB by construction (test_net_contract); test_net_world_codec fills it with the worst floor 3 it finds (every actor alive and moving: 1194 B) |
 | M3 (built) | Carrier coverage for the host-owned world: every monster kind, hellgate, employee, priced prop, crate, mail box and pickup (NetWorldCodec field tables, NetEvents.WORLD_CARRIES) |
-| M4 | Lint: no `apply_damage`/`shove`/`set_modifier` loops outside `Combat` and the verbs (closes the known gaps) |
+| M4 (built) | Lint: an area loop over actors that calls `apply_damage`/`shove`/`set_modifier`/`heal` must ask `Combat.resolves` / `Net.resolves` (rule 6; no allowlist) |
 | M6 | Late-join coverage: every host-owned class declares how a joiner gets its state (keyframe, gone-id, or event replay) |
 
 ### Real Steam (manual checklist, two PCs and two accounts)

@@ -295,12 +295,14 @@ func _on_damaged(amount: float, source: Node) -> void:
 		PropDebris.burst(global_position + Vector3.UP * model_height() * 0.5, PropModels.palette(kind), 3, 0.5)
 
 
-## Actors shoved into the prop damage it. Cheap: scans the actor group once per physics frame.
+## Actors shoved into the prop damage it. Cheap: scans the actor group once per physics frame. Online (M4) each machine
+## checks only the sliders it OWNS (a slide is its owner's), so a player's hero thrown into the prop is seen on that
+## player's machine, stops there, and the hit goes to the host (Net.hit_object), which bills the prop once.
 func _check_shove_contacts() -> void:
 	var seen := {}
 	for n in get_tree().get_nodes_in_group("actors"):
 		var a := n as Actor
-		if a == null or a == self or a.dead or not a.is_shoved():
+		if a == null or a == self or a.dead or not a.is_shoved() or not Net.owns(a):
 			continue
 		var id := a.get_instance_id()
 		seen[id] = true
@@ -318,22 +320,22 @@ func _check_shove_contacts() -> void:
 
 
 func _shove_hit(a: Actor) -> void:
-	if a._slide_t >= a._slide_dur:
-		return   # only coasting: no real impact
-	var left := clampf(1.0 - a._slide_t / maxf(a._slide_dur, 0.001), 0.3, 1.0)
-	var dmg := a._slide_dist * left * SHOVE_DAMAGE_PER_UNIT
+	var dmg := a.slide_impact() * SHOVE_DAMAGE_PER_UNIT   # (0 while only coasting: no real impact)
 	if dmg < SHOVE_MIN_DAMAGE:
 		return
-	var src: Node = null
-	if a._src_ref != null:
-		src = a._src_ref.get_ref() as Node
+	var src: Node = a.shove_source()
 	if src == null:
 		src = a   # an unknown shover: the thing that hit it is to blame
-	# The shoved actor stops dead against the prop, like a wall slam without the damage.
-	a._slide_t = a._slide_dur
-	a._coast = Vector3.ZERO
-	a.shove_impact.emit("slam", a.global_position, 0.0)
-	apply_damage(dmg, src)
+	# The shoved actor stops dead against the prop, like a wall slam without the damage (its own machine stops it).
+	a.stop_slide()
+	Net.hit_object(self, dmg, src)
+
+
+## A client (M4): this prop is the host's copy, so its physics process is off; NetObjects runs the contact check for the
+## heroes this machine owns.
+func net_contacts() -> void:
+	if not dead:
+		_check_shove_contacts()
 
 
 # --- Breaking ------------------------------------------------------------------------------

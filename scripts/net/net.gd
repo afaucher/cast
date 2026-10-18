@@ -127,14 +127,14 @@ static func remote_die(a: Actor) -> void:
 	a._on_death()
 
 
-## Host-arbitrated objects a player's hit is sent to the host for (M3c: priced props, crates, mail boxes). Monsters and
-## gates are M4 (the attacker decides, layer 4): until then a client's hit on one does nothing.
+## What a player's hit is sent to the host for: every host-owned actor (M3c: priced props, crates, mail boxes; M4: monsters,
+## hellgates and employees too, "the attacker decides"). A hero is never routed a hit: its owner decides (rule 1).
 static func routes_hits(a: Object) -> bool:
-	return a is PricedProp or a is BreakableCrate or a is MailPackage
+	return a is Actor and not (a is Hero)
 
 
-## Actor.apply_damage on a copy: a hit from this machine on a host-arbitrated object becomes a request to the host
-## (the host breaks it once, bills it once and tells everyone). Anything else is ignored, as before.
+## Actor.apply_damage on a copy: a hit this machine decided on a host-owned actor becomes a request to the host (the host
+## applies it once: a monster loses the HP, a prop breaks and is billed once). A hit on a hero copy is ignored.
 static func route_hit(target: Actor, amount: float, source: Node) -> void:
 	var s := session()
 	if s == null or s.objects == null or not routes_hits(target):
@@ -142,6 +142,134 @@ static func route_hit(target: Actor, amount: float, source: Node) -> void:
 	if source != null and is_instance_valid(source) and not owns(source):
 		return   # (a copy never acts: only what this machine runs may hit anything)
 	s.objects.request_hit(target, amount, source)
+
+
+## A shove on something this machine does not own (Actor.shove on a copy): a request to its owner (rule 5). The host
+## applies it to its own actors and passes a shove on a player's hero to that player's machine, which runs Actor.shove
+## itself (and drops it while the hero is rooted).
+static func route_shove(target: Actor, dir: Vector3, distance: float, source: Node) -> void:
+	var s := session()
+	if s == null or s.objects == null:
+		return
+	if source != null and is_instance_valid(source) and not owns(source):
+		return
+	s.objects.request_shove(target, dir, distance, source)
+
+
+## A modifier on something this machine does not own (Actor.set_modifier on a copy): a request to its owner.
+static func route_modifier(target: Actor, id: String, mult: float, duration: float, stat: String) -> void:
+	var s := session()
+	if s != null and s.objects != null:
+		s.objects.request_modifier(target, id, mult, duration, stat)
+
+
+## A host-owned object (a priced prop, a crate, a mail box) was hit by something this machine moves: a hero it owns that
+## was shoved into it (the slider's owner sees the contact). The culprit is whoever caused the shove, even when another
+## machine runs that actor, so this skips route_hit's "a copy never acts" check: the decision is this machine's.
+static func hit_object(obj: Actor, amount: float, culprit: Node) -> void:
+	if owns(obj):
+		obj.apply_damage(amount, culprit)
+		return
+	var s := session()
+	if s != null and s.objects != null and routes_hits(obj):
+		s.objects.request_hit(obj, amount, culprit)
+
+
+# --- Combat across owners (M4, layer 4): who applies what ---------------------------------------------------------------
+# Effects (a cast, a swing, a monster's strike) may run on every machine; each machine applies only what it RESOLVES.
+
+## Statuses (a modifier, a heal, a soak, a fire, coffee): the target's owner applies them. A hero's player, the host for
+## everything else; everything offline.
+static func resolves(target: Object) -> bool:
+	return target != null and owns(target)
+
+
+## Hits (damage, a shove): a hero is decided by its owner (the victim decides, rule 1); anything else by the attacker's
+## machine, the owner of `source` (rule 2: a client's hit on the host's monster then travels as a request, route_hit); the
+## host when the source is unknown or gone. Offline, everything.
+static func resolves_hit(target: Object, source: Object) -> bool:
+	if target is Hero:
+		return owns(target)
+	if source != null and is_instance_valid(source):
+		return owns(source)
+	return is_host()
+
+
+# --- Casts and hero actions as events (M4a) -------------------------------------------------------------------------------
+
+## True when a cast from `caster` travels as an event (a crewed floor, and the caster is this machine's hero): it lands
+## NetCasts.LEAD seconds from now on every machine. False offline and solo: the cast lands at once, as ever.
+static func shares_cast(caster: Node) -> bool:
+	var s := session()
+	return s != null and s.casts != null and s.casts.shares(caster)
+
+
+## Send a cast (NetCasts): `spec` is SpellBook's cast description (spell, power, target, follow, extra).
+static func send_cast(caster: Actor, spec: Dictionary) -> void:
+	var s := session()
+	if s != null and s.casts != null:
+		s.casts.send_cast(caster, spec)
+
+
+## A hero this machine owns attacked (melee, an arrow, a bolt, the bowl, the spin): the other screens replay it on its
+## puppet (the swing shows, and each machine resolves its own heroes against it).
+static func hero_acted(hero: Hero, kind: String, dir: Vector3, drawn: bool = false) -> void:
+	var s := session()
+	if s != null and s.casts != null:
+		s.casts.acted(hero, kind, dir, drawn)
+
+
+## A status of an actor this machine owns changed ("mods", "burn", "soak"): the other screens are told (NetStatus).
+static func status_changed(a: Node, kind: String) -> void:
+	var s := session()
+	if s != null and s.status != null:
+		s.status.changed(a, kind)
+
+
+## This machine's hero took a hit (telemetry's `hits` column).
+static func note_hit(a: Node) -> void:
+	var s := session()
+	if s != null and s.online() and owns(a):
+		s.hits_taken += 1
+
+
+# --- Runtime guard (M4c, layer 5) -----------------------------------------------------------------------------------------
+# A copy's OWNER fields are written only by the net layer applying what the owner sent. Anything else that writes one is
+# a machine deciding something it does not own: a silent desync. In debug builds it raises a script error (which fails
+# every test); `guard_capture` (a test seam) records it instead, so a negative test can see it fire.
+
+static var _applying := 0
+## Test seam: record violations in guard_hits instead of raising.
+static var guard_capture := false
+## Every violation seen in this process (the message).
+static var guard_hits: Array[String] = []
+
+
+## The net layer starts / stops applying an owner's state to copies (events, snapshots, the world stream).
+static func apply_begin() -> void:
+	_applying += 1
+
+
+static func apply_end() -> void:
+	_applying = maxi(0, _applying - 1)
+
+
+static func applying() -> bool:
+	return _applying > 0
+
+
+## Called by the guarded setters (Actor.hp, Actor.dead) of a copy.
+static func guard_write(node: Object, field: String) -> void:
+	if _applying > 0 or not is_copy(node) or not OS.is_debug_build() or not online():
+		return   # (offline a copy only exists in a single-process test standing in for the net layer)
+	var label := str(node.get("display_name")) if node.get("display_name") != null else str(node)
+	var msg := "[Net] OWNER write on a non-owner: %s.%s (net id %d). Only its owner writes it; use a verb." % [label, field, NetFloor.id_of(node as Node)]
+	guard_hits.append(msg)
+	if guard_capture:
+		print(msg)
+		return
+	push_error(msg)
+	assert(false, msg)
 
 
 ## A client asks the host about something the host owns ("collect" / "swap" a pickup, "follow" / "wait" an employee).

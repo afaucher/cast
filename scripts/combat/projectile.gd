@@ -85,7 +85,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _impact(hit: Actor, pos: Vector3) -> void:
-	if hit:
+	if hit and Net.resolves_hit(hit, source):   # (online: the shot flies on every screen; one machine decides the hit)
 		hit.apply_damage(damage, source)
 	if on_hit.is_valid():
 		on_hit.call(self, hit, pos)

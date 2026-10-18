@@ -138,14 +138,14 @@ static func _on_pop(aff: Affliction) -> void:
 		if a == carrier:
 			continue
 		Fx.attach_hit_feedback(a)
-		_hurt(a, splash, aff.caster_team, src)
+		_hurt(a, splash, aff.caster_team, src)   # (_hurt asks Combat.resolves: the pop runs on every screen)
 	Combat.shove_radius(pos, SpellBook.TEETH_SPLASH_RADIUS, SpellBook.TEETH_SHOVE, src, -1, carrier)
 
 
 ## Damage with the friendly-fire floor: a hero's spell never takes a hero below 1 HP.
 static func _hurt(victim: Actor, amount: float, caster_team: int, src: Node) -> float:
-	if victim.dead or amount <= 0.0:
-		return 0.0
+	if victim.dead or amount <= 0.0 or not Combat.resolves(victim, src):
+		return 0.0   # (online: the victim's machine decides a hero, the caster's the rest)
 	if victim.team == GameWorld.TEAM_HEROES and caster_team == GameWorld.TEAM_HEROES:
 		var room := victim.hp - 1.0
 		if room <= 0.0:

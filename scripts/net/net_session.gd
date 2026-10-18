@@ -128,6 +128,12 @@ var world: NetWorld = null
 ## Host-arbitrated objects (M3): hits on props, crates and mail, pickups, employee requests, the Ledger mirror and exits
 ## (scripts/net/net_objects.gd), child "Objects".
 var objects: NetObjects = null
+## Casts and hero attacks as events (M4a): child "Casts".
+var casts: NetCasts = null
+## Statuses (modifiers, fires, soaks) from their owners to every screen (M4b): child "Status".
+var status: NetStatus = null
+## Hits this machine's own heroes took since the last telemetry row (the `hits` column, M4).
+var hits_taken := 0
 var clock := NetClock.new()
 var telemetry: NetTelemetry = null
 
@@ -165,6 +171,12 @@ func _ready() -> void:
 	objects = NetObjects.new()
 	objects.name = "Objects"
 	add_child(objects)
+	casts = NetCasts.new()
+	casts.name = "Casts"
+	add_child(casts)
+	status = NetStatus.new()
+	status.name = "Status"
+	add_child(status)
 	lobby = SteamLobby.new()
 	lobby.name = "Lobby"
 	add_child(lobby)
@@ -612,7 +624,9 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 		return
 	if state != State.ONLINE or (hosting and not roster.has(from)) or (not hosting and from != 1):
 		return
+	Net.apply_begin()   # (M4c: what an event changes on a copy is the owner's word; the debug guard lets it)
 	event_received.emit(from, kind, data, stamp)
+	Net.apply_end()
 
 
 func _host_sys(from: int, kind: String, data: Dictionary) -> void:
@@ -743,7 +757,9 @@ func _on_packet(from: int, type: int, seq: int, stamp_ms: int, payload: PackedBy
 		_:
 			if hosting and not roster.has(from):
 				return
+			Net.apply_begin()   # (M4c: the net layer applies an owner's state to copies; the debug guard lets it)
 			packet_received.emit(from, type, seq, stamp_ms, payload)
+			Net.apply_end()
 
 
 # --- Every frame -------------------------------------------------------------------------------------
@@ -818,8 +834,9 @@ func _telemetry_row() -> void:
 		"" if hosting else "%.1f" % clock.jitter_ms, "" if hosting else "%.2f" % clock.pending_correction_ms(),
 		"%.3f" % (float(arrived) / float(expected) if expected > 0 else 1.0),
 		c["bytes_out"], c["bytes_in"], c["packets_out"], c["packets_in"], c["events_out"], c["events_in"], c["gaps"], c["stale"],
-		wire.link.preset, wire.link.held(), wire.link.dropped, "", "",
+		wire.link.preset, wire.link.held(), wire.link.dropped, "", hits_taken,
 	]
+	hits_taken = 0
 	telemetry.write_row(row)
 	if not hosting:
 		wire.send_packet(1, NetWire.T_ROW, var_to_bytes(row))

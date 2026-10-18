@@ -13,17 +13,17 @@ extends RefCounted
 ## Hero / Actor OWNER var -> its carrier.
 const CARRIES := {
 	# Set by the license at the floor start (the roster's `spells` on every machine) and changed by casts and pickups.
-	"spell_slots": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); casts M4",
-	"_charges": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); spends M4",
+	"spell_slots": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); a cast never changes them",
+	"_charges": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); casts: the cast event's charges left (NetCasts, M4)",
 	# Timed buffs and debuffs (armor, coffee, vines roots) are applied by the target's owner and shown from here.
-	"_modifiers": "M4: modifier events from the owner (armor, coffee, vines)",
+	"_modifiers": "st {k mods} from the owner when they change (NetStatus, M4): armor, coffee, the vines' root",
 }
 
 ## Actor OWNER vars every host-owned class inherits, and why each is right on the other screens.
 const _ACTOR_WORLD := {
 	"dead": "world.die (NetWorld), shown on the beat the host stamped it",
 	"pass_through_until": "never set on host-owned actors (only heroes pass through each other)",
-	"_modifiers": "M4: modifier events from the owner (vines roots, coffee on monsters)",
+	"_modifiers": "st {k mods} from the host when they change (NetStatus, M4): vines roots, coffee on monsters",
 }
 const _FIXED := "fixed: it never moves, turns or climbs (built from the floor plan on every machine)"
 
@@ -31,9 +31,9 @@ const _FIXED := "fixed: it never moves, turns or climbs (built from the floor pl
 const WORLD_CARRIES := {
 	"res://scripts/monsters/monster.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
-		"target": "M4: the wind-up event names its victim (the victim decides, rule 1); M3 shows the swing only",
-		"_windup_total": "shown through _telegraph (the snapshot); M4: the wind-up event (start and length)",
-		"_windup_left": "shown through _telegraph (the snapshot); M4: the wind-up event (start and length)",
+		"target": "world.windup names its victim (NetWorld, M4: each client resolves the strike against its own hero)",
+		"_windup_total": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
+		"_windup_left": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
 	},
 	"res://scripts/contracts/employee.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
@@ -69,6 +69,10 @@ const WORLD_CARRIES := {
 ##   T_SNAP (unreliable)   hero snapshots, both ways (NetCodec); host -> client also the world (NetWorldCodec, M3)
 ##   seat.ai (reliable)    host -> clients: a seat went back to the AI as its original character
 ##   world.* (reliable)    host -> clients (NetWorld): spawn, die, say, extract, phase, shove
-##   obj.* (reliable)      NetObjects: req / loadout (client -> host); break, hurt, pickup, pick, gone, grant, deny,
-##                         ledger, contract, exit, end, loadout (host -> clients)
+##   obj.* (reliable)      NetObjects: req / loadout (client -> host; M4: req hit on any host-owned actor, shove, mod);
+##                         break, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
+##                         shove / mod passed on to the owner of a player's hero (host -> clients)
+##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
+##   cast, act (reliable, M4)  NetCasts: a cast (lands LEAD later everywhere) / a hero's attack, owner -> host -> others
+##   st (reliable, M4)     NetStatus: an actor's modifiers, fire or soak, owner -> host -> others
 const KIND_SEAT_AI := "seat.ai"

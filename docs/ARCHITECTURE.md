@@ -5,7 +5,8 @@ one PC, one mic, one keyboard/mouse player plus AI allies. Online co-op is being
 (`docs/design/networking-build-plan.md`); M0 (transport, lobby, crew roster, clock, telemetry) and M1 (the shared run:
 the host's board and job, each player's license checkout, the same floor from the seed behind a load barrier, the floor
 clock), M2 (hero sync) and M3 (the host's world: monsters, hellgates, employees, props, crates, mail, pickups, the Ledger, the
-exits) are in; combat across machines is M4.
+exits) and M4 (combat across machines: casts and attacks as events, hits resolved by the victim or the attacker, statuses by
+their owner, monster wind-ups resolved on the victim's machine, the OWNER-write guard) are in; M5 (the contract flow polish) is next.
 
 Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 **kinematic on a hex heightfield** (no physics bodies for terrain or actors).
@@ -88,6 +89,8 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (runtime spawns and pickups get host ids from 10000); the tables of OWNER fields an event carries instead of a snapshot (`CARRIES` for heroes, `WORLD_CARRIES` for the host-owned classes) |
 | `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events |
 | `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice |
+| `net_casts.gd` (`NetCasts`, child `Session/Casts`, `Session.casts`) | casts and hero attacks as events (M4): a cast is resolved on the caster's machine and lands `LEAD` (0.2 s) later on every machine (`SpellBook.apply`); a hero's swing, shot, bowl or spin (`act`) is replayed on its puppet everywhere at the moment the puppet shows |
+| `net_status.gd` (`NetStatus`, child `Session/Status`, `Session.status`) | statuses (M4): the target's owner applies a modifier, a fire or a soak and announces it (`st`); the other screens show it (`Actor.net_set_modifiers`, `Burning.show_remote`, `Coffee.show_remote`, `Wet.douse`) |
 | `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
 | `steam_lobby.gd` (`SteamLobby`, child `Session/Lobby`) | lobbies: create, list, join, leave, invites, lobby data |
 
@@ -136,6 +139,15 @@ is a mirror (`Ledger.mirror`, `mirror_line`), the objectives are kept on the hos
 (`game._choose_exit` -> `NetObjects.decide_exit` -> `_on_exit_decided`): down reloads every machine onto the next floor behind the
 barrier again (`CrewFlow.host_next_floor`, `crew.next`), out ends the job with the host's invoice. Monsters aim at another player's
 hero where its newest snapshot says it is now (`Monster.target_point()`, `Net.lead_point`).
+
+**Combat across owners (M4).** Effects run on every machine (a cast lands on every machine at the same shared moment, a hero's
+attack is replayed on its puppet, a monster's wind-up is an event) and each machine applies only what it RESOLVES (layer 4):
+a hero's hits by its owner (the victim decides: `Net.resolves_hit`, every `Combat.*` helper and `Projectile` ask it), anything
+else's hits by the attacker's machine (a client's hit, shove or modifier on the host's actor is a request:
+`Net.route_hit` / `route_shove` / `route_modifier`, `NetObjects`), statuses by the target's owner (`Net.resolves`). A monster's
+strike on a client's hero is resolved on that client when its screen shows the strike (`world.windup`, `Monster.net_strike`); a
+shoved hero's own machine sees it hit a prop (`Net.hit_object`). In debug builds a write to a copy's `hp`/`dead` outside the net
+layer raises a script error (`Net.guard_write`, layer 5).
 
 RPC endpoints live under the autoload (`/root/Session/Wire`), never in `game.tscn`, because every floor change is a
 scene reload and an RPC needs the same node path on every peer. `Session` runs with process mode ALWAYS, so pausing

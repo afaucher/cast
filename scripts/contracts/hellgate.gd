@@ -589,6 +589,9 @@ func net_shove_fx() -> void:
 	_shove_t = -1.0
 	_shove_fx()
 	shove_burst.emit(SHOVE_RADIUS)
+	# M4: the burst throws this machine's own hero (the victim applies a shove on it, rule 5); the host threw everyone
+	# it owns at its own burst (Combat.shove_radius skips what another machine resolves).
+	Combat.shove_radius(global_position, SHOVE_RADIUS, SHOVE_DISTANCE, self, GameWorld.TEAM_HEROES)
 
 
 ## A burst landed on the host (world.spawn): its look here, around the monsters it brought.

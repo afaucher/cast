@@ -25,6 +25,13 @@ extends Node
 ##              (`obj.exit {c, seat}` to everyone) and drops the rest; a cash-out ends the job with the host's
 ##              invoice (`obj.end`).
 ##
+##   COMBAT     (M4) "the attacker decides": a client's hit on ANY host-owned actor (a monster, a hellgate, an employee, a
+##              prop) is a `hit` request the host applies once; a shove on something this machine does not own is a
+##              `shove` request (Net.route_shove), and a modifier a `mod` request: the host applies its own and passes
+##              one aimed at a player's hero on to that player's machine (`obj.shove` / `obj.mod`), which runs the verb on
+##              its own hero (a rooted hero drops the shove there). A client also watches its own shoved hero against the
+##              host's props, crates and mail (their copies run no physics) and reports the impact (Net.hit_object).
+##
 ## Trusting a client's word for where its hero stands is deliberate: friends only, no cheating concern
 ## (networking.md), and the host's picture of that hero is about 100 ms old.
 
@@ -50,6 +57,7 @@ var _ticked: Array[Node] = []      ## client: props and mail boxes that run thei
 var _requested: Dictionary = {}    ## client: pickup id -> host_time asked
 var _links: Array = []
 var _exit_taken := false
+var _contacts: Array[Node] = []    ## client: props, crates and mail its own shoved hero may hit (M4)
 
 
 func _ready() -> void:
@@ -67,7 +75,8 @@ func _ready() -> void:
 
 func _reset_stats() -> void:
 	stats = {"hits_out": 0, "hits_in": 0, "breaks": 0, "grants": 0, "denies": 0, "requests": 0, "pickups": 0,
-		"ledger_out": 0, "ledger_in": 0, "loadouts": 0}
+		"ledger_out": 0, "ledger_in": 0, "loadouts": 0, "shoves_out": 0, "shoves_in": 0, "mods_out": 0, "mods_in": 0,
+		"hit_damage_in": 0.0, "hit_reqs": 0}
 
 
 # --- Setup -----------------------------------------------------------------------------------------------
@@ -93,6 +102,9 @@ func begin(local: Hero) -> void:
 				_link((n as MailPackage).broken, _on_mail_broken.bind(id))
 		elif n is PricedProp or n is MailPackage:
 			_ticked.append(n)
+			_contacts.append(n)
+		elif n is BreakableCrate:
+			_contacts.append(n)
 	if local != null:
 		_link(local.component_collected, func(_id: String, _n: int, _r: String) -> void: send_loadout())
 		_link(local.component_swapped, func(_o: String, _n: String, _s: int) -> void: send_loadout())
@@ -109,6 +121,7 @@ func end() -> void:
 	_links.clear()
 	_pickups.clear()
 	_ticked.clear()
+	_contacts.clear()
 	_requested.clear()
 	_local = null
 
@@ -149,9 +162,42 @@ func request_hit(target: Actor, amount: float, source: Node) -> bool:
 	var id := NetFloor.id_of(target)
 	if id == 0:
 		return false
-	_session.send_event(1, "obj.req", {"what": "hit", "id": id, "a": amount, "by": NetFloor.id_of(source)})
+	_session.send_event(1, "obj.req", {"what": "hit", "id": id, "a": amount, "by": _id(source)})
 	stats["hits_out"] = int(stats["hits_out"]) + 1
+	if target is Monster:
+		(target as Monster).net_flash()   # (the hit shows now; the HP drop arrives with the host's stream)
 	return true
+
+
+## A shove on an actor this machine does not own (Net.route_shove). A client asks the host; the host (asked, or shoving a
+## player's hero itself) passes a shove on a player's hero to that player's machine.
+func request_shove(target: Actor, dir: Vector3, distance: float, source: Node) -> void:
+	var id := NetFloor.id_of(target)
+	if id == 0 or _session == null or not _session.online() or not active:
+		return
+	var d := {"what": "shove", "id": id, "d": Vector2(dir.x, dir.z), "n": distance, "by": _id(source)}
+	stats["shoves_out"] = int(stats["shoves_out"]) + 1
+	if _session.hosting:
+		_host_shove(d)
+	else:
+		_session.send_event(1, "obj.req", d)
+
+
+## A modifier on an actor this machine does not own (Net.route_modifier): the same path as a shove.
+func request_modifier(target: Actor, mod_id: String, mult: float, duration: float, stat: String) -> void:
+	var id := NetFloor.id_of(target)
+	if id == 0 or _session == null or not _session.online() or not active:
+		return
+	var d := {"what": "mod", "id": id, "m": mod_id, "x": mult, "u": duration, "s": stat}
+	stats["mods_out"] = int(stats["mods_out"]) + 1
+	if _session.hosting:
+		_host_modifier(d)
+	else:
+		_session.send_event(1, "obj.req", d)
+
+
+static func _id(n: Node) -> int:
+	return NetFloor.id_of(n) if n != null and is_instance_valid(n) else 0
 
 
 ## Ask the host for something about `node` ("collect", "swap", "follow", "wait"). True when it was sent.
@@ -268,9 +314,23 @@ func _process(delta: float) -> void:
 				_pickups.erase(id)
 				continue
 			p.net_tick(delta)
+		Net.apply_begin()   # (the copies' look: nothing here is a decision)
 		for n in _ticked:
 			if is_instance_valid(n) and not (n as Actor).dead:
 				n.call("net_tick", delta)
+		Net.apply_end()
+
+
+## Client (M4): the host's props, crates and mail are copies (no physics), so this machine checks its OWN shoved hero
+## against them (a slide is its owner's): an impact stops the hero here and the hit goes to the host.
+func _physics_process(_delta: float) -> void:
+	if not active or _session == null or _session.hosting or not _session.online():
+		return
+	if _local == null or not is_instance_valid(_local) or not _local.is_shoved():
+		return
+	for n in _contacts:
+		if is_instance_valid(n) and not (n as Actor).dead:
+			n.call("net_contacts")
 
 
 ## Host: give new pickups an id and announce them; tell everyone when one's charges change or it is gone.
@@ -351,6 +411,10 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 				p.consume()
 		"obj.grant":
 			_client_grant(data)
+		"obj.shove":
+			_apply_shove(data)
+		"obj.mod":
+			_apply_modifier(data)
 		"obj.deny":
 			_requested.erase(int(data.get("id", 0)))
 			stats["denies"] = int(stats["denies"]) + 1
@@ -369,13 +433,21 @@ func _host_request(from: int, data: Dictionary) -> void:
 			if active:
 				ComponentPickup.drop(str(data.get("s", "")), int(data.get("n", 0)), at, float(data.get("l", 0.0)))
 		"hit":
+			stats["hit_reqs"] = int(stats["hit_reqs"]) + 1   # (every hit request, applied or too late: the target was gone)
 			if not active:
 				return
 			var t := NetRegistry.node(int(data.get("id", 0))) as Actor
 			if t == null or t.dead or not Net.routes_hits(t):
 				return
 			stats["hits_in"] = int(stats["hits_in"]) + 1
+			stats["hit_damage_in"] = float(stats["hit_damage_in"]) + float(data.get("a", 0.0))
 			t.apply_damage(float(data.get("a", 0.0)), NetRegistry.node(int(data.get("by", 0))))
+		"shove":
+			if active:
+				_host_shove(data)
+		"mod":
+			if active:
+				_host_modifier(data)
 		"collect", "swap":
 			if active:
 				_host_grant(from, int(data.get("id", 0)), what, int(data.get("want", 0)), at)
@@ -389,6 +461,59 @@ func _host_request(from: int, data: Dictionary) -> void:
 				e.request_follow(hero, at)
 			else:
 				e.request_wait(hero, at)
+
+
+## Host: a shove request. The host's own actors (monsters, the AI heroes, employees) are shoved here, from where the host
+## has them; a player's hero is shoved by that player's machine (`obj.shove`).
+func _host_shove(data: Dictionary) -> void:
+	var t := NetRegistry.node(int(data.get("id", 0))) as Actor
+	if t == null or t.dead:
+		return
+	var peer := _owner_peer(t)
+	if peer > 1:
+		_send(peer, "obj.shove", data)
+		return
+	stats["shoves_in"] = int(stats["shoves_in"]) + 1
+	var d: Vector2 = data.get("d", Vector2.ZERO)
+	t.shove(Vector3(d.x, 0.0, d.y), float(data.get("n", 0.0)), NetRegistry.node(int(data.get("by", 0))))
+
+
+func _host_modifier(data: Dictionary) -> void:
+	var t := NetRegistry.node(int(data.get("id", 0))) as Actor
+	if t == null or t.dead:
+		return
+	var peer := _owner_peer(t)
+	if peer > 1:
+		_send(peer, "obj.mod", data)
+		return
+	stats["mods_in"] = int(stats["mods_in"]) + 1
+	t.set_modifier(str(data.get("m", "")), float(data.get("x", 1.0)), float(data.get("u", 0.0)), str(data.get("s", Actor.STAT_DAMAGE_TAKEN)))
+
+
+## The peer whose machine owns `a`: a player's hero's peer; 1 (the host) for everything else.
+func _owner_peer(a: Actor) -> int:
+	if a is Hero and _session.seats != null:
+		var p := _session.seats.owner_of(NetFloor.id_of(a))
+		return p if p != 0 else 1
+	return 1
+
+
+## Client: the host passed on a shove / a modifier for this machine's own hero.
+func _apply_shove(data: Dictionary) -> void:
+	var h := NetRegistry.node(int(data.get("id", 0))) as Actor
+	if h == null or not Net.owns(h):
+		return
+	stats["shoves_in"] = int(stats["shoves_in"]) + 1
+	var d: Vector2 = data.get("d", Vector2.ZERO)
+	h.shove(Vector3(d.x, 0.0, d.y), float(data.get("n", 0.0)), NetRegistry.node(int(data.get("by", 0))))
+
+
+func _apply_modifier(data: Dictionary) -> void:
+	var h := NetRegistry.node(int(data.get("id", 0))) as Actor
+	if h == null or not Net.owns(h):
+		return
+	stats["mods_in"] = int(stats["mods_in"]) + 1
+	h.set_modifier(str(data.get("m", "")), float(data.get("x", 1.0)), float(data.get("u", 0.0)), str(data.get("s", Actor.STAT_DAMAGE_TAKEN)))
 
 
 ## Host: the first player to ask gets the pickup (up to what they can take); everyone after is told no.

@@ -407,7 +407,8 @@ func _pose(t: float) -> void:
 	_pose_circle(t)
 	_pose_van(t)
 	_pose_fx(t)
-	_pose_crew(t)
+	if not done:
+		_pose_crew(t)   # (once the crew is out it is theirs: the van settling must not pin them, or a puppet, M4)
 
 
 func _pose_circle(t: float) -> void:

@@ -11,6 +11,8 @@ const MODIFIER_DURATION := 0.3
 
 var team := GameWorld.TEAM_HEROES
 var power := 1.0
+## The cast's GameWorld.time (SPAWN, from the cast event, M4a): the zone lasts armor_duration(power) from it. -1 = now.
+var start_time := -1.0
 
 var _end_time := 0.0
 var _next_tick := 0.0
@@ -23,7 +25,9 @@ var _next_pulse := 0.0
 
 
 func _ready() -> void:
-	_end_time = GameWorld.time + SpellBook.armor_duration(power)
+	if start_time < 0.0:
+		start_time = GameWorld.time
+	_end_time = start_time + SpellBook.armor_duration(power)
 	_build_visual()
 	_apply()
 
@@ -32,7 +36,7 @@ func _ready() -> void:
 ## the zone from team + power and GameWorld.time.
 func net_fields() -> Dictionary:
 	return {
-		"team": Net.SPAWN, "power": Net.SPAWN,
+		"team": Net.SPAWN, "power": Net.SPAWN, "start_time": Net.SPAWN,
 		"_end_time": Net.LOCAL, "_next_tick": Net.LOCAL, "_expiring": Net.LOCAL, "_next_pulse": Net.LOCAL,
 		"_dome_mat": Net.LOCAL, "_ring_mat": Net.LOCAL, "_floor_mat": Net.LOCAL, "_visual": Net.LOCAL,
 	}
@@ -55,10 +59,9 @@ func time_left() -> float:
 	return maxf(0.0, _end_time - GameWorld.time)
 
 
+## Each hero's owner applies its own armor (Combat.modify_radius, layer 4): the zone runs on every machine.
 func _apply() -> void:
-	var mult := SpellBook.armor_multiplier(power)
-	for a in GameWorld.actors_in_radius(global_position, RADIUS, team):
-		a.set_modifier("armor", mult, MODIFIER_DURATION)
+	Combat.modify_radius(global_position, RADIUS, "armor", SpellBook.armor_multiplier(power), MODIFIER_DURATION, Actor.STAT_DAMAGE_TAKEN, team)
 
 
 func _expire() -> void:

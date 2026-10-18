@@ -15,6 +15,10 @@ extends TestCase
 ##    codec never streams a SPAWN / PRIVATE / LOCAL var. Run against declarations that must fail too.
 ## 5. The packet budget (M3): the host's packet (heroes plus the world section NetWorld fills) fits NetWorldCodec.PACKET_BUDGET
 ##    (about 1.2 KB, one datagram); test_net_world_codec fills it with the worst floor it can find.
+## 6. Area verbs (M4, layer 4): a loop over the actors in an area (GameWorld.actors_in_radius / hittable_in_radius /
+##    team_actors / actors, the "actors" group) that calls a verb on them (apply_damage, shove, set_modifier, heal) must ask
+##    who resolves each one (Combat.resolves / Net.resolves / Net.resolves_hit / Net.owns) in that loop: effects run on
+##    every machine, and a verb applied by every machine lands once per machine. Run against loops that must fail too.
 
 ## Gameplay scripts that aren't Actors but hold state that matters in co-op. A new one goes here.
 const NET_SCRIPTS := [
@@ -110,6 +114,8 @@ func setup() -> void:
 	_check_lint_samples()
 	_check_carriers()
 	_check_budget()
+	_check_area_loops(scripts)
+	_check_area_samples()
 	finish()
 
 
@@ -255,6 +261,64 @@ func _all_scripts(dir: String) -> Array[String]:
 	for d in DirAccess.get_directories_at(dir):
 		out.append_array(_all_scripts(dir + d + "/"))
 	return out
+
+
+# --- 6. Area verbs (M4) ----------------------------------------------------------------------
+
+## Files whose area loops may call verbs without asking who resolves: {path: reason}. Adding one is a design decision.
+const AREA_LOOP_ALLOW := {}   # (empty: every area loop in scripts/ asks)
+const AREA_LOOP_RE := "^(\\s*)for (\\w+)(?:\\s*:\\s*\\w+)? in .*(GameWorld\\.(actors_in_radius|hittable_in_radius|team_actors|actors)\\(|get_nodes_in_group\\(\"actors\"\\)|\\bheroes\\(\\))"
+const AREA_ASK_RE := "Combat\\.resolves\\(|Net\\.resolves(_hit)?\\(|Net\\.owns\\("
+
+
+## The area loops in `lines` that call a verb on their actor without asking who resolves it: [line number, var].
+static func _area_loop_gaps(lines: PackedStringArray) -> Array:
+	var loop_re := RegEx.create_from_string(AREA_LOOP_RE)
+	var ask_re := RegEx.create_from_string(AREA_ASK_RE)
+	var out := []
+	for i in lines.size():
+		var m := loop_re.search(_strip_comment(lines[i]))
+		if m == null:
+			continue
+		var indent := m.get_string(1).length()
+		var v := m.get_string(2)
+		var verb_re := RegEx.create_from_string("\\b%s\\.(apply_damage|shove|set_modifier|heal)\\(" % v)
+		var verb := false
+		var asks := false
+		var j := i + 1
+		while j < lines.size():
+			var code := _strip_comment(lines[j])
+			if code.strip_edges() != "":
+				var ind := code.length() - code.lstrip("\t ").length()
+				if ind <= indent:
+					break
+				verb = verb or verb_re.search(code) != null
+				asks = asks or ask_re.search(code) != null
+			j += 1
+		if verb and not asks:
+			out.append([i + 1, v])
+	return out
+
+
+func _check_area_loops(paths: Array[String]) -> void:
+	for p: String in AREA_LOOP_ALLOW:
+		check(p in paths, "the area-loop rule allowlists a missing file: " + p)
+	for p in paths:
+		if AREA_LOOP_ALLOW.has(p) or p.begins_with("res://scripts/net/") or p.begins_with("res://scripts/test_support/"):
+			continue
+		for g: Array in _area_loop_gaps(FileAccess.get_file_as_string(p).split("\n")):
+			_fail("%s:%d [area_verb] the loop calls a verb on `%s` without asking who resolves it (Combat.resolves / Net.resolves): online every machine runs it, so the verb lands once per machine" % [p, int(g[0]), str(g[1])])
+
+
+func _check_area_samples() -> void:
+	var bad := PackedStringArray(["func f() -> void:", "\tfor a in GameWorld.actors_in_radius(p, 2.0):", "\t\ta.apply_damage(5.0, self)", "\tpass"])
+	eq(_area_loop_gaps(bad).size(), 1, "the area-loop rule flags a verb loop that does not ask")
+	var bad2 := PackedStringArray(["\tfor h: Actor in GameWorld.team_actors(0):", "\t\tif h.hp > 1.0:", "\t\t\th.shove(Vector3.RIGHT, 2.0)"])
+	eq(_area_loop_gaps(bad2).size(), 1, "... a shove nested deeper in the loop")
+	var good := PackedStringArray(["\tfor a in GameWorld.actors_in_radius(p, 2.0):", "\t\tif not Combat.resolves(a, self):", "\t\t\tcontinue", "\t\ta.apply_damage(5.0, self)"])
+	eq(_area_loop_gaps(good).size(), 0, "a loop that asks Combat.resolves passes")
+	var other := PackedStringArray(["\tfor a in GameWorld.actors_in_radius(p, 2.0):", "\t\tFx.attach_hit_feedback(a)", "\tb.apply_damage(1.0)"])
+	eq(_area_loop_gaps(other).size(), 0, "a loop with no verb on its actor passes (a verb after the loop is not in it)")
 
 
 # --- 5. The packet budget (M3) ---------------------------------------------------------------

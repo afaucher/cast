@@ -104,14 +104,8 @@ func _can_strike_target() -> bool:
 
 func _strike() -> void:
 	var pos := global_position
-	for a in GameWorld.actors_in_radius(pos, SLAM_RADIUS, GameWorld.other_team(team)):
-		if absf(a.global_position.y - pos.y) > MAX_SLAM_DY:
-			continue
-		var d := GameWorld.flat_distance(a.global_position, pos)
-		if d > SLAM_RADIUS + 0.1:
-			continue   # judged by the hero's center, so the ring is honest
-		a.apply_damage(SLAM_DAMAGE * lerpf(1.0, SLAM_EDGE_MULT, clampf(d / SLAM_RADIUS, 0.0, 1.0)), self)
-		a.shove(a.global_position - pos, SLAM_SHOVE, self)
+	# Judged by each hero's center, so the ring is honest; online each hero's own machine decides it (Combat.slam).
+	Combat.slam(pos, SLAM_RADIUS, SLAM_DAMAGE, SLAM_EDGE_MULT, SLAM_SHOVE, MAX_SLAM_DY, GameWorld.other_team(team), self)
 	slammed.emit(pos)
 	_spawn_shockwave(pos)
 

@@ -170,9 +170,9 @@ enforce it.
 |---|---|---|
 | **1. Declarations** | Every class with gameplay state has `net_fields() -> {var: Net.KIND}` covering **every** script var. The kinds are in `scripts/net/net.gd`. | **Built** |
 | **2. Lint** | `tests/test_net_contract.gd` scans `scripts/` for patterns that break option A. | **Built** |
-| **3. Verbs** | Another entity changes only through `apply_damage`, `heal`, `shove`, `set_modifier`, `die`, spawn/despawn and pickup. Once `Net` exists, each verb applies the change if this machine owns the target and otherwise sends a request to the owner. | Convention now; routing comes with the `Net` layer |
-| **4. Hit resolution in `Combat`** | `Combat.melee_arc`, `explode` and projectiles run on every machine, but each one applies hits only to targets it resolves: the hero's owner for heroes, the attacker's machine for everything else. Content that uses `Combat.*` gets the rules for free. | Comes with the `Net` layer |
-| **5. Runtime guards and agreement tests** | In debug builds, a write to an `OWNER` field on a machine that doesn't own the entity raises a script error, which fails tests. Two-peer headless scenarios with Steam fake lag assert that every peer agrees on HP, deaths and objectives. | Comes with the `Net` layer |
+| **3. Verbs** | Another entity changes only through `apply_damage`, `heal`, `shove`, `set_modifier`, `die`, spawn/despawn and pickup. Once `Net` exists, each verb applies the change if this machine owns the target and otherwise sends a request to the owner. | **Built** (M3/M4): a verb on a copy is a request to its owner (`Net.route_hit` / `route_shove` / `route_modifier`) |
+| **4. Hit resolution in `Combat`** | `Combat.melee_arc`, `explode` and projectiles run on every machine, but each one applies hits only to targets it resolves: the hero's owner for heroes, the attacker's machine for everything else. Content that uses `Combat.*` gets the rules for free. | **Built** (M4): `Net.resolves_hit` / `Net.resolves`; test_net_contract checks area loops |
+| **5. Runtime guards and agreement tests** | In debug builds, a write to an `OWNER` field on a machine that doesn't own the entity raises a script error, which fails tests. Two-peer headless scenarios with Steam fake lag assert that every peer agrees on HP, deaths and objectives. | **Built** (M4): `Net.guard_write` on a copy's `hp`/`dead`; `test_net_m4_*` |
 
 ### The four kinds (`Net`)
 | Kind | Meaning | Examples |
