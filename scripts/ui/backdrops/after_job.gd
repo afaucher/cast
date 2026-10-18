@@ -200,26 +200,21 @@ static func van_damage(root: Node3D) -> void:
 		var fx := -0.32 + 0.32 * float(i)
 		Kit.rod(s, Vector3(fx, 1.3, 1.93), Vector3(fx * 0.7 + 0.04, 2.15 + 0.25 * float(i % 2), 1.93), 0.22 - 0.05 * float(i % 2), 0.0, 5, Kit.glow(Color(1.0, 0.48, 0.1)))
 	Kit.rod(s, Vector3(0.0, 1.31, 1.93), Vector3(0.02, 1.85, 1.93), 0.12, 0.0, 5, Kit.glow(Color(1.0, 0.85, 0.4)))
-	# soot: flame-lick streaks climbing the camera side from the front wheel arch and the rear corner, leaning back
+	# soot: broad, ragged smudges low on the camera side (over the front wheel arch and the rear corner). Flat blobs
+	# lying on the panel, not flame-lick spikes: thin dark triangles read as spikes at the menu camera.
 	var soot := LowPoly.Soup.new(4251, 0.05)
-	var lrng := RandomNumberGenerator.new()
-	lrng.seed = 78
-	for run: Array in [[1.15, 1.95, 7, 0.62, 0.95], [-2.0, -1.5, 4, 0.55, 0.85]]:
-		var z0: float = run[0]
-		var z1: float = run[1]
-		var cnt: int = run[2]
-		var y0: float = run[3]
-		var hh: float = run[4]
-		for i in cnt:
-			var zc := lerpf(z0, z1, (float(i) + 0.5) / float(cnt))
-			var h := hh * lrng.randf_range(0.6, 1.2)
-			var w := lrng.randf_range(0.2, 0.34)
-			var tilt := lrng.randf_range(-22.0, -8.0)
-			var up := Vector3(0.0, cos(deg_to_rad(tilt)), sin(deg_to_rad(tilt)))
-			soot.merge(LowPoly.frustum(Vector2(0.01, w * 1.5), Vector2(0.01, w * 0.12), h * 1.15, Color(0.46, 0.42, 0.38), Kit.n(), 0.0, 1, Vector2.ZERO, 0.06),
-					_xf(Vector3(-1.07, y0, zc) + up * h * 0.57, Vector3(tilt, 0.0, 0.0)))
-			soot.merge(LowPoly.frustum(Vector2(0.01, w), Vector2(0.01, w * 0.1), h, Color(0.2, 0.18, 0.17), Kit.n(), 0.0, 1, Vector2.ZERO, 0.06),
-					_xf(Vector3(-1.085, y0, zc) + up * h * 0.5, Vector3(tilt, 0.0, 0.0)))
+	for blob: Array in [[1.55, 0.78, 0.55, 0.32, 0.17], [1.0, 1.02, 0.36, 0.22, 0.2], [-1.75, 0.75, 0.45, 0.28, 0.18]]:
+		var bz: float = blob[0]
+		var by: float = blob[1]
+		var rz: float = blob[2]
+		var ry: float = blob[3]
+		var dark: float = blob[4]
+		var seed_v := 4260 + int(bz * 10.0)
+		# a soft grey halo under a darker core, both flat on the side panel (x = -1.07), jittered so the edge is ragged
+		soot.merge(LowPoly.cylinder(1.0, 1.0, 0.01, 12, Color(0.4, 0.37, 0.34), seed_v, 0.0, 1, 0.0).jitter(0.18, seed_v, Vector3(1.0, 0.0, 1.0)),
+				_xf(Vector3(-1.075, by, bz), Vector3(0.0, 0.0, 90.0), Vector3(ry * 1.25, 1.0, rz * 1.25)))
+		soot.merge(LowPoly.cylinder(1.0, 1.0, 0.01, 10, Color(dark, dark * 0.9, dark * 0.85), seed_v + 1, 0.0, 1, 0.0).jitter(0.22, seed_v + 1, Vector3(1.0, 0.0, 1.0)),
+				_xf(Vector3(-1.085, by - ry * 0.15, bz), Vector3(0.0, 0.0, 90.0), Vector3(ry, 1.0, rz)))
 	root.add_child(Kit.mesh(soot, 0.0, "VanSoot"))
 	# the hole in the roof the cob went through: a black ring, torn flaps of roof turned up
 	s.merge(LowPoly.cylinder(0.62, 0.62, 0.03, 12, CHAR, 4250, 0.0, 1, 0.08).jitter(0.07, 4250, Vector3(1.0, 0.0, 1.0)), LowPoly.at(Vector3(-0.1, 1.93, -1.3)))
