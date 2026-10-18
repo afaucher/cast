@@ -456,16 +456,31 @@ func _apply_mood() -> void:
 		if f != null:
 			f.base = 2.0 if night else (2.2 if after else 2.6)
 	if _gate_light != null:
-		_gate_light.light_energy = 3.2 if night else 2.2
+		_gate_light.light_energy = 6.0 if night else 2.2      # the portal stays the hottest thing at night
 	if _breach_flicker != null:
-		_breach_flicker.base = 5.0 if night else 3.4
+		_breach_flicker.base = 8.0 if night else 3.4
 	van.set_lights(1.0 if night else 0.0)
 	var head := van.get_node_or_null("Chassis/HeadLight") as Light3D
 	if head != null:
 		head.visible = night
 	if night:
-		# night shift: one dim bulb over the van; the rest is torches, headlights and the gate
-		Kit.omni(_mood_root, VAN_AT + Vector3(-1.0, 4.4, 2.4), Color(1.0, 0.6, 0.3), 2.6, 8.0)
+		# night shift: the same overhead work lamp as dawn, as a warm pool of light on the crew and the van, under
+		# the night ambient; no daylight through the grate. Torches, headlights and the portal do the rest.
+		Kit.omni(_mood_root, VAN_AT + Vector3(-1.0, 4.4, 2.4), Color(1.0, 0.7, 0.42), 5.5, 9.5)
+		Kit.omni(_mood_root, VAN_AT + Vector3(-0.6, 2.2, 3.6), Color(1.0, 0.72, 0.45), 3.0, 5.5)   # fills the crew's faces
+		var lamp := SpotLight3D.new()
+		lamp.position = VAN_AT + Vector3(-1.0, 6.5, 2.4)
+		lamp.rotation_degrees = Vector3(-90, 0, 0)
+		lamp.light_color = Color(1.0, 0.76, 0.5)
+		lamp.light_energy = 24.0
+		lamp.spot_range = 12.0
+		lamp.spot_angle = 42.0
+		lamp.spot_attenuation = 0.6
+		lamp.shadow_enabled = false
+		_mood_root.add_child(lamp)
+		var cone := Kit.light_shaft(6.0, 0.6, 2.6, Color(1.0, 0.8, 0.55), 0.1)
+		cone.position = VAN_AT + Vector3(-1.0, 3.6, 2.4)
+		_mood_root.add_child(cone)
 	else:
 		# warm work light over the van, and a cool spot through the ceiling grate with dusty shafts
 		Kit.omni(_mood_root, VAN_AT + Vector3(-1.0, 4.4, 2.4), Color(1.0, 0.74, 0.46), 5.5 if not after else 4.2, 9.5)
@@ -510,17 +525,32 @@ func _grade(night: bool, after: bool) -> void:
 	env.ambient_light_color = Color(0.5, 0.5, 0.6)
 	env.adjustment_color_correction = null
 	if night:
-		env.ambient_light_energy = 0.3
+		env.ambient_light_energy = 0.22
 		env.ambient_light_color = Color(0.4, 0.5, 0.85)
-		env.adjustment_brightness = 0.95
-		env.adjustment_contrast = 1.2
-		env.adjustment_saturation = 0.95
-		env.adjustment_color_correction = _tone_curve(Color(0.66, 0.82, 1.0))
+		env.adjustment_brightness = 1.0
+		env.adjustment_contrast = 1.15
+		env.adjustment_saturation = 1.0
+		# Darks sink to blue-black; highlights (the work lamp, torches, the portal) keep their warm colour.
+		env.adjustment_color_correction = _night_curve()
 	elif after:
 		env.ambient_light_energy = 0.34
 		env.adjustment_brightness = 0.92
 		env.adjustment_saturation = 0.8
 		env.adjustment_color_correction = _tone_curve(Color(1.0, 0.9, 0.8))
+
+
+## Night: shadows and midtones pushed dark and blue, the top of the range left almost neutral, so point lights read
+## as warm pools in a cold room instead of the whole frame being tinted blue.
+static func _night_curve() -> GradientTexture1D:
+	var g := Gradient.new()
+	g.set_color(0, Color.BLACK)
+	g.set_color(1, Color(1.0, 0.97, 0.92))
+	g.add_point(0.35, Color(0.12, 0.15, 0.26))
+	g.add_point(0.7, Color(0.55, 0.55, 0.62))
+	var tex := GradientTexture1D.new()
+	tex.gradient = g
+	tex.width = 64
+	return tex
 
 
 ## A per-channel tone curve from black to `top`: multiplies the image by that colour (a tint grade).

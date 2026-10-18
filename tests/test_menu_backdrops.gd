@@ -4,7 +4,7 @@ extends TestCase
 ## the last contract and the clock, features the player's hero, stays at about six lights, and costs next to nothing
 ## per frame (no allocations). Screens that use it are covered by test_main_menu and test_forms.
 
-const LIGHT_BUDGET := 8                ## positional lights a backdrop may switch on ("about six" plus the van's and the gate's)
+const LIGHT_BUDGET := 9                ## positional lights a backdrop may switch on (night adds the work lamp's spot and fill)
 const FRAME_BUDGET_US := 3000.0        ## script cost of one backdrop _process, microseconds (it is a few vector ops)
 
 
@@ -77,13 +77,13 @@ func _check_garage_moods() -> void:
 		check(g.map.cells.size() > 100, "%s: a floor (%d cells)" % [m, g.map.cells.size()])
 		check(g.terrain.seam_gain < 1.0 and g.terrain.seam_near_gain < 1.0, "%s: the hex seams are turned down" % m)
 		var lights := g.light_count()
-		check(lights >= 3 and lights <= LIGHT_BUDGET, "%s: about six lights (%d)" % [m, lights])
+		check(lights >= 3 and lights <= LIGHT_BUDGET, "%s: lights within budget (%d)" % [m, lights])
 		var env := g.environment
 		check(env != null, "%s: an environment" % m)
 		if env != null:
 			match m:
 				"night":
-					check(env.adjustment_brightness < 1.0 and env.adjustment_color_correction != null, "night is graded (brightness + tone curve), not just fewer lights")
+					check(env.adjustment_color_correction != null and env.ambient_light_energy < 0.3, "night is graded (shadow tone curve + low ambient), not just fewer lights")
 				"after":
 					check(env.adjustment_saturation < 1.0, "after is desaturated")
 				_:
@@ -92,7 +92,7 @@ func _check_garage_moods() -> void:
 		check(mood_root != null, "%s: the mood node exists" % m)
 		check((mood_root != null and mood_root.get_node_or_null("Smoke") != null) == (m == "after"), "%s: smoke only after a bad job" % m)
 		check((mood_root != null and mood_root.get_node_or_null("AfterMess") != null) == (m == "after"), "%s: corn and scorch only after a bad job" % m)
-		check(mood_root != null and mood_root.find_children("*", "SpotLight3D", true, false).size() == (0 if m == "night" else 1), "%s: the grate spot is a daytime thing" % m)
+		check(mood_root != null and mood_root.find_children("*", "SpotLight3D", true, false).size() == 1, "%s: one overhead spot (the grate by day, the work lamp at night)" % m)
 		# the corn sign
 		check(g.corn_days == 0, "the corn counter reads 0")
 		var found_sign := false
