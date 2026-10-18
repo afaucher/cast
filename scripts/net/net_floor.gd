@@ -36,7 +36,27 @@ static func assign_ids(root: Node, heroes: Dictionary) -> int:
 			continue
 		NetRegistry.register(next, a)
 		next += 1
-	return next - ID_BASE
+	var actors := next - ID_BASE
+	# M3: component pickups already on the floor (a dev --drop-near) are host-owned things too, built the same everywhere.
+	for p in pickups_under(root):
+		NetRegistry.register(next, p)
+		next += 1
+	return actors
+
+
+## Every ComponentPickup under `root`, depth first in tree order.
+static func pickups_under(root: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	if root != null:
+		_collect_pickups(root, out)
+	return out
+
+
+static func _collect_pickups(n: Node, out: Array[Node]) -> void:
+	for c in n.get_children():
+		if c is ComponentPickup:
+			out.append(c)
+		_collect_pickups(c, out)
 
 
 static func id_of(node: Node) -> int:

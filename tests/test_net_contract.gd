@@ -9,9 +9,12 @@ extends TestCase
 ##    outside scripts/net/; the transport rules (no unreliable_ordered, no high-level sync) apply
 ##    everywhere, and NET_RULES hold scripts/net/ itself to the wire contract (M0).
 ## 3. The lint is run against lines that must fail (LINT_SAMPLES), so a broken regex can't pass silently.
-## 4. Carriers (M2): every OWNER var of a replicated class (REPLICATED: Hero) rides the snapshot (NetCodec.HERO_FIELDS) or is
-##    named, with its carrier, in NetEvents.CARRIES; a codec never streams a SPAWN / PRIVATE / LOCAL var. Run against
-##    declarations that must fail too.
+## 4. Carriers (M2, M3): every OWNER var of a replicated class (REPLICATED: the hero, and from M3 the host-owned world:
+##    monsters of every kind, hellgates, employees, priced props, crates, mail boxes, pickups) rides a snapshot
+##    (NetCodec.HERO_FIELDS, NetWorldCodec.*_FIELDS) or is named, with its carrier, in NetEvents.CARRIES / WORLD_CARRIES; a
+##    codec never streams a SPAWN / PRIVATE / LOCAL var. Run against declarations that must fail too.
+## 5. The packet budget (M3): the host's packet (heroes plus the world section NetWorld fills) fits NetWorldCodec.PACKET_BUDGET
+##    (about 1.2 KB, one datagram); test_net_world_codec fills it with the worst floor it can find.
 
 ## Gameplay scripts that aren't Actors but hold state that matters in co-op. A new one goes here.
 const NET_SCRIPTS := [
@@ -106,6 +109,7 @@ func setup() -> void:
 	_check_lint(scripts)
 	_check_lint_samples()
 	_check_carriers()
+	_check_budget()
 	finish()
 
 
@@ -253,11 +257,33 @@ func _all_scripts(dir: String) -> Array[String]:
 	return out
 
 
+# --- 5. The packet budget (M3) ---------------------------------------------------------------
+
+func _check_budget() -> void:
+	var heroes := NetWire.HEADER + 1 + 2 * NetCodec.ENTRY_SIZE_DRAWING
+	check(heroes + NetWorld.WORLD_BUDGET <= NetWorldCodec.PACKET_BUDGET, "the host's packet (heroes %d + world %d bytes) fits the %d-byte budget" % [heroes, NetWorld.WORLD_BUDGET, NetWorldCodec.PACKET_BUDGET])
+	check(NetWorldCodec.PACKET_BUDGET <= 1200, "the budget is one datagram on Steam's relays (1.2 KB)")
+	check(NetWorld.WORLD_BUDGET >= 60 * NetWorldCodec.MONSTER_SIZE, "the world section holds at least 60 moving monsters a tick")
+
+
 # --- 3. Carriers (M2): nothing owned by a player goes unreplicated ---------------------------
 
-## Classes whose OWNER vars travel: script -> [the codec's field list, the event table]. M3 adds the monsters.
-const REPLICATED := {
-	"res://scripts/heroes/hero.gd": [NetCodec.HERO_FIELDS, NetEvents.CARRIES],
+## Classes whose OWNER vars travel: script -> [the codec's field list, the event table, the fewest codec fields it should
+## have]. Each monster kind is held to the monster tables (a kind that adds an OWNER var must add its carrier).
+const MONSTER_PATH := "res://scripts/monsters/monster.gd"
+var REPLICATED := {
+	"res://scripts/heroes/hero.gd": [NetCodec.HERO_FIELDS, NetEvents.CARRIES, 6],
+	MONSTER_PATH: [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/grunt.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/archer.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/brute.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/swarmer.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/contracts/employee.gd": [NetWorldCodec.EMPLOYEE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/employee.gd"], 5],
+	"res://scripts/contracts/hellgate.gd": [NetWorldCodec.GATE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/hellgate.gd"], 5],
+	"res://scripts/contracts/priced_prop.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/priced_prop.gd"], 0],
+	"res://scripts/world/themes/breakable_crate.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/world/themes/breakable_crate.gd"], 0],
+	"res://scripts/contracts/mail_package.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/mail_package.gd"], 0],
+	"res://scripts/spells/component_pickup.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/spells/component_pickup.gd"], 0],
 }
 
 
@@ -290,8 +316,10 @@ func _check_carriers() -> void:
 		var gaps := _carrier_gaps(obj.net_fields(), tables[0] as Dictionary, tables[1] as Dictionary)
 		for g in gaps:
 			_fail("%s: %s" % [p, g])
-		check((tables[0] as Dictionary).size() >= 6, p + ": the codec carries the hero's state")
+		check((tables[0] as Dictionary).size() >= int(tables[2]), p + ": the codec carries its state")
 		_free(obj)
+	for p: String in NetEvents.WORLD_CARRIES:
+		check(REPLICATED.has(p), "NetEvents.WORLD_CARRIES names %s, which this test does not hold to it" % p)
 	# The rule is run against declarations that must fail, so a broken check can't pass silently.
 	var fake := {"carried": Net.OWNER, "event_carried": Net.OWNER, "dropped": Net.OWNER, "secret": Net.PRIVATE, "look": Net.LOCAL, "fixed": Net.SPAWN}
 	eq(_carrier_gaps(fake, {"carried": "x"}, {"event_carried": "later"}).size(), 1, "an OWNER var with no carrier is flagged (and only it)")

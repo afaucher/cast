@@ -201,6 +201,13 @@ func _physics_process(_delta: float) -> void:
 	_check_shove_contacts()
 
 
+## A copy's per-frame look on a client (M3; NetObjects calls it): the price tag fades in near this screen's heroes.
+func net_tick(_delta: float) -> void:
+	_tag_tick += 1
+	if _tag_tick % 3 == 0:
+		_tag_target = _hero_near()
+
+
 func _process(delta: float) -> void:
 	if tag_label == null:
 		return
@@ -334,7 +341,7 @@ func _shove_hit(a: Actor) -> void:
 func _on_death() -> void:
 	broke = true
 	var culprit := last_culprit()
-	Ledger.damage(display_name, price, culprit)
+	Ledger.damage(display_name, price, culprit)   # (online the host bills it; a client's Ledger mirrors the host's)
 	broken.emit(self, culprit)
 	_break_fx()
 	if _model != null:

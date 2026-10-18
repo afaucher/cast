@@ -70,10 +70,14 @@ extends Node3D
 ## run is SHARED: the host rolls the board and picks the job (clients see the same three offers, read-only), every
 ## player signs their own license checkout (the "ready" step), every machine builds the same floor from the
 ## contract seed behind a load barrier, and the host starts the floor clock: the van arrival plays from that
-## shared start. A client's world is COPIES of everything the host owns (Net.make_copy: no AI, no damage) until M3
-## syncs them; each machine controls its own seat's hero, the others are AI on the host until M2. A host alone
-## (Steam lobby, nobody joined) plays exactly the solo game. While crewed there is no local pause and no exit yet
-## (M5). Esc on a client's board or checkout leaves the crew; the host confirms first (it ends the job for all).
+## shared start. Each machine controls its own seat's hero and shows the others as puppets (M2). The host's world
+## (monsters, hellgates, employees, props, crates, mail, pickups) runs on the host and is SHOWN on clients (M3:
+## Session.world / Session.objects): a client's hits on props and mail, its pickups and its E on an employee are requests
+## the host grants, the host keeps the Ledger and the objectives and every client mirrors them. The elevator and the van
+## are first-to-choose: the first player to pick a row decides for the crew (down: every machine builds the next floor
+## behind the barrier; out: the host's invoice for everyone). A host alone (Steam lobby, nobody joined) plays exactly
+## the solo game. While crewed there is no local pause. Esc on a client's board or checkout leaves the crew; the host
+## confirms first (it ends the job for all).
 
 ## Every castable spell, straight from SpellBook (new spells need no change here).
 static func all_spells() -> PackedStringArray:
@@ -141,6 +145,7 @@ var _site: SiteBuilder.Site
 var _menu: ElevatorMenu = null
 var _van_menu: VanExitMenu = null    ## the clock-out slip at the van (floor 1 only)
 var _invoice: InvoiceScreen = null
+var _last_invoice: Dictionary = {}   ## the invoice on screen (tests: online, every machine shows the host's)
 var _board: JobBoard = null
 var _picker: SpellPicker = null
 var _pause: PauseMenu = null
@@ -193,6 +198,9 @@ func _ready() -> void:
 		Session.peer_left.connect(_on_peer_left)
 		Session.roster_changed.connect(_note_names)
 		Session.seats.to_ai.connect(_on_seat_to_ai)
+		Session.objects.exit_decided.connect(_on_exit_decided)
+		Session.objects.contract_received.connect(_on_contract_mirror)
+		Session.objects.end_received.connect(_end_from_host)
 		_note_names()
 	if Session.is_client():
 		_start_as_client()
@@ -201,6 +209,9 @@ func _ready() -> void:
 	if _session == null:
 		_show_board()
 		return
+	if Session.online() and Net.crewed() and _flow != null and _flow.floor_change and _flow.phase == CrewFlow.LOADING:
+		_shared = true   # the crew took the elevator down: the next floor goes through the barrier again (no license)
+		_wire_flow()
 	_enter_floor()
 
 
@@ -229,8 +240,16 @@ func _exit_tree() -> void:
 		Session.roster_changed.disconnect(_note_names)
 	if Session.seats != null and Session.seats.to_ai.is_connected(_on_seat_to_ai):
 		Session.seats.to_ai.disconnect(_on_seat_to_ai)
+	if Session.objects != null and Session.objects.exit_decided.is_connected(_on_exit_decided):
+		Session.objects.exit_decided.disconnect(_on_exit_decided)
+		Session.objects.contract_received.disconnect(_on_contract_mirror)
+		Session.objects.end_received.disconnect(_end_from_host)
 	if Session.snap != null:
 		Session.snap.end()   # the heroes are going with the scene
+	if Session.world != null:
+		Session.world.end()
+	if Session.objects != null:
+		Session.objects.end()
 	if _pause != null:
 		get_tree().paused = false   # never leave the next scene frozen
 	if GameWorld.actor_died.is_connected(_on_actor_died):
@@ -324,6 +343,7 @@ func _begin_contract(run: ContractRun) -> void:
 	_run = run
 	_session = ContractSession.begin(run, int(opts.get("floor", 1)) if not _dev_released else 1)
 	_spells.clear()
+	Ledger.mirror = Session.is_client()   # (M3: the host keeps the books; a client shows the host's lines)
 	if Session.is_client():
 		_shared = true
 	elif Session.online() and Net.crewed() and _flow != null:
@@ -432,6 +452,12 @@ func _unwire_flow() -> void:
 
 ## Show whatever the host's flow says right now (this scene may have been loaded after the events arrived).
 func _sync_with_flow() -> void:
+	if _session != null and _flow.floor_change:
+		if _flow.phase == CrewFlow.LOADING:
+			_enter_floor()   # the crew took the elevator: the next floor, behind the barrier
+		else:
+			_show_waiting("Taking the elevator down...")
+		return
 	match _flow.phase:
 		CrewFlow.BOARD:
 			_on_flow_board()
@@ -480,6 +506,8 @@ func _enter_floor() -> void:
 		_fade(1.0, 0.0, 0.5)
 	if _spells.is_empty():
 		_show_picker()
+	elif _shared and _flow != null and _flow.floor_change:
+		_start()   # a floor change (the elevator down): no license, straight to the barrier
 	elif _shared:
 		_sign_license()
 	else:
@@ -817,6 +845,10 @@ func _sign_license() -> void:
 
 ## Everyone signed (CrewFlow.load_requested): build the floor and report to the host.
 func _on_flow_load() -> void:
+	if _session != null and player == null and _flow != null and _flow.floor_change and not _leaving:
+		_hide_wait()
+		_enter_floor()   # (a client that reloaded before crew.next arrived)
+		return
 	if _session == null or player == null or _barrier_up or _floor_begun or _spells.is_empty():
 		return
 	_start()
@@ -969,6 +1001,8 @@ func _enter_barrier() -> void:
 	if not Net.is_host():
 		NetFloor.freeze_copies(GameWorld.root, [player])
 	_begin_hero_sync()
+	Session.world.begin()           # M3: the host streams its monsters, gates and employees; a client shows them
+	Session.objects.begin(player)   # M3: props, crates, mail, pickups, the Ledger and the exits are the host's
 	_freeze(true)
 	var t0 := Time.get_ticks_usec()
 	var sums := NetFloor.checksum(map, _plan, _run, GameWorld.root)
@@ -1189,12 +1223,39 @@ func _on_gate_closed(gate: Actor) -> void:
 		return
 	_closed_gates[id] = true
 	var is_origin := gate == _site.origin_gate
+	if not _keeps_books():
+		# A client: the host closed it (world.die). Its bookkeeping and pay arrive from the host (obj.contract, obj.ledger).
+		if is_origin:
+			hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
+			_show_banner("The origin gate is shut. The site calms down. The invoice does not.", 6.0)
+		_log("%s closed" % ("ORIGIN gate" if is_origin else "hellgate"), Color(0.6, 1.0, 0.7))
+		return
 	var pay := _session.gate_closed(is_origin)
+	_publish_contract()
 	if is_origin:
 		hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
 		_show_banner("The origin gate is shut. The site calms down. The invoice does not.", 6.0)
 	_log("%s closed  +%s" % ["ORIGIN gate" if is_origin else "hellgate", ContractRun.money(pay)], Color(0.6, 1.0, 0.7))
 	_objective_t = 0.0   # re-check cleanliness now
+
+
+## True where the contract's books are kept: solo, and the host of a shared run (M3). A client mirrors the host's.
+func _keeps_books() -> bool:
+	return not (_shared and not Net.is_host())
+
+
+## Host of a crew: the objective bookkeeping changed; every client's tracker follows (NetObjects, obj.contract).
+func _publish_contract() -> void:
+	if _crewed() and Net.is_host() and _session != null:
+		Session.objects.send_contract(_session.mirror_state())
+
+
+## Client: the host's bookkeeping arrived.
+func _on_contract_mirror(d: Dictionary) -> void:
+	if _session == null or _keeps_books():
+		return
+	_session.apply_mirror(d)
+	_update_tracker()
 
 
 func _on_ledger_line(line: Dictionary) -> void:
@@ -1220,6 +1281,7 @@ func _pest_alive() -> int:
 func _check_objectives() -> void:
 	var paid := _session.check_clean(_pest_alive())
 	if paid > 0:
+		_publish_contract()
 		hud.show_center("FLOOR CLEAN", Color(0.6, 1.0, 0.8), 1.8)
 		_log("floor clean: %s cleared  +%s" % [ClientArchetype.pest_name(_run.pest), ContractRun.money(paid)], Color(0.6, 1.0, 0.7))
 	_update_tracker()
@@ -1275,7 +1337,9 @@ func _on_actor_died(a: Actor) -> void:
 		_log("%s is down!" % a.display_name, Color(1.0, 0.45, 0.45))
 	elif _site != null and _site.employees.has(a):
 		var cause: String = str(_emp_cause.get(a.get_instance_id(), "unknown"))
-		_session.employee_lost(a.display_name, cause)
+		if _keeps_books():
+			_session.employee_lost(a.display_name, cause)
+			_publish_contract()
 		_log("%s was lost (%s)" % [a.display_name, cause], Color(1.0, 0.6, 0.4))
 		hud.show_message("%s lost (%s)" % [a.display_name, cause], Color(1.0, 0.55, 0.4))
 		_update_tracker()
@@ -1336,19 +1400,19 @@ func use_target() -> UseTarget:
 	if player == null or player.dead:
 		return null
 	var t := UseTarget.new()
-	if _player_at_van() and not _crewed():
+	if _player_at_van():
 		var door := _van_door_pos()
 		t.kind = "van"
 		t.verb = "Clock out"
 		t.pos = Vector3(door.x, _floor_y(door.x, door.y) + PROMPT_ABOVE_VAN, door.y)
-	elif _player_at_elevator() and not _crewed():
+	elif _player_at_elevator():
 		var ex := Hex.to_world(_exit_cell)
 		t.kind = "elevator"
 		t.verb = "Elevator"
 		t.pos = Vector3(ex.x, _floor_y(ex.x, ex.z) + PROMPT_ABOVE_ELEVATOR, ex.z)
 	else:
 		var e := Employee.interact_target(player)
-		if e != null and Net.simulates(e):   # (on a client an employee is only a copy until M3)
+		if e != null and (Net.simulates(e) or Net.is_puppet(e)):   # (a client's E on the host's employee is a request: Employee.interact)
 			t.kind = "employee"
 			t.verb = e.interact_verb(player)
 			t.pos = e.prompt_point()
@@ -1472,6 +1536,7 @@ func _extract_followers(riders: Array[Actor], line: String) -> void:
 		if e.has_method("extract"):
 			e.call("extract", line)
 	_session.extract(riders.size(), player)
+	_publish_contract()
 	var pay := ContractRun.money(riders.size() * ContractRun.EMPLOYEE_EXTRACTED)
 	if riders.size() == 1:
 		_log("%s extracted  +%s" % [riders[0].display_name, pay], Color(0.6, 1.0, 0.7))
@@ -1511,8 +1576,8 @@ func _elevator_lines() -> Array[String]:
 
 
 func _open_elevator() -> void:
-	if _crewed():
-		return   # exits are shared in M5; until then the crew can not leave the floor
+	if _crewed() and Session.objects.exit_taken():
+		return   # the crew is already on its way
 	var info := {
 		"floor": _floor_n(), "floor_count": ContractRun.FLOOR_COUNT,
 		"payout": Ledger.payout(), "damages": Ledger.deducted(),
@@ -1521,18 +1586,18 @@ func _open_elevator() -> void:
 	_menu = ElevatorMenu.new(info)
 	_screens().add_child(_menu)
 	_freeze(true)
-	_menu.go_down.connect(func() -> void: _use_elevator(true))
-	_menu.cash_out.connect(func() -> void: _use_elevator(false))
+	_menu.go_down.connect(func() -> void: _choose_exit("down"))
+	_menu.cash_out.connect(func() -> void: _choose_exit("out"))
 	_menu.stay.connect(_close_elevator.bind(true))
 	if opts.has("auto_elevator"):
 		get_tree().create_timer(1.2).timeout.connect(func() -> void:
 			if _menu != null:
-				_use_elevator(str(opts["auto_elevator"]) == "down" and _menu.can_descend()))
+				_choose_exit("down" if str(opts["auto_elevator"]) == "down" and _menu.can_descend() else "out"))
 
 
 ## The clock-out slip at the van (floor 1): the crew's other exit, the same as the elevator's "Exit".
 func _open_van_exit() -> void:
-	if _crewed():
+	if _crewed() and Session.objects.exit_taken():
 		return
 	var info := {
 		"floor": _floor_n(), "floor_count": ContractRun.FLOOR_COUNT,
@@ -1542,7 +1607,7 @@ func _open_van_exit() -> void:
 	_van_menu = VanExitMenu.new(info)
 	_screens().add_child(_van_menu)
 	_freeze(true)
-	_van_menu.clock_out.connect(_use_van)
+	_van_menu.clock_out.connect(func() -> void: _choose_exit("van"))
 	_van_menu.cancel.connect(_close_elevator.bind(true))
 
 
@@ -1559,14 +1624,81 @@ func _close_elevator(disarm: bool) -> void:
 		_elev_armed = false
 
 
-## Stop (or resume) the simulation and the player's input; the HUD and menus keep running.
+## Stop (or resume) the simulation and the player's input; the HUD and menus keep running. While crewed (M3, the M5b rule)
+## a menu stops only this player's own hero: the world goes on for everyone else.
 func _freeze(on: bool) -> void:
-	if GameWorld.root != null:
+	var self_only := on and _crewed() and _floor_begun and not _ended and not _leaving
+	if GameWorld.root != null and not self_only:
 		GameWorld.root.process_mode = Node.PROCESS_MODE_DISABLED if on else Node.PROCESS_MODE_INHERIT
 	if controller != null and not on:
 		controller.enabled = not player.dead and not _ended
 	elif controller != null:
 		controller.enabled = false
+
+
+## A row picked on the elevator ("down", "out") or the van ("van"). Solo it happens at once; in a crew the FIRST player
+## to choose decides for everyone (NetObjects: the host takes the first choice and tells the crew, _on_exit_decided).
+func _choose_exit(choice: String) -> void:
+	if not _crewed():
+		match choice:
+			"down":
+				_use_elevator(true)
+			"out":
+				_use_elevator(false)
+			"van":
+				_use_van()
+		return
+	_close_elevator(false)
+	if controller != null:
+		controller.enabled = false
+	hud.show_message("Asking the crew...", Color(0.8, 0.9, 1.0))
+	Session.objects.choose_exit(choice)
+	get_tree().create_timer(2.0).timeout.connect(func() -> void:
+		if not _leaving and not _ended and not Session.objects.exit_taken() and controller != null and player != null and not player.dead:
+			controller.enabled = true)
+
+
+## The crew's exit was decided (every machine, M3): by whoever chose first. The host does it; a client follows.
+func _on_exit_decided(choice: String, seat: int) -> void:
+	if _leaving or _ended or _session == null:
+		return
+	_close_elevator(false)
+	var who := str(_names.get(Session.seats.owners.get(seat, 0), "")) if Session.seats != null else ""
+	if who == "" and heroes_by_seat.has(seat):
+		who = Net.label_of(heroes_by_seat[seat])
+	var what := "takes the elevator down" if choice == "down" else "clocks the crew out"
+	hud.show_center("%s %s" % [who, what], Color(1.0, 0.9, 0.6), 2.0)
+	_log("exit: %s (seat %d) %s" % [who, seat, what], Color(1.0, 0.9, 0.6))
+	if choice == "down":
+		_descend_shared()
+		return
+	if Net.is_host():
+		if choice == "van":
+			_use_van()
+		else:
+			_use_elevator(false)
+		return
+	if controller != null:
+		controller.enabled = false   # a client waits for the host's invoice (obj.end)
+
+
+## The crew goes down (shared run): every machine keeps its heroes' HP and downed state for the next floor, and reloads
+## onto it; the host starts the barrier (CrewFlow.host_next_floor) and the floor starts when everyone has built it.
+func _descend_shared() -> void:
+	if _leaving:
+		return
+	if Net.is_host():
+		_extract_followers(_followers_near_exit(), "thank you!")
+	_leaving = true
+	_update_hero_sync()
+	_freeze(true)
+	_session.save_carry(_heroes())
+	_session.floor_number += 1
+	if Net.is_host():
+		_flow.host_next_floor()
+	_fade(0.0, 1.0, 0.45, func() -> void:
+		_fade_in = true
+		_change_scene(""))
 
 
 func _use_elevator(descend: bool) -> void:
@@ -1624,12 +1756,30 @@ func _end_contract(reason: String) -> void:
 			downed.append(h.display_name)
 	_session.finish(reason, downed)
 	var inv := ContractInvoice.build(_session)
+	if _crewed() and Net.is_host():
+		Session.objects.send_end(inv)   # M3: every client shows the host's invoice
 	LastContract.record(inv)   # the main menu's garage shows the morning after a bad job
 	_log("contract over (%s): earned %s, damages %s, payout %s" % [reason, ContractRun.money(int(inv["earned"])), ContractRun.money(int(inv["damages"])), ContractRun.money(int(inv["payout"]))], Color(1.0, 0.9, 0.5))
 	_show_invoice(inv)
 
 
+## Client: the host ended the job (cashed out, or the crew went down); its invoice is the one.
+func _end_from_host(inv: Dictionary) -> void:
+	if _ended or _session == null or _keeps_books():
+		return
+	_ended = true
+	_close_elevator(false)
+	_freeze(true)
+	_session.finished = true
+	_session.end_reason = str(inv.get("reason", ""))
+	Ledger.end_contract()
+	LastContract.record(inv)
+	_log("contract over (%s): earned %s, damages %s, payout %s" % [str(inv.get("reason", "")), ContractRun.money(int(inv.get("earned", 0))), ContractRun.money(int(inv.get("damages", 0))), ContractRun.money(int(inv.get("payout", 0)))], Color(1.0, 0.9, 0.5))
+	_show_invoice(inv)
+
+
 func _show_invoice(inv: Dictionary) -> void:
+	_last_invoice = inv
 	if debug_panel != null:
 		debug_panel.visible = false
 	_invoice = InvoiceScreen.new(inv)
@@ -1642,6 +1792,9 @@ func _show_invoice(inv: Dictionary) -> void:
 func _on_next_contract() -> void:
 	if _leaving:
 		return
+	if _shared and not Net.is_host() and Net.crewed():
+		hud.show_message("Waiting for the host's job board...", Color(0.8, 0.9, 1.0))
+		return   # the host's next board brings the whole crew (crew.board)
 	_leaving = true
 	_dev_released = true
 	_run = null
@@ -1707,7 +1860,8 @@ func _check_crew() -> void:
 			_ending = true
 			controller.enabled = false
 			hud.show_center("Crew incapacitated", Color(1.0, 0.4, 0.35))
-			get_tree().create_timer(INCAP_DELAY).timeout.connect(func() -> void: _end_contract(ContractSession.END_INCAPACITATED))
+			if _keeps_books():   # (a client: the host ends the job and sends its invoice)
+				get_tree().create_timer(INCAP_DELAY).timeout.connect(func() -> void: _end_contract(ContractSession.END_INCAPACITATED))
 		return
 	if player.dead and not _player_down_noted:
 		_player_down_noted = true
@@ -1910,7 +2064,7 @@ func _note_names() -> void:
 		_names[int(e["peer"])] = str(e["name"])
 
 
-## True while someone else is in the crew of a shared run: no local pause, no exits yet (M5).
+## True while someone else is in the crew of a shared run: no local pause; exits are first-to-choose (M3).
 func _crewed() -> bool:
 	return _shared and Net.crewed()
 
@@ -2166,7 +2320,8 @@ func _spawn_near() -> void:
 				_dev_monsters.append(tm)
 		_log("spawn-near: %d %s on the tower" % [_dev_monsters.size(), kind], Color(0.8, 0.8, 1.0))
 		return
-	var here := player.current_cell()
+	var near_hero: Hero = heroes_by_seat.get(1, player) if _shared else player   # (a shared run: seat 1's spot on every machine)
+	var here := near_hero.current_cell()
 	var base_level: int = map.get_cell(here).level
 	var cands: Array[Vector2i] = []
 	for c in Hex.range_cells(here, 5):
@@ -2181,7 +2336,7 @@ func _spawn_near() -> void:
 		for c in Hex.range_cells(here, 7):
 			var cc: HexMap.Cell = map.get_cell(c)
 			if Hex.distance(c, here) >= 5 and cc != null and cc.type == HexMap.Tile.FLOOR and cc.level == base_level:
-				if map.line_of_sight(Combat.chest(player), Hex.to_world(c, cc.level) + Vector3.UP * 0.9):
+				if map.line_of_sight(Combat.chest(near_hero), Hex.to_world(c, cc.level) + Vector3.UP * 0.9):
 					cands.append(c)
 		cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
 	if parts.size() > 2 and parts[2].strip_edges() == "cluster" and not cands.is_empty():

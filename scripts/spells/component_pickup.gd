@@ -32,6 +32,9 @@ var _ring: MeshInstance3D
 static func drop(id: String, amount: int, pos: Vector3, life: float = SpellComponents.PICKUP_LIFETIME) -> ComponentPickup:
 	if GameWorld.root == null or not SpellBook.has_spell(id) or amount <= 0:
 		return null
+	if Net.world_live():
+		Net.request_drop(id, amount, pos, life)   # online the host owns pickups: it puts this one down (M3)
+		return null
 	var spot := _floor_spot(pos)
 	if spot == Vector3.INF:
 		return null
@@ -40,6 +43,19 @@ static func drop(id: String, amount: int, pos: Vector3, life: float = SpellCompo
 	p.charges = amount
 	p.lifetime = life
 	GameWorld.spawn(p, spot)
+	return p
+
+
+## A client's copy of a pickup the host announced (M3, NetObjects): exactly where the host has it, `age` seconds old.
+static func copy_at(id: String, amount: int, pos: Vector3, life: float, age: float) -> ComponentPickup:
+	if GameWorld.root == null or not SpellBook.has_spell(id) or amount <= 0:
+		return null
+	var p := ComponentPickup.new()
+	p.spell_id = id
+	p.charges = amount
+	p.lifetime = life
+	p._age = age
+	GameWorld.spawn(p, pos)
 	return p
 
 
@@ -143,6 +159,46 @@ func _process(delta: float) -> void:
 		var k := 1.0 + 0.08 * sin(_t * 3.0)
 		_glow.scale = Vector3.ONE * k
 		_glow.position.y = _prop.position.y if _prop else HOVER
+
+
+## A copy's per-frame work on a client (M3; NetObjects calls it, the host decides the rest): it ages and blinks, shows
+## its label, offers the swap, and walking onto it ASKS the host (Net.request) instead of taking it; the grant comes
+## back as an event and only then do this player's slots change. It never ends itself: the host says when it is gone.
+func net_tick(delta: float) -> void:
+	if _used:
+		return
+	_age += delta
+	_blink()
+	var near_player := false
+	for h in GameWorld.team_actors(GameWorld.TEAM_HEROES):
+		var hero := h as Hero
+		if hero == null or not hero.is_player:
+			continue
+		var d := GameWorld.flat_distance(hero.global_position, global_position)
+		if absf(hero.global_position.y - global_position.y) > 1.6:
+			_withdraw_offer(hero)
+			continue
+		if d <= SpellComponents.LABEL_RADIUS:
+			near_player = true
+		match hero.component_outcome(spell_id):
+			"add":
+				_withdraw_offer(hero)
+				if d <= SpellComponents.COLLECT_RADIUS:
+					Net.request(self, "collect", {"want": mini(charges, SpellComponents.MAX_CHARGES - hero.charges_of(spell_id))})
+			"fill":
+				_withdraw_offer(hero)
+				if d <= SpellComponents.COLLECT_RADIUS:
+					Net.request(self, "collect", {"want": mini(charges, SpellComponents.MAX_CHARGES)})
+			"swap":
+				if d <= SpellComponents.SWAP_RADIUS:
+					_offer(hero, d)
+				else:
+					_withdraw_offer(hero)
+			_:
+				_withdraw_offer(hero)
+	if _label:
+		_label.visible = near_player
+		_label.text = label_text()
 
 
 func _physics_process(delta: float) -> void:

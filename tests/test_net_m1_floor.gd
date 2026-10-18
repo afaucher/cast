@@ -10,7 +10,8 @@ extends NetGameTest
 ##   shared clock, and clients' GameWorld.time tracks the host's within a frame and the link;
 ## - the van arrival plays on every machine from that shared start;
 ## - what the host owns is a non-acting COPY on a client (no AI, no damage), the same entities as on the host; each
-##   machine controls exactly one hero and only the host runs the AI heroes.
+##   machine controls exactly one hero and only the host runs the AI heroes. (M3: a copy is no longer frozen: it shows the
+##   host's world, so at the end of the watch every copy stands where the host has it and has the host's HP.)
 
 const PEERS := 3
 const SEED := 11
@@ -82,7 +83,14 @@ func run_host() -> void:
 		check(float(r["first_adjust_s"]) < 30.0, "peer %d: the first clock adjustment was sane (%.2f s)" % [p, float(r["first_adjust_s"])])
 		# Copies, heroes, licenses.
 		check(bool(r["copies_ok"]), "peer %d: everything the host owns is a non-acting copy" % p)
-		check(bool(r["frozen"]), "peer %d: the copies did not move or change in %.1f s" % [p, WATCH])
+		var off_by := 0
+		for i in mini((r["poses"] as Array).size(), (ours["poses"] as Array).size()):
+			var theirs_p: Vector3 = (r["poses"] as Array)[i]
+			var ours_p: Vector3 = (ours["poses"] as Array)[i]
+			if Vector2(theirs_p.x, theirs_p.z).distance_to(Vector2(ours_p.x, ours_p.z)) > 0.6 or absf(float((r["hps"] as Array)[i]) - float((ours["hps"] as Array)[i])) > 0.1:
+				off_by += 1
+		eq((r["poses"] as Array).size(), (ours["poses"] as Array).size(), "peer %d has the host's world" % p)
+		eq(off_by, 0, "peer %d: after %.1f s every copy stands where the host has it, with its HP (M3: the host's world, shown)" % [p, WATCH])
 		check(bool(r["local_simulates"]), "peer %d simulates its own hero" % p)
 		eq(int(r["heroes"]), 3, "peer %d has all three crew heroes" % p)
 		eq(int(r["controllers"]), 1, "peer %d controls exactly one hero" % p)
@@ -144,8 +152,6 @@ func measure() -> Dictionary:
 	var f := flow()
 	var site: SiteBuilder.Site = game.get("_site")
 	var copies := _copies(site)
-	var pos0 := _poses(copies)
-	var hp0 := _hps(copies)
 	var t_end := wall() + WATCH
 	var max_time_err := 0.0
 	var max_arr_err := 0.0
@@ -172,11 +178,12 @@ func measure() -> Dictionary:
 	out["heroes"] = heroes.size()
 	out["controllers"] = heroes.filter(func(h: Hero) -> bool: return h.get_node_or_null("PlayerController") != null).size()
 	out["brains"] = heroes.filter(func(h: Hero) -> bool: return h.get_node_or_null("AllyBrain") != null).size()
+	out["poses"] = _poses(copies)
+	out["hps"] = _hps(copies)
 	if is_host():
 		out["host_simulates"] = copies.all(func(a: Actor) -> bool: return Net.simulates(a) and a.is_physics_processing())
 	else:
 		out["copies_ok"] = copies.size() > 5 and copies.all(func(a: Actor) -> bool: return Net.is_copy(a) and not Net.simulates(a) and not a.is_physics_processing())
-		out["frozen"] = pos0 == _poses(copies) and hp0 == _hps(copies)
 		out["local_simulates"] = Net.simulates(my_hero()) and not Net.is_copy(my_hero())
 	return out
 

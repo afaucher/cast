@@ -1,7 +1,8 @@
 # Networking build plan: online co-op, step by step
 
-Status: **M0, M1 and M2 built** 2026-10-17 (see [M0 as built](#m0-as-built-2026-10-17), [M1 as built](#m1-as-built-2026-10-17) and
-[M2 as built](#m2-as-built-2026-10-17) after the milestones); M3 onward is still the plan. The architecture is fixed by
+Status: **M0, M1 and M2 built** 2026-10-17, **M3 built** 2026-10-18 (see [M0 as built](#m0-as-built-2026-10-17),
+[M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17) and [M3 as built](#m3-as-built-2026-10-18) after the
+milestones); M4 onward is still the plan. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -155,7 +156,7 @@ no gap over 0.6 units in one frame. Each client sends under 3 KB/s. Then the cli
 AI-driven on the host within 1 s at the same position.
 *Playable:* **two or three players walk around the same floor together**, monsters frozen.
 
-### M3 Host-owned world *(3 sessions)* — **Risk**
+### M3 Host-owned world *(3 sessions)* — **Risk** — built, see [M3 as built](#m3-as-built-2026-10-18)
 **M3a Monsters.** The host snapshot: an id manifest, changed entries, a keyframe every 15 sends, quantised
 (position to a centimetre in i16, velocity in i8, facing in u8, HP in u16, a state/windup flags byte), **under 1.2 KB**.
 Monster AI runs only on the host and aims at each hero's latest position plus velocity × one-way latency
@@ -679,6 +680,197 @@ roster update travels ahead of `crew.load` on the same ordered channel, so all o
     the game's own dev flags; `start_bot()` walks a hero; `record()` / `series_error()` hold what a viewer showed against the owner's
     truth at the shared time shown. A monster's render error (M3's "under 0.5 units") can use the same recorder with the host's ring.
 
+### M3 as built (2026-10-18)
+One session (M3a, M3b and M3c together, plus the exits' first-to-choose rule, which the plan had in M5). Everything in M3's
+"done when" passes under `off` and `coast`, and the run is playable as the plan says: **players walk among live monsters that fight
+back** (on the host's hero and the AI's: a client's hero is a puppet on the host and takes no hit until M4's victim rule), see
+hellgates wake, flare, burst and close, recruit and dismiss employees, break props, crates and mail, pick things up (exactly one
+player gets each), and take the elevator down or clock out together (the first player to choose decides for the crew).
+
+**Files.** `scripts/net/`: `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`: the host streams its monsters,
+hellgates and employees; a client shows them as puppets), `net_world_codec.gd` (`NetWorldCodec`: the bytes, the field tables and
+how each class's OWNER fields go in and out), `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`: hits on
+props, crates and mail, pickups, employee requests, loadouts, the Ledger and objectives mirror, the exits and the invoice);
+`net.gd` gained `remote_die`, `routes_hits`, `route_hit`, `request`, `request_drop`, `world_live`, `lead_point`; `net_snapshot.gd`
+appends the world after the heroes (and `lead_point(seat)`), `net_codec.gd` `decode_from` (the world follows the heroes in the
+same buffer), `net_hero_state.gd` (`id`, `mode`, `telegraph`, `extra`, `helpless`: the sample class of every interpolated actor),
+`net_interp.gd` (the wind-up blends within one state), `net_floor.gd` (`assign_ids` also numbers the pickups already on the floor),
+`net_events.gd` (`WORLD_CARRIES`, the event kinds), `crew_flow.gd` (`host_next_floor`, `crew.next`, `floor_change`),
+`net_session.gd` (the two children). Gameplay: `Actor.apply_damage` (a hit on a copy goes to `Net.route_hit`), `Monster`
+(`strikes`, `net_show`/`net_tick`, `target_point()` = `Net.lead_point`, drops only on the owner, `_on_strike_visual`; brute: the
+shockwave, archer: a harmless arrow), `Hellgate` (`net_show`, `net_phase`, `net_shove_fx`, `net_burst_fx`; `_burst_fx`/`_shove_fx`
+split out), `Employee` (`said`, `net_show`/`net_tick`, `_look_around` (the LOCAL mood), requests judged at the position a client
+gives, `interact` routes to the host, `_is_person`), `PricedProp`/`MailPackage` (`net_tick`; mail hands out only on the owner),
+`ComponentPickup` (`copy_at`, `net_tick`, `drop` becomes a request on a client), `Hero` (`swap_in_pickup` asks the host;
+`apply_swap`), `Ledger` (`mirror`, `mirror_line`), `ContractSession` (`mirror_state`, `apply_mirror`). `game.gd`: the barrier begins
+`Session.world` and `Session.objects`; the books are kept on the host (`_keeps_books`, `_publish_contract`, `_on_contract_mirror`,
+`_end_from_host`); the exits (`_choose_exit`, `_on_exit_decided`, `_descend_shared`; a menu freezes only your own hero while crewed);
+a host reloaded onto the next floor rejoins the barrier; `--spawn-near` anchors on seat 1 in a shared run (same cells everywhere);
+`_last_invoice` (test seam). Test support: `NetGameTest.make_game(extra, fresh)`, `follow_reloads` / `reloads` (a scene reload the
+game asks for is done, keeping the contract). Tests: `test_net_m3_world` (2 processes), `test_net_m3_objects`, `test_net_m3_exit`
+(3 each), `test_net_world_codec` (single process); `test_net_contract` gained the world's carriers and the budget check.
+
+**Ownership.** `Net.owns(node)` is still `simulates(node)`, and that is now the whole answer: on the host everything but a client's
+hero is its own; on a client every host-owned thing (monsters, hellgates, employees, props, crates, mail, pickups) is a copy
+(`freeze_copies` at the barrier, as in M1), and the movers are puppets of the host's stream (`Net.make_puppet`). Copies keep taking
+no damage; a hit from this machine on a **host-arbitrated object** (prop, crate, mail box: `Net.routes_hits`) becomes a request
+(`Actor.apply_damage` -> `Net.route_hit`), which is the one combat path M3 opens across owners. A hit on a monster or a gate from a
+client still does nothing (M4, "the attacker decides").
+
+**The world in the snapshot (`NetWire.T_SNAP`, host -> client only, after the hero entries).**
+`u8 n_monsters, n x MONSTER (16 B) | u8 n_employees, n x EMPLOYEE (15 B) | u8 n_gates, n x GATE (7 B)`:
+
+| entry | bytes |
+|---|---|
+| MONSTER | `u16 id`, `i16 x, z, y` (cm), `i8 vx, vz` (1/8 u/s), `u8 angle`, `u16 hp` (tenths), `u8 flags` (state 0-2, climbing 8, helpless 16, teleport counter bits 5-7), `u8 telegraph` (the wind-up, 1/255), `u8 strikes` (attacks struck, mod 256: a change plays the swing) |
+| EMPLOYEE | `u16 id`, the same 11 bytes of motion, facing and hp, `u8 head` (state 0-2, dismissed 8, climbing 16, teleport counter 5-7), `u8 leader` (the seat it follows, 0 none) |
+| GATE | `u16 id`, `u16 hp`, `u8 flags` (active 1, flare 2, phase bits 2-3), `u8 burst_in` (1/50 s while the flare is up, 255 none), `u8 shove_t` (centiseconds of the origin gate's shove wind-up, 255 none) |
+
+Which entries ride (`NetWorld.section`, built ONCE per 30 Hz tick and appended to every client's packet): an entry whose bytes
+changed rides that tick and the next `REDUNDANCY` (3) ticks (one lost packet never strands a stop); every entry rides at least
+every `REFRESH` (30) ticks, the overdue ones first and a thirtieth of the rest each tick (the keyframe is spread over the ticks, so
+no packet carries the whole floor at once; the plan said a keyframe every 15 sends: 30 halves what a still floor costs, about
+16 B per actor per second, and the redundancy already covers loss); oldest first, up to the packet budget (`NetWorldCodec.PACKET_BUDGET` 1200 B for the
+whole packet: `NetWorld.WORLD_BUDGET` 1158 B after the wire header and two heroes). Packed bytes are compared, so an idle monster
+costs nothing between its refreshes. There is no id manifest: spawns and deaths are reliable events, and an entry for an id a client
+does not know is skipped (counted as `unknown`; 0 in every test).
+
+**Showing it.** A client's movers share ONE delay, measured on the world packets (`NetInterp`'s adaptive delay on a stream of
+per-packet samples), so the whole floor is shown at one moment: 100 ms on a clean link, 100-110 ms under `coast`. Each mover has a
+`NetInterp` buffer of `NetHeroState` samples (Hermite, extrapolation for 120 ms, teleports never blend). A sample that arrives
+after a quiet spell (the actor stood still and was not sent) gets a "held still" sample one tick before it, so the puppet does not
+start walking early. `NetWorldCodec.write_monster/write_employee/write_gate` put the state on the node and the class plays what
+changed (`net_show`): an HP drop flashes and updates the bar, entering ATTACK begins the wind-up (the brute's ring), leaving it ends
+it, a new strike count swings (the archer's puppet looses a harmless arrow, the brute's a shockwave); an employee's state sets its
+mood and pose, and its LOCAL mood (`_hero_near`, `_scared`: the name tag, the cower bubble) is worked out on each screen
+(`net_tick` -> `_look_around`); a gate wakes, flares, cracks and changes phase. A death is applied when the render time reaches the
+host's stamp (or 0.6 s after it arrived), through `Net.remote_die` (the visuals and signals of `die()`, deciding nothing: a
+monster's drops, a box's contents and a prop's bill are the owner's, checked with `Net.owns` in `_on_death`).
+
+**Events (reliable).**
+| Event | From -> to | Data |
+|---|---|---|
+| `world.spawn` | host -> clients | `g` (the gate's id, 0 for none), `m`: `[[id, kind, x, y, z], ...]`: one event per burst, ids from `NetRegistry.RUNTIME_BASE` (10000) up; the client builds the monsters (`MonsterFactory`), registers the ids, makes them puppets and plays the gate's burst |
+| `world.die` | host -> clients | `id` (a monster, gate or employee; the stamp is the moment) |
+| `world.say` / `world.extract` | host -> clients | an employee's bubble (`id`, `s`, `d`) / its extraction (`id`, `s` the bark) |
+| `world.phase` / `world.shove` | host -> clients | the origin gate's phase change and its shove wind-up / the shove going off (the look) |
+| `obj.req` | client -> host | `what`: `hit {id, a, by}`, `collect {id, want, at}`, `swap {id, at}`, `drop {s, n, at, l}`, `follow` / `wait {id, at}`, `exit {c}` (`at` is where the player says its hero stands) |
+| `obj.break` / `obj.hurt` | host -> clients | a prop, crate or box broke (`id`; a box adds `c` contents, `cr` crypto, `cid` component) / a prop was dented (`id`, `hp`, `a`) |
+| `obj.pickup` / `obj.pick` / `obj.gone` | host -> clients | a pickup appeared (`id`, `s`, `n`, `at`, `l` lifetime, `age`) / its charges changed / it is gone |
+| `obj.grant` / `obj.deny` | host -> the asking client | `id`, `k` (collect / swap), `s`, `n`, `at` / `id` |
+| `obj.loadout` | owner -> host -> the others | `seat`, `sl` (slots), `ch` (charges): after a pickup or a swap changes a hero's slots |
+| `obj.ledger` / `obj.contract` | host -> clients | every Ledger line / `ContractSession.mirror_state()` (the floor's objective dict, the lost list, extracted) after each change |
+| `obj.exit` / `obj.end` | host -> clients | the crew's exit (`c` down / out / van, `seat` who chose) / the host's finished invoice |
+| `crew.next` | host -> clients | the crew goes down: build the next floor behind the barrier (CrewFlow LOADING with `floor_change`; then `crew.ready` and `crew.go` as in M1) |
+
+**Host-arbitrated objects (`NetObjects`).** *Breakables*: the host applies a client's hit to its own object (the culprit is that
+player's hero); a prop broken by two players at once is broken and billed once (the second hit finds it dead). *Pickups*: the host
+numbers every pickup it puts down (monster drops, mail, swaps, `--drop-near` ones are numbered at the barrier) and polls them each
+frame for charge changes and ends. A client's copy runs `net_tick` (it ages and blinks, shows its label, offers the F swap) and
+walking onto it asks; the host grants the first request it reads (up to what that player can take; a swap takes all) and refuses
+the rest; the player's own machine changes its own hero (`collect_component` / `apply_swap`) and tells the crew its slots and
+charges. The host's own hero still collects locally (first by construction: its pickups run in its physics frame). *Employees*: E
+on a client goes through the same `use_target` / `Employee.interact`, which asks the host when it does not own the employee; the
+host runs `request_follow` / `request_wait` judged from the position the client gives. The leader travels as a seat.
+*Money*: a client's Ledger is a **mirror** (`Ledger.mirror`, set at the job pick on a client, cleared by `end_contract`): its own
+writes are dropped and the host's lines arrive as they are written; the objective bookkeeping (`ContractSession`) is kept on the host
+only (`game._keeps_books`) and mirrored. The invoice a client shows is the host's dict.
+
+**Exits: first to choose.** While crewed the van and the elevator prompts are back; opening their menu stops only your own hero
+(the M5b rule, `_freeze`). A row picked is a choice (`_choose_exit`): the host takes the first it sees (`NetObjects.decide_exit`,
+its own included) and every machine follows that one (`_on_exit_decided`, with "<name> takes the elevator down / clocks the crew
+out" on every screen); later choices are dropped. *Down*: every machine keeps its heroes' HP and downed state by seat, bumps the
+floor and reloads; the host starts the barrier (`CrewFlow.host_next_floor` -> `crew.next`), a reloaded host or client builds the
+next floor behind it with no board and no license, the checksums are compared and `crew.go` starts it for everyone. *Out / van*:
+the host extracts the followers at that exit, ends the contract and sends its invoice; "crew incapacitated" also ends on the host
+only. A client's "Next contract" waits for the host's board.
+
+**Monsters aim at players fairly (M3a).** `Monster.target_point()` is `Net.lead_point(target)`: for another player's hero on the host
+it is the newest snapshot's position carried along its velocity for that snapshot's age (at most 0.25 s), not the ~100 ms old puppet
+the host draws; offline and for everything else it is the target's position (solo play is unchanged). Chasing, facing, the wind-up's
+tracking and the archer's aim use it.
+
+**Sizes and bandwidth (measured).** Entries: a monster 16 B, an employee 15 B, a gate 7 B; an empty world section 3 B.
+`test_net_world_codec` builds the worst floor it finds (founder floor 3 at difficulty 1.0: 62 monsters, 3 employees, the origin gate
+with its 19 spawns at the cap, 85 entries) and moves EVERYTHING every tick: the biggest packet is 1194 B (the budget holds; about
+36 KB/s per client at worst) and no entry waits more than 2 ticks; the same floor standing still costs at most 51 B a tick and every
+entry is refreshed within 30 ticks. **A typical fight** (`test_net_m3_world`, floor 1, about 22 monsters on the floor, 10 of them
+chasing the host's hero): **about 3.8 KB/s down per client: heroes 1.2 KB/s + world 2.6 KB/s** (87 B world sections on average); the biggest packet 462 B.
+**A typical floor** (`test_net_m3_objects`: three players on a floor 1 breaking things, grabbing a pickup and leading an
+employee, nobody fighting): **about 4.2 KB/s down per client: heroes 1.2 KB/s + world 3.0 KB/s**; the biggest packet 757 B (the
+stream's first ticks, when every entry is new). Telemetry's `bytes_in` / `bytes_out` columns carry the same totals per second. Up: a client still sends only its hero (725 B/s) plus the odd request. Reliable events are a few
+dozen bytes each and rare (spawns, deaths, breaks, pickups, Ledger lines).
+
+**What the tests prove** (timings are this machine's; real-time processes).
+- `test_net_m3_world` [off, coast] (2 processes): the client shows every host-owned actor as a non-acting puppet and its Ledger is a
+  mirror; over 8.5 s of host-driven fighting (five dev grunts and the nearest floor monsters chasing the host's hero walking a loop,
+  two killed by the host), ten monsters (nine of them moving 2-9 units) are within **0.04 units** (`off`) / **0.03** (`coast`) of
+  where the host had them at the time shown (limit 0.5); each death reaches the client's screen **about 110 ms** after the host
+  decided it (limit 250 ms: the render delay, under both links); the client's living monsters are the host's at the moment it shows; a gate's burst exists on the client with the
+  same ids (10000+), kinds and spots; the gate closes on the client within the death limit, leaves the open-gate list, the client's
+  tracker shows the host's closed count and both Ledgers hold the gate's pay once; the cost (above), the biggest packet under 1.2 KB.
+- `test_net_m3_objects` [off, coast] (3 processes): both clients hit the same priced prop at one shared moment: it breaks once on all
+  three and is billed once at its price on all three Ledgers (the host applied three hits: the second on the prop found it broken);
+  c1 smashes a crate and c2 a mail box (the host rolled a component): broken everywhere, the same contents and the same pickup id;
+  both clients walk onto one pickup at one shared moment: exactly one gets its 3 charges (either one, depending on the frame), the
+  other is refused, the pickup is gone everywhere, and every machine sees every hero's slots and charges as their owner has them;
+  c1's E recruits an employee (FOLLOW, leader seat 2, on every screen, walking after c1's hero), its second E tells it to wait (every
+  screen agrees with the host); the host loses one employee and extracts another: dead / extracted everywhere, the clients' trackers
+  show the host's books, and every Ledger is the host's line for line.
+- `test_net_m3_exit` [off, coast] (3 processes): both clients pick "go down" at one shared moment: one decision (by whichever reached
+  the host first), seen identically on all three; everyone reloads onto floor 2 through the barrier with the same checksum (no
+  desync), each hero's HP carried by seat; then the host and c2 clock out at once: one decision, every client shows the host's
+  invoice (payout, earned, damages, floor, reason, number, stars) and its Ledger mirrors the host's to the dollar.
+- `test_net_world_codec` (1 process): sizes; 120 randomised round trips per entry kind within one quantum; cut and random sections;
+  every field of the three field tables through a real actor -> bytes -> puppet (and the puppet plays the flash, the wind-up ring, the
+  swing, the mood); the worst-floor budget above.
+- `test_net_contract`: carriers for the world (every monster kind, the hellgate, the employee, the priced prop, the crate, the mail box
+  and the pickup: their OWNER vars ride `NetWorldCodec.*_FIELDS` or name their event in `NetEvents.WORLD_CARRIES`) and the budget
+  constant check. No allowlist was widened.
+- `test_net_m1_floor` changed in one check, on purpose: M1 asserted a client's copies "did not move or change" for 3.2 s; from M3
+  they show the host's world, so it now asserts that after 3.2 s every copy stands where the host has it (0.6 units) with its HP.
+- Unchanged and passing: every other M0-M2 net test (M2's 40-byte hero packet is measured on the hero part alone:
+  `NetSnapshot.stats` counts the world separately in `world_out_bytes` / `packet_max`), `test_net_puppets` (copies are still inert
+  without a session), and the solo suite. Full run: **All 96 test(s) passed.**
+
+**Try it.** `.\run.ps1 -Crew 3 -Bot 1 --seed 7 --net-wait 3 --contract 1 --spells heal,corn --spawn-near grunt,5` (add
+`-Link coast` for a coast-to-coast link): five skeletons chase the host's walking hero on all three screens; walk a client onto a
+pickup, press E beside an employee, smash a crate (LMB), or open the elevator / the van (E) from any window: the first choice
+takes the crew. `-ShotDir <dir> --shot-after 5.5` saves each window's picture.
+
+**Known gaps (left for later, on purpose).**
+1. **Combat across owners is M4.** A client's melee, arrows and spells do nothing to the host's monsters and gates (copies), and the
+   host's monsters cannot hurt a client's hero (a puppet on the host). Only breakables route a hit to the host. A swing, a slam and an
+   archer's arrow are SHOWN on a client (the strike count), harmless.
+2. **Shoves on the world from a client** (Rebar's bowl through a crate, a hero shoved into a prop on its own screen) are not sent:
+   `MailPackage` / `BreakableCrate` / `PricedProp._check_shove_contacts` run on the host only (M4, with shove requests).
+3. **Spells' effects on the world**: a client's corn on a prop is a routed hit only because `Combat.explode` calls `apply_damage`;
+   modifiers (vines on monsters, coffee) and burning are M4 (the target's owner applies them; `_modifiers` is in `WORLD_CARRIES`).
+4. **Monster wind-ups are a snapshot field, not an event**: fine to look at (the telegraph grows on the client), but M4's "the victim
+   decides" needs the wind-up event (start, length, victim). `target`, `_windup_total`, `_windup_left` name it in `WORLD_CARRIES`.
+5. **The floor clock across a floor change**: a client's `GameWorld.time` jumps again at each floor's `crew.go` (the M1 rule), so a
+   timer a client stamped on the old floor is in the old floor's time (nothing does today).
+6. **A pickup's lifetime** runs on the host; a client's copy blinks on its own clock from the age the host sent (cosmetic).
+7. **Late join (M6)** has more to replay now: the gone ids, the broken objects, the pickups, the employees' wait spots.
+8. A hard kill is still noticed after `CLIENT_SILENCE` (10 s) and revival is still not a snapshot concern (M2 notes 6 and 9).
+9. Hellgate spawns before the host's world stream starts (the van arrival) are announced at once (spawn events do not wait for the
+   stream); a death in that window is shown when the client's stream starts.
+
+**Notes for M4.**
+1. **Route the verbs.** `Actor.apply_damage` on a copy already calls `Net.route_hit`; widen `Net.routes_hits` to monsters and gates
+   ("the attacker decides") and add `shove` / `set_modifier` the same way. `NetObjects._host_request` "hit" is where the host applies
+   it (add the shove, and an id for the spell/attack so a double send is dropped).
+2. **The victim decides**: a monster's strike on a client's hero should be resolved on that client from a wind-up event. The host
+   already counts `strikes` and knows `target`; send `world.windup {id, target, start, length}` and let the victim's machine run
+   `Combat.melee_arc` against its own hero only (layer 4).
+3. **Casts as events** will run effects on every machine: filter `Combat.melee_arc` / `explode` / `Projectile` hits to the targets
+   this machine resolves (its own hero; the host for the world), or the routed hits above become double hits.
+4. **Loadouts** already travel on pickups (`obj.loadout`); a cast's charge spend can reuse it or ride the cast event.
+5. **Reuse**: `NetWorld` for any new host-owned mover (add a kind and a codec entry), `NetObjects` for any host-arbitrated object
+   (a `request` kind and a grant), `Ledger.mirror` for money, `game._keeps_books` for host-only bookkeeping.
+6. **Exits** (built here, early): M5 still owns the load-barrier polish (a fade on every machine at once, joining during a floor
+   change) and the pause rules; the elevator's first-to-choose and the shared invoice are done.
+
 ---
 
 ## 3. Test strategy
@@ -718,7 +910,7 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 
 ### Single-process tests (cheap, run in the normal parallel batch)
 `test_enet_loopback`, `test_net_session`, `test_net_puppets` (built in M1: a copy never changes a `PRIVATE`/`OWNER` field),
-`test_net_codec` (M2: round trips, budgets, every carried field), `test_net_interp` and `test_net_seats` (M2), `test_net_floor` (built in M1: the checksum and ids), `test_net_board` (M1: the read-only board, the confirm).
+`test_net_codec` (M2: round trips, budgets, every carried field), `test_net_interp` and `test_net_seats` (M2), `test_net_floor` (built in M1: the checksum and ids), `test_net_board` (M1: the read-only board, the confirm), `test_net_world_codec` (M3: the world entries, every carried field through a real actor, the packet budget on the worst floor).
 
 ### Lag and loss
 - **ENet:** `net_link.gd` on every process's inbound side, covering both directions: `coast` = 45 ms ±15 ms, 1.5%
@@ -735,7 +927,8 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 | M0 | `Steam` singleton / `ClassDB` Steam use only in `scripts/net/`; `send_bytes` must name `TRANSFER_MODE_UNRELIABLE` |
 | M2 (built) | **Carrier coverage, driven by `net_fields()`**: every `OWNER` field of every checked class has a carrier, either in that class's codec field list or in `NetEvents.CARRIES` (event-carried, e.g. `dead`). A codec that streams a `SPAWN`/`PRIVATE`/`LOCAL` field fails. A new `OWNER` var without a carrier fails the build, so content can't silently go unreplicated. |
 | M2 (built) | Codec round trip for every codec (randomised entity, pack then unpack, equal within its quantum): `test_net_codec` |
-| M3 | Size budget: a worst-case snapshot (floor 3, hardest contract, every actor alive) under 1.2 KB |
+| M3 (built) | Size budget: the host's packet fits 1.2 KB by construction (test_net_contract); test_net_world_codec fills it with the worst floor 3 it finds (every actor alive and moving: 1194 B) |
+| M3 (built) | Carrier coverage for the host-owned world: every monster kind, hellgate, employee, priced prop, crate, mail box and pickup (NetWorldCodec field tables, NetEvents.WORLD_CARRIES) |
 | M4 | Lint: no `apply_damage`/`shove`/`set_modifier` loops outside `Combat` and the verbs (closes the known gaps) |
 | M6 | Late-join coverage: every host-owned class declares how a joiner gets its state (keyframe, gone-id, or event replay) |
 

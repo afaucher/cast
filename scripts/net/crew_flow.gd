@@ -28,6 +28,10 @@ extends Node
 ## timers) changes. A client JUMPS once, when crew.go arrives, then slews; so on a client any time stamp made
 ## before crew.go is in its own pre-floor time and must not be used for gameplay (nothing in M1 does).
 ##
+##   NEXT      (M3) the crew took the elevator down (NetObjects' first-to-choose exit): the host sends crew.next and every
+##             machine reloads onto the next floor of the same contract and goes through the barrier again (LOADING:
+##             build, checksum, crew.ready, crew.go), with no board and no license (`floor_change` is true).
+##
 ## The host is the only one that decides; clients only draw what they are told. A client that leaves, or is
 ## sent out, just stops being waited for. Joining mid-contract is M6 (until then a crew on a job is closed to
 ## new hellos: NetSession.JOB_RUNNING).
@@ -66,6 +70,8 @@ var desyncs: Array = []
 var debug_seed_shift := 0
 ## How far this machine's GameWorld.time was from the floor clock when crew.go arrived (seconds).
 var first_adjust := 0.0
+## The barrier in progress is a floor change (the elevator down, M3), not the contract's first floor.
+var floor_change := false
 
 var _session: NetSession = null
 var _sums: Dictionary = {}          ## host: peer -> checksum dict
@@ -99,6 +105,7 @@ func reset() -> void:
 	local_sums = {}
 	desyncs = []
 	first_adjust = 0.0
+	floor_change = false
 	_sums = {}
 	_local_signed = false
 	_local_ready = false
@@ -126,6 +133,7 @@ func host_board(seed_value: int, highlight: int = 0) -> void:
 	if not _hosting():
 		return
 	phase = BOARD
+	floor_change = false
 	board_seed = seed_value
 	board_hi = highlight
 	job = {}
@@ -150,6 +158,7 @@ func host_pick(run: ContractRun) -> void:
 	if not _hosting():
 		return
 	phase = LICENSE
+	floor_change = false
 	job = {"archetype": run.archetype_id, "seed": run.seed, "difficulty": run.difficulty}
 	_clear_run_state()
 	_session.set_members(0, {"signed": false, "ready": false, "spells": []})
@@ -157,6 +166,20 @@ func host_pick(run: ContractRun) -> void:
 	job_changed.emit()
 	waiting_changed.emit()
 	_check_progress()
+
+
+## Host: the crew takes the elevator down. Everyone builds the next floor behind the barrier (LOADING, then crew.go as
+## for the first floor); the game reloads its scene and reports again (report_built).
+func host_next_floor() -> void:
+	if not _hosting():
+		return
+	phase = LOADING
+	floor_change = true
+	_clear_run_state()
+	_local_signed = true
+	_session.set_members(0, {"ready": false})
+	_session.send_event(0, "crew.next", {})
+	waiting_changed.emit()
 
 
 ## The contract this machine builds from the job (null before one is known). debug_seed_shift applies here only.
@@ -230,6 +253,8 @@ func waiting_text() -> String:
 				return ""
 			return "License signed. Waiting for %s..." % who if not names.is_empty() else "License signed. Loading the floor..."
 		LOADING:
+			if floor_change and _local_ready and names.is_empty():
+				return "Everyone is in. Starting..."
 			return "Loading the floor. Waiting for %s..." % who if not names.is_empty() else "Everyone is in. Starting..."
 		PENDING:
 			return "Everyone is in. Starting..."
@@ -275,6 +300,7 @@ func _client_event(kind: String, data: Dictionary) -> void:
 	match kind:
 		"crew.board":
 			phase = BOARD
+			floor_change = false
 			board_seed = int(data.get("seed", -1))
 			board_hi = int(data.get("hi", 0))
 			job = {}
@@ -286,12 +312,20 @@ func _client_event(kind: String, data: Dictionary) -> void:
 			board_changed.emit()
 		"crew.job":
 			phase = LICENSE
+			floor_change = false
 			job = data.duplicate()
 			_clear_run_state()
 			job_changed.emit()
 			waiting_changed.emit()
 		"crew.load":
 			phase = LOADING
+			load_requested.emit()
+			waiting_changed.emit()
+		"crew.next":
+			phase = LOADING
+			floor_change = true
+			_clear_run_state()
+			_local_signed = true
 			load_requested.emit()
 			waiting_changed.emit()
 		"crew.go":

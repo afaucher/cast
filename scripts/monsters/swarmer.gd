@@ -79,10 +79,11 @@ func _chase_move(delta: float, dist: float) -> void:
 	if _los_t <= 0.0:
 		_los_t = 0.3
 		_los_ok = dist < FLANK_RANGE and _can_strike_target()
+	var tp := target_point()
 	if dist > FLANK_RANGE or not _los_ok:
-		_nav_to(target.global_position, delta)
+		_nav_to(tp, delta)
 		return
-	var to := target.global_position - global_position
+	var to := tp - global_position
 	to.y = 0.0
 	var fwd := to.normalized()
 	var side := Vector3(-fwd.z, 0.0, fwd.x) * _side
@@ -94,7 +95,7 @@ func _chase_move(delta: float, dist: float) -> void:
 		var radial := clampf((dist - ORBIT_DIST) * 0.8, -0.7, 0.7)
 		dir = (side + fwd * radial).normalized()
 	if not move(dir, delta):
-		_nav_to(target.global_position, delta)
+		_nav_to(tp, delta)
 	else:
 		_prog_t = 0.0
-		face_point(target.global_position)   # keep biting end toward the hero while circling
+		face_point(tp)   # keep biting end toward the hero while circling

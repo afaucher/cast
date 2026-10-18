@@ -29,19 +29,22 @@ The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc 
 3. **Start a job** opens the job board.
 
 ### Online play (in progress)
-Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M2) a crew shares one
-run and walks it together**: the host rolls the job board and its three offers appear on every player's board (read-only for
+Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M3) a crew shares one
+run and its world**: the host rolls the job board and its three offers appear on every player's board (read-only for
 the others, "the host picks the job"); the host takes a job; everyone signs **their own** license checkout (that is
 the "ready" step, and the others see "waiting for <name>"); every machine builds the same floor from the contract
 seed behind a load barrier, checks that it is the same floor (a floor that differs is refused with "Desync:
 different floor"), and the van arrival plays on every screen from the same moment. Then **every player moves their own
 hero, with no lag on their own screen, and sees the others walk, turn and animate** (about a tenth of a second behind),
 each with the player's name over their head. If a player drops, the AI takes their seat back as the character that seat
-started as (Rebar or Gasket), right where they stood. **Monsters, hellgates, employees and pickups are not synced yet**
-(M3), and casts, hits and damage across machines come in M4, so on a client the host's world is a frozen copy and
-fighting is for later. Exits (elevator, van) and the pause are not shared yet either: while a crew is on a floor, Esc
-opens the menu without pausing, and the only way out is Main menu (a client leaves the crew; the host asks first, because
-it ends the job for everyone).
+started as (Rebar or Gasket), right where they stood. **The host's world is live on every screen**: monsters chase, wind up,
+swing and die, hellgates wake, flare, spawn and close, employees cower, follow and wait, props, crates and mail break (once, and
+billed once), and pickups go to exactly one player; the Ledger, the objectives and the invoice are the host's on every screen.
+The elevator and the van work online: **the first player to choose decides for the crew** (down takes everyone to the next
+floor; clocking out ends the job for everyone with the same invoice). Casts, hits and damage across machines come in M4: until
+then only the host's side of a fight counts (a client's swings and spells don't hurt the host's monsters, and the monsters'
+blows don't hurt a client's hero). While a crew is on a floor, Esc opens the menu without pausing; Main menu leaves (a client
+leaves the crew; the host asks first, because it ends the job for everyone).
 
 Up to 3 players (one per crew slot); a 4th is told "Crew is full", a different build is refused, a crew already on a
 job is closed ("That crew is already on a job"), and when the host leaves everyone else is told "The host clocked
@@ -55,6 +58,7 @@ out". Invites from the Steam overlay join directly. A host with nobody else in t
 .\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # the host takes offer 2 once both are in; both sign heal+corn
 .\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn -ShotDir C:\shots   # ... and each window saves <Name>.png and quits
 .\run.ps1 -Crew 2 -Bot 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # window 2's hero walks a loop by itself (--net-bot); walk window 1 with WASD and watch it move there
+.\run.ps1 -Crew 3 -Bot 1 --seed 7 --net-wait 3 --contract 1 --spells heal,corn --spawn-near grunt,5   # five skeletons chase the host's walking hero on every screen
 ```
 
 Or by hand, in two terminals:

@@ -94,7 +94,7 @@ func _pose(_delta: float, _moving: bool) -> void:
 func _tick_chase(delta: float) -> void:
 	if not _validate_target(delta):
 		return
-	var tp := target.global_position
+	var tp := target_point()
 	var dist := GameWorld.flat_distance(global_position, tp)
 	face_point(tp)
 	var ready := GameWorld.time >= _next_attack_time
@@ -222,10 +222,19 @@ func _clear_shot() -> bool:
 func _strike() -> void:
 	if not _target_alive() or not _clear_shot():
 		return   # lost the shot during the draw: no arrow
-	var dir := target.global_position - global_position
+	var dir := target_point() - global_position
 	dir.y = 0.0
 	if dir.length() < 0.01:
 		return
 	dir = dir.normalized()
 	facing = dir
 	Projectile.fire(self, Combat.chest(self) + dir * 0.45, dir, attack_damage, ARROW_SPEED, ARROW_RANGE)
+
+
+## A puppet's shot (M3): the arrow flies on this screen too, harmless (the host decides hits until M4's victim rule).
+func _on_strike_visual() -> void:
+	var dir := Vector3(facing.x, 0.0, facing.z)
+	if dir.length() < 0.01:
+		return
+	dir = dir.normalized()
+	Projectile.fire(self, Combat.chest(self) + dir * 0.45, dir, 0.0, ARROW_SPEED, ARROW_RANGE)

@@ -21,12 +21,16 @@ extends Node
 ##
 ## The game calls begin() when the floor is built and set_active() at the shared start (and once its own van
 ## arrival is over: the arrival places the heroes itself). Nothing here knows about game.gd.
+##
+## M3: the host's packets to a client carry the world after the heroes (NetWorld.section, NetWorldCodec), and a client
+## hands that part to NetWorld; set_active() switches the world's stream with the heroes'.
 
 const SEND_RATE := 30.0
 const SEND_INTERVAL := 1.0 / SEND_RATE
 const TELEPORT_DIST := 3.0        ## a hero that moves farther than this between two physics frames jumped
 const FORWARD_MAX_AGE := 0.3      ## a client's state older than this is not forwarded (it stopped sending)
 const AI_AIM_AHEAD := 4.0         ## an AI hero "aims" this far in front of it
+const LEAD_MAX := 0.25            ## M3a: a monster leads a remote hero by at most this much of its velocity
 
 ## Tracks a hero this machine streams (physics-frame velocity and the teleport counter).
 class Track extends RefCounted:
@@ -50,7 +54,7 @@ class Puppet extends RefCounted:
 var active := false
 var local_seat := 0
 ## Counters (tests and the report): packets and bytes sent and received on T_SNAP, entries refused as not newer.
-var stats := {"out_packets": 0, "out_bytes": 0, "out_max": 0, "in_packets": 0, "in_bytes": 0, "in_entries": 0,
+var stats := {"out_packets": 0, "out_bytes": 0, "out_max": 0, "world_out_bytes": 0, "packet_max": 0, "in_world_bytes": 0, "in_packets": 0, "in_bytes": 0, "in_entries": 0,
 	"in_foreign": 0, "since": 0.0}
 
 var _session: NetSession = null
@@ -94,7 +98,7 @@ func begin(heroes_by_seat: Dictionary, own_seat: int) -> void:
 
 
 func _reset_stats() -> void:
-	stats = {"out_packets": 0, "out_bytes": 0, "out_max": 0, "in_packets": 0, "in_bytes": 0, "in_entries": 0, "in_foreign": 0,
+	stats = {"out_packets": 0, "out_bytes": 0, "out_max": 0, "world_out_bytes": 0, "packet_max": 0, "in_world_bytes": 0, "in_packets": 0, "in_bytes": 0, "in_entries": 0, "in_foreign": 0,
 		"since": _now()}
 
 
@@ -109,6 +113,8 @@ func end() -> void:
 ## Start or stop streaming and showing. Turning it on starts the sender's tracking afresh and makes the first
 ## frame of every puppet a jump (the van arrival put them somewhere else a moment ago).
 func set_active(on: bool) -> void:
+	if _session != null and _session.world != null:
+		_session.world.set_active(on)   # (M3: the host-owned world rides in the same packets)
 	if on == active:
 		return
 	active = on
@@ -195,6 +201,19 @@ func aim_of(seat: int) -> Vector3:
 	if _live.has(seat):
 		return _aim_of(_live[seat] as Track)
 	return Vector3.INF
+
+
+## Where the hero in a puppet seat most likely is NOW (host, M3a: monsters aim here): the newest sample received,
+## carried along its velocity for as long as that sample is old (at most LEAD_MAX). Vector3.INF without a sample.
+func lead_point(seat: int) -> Vector3:
+	var pp := puppet(seat)
+	if pp == null:
+		return Vector3.INF
+	var newest := pp.interp.newest()
+	if newest == null:
+		return Vector3.INF
+	var age := clampf(_now() - newest.t, 0.0, LEAD_MAX)
+	return Vector3(newest.pos.x + newest.vel.x * age, pp.hero.global_position.y, newest.pos.z + newest.vel.y * age)
 
 
 ## Bytes a snapshot packet took, per second, since begin() (what the plan's 3 KB/s budget is measured on).
@@ -301,6 +320,8 @@ func _send(now: float) -> void:
 		if own != null:
 			live[seat] = own
 	if _session.hosting:
+		# M3: the world (monsters, employees, hellgates) is packed once and rides after the heroes in every packet.
+		var world := _session.world.section(now) if _session.world != null else PackedByteArray()
 		var seats: Array = _live.keys() + _puppets.keys()
 		seats.sort()
 		for peer: int in _session.roster:
@@ -313,7 +334,7 @@ func _send(now: float) -> void:
 				var st: NetHeroState = live.get(seat) if live.has(seat) else _forwarded(seat, now)
 				if st != null:
 					states.append(st)
-			_send_to(peer, states, now)
+			_send_to(peer, states, now, world)
 	elif live.has(local_seat):
 		var one: Array[NetHeroState] = [live[local_seat]]
 		_send_to(0, one, now)
@@ -330,16 +351,20 @@ func _forwarded(seat: int, now: float) -> NetHeroState:
 	return newest
 
 
-func _send_to(peer: int, states: Array[NetHeroState], now: float) -> void:
-	if states.is_empty():
+func _send_to(peer: int, states: Array[NetHeroState], now: float, world: PackedByteArray = PackedByteArray()) -> void:
+	if states.is_empty() and world.is_empty():
 		return
 	var payload := NetCodec.encode(states, now)
+	var bytes := NetWire.HEADER + payload.size()   # the hero stream (M2's budget is measured on this part alone)
+	if not world.is_empty():
+		payload.append_array(world)
 	if _session.send_packet(peer, NetCodec.SNAP_TYPE, payload) < 0:
 		return
-	var bytes := NetWire.HEADER + payload.size()
 	stats["out_packets"] = int(stats["out_packets"]) + 1
 	stats["out_bytes"] = int(stats["out_bytes"]) + bytes
 	stats["out_max"] = maxi(int(stats["out_max"]), bytes)
+	stats["world_out_bytes"] = int(stats["world_out_bytes"]) + world.size()
+	stats["packet_max"] = maxi(int(stats["packet_max"]), NetWire.HEADER + payload.size())
 
 
 # --- Receiving ---------------------------------------------------------------------------------------------
@@ -350,9 +375,16 @@ func _on_packet(from: int, type: int, _seq: int, stamp_ms: int, payload: PackedB
 	if not _session.hosting and from != 1:
 		return
 	stats["in_packets"] = int(stats["in_packets"]) + 1
-	stats["in_bytes"] = int(stats["in_bytes"]) + NetWire.HEADER + payload.size()
 	var arrival := _session.host_time()
-	for st in NetCodec.decode(payload, float(stamp_ms) / 1000.0):
+	var stamp := float(stamp_ms) / 1000.0
+	var b := StreamPeerBuffer.new()
+	b.data_array = payload
+	var heroes := NetCodec.decode_from(b, stamp)
+	stats["in_bytes"] = int(stats["in_bytes"]) + NetWire.HEADER + b.get_position()
+	stats["in_world_bytes"] = int(stats["in_world_bytes"]) + b.get_available_bytes()
+	if not _session.hosting and _session.world != null and b.get_available_bytes() > 0:
+		_session.world.receive(b, stamp, arrival)   # M3: the host's world, after the heroes
+	for st in heroes:
 		stats["in_entries"] = int(stats["in_entries"]) + 1
 		if st.seat == local_seat or not _puppets.has(st.seat):
 			stats["in_foreign"] = int(stats["in_foreign"]) + 1

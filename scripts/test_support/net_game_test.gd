@@ -17,17 +17,42 @@ var scene_changes: Array[String] = []
 const LICENSES := [["heal", "corn"], ["fireball", "armor"], ["tentacles", "teeth"]]
 
 
-## A game scene with the test seams. `extra` adds to its opts (the dev flags).
-func make_game(extra: Dictionary = {}) -> Node3D:
-	GAME_SCRIPT.reset_flow()
+## A game scene with the test seams. `extra` adds to its opts (the dev flags). `fresh` false keeps the contract in
+## progress (the game's static state), as a scene reload does.
+func make_game(extra: Dictionary = {}, fresh: bool = true) -> Node3D:
+	if fresh:
+		GAME_SCRIPT.reset_flow()
 	var g: Node3D = GAME_SCRIPT.new()
 	var o := {"no_mic": true, "van_intro": true}
 	o.merge(extra, true)
 	g.set("opts", o)
-	g.set("scene_changer", func(p: String) -> void: scene_changes.append(p))
+	g.set("scene_changer", func(p: String) -> void:
+		scene_changes.append(p)
+		if follow_reloads and p == "":
+			_reload_game.call_deferred())
 	add_child(g)
 	game = g
 	return g
+
+
+## M3: when true, a scene reload the game asks for ("": the elevator down, the board) is DONE: the game node is replaced by a
+## new one with the same flags and the contract in progress, exactly as reload_current_scene() would.
+var follow_reloads := false
+## How many reloads were followed.
+var reloads := 0
+
+
+func _reload_game() -> void:
+	if game == null:
+		return
+	var o: Dictionary = (game.get("opts") as Dictionary).duplicate()
+	var old := game
+	game = null
+	remove_child(old)
+	old.free()
+	await get_tree().process_frame
+	reloads += 1
+	make_game(o, false)
 
 
 func board() -> JobBoard:

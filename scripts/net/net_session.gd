@@ -35,6 +35,9 @@ extends Node
 ##
 ## HEROES (M2): `snap` (NetSnapshot) streams the heroes this machine owns and shows the others as puppets over
 ## NetWire.T_SNAP; `seats` (SeatHandover) says who owns which seat and runs the hand-back to the AI.
+## THE WORLD (M3): `world` (NetWorld) streams the host's monsters, hellgates and employees in the same packets and shows
+## them as puppets on clients; `objects` (NetObjects) arbitrates props, crates, mail, pickups, employee requests, the
+## Ledger and the exits (requests from players, one decision on the host).
 ##
 ## CLOCK: NetClock, pinged over unreliable packets; `host_time()` is the shared clock.
 ## TELEMETRY: NetTelemetry, one row a second, clients' rows collected on the host.
@@ -120,6 +123,11 @@ var flow: CrewFlow = null
 var seats: SeatHandover = null
 ## Hero sync (M2): streams the heroes this machine owns and shows the others as puppets (scripts/net/net_snapshot.gd), child "Snap".
 var snap: NetSnapshot = null
+## The host-owned world (M3): monsters, hellgates and employees streamed to clients as puppets (scripts/net/net_world.gd), child "World".
+var world: NetWorld = null
+## Host-arbitrated objects (M3): hits on props, crates and mail, pickups, employee requests, the Ledger mirror and exits
+## (scripts/net/net_objects.gd), child "Objects".
+var objects: NetObjects = null
 var clock := NetClock.new()
 var telemetry: NetTelemetry = null
 
@@ -151,6 +159,12 @@ func _ready() -> void:
 	snap = NetSnapshot.new()
 	snap.name = "Snap"
 	add_child(snap)
+	world = NetWorld.new()
+	world.name = "World"
+	add_child(world)
+	objects = NetObjects.new()
+	objects.name = "Objects"
+	add_child(objects)
 	lobby = SteamLobby.new()
 	lobby.name = "Lobby"
 	add_child(lobby)

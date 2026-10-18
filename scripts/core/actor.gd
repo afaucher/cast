@@ -200,7 +200,12 @@ func stat_mult_present(stat: String) -> bool:
 
 ## Returns the damage actually dealt.
 func apply_damage(amount: float, source: Node = null) -> float:
-	if dead or amount <= 0.0 or Net.is_copy(self):   # a copy of a host-owned thing takes no damage on this machine (Net.simulates)
+	if dead or amount <= 0.0:
+		return 0.0
+	if Net.is_copy(self):
+		# A copy of a host-owned thing takes no damage on this machine (Net.simulates). A hit on a host-arbitrated object
+		# (a priced prop, a crate, a mail box) goes to the host as a request instead (M3); the host applies it once.
+		Net.route_hit(self, amount, source)
 		return 0.0
 	var dealt := amount * damage_taken_mult()
 	hp = maxf(0.0, hp - dealt)

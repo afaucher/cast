@@ -116,6 +116,11 @@ func _strike() -> void:
 	_spawn_shockwave(pos)
 
 
+## A puppet's slam (M3): the shockwave only; the host deals the damage.
+func _on_strike_visual() -> void:
+	_spawn_shockwave(global_position)
+
+
 func _on_windup_begin() -> void:
 	_free_ring()
 	_ring = Node3D.new()

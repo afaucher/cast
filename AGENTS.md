@@ -17,9 +17,14 @@ The transport, lobby, crew roster, clock and telemetry (M0) and the shared run (
 player's license checkout, the same floor from the seed behind a load barrier with a checksum, the floor clock) exist
 (`docs/design/networking-build-plan.md`; the `Session` autoload and its `Flow`). Heroes are synced (M2: each machine owns
 its own seat's hero and streams it, `Session.snap`; the others are puppets, `Net.is_puppet`; a dropped player's seat goes
-back to the AI, `Session.seats`). The host's world is not synced yet: on a client everything the host owns is a non-acting
-copy (`Net.simulates(node)`, `Net.make_copy`; M3 syncs it). A new `OWNER` var of `Hero` needs a carrier too
-(`NetCodec.HERO_FIELDS` or `NetEvents.CARRIES`). Every change has to keep co-op possible:
+back to the AI, `Session.seats`). The host's world is synced (M3): the host simulates its monsters, hellgates and employees
+and streams them after the heroes (`Session.world`, `NetWorldCodec`); on a client they are puppets (`Net.is_puppet`), and props,
+crates, mail and pickups are copies the host arbitrates (`Session.objects`): a client's hit on a breakable, its pickups, its E on
+an employee and its exit choice are requests (`Net.request`, `Net.route_hit`), the host decides once and tells everyone, and a
+client's Ledger and objectives mirror the host's (`Ledger.mirror`, `game._keeps_books`). The elevator and van are
+first-to-choose. Hits on monsters from a client and monster hits on a client's hero are still M4. A new `OWNER` var of `Hero`
+or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELDS`, `NetWorldCodec.*_FIELDS`, `NetEvents.CARRIES` or
+`NetEvents.WORLD_CARRIES`). Every change has to keep co-op possible:
 1. **Declare authority.** A class with gameplay state has `net_fields()` classifying **every** script
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.

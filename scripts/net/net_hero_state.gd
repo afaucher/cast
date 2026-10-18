@@ -2,6 +2,9 @@ class_name NetHeroState
 extends RefCounted
 ## One hero's replicated state at one moment: what an owner packs into a snapshot (NetCodec) and what a puppet
 ## is shown (NetInterp). Plain data, in game units (the wire quantises it).
+##
+## M3: the host-owned movers (monsters, employees) reuse it as their sample (NetWorldCodec, NetWorld), so one buffer and
+## one interpolation serve every puppet. `id` is then the net id and the M3 fields below carry what those classes add.
 
 var seat := 0
 ## The sample's moment on the shared clock (host_time seconds).
@@ -24,6 +27,13 @@ var drawing := false
 var draw_age := 0.0
 ## Teleport counter (0-15): it changes when the hero jumps, so a receiver never blends across the gap.
 var tp := 0
+## M3, host-owned movers: the net id, the state machine's state, a wind-up 0..1 (interpolated), a byte the class uses
+## (a monster's strike count, an employee's leader seat) and a flag (a monster is helpless, an employee dismissed).
+var id := 0
+var mode := 0
+var telegraph := 0.0
+var extra := 0
+var helpless := false
 
 
 func facing_vector() -> Vector3:
@@ -50,4 +60,9 @@ func copy() -> NetHeroState:
 	s.drawing = drawing
 	s.draw_age = draw_age
 	s.tp = tp
+	s.id = id
+	s.mode = mode
+	s.telegraph = telegraph
+	s.extra = extra
+	s.helpless = helpless
 	return s

@@ -4,7 +4,8 @@ Co-op, voice-cast, isometric hex dungeon crawler. This is the **proof of concept
 one PC, one mic, one keyboard/mouse player plus AI allies. Online co-op is being built in milestones
 (`docs/design/networking-build-plan.md`); M0 (transport, lobby, crew roster, clock, telemetry) and M1 (the shared run:
 the host's board and job, each player's license checkout, the same floor from the seed behind a load barrier, the floor
-clock) are in, so a crew can stand on one frozen floor; heroes and monsters are not synced yet.
+clock), M2 (hero sync) and M3 (the host's world: monsters, hellgates, employees, props, crates, mail, pickups, the Ledger, the
+exits) are in; combat across machines is M4.
 
 Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 **kinematic on a hex heightfield** (no physics bodies for terrain or actors).
@@ -84,7 +85,9 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_codec.gd` (`NetCodec`), `net_hero_state.gd` (`NetHeroState`) | the hand-packed hero snapshot (16 bytes a hero) and how a hero's OWNER fields go in and out; `HERO_FIELDS` is what the contract test holds it to |
 | `net_interp.gd` (`NetInterp`) | the buffer behind a puppet: Hermite on position and velocity, about 100 ms behind `host_time()`, an adaptive delay, extrapolation up to 120 ms, teleports never blend |
 | `seat_handover.gd` (`SeatHandover`, child `Session/Seats`, `Session.seats`) | who owns each seat's hero; a dropped player's seat goes back to the AI as the seat's original character (`to_ai`) |
-| `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (M3 reuses it); the table of OWNER fields an event carries instead of the snapshot |
+| `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (runtime spawns and pickups get host ids from 10000); the tables of OWNER fields an event carries instead of a snapshot (`CARRIES` for heroes, `WORLD_CARRIES` for the host-owned classes) |
+| `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events |
+| `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice |
 | `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
 | `steam_lobby.gd` (`SteamLobby`, child `Session/Lobby`) | lobbies: create, list, join, leave, invites, lobby data |
 
@@ -100,7 +103,7 @@ van arrival plays (`CrewFlow.floor_started`), and each client's `GameWorld.time`
 Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero; an EMPTY seat is an
 AI ally (seat 2 Rebar, seat 3 Gasket: `AI_SEATS`, the seat's original character) that only the host runs; on a client every
 host-owned actor is a copy (`Net.make_copy`: no physics process, no damage, no shove, no E).
-While crewed there is no local pause and no exit (M5). `NetFloor`, `CrewFlow`, `CrewConfirm` (the host's leave question)
+While crewed there is no local pause (M5); the exits are first-to-choose (M3, below). `NetFloor`, `CrewFlow`, `CrewConfirm` (the host's leave question)
 and `NetGameTest` are the pieces to read first.
 
 **Hero sync (M2).** Each machine OWNS its own seat's hero and moves it locally, with full responsiveness; no input crosses
@@ -118,6 +121,21 @@ seat's original character (`Hero.become`: kit, name, colour, model; HP keeps its
 attaches an `AllyBrain`; the clients get `seat.ai` and re-kit the same node on their screens, and show the host's stream
 from then on. The floor carry is keyed by seat (`ContractSession.carry_key`): two players may both be Wick. New `OWNER`
 vars of `Hero` must be in `NetCodec.HERO_FIELDS` or `NetEvents.CARRIES` (test_net_contract).
+
+**The host's world (M3).** At the barrier `Session.world.begin()` and `Session.objects.begin(player)` take the registry. The host
+simulates everything it owns as ever and `NetWorld.section()` packs it into every snapshot to the clients; on a client monsters,
+hellgates and employees are PUPPETS (`Net.make_puppet`) shown on the shared clock (`Monster/Employee/Hellgate.net_show` play what
+changed: the hit flash, the wind-up, the swing, the mood; `net_tick` runs their look), and props, crates, mail and pickups are
+copies whose look runs from `NetObjects` (`net_tick`). What a client does to the host's things is a request: `Actor.apply_damage`
+on a copy calls `Net.route_hit` (breakables only until M4), a pickup's copy asks to `collect`, F asks to `swap`
+(`Hero.apply_swap` runs on the grant), E on an employee asks `follow` / `wait`; the host grants the FIRST request (one player gets
+each pickup) and the owner changes its own hero (`obj.loadout` tells the crew). Deaths and breaks go through `Net.remote_die`
+(the visuals of `die()`, deciding nothing: drops, contents and bills are the owner's). The money is the host's: a client's `Ledger`
+is a mirror (`Ledger.mirror`, `mirror_line`), the objectives are kept on the host (`game._keeps_books`) and mirrored
+(`ContractSession.mirror_state`), and the invoice a client shows is the host's. The elevator and the van are first-to-choose
+(`game._choose_exit` -> `NetObjects.decide_exit` -> `_on_exit_decided`): down reloads every machine onto the next floor behind the
+barrier again (`CrewFlow.host_next_floor`, `crew.next`), out ends the job with the host's invoice. Monsters aim at another player's
+hero where its newest snapshot says it is now (`Monster.target_point()`, `Net.lead_point`).
 
 RPC endpoints live under the autoload (`/root/Session/Wire`), never in `game.tscn`, because every floor change is a
 scene reload and an RPC needs the same node path on every peer. `Session` runs with process mode ALWAYS, so pausing
@@ -312,6 +330,9 @@ flags), `wait_sync()`, `start_bot()` (a `NetBot`, `scripts/test_support/net_bot.
 its `move_override` seam along a route of real floor), and a recorder: `record(true)` keeps every frame of this machine's own hero
 (the TRUTH) and of what each puppet showed with the shared time it showed (`render_time`); `series_error(ring, series)` holds
 a viewer's series against the owner's ring (error, biggest step, and the step beyond what walking covers in the frame gap).
+M3 added `follow_reloads` (a scene reload the game asks for, the elevator down, is DONE: the game node is replaced with the
+contract kept, `reloads` counts them) and `make_game(extra, fresh)`; the world tests record monsters the same way
+(`NetWorld.shown_state(id)` is what a client showed and at which shared time).
 
 Run the game: `.\run.ps1` (or `--scene res://scenes/arena.tscn` after `--`).
 Engine: `$env:CAST_GODOT`, else `..\Hero-Reader\third_party\godot\Godot_v4.7-stable_win64_console.exe`.

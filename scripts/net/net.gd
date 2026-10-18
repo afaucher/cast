@@ -6,8 +6,8 @@ class_name Net
 ## snapshot packer and the debug write guards will be driven by the same declarations.
 ##
 ## It is also the facade gameplay code asks (it never sends anything itself; that is scripts/net/):
-## `Net.is_host()`, `Net.online()`, `Net.owns(node)`, `Net.is_puppet(node)`. The transport is the Session autoload
-## (NetSession, M0); `request()` arrives with the host-owned world (M3).
+## `Net.is_host()`, `Net.online()`, `Net.owns(node)`, `Net.is_puppet(node)`, `Net.request(...)` (M3). The transport is
+## the Session autoload (NetSession, M0).
 ##
 ## Owner: a hero's player owns that hero; the host owns everything else (monsters, hellgates,
 ## employees, props, pickups, the contract). "Owner" below means that machine.
@@ -105,9 +105,76 @@ static func is_puppet(node: Object) -> bool:
 
 
 ## True when this machine is the owner of `node` (the authority for its OWNER fields): offline, everything; online,
-## whatever is not a copy of somebody else's. (M3 extends this to the host-owned world.)
+## whatever is not a copy of somebody else's. M3: on a client every host-owned thing (monsters, hellgates, employees,
+## props, crates, mail, pickups) is a copy or a puppet, so this is false for it there and true on the host; a client's
+## own hero, and what it casts, are its own.
 static func owns(node: Object) -> bool:
 	return simulates(node)
+
+
+# --- The host-owned world (M3): verbs on things another machine owns become requests --------------------------------
+
+## Show a death the owner decided on a copy here (the owner's death event or snapshot): `dead`, hp 0, the signals and
+## the death visuals, exactly as a die() on the owner would, but without deciding anything (a monster's drops, a mail
+## box's contents, a prop's bill are the owner's: the classes check Net.owns in their _on_death).
+static func remote_die(a: Actor) -> void:
+	if a == null or a.dead:
+		return
+	a.hp = 0.0
+	a.dead = true
+	a.died.emit()
+	GameWorld.actor_died.emit(a)
+	a._on_death()
+
+
+## Host-arbitrated objects a player's hit is sent to the host for (M3c: priced props, crates, mail boxes). Monsters and
+## gates are M4 (the attacker decides, layer 4): until then a client's hit on one does nothing.
+static func routes_hits(a: Object) -> bool:
+	return a is PricedProp or a is BreakableCrate or a is MailPackage
+
+
+## Actor.apply_damage on a copy: a hit from this machine on a host-arbitrated object becomes a request to the host
+## (the host breaks it once, bills it once and tells everyone). Anything else is ignored, as before.
+static func route_hit(target: Actor, amount: float, source: Node) -> void:
+	var s := session()
+	if s == null or s.objects == null or not routes_hits(target):
+		return
+	if source != null and is_instance_valid(source) and not owns(source):
+		return   # (a copy never acts: only what this machine runs may hit anything)
+	s.objects.request_hit(target, amount, source)
+
+
+## A client asks the host about something the host owns ("collect" / "swap" a pickup, "follow" / "wait" an employee).
+## True when the request was sent (the answer comes back as an event). False offline and on the host.
+static func request(node: Node, what: String, data: Dictionary = {}) -> bool:
+	var s := session()
+	return s != null and s.objects != null and s.objects.request(node, what, data)
+
+
+## True on a client while a shared floor runs: things it would create or change that the host owns are requests.
+static func world_live() -> bool:
+	var s := session()
+	return s != null and s.objects != null and s.objects.client_live()
+
+
+## A client puts a pickup down (the spell a swap pushed out of its slot): the host drops it.
+static func request_drop(spell: String, amount: int, pos: Vector3, life: float) -> void:
+	var s := session()
+	if s != null and s.objects != null:
+		s.objects.request_drop(spell, amount, pos, life)
+
+
+## Where a monster should aim at `target` (M3a, networking.md "Monsters chasing non-host players"): a remote player's
+## hero is where its newest snapshot says plus its velocity for that snapshot's age, not the ~100 ms old puppet the host
+## draws. Everything else (and everything offline) is where it stands.
+static func lead_point(target: Node3D) -> Vector3:
+	if target == null:
+		return Vector3.INF
+	var s := session()
+	if s == null or s.snap == null or not is_puppet(target) or not (target is Hero):
+		return target.global_position
+	var p := s.snap.lead_point(NetFloor.id_of(target))
+	return target.global_position if p == Vector3.INF else p
 
 
 ## What to call a hero on screen: the player's roster name for a seat a person plays, else the hero's own name.

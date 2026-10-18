@@ -20,8 +20,8 @@ extends RefCounted
 ##   u8  draw      only when flags has drawing: how long the bow has been drawn, centiseconds
 ##
 ## A snapshot to the host is 7 + 1 + 16 = 24 bytes; the host's to a client carries two heroes, 40 bytes; at 30 Hz
-## that is 0.72 KB/s up and 1.2 KB/s down per client (the plan's budget is 3 KB/s). M3 appends the world after the
-## heroes in the same packet.
+## that is 0.72 KB/s up and 1.2 KB/s down per client (the plan's budget is 3 KB/s). M3: the host appends the world
+## section (NetWorldCodec: monsters, employees, hellgates) after the heroes in the same packet.
 ##
 ## HERO_FIELDS is the list the contract test holds this codec to: every var in it must be OWNER on Hero (a codec
 ## must never stream a SPAWN / PRIVATE / LOCAL var), and every OWNER var of Hero must be in it or in
@@ -95,11 +95,17 @@ static func _put_entry(b: StreamPeerBuffer, s: NetHeroState, sent_at: float) -> 
 ## The states in a payload that arrived in a packet stamped `stamp` (host_time seconds). Malformed or short data
 ## gives what was complete; an entry with an impossible seat is skipped.
 static func decode(payload: PackedByteArray, stamp: float) -> Array[NetHeroState]:
-	var out: Array[NetHeroState] = []
-	if payload.is_empty():
-		return out
 	var b := StreamPeerBuffer.new()
 	b.data_array = payload
+	return decode_from(b, stamp)
+
+
+## The hero entries read from `b` (positioned at the count byte); `b` is left just past them, where the host's
+## packet goes on with the world (NetWorldCodec, M3).
+static func decode_from(b: StreamPeerBuffer, stamp: float) -> Array[NetHeroState]:
+	var out: Array[NetHeroState] = []
+	if b.get_available_bytes() < 1:
+		return out
 	var count := b.get_u8()
 	for _i in count:
 		if b.get_available_bytes() < ENTRY_SIZE:

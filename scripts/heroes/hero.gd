@@ -305,14 +305,25 @@ func swap_in_pickup() -> bool:
 	var cand := swap_target()
 	if cand == null:
 		return false
-	var slot := held_slot
-	var old := slot_spell(slot)
-	var old_n := charges_of(old)
+	if not Net.owns(cand):
+		return Net.request(cand, "swap")   # online the host owns pickups: it grants, then apply_swap() runs here (M3)
 	var spot := cand.global_position
 	var new_id := cand.spell_id
 	var new_n := mini(cand.charges, SpellComponents.MAX_CHARGES)
 	cand.consume()
 	swap_candidate = null
+	apply_swap(new_id, new_n, spot)
+	return true
+
+
+## Put `new_id` with `new_n` charges into the held slot; the spell it replaces goes on the floor beside `spot` with
+## its charges (nothing if it had none). The second half of a swap (online, the host granted the pickup first).
+func apply_swap(new_id: String, new_n: int, spot: Vector3) -> void:
+	new_n = mini(new_n, SpellComponents.MAX_CHARGES)
+	swap_candidate = null
+	var slot := held_slot
+	var old := slot_spell(slot)
+	var old_n := charges_of(old)
 	var slots := spell_slots.duplicate()
 	slots[slot] = new_id
 	spell_slots = slots           # the setter re-syncs the charge table (the new spell starts at START_CHARGES) ...
@@ -325,7 +336,6 @@ func swap_in_pickup() -> bool:
 	_refresh_hold()
 	held_changed.emit()
 	component_swapped.emit(old, new_id, slot)
-	return true
 
 
 func _sync_slots() -> void:

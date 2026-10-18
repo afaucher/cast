@@ -420,15 +420,23 @@ func _do_burst() -> Array[Monster]:
 		var h := GameWorld.nearest_actor(m.global_position, GameWorld.TEAM_HEROES)
 		if h != null:
 			m.aggro(h)
-		if fx_enabled:
-			var embers: Array[Color] = [Color(1.0, 0.7, 0.25), Color(1.0, 0.3, 0.08), Color(0.5, 0.1, 0.12)]
-			Fx.burst(m.global_position + Vector3.UP * 0.2, embers, 8, 2.6, 0.07, 0.55, 3.0, Vector3.UP, 60.0)
-	if model != null:
-		model.pulse(1.0)
-	if fx_enabled and not out.is_empty():
-		Fx.ring(global_position, radius + 0.6, Color(1.0, 0.35, 0.1, 0.8), 0.5, 0.0, true, 0.5)
+	_burst_fx(out)
 	burst_spawned.emit(out)
 	return out
+
+
+## The look of a burst: embers at each spawn, the gate pulses, a ring on the floor.
+func _burst_fx(spawned: Array) -> void:
+	if fx_enabled:
+		var embers: Array[Color] = [Color(1.0, 0.7, 0.25), Color(1.0, 0.3, 0.08), Color(0.5, 0.1, 0.12)]
+		for n: Variant in spawned:
+			var m := n as Node3D
+			if m != null and is_instance_valid(m):
+				Fx.burst(m.global_position + Vector3.UP * 0.2, embers, 8, 2.6, 0.07, 0.55, 3.0, Vector3.UP, 60.0)
+	if model != null:
+		model.pulse(1.0)
+	if fx_enabled and not spawned.is_empty():
+		Fx.ring(global_position, radius + 0.6, Color(1.0, 0.35, 0.1, 0.8), 0.5, 0.0, true, 0.5)
 
 
 func _pick_kind(weights: Dictionary) -> String:
@@ -520,6 +528,11 @@ func _fire_shove() -> void:
 	_shove_t = -1.0
 	Combat.shove_radius(global_position, SHOVE_RADIUS, SHOVE_DISTANCE, self, GameWorld.TEAM_HEROES)
 	Combat.shove_radius(global_position, SHOVE_RADIUS, SHOVE_DISTANCE, self, GameWorld.TEAM_NEUTRAL)
+	_shove_fx()
+	shove_burst.emit(SHOVE_RADIUS)
+
+
+func _shove_fx() -> void:
 	if model != null:
 		model.pulse(2.5)
 	if fx_enabled:
@@ -527,7 +540,66 @@ func _fire_shove() -> void:
 		var hot: Array[Color] = [Color(1.0, 0.85, 0.4), Color(1.0, 0.35, 0.1), Color(0.6, 0.1, 0.15)]
 		Fx.burst(global_position + Vector3.UP * 0.5, hot, 36, 7.0, 0.1, 0.8, 3.0, Vector3.UP, 85.0)
 		Fx.shake(0.35)
+
+
+# --- Puppet (M3): on a client the host's gate is SHOWN, not simulated ---------------------------------------
+
+## Show the host's gate state (NetWorldCodec.write_gate): its HP (the bar, the cracks), waking up, the flare before a
+## burst (the model's _process reads it), the origin phase and its shove wind-up.
+func net_show(new_hp: float, active: bool, telegraphing: bool, new_phase: int, burst_in: float, shove_t: float) -> void:
+	if absf(new_hp - hp) > 0.05:
+		hp = new_hp
+		_update_bar()
+		if model != null:
+			model.set_hurt(1.0 - hp / max_hp)
+			model.pulse(0.35)
+	if active and not _active:
+		_active = true
+		if model != null:
+			model.set_active(true)
+			model.pulse(1.0)
+		_update_bar()
+		activated.emit()
+	_telegraphing = telegraphing
+	_next_burst_in = burst_in if burst_in >= 0.0 else spawn_interval
+	if new_phase != phase:
+		phase = new_phase
+		_apply_profile()
+		if model != null:
+			model.set_phase(phase)
+	_shove_t = shove_t
+
+
+## The origin gate changed phase (world.phase): its shove winds up on this screen too.
+func net_phase(new_phase: int) -> void:
+	if new_phase != phase:
+		phase = new_phase
+		_apply_profile()
+		if model != null:
+			model.set_phase(phase)
+		phase_changed.emit(phase)
+	_shove_t = SHOVE_WINDUP
+	if model != null:
+		model.telegraph_shove(SHOVE_WINDUP, SHOVE_RADIUS)
+	shove_telegraphed.emit(SHOVE_RADIUS, SHOVE_WINDUP)
+
+
+## The shove went off on the host (world.shove): its look here (the host shoved whoever it shoves).
+func net_shove_fx() -> void:
+	_shove_t = -1.0
+	_shove_fx()
 	shove_burst.emit(SHOVE_RADIUS)
+
+
+## A burst landed on the host (world.spawn): its look here, around the monsters it brought.
+func net_burst_fx(spawned: Array) -> void:
+	_telegraphing = false
+	_burst_fx(spawned)
+
+
+## A puppet's per-frame work: none (the model and _process animate from what net_show set).
+func net_tick(_delta: float) -> void:
+	pass
 
 
 # --- Closing --------------------------------------------------------------------------------------

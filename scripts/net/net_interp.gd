@@ -7,7 +7,7 @@ extends RefCounted
 ##   position  Hermite (cubic) on x and z from the samples' positions AND velocities, linear on height
 ##   facing    the short way round between the two samples
 ##   the rest  (hp, dead, the held slot, the bow) is a step: the earlier sample's value, so a death lands on the
-##             same beat as the movement that led to it
+##             same beat as the movement that led to it (M3: a monster's wind-up is linear within one state)
 ##
 ## When the render time runs past the newest sample (a packet is late or lost) the puppet extrapolates along the
 ## last velocity for up to EXTRAP_MAX seconds, then holds. A TELEPORT (the sample's counter changed) empties the
@@ -140,6 +140,8 @@ func sample(t: float) -> NetHeroState:
 	out.vel = a.vel.lerp(b.vel, u)
 	out.angle = lerp_angle(a.angle, b.angle, u)
 	out.aim = a.aim.lerp(b.aim, u)
+	if a.mode == b.mode:
+		out.telegraph = lerpf(a.telegraph, b.telegraph, u)   # (M3: a wind-up grows smoothly between samples)
 	return out
 
 

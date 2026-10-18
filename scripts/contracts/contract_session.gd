@@ -193,3 +193,22 @@ func finish(reason: String, downed_heroes: Array[String] = []) -> void:
 
 func payout() -> int:
 	return Ledger.payout()
+
+
+# --- Online (M3): the host keeps the books, a client shows them ----------------------------------------------
+
+## What a client needs to show the objectives as the host has them (NetObjects sends it on every change).
+func mirror_state() -> Dictionary:
+	return {"floor": floor_number, "state": state().duplicate(), "lost": lost.duplicate(true), "extracted": extracted_total}
+
+
+## The host's bookkeeping, on a client.
+func apply_mirror(d: Dictionary) -> void:
+	var f := int(d.get("floor", floor_number))
+	var st := d.get("state", {}) as Dictionary
+	if not st.is_empty():
+		floors[f] = st.duplicate()
+	lost.clear()
+	for e: Variant in d.get("lost", []) as Array:
+		lost.append((e as Dictionary).duplicate())
+	extracted_total = int(d.get("extracted", extracted_total))

@@ -170,6 +170,12 @@ func _physics_process(delta: float) -> void:
 	_check_shove_contacts()
 
 
+## A copy's per-frame work on a client (M3; NetObjects calls it): a box whose support broke still drops onto what is
+## under it (the breaks are the host's, the settling is the same everywhere).
+func net_tick(delta: float) -> void:
+	_settle(delta)
+
+
 ## Total height (the model's top) above the floor.
 func top_height() -> float:
 	return _lift + PackageModels.height_of(size_kind)
@@ -275,17 +281,24 @@ func _on_death() -> void:
 
 
 ## The prize: a component pickup or crypto cash (decorative contents are the spill's job).
+## Online (M3) only the owner (the host) rolls and hands out: a client's copy was told the contents, the component and
+## the crypto by the host's break event, and only shows them (the pickup and the money come from the host).
 func _hand_out(what: String, here: Vector3, culprit: Node) -> void:
+	var owner := Net.owns(self)
 	match what:
 		"component":
-			component_id = roll_component(_rng)
-			# ComponentPickup.drop does not touch GameWorld.floor_drops: mail is not a monster drop
-			pickup = ComponentPickup.drop(component_id, SpellComponents.PICKUP_CHARGES, global_position)
+			if owner:
+				component_id = roll_component(_rng)
+				# ComponentPickup.drop does not touch GameWorld.floor_drops: mail is not a monster drop
+				pickup = ComponentPickup.drop(component_id, SpellComponents.PICKUP_CHARGES, global_position)
+			if component_id == "":
+				return
 			var sparks: Array[Color] = [SpellBook.color_of(component_id).lightened(0.4), Color.WHITE]
 			Fx.burst(here + Vector3.UP * 0.3, sparks, 10, 2.2, 0.06, 0.5, -0.5, Vector3.UP, 70.0)
 		"crypto":
-			crypto_amount = roll_crypto(_rng)
-			Ledger.earn(CRYPTO_LABEL, crypto_amount, culprit)
+			if owner:
+				crypto_amount = roll_crypto(_rng)
+				Ledger.earn(CRYPTO_LABEL, crypto_amount, culprit)
 			Fx.number(here + Vector3(0, top_height() - _lift + 0.7, 0), "+%s crypto" % PricedProp.money(crypto_amount), CRYPTO_COLOR, 1.1)
 			var coins: Array[Color] = [Color(0.45, 1.0, 0.62), Color(1.0, 0.9, 0.4), Color.WHITE]
 			Fx.burst(here + Vector3.UP * 0.3, coins, 14, 3.4, 0.06, 0.7, 7.0, Vector3.UP, 80.0)

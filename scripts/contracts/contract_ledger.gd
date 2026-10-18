@@ -19,12 +19,16 @@ var lines: Array[Dictionary] = []
 var contract_value := 0
 var floor_number := 1
 var active := false
+## Online, on a client (M3): the host's Ledger is the one; this one only takes the host's lines (mirror_line) and drops
+## every local write, so nothing is billed or paid twice. Set by the game for a client's shared run; end_contract clears it.
+var mirror := false
 
 
 ## Who may write each var (see Net). The host owns the money record; everyone else receives it.
 func net_fields() -> Dictionary:
 	return {
 		"lines": Net.OWNER, "contract_value": Net.OWNER, "floor_number": Net.OWNER, "active": Net.OWNER,
+		"mirror": Net.LOCAL,   # this machine's role (a client mirrors the host's lines: obj.ledger)
 	}
 
 
@@ -38,6 +42,15 @@ func begin_contract(value: int) -> void:
 
 func end_contract() -> void:
 	active = false
+	mirror = false
+	changed.emit()
+
+
+## A line the host wrote (client, M3: NetObjects, `obj.ledger`).
+func mirror_line(line: Dictionary) -> void:
+	var l := line.duplicate()
+	lines.append(l)
+	line_added.emit(l)
 	changed.emit()
 
 
@@ -55,7 +68,7 @@ func damage(label: String, amount: int, culprit: Node = null) -> void:
 ## Corporate revives a hero who is down at the end of the contract; the client is billed. `hero_name` is the
 ## hero's display name. Not capped by the contract value.
 func revival(hero_name: String, amount: int = REVIVAL_FEE) -> void:
-	if amount <= 0:
+	if amount <= 0 or mirror:
 		return
 	var line := {"kind": "revival", "label": "Revival - %s" % hero_name, "amount": amount, "who": hero_name, "floor": floor_number}
 	lines.append(line)
@@ -112,8 +125,8 @@ static func culprit_name(n: Node) -> String:
 
 
 func _add(kind: String, label: String, amount: int, who: Node) -> void:
-	if amount <= 0:
-		return
+	if amount <= 0 or mirror:
+		return   # (a client's Ledger takes the host's lines only)
 	var line := {"kind": kind, "label": label, "amount": amount, "who": culprit_name(who) if who != null else "", "floor": floor_number}
 	lines.append(line)
 	line_added.emit(line)

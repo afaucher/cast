@@ -58,6 +58,8 @@ var employee_chance := 0.3        ## contracts: odds per retarget roll of going 
 var state: int = State.IDLE
 var target: Actor = null
 var home := Vector3.ZERO
+## How many attacks it has struck (the other screens play a swing when it moves on: NetWorldCodec, M3).
+var strikes := 0
 
 var _home_set := false
 var _scan_t := 0.0
@@ -144,6 +146,7 @@ func net_fields() -> Dictionary:
 		"walk_freq": Net.LOCAL, "windup_scale": Net.LOCAL, "model_windup_scale": Net.LOCAL,
 		"state": Net.OWNER,
 		"target": Net.OWNER,            # will travel as an entity id; the victim's machine needs to know who is being hit
+		"strikes": Net.OWNER,           # the swing on the other screens (M3)
 		"home": Net.PRIVATE, "_home_set": Net.PRIVATE,
 		# Attack windup: players see a swing coming, so the telegraph is OWNER.
 		"_windup_total": Net.OWNER, "_windup_left": Net.OWNER, "_telegraph": Net.OWNER,
@@ -236,11 +239,18 @@ func _tick_idle(delta: float) -> void:
 func _tick_chase(delta: float) -> void:
 	if not _validate_target(delta):
 		return
-	var dist := GameWorld.flat_distance(global_position, target.global_position)
-	face_point(target.global_position)
+	var tp := target_point()
+	var dist := GameWorld.flat_distance(global_position, tp)
+	face_point(tp)
 	if _try_start_attack(dist):
 		return
 	_chase_move(delta, dist)
+
+
+## Where to aim at the target: where it stands, or for another player's hero (online, on the host) where its newest
+## snapshot says it is now (Net.lead_point, M3a), so monsters press every player alike.
+func target_point() -> Vector3:
+	return Net.lead_point(target) if target != null else global_position
 
 
 ## Default melee start: in range, off cooldown, and able to actually hit.
@@ -263,7 +273,7 @@ func _can_strike_target() -> bool:
 ## Default: path to the target and stop at stop_distance.
 func _chase_move(delta: float, dist: float) -> void:
 	if dist > stop_distance:
-		_nav_to(target.global_position, delta)
+		_nav_to(target_point(), delta)
 	else:
 		_prog_t = 0.0
 
@@ -275,13 +285,14 @@ func _tick_attack(delta: float) -> void:
 		return
 	_windup_left -= delta
 	if _windup_left > _windup_total * WINDUP_LOCK_FRACTION:
-		face_point(target.global_position)
+		face_point(target_point())
 	_telegraph = clampf(1.0 - _windup_left / _windup_total, 0.0, 1.0)
 	_prog_t = 0.0
 	if _windup_left <= 0.0:
 		_end_windup()
 		_strike()
 		_strike_employee()
+		strikes += 1
 		_next_attack_time = GameWorld.time + scaled_cooldown(attack_cooldown)
 		_strike_t = 1.0
 		if model != null:
@@ -632,7 +643,8 @@ func _on_damaged(_amount: float, source: Node) -> void:
 func _on_death() -> void:
 	state = State.DEAD
 	remove_from_group("monsters")
-	SpellComponents.drop_for(self)   # material components, per the drop table
+	if Net.owns(self):
+		SpellComponents.drop_for(self)   # material components, per the drop table (the owner rolls them: a client is told)
 	_end_windup()
 	if model != null:
 		model.set_downed(true)
@@ -725,6 +737,46 @@ func _update_visual(delta: float) -> void:
 	if model != null:
 		model.windup(_telegraph)
 	_pose(delta, moved)
+
+
+# --- Puppet (M3): on a client the host's monster is SHOWN, not simulated ------------------------------------
+
+## Show the host's state (NetWorldCodec.write_monster) and play what changed the way the host's own monster played
+## it: an HP drop flashes and updates the bar, a wind-up starts and ends (the brute's ring), a new strike swings.
+func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: int, telegraph: float, strike_count: int) -> void:
+	facing = new_facing
+	climbing = is_climbing
+	if absf(new_hp - hp) > 0.05:
+		if new_hp < hp:
+			_flash_t = FLASH_TIME
+		hp = new_hp
+		_update_bar()
+	if new_state != state:
+		var was := state
+		state = new_state
+		if state == State.ATTACK:
+			_windup_total = maxf(attack_windup, 0.01)
+			_on_windup_begin()
+		elif was == State.ATTACK:
+			_end_windup()
+	_telegraph = telegraph if state == State.ATTACK else 0.0
+	if strike_count != strikes:
+		strikes = strike_count
+		_strike_t = 1.0
+		if model != null:
+			model.attack_swing()
+		_on_strike_visual()
+
+
+## A puppet's look each frame (on the host the physics process does it).
+func net_tick(delta: float) -> void:
+	if not dead:
+		_update_visual(delta)
+
+
+## Override: what a strike looks like on a screen that only shows this monster (no damage: the host decides that).
+func _on_strike_visual() -> void:
+	pass
 
 
 ## Override: animate limbs. Uses _telegraph (windup 0..1) and _strike_t (1 -> 0 after the hit).

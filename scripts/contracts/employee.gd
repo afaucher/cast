@@ -26,6 +26,8 @@ extends Actor
 ## Emitted once by extract(), immediately (the fade-out plays afterwards). The employee is already out
 ## of the "employees" and "actors" groups by then, so it can no longer be hurt or counted as alive.
 signal rescued(employee: Employee)
+## A speech bubble started (say()): every screen shows it (NetWorld sends it, M3).
+signal said(text: String, seconds: float)
 
 enum State { COWER, PANIC, FOLLOW, EXTRACT, WAIT }
 
@@ -235,27 +237,28 @@ func is_dismissed() -> bool:
 
 ## Can `hero` tell this employee to wait right now? It must be following that hero (or an AI ally of the
 ## crew: the player may dismiss what an ally picked up) and be close enough.
-func can_wait(hero: Actor) -> bool:
+func can_wait(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
 	if hero == null or not is_instance_valid(hero) or hero.dead or dead or _extracted:
 		return false
 	if state != State.FOLLOW or not _controlled_by(hero):
 		return false
-	return _reach(hero) <= WAIT_RANGE
+	return _reach(hero, at) <= WAIT_RANGE
 
 
 ## Can `hero` recruit this employee right now? A dismissed one always, a never-dismissed one only when
 ## JOIN_NEEDS_E; one following somebody else (another player) never.
-func can_follow(hero: Actor) -> bool:
+func can_follow(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
 	if hero == null or not is_instance_valid(hero) or hero.dead or dead or _extracted:
 		return false
 	if state == State.FOLLOW or not (_dismissed or JOIN_NEEDS_E):
 		return false
-	return _reach(hero) <= RECALL_RANGE
+	return _reach(hero, at) <= RECALL_RANGE
 
 
-## "Wait here": stop following and hold this spot. Still panics if a monster comes, then returns.
-func request_wait(hero: Actor) -> bool:
-	if not can_wait(hero):
+## "Wait here": stop following and hold this spot. Still panics if a monster comes, then returns. `at` is where the
+## hero stands when another player's machine asks (online, M3: the host's picture of that hero is ~100 ms old).
+func request_wait(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
+	if not can_wait(hero, at):
 		return false
 	_dismissed = true
 	_leader = null
@@ -266,9 +269,9 @@ func request_wait(hero: Actor) -> bool:
 	return true
 
 
-## "Come with me": follow `hero` again.
-func request_follow(hero: Actor) -> bool:
-	if not can_follow(hero):
+## "Come with me": follow `hero` again (`at` as in request_wait).
+func request_follow(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
+	if not can_follow(hero, at):
 		return false
 	var line := str(RECALL_LINES[style]) if _dismissed else str(LATCH_LINES[style])   # first contact vs recalled
 	_dismissed = false
@@ -283,13 +286,20 @@ func _controlled_by(hero: Actor) -> bool:
 	if ld == hero:
 		return true
 	var ally := ld as Hero
-	return ally != null and not ally.is_player and (hero as Hero) != null and (hero as Hero).is_player
+	return ally != null and not _is_person(ally) and (hero as Hero) != null and _is_person(hero as Hero)
 
 
-func _reach(hero: Actor) -> float:
-	if absf(hero.global_position.y - global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
+## A hero a person plays: this machine's player, or (online) another player's hero (it carries the player's name);
+## the AI allies are neither.
+static func _is_person(h: Hero) -> bool:
+	return h.is_player or h.has_meta(Net.NAME_META)
+
+
+func _reach(hero: Actor, at: Vector3 = Vector3.INF) -> float:
+	var p := hero.global_position if at == Vector3.INF else at
+	if absf(p.y - global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
 		return INF
-	return GameWorld.flat_distance(global_position, hero.global_position)
+	return GameWorld.flat_distance(global_position, p)
 
 
 ## The employee `hero`'s E would act on: the nearest one it can tell to wait or recruit, or null.
@@ -319,11 +329,14 @@ func prompt_point() -> Vector3:
 	return global_position + Vector3(0.0, model.ui_height + 0.95, 0.0)
 
 
-## The E press: dismiss or recruit the nearest employee. True when it was used.
+## The E press: dismiss or recruit the nearest employee. True when it was used. Online the host owns employees: from
+## a client it is a request (Net.request), and the host grants it (the employee's state comes back in the snapshot).
 static func interact(hero: Actor) -> bool:
 	var e := interact_target(hero)
 	if e == null:
 		return false
+	if not Net.owns(e):
+		return Net.request(e, "wait" if e.can_wait(hero) else "follow")
 	return e.request_wait(hero) if e.can_wait(hero) else e.request_follow(hero)
 
 
@@ -352,6 +365,7 @@ func extract(line: String = "thank you!") -> void:
 func say(text: String, seconds: float = 1.5) -> void:
 	_say_text = text
 	_say_until = GameWorld.time + seconds
+	said.emit(text, seconds)
 
 
 func state_name() -> String:
@@ -383,30 +397,14 @@ func _physics_process(delta: float) -> void:
 ## Look around: the nearest monster and hero decide the state.
 func _scan() -> void:
 	var now := GameWorld.time
-	var mon_d := INF
-	var mon_pos := Vector3.ZERO
-	for n in get_tree().get_nodes_in_group("monsters"):
-		var m := n as Actor
-		if m == null or m.dead:
-			continue
-		var d := GameWorld.flat_distance(global_position, m.global_position)
-		if d < mon_d:
-			mon_d = d
-			mon_pos = m.global_position
-	var hero_d := INF
-	var hero: Actor = null
-	for h in GameWorld.team_actors(GameWorld.TEAM_HEROES):
-		var d := GameWorld.flat_distance(global_position, h.global_position)
-		if d < hero_d and absf(h.global_position.y - global_position.y) <= 2.1 * Hex.LEVEL_HEIGHT:
-			hero_d = d
-			hero = h
-	_hero_near = hero != null and hero_d <= NEAR_RANGE
+	var seen := _look_around()
+	var mon_d: float = seen[0]
+	var mon_pos: Vector3 = seen[1]
+	var hero: Actor = seen[2]
+	var hero_d: float = seen[3]
 	_hero_pos_valid = hero != null
 	if hero != null:
 		_hero_pos = hero.global_position
-	_scared = mon_d <= PANIC_RANGE + 1.0
-	if model != null:
-		model.set_scared(_scared and state != State.PANIC)
 	if mon_d <= CALM_RANGE:
 		_threat = mon_pos
 		_threat_valid = true
@@ -428,6 +426,64 @@ func _scan() -> void:
 		State.FOLLOW:
 			if leader() == null:
 				_lose_leader()
+
+
+## The nearest monster and hero: [monster distance, its position, the hero, its distance]. Also the LOCAL mood every
+## screen works out for itself (the name tag, the cower bubble, the scared pose), so a client's puppet runs it too.
+func _look_around() -> Array:
+	var mon_d := INF
+	var mon_pos := Vector3.ZERO
+	for n in get_tree().get_nodes_in_group("monsters"):
+		var m := n as Actor
+		if m == null or m.dead:
+			continue
+		var d := GameWorld.flat_distance(global_position, m.global_position)
+		if d < mon_d:
+			mon_d = d
+			mon_pos = m.global_position
+	var hero_d := INF
+	var hero: Actor = null
+	for h in GameWorld.team_actors(GameWorld.TEAM_HEROES):
+		var d := GameWorld.flat_distance(global_position, h.global_position)
+		if d < hero_d and absf(h.global_position.y - global_position.y) <= 2.1 * Hex.LEVEL_HEIGHT:
+			hero_d = d
+			hero = h
+	_hero_near = hero != null and hero_d <= NEAR_RANGE
+	_scared = mon_d <= PANIC_RANGE + 1.0
+	if model != null:
+		model.set_scared(_scared and state != State.PANIC)
+	return [mon_d, mon_pos, hero, hero_d]
+
+
+# --- Puppet (M3): on a client the host's employee is SHOWN, not simulated ----------------------------------
+
+## Show the host's state (NetWorldCodec.write_employee): HP (the bar), its state (the mood and pose follow), who it
+## follows and whether it was told to wait. Speech, extraction and death are events (NetWorld).
+func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: int, dismissed: bool, new_leader: Actor) -> void:
+	facing = new_facing
+	climbing = is_climbing
+	if absf(new_hp - hp) > 0.05:
+		hp = new_hp
+		if _bar != null:
+			_bar.visible = hp < max_hp - 0.001
+			_bar.set_fraction(hp / max_hp)
+	_dismissed = dismissed
+	_leader = new_leader
+	if new_state != state and new_state != State.EXTRACT and not _extracted:
+		_set_state(new_state)
+
+
+## A puppet's per-frame work: its own mood against this screen's heroes and monsters, and the look.
+func net_tick(delta: float) -> void:
+	if dead:
+		return
+	if not _extracted and GameWorld.time >= _next_scan:
+		_next_scan = GameWorld.time + SCAN_INTERVAL
+		var seen := _look_around()
+		_hero_pos_valid = seen[2] != null
+		if seen[2] != null:
+			_hero_pos = (seen[2] as Actor).global_position
+	_update_visual(delta)
 
 
 func _latch(hero: Actor, line: String = "") -> void:
