@@ -215,7 +215,19 @@ static func van_damage(root: Node3D) -> void:
 				_xf(Vector3(-1.075, by, bz), Vector3(0.0, 0.0, 90.0), Vector3(ry * 1.25, 1.0, rz * 1.25)))
 		soot.merge(LowPoly.cylinder(1.0, 1.0, 0.01, 10, Color(dark, dark * 0.9, dark * 0.85), seed_v + 1, 0.0, 1, 0.0).jitter(0.22, seed_v + 1, Vector3(1.0, 0.0, 1.0)),
 				_xf(Vector3(-1.085, by - ry * 0.15, bz), Vector3(0.0, 0.0, 90.0), Vector3(ry, 1.0, rz)))
-	root.add_child(Kit.mesh(soot, 0.0, "VanSoot"))
+	# translucent: soot darkens the paint, it doesn't cover it
+	var soot_mi := MeshInstance3D.new()
+	soot_mi.name = "VanSoot"
+	soot_mi.mesh = soot.to_mesh()
+	var soot_mat := StandardMaterial3D.new()
+	soot_mat.vertex_color_use_as_albedo = true
+	soot_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	soot_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.38)
+	soot_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	soot_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	soot_mi.material_override = soot_mat
+	soot_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(soot_mi)
 	# the hole in the roof the cob went through: a black ring, torn flaps of roof turned up
 	s.merge(LowPoly.cylinder(0.62, 0.62, 0.03, 12, CHAR, 4250, 0.0, 1, 0.08).jitter(0.07, 4250, Vector3(1.0, 0.0, 1.0)), LowPoly.at(Vector3(-0.1, 1.93, -1.3)))
 	for i in 6:
