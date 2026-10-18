@@ -1,11 +1,12 @@
 extends TestCase
-## The four faceted monster models (grunt skeleton, archer, brute, swarmer imp): each builds headless
+## The faceted monster models (grunt skeleton, archer, brute, swarmer imp, and the design-only goblin scout
+## from MonsterModels.DESIGN_KINDS): each builds headless
 ## with its named parts on the shared LowPolyModel base, uses FLAT per-face normals, stays cheap, glows
 ## only where it should (heroes never do), and its windup / swing / downed / tint / fade hooks run.
 
 const MAX_NODES := 20
 ## kind -> triangle budget
-const BUDGET := {"grunt": 1500, "archer": 1700, "brute": 2600, "swarmer": 1000}
+const BUDGET := {"grunt": 1500, "archer": 1700, "brute": 2600, "swarmer": 1000, "goblin": 1900}
 
 
 func _part_names(kind: String) -> Array[String]:
@@ -16,6 +17,8 @@ func _part_names(kind: String) -> Array[String]:
 			return ArcherModel.PART_NAMES
 		"brute":
 			return BruteModel.PART_NAMES
+		"goblin":
+			return GoblinModel.PART_NAMES
 		_:
 			return SwarmerModel.PART_NAMES
 
@@ -23,7 +26,10 @@ func _part_names(kind: String) -> Array[String]:
 func setup() -> void:
 	check(MonsterModels.make("nope") == null, "unknown kind gives null")
 	var heights := {}
-	for kind in MonsterModels.KINDS:
+	var all_kinds: Array[String] = []
+	all_kinds.append_array(MonsterModels.KINDS)
+	all_kinds.append_array(MonsterModels.DESIGN_KINDS)
+	for kind in all_kinds:
 		var m := MonsterModels.make(kind)
 		check(m != null, "%s model made" % kind)
 		if m == null:
@@ -42,6 +48,9 @@ func setup() -> void:
 	check(heights["swarmer"] < heights["grunt"], "swarmer is smaller than the grunt")
 	check(heights["grunt"] < heights["brute"] and heights["archer"] < heights["brute"], "brute is the tallest")
 	check(heights["swarmer"] > 0.5, "swarmer is not tiny")
+	# the goblin scout: bigger than an imp, under the brute (his bar sits above the rocket rack)
+	check(heights["goblin"] > heights["swarmer"] and heights["goblin"] < heights["brute"], "goblin sits between the imp and the brute")
+	await _check_goblin_poses()
 
 	# heroes stay matte: nothing in Rebar glows
 	var peb := RebarModel.new()
@@ -196,6 +205,40 @@ func _check_poses(kind: String, m: MonsterModel) -> void:
 	near(float((m._mat as ShaderMaterial).get_shader_parameter("glow_gain")), MonsterModel.GLOW_GAIN * (1.0 + m.glow_flare * m.wind_e()), 0.01, "%s glow back" % kind)
 	m.idle_enabled = true
 	m.windup(0.0)
+
+
+## The goblin's own pose hooks (alert, look-around, fuse sparks, rockets fired, cower) each change the pose,
+## and switching them off returns exactly to rest.
+func _check_goblin_poses() -> void:
+	var g := GoblinModel.new()
+	add_child(g)
+	g.idle_enabled = false
+	g._t = 0.6                  # the hooks re-pose at the model's own clock
+	g.apply_idle(0.6)
+	var rest := _snapshot(g)
+	check(not g.get_part("mark").visible and not g.get_part("spark").visible and g.get_part("rockets").visible, "goblin rest: no mark, no sparks, rack loaded")
+	g.set_alert(1.0)
+	check(_pose_distance(rest, _snapshot(g)) > 0.3 and g.get_part("mark").visible, "goblin alert pose + the ! mark")
+	g.set_alert(0.0)
+	g.set_look(1.0, 0.25)
+	check(_pose_distance(rest, _snapshot(g)) > 0.2, "goblin look-around pose")
+	g.set_look(0.0)
+	g.set_fuse_lit(true)
+	check(g.get_part("spark").visible, "goblin fuse sparks show")
+	g.set_fuse_lit(false)
+	g.set_loaded(false)
+	check(not g.get_part("rockets").visible, "goblin rockets gone after the volley")
+	g.set_loaded(true)
+	g.set_cower(1.0)
+	check(_pose_distance(rest, _snapshot(g)) > 0.3, "goblin cower pose")
+	g.set_cower(0.0)
+	check(_pose_distance(rest, _snapshot(g)) < 0.001, "goblin hooks off: back to rest")
+	g.pose_scout("fuse_run")
+	check(_pose_distance(rest, _snapshot(g)) > 0.3, "goblin fuse_run pose")
+	g.pose_scout("rest")
+	check(_pose_distance(rest, _snapshot(g)) < 0.001, "goblin pose_scout(rest) is the rest pose")
+	g.queue_free()
+	await get_tree().process_frame
 
 
 func _count_nodes(n: Node) -> int:

@@ -6,6 +6,9 @@ extends RefCounted
 ##   var model: MonsterModel = MonsterModels.make("grunt")      # null for an unknown kind
 
 const KINDS: Array[String] = ["grunt", "archer", "brute", "swarmer"]
+## Models built for a design that no Monster kind uses yet (labs and tests only): the goblin scout
+## (docs/design/goblin-scout.md). make() builds them; KINDS stays the live kinds.
+const DESIGN_KINDS: Array[String] = ["goblin"]
 
 
 static func make(kind: String) -> MonsterModel:
@@ -18,4 +21,6 @@ static func make(kind: String) -> MonsterModel:
 			return BruteModel.new()
 		"swarmer":
 			return SwarmerModel.new()
+		"goblin":
+			return GoblinModel.new()
 	return null
