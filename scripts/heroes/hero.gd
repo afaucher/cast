@@ -87,8 +87,10 @@ var is_player := false:
 		if _name_label:
 			_name_label.visible = not v and not dead
 		_refresh_bar()
-## Spell ids in slots 1..SLOT_COUNT, in order, with no gaps (index = slot - 1). Assigning a new list gives
-## every newly listed spell SpellComponents.START_CHARGES; use slot_spell(i) for a safe lookup.
+## Spell ids in slots 1..SLOT_COUNT, in order (index = slot - 1). "" is an open slot: a spell whose last charge was
+## spent leaves its slot open in place (user, 2026-10-18), so the others keep their keys; trailing open slots are
+## trimmed. Assigning a new list gives every newly listed spell SpellComponents.START_CHARGES; use slot_spell(i) for a
+## safe lookup.
 var spell_slots: Array[String] = []:
 	set(v):
 		spell_slots = v
@@ -96,7 +98,7 @@ var spell_slots: Array[String] = []:
 ## Index (0-based) of the held slot: that spell gets the passive cooldown boost,
 ## and its component is shown in the hero's hand. Voice casts any slotted spell either way.
 var held_slot := 0
-## A dropped component the hero stands next to while every slot is full; F swaps it in. Set by ComponentPickup.
+## A dropped component the hero stands next to while every slot is full; E swaps it in. Set by ComponentPickup.
 var swap_candidate: ComponentPickup = null
 
 var _ready_at := {}                  ## cooldown key -> GameWorld.time when usable again
@@ -198,7 +200,23 @@ func try_cast(id: String, power: float, aim: Vector3) -> bool:
 	_charges[id] = maxi(0, charges_of(id) - 1)
 	_cast_pose()
 	spell_cast.emit(id, power)
+	if charges_of(id) <= 0:
+		empty_slot(id)   # the last component is used up: the slot opens again, nothing is dropped
 	return true
+
+
+## Open the slot holding `id` (its last component is spent): "" in its place, trailing open slots trimmed, no pickup
+## dropped. Other copies of this hero do the same when the owner's cast says it has none left (NetCasts).
+func empty_slot(id: String) -> void:
+	var i := spell_slots.find(id)
+	if i < 0:
+		return
+	var slots := spell_slots.duplicate()
+	slots[i] = ""
+	while not slots.is_empty() and slots[slots.size() - 1] == "":
+		slots.remove_at(slots.size() - 1)
+	spell_slots = slots
+	held_changed.emit()
 
 
 # --- Slots, charges, the held spell ---------------------------------------------------------
@@ -235,9 +253,13 @@ func slot_in(id: String, n: int) -> bool:
 		return false
 	if spell_slots.has(id):
 		return set_charges(id, n)
-	if spell_slots.size() >= SpellComponents.SLOT_COUNT:
+	var open := spell_slots.find("")
+	if open >= 0:
+		spell_slots[open] = id
+	elif spell_slots.size() >= SpellComponents.SLOT_COUNT:
 		return false
-	spell_slots.append(id)
+	else:
+		spell_slots.append(id)
 	_charges[id] = clampi(n, 0, SpellComponents.MAX_CHARGES)
 	_refresh_hold()
 	return true
@@ -255,20 +277,20 @@ func select_slot(i: int) -> bool:
 
 
 ## What walking onto a pickup of `id` would do: "add" (slotted, room for charges), "capped" (slotted and
-## full of charges), "fill" (an empty slot takes it), "swap" (every slot is full: F swaps it into the held
+## full of charges), "fill" (an empty slot takes it), "swap" (every slot is full: E swaps it into the held
 ## slot) or "none" (the spell is not available).
 func component_outcome(id: String) -> String:
 	if not SpellBook.is_available(id):
 		return "none"
 	if spell_slots.has(id):
 		return "add" if charges_of(id) < SpellComponents.MAX_CHARGES else "capped"
-	return "fill" if spell_slots.size() < SpellComponents.SLOT_COUNT else "swap"
+	return "fill" if spell_slots.size() < SpellComponents.SLOT_COUNT or spell_slots.has("") else "swap"
 
 
 ## Collect a component of `id` with `amount` charges. Returns {"result": "added" | "filled" | "none",
 ## "amount": charges actually taken, "slot": 0-based slot}. A slotted spell gains charges up to the cap; an
 ## unslotted one takes the first empty slot; with every slot full nothing is taken (the pickup waits for an
-## F swap).
+## E swap).
 func collect_component(id: String, amount: int) -> Dictionary:
 	var out := {"result": "none", "amount": 0, "slot": -1}
 	if dead or amount <= 0:
@@ -342,7 +364,7 @@ func _sync_slots() -> void:
 	if spell_slots.size() > SpellComponents.SLOT_COUNT:
 		spell_slots.resize(SpellComponents.SLOT_COUNT)
 	for id in spell_slots:
-		if not _charges.has(id):
+		if id != "" and not _charges.has(id):
 			_charges[id] = SpellComponents.START_CHARGES
 	for id: String in _charges.keys():
 		if not spell_slots.has(id):

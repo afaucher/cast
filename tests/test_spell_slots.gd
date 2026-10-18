@@ -67,8 +67,9 @@ func _test_data_and_input() -> void:
 	eq(SpellComponents.PICKUP_CHARGES, 3, "pickup charges")
 	eq(SpellComponents.MAX_CHARGES, 9, "cap")
 	near(SpellComponents.HELD_COOLDOWN_DIV, 1.15, 0.0001, "held boost")
-	for a in ["cast_slot_1", "cast_slot_2", "cast_slot_3", "cast_slot_4", "use", "swap_pickup"]:
+	for a in ["cast_slot_1", "cast_slot_2", "cast_slot_3", "cast_slot_4", "use"]:
 		check(InputMap.has_action(a), "input action " + a)
+	check(not InputMap.has_action("swap_pickup"), "no F swap action: E swaps a pickup in (user, 2026-10-18)")
 	check(not InputMap.has_action("cast_readied"), "E no longer has a cast action")
 	# Every castable spell names a component (teeth included since its gameplay landed).
 	for id in SpellBook.ids():
@@ -327,6 +328,20 @@ func _test_swap() -> void:
 	await frames(2)
 	eq(h.slot_spell(2), "fireball")
 	eq(_pickups().size(), 0, "nothing dropped for 0 charges")
+
+	# Spending the last charge opens that slot in place (user, 2026-10-18): the others keep their keys, nothing is
+	# dropped, and the next component fills the open slot.
+	_clear_pickups()
+	h.set_charges("heal", 1)
+	check(h.try_cast("heal", 1.0, h.global_position), "the last heal casts")
+	eq(h.slot_spell(0), "", "slot 1 is open again")
+	eq(h.slot_spell(1), "tentacles", "the other spells keep their slots")
+	eq(h.charges_of("heal"), 0, "no heal left")
+	await frames(2)
+	eq(_pickups().size(), 0, "nothing dropped for a spent component")
+	eq(h.component_outcome("vines"), "fill", "a new component fills the open slot")
+	check(h.slot_in("vines", 3), "it takes it")
+	eq(h.slot_spell(0), "vines", "into slot 1, where heal was")
 	hud.queue_free()
 	h.queue_free()
 	_clear_pickups()

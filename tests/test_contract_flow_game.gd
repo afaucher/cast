@@ -331,32 +331,44 @@ func _check_use_prompt() -> void:
 	await frames(3)
 	GAME.reset_flow()
 
-	# F: the swap offer
+	# E: the swap offer (was F; user, 2026-10-18). Away from the van and the elevator, whose E comes first.
 	var g2 := _make_game({"contract": 1, "seed": 5})
 	add_child(g2)
 	await frames(10)
 	var p2: Hero = g2.get("player")
-	var fp: UsePrompt = g2.get("_swap_prompt")
+	var fp: UsePrompt = g2.get("_use_prompt")
+	var map: HexMap = GameWorld.map
+	var start: Vector2i = map.cells_with_tag("start")[0]
+	var exit_c: Vector2i = g2.get("_exit_cell")
+	for c: Vector2i in map.cells:
+		var cell: HexMap.Cell = map.get_cell(c)
+		if cell.type != HexMap.Tile.FLOOR or Hex.distance(c, start) < 6 or Hex.distance(c, exit_c) < 4:
+			continue
+		p2.global_position = Hex.to_world(c, cell.level)
+		if g2.call("use_target") == null:
+			break   # (nothing else for E here: no note, employee, van or elevator)
 	p2.slot_in("fireball", 3)
 	p2.slot_in("armor", 3)
 	check(p2.spell_slots.size() == SpellComponents.SLOT_COUNT, "all slots are full")
 	await frames(30)
-	check(fp != null and not fp.wanted, "no pickup near: no F prompt")
+	check(fp != null and not _prompt_text(g2).begins_with("E Swap"), "no pickup near: no swap prompt")
 	var pickup := ComponentPickup.drop("tentacles", 3, p2.global_position + Vector3(0.9, 0.0, 0.55))
 	await frames(30)
 	if check(pickup != null and p2.swap_target() == pickup, "the pickup is offered for a swap"):
-		check(fp.wanted and fp.key == "F" and fp.verb == "Swap in %s" % SpellBook.component_name("tentacles"), "the prompt shows [F] Swap in <component>")
+		eq(_prompt_text(g2), "E Swap in %s" % SpellBook.component_name("tentacles"), "the prompt shows [E] Swap in <component>")
 		check(fp.global_position.y > pickup.global_position.y + 1.0, "floating above the pickup")
-		check(p2.swap_in_pickup(), "F does what the prompt said")
+		await _press_e()
+		eq(p2.slot_spell(p2.held_slot), "tentacles", "E does what the prompt said")
 		await frames(30)
-		check(not fp.wanted, "and the prompt goes away")
+		check(not _prompt_text(g2).begins_with("E Swap"), "and the prompt goes away")
 	g2.queue_free()
 	await frames(3)
 	GAME.reset_flow()
 
 
 ## The elevator on floors 2 and 3: floor 2 offers going down and exit, floor 3 offers exit only. Neither floor has a van or an
-## arrival (the crew just starts), and closing the floor-3 origin gate does not end the contract by itself.
+## arrival: the crew starts at the elevator it rode down in (user, 2026-10-18), and closing the floor-3 origin gate does not
+## end the contract by itself.
 func _check_elevator_floors() -> void:
 	for f in [2, 3]:
 		var g := _make_game({"contract": 1, "seed": 5, "floor": f})
@@ -368,8 +380,8 @@ func _check_elevator_floors() -> void:
 		check(g.get("_arrival") == null and not bool(g.call("_has_van")) and site.plan.van.is_empty(), "floor %d: no van and no arrival" % f)
 		check(g.get("controller").enabled and player.visible, "floor %d: the crew simply starts, in control" % f)
 		check(_prompt_text(g) != "E Clock out", "floor %d: no van prompt at the start" % f)
-		await _press_e()
-		check(g.get("_van_menu") == null, "floor %d: E at the start opens no van slip" % f)
+		check(Hex.distance(player.current_cell(), g.get("_exit_cell")) <= 2, "floor %d: the crew starts at the elevator" % f)
+		eq(_prompt_text(g), "E Elevator", "floor %d: standing at the elevator on arrival" % f)
 		if f == 3:
 			var origin: Actor = site.origin_gate
 			if check(origin != null, "floor 3 has the origin gate"):

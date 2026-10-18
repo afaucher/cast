@@ -216,6 +216,8 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 			var spell := str(data.get("s", ""))
 			if hero.spell_slots.has(spell):
 				hero._charges[spell] = int(data.get("ch", hero.charges_of(spell)))   # (the owner's count, carried by the cast)
+				if hero.charges_of(spell) <= 0:
+					hero.empty_slot(spell)   # (the owner's slot opened when its last charge went)
 			hero.net_act("cast", Vector3.ZERO, false)   # the cast pose, now
 		_schedule(data)
 	else:

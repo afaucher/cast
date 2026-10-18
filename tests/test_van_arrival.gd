@@ -263,19 +263,19 @@ func _check_no_van_floors() -> void:
 		await frames(6)
 		var map: HexMap = g.get("map")
 		var site: SiteBuilder.Site = g.get("_site")
-		var start: Vector2i = map.cells_with_tag("start")[0]
+		var start: Vector2i = g.get("_exit_cell")   # (below floor 1 the crew arrives by elevator, at the exit cell)
 		eq((g.get("_session") as ContractSession).floor_number, f, "floor %d: the contract starts there" % f)
 		check(g.get("_arrival") == null, "floor %d: no van arrival" % f)
 		check(site.plan.van.is_empty(), "floor %d: the plan has no van" % f)
 		check(g.find_children("VanArrival", "", true, false).is_empty(), "floor %d: no van in the scene" % f)
 		check((g.get("controller") as PlayerController).enabled, "floor %d: control is on from the first frame" % f)
 		var heroes: Array[Hero] = g.call("_heroes")
-		eq(heroes[0].current_cell(), start, "floor %d: Wick starts on the start cell" % f)
+		eq(heroes[0].current_cell(), start, "floor %d: Wick starts at the elevator" % f)
 		for h in heroes:
 			var cell := map.get_cell(h.current_cell())
 			check(h.visible, "floor %d: %s is out in the open" % [f, h.display_name])
 			check(cell != null and cell.type == HexMap.Tile.FLOOR, "floor %d: %s stands on a walkable cell" % [f, h.display_name])
-			check(Hex.distance(h.current_cell(), start) <= 2, "floor %d: %s starts beside the start cell" % [f, h.display_name])
+			check(Hex.distance(h.current_cell(), start) <= 2, "floor %d: %s starts beside the elevator" % [f, h.display_name])
 		await _drop(g)
 
 

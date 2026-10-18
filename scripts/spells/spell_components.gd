@@ -16,7 +16,7 @@ const HELD_COOLDOWN_DIV := 1.15  ## the held spell's cooldown is divided by this
 
 # --- Pickups ---------------------------------------------------------------------------------
 const COLLECT_RADIUS := 0.8      ## a hero this close picks it up automatically
-const SWAP_RADIUS := 1.2         ## a hero this close (slots full) can press F to swap it in
+const SWAP_RADIUS := 1.2         ## a hero this close (slots full) can press E to swap it in
 const LABEL_RADIUS := 4.0        ## the floating name label shows when a player is this close
 const DROP_SCATTER := 0.55       ## several drops from one kill fan out this far
 const FLOOR_DROP_CAP := 5        ## at most this many monster-dropped pickups per floor (GameWorld.floor_drops counts them)

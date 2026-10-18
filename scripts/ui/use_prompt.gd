@@ -1,7 +1,7 @@
 class_name UsePrompt
 extends Node3D
 ## The one small prompt for everything the player can use: a billboarded slip that floats just above the thing
-## itself, a cream paper keycap with the key and then a short verb ("[E] Clock out", "[F] Swap in Grave moss").
+## itself, a cream paper keycap with the key and then a short verb ("[E] Clock out", "[E] Swap in Grave moss").
 ## The game owns one per key (E and F) and each frame tells it what that key would act on right now:
 ## show_at(world point, key, verb), or hide_prompt() when the key would do nothing. It fades in and out over
 ## FADE_TIME and snaps to a new spot when the target changes.
@@ -26,7 +26,7 @@ const SLIP_EDGE := Color(0.96, 0.95, 0.9, 0.55)
 const VERB_COLOR := Color(0.97, 0.95, 0.88)
 const CAP_EDGE := Color("8a8270")
 
-var key := ""             ## the key shown on the cap ("E", "F")
+var key := ""             ## the key shown on the cap ("E")
 var verb := ""            ## the short verb after it
 var wanted := false       ## true while the prompt is asked to be up (it may still be fading)
 var alpha := 0.0          ## 0..1 fade state

@@ -126,6 +126,12 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 const VAN_FLOOR := 1
 
 
+## Where the crew arrives on this floor: the start room (the van) on the van floor, the elevator's room on every other
+## floor (the crew rides the elevator down and steps out there). No monster pack or employee is placed in it.
+static func arrival_room(p: SitePlan) -> String:
+	return p.start_room if p.floor_number <= VAN_FLOOR else p.exit_room
+
+
 static func _plan_van(map: HexMap, p: SitePlan, ctx: ThemeCtx, floor_n: int) -> void:
 	if floor_n != VAN_FLOOR:
 		p.van = {}
@@ -337,7 +343,7 @@ static func _plan_employees(map: HexMap, run: ContractRun, floor_n: int, p: Site
 	var gate_cells := p.gate_cells()
 	var scored: Array[Dictionary] = []
 	for tag: String in p.rooms:
-		if tag == p.start_room:
+		if tag == p.start_room or tag == arrival_room(p):
 			continue
 		var d := 1 << 20
 		for g in gate_cells:
@@ -786,7 +792,7 @@ static func _plan_packs(run: ContractRun, floor_n: int, p: SitePlan) -> void:
 	var gate_cells := p.gate_cells()
 	var bonus_hard := int(roundf(run.difficulty * 3.0))
 	for tag: String in p.rooms:
-		if tag == p.start_room:
+		if tag == p.start_room or tag == arrival_room(p):
 			continue
 		var idx := int(tag.trim_prefix("room:"))
 		var budget := ROOM_BUDGET_BASE + ROOM_BUDGET_PER_ROOM * idx + ROOM_BUDGET_PER_FLOOR * (floor_n - 1) + bonus_hard

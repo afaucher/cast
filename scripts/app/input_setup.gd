@@ -2,7 +2,7 @@ class_name InputSetup
 extends RefCounted
 ## Input actions, registered in code so project.godot stays readable.
 ## Keyboard + mouse for player 1. Keys 1-4 ready (hold) a spell slot, E is the context "use" key
-## (elevator, employees; it never casts), F swaps a dropped component into the held slot.
+## (van, elevator, employees, notes, and swapping a dropped component into the held slot; it never casts).
 ## Spells are cast by voice or the typed console only.
 
 const KEYS := {
@@ -15,7 +15,6 @@ const KEYS := {
 	"cast_slot_3": [KEY_3],
 	"cast_slot_4": [KEY_4],
 	"use": [KEY_E],
-	"swap_pickup": [KEY_F],
 	"toggle_voice_debug": [KEY_F1],
 	"restart": [KEY_F5],
 	"pause": [KEY_ESCAPE],

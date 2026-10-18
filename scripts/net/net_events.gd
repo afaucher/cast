@@ -13,7 +13,7 @@ extends RefCounted
 ## Hero / Actor OWNER var -> its carrier.
 const CARRIES := {
 	# Set by the license at the floor start (the roster's `spells` on every machine) and changed by casts and pickups.
-	"spell_slots": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); a joiner's license: seat.take / join.snapshot (M6); a cast never changes them",
+	"spell_slots": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); a joiner's license: seat.take / join.snapshot (M6); a cast that spends the last charge opens that slot on every copy (NetCasts)",
 	"_charges": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); casts: the cast event's charges left (NetCasts, M4); a joiner's license: seat.take / join.snapshot (M6)",
 	# Timed buffs and debuffs (armor, coffee, vines roots) are applied by the target's owner and shown from here.
 	"_modifiers": "st {k mods} from the owner when they change (NetStatus, M4): armor, coffee, the vines' root",

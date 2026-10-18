@@ -156,7 +156,6 @@ var _subtitle_tween: Tween
 var _screen_layer: CanvasLayer     ## board / elevator / invoice
 var _tracker: ObjectiveTracker
 var _use_prompt: UsePrompt         ## "[E] verb" over whatever E would act on right now (van, elevator, employee, note)
-var _swap_prompt: UsePrompt        ## "[F] Swap in ..." over the pickup F would swap in
 var _ticker: Control
 var _banner: DispatchBanner        ## dispatch on the headset: the floor line, the origin-closed line
 var _note_slip: NoteSlip           ## the note being read, lower left (E opens it; E or walking away closes it)
@@ -625,7 +624,11 @@ func _build_world() -> void:
 	# (host only) fill the empty seats and follow the host's hero.
 	# Faceted low-poly models by default; --proto-heroes brings back the capsule bodies.
 	var faceted: bool = not bool(opts.get("proto_heroes", false))
+	# The crew starts a job at the van (floor 1's start cell); taking the elevator down puts it at the elevator on the
+	# new floor (user, 2026-10-18), not on that floor's start cell.
 	var start: Vector2i = map.cells_with_tag("start")[0]
+	if _floor_n() > SiteBuilder.VAN_FLOOR and not map.cells_with_tag("exit").is_empty():
+		start = _exit_cell
 	var spots := _free_cells_near(start, 2)
 	_spawn_crew(start, spots, faceted)
 	var rebar: Hero = null
@@ -1584,9 +1587,6 @@ func _follow_living_ally() -> void:
 func _build_contract_ui() -> void:
 	_use_prompt = UsePrompt.new()
 	add_child(_use_prompt)
-	_swap_prompt = UsePrompt.new()
-	_swap_prompt.name = "SwapPrompt"
-	add_child(_swap_prompt)
 	_tracker = ObjectiveTracker.new()
 	hud.add_overlay(_tracker)
 	_ticker = ContractParts.make_ticker()
@@ -1853,7 +1853,13 @@ func use_target() -> UseTarget:
 			return t
 		var n := _note_target()
 		if n == null:
-			return null
+			var pickup := player.swap_target()   # E swaps a dropped component into the held slot (was F; user, 2026-10-18)
+			if pickup == null:
+				return null
+			t.kind = "pickup"
+			t.verb = "Swap in %s" % SpellBook.component_name(pickup.spell_id)
+			t.pos = pickup.global_position + Vector3(0.0, PROMPT_ABOVE_PICKUP, 0.0)
+			return t
 		t.kind = "note"
 		t.verb = "Close" if n == _open_note and _note_slip != null and _note_slip.is_open() else n.verb()
 		t.pos = n.prompt_point()
@@ -1892,25 +1898,20 @@ func _use_key() -> bool:
 		"note":
 			_toggle_note(t.note)
 			return true
+		"pickup":
+			return player.swap_in_pickup()
 	return Employee.interact(player)
 
 
-## Point the two use prompts: E at use_target(), F at the pickup the hero would swap in. Each frame.
+## Point the use prompt: E at use_target(). Each frame.
 func _update_use_prompts() -> void:
-	if _use_prompt == null or _swap_prompt == null:
+	if _use_prompt == null:
 		return
 	var t := use_target()
 	if t == null:
 		_use_prompt.hide_prompt()
 	else:
 		_use_prompt.show_at(t.pos, "E", t.verb)
-	var pickup: ComponentPickup = null
-	if player != null and is_instance_valid(player) and not (_ended or _ending or _leaving or _menu != null or _van_menu != null):
-		pickup = player.swap_target()
-	if pickup == null:
-		_swap_prompt.hide_prompt()
-	else:
-		_swap_prompt.show_at(pickup.global_position + Vector3(0.0, PROMPT_ABOVE_PICKUP, 0.0), "F", "Swap in %s" % SpellBook.component_name(pickup.spell_id))
 
 
 func _check_elevator() -> void:

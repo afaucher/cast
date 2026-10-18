@@ -4,7 +4,7 @@ extends Node3D
 ## small floating label when a player is close. A player hero walking within COLLECT_RADIUS picks
 ## it up automatically (see Hero.collect_component for what that does). When the hero's slots are
 ## all full and this spell is not slotted, it stays on the floor and offers a swap: Hero.swap_candidate
-## is set while the hero stands within SWAP_RADIUS and F swaps it into the held slot.
+## is set while the hero stands within SWAP_RADIUS and E swaps it into the held slot.
 ##
 ## Only heroes with is_player collect (the keyboard player today, later each human). AI allies
 ## do not cast spells yet, so their slots would only steal the player's loot.

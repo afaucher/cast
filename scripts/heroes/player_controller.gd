@@ -85,8 +85,6 @@ func _slot_keys() -> void:
 			select_slot(i)
 	if Input.is_action_just_pressed("use"):
 		press_use()
-	if Input.is_action_just_pressed("swap_pickup"):
-		swap_pickup()
 
 
 ## Ready slot `i` (0-based). An empty slot just says so.
@@ -111,7 +109,7 @@ func press_use() -> bool:
 	return false
 
 
-## F: swap the pickup the hero stands next to into the held slot.
+## Swap the pickup the hero stands next to into the held slot (E, through the game's use_target()).
 func swap_pickup() -> bool:
 	if hero == null or hero.dead:
 		return false

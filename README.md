@@ -116,8 +116,7 @@ HP carries between floors; everything resets between contracts.
 | LMB / RMB | Primary / secondary attack |
 | **Say "cast heal"** etc. | Cast any spell in your four slots. Fumbles weaken it or fizzle it |
 | 1 – 4 | Hold that slot's spell: it recharges 15% faster, and its component shows in your hand |
-| E | Use, first match wins: at the van's side door (floor 1), open the clock-out slip; at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; next to a note (a sign, memo, sticky note, voicemail...), read it, and E again closes it; otherwise nothing. E never casts |
-| F | Swap a component on the floor into your held slot |
+| E | Use, first match wins: at the van's side door (floor 1), open the clock-out slip; at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; next to a note (a sign, memo, sticky note, voicemail...), read it, and E again closes it; next to a component on the floor while your slots are full, swap it into your held slot; otherwise nothing. E never casts |
 | Enter | Type an incantation instead of speaking |
 | F1 | Voice debug panel: what the mic hears and what the game did |
 | F5 | Abandon the contract and return to the job board |
@@ -134,7 +133,7 @@ further) and **coffee** (+60% move and attack speed for six seconds, twitchy, th
 - **Aiming:** everything lands where you aim, so to heal a friend you point at them.
 - **Fire:** a fireball can set anyone near the blast on fire (monsters, teammates, employees) for 5 to 10 seconds of mild damage. It never spreads, and healing doesn't put it out.
 - **Charges:** each cast spends a charge of that spell's material component. Monsters
-  occasionally drop components. Walk over one to collect it, or press F to swap it into a full
+  occasionally drop components. Walk over one to collect it, or press E to swap it into a full
   slot.
 
 ### Voice
