@@ -70,6 +70,7 @@ func _check_picker() -> void:
 	eq(picker._back.text, "Leave the crew", "a client's checkout has a Leave the crew row")
 	eq(picker._back.hint, "back to the menu", "and says where it goes")
 	picker._back.pressed.emit()
+	await after_void()
 	eq(left.size(), 1, "pressing it cancels the checkout")
 	picker.queue_free()
 	await frames(2)
@@ -84,6 +85,7 @@ func _check_confirm() -> void:
 	await frames(3)
 	check(confirm.stay_button.has_focus(), "Stay is the default")
 	confirm.stay_button.pressed.emit()
+	await after_void()
 	confirm.leave_button.pressed.emit()
 	eq(answers, ["stay", "leave"] as Array[String], "Stay declines and End the job confirms")
 	answers.clear()
@@ -92,6 +94,7 @@ func _check_confirm() -> void:
 	esc.keycode = KEY_ESCAPE
 	esc.pressed = true
 	confirm._input(esc)
+	await after_void()
 	eq(answers, ["stay"] as Array[String], "Esc stays")
 	confirm.queue_free()
 	await frames(2)

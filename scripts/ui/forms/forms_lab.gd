@@ -12,8 +12,12 @@ extends Control
 ## --lab-down <n>  press Down n times first (focus walk), for the picker / pause / elevator
 ## --lab-card <i> picker: focus card i (0-based) after the first two are ticked
 ## --lab-fake <n>  picker: offer n made-up spells instead of the real ones (checks a long catalog)
+## --lab-void      void the screen (its void_back(), as Esc does) 0.4 s before the shot and hold the VOID stamp there
+##                 (board, picker, pause, elevator, elevator_last, van; FormVoid)
 
 var screen := "board"
+## The screen _open() built (for --lab-void).
+var opened: Control = null
 
 
 func _ready() -> void:
@@ -39,7 +43,18 @@ func _ready() -> void:
 	var shot := Boot.arg_value(a, "--lab-shot")
 	if shot != "":
 		var after := Boot.arg_value(a, "--lab-after")
-		_shot_later(shot, float(after) if after != "" else 1.2)
+		var at := float(after) if after != "" else 1.2
+		if a.has("--lab-void"):
+			_void_later(maxf(at - 0.4, 0.1))
+		_shot_later(shot, at)
+
+
+## --lab-void: void the open screen like Esc does, holding the stamp (nothing is wired to its back signal here anyway).
+func _void_later(after: float) -> void:
+	await get_tree().create_timer(after).timeout
+	FormVoid.hold_s = 3600.0
+	if opened != null and opened.has_method("void_back"):
+		opened.call("void_back")
 
 
 func _open(which: String, a: PackedStringArray) -> void:
@@ -47,6 +62,7 @@ func _open(which: String, a: PackedStringArray) -> void:
 		"board":
 			var board := JobBoard.new(ContractBoard.offers(7))
 			add_child(board)
+			opened = board
 			var f := Boot.arg_value(a, "--lab-focus")
 			if f != "":
 				board.set_highlight(int(f))
@@ -57,6 +73,7 @@ func _open(which: String, a: PackedStringArray) -> void:
 				p.spell_ids = SpellPicker.fake_ids(fake)
 				p.spell_meta = SpellPicker.fake_meta(p.spell_ids)
 			add_child(p)
+			opened = p
 			var offered := p.offered()
 			if offered.size() >= 2:
 				p.toggle(offered[0])
@@ -67,15 +84,18 @@ func _open(which: String, a: PackedStringArray) -> void:
 		"pause":
 			var p := PauseMenu.new()
 			add_child(p)
+			opened = p
 		"elevator", "elevator_last":
 			var last := which == "elevator_last"
 			var e := ElevatorMenu.new({"floor": 3 if last else 1, "floor_count": 3, "payout": 8400, "damages": 1200, "followers": 2,
 				"lines": ["Wine cellar sealed.", "Colin (valet) did not make it."]})
 			add_child(e)
+			opened = e
 		"van":
 			var v := VanExitMenu.new({"floor": 1, "floor_count": 3, "payout": 8400, "damages": 1200, "followers": 2,
 				"lines": ["Hellgates closed on this floor: 1 of 2.", "Objectives not met do not pay. Damage comes out of what you earned."]})
 			add_child(v)
+			opened = v
 		"invoice":
 			var inv := _demo_invoice()
 			var s := InvoiceScreen.new(inv)

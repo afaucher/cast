@@ -3,7 +3,7 @@ extends Control
 ## The freight elevator prompt that opens when the crew steps on the exit cell:
 ##   [1] Go down to floor N (more pay, more danger)     (not offered on the last floor)
 ##   [2] Exit: clock out and invoice the client        (the only way out on the last floor, where it is [1])
-##   [Esc] Stay on this floor
+##   [Esc] Stay on this floor (Esc or the row voids the slip first: form-rules.md §6, FormVoid; void_back())
 ## Followers near the elevator ride along (extracted, $100 each). Exiting is always available. (Floor 1's van is the
 ## other exit, see VanExitMenu.)
 ## Drawn as a canary "while you were out" slip (scripts/ui/forms/). Add under a Control (Hud.add_overlay).
@@ -22,6 +22,7 @@ const INPUT_GUARD_MS := 500
 var _can_descend := false
 var _rows: Array[Control] = []
 var _born_ms := 0
+var _sheet: FormSheet
 
 
 func _init(new_info: Dictionary = {}) -> void:
@@ -46,6 +47,7 @@ func _ready() -> void:
 	var sheet := FormSheet.new("E-1", "While you were out", "Freight elevator  ·  floor %d of %d" % [floor_n, floors], "Floor", "%d / %d" % [floor_n, floors], "canary", 36)
 	sheet.custom_minimum_size = Vector2(820, 0)
 	center.add_child(sheet)
+	_sheet = sheet
 	var body := sheet.body
 
 	var facts := FormSection.new("Report")
@@ -76,7 +78,7 @@ func _ready() -> void:
 	body.add_child(out)
 	_rows.append(out)
 	var stay_b := FormRow.new("Stay on this floor", "Esc", "")
-	stay_b.pressed.connect(func() -> void: stay.emit())
+	stay_b.pressed.connect(void_back)
 	body.add_child(stay_b)
 	_rows.append(stay_b)
 	if not _can_descend:
@@ -107,8 +109,13 @@ func _input(event: InputEvent) -> void:
 				cash_out.emit()
 				get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
-			stay.emit()
+			void_back()
 			get_viewport().set_input_as_handled()
+
+
+## Back is VOID: stamp the slip, then emit `stay`. False while it is already being voided.
+func void_back() -> bool:
+	return FormVoid.void_and(self, stay.emit, _sheet)
 
 
 func can_descend() -> bool:

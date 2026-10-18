@@ -285,6 +285,10 @@ Option B is in the game. Every screen in `scripts/ui/` is a form; `MenuStyle` is
   board, metal clip, index tabs, 1 degree tilt), `KeyHints` (paper keycaps).
 - Focus is one language: the mouse grabs focus on hover, so only one thing is ever highlighted, and the focused
   row gets the yellow band plus a red tick (or, on a toggle row, the band alone, with a red X in the box once ticked).
+- Back is one language too (`form-rules.md` §6): `FormVoid` (2026-10-18). Esc or a form's back row stamps a red VOID on
+  the sheet (each part of the job board's set), holds 0.3 s (`FormVoid.HOLD_S`) with the screen's input blocked, then runs
+  that screen's back. Each screen exposes `void_back()`; game.gd and the main menu call it on Esc. The key strips say
+  "Esc VOID". Test seam: `FormVoid.hold_s`; tests wait it out with `TestCase.after_void()`.
 - `forms_lab.gd` / `scenes/forms_lab.tscn`: the screenshot lab (see Screenshots below).
 
 **Fonts:** the real OFL files in `assets/fonts/` (Barlow Condensed, Courier Prime, Black Ops One, Caveat variable
@@ -317,7 +321,8 @@ Button ignores the script's).
 **Screenshots:** the menu screens use the menu's own flags (`--menu-screen main|voice|settings --menu-shot`); the
 rest use the lab: `godot --path . --resolution 1280x720 -- --scene res://scenes/forms_lab.tscn --screen
 board|picker|pause|elevator|elevator_last|invoice|tracker --shot x --lab-shot <abs.png> [--lab-focus n]` (the `--shot x`
-only stops `Boot` from changing the window size). Test: `tests/test_forms.gd`.
+only stops `Boot` from changing the window size). Add `--lab-void` (lab) or `--menu-void` (menu sub-screens) to void the
+screen just before the shot and hold the VOID stamp. Tests: `tests/test_forms.gd`, `tests/test_form_void.gd`.
 
 ## 5. Files
 - `tools/theme_options/menus.html`, `tools/theme_options/backdrops.html`: self-contained mockups.

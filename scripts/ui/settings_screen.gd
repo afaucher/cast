@@ -3,8 +3,8 @@ extends Control
 ## The menu's Settings screen (FORM 3, goldenrod, scripts/ui/forms/): master volume, fullscreen / windowed, window resolution, whether the voice
 ## debug panel is open when a contract starts, and (4. Diagnostics, M7) "Simulate a long link": off / coast / rough, the
 ## lag the host's crew plays under (playtests of the netcode; the host's choice is broadcast to the crew). Every change is
-## applied at once and saved through GameSettings (user://settings.cfg, section "game"). Emits `back` for the Back button
-## (the menu also handles Esc).
+## applied at once and saved through GameSettings (user://settings.cfg, section "game"). Emits `back` once the form is
+## voided (void_back(): the Back button, or Esc through the menu; FormVoid).
 
 signal back
 
@@ -24,6 +24,7 @@ var panel_check: FormCheck
 var link_menu: OptionButton
 var link_state: Label
 var back_button: Button
+var sheet: FormSheet
 var fullscreen_state: Label
 var panel_state: Label
 
@@ -40,6 +41,11 @@ func _ready() -> void:
 
 func first_focus() -> Control:
 	return volume_slider
+
+
+## Back is VOID (form-rules.md §6): stamp the sheet, then emit `back`. False while it is already being voided.
+func void_back() -> bool:
+	return FormVoid.void_and(self, back.emit, sheet)
 
 
 # --- API (the controls call these too) -----------------------------------------------------------
@@ -105,7 +111,7 @@ func _build() -> void:
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(col)
 
-	var sheet := FormSheet.new("3", "Options", "Equipment settings  ·  filed at once", "Saved", "at once", "gold", 44)
+	sheet = FormSheet.new("3", "Options", "Equipment settings  ·  filed at once", "Saved", "at once", "gold", 44)
 	sheet.custom_minimum_size = Vector2(960, 0)
 	sheet.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	col.add_child(sheet)
@@ -191,11 +197,11 @@ func _build() -> void:
 	foot_row.add_child(note)
 	back_button = FormTheme.button("Back  (Esc)")
 	back_button.custom_minimum_size = Vector2(220, 50)
-	back_button.pressed.connect(func() -> void: back.emit())
+	back_button.pressed.connect(void_back)
 	foot_row.add_child(back_button)
 	foot.box.add_child(foot_row)
 
-	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "back"]])
+	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "void"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 58.0
 	keys.offset_top = -52.0

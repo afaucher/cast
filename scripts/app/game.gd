@@ -432,6 +432,7 @@ func _make_board(board_seed: int, read_only: bool, note: String = "") -> JobBoar
 	add_child(_backdrop)
 	board.backdrop_behind = true
 	_screens().add_child(board)
+	board.back.connect(_request_leave)   # Esc voids the board, then leaves (a crew host confirms first)
 	return board
 
 
@@ -2374,12 +2375,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			return   # (M6: not on the job yet)
 		_abandon_to_board()
 	elif event.is_action_pressed("pause"):
-		if _join_slip != null:
-			_request_leave()   # (M6: still clocking in: leave the crew)
+		# Back is VOID (form-rules.md §6): Esc stamps the form on screen and its own back runs after the hold (FormVoid).
+		if _picker != null:
+			_picker.void_back()      # the license checkout: back to the same three offers (a client, or a joiner's 15-S, leaves the crew)
+		elif _join_slip != null:
+			_join_slip.void_back()   # (M6: still clocking in: leave the crew)
 		elif _board != null:
-			_request_leave()   # Esc on the job board: back to the menu (a crew host confirms first)
-		elif _picker != null:
-			_back_to_board()  # Esc on the license checkout: back to the same three offers (a client leaves the crew)
+			_board.void_back()       # the job board: back to the menu (a crew host confirms first)
 		elif _shared and _session == null:
 			_request_leave()  # a client still waiting for the host's board
 		elif _can_pause():

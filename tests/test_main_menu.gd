@@ -194,7 +194,9 @@ func _check_menu() -> void:
 	eq(menu.screen, "settings", "Settings opens the settings screen")
 	check(menu.settings_screen != null and not menu.main_panel.visible, "the main buttons give way to it")
 	menu._unhandled_input(_action("pause"))
-	eq(menu.screen, "main", "Esc backs out of Settings")
+	eq(menu.screen, "settings", "Esc voids Settings first...")
+	await after_void()
+	eq(menu.screen, "main", "... then backs out of it")
 	check(menu.main_panel.visible and menu.settings_screen == null, "the main screen is back")
 	menu.voice_button.pressed.emit()
 	await frames(3)
@@ -206,7 +208,7 @@ func _check_menu() -> void:
 		check(not menu.voice_screen.caster.use_mic, "use_mic=false reaches the caster")
 	var vs := menu.voice_screen
 	menu._unhandled_input(_action("pause"))
-	await frames(3)
+	await after_void()
 	eq(menu.screen, "main", "Esc backs out of Voice setup")
 	check(not is_instance_valid(vs), "the voice screen (and its mic) is freed")
 	menu.quit_button.pressed.emit()
@@ -393,6 +395,8 @@ func _check_voice_setup() -> void:
 	check(typed_ok[0] and screen.result_label.text.begins_with("CAST FIREBALL"), "the type-it box casts (%s)" % screen.result_label.text)
 
 	screen.back_button.pressed.emit()
+	eq(backed[0], 0, "Back voids the form first")
+	await after_void()
 	eq(backed[0], 1, "Back emits back")
 	screen.queue_free()
 	await frames(2)
@@ -442,7 +446,8 @@ func _check_settings_screen() -> void:
 	var backed := [0]
 	s.back.connect(func() -> void: backed[0] += 1)
 	s.back_button.pressed.emit()
-	eq(backed[0], 1, "Back emits back")
+	await after_void()
+	eq(backed[0], 1, "Back emits back (after the void)")
 	s.queue_free()
 	await frames(2)
 
@@ -499,6 +504,8 @@ func _check_pause() -> void:
 	check(not g.call("_can_pause"), "a second Esc does not stack another overlay")
 
 	pause.resume_button.pressed.emit()
+	check(g.get("_pause") != null, "Resume voids the form first")
+	await after_void()
 	check(g.get("_pause") == null and not get_tree().paused, "Resume unpauses")
 	await frames(10)
 	check(GameWorld.time > t0, "the clock runs again")
@@ -556,6 +563,8 @@ func _check_pause() -> void:
 	await frames(4)
 	check(g.get("_board") != null, "the job board is up")
 	g.call("_unhandled_input", _action("pause"))
+	eq(changed, [] as Array[String], "Esc voids the job board first")
+	await after_void()
 	eq(changed, [Boot.MENU_SCENE] as Array[String], "Esc on the job board goes to the main menu")
 	g.queue_free()
 	await frames(3)

@@ -8,7 +8,8 @@ extends Control
 ##     the peak of the last voice (the numbers come from the caster's SpeechGate),
 ##   - "Try it": say "<cast word> heal"; HEARD, the matched spell and its power show live, like the debug panel.
 ## Changes are saved at once (VoiceCaster persists them to `settings_path`) and the game picks them up when
-## it starts its own VoiceCaster. Emits `back` (the menu also handles Esc). Free the screen to stop the mic.
+## it starts its own VoiceCaster. Emits `back` once the form is voided (void_back(): the Back button, or Esc through the
+## menu; FormVoid). Free the screen to stop the mic.
 
 signal back
 
@@ -46,6 +47,7 @@ var result_label: Label
 var say_label: Label
 var type_edit: LineEdit
 var back_button: Button
+var sheet: FormSheet
 
 var _chips: Dictionary = {}       ## spell id -> {style, power, glow}
 var _voice_lamp: Label
@@ -65,6 +67,11 @@ func _ready() -> void:
 
 func first_focus() -> Control:
 	return trigger_menu
+
+
+## Back is VOID (form-rules.md §6): stamp the sheet, then emit `back`. False while it is already being voided.
+func void_back() -> bool:
+	return FormVoid.void_and(self, back.emit, sheet)
 
 
 func _exit_tree() -> void:
@@ -136,7 +143,7 @@ func _build() -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
-	var sheet := FormSheet.new("7", "Rig calibration", "Dispatch rig  ·  microphone and cast word", "Mic status", "...", "white", 44)
+	sheet = FormSheet.new("7", "Rig calibration", "Dispatch rig  ·  microphone and cast word", "Mic status", "...", "white", 44)
 	sheet.custom_minimum_size = Vector2(1500, 0)
 	center.add_child(sheet)
 	status_label = sheet.header.copy_value
@@ -163,7 +170,7 @@ func _build() -> void:
 	root.add_child(FormTheme.rule(3.0))
 	root.add_child(FormTheme.margin(_build_try_it(), 26, 10, 26, 14))
 
-	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "back"]])
+	var keys := KeyHints.new([["Up", "Down", "field"], ["Left", "Right", "adjust"], ["Esc", "void"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 58.0
 	keys.offset_top = -48.0
@@ -312,7 +319,7 @@ func _build_try_it() -> Control:
 	type_row.add_child(type_edit)
 	back_button = FormTheme.button("Back  (Esc)")
 	back_button.custom_minimum_size = Vector2(220, 50)
-	back_button.pressed.connect(func() -> void: back.emit())
+	back_button.pressed.connect(void_back)
 	type_row.add_child(back_button)
 	return box
 

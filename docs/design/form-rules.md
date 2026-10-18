@@ -78,7 +78,24 @@ A real form has three layers, made by three different hands. Keep them apart.
    signatures, never on a text-heavy sheet.
 26. **Focus is one language:** the yellow highlighter band plus the red tick, the same on every form.
 
-## 6. Before shipping a form
+## 6. Back is VOID
+27. **Esc voids the form you are on.** A big red VOID stamp lands across the sheet, holds a moment, and the game goes
+   back (to the board, out of the crew, out of the menu: whatever "back" means on that screen). The same on every
+   form; the main menu has nothing to void.
+28. **Open visual item (user, 2026-10-18): the clickable equivalent of VOID** so a mouse or controller player can
+   always find it. Options on the table: (A) the Esc keycap in the key strip under every form, labelled VOID and
+   clickable, off the paper; (B) a rubber-stamp prop at a fixed screen corner that voids when clicked. Undecided.
+   Until then, existing back rows stay and void the form the same way Esc does.
+
+**As built (2026-10-18):** one helper, `FormVoid.void_and(screen, action, over)` (`scripts/ui/forms/form_void.gd`). Every
+form screen's `void_back()` calls it, from Esc and from its back row alike: a FormStamp reading VOID (132 px, -9 degrees)
+lands on the sheet in 0.1 s (scale 1.3 to 1, fading in), and the screen's back runs once `FormVoid.HOLD_S` (0.3 s) after
+the press. While it holds, every key and click on that screen stops at the void. The job board stamps each of its three
+parts. Key strips read "Esc VOID". Screens: job board, license checkout (15 and 15-S), voice setup (7), settings (3), pause
+(27-B, back = resume), elevator (E-1, stay), van (E-2, cancel), crew confirm (27-B, stay), invite (27-C, stay), clocking
+in (12-C, leave the crew). The invoice has no back. Test: `tests/test_form_void.gd`.
+
+## 7. Before shipping a form
 - Build it from `FormSheet` / `FormRow` / `FormField` with `theme = FormTheme.theme()`; no one-off colours or fonts.
 - Read it as the clerk who typed it: is every variable typed, every caption printed, every player mark red?
 - Read it as the player: is there any line you could delete without losing anything? Delete it.

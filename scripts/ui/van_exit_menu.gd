@@ -2,7 +2,7 @@ class_name VanExitMenu
 extends Control
 ## The exit slip that opens when the player presses E at the work van (floor 1 only; the van parks there and nowhere else):
 ##   [1] Clock out: drive off and invoice the client
-##   [Esc] Cancel
+##   [Esc] Cancel (Esc or the row voids the slip first: form-rules.md §6, FormVoid; void_back())
 ## Followers near the van ride out with the crew (extracted, $100 each). Clocking out is always allowed, finished or not:
 ## objectives not met do not pay. Drawn as a canary carbon-copy slip like the elevator's (scripts/ui/forms/). Add under a
 ## Control (Hud.add_overlay or the game's screen layer). The game pauses the simulation while it is open.
@@ -18,6 +18,7 @@ const INPUT_GUARD_MS := 500
 
 var _rows: Array[Control] = []
 var _born_ms := 0
+var _sheet: FormSheet
 
 
 func _init(new_info: Dictionary = {}) -> void:
@@ -40,6 +41,7 @@ func _ready() -> void:
 	var sheet := FormSheet.new("E-2", "Clock out", "Work van  ·  floor %d of %d" % [floor_n, floors], "Floor", "%d / %d" % [floor_n, floors], "canary", 36)
 	sheet.custom_minimum_size = Vector2(820, 0)
 	center.add_child(sheet)
+	_sheet = sheet
 	var body := sheet.body
 
 	var facts := FormSection.new("Report")
@@ -64,7 +66,7 @@ func _ready() -> void:
 	body.add_child(out)
 	_rows.append(out)
 	var back := FormRow.new("Cancel", "Esc", "")
-	back.pressed.connect(func() -> void: cancel.emit())
+	back.pressed.connect(void_back)
 	body.add_child(back)
 	_rows.append(back)
 	body.add_child(FormTheme.gap(10))
@@ -86,5 +88,10 @@ func _input(event: InputEvent) -> void:
 			clock_out.emit()
 			get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
-			cancel.emit()
+			void_back()
 			get_viewport().set_input_as_handled()
+
+
+## Back is VOID: stamp the slip, then emit `cancel`. False while it is already being voided.
+func void_back() -> bool:
+	return FormVoid.void_and(self, cancel.emit, _sheet)

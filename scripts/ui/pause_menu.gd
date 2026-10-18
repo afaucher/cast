@@ -2,8 +2,8 @@ class_name PauseMenu
 extends Control
 ## The in-contract pause overlay (Esc): Resume, Abandon contract (back to the job board) or Main menu, as
 ## FORM 27-B on a clipboard (scripts/ui/forms/). The game pauses the scene tree while it is open; this overlay
-## runs while paused (process mode ALWAYS). Add it under a CanvasLayer. Esc resumes.
-## Emits resume / abandon / main_menu; the game does the work.
+## runs while paused (process mode ALWAYS). Add it under a CanvasLayer. Esc (or Resume) voids the form and then
+## resumes: back is VOID (form-rules.md §6, FormVoid; void_back()). Emits resume / abandon / main_menu; the game does the work.
 ##
 ## `online` (set before adding it): another player is in the crew, so NOTHING pauses (networking-build-plan.md M5): the
 ## form says the job runs on, Abandon takes the whole crew back to the board, and Main menu ends the job for everyone
@@ -31,6 +31,8 @@ var hosting := true
 ## The Steam overlay can invite a friend into this crew (a seat is free): show the "Invite crew" row. Set before adding it.
 var can_invite := false
 
+var sheet: FormSheet
+
 var _born_ms := 0
 
 
@@ -53,13 +55,13 @@ func _ready() -> void:
 	center.add_child(holder)
 	var board := FormClipboard.new(640.0, tall, 1.0)
 	holder.add_child(board)
-	var sheet := FormSheet.new("27-B", "On break" if online else "On hold", "CAST  ·  the job runs on" if online else "CAST  ·  shift paused",
+	sheet = FormSheet.new("27-B", "On break" if online else "On hold", "CAST  ·  the job runs on" if online else "CAST  ·  shift paused",
 		"Status", "ON THE CLOCK" if online else "STANDING BY", "white", 46)
 	board.set_content(sheet)
 	var body := sheet.body
 
 	resume_button = _row(body, "Resume", "01", "esc")
-	resume_button.pressed.connect(func() -> void: resume.emit())
+	resume_button.pressed.connect(void_back)
 	abandon_button = _row(body, "Abandon contract", "02", "whole crew" if online else "no invoice")
 	abandon_button.pressed.connect(func() -> void: abandon.emit())
 	menu_button = _row(body, "Main menu", "03", ("ends the job" if hosting else "leave the crew") if online else "")
@@ -103,8 +105,13 @@ func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo) or Time.get_ticks_msec() - _born_ms < INPUT_GUARD_MS:
 		return
 	if event.keycode == KEY_ESCAPE:
-		resume.emit()
+		void_back()
 		get_viewport().set_input_as_handled()
+
+
+## Back is VOID: stamp the form, then emit `resume` (back to the game). False while it is already being voided.
+func void_back() -> bool:
+	return FormVoid.void_and(self, resume.emit, sheet)
 
 
 func _focus() -> void:

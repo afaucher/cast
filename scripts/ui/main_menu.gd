@@ -15,10 +15,12 @@ extends Node
 ## Opening the menu as a host closes the crew (the host left the job). The menu only ASKS Session (the
 ## autoload in scripts/net/); it never touches the network or Steam itself. A Steam overlay invite accepted while the
 ## menu is up joins at once (nothing to lose here; in a job the game asks first, M7).
-## Keyboard (arrows / Tab / Enter) and mouse; Esc backs out of a sub-screen. Everything is built in code.
+## Keyboard (arrows / Tab / Enter) and mouse; Esc voids a sub-screen's form, which then goes back here (FormVoid,
+## form-rules.md §6). On this screen Esc does nothing: the main menu has nothing to void. Everything is built in code.
 ##
 ## Dev flags (after `--`; see Boot): --no-mic, --menu-screen main|voice|settings, --menu-shot <png>
-## [--menu-after s], --menu-say <text>; online: --net-join <ip[:port]> (README "Online play").
+## [--menu-after s], --menu-say <text>, --menu-void (void the sub-screen just before the shot and hold the stamp);
+## online: --net-join <ip[:port]> (README "Online play").
 
 const GAME_SCRIPT := preload("res://scripts/app/game.gd")
 const TAGLINE := "Licensed Budget Sorcery"
@@ -91,13 +93,22 @@ func _ready() -> void:
 	var shot := Boot.arg_value(args, "--menu-shot")
 	if shot != "":
 		var after := Boot.arg_value(args, "--menu-after")
-		_shot_later(shot, float(after) if after != "" else 1.5, Boot.arg_value(args, "--menu-say"))
+		_shot_later(shot, float(after) if after != "" else 1.5, Boot.arg_value(args, "--menu-say"), args.has("--menu-void"))
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if screen != "main" and event.is_action_pressed("pause"):
-		show_screen("main")
+		void_screen()
 		get_viewport().set_input_as_handled()
+
+
+## Esc on a sub-screen: void its form; its `back` then shows the main screen. False when there is nothing to void.
+func void_screen() -> bool:
+	if voice_screen != null and is_instance_valid(voice_screen):
+		return voice_screen.void_back()
+	if settings_screen != null and is_instance_valid(settings_screen):
+		return settings_screen.void_back()
+	return false
 
 
 # --- Actions ----------------------------------------------------------------------------------------
@@ -309,7 +320,7 @@ func _build_main() -> void:
 	_stamp.position = Vector2(235.0, 650.0)   # the blank strip above the ads, clear of the BUILD line
 	clipboard.add_child(_stamp)
 
-	var keys := KeyHints.new([["Up", "Down", "move"], ["Enter", "sign"], ["Esc", "back"]])
+	var keys := KeyHints.new([["Up", "Down", "move"], ["Enter", "sign"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 720.0
 	keys.offset_top = -52.0
@@ -466,11 +477,15 @@ func _fade_in() -> void:
 	tw.tween_callback(rect.queue_free)
 
 
-func _shot_later(path: String, after: float, say_text: String) -> void:
+func _shot_later(path: String, after: float, say_text: String, void_it: bool = false) -> void:
 	if say_text != "" and voice_screen != null:
 		get_tree().create_timer(maxf(after - 0.7, 0.2)).timeout.connect(func() -> void:
 			if voice_screen != null:
 				voice_screen.say(say_text))
+	if void_it:
+		get_tree().create_timer(maxf(after - 0.4, 0.1)).timeout.connect(func() -> void:
+			FormVoid.hold_s = 3600.0   # hold the stamp: the shot catches it mid-hold
+			void_screen())
 	await get_tree().create_timer(after).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(path)

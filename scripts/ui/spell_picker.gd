@@ -7,9 +7,9 @@ extends Control
 ## (description, "say: cast X", cooldown, component) are in the panel on the right instead of on every row.
 ##
 ## Keys: arrows / D-pad move in 2D, Enter / A ticks, 1-9 tick the first nine cards (optional: later ones are
-## reached with the arrows), Enter on Start signs, Esc goes back. Add it under a Control (Hud.add_overlay), not a
-## bare CanvasLayer. Emits picked(spells) with the ids in pick order, or cancelled() from the "Back to the
-## board" row (Esc does the same through the game).
+## reached with the arrows), Enter on Start signs, Esc voids the form. Add it under a Control (Hud.add_overlay), not a
+## bare CanvasLayer. Emits picked(spells) with the ids in pick order, or cancelled() once the form is voided (void_back():
+## the "Back to the board" row, or Esc through the game; FormVoid).
 ##
 ## Test hook: set `spell_ids` (and `spell_meta` for ids SpellBook does not know) before adding it to the tree, e.g.
 ## SpellPicker.fake_ids(24), to see how a long list lays out.
@@ -147,14 +147,14 @@ func _ready() -> void:
 	_back = FormRow.new(back_text, "ESC", back_hint)
 	_back.row_h = 52.0
 	_back.show_box = false
-	_back.pressed.connect(func() -> void: cancelled.emit())
+	_back.pressed.connect(void_back)
 	body.add_child(_back)
 	_wire_focus()
 	_refresh()
 	if not _cards.is_empty():
 		_show_details(_ids[0])
 
-	var keys := KeyHints.new([["Arrows", "move"], ["Enter", "tick / sign"], ["1-9", "tick a license"], ["Esc", "back"]])
+	var keys := KeyHints.new([["Arrows", "move"], ["Enter", "tick / sign"], ["1-9", "tick a license"], ["Esc", "void"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 330.0
 	keys.offset_top = -46.0
@@ -230,6 +230,11 @@ func _detail_panel() -> Control:
 	_d_picks = FormTheme.typed("", 21)
 	v.add_child(_d_picks)
 	return panel
+
+
+## Back is VOID (form-rules.md §6): stamp the sheet, then emit `cancelled`. False while it is already being voided.
+func void_back() -> bool:
+	return FormVoid.void_and(self, cancelled.emit, _sheet)
 
 
 func _initial_focus(first: Control) -> void:

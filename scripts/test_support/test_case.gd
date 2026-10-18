@@ -61,6 +61,11 @@ func frames(n: int) -> void:
 		await get_tree().physics_frame
 
 
+## Wait out a form's VOID stamp (FormVoid.HOLD_S, plus a few frames): back / Esc on a form acts only after it.
+func after_void() -> void:
+	await frames(ceili(FormVoid.hold_s * Engine.physics_ticks_per_second) + 4)
+
+
 func finish() -> void:
 	if _done:
 		return

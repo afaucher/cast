@@ -242,7 +242,8 @@ func _check_slips() -> void:
 	var left := [false]
 	clock.leave.connect(func() -> void: left[0] = true)
 	clock.leave_button.pressed.emit()
-	check(left[0], "Leave the crew leaves")
+	await after_void()
+	check(left[0], "Leave the crew leaves (after the void)")
 	clock.queue_free()
 	await frames(2)
 

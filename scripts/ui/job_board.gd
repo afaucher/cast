@@ -8,7 +8,8 @@ extends Control
 ## Pick one with the mouse, or Left / Right then Enter (A on a controller): the player's name is written on its
 ## Take line, and `picked` follows SIGN_HOLD seconds later so the signature is seen. The highlighted offer
 ## lifts a little and gets a yellow outline. Add it under a Control (Hud.add_overlay) or a CanvasLayer's root
-## Control. Emits picked(run).
+## Control. Emits picked(run), or `back` once the board is voided (void_back(): Esc, through the game; back is VOID,
+## form-rules.md §6, FormVoid: a VOID stamp lands on each of the three parts, since leaving drops the whole set).
 ##
 ## Under the cards, the CREW strip: the roster (seat, name, character) while hosting a crew (Session, the
 ## autoload in scripts/net/), or why this job is solo ("Steam not running: solo only"). Opening the board tells
@@ -23,6 +24,8 @@ extends Control
 signal picked(run: ContractRun)
 ## The highlighted card changed (the host's board tells the crew which one it is looking at).
 signal highlight_changed(index: int)
+## The board was voided (Esc, through the game): leave it (a client leaves the crew; a crew's host is asked first).
+signal back
 
 const CARD_W := 480.0
 const LIFT := 12.0
@@ -109,9 +112,9 @@ func _ready() -> void:
 	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if read_only:
-		side.add_child(KeyHints.new([["Esc", "leave the crew"]]))
+		side.add_child(KeyHints.new([["Esc", "void"]]))
 	else:
-		side.add_child(KeyHints.new([["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "back"]]))
+		side.add_child(KeyHints.new([["Left", "Right", "pick"], ["Enter", "take job"], ["Esc", "void"]]))
 	var rules := FormTheme.label("LEAVING EARLY ALWAYS WORKS  ·  UNMET OBJECTIVES DO NOT PAY", 18, Color(1, 1, 1, 0.85))
 	rules.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	rules.add_theme_constant_override("outline_size", 5)
@@ -192,6 +195,11 @@ func _input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_accept") and not event.is_echo() and not (event is InputEventMouse):
 		choose(_hi)
 		get_viewport().set_input_as_handled()
+
+
+## Back is VOID: stamp every part of the set, then emit `back`. False while it is already being voided.
+func void_back() -> bool:
+	return FormVoid.void_and(self, back.emit, _cards)
 
 
 ## Take offer `index` (mouse click or Enter): sign its Take line, then emit `picked` after `sign_hold`.

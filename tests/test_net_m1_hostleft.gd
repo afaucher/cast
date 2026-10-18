@@ -42,7 +42,7 @@ func run_host() -> void:
 	check(await wait_reports("in_checkout", 1), "c2 is in its checkout")
 	# Back out of the checkout (Esc): the crew goes back to the board, with the same three offers.
 	game.call("_unhandled_input", _pause_key())
-	check(await until(func() -> bool: return scene_changes.size() == 1 and scene_changes[0] == "", 5.0), "backing out asks for the job board again")
+	check(await until(func() -> bool: return scene_changes.size() == 1 and scene_changes[0] == "", 5.0), "backing out (after the VOID) asks for the job board again")
 	game.queue_free()
 	make_game({"seed": SEED})
 	check(await wait_board(), "the host's board is back")
@@ -50,8 +50,9 @@ func run_host() -> void:
 	check(await wait_reports("back_on_board", 1), "c2 is back on the board too")
 	eq(str(reported(c2, "back_on_board")), offers, "with the same offers")
 
-	# Esc on the host's board: the question. Stay first.
+	# Esc on the host's board: the board is voided, then the question. Stay first.
 	game.call("_unhandled_input", _pause_key())
+	await until(func() -> bool: return game.get("_confirm") != null, 2.0)
 	var confirm: CrewConfirm = game.get("_confirm")
 	check(confirm != null, "the host is asked before ending the job for the crew")
 	if confirm == null:
@@ -60,8 +61,9 @@ func run_host() -> void:
 	await get_tree().process_frame
 	check(game.get("_confirm") == null and Session.online() and Session.roster.size() == 2, "Stay: nothing happens")
 	game.call("_unhandled_input", _pause_key())
+	await until(func() -> bool: return game.get("_confirm") != null, 2.0)
 	confirm = game.get("_confirm")
-	check(confirm != null, "asked again")
+	check(confirm != null, "asked again (the board works again after Stay)")
 	if confirm == null:
 		return
 	confirm.confirmed.emit()
@@ -83,8 +85,8 @@ func run_client() -> void:
 		var cmd := await wait_command(20.0)
 		eq(str(cmd.get("cmd", "")), "esc", "the host says when")
 		game.call("_unhandled_input", _pause_key())
-		await get_tree().process_frame
-		check(not Session.online(), "c1 left the crew with Esc on the board")
+		await until(func() -> bool: return not Session.online(), 2.0)
+		check(not Session.online(), "c1 left the crew with Esc on the board (after the VOID)")
 		eq(Session.last_reason, NetSession.YOU_LEFT, "and says so")
 		eq(scene_changes, [Boot.MENU_SCENE] as Array[String], "c1's game goes back to the menu")
 		return

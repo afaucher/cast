@@ -240,6 +240,7 @@ func _check_forms() -> void:
 	esc.keycode = KEY_ESCAPE
 	esc.pressed = true
 	inv._input(esc)
+	await after_void()
 	inv.join_button.pressed.emit()
 	eq(answers, ["stay", "join"] as Array[String], "Esc stays, the second row joins")
 	inv.queue_free()

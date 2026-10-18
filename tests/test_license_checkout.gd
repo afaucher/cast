@@ -199,7 +199,8 @@ func _empty_and_tiny_lists() -> void:
 	var cancelled := [0]
 	p3.cancelled.connect(func() -> void: cancelled[0] += 1)
 	p3._back.pressed.emit()
-	eq(cancelled[0], 1, "the Back row cancels")
+	await after_void()
+	eq(cancelled[0], 1, "the Back row cancels (after the void)")
 	p3.queue_free()
 	await frames(2)
 
