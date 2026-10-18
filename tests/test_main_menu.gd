@@ -1,10 +1,12 @@
 extends TestCase
-## The main menu: boot routing, the buttons, the 3D background, Start, Esc out of sub-screens, the Voice
-## setup screen (no mic) and its effect on VoiceSettings, the Settings screen and GameSettings persistence,
-## and the in-game pause overlay (Esc during a contract).
+## The main menu: boot routing, the buttons, the 3D background, Start a job, Join a crew (no Steam in tests:
+## greyed out), the crew view of a joined client (over ENet in this process), Esc out of sub-screens, the
+## Voice setup screen (no mic) and its effect on VoiceSettings, the Settings screen and GameSettings
+## persistence, and the in-game pause overlay (Esc during a contract).
 
 const GAME := preload("res://scripts/app/game.gd")
 const TMP := "user://test_main_menu_settings.cfg"
+const PORT := 28779
 
 
 func setup() -> void:
@@ -13,6 +15,7 @@ func setup() -> void:
 	_check_routing()
 	_check_game_settings()
 	await _check_menu()
+	await _check_crew_view()
 	await _check_voice_setup()
 	await _check_settings_screen()
 	await _check_pause()
@@ -49,6 +52,8 @@ func _check_routing() -> void:
 	for flags: Array in [["--seed", "5"], ["--spells", "heal,corn"], ["--contract", "1"], ["--floor", "2"], ["--shot", "a.png"],
 			["--zoom", "6"], ["--proto-heroes"], ["--invoice-demo"], ["--seed", "3", "--no-mic"]]:
 		eq(Boot.route(PackedStringArray(flags)), Boot.GAME_SCENE, "dev flags %s jump straight into the game" % str(flags))
+	eq(Boot.route(_args(["--net-join", "127.0.0.1:24600", "--net-name", "B", "--net-link", "coast"])), Boot.MENU_SCENE, "--net-join waits on the menu")
+	eq(Boot.route(_args(["--net-host", "--net-port", "24601"])), Boot.GAME_SCENE, "--net-host opens the job board")
 	eq(Boot.route(_args(["--scene", "res://scenes/rebar_lab.tscn"])), "res://scenes/rebar_lab.tscn", "--scene opens that scene")
 	eq(Boot.route(_args(["--menu", "--scene", "res://scenes/rebar_lab.tscn"])), "res://scenes/rebar_lab.tscn", "--scene wins")
 	eq(Boot.arg_value(_args(["--a", "1", "--b"]), "--b"), "", "a flag without a value reads as empty")
@@ -132,15 +137,24 @@ func _check_menu() -> void:
 	add_child(menu)
 	await frames(3)
 
-	for b: Button in [menu.start_button, menu.voice_button, menu.settings_button, menu.quit_button]:
+	for b: Button in [menu.start_button, menu.join_button, menu.voice_button, menu.settings_button, menu.quit_button]:
 		check(b != null and b.is_inside_tree(), "a menu button exists")
-	eq(menu.start_button.text, "Start", "Start")
+	eq(menu.start_button.text, "Start a job", "Start a job")
+	eq(menu.start_button.number, "01", "row 01")
+	eq(menu.join_button.text, "Join a crew", "Join a crew")
+	eq(menu.join_button.number, "02", "row 02")
 	eq(menu.voice_button.text, "Voice setup", "Voice setup")
 	eq(menu.settings_button.text, "Settings", "Settings")
 	eq(menu.quit_button.text, "Quit", "Quit")
-	check(menu.start_button.has_focus(), "keyboard focus starts on Start")
-	eq(menu.start_button.find_valid_focus_neighbor(SIDE_BOTTOM), menu.voice_button, "Down moves Start -> Voice setup")
+	eq((menu.quit_button as FormRow).number, "05", "five rows")
+	# No Steam in a test run: Join is greyed out and says why; Start plays solo.
+	check(menu.join_button.disabled, "Join a crew is greyed out without Steam")
+	eq(menu.join_button.hint, NetSession.STEAM_OFF, "and says Steam isn't running")
+	eq(menu.start_button.hint, "solo", "Start a job says it will be solo")
+	check(menu.start_button.has_focus(), "keyboard focus starts on Start a job")
+	eq(menu.start_button.find_valid_focus_neighbor(SIDE_BOTTOM), menu.voice_button, "Down skips the greyed Join: Start -> Voice setup")
 	eq(menu.settings_button.find_valid_focus_neighbor(SIDE_BOTTOM), menu.quit_button, "Down moves Settings -> Quit")
+	eq(menu.status_label.text, "", "no status line on a fresh menu")
 	eq(menu.screen, "main", "opens on the main screen")
 
 	# The background (the garage, scripts/ui/menu_backdrop.gd; test_menu_backdrops covers it in depth): the three heroes, a hellgate, a moving camera.
@@ -158,9 +172,16 @@ func _check_menu() -> void:
 		var tris: int = menu.backdrop.wick.triangle_count() + menu.backdrop.rebar.triangle_count() + menu.backdrop.gasket.triangle_count()
 		check(tris < 20000, "the crew stays cheap (%d triangles)" % tris)
 
-	# Start loads the game scene (the job board lives there).
+	# Start loads the game scene (the job board lives there), solo without Steam.
 	menu.start_button.pressed.emit()
 	eq(changed, [Boot.GAME_SCENE] as Array[String], "Start opens the game scene")
+	eq(Session.offline_note, "Steam not running: solo only", "the board will say why it's solo")
+	check(not Session.online(), "no session without Steam")
+	var board := JobBoard.new([] as Array[ContractRun])
+	add_child(board)
+	check(board.crew_strip != null and board.crew_strip.visible and board.crew_strip.text == Session.offline_note, "the job board shows the solo note")
+	board.queue_free()
+	Session.offline_note = ""
 	var game_scene := load(Boot.GAME_SCENE) as PackedScene
 	check(game_scene != null, "the game scene loads")
 	if game_scene != null:
@@ -192,6 +213,74 @@ func _check_menu() -> void:
 	eq(quit_count[0], 1, "Quit quits")
 	menu.queue_free()
 	await frames(2)
+
+
+# --- A joined client waits on the menu (M0: no shared run yet) -------------------------------------------
+
+## Wall-clock wait: this batch runs --fixed-fps, so frames say nothing about elapsed time on a socket.
+func _until(cond: Callable, seconds: float) -> bool:
+	var end := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while not bool(cond.call()):
+		if Time.get_ticks_msec() > end:
+			return false
+		await get_tree().process_frame
+	return true
+
+
+func _check_crew_view() -> void:
+	# A host in this process, under its own multiplayer root: its RPC path ("Session/Wire" from the root)
+	# matches the autoload's, so the autoload Session can join it over ENet.
+	var root := Node.new()
+	root.name = "HostRoot"
+	add_child(root)
+	get_tree().set_multiplayer(SceneMultiplayer.new(), root.get_path())
+	var host := NetSession.new()
+	host.name = "Session"
+	host.telemetry_enabled = false
+	host.player_name = "Hana"
+	root.add_child(host)
+	check(host.host_enet(PORT), "an in-process host")
+	Session.telemetry_enabled = false
+	Session.player_name = "Tess"
+	Session.join_enet("127.0.0.1", PORT)
+	if not check(await _until(func() -> bool: return Session.online(), 5.0), "the menu's Session joins it"):
+		return
+	var menu := _make_menu(false)
+	add_child(menu)
+	await frames(2)
+	eq(menu.join_button.text, "Leave the crew", "joined: Join becomes Leave the crew")
+	check(not menu.join_button.disabled, "and is enabled")
+	check(menu.start_button.disabled, "Start a job is greyed out while in a crew")
+	check(menu.status_label.text.begins_with("Connected to Hana's crew."), "the status says whose crew (%s)" % menu.status_label.text)
+	check(menu.status_label.text.contains(MainMenu.WAITING_NOTE), "and that shared jobs come later")
+	var lines := menu.crew_label.text.split("\n")
+	eq(lines.size(), 2, "the crew list has both players")
+	check(lines[0].contains("Hana") and lines[0].begins_with("1") and lines[0].contains("Wick"), "seat 1: the host and its character (%s)" % lines[0])
+	check(lines[1].contains("Tess") and lines[1].contains("(you)"), "seat 2: you (%s)" % lines[1])
+	check(menu.join_button.has_focus(), "focus moves to Leave the crew")
+	# The host leaves: the menu says so and the rows come back.
+	host.leave()
+	check(await _until(func() -> bool: return not Session.online(), 3.0), "the host's goodbye arrives")
+	await frames(2)
+	eq(menu.status_label.text, NetSession.HOST_LEFT, "the status says the host clocked out")
+	eq(menu.join_button.text, "Join a crew", "the Join row is back")
+	eq(menu.crew_label.text, "", "the crew list is cleared")
+	check(not menu.start_button.disabled, "Start a job is available again")
+	# Leaving on purpose, through the row.
+	host.host_enet(PORT)
+	Session.join_enet("127.0.0.1", PORT)
+	check(await _until(func() -> bool: return Session.online(), 5.0), "joined again")
+	await frames(2)
+	menu.join_button.pressed.emit()
+	check(not Session.online(), "Leave the crew leaves")
+	eq(menu.status_label.text, NetSession.YOU_LEFT, "and says so")
+	host.leave()
+	menu.queue_free()
+	root.queue_free()
+	Session.player_name = ""
+	Session.telemetry_enabled = true
+	Session.last_reason = ""
+	await frames(3)
 
 
 # --- Voice setup ---------------------------------------------------------------------------------------

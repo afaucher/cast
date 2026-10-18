@@ -1,7 +1,9 @@
 # Cast: POC architecture and contracts
 
 Co-op, voice-cast, isometric hex dungeon crawler. This is the **proof of concept**:
-one PC, one mic, one keyboard/mouse player plus AI allies, and no networking.
+one PC, one mic, one keyboard/mouse player plus AI allies. Online co-op is being built in milestones
+(`docs/design/networking-build-plan.md`); M0 (transport, lobby, crew roster, clock, telemetry) is in, so players
+can form a crew, but there is no shared run yet.
 
 Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 **kinematic on a hex heightfield** (no physics bodies for terrain or actors).
@@ -31,15 +33,18 @@ window mode and size) and then changes scene to `Boot.route(args)`:
 | `--scene <res path>` | that scene |
 | `--menu` | `scenes/main_menu.tscn`, even with other flags (they still reach the game) |
 | no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after`, `--backdrop-mood` | the main menu |
-| any other `--flag` (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, every `game.gd` flag, flags added later) | `scenes/game.tscn`, as before |
+| `--net-join <ip[:port]>`, `--net-port`, `--net-link`, `--net-name` (online dev flags, see Networking) | the main menu (a joiner waits there in M0) |
+| any other `--flag` (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, every `game.gd` flag, `--net-host`, `--net-steam-probe`, flags added later) | `scenes/game.tscn`, as before |
 
 `scripts/ui/main_menu.gd` (`MainMenu`) is the menu: `MenuBackdrop` (`scripts/ui/menu_backdrop.gd`: the crew's bunker
 garage, a slowly drifting camera over the three `*Model` heroes idling around the real `VanModel` on its chalk circle,
 torches, a `HellgateModel` glowing through a breach; mood dawn / night / after, see `MenuBackdrop.pick_mood` and
-`LastContract`; no GameWorld, no actors) behind the buttons Start, Voice setup, Settings, Quit. The job board uses
+`LastContract`; no GameWorld, no actors) behind the rows 01 Start a job, 02 Join a crew, 03 Voice setup, 04 Settings,
+05 Quit, a status line and (while joined) the crew list. Start a job hosts a Steam lobby when Steam is up, else plays
+solo; Join a crew joins the first lobby hiring (see Networking). The job board uses
 the same garage: `game.gd`'s `_show_board` adds its own `MenuBackdrop` (the menu scene is already gone after Start's
 scene change, so it is a fresh one that picks the same mood and hero) and sets `board.backdrop_behind`, which swaps
-the board's opaque dark shade for a light dim. Start calls `game.gd`'s `reset_flow()` and loads
+the board's opaque dark shade for a light dim; the board's crew strip shows the roster while hosting. Start calls `game.gd`'s `reset_flow()` and loads
 `Boot.GAME_SCENE`, which opens on the job board. Sub-screens are `VoiceSetupScreen` (runs a real `VoiceCaster`
 with the mic; edits the cast word, strictness and min-voice through the caster, which persists them via
 `VoiceSettings`; live dB meter from `SpeechGate`; "Try it" shows HEARD, the matched spell and its power) and
@@ -56,6 +61,44 @@ opens `PauseMenu` and sets `get_tree().paused`, so the whole world (GameWorld cl
 the overlay (process mode ALWAYS) runs. Resume unpauses; Abandon contract does what F5 does (back to the job board);
 Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the job board also goes to the menu.
 `game.scene_changer` is a test seam for those two scene changes.
+
+## Networking (`scripts/net/`)
+
+Option A, owner authority (`docs/design/networking.md`); the order of work is `docs/design/networking-build-plan.md`.
+Everything that sends, and everything that touches Steam, lives in `scripts/net/` (test_net_contract enforces it).
+Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with nobody joining), `Net.online()`,
+`Session.online()`, `Session.crew()`, `Session.host_time()`.
+
+| File | What |
+|---|---|
+| `net.gd` (`Net`) | the authority kinds (`net_fields()`) and the static facade |
+| `net_session.gd` (autoload **Session**, `NetSession`) | the crew session: ENet or Steam transport, hello handshake, roster, refusals, leaving, clock pings, telemetry rows, dev flags |
+| `net_wire.gd` (`NetWire`, child `Session/Wire`) | the reliable event RPC (its own channel) and unreliable `send_bytes` packets with our own u16 sequence numbers; stale packets are dropped |
+| `net_link.gd` (`NetLink`) | the lag/loss simulator on each process's inbound side (presets `off`, `coast`, `rough`) |
+| `net_clock.gd` (`NetClock`) | `host_time()`: NTP-style pings, interval intersection of the window's bounds, slewed (never backwards) |
+| `net_telemetry.gd` (`NetTelemetry`) | one CSV row a second per machine, clients' rows collected on the host (`user://net/`) |
+| `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
+| `steam_lobby.gd` (`SteamLobby`, child `Session/Lobby`) | lobbies: create, list, join, leave, invites, lobby data |
+
+RPC endpoints live under the autoload (`/root/Session/Wire`), never in `game.tscn`, because every floor change is a
+scene reload and an RPC needs the same node path on every peer. `Session` runs with process mode ALWAYS, so pausing
+the tree never stops the network.
+
+Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
+- **`get_unique_id() == 1` does not mean "I am the host".** Offline, Godot's MultiplayerAPI holds an
+  `OfflineMultiplayerPeer` whose id is also 1. Ask `Session.local_id()` (0 offline) or `Net.is_host()`.
+- **The two ends of a connection become ready on different frames.** The client's `connected_to_server` fires a frame
+  or two before the host's `peer_connected`; an RPC broadcast on the client's signal alone goes to an empty peer list
+  and is lost silently. Cast's handshake has the host speak first (`sys.ask` on `peer_connected`).
+- **`@rpc` mode is a security boundary, not a hint** (`"authority"` drops packets from anyone else). Ours is one
+  `any_peer` reliable event RPC; each handler checks who sent it (`from == 1`, or a roster member).
+- **Test over ENet, but know where it differs:** GodotSteam sends `unreliable_ordered` reliably (never use it), and
+  the Steam peer's send-mode mapping can only be checked on real Steam (the manual checklist in the build plan).
+- **Never free the multiplayer peer inside its own poll** (an RPC handler or a disconnect signal): Cast crashed doing
+  that; `NetSession._end` defers the close.
+- Two peers can share a process (`SceneTree.set_multiplayer` with a node per peer; RPC paths are relative to that
+  root): `test_enet_loopback`, `test_net_session`, `test_main_menu`. A whole game can't (GameWorld and Ledger are
+  autoloads, `game.gd` has static vars), so multi-world tests run as separate processes (Tests, below).
 
 ## Core contracts (already written, see the source)
 
@@ -77,8 +120,9 @@ Main menu drops the contract and changes scene to `Boot.MENU_SCENE`. Esc on the 
     sectors around the center, `Hex.kite_of`, kite k between `DIRS[k]` and `DIRS[k+1]`) that is wall, `wall_top` is
     that part's height. A straight wall cuts a cell in half, a room corner leaves a 120-degree floor wedge, an inside
     corner a 240-degree one. Walls block whole triangles of hex centers, so neighbouring cells always agree; slivers
-    (a floor triangle between two faces, a pocket touching no full cell) are walled in. `Cell.mat_id` is a free
-    material slot (0 = default) for per-room floor / wall looks. Hand-built maps that never call `cut_walls()`
+    (a floor triangle between two faces, a pocket touching no full cell) are walled in. `Cell.mat_id` packs the floor material
+    (bits 0-7) and the wall material (bits 8-15) of the cell, 0 = classic slate; `SiteBuilder.plan()` writes it from the
+    room themes (`FloorMaterials`, docs/design/environment.md "Materials") and `HexMapView` draws it. Hand-built maps that never call `cut_walls()`
     (labs, the arena, most tests) keep plain hex walls; every query below works on both.
   - `is_walkable_cell(c)` means a FULL floor cell (present, not a wall, not cut). Those are the path nodes and the
     spots for spawns, gates, employees, notes and the van. `find_path` never routes through a cut cell (its center lies
@@ -213,6 +257,13 @@ use `check / eq / near / frames(n)`, then call `finish()`. Run with:
 
 Tests run headless with `--fixed-fps 60` (deterministic and fast). Use `GameWorld.time` for
 durations. Logs go to `test_logs/<name>.log` and `.err.log`. **Read the .err.log for parse errors.**
+
+**Multi-process net tests.** A test that extends `NetTest` (`scripts/test_support/net_test.gd`) and declares
+`const PEERS := N` runs as N headless processes over ENet on localhost (a host and N-1 clients), once per link in
+`const LINKS` (default `off` and `coast`), after the parallel batch, at most two runs at a time, in real time
+(`--max-fps 60`, not `--fixed-fps`). The host is the judge: clients `report()` what they saw; the host asserts and
+prints the PASS marker. Every process must exit 0. Logs: `test_logs/<name>.<link>.host.log`, `.c1.log`, ...
+Single-process network tests that need wall time stop the TestCase timer and keep their own (see `test_net_session`).
 
 Run the game: `.\run.ps1` (or `--scene res://scenes/arena.tscn` after `--`).
 Engine: `$env:CAST_GODOT`, else `..\Hero-Reader\third_party\godot\Godot_v4.7-stable_win64_console.exe`.

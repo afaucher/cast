@@ -1,10 +1,13 @@
 class_name Net
 ## Authority classes for networked state (docs/design/networking.md, "Keeping authority straight").
 ##
-## There is no transport yet. Today this file only names who may write each field: every class
-## whose state matters in co-op returns `net_fields() -> {var name: Net.KIND}` covering EVERY
-## script var it has, and test_net_contract fails when a var is missing or a name is stale. The
+## Every class whose state matters in co-op returns `net_fields() -> {var name: Net.KIND}` covering
+## EVERY script var it has, and test_net_contract fails when a var is missing or a name is stale. The
 ## snapshot packer and the debug write guards will be driven by the same declarations.
+##
+## It is also the facade gameplay code asks (it never sends anything itself; that is scripts/net/):
+## `Net.is_host()`, `Net.online()`. The transport is the Session autoload (NetSession, M0); `owns()` and
+## `request()` arrive with hero sync (M2).
 ##
 ## Owner: a hero's player owns that hero; the host owns everything else (monsters, hellgates,
 ## employees, props, pickups, the contract). "Owner" below means that machine.
@@ -21,3 +24,23 @@ const NAMES := {SPAWN: "SPAWN", OWNER: "OWNER", PRIVATE: "PRIVATE", LOCAL: "LOCA
 
 static func is_kind(v: Variant) -> bool:
 	return v is int and NAMES.has(v)
+
+
+## True on the host, and offline (solo is hosting with nobody joining), so solo code paths never change.
+static func is_host() -> bool:
+	var s := session()
+	return s == null or s.is_host()
+
+
+## In a crew session (hosting or joined).
+static func online() -> bool:
+	var s := session()
+	return s != null and s.online()
+
+
+## The Session autoload, or null (a bare test tree without autoloads).
+static func session() -> NetSession:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return null
+	return tree.root.get_node_or_null("Session") as NetSession

@@ -1,6 +1,7 @@
 # Networking build plan: online co-op, step by step
 
-Status: **plan for review**, 2026-10-17. Nothing here is built yet. The architecture is fixed by
+Status: **M0 built** 2026-10-17 (see [M0 as built](#m0-as-built-2026-10-17) after the milestones); M1 onward is
+still the plan. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -274,6 +275,144 @@ Diagnostics "Simulate a long link" (off / coast / rough), set on the host and br
 ENet it uses `net_link.gd`. Swarmer windup decision (open risk in networking.md). Hits taken per player per minute,
 host vs clients, in telemetry.
 *Done when:* the manual Steam checklist (§3) passes once with two real machines.
+
+### M0 as built (2026-10-17)
+One session (M0a and M0b together). Everything in M0's "done when" passes except the clock's 5 ms target with no
+link, which polling makes unreachable (see Clock); the test holds 10 ms.
+
+**Files.** `scripts/net/`: `net_session.gd` (autoload **Session**, `NetSession`), `net_wire.gd` (child
+`Session/Wire`), `net_link.gd`, `net_clock.gd`, `net_telemetry.gd`, `steam_lobby.gd` (child `Session/Lobby`),
+`steam_identity.gd` (kept: still the one Steam init, now also hands the singleton to the others), `net.gd` (gained
+`Net.is_host()`, `Net.online()`, `Net.session()`). Tests: `test_enet_loopback`, `test_net_session`, `test_net_m0_crew`,
+`test_net_link`, `test_net_clock`, plus `tests/pinger.gd`, `scripts/test_support/net_test.gd` (`NetTest`) and new checks in
+`test_net_contract` and `test_main_menu`. UI: `main_menu.gd` (rows, status line, crew view), `job_board.gd` (crew strip).
+`boot.gd`: online flags added to `MENU_FLAGS`. `project.godot`: the `Session` autoload. `run.ps1 -Crew N [-Link L]`.
+Not built yet (later milestones): `net_ids`, `net_codec`, `net_snapshot`, `net_interp`, `net_events`, `crew_flow`,
+`seat_handover`, `Net.owns()`/`Net.request()`. `net_probe.gd` became `NetTest`'s report/command events instead.
+
+**Ported from Bridge, and what changed.**
+| Bridge | Cast | Changed |
+|---|---|---|
+| `steam_manager.gd` | `steam_lobby.gd` | Steam reached through `SteamIdentity.steam()` and string names (no `Steam` global). Game key `cast_licensed_sorcery`; lobby data `name`, `game`, `version` (`BuildVersion.text()`), `protocol`, `seats_free`, `state` (`board`/`job`). The list filters on game, version, `seats_free != "0"` and one free slot. Max 3 members (Steam's "lobby full" maps to "Crew is full"). `+connect_lobby <id>` read at start. Steam also sends `lobby_joined` to a lobby's creator: ignored unless we asked to join. Avatars not ported (M7). `run_callbacks()` every frame once Steam is up. |
+| `network_manager.gd` | `net_session.gd` | Same STEAM/ENET transports and `local_id()` (0 offline). Added: `join_first()` (Bridge's main.gd Join flow), the hello handshake, the roster with character ids, refusals with a reason, a reason on every `session_ended`, `host_time()`, telemetry. `server_relay = false` (clients only talk to the host). The Steam peer gets `no_nagle = true`. ENet admits `MAX_CREW + 2` peers so a 4th can be told why before it is dropped. The peer is closed **deferred**: closing it inside its own poll (the "bye" RPC) crashed Godot. Watchdogs: a client that hears nothing from the host for 6 s ends with "The host clocked out"; the host drops a client silent for 10 s. |
+| `main.gd` Host / Join / Local | `main_menu.gd` rows | "Local" is gone (solo = Start a job with nobody joining). |
+| `net_telemetry.gd` | `net_telemetry.gd` | Same shape (one row a second, clients' rows filed on the host under `from`, gaps are missing). New columns (below); no F4 mark key. Files in `user://net/` (tests: `user://net_tests/`), newest 40 kept. |
+| `_sim_link_ticks` / `_sim_drops_packet` | `net_link.gd` | On **every** process's inbound side, so both directions; reliable events are delayed too (in order, never dropped); wall-clock microseconds, not ticks. |
+| `test_enet_loopback.gd`, `pinger.gd` | same names | Pinger lives in `tests/`; waits are wall-clock; also checks `SteamMultiplayerPeer` exists in 4.7 when the extension does. |
+| CLAUDE.md "Multiplayer" | `docs/ARCHITECTURE.md` "Networking" | Plus Cast's own lesson (don't free the peer inside its poll). |
+
+**Protocol (version 1).** Reliable events ride one RPC, `NetWire._ev(kind, data, stamp)`
+(`@rpc("any_peer", "call_remote", "reliable", 1)`, channel 1); `stamp` is the sender's `host_time()`.
+| Event | From → to | Data |
+|---|---|---|
+| `sys.ask` | host → a new peer, on `peer_connected` | `protocol`, `build` |
+| `sys.hello` | joiner → host | `protocol`, `build`, `name` (`--net-name`, else the Steam persona, else the host names it "Crew N"), `character` (`Session.character_id`, default `wick`), `steam_id` |
+| `sys.welcome` | host → joiner | `seat`, `peer`, `entries` (the roster), `host_unix` (the host's unix time at `host_time` 0; tests use it) |
+| `sys.refuse` | host → joiner | `reason`: "Crew is full", or "Different build (crew on X, you on Y)" for a protocol or build mismatch |
+| `sys.roster` | host → every crew member, after each join and leave | `entries`: `[{peer, seat, name, character, steam_id}]` by seat |
+| `sys.bye` | host → crew, when the host leaves on purpose | `reason` ("The host clocked out") |
+| anything else | either way | gameplay / test events, delivered through `Session.event_received` only from crew members (and only from the host, on a client) |
+
+Unreliable packets: `send_bytes(..., TRANSFER_MODE_UNRELIABLE, 2)` with a 7-byte header, `u8 type | u16 seq | u32
+stamp_ms`. One sequence stream per (sender, type) on the receiver, per (type, target) on the sender; a packet not
+newer than the last accepted (u16 wrap-aware) is dropped as stale. Types: 1 `PING` (`u64` client send time),
+2 `PONG` (`u64` echo, `f64` host time), 3 `ROW` (a client's telemetry row), 15 `TEST`, 16+ gameplay (16 = `SNAP`,
+reserved for M2/M3 snapshots). `Session.send_event(0, ...)` / `send_packet(0, ...)` on the host go to each crew
+member (a broadcast would reach peers still saying hello or being refused).
+
+**Roster and seats.** The host is seat 1; a joiner takes the lowest free seat; at 3 the next hello is refused with
+"Crew is full". Leaving frees the seat. Names, seats, peer ids and character ids are identical on every machine.
+
+**Clock.** Pings every 0.5 s (the first 20 every 50 ms). Each pong bounds the offset (`host_t - t2 <= offset <=
+host_t - t0`); the client intersects the last 24 samples' bounds (the best outbound and the best return leg, even from
+different round trips) and slews to the midpoint at up to 5%, never backwards. Measured on one machine at 60 fps:
+2-8 ms error with no link, 2-17 ms under `coast`. **Why not 5 ms:** each side only sees packets when it polls, once a
+frame, and two processes at the same frame rate keep a fixed frame phase that no exchange of timestamps can observe,
+so the error sits anywhere within half a frame (8.3 ms) and up to a frame while the window lacks a lucky sample (round
+trips come out in whole frames: 100 / 117 / 133 ms under coast). The tests hold 10 ms (off) and 20 ms (coast). A frame
+is the resolution anything in the game can act on, so this is enough for interpolation and scheduled spells, but M1+
+tests that compare "the same host_time" across machines need a one-frame tolerance. `GameWorld.time` is **not** slewed
+yet (there is no shared floor in M0): see "Changes for M1".
+
+**Telemetry columns.** `t` (host_time), `role`, `from`, `seat`, `crew`, `rtt_ms`, `rtt_min_ms`, `jitter_ms`,
+`clock_fix_ms` (correction still being slewed in), `quality` (share of unreliable packets that arrived), `bytes_out`,
+`bytes_in`, `pkts_out`, `pkts_in`, `events_out`, `events_in`, `gaps`, `stale`, `link`, `link_held`, `link_dropped`,
+`pending_rel` (blank: needs Steam's connection status, which `SteamMultiplayerPeer` doesn't expose; M7), `hits` (blank
+until M4). Under `coast` the clients' rows read 100-150 ms RTT: 90 ms of link plus about a frame of polling per hop.
+
+**Main menu (built as proposed).** 01 Start a job · *crew can join* (Steam: `Session.host_steam()`, then the job board;
+no Steam, or the lobby fails: solo, and the board's crew strip says why), 02 Join a crew · *first crew hiring*
+(`Session.join_first()`; greyed "Steam not running" without Steam; "Leave the crew" while joined, "Stop looking" while
+searching), 03 Voice setup, 04 Settings, 05 Quit. A typed status line shows progress and every end reason. A joined
+client stays on the menu with "Connected to <host>'s crew. Shared jobs arrive in a later build." and the crew list.
+The host's job board shows the crew under the cards. Opening the menu as a host closes the crew (Esc on the board, or
+Main menu from pause, ends the session for everyone with "The host clocked out"). An overlay invite while running
+leaves the current session and joins (no prompt yet; M7).
+
+**Dev flags (differ from the proposal's `--net enet --host` form).** `--net-host`, `--net-join <ip[:port]>`,
+`--net-port <P>` (24600), `--net-link off|coast|rough`, `--net-name <name>`, `--net-steam-probe`. `--seat` was not
+needed (seats come from join order). `run.ps1 -Crew 2|3 [-Link coast]` opens a host window and joiner windows
+(only the host has the mic). The harness flags are `--net-role host|client --net-index i --net-port P --net-peers N
+--net-link L`.
+
+**The multi-process harness, as built.** `test_runner.ps1` treats a test with `const PEERS := N` (N = processes) as a
+net test, runs it once per entry of `const LINKS` (default `["off", "coast"]`; `-Link` overrides) on port
+`28000 + 10 * slot`, starts the host, waits 0.4 s, starts the clients (they also retry), and kills every process of a
+run at 90 s. A run passes when every process exits 0, the host printed the PASS marker and no log has a SCRIPT ERROR.
+Net runs go after the parallel batch, at most 2 at a time, before the serial voice tests. Changed from the plan:
+**real time is `--max-fps 60` without `--fixed-fps`** (under `--fixed-fps` a headless process runs flat out and game
+time races ahead of the wall clock, which broke the first run), and `NetTest` replaces the TestCase timer with a
+wall-clock timeout. `NetTest` gives `report(key, value)`, `wait_reports`, `command(peer, cmd)` / `wait_command`,
+`wait_done`, `until(cond, seconds)` and `roster_signature()`; a client's failed checks are forwarded to the host.
+Runtime in `-TestAll`: the 5 net runs (`test_net_m0_crew` off/coast about 2 s each, `test_net_clock` off/coast about 6.5 s each, `test_net_link` coast about 9 s) take about 16 s of wall time, two at a time, after the parallel batch. The single-process `test_net_session` (about 18 s, mostly the 6 s silence watchdog) and `test_enet_loopback` (1 s) run inside the parallel batch.
+
+**Tests and what they prove.**
+- `test_enet_loopback` (1 process): two SceneMultiplayers, an RPC crosses ENet; `SteamMultiplayerPeer` exists in 4.7.
+- `test_net_session` (1 process, about 18 s): offline facade (`local_id` 0, `Net.is_host()` true); two NetSessions:
+  hello, seats, same roster, names, characters, clock sync, events both ways; "Different build"; client leave; a
+  silent host (100% inbound loss) gives "The host clocked out" after 6 s; host leave (bye) reaches the client at once;
+  units for u16 wrap, link loss/delay/order and the clock's interval intersection and slewing.
+- `test_net_m0_crew` (4 processes, off and coast): 3 admitted with seats 1-3, the 4th refused "Crew is full", the same
+  3-entry roster on every admitted process; a client leaves and both remaining ends see 2; the host's process exits and
+  the last client ends with "The host clocked out".
+- `test_net_link` (2 processes, coast): 300 reliable events each way arrive once and in order with about 55-75 ms one-
+  way delay; 3000 sequenced packets each way (12 a frame, so jitter reorders them) lose about 1.5%, stale ones are
+  dropped (none accepted out of order) and the u16 sequence wraps.
+- `test_net_clock` (3 processes, off and coast): clock error from 3 s after joining, never backwards; telemetry CSVs on
+  all three, the clients' rows in the host's file, RTT matching the link.
+- `test_net_contract`: new rules `steam_api` (Steam singleton, `ClassDB` Steam calls, `Steam.` and
+  `SteamMultiplayerPeer` only in `scripts/net/`), `send_bytes_mode` (every `send_bytes` in `scripts/net/` names
+  `TRANSFER_MODE_UNRELIABLE`), `rpc_reliable` (every `@rpc` is reliable); `unreliable_ordered` and high-level sync are
+  now checked **inside** `scripts/net/` too (before, the lint skipped that folder entirely); each rule is run against
+  lines that must fail.
+- `test_main_menu`: the five rows, Join greyed without Steam, Start plays solo with the note, and a joined client's
+  crew view (over ENet in-process), "The host clocked out", Leave the crew.
+
+**Manual Steam check (2026-10-17, this machine, Steam running, app 480).** `--net-steam-probe` ran the real host path:
+lobby created, data set (`game=cast_licensed_sorcery`, `version`, `protocol=1`, `seats_free=2`, `state=board`),
+`SteamMultiplayerPeer.create_host` OK, roster with the Steam persona, lobby left. Four lobbies were created in total
+while building this, each left within seconds. The lobby list with Join's filters came back empty: Steam doesn't seem
+to list a lobby to its own member (or the data hadn't propagated). So **Join a crew, invites and the Steam peer's
+connection are only proven by the two-account checklist (§3)**. M0 items for that checklist:
+1. A: Start a job; B: Join a crew finds A's crew; both see the roster (B on the menu, A on the board strip).
+2. C joins (3 in the crew); D's Join is refused "Crew is full" (or finds nothing, since the lobby is full).
+3. B leaves: A's strip drops B. A presses Esc on the board: B and C read "The host clocked out".
+4. A invites B from the Steam overlay while B's game runs: B joins directly.
+5. A build with a different `version.txt` can't find A's crew (the version filter), and a forced join says
+   "Different build".
+
+**Changes for M1 (found while building M0).**
+1. **`GameWorld.time` needs a floor start on the shared clock.** `host_time()` counts from the session's start;
+   `GameWorld.time` counts physics time per scene. M1 should send `floor_start_host_time` with the floor and have each
+   client slew `GameWorld.time` toward `host_time() - floor_start` (NetClock's slew is reusable).
+2. **One-frame tolerance** for every cross-machine "same host_time" check (clock section).
+3. **Where a joined client lives.** In M0 it waits on the menu, and opening the menu as a host ends the crew. M1 moves
+   joined clients onto the job board (the host's offers, the highlighted card), so Esc on the board for a client should
+   mean "leave the crew", and the host leaving the board probably wants a confirm.
+4. The job board already publishes `state` (`board`/`job`) to the lobby; M6's mid-contract join reads it.
+5. `Session.event_received` delivers Variant dictionaries; fine for events, but M2's snapshots should go through
+   `send_packet` on type 16 with the planned hand-packed codec.
+6. `+connect_lobby` only matters once Cast has its own app id (on 480 Steam launches Spacewar).
 
 ---
 

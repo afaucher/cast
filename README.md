@@ -14,13 +14,49 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
 
 The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc goes back):
 
+| Row | Does |
+|---|---|
+| **01 Start a job** · *crew can join* | Opens the job board. With Steam running it also opens a crew (a Steam lobby) friends can join; without Steam it is solo, and the board says "Steam not running: solo only". |
+| **02 Join a crew** · *first crew hiring* | Joins the first crew hiring for this build, or says "No crews hiring right now". Greyed out ("Steam not running") without Steam. While you're in a crew it reads **Leave the crew**. |
+| 03 Voice setup · 04 Settings · 05 Quit | As below. |
+
 1. **Voice setup first.** Pick your cast word and strictness, then say "cast heal" and watch what the
    game HEARD, the matched spell and its power. The mic meter shows your level in dB, the min-voice
    line, the learned noise floor and your last voice peak. Raise the line until the TV stops showing
    up; your own voice should still go past it.
 2. **Settings:** volume, fullscreen or windowed, window size, and whether the voice debug panel is
    open when a contract starts. Everything is saved.
-3. **Start** opens the job board.
+3. **Start a job** opens the job board.
+
+### Online play (in progress)
+Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M0) a crew can form,
+but there is no shared run yet**: a player who joins sees "Connected to <host>'s crew. Shared jobs arrive in a later
+build." and the crew list (seat, name, character) on the menu, while the host plays on. The host's job board shows
+the crew under the cards. Up to 3 players (one per crew slot); a 4th is told "Crew is full", a different build is
+refused, and when the host leaves everyone else is told "The host clocked out". Invites from the Steam overlay join
+directly.
+
+**Two or three instances on one PC** (ENet on localhost, no Steam needed):
+
+```powershell
+.un.ps1 -Crew 2                 # a host window (job board) and a joiner window (menu, connected)
+.un.ps1 -Crew 3 -Link coast     # three players, each window simulating a coast-to-coast link
+```
+
+Or by hand, in two terminals:
+
+```powershell
+.un.ps1 --net-host --net-name Alex                         # host over ENet on port 24600, opens the job board
+.un.ps1 --net-join 127.0.0.1 --net-name Sam --no-mic       # join it; waits on the menu with the crew
+```
+
+Online dev flags (after `--`): `--net-host` (host over ENet), `--net-join <ip[:port]>`, `--net-port <P>` (default
+24600), `--net-link off|coast|rough` (simulated lag and loss on everything this process receives: coast is 45 ms each
+way, ±15 ms, 1.5% loss), `--net-name <name>` (the roster name; Steam's name otherwise), `--net-steam-probe` (create one
+real Steam lobby through the host path, print it, leave and quit: the quick Steam check).
+
+**Network telemetry** is passive: one CSV row a second per machine in `%APPDATA%\Godot\app_userdata\Cast\net\`
+(the host's file also holds every client's rows). Read a gap as "missing", never as zero.
 
 ### A contract
 1. **Job board:** dispatch offers three jobs from different clients (prepper billionaire,
@@ -91,6 +127,7 @@ further) and **coffee** (+60% move and attack speed for six seconds, twitchy, th
 ```powershell
 .\test_runner.ps1 -TestAll                # every headless test (the voice audio tests take ~5 min)
 .\test_runner.ps1 -TestName test_hex      # one test
+.\test_runner.ps1 -TestName test_net_clock -Link coast   # a multi-process net test under one link preset
 .\build.ps1                               # all tests, then export build\windows\Cast.exe
 ```
 
@@ -106,7 +143,9 @@ further) and **coffee** (+60% move and attack speed for six seconds, twitchy, th
 - **Labs** (`--scene res://scenes/<name>.tscn`): `terrain_preview`, `voice_lab`, `wick_lab`,
   `gasket_lab`, `rebar_lab`, `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `van_lab` (the crew's work van arriving over its summoning circle), `teeth_lab`, `new_spells_lab` (vines, damp and coffee: `--spell vines|damp|coffee`),
   `backdrop_lab` (the garage behind the main menu and the job board, plus the storefront prototype: `--option garage|storefront`, `--mood dawn|night|after`, `--hero wick|gasket|rebar`, `--board` lays the real job board over the garage).
-- **Tests:** the runner fails a test on any `SCRIPT ERROR`. Logs go to `test_logs/`.
+- **Tests:** the runner fails a test on any `SCRIPT ERROR`. Logs go to `test_logs/`. Net tests (`tests/test_net_*.gd`
+  with `const PEERS := N`) run as N headless processes over ENet localhost, after the parallel batch, under each
+  link preset; logs are `test_logs/<name>.<link>.host.log`, `.c1.log`, ... (`docs/ARCHITECTURE.md`, Tests).
 
 ### Docs
 - `docs/ARCHITECTURE.md`: code contracts and the boot flow.

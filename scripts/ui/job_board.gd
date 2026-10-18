@@ -9,6 +9,10 @@ extends Control
 ## lifts a little and gets a yellow outline. Add it under a Control (Hud.add_overlay) or a CanvasLayer's root
 ## Control. Emits picked(run).
 ##
+## Under the cards, the CREW strip: the roster (seat, name, character) while hosting a crew (Session, the
+## autoload in scripts/net/), or why this job is solo ("Steam not running: solo only"). Opening the board tells
+## the lobby the crew is on the board; taking a job says it's on a job.
+##
 ## Nothing here is full-screen and opaque except the fallback shade, which only shows while `backdrop_behind` is
 ## false: the game sets it to true because the garage (MenuBackdrop, the main menu's backdrop) is behind the
 ## cards, and then only a light vignette sits over it.
@@ -35,6 +39,8 @@ var _lifts: Dictionary = {}
 var _hi := 0
 var _fallback: ColorRect = null
 var _lift_tweens: Dictionary = {}
+## The crew strip under the cards (hidden when there's nothing to say).
+var crew_strip: Label = null
 
 
 func _init(new_offers: Array[ContractRun] = []) -> void:
@@ -94,6 +100,16 @@ func _ready() -> void:
 	for i in offers.size():
 		row.add_child(_make_slot(offers[i], i))
 
+	crew_strip = FormTheme.label("", 20, Color(1, 1, 1, 0.92), true)
+	crew_strip.name = "CrewStrip"
+	crew_strip.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	crew_strip.add_theme_constant_override("outline_size", 5)
+	crew_strip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(crew_strip)
+	Session.roster_changed.connect(refresh_crew)
+	Session.set_crew_state("board")
+	refresh_crew()
+
 	_hi = clampi(_hi, 0, maxi(offers.size() - 1, 0))
 	_apply_highlight(false)
 
@@ -121,7 +137,26 @@ func _input(event: InputEvent) -> void:
 ## Take offer `index` (mouse click or the key).
 func choose(index: int) -> void:
 	if index >= 0 and index < offers.size():
+		Session.set_crew_state("job")
 		picked.emit(offers[index])
+
+
+## The crew strip's text: the roster while hosting, else why it's solo, else nothing.
+func refresh_crew() -> void:
+	if crew_strip == null:
+		return
+	var text := ""
+	if Session.online():
+		var parts: PackedStringArray = []
+		for e: Dictionary in Session.crew():
+			parts.append("%d %s · %s" % [int(e["seat"]), str(e["name"]), str(e["character"]).capitalize()])
+		text = "CREW   " + "     ".join(parts)
+		if Session.roster.size() < NetSession.MAX_CREW:
+			text += "     ·  seats open: friends can Join a crew"
+	elif Session.offline_note != "":
+		text = Session.offline_note
+	crew_strip.text = text
+	crew_strip.visible = text != ""
 
 
 ## The highlighted offer (keyboard / controller / the last one the mouse touched).

@@ -13,13 +13,17 @@ extends Node
 ##   --backdrop-hero <h> menu: the hero standing in front in the garage, wick | gasket | rebar (default: the player's hero, Wick)
 ##   --settings-file <p> read and write the game/voice settings at this path instead of user://settings.cfg
 ##   --no-mic            no microphone (the menu's voice setup too); does not skip the menu
+##   --net-join <ip[:port]>, --net-port <P>, --net-link <preset>, --net-name <name>
+##                       online dev flags (NetSession): they show the menu, where a joiner waits with the crew.
+##                       --net-host and --net-steam-probe are game flags: they host and open the job board.
 ## Anything else (--seed, --spells, --contract, --floor, --shot, --zoom ... every game.gd flag, and any flag
 ## added later) skips the menu, so every dev flow keeps working.
 
 const GAME_SCENE := "res://scenes/game.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Flags that belong to the menu and do not mean "jump into the game".
-const MENU_FLAGS: Array[String] = ["--menu", "--menu-shot", "--menu-screen", "--menu-say", "--menu-after", "--backdrop-mood", "--backdrop-hero", "--settings-file", "--no-mic"]
+const MENU_FLAGS: Array[String] = ["--menu", "--menu-shot", "--menu-screen", "--menu-say", "--menu-after", "--backdrop-mood", "--backdrop-hero", "--settings-file", "--no-mic",
+	"--net-join", "--net-port", "--net-link", "--net-name"]
 
 
 func _ready() -> void:

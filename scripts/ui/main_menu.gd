@@ -2,15 +2,26 @@ class_name MainMenu
 extends Node
 ## The main menu (scenes/main_menu.tscn), the default boot target (see Boot.route). A living background
 ## (MenuBackdrop: the crew idling in a slate hall with a hellgate glowing in the distance) behind a work
-## order (FORM 27-B, scripts/ui/forms/) clipped to a clipboard on the left third, with four rows: Start (the game scene, i.e. the contract job board), Voice setup (VoiceSetupScreen: live mic
-## test), Settings (SettingsScreen) and Quit. Keyboard (arrows / Tab / Enter) and mouse; Esc backs out of a
-## sub-screen. Everything is built in code.
+## order (FORM 27-B, scripts/ui/forms/) clipped to a clipboard on the left third, with five rows:
+##   01 Start a job   hosts a crew (a Steam lobby) and opens the job board; without Steam it plays solo
+##                    (the board says "Steam not running: solo only"). Solo is hosting with nobody joining.
+##   02 Join a crew   joins the first Steam lobby hiring for this build (Session.join_first); "No crews hiring
+##                    right now" when there is none; greyed out "Steam not running" without Steam. While in a
+##                    crew it reads "Leave the crew".
+##   03 Voice setup (VoiceSetupScreen: live mic test), 04 Settings (SettingsScreen), 05 Quit.
+## A typed status line under the rows says what the session is doing or why it ended ("Crew is full", "The
+## host clocked out", ...). A joined client waits HERE in M0 (there is no shared run until M1): the status says
+## "Connected to <host>'s crew. Shared jobs arrive in a later build." and the crew list shows the roster.
+## Opening the menu as a host closes the crew (the host left the job). The menu only ASKS Session (the
+## autoload in scripts/net/); it never touches the network or Steam itself.
+## Keyboard (arrows / Tab / Enter) and mouse; Esc backs out of a sub-screen. Everything is built in code.
 ##
 ## Dev flags (after `--`; see Boot): --no-mic, --menu-screen main|voice|settings, --menu-shot <png>
-## [--menu-after s], --menu-say <text>.
+## [--menu-after s], --menu-say <text>; online: --net-join <ip[:port]> (README "Online play").
 
 const GAME_SCRIPT := preload("res://scripts/app/game.gd")
 const TAGLINE := "Licensed Budget Sorcery"
+const WAITING_NOTE := "Shared jobs arrive in a later build."
 
 signal screen_changed(screen_name: String)
 
@@ -30,16 +41,25 @@ var screen := "main"
 var backdrop: MenuBackdrop
 var ui: CanvasLayer
 var main_panel: Control
-var start_button: Button
+var start_button: FormRow
+var join_button: FormRow
 var voice_button: Button
 var settings_button: Button
 var quit_button: Button
 var clipboard: FormClipboard
 var build_label: Label
+## What the session is doing, or why it ended.
+var status_label: Label
+## The crew while joined (seat, name, character).
+var crew_label: Label
 var voice_screen: VoiceSetupScreen = null
 var settings_screen: SettingsScreen = null
 
 var _opened_from: Button = null
+var _hosting_attempt := false   ## Start a job is waiting for the Steam lobby
+var _status_box: Control = null
+var _crew_box: Control = null
+var _stamp: Control = null   ## gives way to the session notice, which uses the same strip
 
 
 func _ready() -> void:
@@ -55,6 +75,7 @@ func _ready() -> void:
 	ui.name = "UI"
 	add_child(ui)
 	_build_main()
+	_wire_session()
 	var wanted := Boot.arg_value(args, "--menu-screen")
 	if wanted != "" and wanted != "main":
 		show_screen(wanted)
@@ -76,10 +97,42 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # --- Actions ----------------------------------------------------------------------------------------
 
-## Start: a fresh run of the game scene (which opens on the contract job board).
+## Start a job: host a crew (Steam lobby) and open the job board; without Steam, solo.
 func start_game() -> void:
+	if Session.is_client() or Session.busy():
+		return
+	Session.character_id = _featured_hero()
+	if Session.steam_available():
+		_hosting_attempt = true
+		Session.host_steam()
+		_refresh_net()
+		return
+	_play_solo("%s: solo only" % NetSession.STEAM_OFF)
+
+
+## The job board, offline. `note` says why it's solo (the board shows it).
+func _play_solo(note: String) -> void:
+	Session.offline_note = note
 	GAME_SCRIPT.reset_flow()
 	_go(Boot.GAME_SCENE)
+
+
+## Join a crew (the first one hiring), or leave the one we're in, or stop trying.
+func join_crew() -> void:
+	if Session.online() or Session.busy():
+		_hosting_attempt = false
+		Session.leave()
+		return
+	if not Session.steam_available():
+		_set_status(NetSession.STEAM_OFF)
+		return
+	Session.character_id = _featured_hero()
+	Session.join_first()
+	_refresh_net()
+
+
+func _featured_hero() -> String:
+	return backdrop.featured_hero if backdrop != null and backdrop.featured_hero != "" else NetSession.DEFAULT_CHARACTER
 
 
 func quit() -> void:
@@ -141,7 +194,7 @@ func _settings_file() -> String:
 
 
 func _focus_start() -> void:
-	_grab(start_button)
+	_grab(join_button if start_button.disabled else start_button)
 
 
 ## Focus a control if it still exists (deferred calls can outlive the screen).
@@ -203,13 +256,14 @@ func _build_main() -> void:
 	body.add_child(FormTheme.margin(strip, 22, 8, 22, 8))
 	body.add_child(FormTheme.rule(2.0))
 
-	start_button = _menu_row(body, "Start", "01", "new contract", func() -> void: start_game())
-	voice_button = _menu_row(body, "Voice setup", "02", "", func() -> void: _open(voice_button, "voice"))
-	settings_button = _menu_row(body, "Settings", "03", "options", func() -> void: _open(settings_button, "settings"))
-	quit_button = _menu_row(body, "Quit", "04", "clock out", func() -> void: quit())
+	start_button = _menu_row(body, "Start a job", "01", "crew can join", func() -> void: start_game())
+	join_button = _menu_row(body, "Join a crew", "02", "first crew hiring", func() -> void: join_crew())
+	voice_button = _menu_row(body, "Voice setup", "03", "", func() -> void: _open(voice_button, "voice"))
+	settings_button = _menu_row(body, "Settings", "04", "options", func() -> void: _open(settings_button, "settings"))
+	quit_button = _menu_row(body, "Quit", "05", "clock out", func() -> void: quit())
 
 	var note := FormTheme.typed_wrapped("First time? Open Voice setup first and make sure the crew can hear you.", 19, FormTheme.TYPED)
-	body.add_child(FormTheme.margin(note, 22, 12, 22, 6))
+	body.add_child(FormTheme.margin(note, 22, 10, 22, 4))
 
 	var office_head := HBoxContainer.new()
 	office_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -222,6 +276,15 @@ func _build_main() -> void:
 	build_label.name = "BuildVersion"
 	office_head.add_child(build_label)
 	body.add_child(FormTheme.margin(office_head, 22, 6, 22, 0))
+	# The session notice and the crew go in the blank strip above the ads (collapsed while empty).
+	status_label = FormTheme.typed_wrapped("", 19, FormTheme.RED, true)
+	status_label.name = "NetStatus"
+	_status_box = FormTheme.margin(status_label, 22, 10, 22, 0)
+	body.add_child(_status_box)
+	crew_label = FormTheme.typed("", 18)
+	crew_label.name = "Crew"
+	_crew_box = FormTheme.margin(crew_label, 22, 4, 22, 0)
+	body.add_child(_crew_box)
 	body.add_child(FormTheme.spacer())
 	body.add_child(FormTheme.rule(2.0))
 	var ads := HBoxContainer.new()
@@ -232,9 +295,9 @@ func _build_main() -> void:
 	ads.add_child(FormTheme.ad("Lost: shark", "Answers to \"Bruce\". Do not hit."))
 	body.add_child(FormTheme.margin(ads, 22, 10, 22, 14))
 
-	var stamp := FormStamp.new("LICENSED · BONDED · MOSTLY", 18, -8.0)
-	stamp.position = Vector2(235.0, 650.0)   # the blank strip above the ads, clear of the BUILD line
-	clipboard.add_child(stamp)
+	_stamp = FormStamp.new("LICENSED · BONDED · MOSTLY", 18, -8.0)
+	_stamp.position = Vector2(235.0, 650.0)   # the blank strip above the ads, clear of the BUILD line
+	clipboard.add_child(_stamp)
 
 	var keys := KeyHints.new([["Up", "Down", "move"], ["Enter", "sign"], ["Esc", "back"]])
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
@@ -243,13 +306,13 @@ func _build_main() -> void:
 	keys.offset_bottom = -20.0
 	main_panel.add_child(keys)
 
-	FormTheme.chain([start_button, voice_button, settings_button, quit_button])
+	FormTheme.chain([start_button, join_button, voice_button, settings_button, quit_button])
 	_refresh_info()
 
 
 func _menu_row(parent: Control, text: String, number: String, hint: String, on_press: Callable) -> FormRow:
 	var r := FormRow.new(text, number, hint)
-	r.row_h = 76.0
+	r.row_h = 66.0
 	r.pressed.connect(on_press)
 	parent.add_child(r)
 	return r
@@ -261,6 +324,96 @@ func _refresh_info() -> void:
 	var word := str(vs["trigger_word"])
 	var strict := str(vs["strictness"])
 	voice_button.hint = "\"%s\" · %s" % [word, strict]
+
+
+# --- The crew session (Session autoload) ---------------------------------------------------------------
+
+func _wire_session() -> void:
+	Session.status_changed.connect(_on_net_status)
+	Session.session_started.connect(_on_session_started)
+	Session.session_ended.connect(_on_session_ended)
+	Session.roster_changed.connect(_refresh_net)
+	if Session.hosting:
+		Session.leave()   # the host came back to the menu: the job (and the crew) is over
+	if Session.last_reason != "" and not Session.online():
+		_set_status(Session.last_reason)
+	_refresh_net()
+
+
+func _on_net_status(text: String) -> void:
+	if Session.is_client():
+		return   # the crew view owns the status line while joined
+	_set_status(text)
+
+
+func _on_session_started(as_host: bool) -> void:
+	if as_host and _hosting_attempt:
+		_hosting_attempt = false
+		Session.offline_note = ""
+		GAME_SCRIPT.reset_flow()
+		_go(Boot.GAME_SCENE)
+		return
+	_refresh_net()
+
+
+func _on_session_ended(reason: String) -> void:
+	if _hosting_attempt:
+		# Steam couldn't open a lobby: play anyway, solo (the board says why).
+		_hosting_attempt = false
+		_play_solo("Couldn't open a crew (%s): solo only" % reason)
+		return
+	_set_status(reason)
+	_refresh_net()
+
+
+func _set_status(text: String) -> void:
+	if status_label != null:
+		status_label.text = text
+	_fit_notice()
+
+
+## Collapse the empty notice lines; the stamp shows only when the strip is free.
+func _fit_notice() -> void:
+	if _status_box == null:
+		return
+	_status_box.visible = status_label.text != ""
+	_crew_box.visible = crew_label.text != ""
+	_stamp.visible = not _status_box.visible and not _crew_box.visible
+
+
+## Rows, hints, the status line and the crew list from the session state.
+func _refresh_net() -> void:
+	if join_button == null:
+		return
+	var steam := Session.steam_available()
+	var joined := Session.is_client()
+	var busy := Session.busy()
+	start_button.disabled = joined or (busy and not _hosting_attempt)
+	start_button.hint = "in a crew" if joined else ("opening..." if _hosting_attempt else ("crew can join" if steam else "solo"))
+	if joined or (busy and not _hosting_attempt):
+		join_button.text = "Leave the crew" if joined else "Stop looking"
+		join_button.hint = "clock out" if joined else "cancel"
+		join_button.disabled = false
+	else:
+		join_button.text = "Join a crew"
+		join_button.hint = "first crew hiring" if steam else NetSession.STEAM_OFF
+		join_button.disabled = not steam
+	join_button.focus_mode = Control.FOCUS_NONE if join_button.disabled else Control.FOCUS_ALL
+	start_button.focus_mode = Control.FOCUS_NONE if start_button.disabled else Control.FOCUS_ALL
+	join_button.queue_redraw()
+	start_button.queue_redraw()
+	if joined:
+		_set_status("Connected to %s's crew. %s" % [Session.host_name(), WAITING_NOTE])
+		var lines: PackedStringArray = []
+		for e: Dictionary in Session.crew():
+			var you := "  (you)" if int(e["peer"]) == Session.local_id() else ""
+			lines.append("%d  %s  ·  %s%s" % [int(e["seat"]), str(e["name"]), str(e["character"]).capitalize(), you])
+		crew_label.text = "\n".join(lines)
+	else:
+		crew_label.text = ""
+	_fit_notice()
+	if (start_button.disabled and start_button.has_focus()) or (join_button.disabled and join_button.has_focus()):
+		_focus_start.call_deferred()
 
 
 func _open(from: Button, which: String) -> void:
