@@ -15,3 +15,6 @@ version.txt
 # GodotSteam binaries copied from ../bridge-to-friendship (see addons/godotsteam/README.md) -- never committed
 addons/godotsteam/win64/*
 !addons/godotsteam/win64/.gitkeep
+# Third-party CC0 audio (Kenney, Freesound): kept out of git until decided; sources and licences in SOURCES.md
+assets/audio/third_party/*
+!assets/audio/third_party/SOURCES.md
