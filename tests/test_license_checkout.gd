@@ -2,7 +2,7 @@ extends TestCase
 ## The license requisition (SpellPicker): one component, two variants. FORM 15 "License requisition" (white) at a contract
 ## start and FORM 15-S "Supplemental requisition" (canary) for a player joining a job in progress, each with FORM 15-A, a
 ## separate "Spec sheet" page beside it that follows the focused line. Covers: the typed header (job number, client, who
-## it is issued to; 15-S also the floor and the seat it relieves), the catalog as line items built from SpellBook.ids()
+## it is issued to; 15-S also the floor), the catalog as line items built from SpellBook.ids()
 ## (nothing hard-coded per spell; the red tick is the only record of a pick), the printed limit once, no instructional or
 ## state copy, Up / Down navigation, scrolling past MAX_LINES, signing "Requested by" with the red name stamp before
 ## `picked`, and a layout that fits 1600 x 900 canvas units (1280 x 720) and 1600 x 1000 (the Steam Deck's 1280 x 800)
@@ -305,10 +305,10 @@ func _empty_and_tiny_lists() -> void:
 
 
 ## A player joining a job under way files FORM 15-S: the same form on canary, the supplemental header, and the job's
-## floor and the seat it relieves typed in too.
+## floor typed in too.
 func _requisition() -> void:
 	var p := SpellPicker.new()
-	p.requisition = {"job": "08323-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3", "relieving": "Gasket"}
+	p.requisition = {"job": "08323-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3"}
 	p.back_text = "Leave the crew"
 	p.signer = "Duckbob"
 	add_child(p)
@@ -318,9 +318,9 @@ func _requisition() -> void:
 	eq(p._sheet.header.title_label.text, "SUPPLEMENTAL REQUISITION", "titled Supplemental requisition")
 	check(p._sheet.carbon == FormTheme.carbon("canary"), "on canary")
 	eq(p._sheet.header.copy_value.text, "08323-PR", "the job number in the copy box")
-	eq(p._fields.keys(), ["client", "floor", "relieving", "issued_to"], "15-S types the client, floor, relieving and issued to")
+	eq(p._fields.keys(), ["client", "floor", "issued_to"], "15-S types the client, floor and issued to (not the AI it replaces)")
 	var typed := _texts(p._sheet)
-	for v in ["08323-PR", "Hollis-Crane Continuity Holdings", "2 of 3", "Gasket", "Duckbob"]:
+	for v in ["08323-PR", "Hollis-Crane Continuity Holdings", "2 of 3", "Duckbob"]:
 		check(typed.has(v), "the requisition types %s" % v)
 	eq(typed.count(SpellPicker.LIMIT_TEXT % SpellPicker.PICK_COUNT), 1, "the same limit, once")
 	eq(p._spec.header.form_no_label.text, "15-A", "the same spec sheet beside it")
@@ -349,7 +349,7 @@ func _fit_windows() -> void:
 		for variant in ["15", "15-S", "15 x24"]:
 			var p := SpellPicker.new()
 			if variant == "15-S":
-				p.requisition = {"job": "08323-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3", "relieving": "Gasket"}
+				p.requisition = {"job": "08323-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3"}
 			if variant.ends_with("x24"):
 				p.spell_ids = SpellPicker.fake_ids(24)
 				p.spell_meta = SpellPicker.fake_meta(p.spell_ids)

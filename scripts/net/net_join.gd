@@ -57,8 +57,6 @@ var waiting := false
 var note := ""
 var wait_job: Dictionary = {}
 var wait_floor := 0
-## The character of the AI whose seat this joiner will relieve ("" = not known yet), for its requisition form.
-var wait_relieving := ""
 ## Joiner: the host says to sign a license now (the crew is on a job this joiner will arrive on).
 var license := false
 ## Joiner: the spells this joiner signed for ([] until it signs; forgotten when the board comes).
@@ -99,7 +97,6 @@ func reset() -> void:
 	note = ""
 	wait_job = {}
 	wait_floor = 0
-	wait_relieving = ""
 	license = false
 	signed = []
 	signed_at = 0.0
@@ -180,10 +177,7 @@ func _tell_wait(peer: int) -> void:
 		return
 	j["note"] = n
 	j["license"] = lic
-	var seat := int((_session.roster.get(peer, {}) as Dictionary).get("seat", 0))
-	var relieving := str(_session.seats.originals.get(seat, "")) if _session.seats != null else ""
-	_session.send_event(peer, "join.wait", {"note": n, "job": _session.flow.job, "floor": _session.flow.floor_n, "license": lic,
-		"relieving": relieving})
+	_session.send_event(peer, "join.wait", {"note": n, "job": _session.flow.job, "floor": _session.flow.floor_n, "license": lic})
 
 
 func _process(_delta: float) -> void:
@@ -434,7 +428,6 @@ func _client_event(kind: String, data: Dictionary) -> void:
 			wait_job = data.get("job", {}) as Dictionary
 			wait_floor = int(data.get("floor", 0))
 			license = bool(data.get("license", false))
-			wait_relieving = str(data.get("relieving", ""))
 			go = {}
 			changed.emit()
 		"join.go":

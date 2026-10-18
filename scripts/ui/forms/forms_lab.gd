@@ -78,7 +78,7 @@ func _open(which: String, a: PackedStringArray) -> void:
 			if which == "picker_s":
 				p.back_text = "Leave the crew"
 				p.back_hint = "back to the menu"
-				p.requisition = {"job": "08137-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3", "relieving": "Gasket"}
+				p.requisition = {"job": "08137-PR", "client": "Hollis-Crane Continuity Holdings", "floor": "2 of 3"}
 			else:
 				p.job = {"job": "08137-PR", "client": "Hollis-Crane Continuity Holdings"}
 			add_child(p)

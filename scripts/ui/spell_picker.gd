@@ -8,7 +8,7 @@ extends Control
 ## its component and cooldown, and what it does.
 ##
 ## The requisition: the job number in the header's copy box; typed fields for the client and who it is issued to (and on
-## 15-S the floor and the AI seat it relieves); the catalog as line items (RequisitionLine: a printed box, the license,
+## 15-S the floor); the catalog as line items (RequisitionLine: a printed box, the license,
 ## its component and cooldown), built from SpellBook.ids() with nothing hard-coded per spell, scrolling past MAX_LINES;
 ## the printed limit; and "Requested by ______", the line it is submitted on. With exactly PICK_COUNT lines ticked,
 ## Enter or a click on that line stamps the player's name on it in red (SignRow / SignLine, the job board's stamp),
@@ -52,7 +52,7 @@ var back_hint := ""
 ## FORM 15's typed header (all typed values, "" leaves a dash): job (number), client. Set before adding to the tree.
 var job := {}
 ## A player joining a job already under way (user, 2026-10-18) files FORM 15-S, the supplemental requisition for the job
-## in progress, instead: canary, with the same keys as `job` plus floor and relieving (the seat's AI hero). Empty = FORM 15.
+## in progress, instead: canary, with the same keys as `job` plus floor. Empty = FORM 15.
 var requisition := {}
 ## Who the form is issued to and who signs it ("" = JobBoard.signer_name(): the crew / Steam name).
 var signer := ""
@@ -223,7 +223,6 @@ func _field_strip(info: Dictionary) -> Control:
 	var cells: Array = [["client", "Client", 3.0]]
 	if supplemental():
 		cells.append(["floor", "Floor", 0.9])
-		cells.append(["relieving", "Relieving", 1.2])
 	cells.append(["issued_to", "Issued to", 1.6])
 	for i in cells.size():
 		var c: Array = cells[i]

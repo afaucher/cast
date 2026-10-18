@@ -69,7 +69,7 @@ func _screens() -> Array[Dictionary]:
 				var p := SpellPicker.new()
 				p.back_text = "Leave the crew"
 				p.back_hint = "back to the menu"
-				p.requisition = {"job": "08137-PR", "client": "Hollis-Crane", "floor": "2 of 3", "relieving": "Gasket"}
+				p.requisition = {"job": "08137-PR", "client": "Hollis-Crane", "floor": "2 of 3"}
 				return p,
 			"row": func(s: Control) -> BaseButton: return s.get("_back"),
 			"over": func(s: Control) -> Control: return s.get("_sheet")},

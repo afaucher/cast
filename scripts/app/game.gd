@@ -1395,26 +1395,16 @@ func _open_join_picker() -> void:
 	_shot_stage("license", 1.0)
 
 
-## What the joiner's FORM 15-S types in its header: the job in progress (number, client, floor) and the seat it relieves.
+## What the joiner's FORM 15-S types in its header: the job in progress (number, client, floor).
 func _join_requisition() -> Dictionary:
 	var j := Session.join
-	var out := {"job": "", "client": "", "floor": "", "relieving": ""}
+	var out := {"job": "", "client": "", "floor": ""}
 	if not j.wait_job.is_empty():
 		var run := ContractRun.make(str(j.wait_job["archetype"]), int(j.wait_job["seed"]), float(j.wait_job["difficulty"]))
 		out["job"] = run.invoice_number.replace("INV-", "")
 		out["client"] = run.company
 	if j.wait_floor > 0:
 		out["floor"] = "%d of %d" % [j.wait_floor, ContractRun.FLOOR_COUNT]
-	var seat := int(j.go.get("seat", Session.local_entry().get("seat", -1)))
-	if seat > 0:
-		out["relieving"] = "seat %d" % seat
-	if j.wait_relieving != "":
-		out["relieving"] = str((CREW_LOOKS.get(j.wait_relieving, {"name": j.wait_relieving}) as Dictionary)["name"])
-	for row: Variant in j.go.get("seats", []) as Array:
-		var d := row as Dictionary
-		if int(d.get("seat", 0)) == seat:
-			var ch := str(d.get("character", ""))
-			out["relieving"] = str((CREW_LOOKS.get(ch, {"name": ch}) as Dictionary)["name"])
 	return out
 
 
