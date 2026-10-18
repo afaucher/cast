@@ -395,15 +395,18 @@ static func _wet_label() -> Label3D:
 
 
 static func _pool_lounger(s: LowPoly.Soup) -> void:
-	# the sitter faces +Z (feet end); the backrest is at -Z
+	# the sitter faces +Z (feet end, toward the water); the backrest is at -Z and rises toward -Z, away from the seat.
+	# (A +X pitch lifts the -Z end of a box: the recliner/chair pitch -X because their backs are upright boxes.)
+	var white := Color(0.96, 0.96, 0.98)
 	for sx: float in [-0.34, 0.34]:
-		for sz: float in [-0.8, 0.7]:
-			_b(s, Vector3(0.07, 0.26, 0.07), Vector3(sx, 0.13, sz), PropModels.IRON_LT)
-	_b(s, Vector3(0.72, 0.1, 1.0), Vector3(0, 0.3, 0.3), Color(0.96, 0.96, 0.98))
-	_b(s, Vector3(0.72, 0.1, 0.74), Vector3(0, 0.5, -0.5), Color(0.96, 0.96, 0.98), Vector3(-30, 0, 0))
+		_b(s, Vector3(0.07, 0.26, 0.07), Vector3(sx, 0.13, 0.7), PropModels.IRON_LT)
+		_b(s, Vector3(0.07, 0.26, 0.07), Vector3(sx, 0.13, 0.0), PropModels.IRON_LT)
+		_b(s, Vector3(0.07, 0.56, 0.07), Vector3(sx, 0.28, -0.72), PropModels.IRON_LT)
+	_b(s, Vector3(0.72, 0.1, 1.0), Vector3(0, 0.3, 0.3), white)
+	_b(s, Vector3(0.72, 0.1, 0.74), Vector3(0, 0.485, -0.45), white, Vector3(30, 0, 0))
 	for i in 3:
 		_b(s, Vector3(0.74, 0.115, 0.1), Vector3(0, 0.31, 0.0 + 0.3 * float(i)), Color(0.2, 0.7, 0.9))
-	_b(s, Vector3(0.5, 0.1, 0.34), Vector3(0, 0.66, -0.7), Color(1.0, 0.55, 0.45), Vector3(-30, 0, 0))
+	_b(s, Vector3(0.5, 0.1, 0.34), Vector3(0, 0.66, -0.56), Color(1.0, 0.55, 0.45), Vector3(30, 0, 0))
 
 
 static func _pool_basin(s: LowPoly.Soup) -> void:
