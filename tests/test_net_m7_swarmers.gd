@@ -5,7 +5,7 @@ extends NetGameTest
 ##
 ## Phase 1, STANDING STILL (10 s): every swarmer wind-up aimed at a hero, per machine:
 ##   - how long the wind-up is VISIBLE on the victim's own screen before the strike is decided there: on the host, from the
-##     monster entering its wind-up to the strike (Swarmer.WINDUP, 0.15 s); on a client, from the first frame its puppet SHOWS
+##     monster entering its wind-up to the strike (Swarmer.WINDUP, 0.3 s since 2026-10-18); on a client, from the first frame its puppet SHOWS
 ##     the wind-up (the snapshot's ATTACK state, at the render delay) to the frame this client resolves the strike (render
 ##     time >= start + length - NetWorld.STRIKE_EARLY);
 ##   - when the world.windup event arrived on the client, against the wind-up's start (one way + polling), i.e. how early a

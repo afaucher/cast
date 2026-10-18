@@ -49,8 +49,8 @@ gives five lessons, and one more turned up during this research.
 - **Voice already hides latency.** Speech takes 360-480 ms from the end of the utterance to the cast.
   One-way network time (about 50 ms) is a small fraction of that, and nobody can tell when within the
   utterance a spell "should" have fired.
-- **Monster attacks are telegraphed.** Brute 0.9 s, archer 0.5 s, grunt 0.35 s. Swarmer 0.15 s is the
-  exception (see open risks).
+- **Monster attacks are telegraphed.** Brute 0.9 s, archer 0.5 s, grunt 0.35 s, swarmer 0.3 s
+  (lengthened from 0.15 s on 2026-10-18 so it can be dodged on any machine).
 - **Aim snaps to a teammate.** `SpellBook.snap_hero` already knows *who* a support spell is for, so the
   network can send an id instead of a point.
 - **It's co-op.** Peers can disagree for 100 ms about a near miss and nobody minds, as long as each
@@ -266,9 +266,7 @@ or a `Combat` resolver call when the `Net` layer is built:
   Each screen needs its own recompute.
 
 ## Open risks
-- **Swarmers' 0.15 s windup** is shorter than a remote player sees it (one-way plus buffer is about
-  150 ms). Rule 1 keeps the hit fair, but the telegraph is invisible to clients. Lengthen it, or accept
-  swarmers as undodgeable chip damage.
+- ~~**Swarmers' 0.15 s windup**~~ Decided 2026-10-18 (user, option A): `Swarmer.WINDUP` is 0.3 s.
 - **Real relay RTT is unknown.** Players report bad SDR routes in other games. Measure with
   `estimatePingTimeBetweenTwoLocations` and the in-game telemetry before tuning buffers.
 - **Host upload.** Four players and a monster pack with 30 Hz snapshots should fit in tens of KB/s.

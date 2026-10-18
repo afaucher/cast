@@ -2,9 +2,10 @@ class_name ClockInSlip
 extends Control
 ## "Clocking in...": what a player who joined a crew on the job sees while their machine catches up (networking-build-plan.md
 ## M6). A white FORM 12-C on a clipboard like the pause menu: the crew, the job, the floor and the seat they are taking,
-## typed in as they become known, and one short line about what is happening ("Building floor 2..."). The only row is
-## "Leave the crew" (Esc). The game fills it with set_values() and removes it when the floor starts. Add it under a
-## CanvasLayer.
+## typed in as they become known, the license they signed (set_license(): a joiner signs its own license checkout while it
+## waits, and the form takes it back afterwards with the spells typed in and its status LICENSED), and one short line about
+## what is happening ("Building floor 2..."). The only row is "Leave the crew" (Esc). The game fills it with set_values()
+## and removes it when the floor starts. Add it under a CanvasLayer.
 
 signal leave
 
@@ -15,6 +16,8 @@ var crew_value: Label
 var job_value: Label
 var floor_value: Label
 var seat_value: Label
+var license_value: Label
+var sheet: FormSheet
 var step_label: Label
 var stamp: FormStamp
 
@@ -33,18 +36,19 @@ func _ready() -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 	var holder := Control.new()
-	holder.custom_minimum_size = Vector2(660.0, 600.0)
+	holder.custom_minimum_size = Vector2(660.0, 652.0)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(holder)
-	var board := FormClipboard.new(660.0, 600.0, -0.8)
+	var board := FormClipboard.new(660.0, 652.0, -0.8)
 	holder.add_child(board)
-	var sheet := FormSheet.new("12-C", "Clocking in...", "CAST  ·  joining a crew on the job", "Status", "EN ROUTE", "white", 44)
+	sheet = FormSheet.new("12-C", "Clocking in...", "CAST  ·  joining a crew on the job", "Status", "EN ROUTE", "white", 44)
 	board.set_content(sheet)
 	var body := sheet.body
 	crew_value = _field(body, "Crew")
 	job_value = _field(body, "Job")
 	floor_value = _field(body, "Floor")
 	seat_value = _field(body, "Seat")
+	license_value = _field(body, "License")
 	body.add_child(FormTheme.rule(2.0))
 	step_label = FormTheme.typed_wrapped("Calling the crew...", 21)
 	step_label.custom_minimum_size = Vector2(560.0, 0.0)
@@ -56,7 +60,7 @@ func _ready() -> void:
 	leave_button = row
 	leave_button.pressed.connect(func() -> void: leave.emit())
 	stamp = FormStamp.new("CLOCKING IN", 30, -7.0)
-	stamp.position = Vector2(330.0, 410.0)
+	stamp.position = Vector2(330.0, 462.0)
 	board.add_child(stamp)
 	_focus.call_deferred()
 
@@ -79,6 +83,12 @@ func set_values(crew: String, job: String, floor_text: String, seat: String, ste
 	floor_value.text = floor_text if floor_text != "" else "-"
 	seat_value.text = seat if seat != "" else "-"
 	step_label.text = step
+
+
+## The license this joiner signed ("" = not yet: a dash, status EN ROUTE); signed, the status reads LICENSED.
+func set_license(spells: String) -> void:
+	license_value.text = spells if spells != "" else "-"
+	sheet.header.copy_value.text = "LICENSED" if spells != "" else "EN ROUTE"
 
 
 func _input(event: InputEvent) -> void:

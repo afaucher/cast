@@ -4,14 +4,20 @@ extends NetGameTest
 ## player who has not joined yet cannot be sent a command).
 ## - c2 joins DURING A FLOOR CHANGE (the host takes the elevator the moment c2's connection opens, so its hello lands while
 ##   the crew is loading floor 2): it is a joining member nobody waits for (the barrier starts floor 2 without it), it shows
-##   "Clocking in..." saying the crew is riding the elevator, and it arrives on floor 2 (not 1) once floor 2 has started,
-##   with the host's checksum, in the AI's seat.
+##   "Clocking in..." saying the crew is riding the elevator, signs its license at once with the dev flag (--spells
+##   vines,damp: a joiner's license, user 2026-10-18), and it arrives on floor 2 (not 1) once floor 2 has started, with the
+##   host's checksum, in the AI's seat, holding vines and damp on every machine.
 ## - with three players in, c3's join is refused with "Crew is full" (and seats_free is 0): nothing on the floor changes.
 ## - c2 leaves (the AI is back, seats_free 1); the crew cashes out; c3 joins ON THE INVOICE: it waits ("Clocking in...", the
-##   crew is reading the invoice), and the host's "Next contract" takes it to the board with everyone, an ordinary member.
+##   crew is reading the invoice; there is no license to sign for a finished job), and the host's "Next contract" takes it
+##   to the board with everyone, an ordinary member. On the next job c3 signs the ORDINARY license checkout with the crew
+##   (not a joiner's) and starts floor 1 in its seat from the barrier, like everyone.
 
 const PEERS := 4
 const SEED := 13
+## c2's license (the --spells dev flag signs a joiner's license at once) and c3's on the next job.
+const C2_SPELLS := ["vines", "damp"]
+const C3_SPELLS := ["coffee", "armor"]
 
 ## The flow phase the host was in when each joiner's hello was admitted: peer -> [phase, floor_change, floor].
 var admitted_in := {}
@@ -65,6 +71,8 @@ func run_host() -> void:
 		check(bool(r["owns"]), "c2 controls it")
 		check(str(r["note"]).contains("elevator"), "c2's \"Clocking in...\" said the crew was riding the elevator (\"%s\")" % str(r["note"]))
 		check(bool(r["saw_slip"]), "c2 showed the form while it waited")
+		eq(str(r["slots"]), str(C2_SPELLS), "c2 arrived with the license it signed (--spells, at once)")
+	eq(str(Array(hero_at(3).spell_slots)), str(C2_SPELLS), "the host shows c2's license in seat 3")
 	eq(flow().desyncs.size(), 0, "nobody built a different floor")
 	eq(Session.seats.owner_of(3), c2, "seat 3 is c2's")
 	eq(Session.seats_free(), 0, "seats_free is 0: the lobby stops listing the crew")
@@ -101,6 +109,7 @@ func run_host() -> void:
 		check(bool(w["slip"]), "c3 shows \"Clocking in...\"")
 		check(str(w["note"]).contains("invoice"), "... saying the crew is reading the invoice (\"%s\")" % str(w["note"]))
 		check(not bool(w["floor"]), "... and builds no floor")
+		check(not bool(w["picker"]), "... and opens no license checkout (the job is over: nothing to sign)")
 	check(not Session.join.admitted.has(c3), "c3 does not arrive on the finished job")
 	check(await wait_reports("invoice", 1, 10.0), "c1 is on the invoice")
 	# The host's Next contract: everyone (c3 too) on the new board.
@@ -117,6 +126,21 @@ func run_host() -> void:
 			check(not bool(b["slip"]), "%s shows no \"Clocking in...\"" % who)
 	check(not CrewFlow.is_joining(Session.roster.get(c3, {})), "the host's roster: c3 is a member")
 	check(Session.join.joiners.is_empty(), "nobody is joining any more")
+	# 5. The next job: c3 signs the ordinary license checkout with the crew and starts in its seat from the barrier.
+	board().choose(0)
+	for p in [c1, c3]:
+		command(p, "license")
+	if check(await wait_picker(15.0), "the host's license checkout opens for the next job"):
+		sign_license(my_license())
+	if check(await wait_floor(40.0), "the next job's floor 1 starts with the whole crew"):
+		var seat3 := int(Session.roster[c3]["seat"])
+		eq(Session.seats.owner_of(seat3), c3, "c3 holds seat %d from the barrier" % seat3)
+		check(not Session.join.admitted.has(c3), "... as a member, not through a join")
+		eq(str(Array(hero_at(seat3).spell_slots)), str(C3_SPELLS), "... with the license it signed")
+	if check(await wait_reports("license", 2, 30.0), "c1 and c3 report their checkouts"):
+		var l3: Dictionary = reported(c3, "license")
+		check(bool(l3["picker"]) and not bool(l3["joiner"]), "c3 signed the ordinary license checkout (not a joiner's)")
+		eq(str(l3["back"]), "Leave the crew", "... a client's (its back row leaves the crew)")
 	for p in [c1, c3]:
 		command(p, "end")
 	check(await wait_done(2, 20.0), "c1 and c3 are done")
@@ -175,6 +199,13 @@ func _commands() -> void:
 				check(await until(func() -> bool: return board() != null and game.get("_session") == null, 15.0), "on the board")
 				report("board", {"seed": int(game.get("_board_shown")), "joining": CrewFlow.is_joining(Session.local_entry()),
 					"slip": game != null and game.get("_join_slip") != null})
+			"license":
+				var opened := await wait_picker(15.0)
+				var info := {"picker": opened, "joiner": game.get("_join_picker") != null, "back": picker().back_text if opened else ""}
+				if opened:
+					check(sign_license(C3_SPELLS if index == 3 else my_license()), "signed the next job's license")
+				check(await wait_floor(40.0), "the next job's floor starts here")
+				report("license", info)
 			"leave":
 				Session.leave()
 				running = false
@@ -189,7 +220,7 @@ func _c2() -> void:
 		return
 	if not check(await connect_client() == "", "c2 joined the crew on the job"):
 		return
-	make_game({"spells": "heal,corn"})
+	make_game({"spells": ",".join(C2_SPELLS)})
 	var seen := {"slip": false, "note": ""}
 	var arrived := await until(func() -> bool:
 		if game != null and game.get("_join_slip") != null:
@@ -203,8 +234,13 @@ func _c2() -> void:
 		return
 	_ward()
 	report("arrived", {"floor": int((game.get("_session") as ContractSession).floor_number), "sum": flow().local_sums.get("all", ""),
-		"seat": NetFloor.id_of(my_hero()), "owns": Net.owns(my_hero()) and not Net.is_puppet(my_hero()), "note": seen["note"], "saw_slip": seen["slip"]})
+		"seat": NetFloor.id_of(my_hero()), "owns": Net.owns(my_hero()) and not Net.is_puppet(my_hero()), "note": seen["note"], "saw_slip": seen["slip"],
+		"slots": str(Array(my_hero().spell_slots))})
 	await _commands()
+
+
+## Longer than the beat a joiner's form shows before its license checkout opens (game.gd JOIN_LICENSE_BEAT).
+const JOIN_BEAT := 1.0
 
 
 ## c3: refused while the crew is full, then joins on the invoice and goes to the board with everyone.
@@ -218,7 +254,8 @@ func _c3() -> void:
 		return
 	if not check(await connect_client() == "", "c3 joined the crew on the invoice"):
 		return
-	make_game({"spells": "heal,corn"})
+	make_game({})   # (no --spells: c3 signs the next job's license by hand)
 	check(await until(func() -> bool: return game.get("_join_slip") != null and Session.join.note != "", 10.0), "c3 shows \"Clocking in...\"")
-	report("waiting", {"slip": game.get("_join_slip") != null, "note": Session.join.note, "floor": game.get("map") != null})
+	await sleep(JOIN_BEAT)
+	report("waiting", {"slip": game.get("_join_slip") != null, "note": Session.join.note, "floor": game.get("map") != null, "picker": picker() != null})
 	await _commands()

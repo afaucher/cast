@@ -26,6 +26,9 @@ extends Node
 ##     `seat.take {seat, peer, character, epoch, state}`;
 ##   - the joiner itself takes the seat from the host's late-join snapshot (take_local: the same re-kit, then the hero is
 ##     live there and gets `state`: position, facing, slots, charges, cooldowns, the held slot, modifiers, fire, soak).
+##   - the joiner signed its own license while it waited (NetJoin, `join.signed`): `state` carries THOSE spells with fresh
+##     charges, not the AI's, and every machine puts them on the hero as the seat changes hands (apply_loadout: the host
+##     in take(), the other clients from `seat.take`, the joiner from its snapshot).
 ##
 ## A player who left BEFORE the floor's barrier (during the license checkout) has no hero state to hand over: the
 ## game converts that seat itself when it builds the table (game.gd `_drop_departed_seats`), identically on every
@@ -190,6 +193,26 @@ static func apply_state(h: Hero, st: Dictionary) -> void:
 	if f.length() > 0.01:
 		h.facing = f.normalized()
 	h.reset_physics_interpolation()
+	apply_loadout(h, st)
+	var cd := st.get("cd", {}) as Dictionary
+	for k: Variant in cd:
+		h._ready_at[str(k)] = GameWorld.time + float(cd[k])
+	var mods := st.get("m", {}) as Dictionary
+	for m: Variant in mods:
+		var e := mods[m] as Array
+		if e != null and e.size() >= 3 and float(e[1]) > 0.0:
+			h.set_modifier(str(m), float(e[0]), float(e[1]), str(e[2]))
+	if float(st.get("b", 0.0)) > 0.0 and Burning.can_burn(h):
+		Burning.ignite(h, null, float(st["b"]))
+	if float(st.get("s", 0.0)) > 0.0:
+		Burning.soak(h, float(st["s"]))
+
+
+## A handed-over state's slots, charges and held slot on `h` (any machine: the new owner's own hero, or its puppet
+## elsewhere, which shows what its owner holds).
+static func apply_loadout(h: Hero, st: Dictionary) -> void:
+	if not st.has("sl"):
+		return
 	var slots: Array[String] = []
 	for s: Variant in st.get("sl", []) as Array:
 		slots.append(str(s))
@@ -206,18 +229,6 @@ static func apply_state(h: Hero, st: Dictionary) -> void:
 	h.held_slot = clampi(int(st.get("hs", 0)), 0, maxi(0, slots.size() - 1))
 	h._refresh_hold()
 	h.held_changed.emit()
-	var cd := st.get("cd", {}) as Dictionary
-	for k: Variant in cd:
-		h._ready_at[str(k)] = GameWorld.time + float(cd[k])
-	var mods := st.get("m", {}) as Dictionary
-	for m: Variant in mods:
-		var e := mods[m] as Array
-		if e != null and e.size() >= 3 and float(e[1]) > 0.0:
-			h.set_modifier(str(m), float(e[0]), float(e[1]), str(e[2]))
-	if float(st.get("b", 0.0)) > 0.0 and Burning.can_burn(h):
-		Burning.ignite(h, null, float(st["b"]))
-	if float(st.get("s", 0.0)) > 0.0:
-		Burning.soak(h, float(st["s"]))
 
 
 ## Host: `peer` (a joiner, now ready on this floor) takes the AI seat `seat` as `character`. `state` is the hero's state at
@@ -232,6 +243,9 @@ func take(seat: int, peer: int, character: String, state: Dictionary) -> void:
 		"p": state.get("p", Vector3.ZERO)})
 	print("[Net] seat %d: peer %d takes over from the AI as %s (epoch %d)" % [seat, peer, character, epoch_of(seat)])
 	to_player.emit(seat, peer, character)
+	var h := NetRegistry.hero(seat)
+	if h != null:
+		apply_loadout(h, state)   # (the joiner's license, still this machine's hero for this one call)
 	if _session.snap != null:
 		_session.snap.seat_taken(seat, peer)
 	for p: int in _session.roster:
@@ -285,5 +299,8 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 	history.append({"kind": "player", "seat": seat, "peer": peer, "character": character, "epoch": epoch_of(seat), "t": _session.host_time(),
 		"p": (data.get("state", {}) as Dictionary).get("p", Vector3.ZERO)})
 	to_player.emit(seat, peer, character)
+	var h := NetRegistry.hero(seat)
+	if h != null:
+		apply_loadout(h, data.get("state", {}) as Dictionary)   # (the joiner's license on its puppet here)
 	if _session.snap != null:
 		_session.snap.seat_taken(seat, peer)

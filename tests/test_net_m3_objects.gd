@@ -13,6 +13,11 @@ extends NetGameTest
 ##   (state FOLLOW, leader seat 2) and walks after it; E again tells it to wait (WAIT, dismissed, on every screen). The host
 ##   loses one employee and extracts another: dead / extracted everywhere, the clients' trackers show the host's books
 ##   and the extraction pay is on every Ledger once;
+## - E ON THE CLIENT'S WORD (user, 2026-10-18): the host trusts a client's follow / wait for range (its own screen found the
+##   employee within reach; the host's picture is ~100 ms old) and judges only the state. Both clients ask the waiting
+##   employee to follow at the same shared moment, each from 3.5 units away as the host has it (out of E's 2.2 there: the
+##   host refused that before): exactly one is granted, the first, and the other is refused because it now follows
+##   someone; its new leader then tells it to wait from as far, granted;
 ## - every Ledger ends with the same lines.
 
 const PEERS := 3
@@ -161,6 +166,7 @@ func run_host() -> void:
 			var r: Dictionary = reported(p, "employee")
 			agreed = agreed and int(r["state"]) == host_state and bool(r["dismissed"]) and int(r["leader"]) == 0
 	check(agreed, "every screen shows it waiting as the host has it: dismissed, following nobody, state %s (after %d looks)" % [e.state_name(), tries])
+	await _far_e(e, c1, c2)
 	# Lose one, extract one.
 	var lost: Employee = emps[1]
 	var saved: Employee = emps[2]
@@ -277,7 +283,8 @@ func run_client() -> void:
 				# built): inside FOLLOW_MIN the follower backs off and overshoots to 1.7-2.3, and a jump of under 3 units is no
 				# teleport to the snapshot, so the host showed c1's hero LUNGING at the employee at the velocity clamp (15.9 u/s,
 				# extrapolated), which pushed the follower further out still; the E then landed on the edge of WAIT_RANGE (2.2),
-				# judged by the host against an employee moving away. A real player walks, and so does this one.
+				# judged by the host against an employee moving away (since 2026-10-18 the host trusts the client's reach: step 3b).
+				# A real player walks, and so does this one.
 				var c := game.get("controller") as PlayerController
 				var used := false
 				var tries := 0
@@ -300,6 +307,16 @@ func run_client() -> void:
 							GameWorld.flat_distance(e.global_position, my_hero().global_position), tries])
 				check(used, "E is used again (tell it to wait), in %d tries" % tries)
 				report("dismiss", true)
+			"far_e":
+				# Step 3b: stand FAR_E from where the HOST has the employee and ask, as if this screen had found it within
+				# reach (the client's word on range is what the host now trusts).
+				var e := NetRegistry.node(int(cmd["id"])) as Employee
+				var pos: Vector3 = cmd["pos"]
+				await until(func() -> bool: return Session.host_time() >= float(cmd["t"]), 5.0)
+				my_hero().global_position = _open_spot_from(pos, FAR_E, 0 if index == 1 else 4)   # (placed in the frame it asks)
+				my_hero().snap_to_ground()
+				var sent := Session.objects.request(e, str(cmd["what"]))
+				report("far_e", {"sent": sent, "d": GameWorld.flat_distance(my_hero().global_position, pos)})
 			"employee":
 				var e := NetRegistry.node(int(cmd["id"])) as Employee
 				var ld := e.leader()
@@ -315,6 +332,57 @@ func run_client() -> void:
 
 
 # --- Helpers ---------------------------------------------------------------------------------------------------
+
+## Host, step 3b: E on the client's word. The employee is held still on the host (its AI paused for the step), so the distance
+## the host measures from each client's spot is exactly FAR_E: out of E's reach as the host sees it.
+func _far_e(e: Employee, c1: int, c2: int) -> void:
+	var eid := NetFloor.id_of(e)
+	e.set_physics_process(false)
+	var from := Session.objects.employee_log.size()
+	var t_ask := Session.host_time() + 0.8
+	for p in [c1, c2]:
+		command(p, "far_e", {"id": eid, "pos": e.global_position, "t": t_ask, "what": "follow"})
+	check(await wait_reports("far_e", 2, 20.0), "both clients asked the employee to follow from %.1f away" % FAR_E)
+	check(await until(func() -> bool: return Session.objects.employee_log.size() >= from + 2, 5.0), "the host judged both requests")
+	var judged := Session.objects.employee_log.slice(from)
+	var won := judged.filter(func(j: Dictionary) -> bool: return bool(j["granted"]))
+	for j: Dictionary in judged:
+		check(float(j["d"]) > Employee.RECALL_RANGE + 0.3, "seat %d asked from %.2f away as the host has it, out of E's reach there (refused for range before)" % [int(j["seat"]), float(j["d"])])
+	if not check(won.size() == 1, "exactly one follow was granted (%d): the client's word on range is trusted, and the first one wins" % won.size()):
+		e.set_physics_process(true)
+		return
+	var seat := int(won[0]["seat"])
+	var lost: Array = judged.filter(func(j: Dictionary) -> bool: return not bool(j["granted"]))
+	check(lost.size() == 1 and str(lost[0]["state"]) == "FOLLOW", "the other was refused: by then it followed seat %d (a conflicting request loses)" % seat)
+	check(e.is_following() and e.leader() == hero_at(seat), "it follows seat %d's hero on the host" % seat)
+	# Its leader tells it to wait, from as far: granted (only the state is judged).
+	var leader_peer := Session.seats.owner_of(seat)
+	reports[leader_peer].erase("far_e")
+	command(leader_peer, "far_e", {"id": eid, "pos": e.global_position, "t": Session.host_time() + 0.3, "what": "wait"})
+	check(await wait_reports("far_e", 2, 20.0), "seat %d asked it to wait from %.1f away" % [seat, FAR_E])
+	check(await until(func() -> bool: return Session.objects.employee_log.size() >= from + 3, 5.0), "the host judged the wait")
+	var w: Dictionary = Session.objects.employee_log.back()
+	check(str(w["what"]) == "wait" and bool(w["granted"]) and float(w["d"]) > Employee.WAIT_RANGE + 0.3,
+		"the wait from %.2f away was granted (it was following that hero)" % float(w["d"]))
+	check(e.is_dismissed() and e.leader() == null, "it waits, on the host")
+	e.set_physics_process(true)
+
+
+## How far (as the host has the employee) the clients stand when they ask in step 3b: out of E's reach (2.2) and of any slack.
+const FAR_E := 3.5
+
+
+## Walkable floor `dist` from `p`, trying the eight directions from `k0` on (two clients asking at once stand apart).
+func _open_spot_from(p: Vector3, dist: float, k0: int) -> Vector3:
+	var map := game.get("map") as HexMap
+	for i in 8:
+		var a := TAU * float((k0 + i) % 8) / 8.0
+		var q := p + Vector3(cos(a), 0.0, sin(a)) * dist
+		var c := Hex.from_world(q)
+		if map.is_walkable_cell(c) and not map.blocks_point(q, 0.5) and absf(map.ground_height(q) - p.y) < 0.6:
+			return Vector3(q.x, map.ground_height(q), q.z)
+	return p
+
 
 func _peer_named(n: String) -> int:
 	for p: int in Session.roster:

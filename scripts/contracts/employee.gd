@@ -236,29 +236,31 @@ func is_dismissed() -> bool:
 # controller never writes the state itself. Both return true when the request was granted.
 
 ## Can `hero` tell this employee to wait right now? It must be following that hero (or an AI ally of the
-## crew: the player may dismiss what an ally picked up) and be close enough.
-func can_wait(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
+## crew: the player may dismiss what an ally picked up) and be close enough. `reach_checked` (online, the host judging a
+## player's E): the player's own machine already found it within reach on its screen, so only the state is judged here.
+func can_wait(hero: Actor, at: Vector3 = Vector3.INF, reach_checked: bool = false) -> bool:
 	if hero == null or not is_instance_valid(hero) or hero.dead or dead or _extracted:
 		return false
 	if state != State.FOLLOW or not _controlled_by(hero):
 		return false
-	return _reach(hero, at) <= WAIT_RANGE
+	return reach_checked or _reach(hero, at) <= WAIT_RANGE
 
 
 ## Can `hero` recruit this employee right now? A dismissed one always, a never-dismissed one only when
-## JOIN_NEEDS_E; one following somebody else (another player) never.
-func can_follow(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
+## JOIN_NEEDS_E; one following somebody else (another player) never. `reach_checked` as in can_wait.
+func can_follow(hero: Actor, at: Vector3 = Vector3.INF, reach_checked: bool = false) -> bool:
 	if hero == null or not is_instance_valid(hero) or hero.dead or dead or _extracted:
 		return false
 	if state == State.FOLLOW or not (_dismissed or JOIN_NEEDS_E):
 		return false
-	return _reach(hero, at) <= RECALL_RANGE
+	return reach_checked or _reach(hero, at) <= RECALL_RANGE
 
 
 ## "Wait here": stop following and hold this spot. Still panics if a monster comes, then returns. `at` is where the
-## hero stands when another player's machine asks (online, M3: the host's picture of that hero is ~100 ms old).
-func request_wait(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
-	if not can_wait(hero, at):
+## hero stands when another player's machine asks (online, M3: the host's picture of that hero is ~100 ms old);
+## `reach_checked` (online, the host): that machine already checked the reach on its own screen (see can_wait).
+func request_wait(hero: Actor, at: Vector3 = Vector3.INF, reach_checked: bool = false) -> bool:
+	if not can_wait(hero, at, reach_checked):
 		return false
 	_dismissed = true
 	_leader = null
@@ -269,9 +271,9 @@ func request_wait(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
 	return true
 
 
-## "Come with me": follow `hero` again (`at` as in request_wait).
-func request_follow(hero: Actor, at: Vector3 = Vector3.INF) -> bool:
-	if not can_follow(hero, at):
+## "Come with me": follow `hero` again (`at` and `reach_checked` as in request_wait).
+func request_follow(hero: Actor, at: Vector3 = Vector3.INF, reach_checked: bool = false) -> bool:
+	if not can_follow(hero, at, reach_checked):
 		return false
 	var line := str(RECALL_LINES[style]) if _dismissed else str(LATCH_LINES[style])   # first contact vs recalled
 	_dismissed = false

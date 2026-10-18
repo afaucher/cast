@@ -5,11 +5,16 @@ extends Node
 ## on a running floor. Everything here is a reliable event, kinds "join.*"; the seat itself changes hands in SeatHandover.
 ##
 ## HOST
-##   - a joiner waits (`join.wait {note, job, floor}`: what the crew is doing, for its "Clocking in..." form) until the crew
-##     is on a running floor: CrewFlow FLOOR, the van arrival over (the hero sync is live), the job not over, no exit taken.
-##     A joiner during a floor change therefore waits for the next floor to start; one on the invoice waits for the next
-##     board (CrewFlow's crew.board makes it an ordinary member, and this forgets it).
-##   - then `join.go {ticket, job, floor, seat, seats, start_at, floor_start}`: the seat it takes (SeatHandover.choose_seat,
+##   - a joiner waits (`join.wait {note, job, floor, license}`: what the crew is doing, for its "Clocking in..." form) until
+##     the crew is on a running floor: CrewFlow FLOOR, the van arrival over (the hero sync is live), the job not over, no
+##     exit taken. A joiner during a floor change therefore waits for the next floor to start; one on the invoice waits for
+##     the next board (CrewFlow's crew.board makes it an ordinary member, and this forgets it).
+##   - THE JOINER'S LICENSE (user, 2026-10-18): while the crew is on a job it can arrive on (`license` true: licenses being
+##     signed, a floor loading or running), the joiner signs its own license checkout and says so (`join.signed {spells}`,
+##     the same check as crew.signed). It is sent onto a floor only once it has signed. Nobody waits for it: the AI keeps
+##     playing the seat until the joiner is built and ready, and the seat is handed over with the joiner's spells at fresh
+##     charges (SpellComponents.START_CHARGES, as a license gives), not the AI's.
+##   - then (signed, on a running floor) `join.go {ticket, job, floor, seat, seats, start_at, floor_start}`: the seat it takes (SeatHandover.choose_seat,
 ##     the plan's order, decided now: the roster seat follows) and the seat table the floor was built with at its barrier
 ##     (CrewFlow.floor_seats), so the joiner builds the SAME floor from the seed (the same checksum) with that seat as its own;
 ##   - the joiner reports `join.built {ticket, sums}`; a different checksum is a desync (sent out, as at a barrier); a match
@@ -24,7 +29,9 @@ extends Node
 ##   character, epoch, the hero's state: SeatHandover.hero_state); plus what the game adds (`contract`: the objective
 ##   bookkeeping). Not in it (the plan): scheduled effects in flight and monsters' wind-ups (they last under 2 s), grime decals.
 ## JOINER
-##   - shows "Clocking in..." (the game's ClockInSlip) from the first `join.wait`; on `join.go` the game builds the floor
+##   - shows "Clocking in..." (the game's ClockInSlip) from the first `join.wait`; with `license` the game opens the license
+##     checkout in its place at once, and sign(spells) tells the host (Esc there leaves the crew, as on the form);
+##   - on `join.go` the game builds the floor
 ##     behind its own barrier (every hero a puppet of the host's stream, its future one included), reports built, and
 ##     applies the snapshot when it comes: the floor clock (CrewFlow.join_floor), the game's part (snapshot_received), then
 ##     the world, the Ledger and finally its own seat (SeatHandover.take_local). The floor starts on the next frame.
@@ -40,7 +47,7 @@ const WAIT := "wait"
 const BUILD := "build"
 const READY := "ready"
 
-## Host: peer -> {state, ticket, note}.
+## Host: peer -> {state, ticket, note, license, spells (its signed license, [] until it signs), ...}.
 var joiners: Dictionary = {}
 ## Host, tests: per admitted peer, what its snapshot held: {t, bytes, gone (ids), alive (ids), seat, take (state)}.
 var admitted: Dictionary = {}
@@ -50,6 +57,12 @@ var waiting := false
 var note := ""
 var wait_job: Dictionary = {}
 var wait_floor := 0
+## Joiner: the host says to sign a license now (the crew is on a job this joiner will arrive on).
+var license := false
+## Joiner: the spells this joiner signed for ([] until it signs; forgotten when the board comes).
+var signed: Array[String] = []
+## Joiner, tests: host_time when it signed.
+var signed_at := 0.0
 ## Joiner: the host's join.go ({} until it comes).
 var go: Dictionary = {}
 var arrived := false
@@ -84,6 +97,9 @@ func reset() -> void:
 	note = ""
 	wait_job = {}
 	wait_floor = 0
+	license = false
+	signed = []
+	signed_at = 0.0
 	go = {}
 	arrived = false
 	ready_at = 0.0
@@ -105,7 +121,7 @@ func _now() -> float:
 func _on_peer_joined(peer: int) -> void:
 	if not _hosting() or not CrewFlow.is_joining(_session.roster.get(peer, {}) as Dictionary):
 		return
-	joiners[peer] = {"state": WAIT, "ticket": 0, "note": "", "hello_t": _now()}
+	joiners[peer] = {"state": WAIT, "ticket": 0, "note": "", "hello_t": _now(), "spells": []}
 	_tell_wait(peer)
 
 
@@ -115,6 +131,8 @@ func _on_board() -> void:
 	joiners.clear()
 	if waiting and not _hosting():
 		waiting = false
+		license = false
+		signed = []   # (an ordinary member now: it signs the next job's license like everyone)
 		go = {}
 		changed.emit()
 
@@ -127,8 +145,15 @@ func can_admit() -> bool:
 			and not _session.objects.exit_taken()
 
 
-## What a waiting joiner reads on its form.
-func _wait_note() -> String:
+## Host: the crew is on a job a joiner will arrive on, so the joiner signs its license now (licenses being signed, a floor
+## loading or running). Not on the invoice, and not for a host on a job alone (they start together at the next board).
+func license_open() -> bool:
+	var flow := _session.flow
+	return not flow.job_ended and flow.phase in [CrewFlow.LICENSE, CrewFlow.LOADING, CrewFlow.PENDING, CrewFlow.FLOOR]
+
+
+## What a waiting joiner reads on its form (`has_signed`: it has signed its license).
+func _wait_note(has_signed: bool) -> String:
 	var flow := _session.flow
 	if flow.job_ended:
 		return "The crew is reading the invoice. You start with them on the next job."
@@ -138,17 +163,21 @@ func _wait_note() -> String:
 		CrewFlow.LOADING, CrewFlow.PENDING:
 			return "The crew is riding the elevator. You arrive on the next floor." if flow.floor_change else "The crew is heading in. You arrive on floor 1."
 		CrewFlow.FLOOR:
-			return "The crew is stepping out of the van. Hold on." if not can_admit() else "Building the floor..."
+			if not can_admit():
+				return "The crew is stepping out of the van. Hold on."
+			return "Building the floor..." if has_signed else "The crew is on floor %d." % flow.floor_n
 	return "The host is on a job alone. You start together at the next board."
 
 
 func _tell_wait(peer: int) -> void:
 	var j: Dictionary = joiners[peer]
-	var n := _wait_note()
-	if n == str(j["note"]):
+	var lic := license_open()
+	var n := _wait_note(not (j["spells"] as Array).is_empty())
+	if n == str(j["note"]) and lic == bool(j.get("license", false)):
 		return
 	j["note"] = n
-	_session.send_event(peer, "join.wait", {"note": n, "job": _session.flow.job, "floor": _session.flow.floor_n})
+	j["license"] = lic
+	_session.send_event(peer, "join.wait", {"note": n, "job": _session.flow.job, "floor": _session.flow.floor_n, "license": lic})
 
 
 func _process(_delta: float) -> void:
@@ -165,8 +194,8 @@ func _process(_delta: float) -> void:
 			joiners.erase(peer)
 			continue
 		if str(j["state"]) == WAIT:
-			if ok:
-				_dispatch(peer)
+			if ok and not (j["spells"] as Array).is_empty():
+				_dispatch(peer)   # (signed: it arrives with its own license; until then the AI plays the seat)
 			else:
 				_tell_wait(peer)
 		elif not ok:
@@ -204,6 +233,9 @@ func _dispatch(peer: int) -> void:
 
 
 func _host_event(from: int, kind: String, data: Dictionary) -> void:
+	if kind == "join.signed" and joiners.has(from):
+		_host_signed(from, data)
+		return
 	if kind != "join.built" or not joiners.has(from):
 		return
 	var j: Dictionary = joiners[from]
@@ -229,6 +261,40 @@ func _host_event(from: int, kind: String, data: Dictionary) -> void:
 	built_ready.emit(from)
 
 
+## Host: a joiner signed its license while it waited (the same check as crew.signed: exactly PICK_COUNT available spells).
+## Once is enough: a second signing is ignored. It is sent onto the next running floor with these (_process).
+func _host_signed(from: int, data: Dictionary) -> void:
+	var j: Dictionary = joiners[from]
+	var who := str((_session.roster.get(from, {}) as Dictionary).get("name", from))
+	if not (j["spells"] as Array).is_empty() or not license_open():
+		return
+	var spells: Array[String] = []
+	for s: Variant in data.get("spells", []) as Array:
+		if SpellBook.is_available(str(s)) and not spells.has(str(s)):
+			spells.append(str(s))
+	if spells.size() != SpellPicker.PICK_COUNT:
+		push_warning("[Net] %s (joining) signed %d spells: ignored" % [who, spells.size()])
+		return
+	j["spells"] = spells
+	j["signed_t"] = _now()
+	print("[Net] %s (joining) signed a license: %s" % [who, ", ".join(spells)])
+
+
+## The license a joiner signed, as a handed-over state's loadout: its spells at fresh charges (START_CHARGES each, what a
+## license gives at a floor start), no cooldowns, the first slot held. Everything else in `state` (the AI's spot, facing,
+## modifiers, fire, soak) is kept.
+static func licensed_state(state: Dictionary, spells: Array) -> Dictionary:
+	var out := state.duplicate(true)
+	var ch := {}
+	for s: Variant in spells:
+		ch[str(s)] = SpellComponents.START_CHARGES
+	out["sl"] = spells.duplicate()
+	out["ch"] = ch
+	out["cd"] = {}
+	out["hs"] = 0
+	return out
+
+
 ## Host: the joiner is ready on this floor. Send it the snapshot and hand it the seat (the game calls this from built_ready
 ## with what it keeps itself: `extra` = {"contract": ContractSession.mirror_state()}). False when it cannot happen now.
 func admit(peer: int, extra: Dictionary = {}) -> bool:
@@ -241,7 +307,9 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		return false
 	var character := str(e.get("character", NetSession.DEFAULT_CHARACTER))
 	var now := _now()
-	var state := SeatHandover.hero_state(hero)   # (the AI's hero at this moment, before anything changes)
+	var spells := ((joiners[peer] as Dictionary)["spells"] as Array).duplicate()
+	# The AI's hero at this moment (before anything changes), with the joiner's own license on it.
+	var state := licensed_state(SeatHandover.hero_state(hero), spells)
 	var flow := _session.flow
 	var kits := {}
 	var heroes := {}
@@ -255,8 +323,10 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 			heroes[s] = [h.global_position, h.facing, h.hp, h.dead, Array(h.spell_slots), h._charges.duplicate(), h.held_slot]
 	var gone := gone_ids()
 	var jt: Dictionary = joiners[peer]
-	# (M7: the join's timings, passively in the host's log: the wait for a running floor, the joiner's build, ready -> seated)
-	var timings := {"wait_s": float(jt.get("go_t", now)) - float(jt.get("hello_t", now)),
+	# (M7: the join's timings, passively in the host's log: the license, the wait for a running floor, the joiner's build,
+	# ready -> seated)
+	var timings := {"sign_s": float(jt.get("signed_t", now)) - float(jt.get("hello_t", now)),
+		"wait_s": float(jt.get("go_t", now)) - float(jt.get("hello_t", now)),
 		"build_s": float(jt.get("built_t", now)) - float(jt.get("go_t", now)), "seat_ms": (now - float(jt.get("built_t", now))) * 1000.0}
 	var waits := {}
 	for id in NetRegistry.ids():
@@ -275,14 +345,15 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 	var size := var_to_bytes(d).size()
 	_session.send_event(peer, "join.snapshot", d)
 	admitted[peer] = {"t": now, "bytes": size, "gone": gone.keys(), "alive": living_ids(), "seat": seat, "take": state,
-		"slots": Array(hero.spell_slots), "charges": hero._charges.duplicate(), "timings": timings}
-	print("[Net] join timings for %s: waited %.1f s for a running floor, built it in %.1f s, seated %d ms after ready" % [
-		str(e.get("name", peer)), float(timings["wait_s"]), float(timings["build_s"]), roundi(float(timings["seat_ms"]))])
+		"slots": (state["sl"] as Array).duplicate(), "charges": (state["ch"] as Dictionary).duplicate(),
+		"ai_slots": Array(hero.spell_slots), "signed_t": float(jt.get("signed_t", 0.0)), "timings": timings}
+	print("[Net] join timings for %s: signed its license after %.1f s, sent in after %.1f s, built the floor in %.1f s, seated %d ms after ready" % [
+		str(e.get("name", peer)), float(timings["sign_s"]), float(timings["wait_s"]), float(timings["build_s"]), roundi(float(timings["seat_ms"]))])
 	print("[Net] late-join snapshot to %s: %d bytes (%d gone, %d runtime monsters, %d Ledger lines)" % [
 		str(e.get("name", peer)), size, gone.size(), (d["spawns"] as Array).size(), Ledger.lines.size()])
 	joiners.erase(peer)
 	_session.seats.take(seat, peer, character, state)
-	_session.set_members(peer, {"joining": false, "signed": true, "ready": true, "spells": Array(hero.spell_slots)})
+	_session.set_members(peer, {"joining": false, "signed": true, "ready": true, "spells": spells})
 	return true
 
 
@@ -319,6 +390,16 @@ static func living_ids() -> Array[int]:
 
 # --- Joiner ----------------------------------------------------------------------------------------------
 
+## The joiner signed its license checkout (the game's SpellPicker): tell the host. It arrives in the seat with these.
+func sign(spells: Array[String]) -> void:
+	if _session == null or not _session.is_client() or not waiting or not signed.is_empty():
+		return
+	signed = spells.duplicate()
+	signed_at = _now()
+	_session.send_event(1, "join.signed", {"spells": signed})
+	changed.emit()
+
+
 ## The joiner built the floor behind its barrier: tell the host (with the checksum). A joiner can be this quick: it says so
 ## only once the shared clock is synced (the floor clock it is about to join is on it).
 func report_built(sums: Dictionary) -> void:
@@ -346,6 +427,7 @@ func _client_event(kind: String, data: Dictionary) -> void:
 			note = str(data.get("note", ""))
 			wait_job = data.get("job", {}) as Dictionary
 			wait_floor = int(data.get("floor", 0))
+			license = bool(data.get("license", false))
 			go = {}
 			changed.emit()
 		"join.go":

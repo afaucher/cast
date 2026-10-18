@@ -235,6 +235,10 @@ func _check_slips() -> void:
 	eq(clock.seat_value.text, "-", "a value not known yet is a dash")
 	eq(clock.step_label.text, "Building floor 2...", "the one line says what is happening")
 	check(clock.job_value.clip_text, "a long job name is trimmed on the form")
+	eq(clock.license_value.text, "-", "no license signed yet: a dash")
+	clock.set_license("TENTACLES · TEETH")
+	eq(clock.license_value.text, "TENTACLES · TEETH", "the joiner's signed license is typed in")
+	eq(clock.sheet.header.copy_value.text, "LICENSED", "... and its status reads LICENSED")
 	var left := [false]
 	clock.leave.connect(func() -> void: left[0] = true)
 	clock.leave_button.pressed.emit()

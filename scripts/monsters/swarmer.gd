@@ -6,7 +6,7 @@ extends Monster
 const HP := 12.0
 const SPEED := 5.5
 const DAMAGE := 4.0
-const WINDUP := 0.15
+const WINDUP := 0.3   ## user, 2026-10-18 (option A): long enough to react to on any machine
 const COOLDOWN := 0.6
 const AGGRO := 9.0
 const REACH := 0.7

@@ -90,11 +90,13 @@ extends Node3D
 ## the invoice, takes the whole crew back to the host's board (a client asks the host: CrewFlow crew.abandon / crew.again).
 ## The host decides "crew incapacitated" from every hero's replicated `dead` and bills the revivals on its Ledger. Esc on a
 ## client's board or checkout leaves the crew; the host confirms first (it ends the job for all).
-## M6: a player can join a crew on the job. They see "Clocking in..." (ClockInSlip) until the crew is on a running floor,
+## M6: a player can join a crew on the job. They see "Clocking in..." (ClockInSlip), sign their own license checkout over it
+## (user, 2026-10-18; Esc there leaves the crew), and wait on the form until the crew is on a running floor,
 ## then build that floor from the seed exactly as it was at its barrier (Session.join's seat table, their own seat being an
 ## AI's), report the checksum, apply the host's late-join snapshot and take the AI's seat: the same hero node becomes their
-## character at full health with the AI's spells, charges and spot (SeatHandover). Everyone sees "<name> takes over Gasket's
-## seat". A joiner during a floor change arrives on the next floor; one on the invoice starts with the crew at the next board.
+## character at full health, with the spells they signed at fresh charges, in the AI's spot (SeatHandover). Everyone sees
+## "<name> takes over Gasket's seat". A joiner during a floor change arrives on the next floor; one on the invoice starts
+## with the crew at the next board (and signs that job's ordinary license).
 
 ## Every castable spell, straight from SpellBook (new spells need no change here).
 static func all_spells() -> PackedStringArray:
@@ -113,6 +115,7 @@ const DROPOFF_DIST := 2.5         ## a FOLLOWING employee this close (world unit
 const OBJECTIVE_INTERVAL := 0.25
 const FOLLOW_EXTRACT_CELLS := 3   ## followers within this many cells of the elevator ride along
 const INCAP_DELAY := 2.2
+const JOIN_LICENSE_BEAT := 0.6    ## a joiner sees its "Clocking in..." form this long before the license checkout opens over it
 ## The three crew seats. Seat 1 is the host's hero (the AI allies follow it); an empty seat is an AI ally: seat 2
 ## Rebar, seat 3 Gasket. A human takes the seat with the character id the roster carries (Wick for everyone today).
 const CREW_LOOKS := {
@@ -205,6 +208,8 @@ var _join_ticket := -1              ## the join.go this scene is building (a new
 var _join_seats: Array = []         ## the seat table the host's floor was built with (join.go), for _crew_seats()
 var _join_seat := 0                 ## the seat this joiner takes
 var _join_slip: ClockInSlip = null  ## "Clocking in..."
+var _join_picker: Control = null    ## the joiner's license checkout (its holder; `_picker` is the SpellPicker in it)
+var _join_beat := false             ## the license checkout is about to open (JOIN_LICENSE_BEAT after the form)
 var _join_wired := false
 var _seat_notices: Array[String] = []   ## every "takes over" line this screen showed (tests)
 
@@ -1290,13 +1295,14 @@ func _on_join_ready(peer: int) -> void:
 	Session.join.admit(peer, {"contract": _session.mirror_state()})
 
 
-## A joiner: the host said what the crew is doing (wait), sent us onto a floor (go), or the board came.
+## A joiner: the host said what the crew is doing (wait), sent us onto a floor (go), or the board came; or we signed.
 func _on_join_changed() -> void:
 	var j := Session.join
 	if j == null or _leaving or j.arrived or not j.waiting:
 		return   # (arrived: the floor starts through the flow; not waiting any more: the board came, _on_flow_board)
 	var go := j.go
 	if not go.is_empty():
+		_close_join_picker()   # (the host sends us in only once we signed)
 		if int(go.get("ticket", -1)) == _join_ticket:
 			return
 		if _session != null or map != null:
@@ -1310,7 +1316,91 @@ func _on_join_changed() -> void:
 		_change_scene("")
 		return
 	_hide_wait()
-	_refresh_join_slip(j.note)
+	var step := j.note
+	if j.license and j.signed.is_empty():
+		step = "Sign your license to clock in. The AI holds your seat meanwhile."
+	_refresh_join_slip(step)
+	_update_join_license()
+
+
+## A joiner (user, 2026-10-18): while the crew is on a job we will arrive on, sign our own license first. The checkout opens
+## over "Clocking in..." a beat after the form (or, with the dev flag --spells, signs at once); the crew does not wait for
+## it, the AI plays our seat until we arrive. Off the job (the invoice, a host alone) there is nothing to sign: the next
+## board's license is the ordinary one.
+func _update_join_license() -> void:
+	var j := Session.join
+	if not j.license or not j.signed.is_empty():
+		_close_join_picker()
+		return
+	if _join_picker != null or _join_beat:
+		return
+	var dev := _dev_join_spells()
+	if not dev.is_empty():
+		j.sign(dev)
+		return
+	_join_beat = true
+	get_tree().create_timer(JOIN_LICENSE_BEAT).timeout.connect(_join_beat_over)
+
+
+func _join_beat_over() -> void:
+	_join_beat = false
+	var j := Session.join
+	if is_inside_tree() and not _leaving and j.waiting and j.go.is_empty() and j.license and j.signed.is_empty():
+		_open_join_picker()
+
+
+## --spells a,b on a joiner: sign those at once (as every machine does with it at a contract start). [] when not given.
+func _dev_join_spells() -> Array[String]:
+	var out: Array[String] = []
+	if _dev_released or not opts.has("spells"):
+		return out
+	for s in str(opts["spells"]).split(","):
+		var id := s.strip_edges()
+		if id in all_spells() and not out.has(id):
+			out.append(id)
+	if out.size() != SpellPicker.PICK_COUNT:
+		out.clear()
+	return out
+
+
+## The joiner's license checkout: the same FORM 15 as at a contract start, in place of "Clocking in..." (the form comes back
+## with the license typed in once it is signed). Its back row and Esc leave the crew, as the form's own row does.
+func _open_join_picker() -> void:
+	if _join_picker != null:
+		return
+	var holder := Control.new()
+	holder.name = "JoinLicense"
+	holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var picker := SpellPicker.new()
+	picker.set_trigger_word(str(VoiceSettings.load_settings(GameSettings.path).get("trigger_word", "cast")))
+	picker.back_text = "Leave the crew"
+	picker.back_hint = "back to the menu"
+	holder.add_child(picker)
+	_screens().add_child(holder)
+	_join_picker = holder
+	_picker = picker
+	if _join_slip != null:
+		_join_slip.visible = false
+	picker.cancelled.connect(_request_leave)
+	picker.picked.connect(func(chosen: Array[String]) -> void:
+		_close_join_picker()
+		Session.join.sign(chosen))
+	_log("clocking in: sign your license (the AI holds your seat)", Color(0.6, 0.9, 1.0))
+	_shot_stage("license", 1.0)
+
+
+## Close the joiner's checkout; `show_slip`: "Clocking in..." comes back (with the license on it).
+func _close_join_picker(show_slip: bool = true) -> void:
+	if _join_picker == null:
+		return
+	if _picker != null and _join_picker.is_ancestor_of(_picker):
+		_picker = null
+	_join_picker.queue_free()
+	_join_picker = null
+	if show_slip and _join_slip != null:
+		_join_slip.visible = true
+		_join_slip.call_deferred("_focus")
 
 
 ## A joiner: build the crew's floor exactly as the host built it at its barrier (its seat table, with the seat we are taking
@@ -1398,9 +1488,14 @@ func _refresh_join_slip(step: String) -> void:
 			var ch := str(d.get("character", ""))
 			seat_text = "%s's (seat %d)" % [str((CREW_LOOKS.get(ch, {"name": ch}) as Dictionary)["name"]), int(d["seat"])]
 	_join_slip.set_values("%s's crew" % Session.host_name(), job_text, floor_text, seat_text, step)
+	var lic: PackedStringArray = []
+	for id in j.signed:
+		lic.append(SpellBook.spell_name(id).to_upper() if SpellBook.has_spell(id) else id.to_upper())
+	_join_slip.set_license(" · ".join(lic))
 
 
 func _close_join_slip() -> void:
+	_close_join_picker(false)
 	if _join_slip != null:
 		_join_slip.queue_free()
 		_join_slip = null

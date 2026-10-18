@@ -17,7 +17,10 @@ extends Node
 ##              slots and charges (they are OWNER fields) and tells the crew (`obj.loadout`). A swapped-out spell is
 ##              a `drop` request: the host puts the pickup down.
 ##   EMPLOYEES  E on an employee from a client is `follow` / `wait` (Employee.request_follow / request_wait run on
-##              the host, judged from where the client says its hero stands).
+##              the host). The client already found the employee within E's reach on its own screen, so the host
+##              trusts that and judges only the state (alive, not extracted, following that hero / free to recruit):
+##              requests are taken in order, so of two at once the first wins and a conflicting later one is refused.
+##              Range was the one thing the host's ~100 ms old picture got wrong (a second E press, M7 as built item 7).
 ##   MONEY      every Ledger line the host writes goes to every client (`obj.ledger`), whose Ledger is a MIRROR
 ##              (Ledger.mirror: its own writes are dropped), and the objective bookkeeping follows
 ##              (`obj.contract`, ContractSession.mirror_state), so the tracker, the ticker and the invoice agree.
@@ -49,6 +52,9 @@ const REQUEST_RETRY := 0.8     ## a client asks again for a pickup after this lo
 
 var active := false
 var stats := {}
+## Host, tests and logs: every client follow / wait judged here: {what, seat, id, granted, d (the client's spot to the host's
+## employee), state (the employee's state before)}.
+var employee_log: Array = []
 
 var _session: NetSession = null
 var _local: Hero = null
@@ -74,6 +80,7 @@ func _ready() -> void:
 
 
 func _reset_stats() -> void:
+	employee_log = []
 	stats = {"hits_out": 0, "hits_in": 0, "breaks": 0, "grants": 0, "denies": 0, "requests": 0, "pickups": 0,
 		"ledger_out": 0, "ledger_in": 0, "loadouts": 0, "shoves_out": 0, "shoves_in": 0, "mods_out": 0, "mods_in": 0,
 		"hit_damage_in": 0.0, "hit_reqs": 0}
@@ -499,13 +506,17 @@ func _host_request(from: int, data: Dictionary) -> void:
 			var e := NetRegistry.node(int(data.get("id", 0))) as Employee
 			if e == null or e.dead:
 				return
-			var granted := e.request_follow(hero, at) if what == "follow" else e.request_wait(hero, at)
+			# The asker is the hero's owner (seat_of(from)) and its screen found the employee within reach: trusted. Only
+			# the state is judged (Employee.can_follow / can_wait with reach_checked).
+			var p := hero.global_position if at == Vector3.INF else at
+			var d := GameWorld.flat_distance(e.global_position, p)
+			var was := e.state_name()
+			var granted := e.request_follow(hero, at, true) if what == "follow" else e.request_wait(hero, at, true)
+			employee_log.append({"what": what, "seat": seat, "id": int(data.get("id", 0)), "granted": granted, "d": d, "state": was})
 			if not granted:
-				# (a refused E is the player's word against the host's picture: log both, the playtest logs are passive)
-				var p := hero.global_position if at == Vector3.INF else at
-				print("[Net] %s from seat %d refused: %s is %s, leader %s, %.2f away (%s)" % [what, seat,
-					e.display_name, e.state_name(), str(NetFloor.id_of(e.leader())) if e.leader() != null else "none",
-					GameWorld.flat_distance(e.global_position, p), "from the client's spot" if at != Vector3.INF else "host's picture"])
+				# (a refused E: the employee's state had moved on by the time the host judged it; passive log only)
+				print("[Net] %s from seat %d refused: %s is %s, leader %s (%.2f from the client's spot)" % [what, seat,
+					e.display_name, e.state_name(), str(NetFloor.id_of(e.leader())) if e.leader() != null else "none", d])
 
 
 ## Host: a shove request. The host's own actors (monsters, the AI heroes, employees) are shoved here, from where the host

@@ -256,8 +256,9 @@ Its own milestone: it needs everything above, and it is the part the user decide
   epoch+1, state)`. The state is position, facing, HP, dead, modifiers, burning, slots, charges, cooldowns, the held
   slot and followers. The hero node and **net id stay the same** (followers and targets keep working); its model and
   kit change to the joiner's character, at **full health** (decided: a joiner always arrives at 100% HP).
-  Snapshots carry an **ownership epoch**, so everyone ignores stale states for that hero from the old owner. No
-  license screen mid-contract: the joiner inherits the AI's spells.
+  Snapshots carry an **ownership epoch**, so everyone ignores stale states for that hero from the old owner. ~~No
+  license screen mid-contract: the joiner inherits the AI's spells.~~ **Changed 2026-10-18 (user):** a joiner signs its own
+  license checkout while it waits and takes the seat with those spells at fresh charges (M6 as built, "Follow-up").
 - **Joining during a floor change** waits for the next load barrier and arrives with the new floor.
 - **Leaving** is the M2b reverse handover. The lobby's `seats_free` is updated on every join and leave, so "Join a
   crew" only finds crews with an AI seat.
@@ -1220,7 +1221,7 @@ taken. So:
 | The crew is... | The joiner |
 |---|---|
 | on the board | joins the board as in M1 (an ordinary member) |
-| signing licenses | waits ("signing licenses"); arrives on floor 1 after the van arrival; signs no license |
+| signing licenses | waits ("signing licenses"); signs its own license (follow-up below), not one the crew waits on; arrives on floor 1 after the van arrival |
 | on a floor (after the van arrival) | arrives within a second or so |
 | in the van arrival | waits ("stepping out of the van") until it is over |
 | changing floors | waits ("riding the elevator"); arrives on the NEW floor once it has started (a build for the old floor is dropped: its ticket is stale) |
@@ -1248,7 +1249,8 @@ free seat. The joiner keeps its character id (Wick today; duplicates are fine).
    sends the snapshot to the joiner, then `SeatHandover.take`: the epoch goes up, `to_player` re-kits the same node as the
    joiner's character at full health and frees the `AllyBrain` (the AI stops at this tick), NetSnapshot makes the hero a
    puppet of the joiner's stream, every other client gets `seat.take {seat, peer, character, epoch, state}`, and the roster
-   entry becomes an ordinary member (`joining` false, `spells` the AI's, so the next floor's build agrees everywhere).
+   entry becomes an ordinary member (`joining` false, `spells` the joiner's license since the follow-up below (the AI's
+   before), so the next floor's build agrees everywhere).
 4. The joiner applies the snapshot in order: the floor clock first (`CrewFlow.join_floor`: one jump of `GameWorld.time`, then
    the slew), the seat table, the game's part (`snapshot_received`: the objective mirror, every other seat's kit and player
    name as it is NOW), the other heroes' states, the gone ids, runtime monsters, the keyframe, the employees' wait spots,
@@ -1288,7 +1290,8 @@ one round trip plus a frame.
 **Events (all reliable; the protocol version did not change).**
 | Event | From -> to | Data |
 |---|---|---|
-| `join.wait` | host -> a joiner (on its hello, and whenever the reason changes) | `note` (what the crew is doing, for the form), `job`, `floor` |
+| `join.wait` | host -> a joiner (on its hello, and whenever the reason changes) | `note` (what the crew is doing, for the form), `job`, `floor`, `license` (follow-up: sign now) |
+| `join.signed` | joiner -> host (follow-up) | `spells` (exactly 2 available ids, as `crew.signed`; anything else is ignored with a warning) |
 | `join.go` | host -> a joiner | `ticket`, `job`, `floor`, `seat`, `seats` (the barrier's table), `start_at`, `floor_start` |
 | `join.built` | joiner -> host | `ticket`, `sums` (NetFloor.checksum) |
 | `join.snapshot` | host -> the joiner | above |
@@ -1344,9 +1347,8 @@ sits on the invoice, to see it wait. Screenshots: `-ShotDir <dir> --shot-at take
 after the handover; add `-Bot 3` to see the joiner walk) or `--shot-at clockin --join-hold 4` (the joiner's form).
 
 **Known gaps (left for later, on purpose).**
-1. **A joiner inherits the AI's spells** (the plan: no license mid-contract). The AI heroes cast nothing and usually hold no
-   spells, so a joiner usually arrives with empty slots until a pickup, a later contract's license, or the dev `--give-allies`.
-   A license on arrival (or giving the AI seats licenses) is a design call for the user.
+1. ~~**A joiner inherits the AI's spells**~~ Resolved 2026-10-18 (user's call): a joiner signs its own license (the
+   follow-up below).
 2. Scheduled effects in flight and monster wind-ups are not in the snapshot (planned: under 2 s); grime decals are missing;
    an opened mail box's spill debris is not rebuilt (the box is just gone); the kill counter and logs start at the join.
 3. A joiner's build must reproduce the barrier exactly, dev flags included (`--spawn-near`, `--to-*`, `--drop-near` pickups are
@@ -1357,6 +1359,47 @@ after the handover; add `-Bot 3` to see the joiner walk) or `--shot-at clockin -
    floor has a handful at most.
 6. Invites (`join_requested` mid-game) still leave the current session and join without asking (M7), but a crew on the job now
    takes the invited player in.
+
+**Follow-up (2026-10-18, user decision): a mid-contract joiner signs its own license.** Before, a joiner inherited the AI
+seat's slots, usually empty. Now:
+- **When.** Whenever the joiner waits for a job it will arrive on (`NetJoin.license_open()`: CrewFlow LICENSE, LOADING,
+  PENDING or FLOOR, the job not over), `join.wait` carries `license: true`. The joiner's "Clocking in..." form shows for a beat
+  (`JOIN_LICENSE_BEAT`, 0.6 s, step "Sign your license to clock in. The AI holds your seat meanwhile."), then the ordinary
+  FORM 15 license checkout opens in its place (the same `SpellPicker`; the form is hidden behind it). Signing sends
+  `join.signed {spells}` (the host checks it as `crew.signed`) and the form comes back with a **License** line typed in
+  ("TENTACLES · TEETH") and its status stamped LICENSED. `--spells a,b` signs at once on a joiner too.
+- **The crew is never held up.** Nobody waits on a joiner's license (CrewFlow's waits still skip joiners) and the AI keeps
+  playing the seat: the host sends the joiner onto a running floor (`join.go`) only once it has signed; until then its note
+  is "The crew is on floor N.". A joiner that signs during the license phase or a floor change arrives as before, after the
+  van arrival / on the new floor.
+- **The seat comes with the license.** `NetJoin.admit` hands over the AI hero's state with the joiner's spells at fresh
+  charges (`licensed_state`: `SpellComponents.START_CHARGES` each, as a license gives; no cooldowns; slot 1 held; the AI's
+  spot, facing, modifiers, fire and soak kept). **Replication:** the joiner gets it in the snapshot's `take` (as before),
+  every other client in `seat.take`'s `state` (now applied: `SeatHandover.apply_loadout` on the puppet), and the host puts it
+  on its own copy in `take()`; the roster's `spells` become the joiner's license (later floors build it everywhere).
+  `NetEvents.CARRIES` names the new carrier for `spell_slots` / `_charges`.
+- **Esc / back on a joiner's checkout leaves the crew** (decided here: the same as the form's only row, and as a client's
+  ordinary checkout; there is no board to go back to, and the crew is not waiting for it).
+- **The invoice case is unchanged and confirmed:** a joiner on the invoice gets `license: false` (nothing to sign for a
+  finished job), waits, becomes an ordinary member at the next board and signs that job's ordinary checkout with the crew
+  (`test_net_m6_join_flow` step 5). A host on a job alone: the same.
+- **Join timings** now say when it signed: `[Net] join timings for c2: signed its license after 2.4 s, sent in after 2.4 s,
+  built the floor in 1.2 s, seated 0 ms after ready`.
+- **Tests.** `test_net_m6_late_join`: c2 opens its own checkout (no `--spells`), back row "Leave the crew"; for 1.5 s the host
+  checks the AI keeps seat 3 (owner 0, AllyBrain on, c2 not sent in) while the floor clock runs on; c2 signs tentacles + teeth
+  (the AI holds heal + vines); the seat is handed over after the signing (`history`), and c2, the host and c1 all show seat 3
+  holding tentacles + teeth at 5 charges each; c2's form came back with the license typed in. `test_net_m6_join_license`: c2
+  opens its own checkout while the crew signs, the crew starts floor 1 without it, c2 signs only after that and arrives with
+  its license on every machine. `test_net_m6_join_flow`: c2 (joining during the elevator, `--spells vines,damp`) arrives with
+  vines + damp; c3 on the invoice opens no checkout, then signs the next job's ordinary checkout and starts in its seat from
+  the barrier. `test_forms`: the form's License line and status.
+- **Try it.** `.un.ps1 -Crew 3 -JoinLate 25 --seed 13 --net-wait 2 --contract 1` (no `--spells`: every window signs by
+  hand): 25 s in, the third window's checkout opens over its form while the crew plays on, and it arrives with what it
+  signed. With `--spells` on the command line every window, the joiner too, signs those at once.
+- **Files.** `net_join.gd` (`license_open`, `join.signed`, `licensed_state`, the joiner's `sign` / `license` / `signed`),
+  `seat_handover.gd` (`apply_loadout`, used by `take`, `seat.take` and `apply_state`), `net_events.gd` (the carrier text),
+  `clock_in_slip.gd` (the License line, `set_license`), `game.gd` (`_update_join_license`, `_open_join_picker`,
+  `_close_join_picker`, `_dev_join_spells`).
 
 **Notes for M7.**
 1. **Steam checklist item 4** ("B joins mid-floor 2 and takes an AI seat; B quits and the AI takes it back") is now buildable;
@@ -1530,6 +1573,19 @@ on c1's screen (or the host refused it at 2.20) and the second press did it. In 
 (those 3 runs), and online the host judges the press ~150 ms after the client saw it. If testers report "E on my
 follower sometimes does nothing" online, a 0.3-unit slack for a client's `wait` / `follow` request (the host already judges
 from the client's spot) is the one-line fix; not done here (a gameplay rule).
+**Decided 2026-10-18 (user): the host trusts the client's range** (co-op, no anti-cheat concern; the client already checked
+reach on its own screen, and the host's picture of the employee is ~100 ms stale). `NetObjects` judges a client's `follow` /
+`wait` with `Employee.request_follow` / `request_wait(hero, at, reach_checked = true)`: no distance check (no slack either),
+but every STATE check stays: the employee exists and is alive, not extracted, `wait` only from its leader (or a person over
+an AI leader), `follow` only when it is not following anyone; requests are judged in arrival order, so of two at once the
+first wins and a conflicting later one is refused. Solo and the host's own E are unchanged (they still check reach). Each
+judgement is in `NetObjects.employee_log` and a refusal is logged with the state that refused it. **The other client "use"
+requests were checked and left alone:** exits (`obj.req exit`) never had a host range check (first to choose wins); notes
+are local; pickups are contested and keep request/grant, and their range check compares the client's own position with a
+pickup that does not move, so it is not stale (`REACH_SLACK` stays); hits, shoves and modifiers have no range check.
+`test_net_m3_objects` step 3b: the host holds the waiting employee still and both clients ask it to follow at the same shared
+moment from 3.5 units away as the host has it (refused for range before): exactly one is granted, the other is refused as
+"FOLLOW" (it already follows the first), and the new leader's `wait` from 3.5 away is granted.
 
 **8. The checklist** is [steam-playtest-checklist.md](steam-playtest-checklist.md): build (`.\build.ps1` ->
 `build\Cast_Windows_v<stamp>.zip`, `steam_appid.txt` 480 next to the exe), the lobby, invites (running, closed via a manual
@@ -1564,7 +1620,8 @@ the four new M7 tests add about 2 minutes of net runs).
 2. `+connect_lobby` from a closed game only works once Cast has its own app id (on 480 Steam launches Spacewar).
 3. `pending_rel` stays blank (SteamMultiplayerPeer does not expose the connection's status).
 4. A client's own Diagnostics setting is never used (the host's is the crew's); solo it does nothing.
-5. The swarmer decision (above) and the E slack (cause 1 of the flake) are the user's calls.
+5. ~~The swarmer decision (above) and the E slack (cause 1 of the flake) are the user's calls.~~ Both decided 2026-10-18
+   (§5): the swarmer's wind-up is 0.3 s, and the host trusts a client's E range (item 7).
 6. README's "Online play" section still describes M3; M7 left it alone (a docs pass is due before a public playtest).
 7. For test writers: moving a hero by setting its position less than 3 units is NOT a teleport to the snapshot; the other
    screens see a lunge at the velocity clamp (15.9 u/s, extrapolated). Walk it (`PlayerController.move_override`), or jump
@@ -1689,9 +1746,11 @@ Scripted step by step (build, what to click, what to look for, where the logs la
   to the host's board.
 
 **Open (M7):**
-- **Swarmer wind-up** (networking.md open risk): measured in M7 as built; options A (lengthen to about 0.3 s), B (draw a
-  client's telegraph from the wind-up event, cosmetic) or C (accept as chip damage). The user picks.
-- **E slack for a client's employee request** (optional, M7 as built item 7): judge a client's `wait` / `follow` with 0.3 units
-  of slack, or leave it.
+- **Swarmer wind-up: decided 2026-10-18 (user): option A**, `Swarmer.WINDUP` 0.15 -> 0.3 s (cooldown and damage unchanged).
+- **E range for a client's employee request: decided 2026-10-18 (user): the host trusts the client** ("should the host just
+  trust the remote?": yes, for range). No distance check on a client's `follow` / `wait` (no slack); the state checks stay,
+  first request wins (M7 as built item 7).
+- **A mid-contract joiner picks its spells: decided 2026-10-18 (user).** It signs its own license checkout while it waits;
+  the AI keeps the seat until the joiner arrives with that license at fresh charges (M6 as built, "Follow-up").
 
 The main menu in §1 is still a proposal.
