@@ -32,3 +32,8 @@ fetched again. Full attribution table and the cue each sound is for: docs/design
 | 380138__yottasounds__typewriter-single-key-type-1.wav | Typewriter - single key - type 1.wav | yottasounds | https://freesound.org/people/yottasounds/sounds/380138/ |
 | 204466__nhumphrey__typewriter-ding.wav | Typewriter Ding.wav | NHumphrey | https://freesound.org/people/NHumphrey/sounds/204466/ |
 | 209578__zott820__cash-register-purchase.wav | Cash Register Purchase | Zott820 | https://freesound.org/people/Zott820/sounds/209578/ |
+
+### Rejected by the user (2026-10-18), moved to freesound/_rejected/ (not used)
+45650 fuse_burning (useless), 457531 dinosaur falls, 476800 elevator door and ding, 506710 demonic portal,
+528264 gates of hell gate slam, 562292 heal-rpg ("too fairy"). Still needed instead: a fuse hiss (procedural for now),
+a heavy brute slam/fall, elevator doors, a hellgate open/close, a heal.
