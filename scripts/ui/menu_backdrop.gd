@@ -604,6 +604,9 @@ static func _tone_curve(top: Color) -> GradientTexture1D:
 ## "After a bad job" (the pieces are in after_job.gd): the corn bomb in the van roof and the popped hood over a fire, smoke
 ## columns, scorch marks, cobs and kernels, the invoice, the red 0, a failing lamp, the crew scuffed up.
 func _after_job() -> void:
+	# the van's own pieces: the side door hangs off its track
+	van.door.rotation = Vector3(deg_to_rad(-5.0), 0.0, deg_to_rad(8.0))
+	van.door.position += Vector3(-0.04, -0.06, 0.0)
 	var vroot := Node3D.new()
 	vroot.name = "VanDamage"
 	vroot.transform = _van_holder.transform * van.transform

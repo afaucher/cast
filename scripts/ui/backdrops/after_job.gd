@@ -7,7 +7,7 @@ extends RefCounted
 ##   - CORN: a giant smug cob wedged in the van roof, whole cobs lying about (kernel-bumped, husked, one scorched),
 ##     one planted in the floor, kernels and popcorn in clumps, loose husk leaves. Never a word about corn but the sign.
 ##   - DAMAGE: big char-black scorch marks (brown halo) on the floor and up the back wall, a popped hood with a small fire
-##     and a thick smoke column, a failing work lamp.
+##     and a thick smoke column and a door hanging crooked, a failing work lamp.
 ##   - STORY: an invoice nailed to the wall stamped PAST DUE, the corn sign reading a big red 0, an extinguisher on its
 ##     side in a puddle of foam, the crew scuffed, sooty, patched and slumping.
 ##
