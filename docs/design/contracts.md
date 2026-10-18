@@ -191,12 +191,34 @@ A rework of "Mission structure" above, to be built later. Floors are named by **
 - **Nothing ties the spawn floor to "floor 1" or the origin to "floor 3".** The spawn floor isn't necessarily the top
   of the building and the origin isn't necessarily the bottom.
 
+**The elevator's form: a floor sign-in sheet [design, user, 2026-10-18; NOT built, wording not final].**
+Like the cleaning log on a restroom door, but you sign in to *start* servicing a floor. One row per floor of the site;
+the crew's marks are the record of the job.
+- **Row states:**
+  - **Open:** nobody has signed in. Selecting it signs the crew in (the player's red name stamp in the IN column) and
+    the elevator goes there.
+  - **In progress:** the floor you are on: signed in, not signed out. Not selectable.
+  - **Serviced:** the floor's work is done, so it is signed out (stamp in the OUT column). Not selectable.
+  - **Left unfinished**, depending on the backtracking decision (still open, see below):
+    - *no backtracking:* an **ABANDONED** stamp across the row; not selectable;
+    - *backtracking allowed:* signed in with no sign-out; still selectable to sign in again.
+- **Leaving the job** is the sheet's last line (the van offers the same on the spawn floor): sign off the job.
+- **Wording candidates** (to choose):
+  - title: "Floor service log" / "Site sign-in sheet" / "Service record";
+  - columns: FLOOR · RISK · IN · OUT (or "Started by" / "Serviced by");
+  - the floor's name: the room theme of its origin or a site name ("Wine cellar level"), or only its risk;
+  - the exit line: "Sign off the job" / "Job complete: clock out" / "Close the job";
+  - whether IN and OUT carry a time (the site clock) next to the stamp, like a real log.
+- What "serviced" means (the condition for signing a floor out) is not decided yet: every gate on it closed, or every
+  objective on it met.
+
 **How it works today (for comparison):** every floor spawns the crew on its start cell (the blue-bordered hex, tag
 `start`), including after the elevator; the elevator stands on the separate `exit` cell. The van is on floor 1 only.
 The elevator offers down and exit, and only exit on floor 3.
 
 **Open:**
-- Backtracking: can the crew go back to a floor it has already visited (the earlier rule was "down only")?
+- Backtracking: can the crew go back to a floor it has already visited (the earlier rule was "down only")? The sheet
+  handles both: an ABANDONED stamp if not, an unsigned row if so.
 - What the elevator panel and the floor tracker call the floors (by risk, by a site-specific name, by number?).
 - What happens to the start cell's role in generation (room layout, gate placement and the van spot use it today).
 - Networking: the floor barrier and the join-mid-job flow assume "the next floor"; going to any floor changes that.
