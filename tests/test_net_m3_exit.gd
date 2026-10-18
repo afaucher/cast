@@ -54,6 +54,12 @@ func run_host() -> void:
 		near(float((r["hp"] as Dictionary)[1]), my_hero().hp, 0.2, "%s shows the host's hero with its carried HP" % who)
 		eq(int(r["reloads"]), 1, "%s reloaded once" % who)
 	near(my_hero().hp, float(hurt[1]), 0.2, "the host's hero kept its HP on floor 2 (carry by seat)")
+	# floor 2 starts with the crew stepping out of the elevator (its beat, from the shared clock): over on every machine
+	var lift: ElevatorArrival = game.get("_lift")
+	check(lift != null and lift.crew.size() == 3, "floor 2: the crew came down in the elevator")
+	check(lift != null and await until(func() -> bool: return lift.is_done(), 6.0), "floor 2: and stepped out")
+	for p in [c1, c2]:
+		eq(str((reported(p, "floor2") as Dictionary).get("elev", "")), _elev_text(), "%s shows the same elevator, done arriving" % ("c1" if p == c1 else "c2"))
 	if not await wait_sync():
 		return
 	check(Session.world.active and Session.world.tracked_ids().size() > 10, "the host streams floor 2's world (%d actors)" % Session.world.tracked_ids().size())
@@ -113,7 +119,7 @@ func run_client() -> void:
 						if hero_at(seat) != null:
 							hp[seat] = hero_at(seat).hp
 					report("floor2", {"floor": int((game.get("_session") as ContractSession).floor_number), "sum": flow().local_sums.get("all", ""),
-						"decisions": decisions.duplicate(), "hp": hp, "reloads": reloads})
+						"decisions": decisions.duplicate(), "hp": hp, "reloads": reloads, "elev": _elev_text()})
 			"reset":
 				decisions.clear()
 			"invoice":
@@ -122,6 +128,14 @@ func run_client() -> void:
 					"decisions": decisions.duplicate()})
 			_:
 				running = false
+
+
+## This machine's elevator on the floor: look, placement, landing and whether its arrival is over.
+func _elev_text() -> String:
+	var lift: ElevatorArrival = game.get("_lift")
+	if lift == null:
+		return "none"
+	return "%s/%s/%s/%s" % [lift.plan["look"], lift.plan["place"], str(lift.plan["landing"]), str(lift.is_done())]
 
 
 func _peer_named(n: String) -> int:

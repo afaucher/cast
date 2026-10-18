@@ -685,11 +685,13 @@ func _step_along_path(delta: float) -> bool:
 	return move(step.normalized(), delta)
 
 
-## True if a straight walk is free of ledges, walls and holes.
+## True if a straight walk is free of ledges, walls and holes (and the elevator's thin sides).
 func _direct_clear(from: Vector3, to: Vector3) -> bool:
 	var map := GameWorld.map
 	if map == null:
 		return true
+	if map.crosses_solid(from, to, radius):
+		return false
 	var flat := Vector3(to.x - from.x, 0.0, to.z - from.z)
 	var n := maxi(1, int(flat.length() / PROBE_STEP))
 	var prev := from

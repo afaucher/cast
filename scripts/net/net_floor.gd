@@ -144,6 +144,15 @@ static func map_text_of(map: HexMap) -> String:
 	keys.sort()
 	var lines := PackedStringArray()
 	lines.append("midpoint=%s" % str(map.midpoint_walls))
+	# the elevator: its record, the solids (its jambs / sides) and the cells it stands on
+	lines.append("elevator=%s" % canon(map.elevator))
+	var polys: Array = []
+	for poly in map.solids:
+		polys.append(Array(poly))
+	lines.append("solids=%s" % canon(polys))
+	var stand: Array = map.no_stand.keys()
+	stand.sort()
+	lines.append("no_stand=%s" % canon(stand))
 	for c: Vector2i in keys:
 		var cell: HexMap.Cell = map.cells[c]
 		lines.append("%d,%d:%d,%d,%d,%d,%s,%d,%d,%d" % [c.x, c.y, cell.level, cell.type, cell.stair_dir, cell.stair_rise,

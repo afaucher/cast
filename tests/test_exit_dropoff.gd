@@ -3,7 +3,8 @@ extends TestCase
 ##  - the van (floor 1 only) and the elevator (every floor) are exits; E opens the exit slip, E never casts;
 ##  - an employee who is FOLLOWING the crew and walks within DROPOFF_DIST of an exit leaves right away and is paid $100 once,
 ##    whether or not the crew takes the exit; waiting and cowering employees never do;
-##  - a follower still within ~3 cells when the crew takes an exit is extracted at that moment;
+##  - a follower still within ~3 cells when the crew takes an exit is extracted at that moment; the elevator's reach is
+##    measured to its doorway or its landing (both placements), so a follower in the car is dropped off too;
 ##  - the invoice has one "Employee extracted" line per extracted employee and no double count.
 
 const GAME := preload("res://scripts/app/game.gd")
@@ -272,8 +273,12 @@ func _check_floor2_and_3() -> void:
 		var exit_cell: Vector2i = _g.get("_exit_cell")
 		var exit_pos := Hex.to_world(exit_cell, GameWorld.map.ground_level(Hex.to_world(exit_cell)))
 		player.global_position = exit_pos
-		emp.global_position = exit_pos + Vector3(1.5, 0.0, 0.0)
+		# at the elevator's DOOR (in its car, more than 2.5 from the landing): the drop-off measures to the doorway too
+		var e: Dictionary = site.plan.elevator
+		var in_car := ElevatorGeo.to_world(e, ElevatorGeo.to_local(e, e["door"]) + Vector2(0.0, -1.2))
+		check(Vector2(exit_pos.x, exit_pos.z).distance_to(in_car) > GAME.DROPOFF_DIST, "floor %d: (the spot is beyond the landing's reach)" % f)
+		emp.global_position = Vector3(in_car.x, exit_pos.y, in_car.y)
 		await frames(4)
-		check(bool(emp.call("is_extracted")), "floor %d: the elevator drop-off works" % f)
+		check(bool(emp.call("is_extracted")), "floor %d: the elevator drop-off works at the door" % f)
 		eq(_extracted_lines(), 1, "floor %d: paid once" % f)
 		await _stop()

@@ -13,7 +13,7 @@ extends Node3D
 ##
 ## Command line (after `--`):
 ##   --seed N            dungeon seed (default: random). Seeds the job board; with --contract N / --spells it is
-##                       the contract's seed and floor 1 is exactly DungeonGen.generate(N)
+##                       the contract's seed and floor 1 is exactly DungeonGen.for_run(run, 1) (seed N and the job's elevator)
 ##   --contract K        skip the board: take offer K (0-2) of the board, or, for K >= 3, the contract rolled from seed K
 ##   --floor N           start on floor N (1-3) of the contract (implies a contract; default offer from --seed)
 ##   --spells a,b        skip the picker (e.g. heal,corn); with no --contract it also skips the board
@@ -30,7 +30,8 @@ extends Node3D
 ##   --give heal:9,corn:3  dev: slot these spells (up to 4) with these charges, after the picked two
 ##   --hold N            dev: ready slot N (1-4) at the start
 ##   --zoom S            dev: camera size (default 24; 6 is a close-up of the crew)
-##   --focus rebar|gasket|dev  dev: the camera follows that ally (or the --spawn-near monsters) instead of the player
+##   --focus rebar|gasket|dev|elevator  dev: the camera follows that ally (or the --spawn-near monsters, or looks at the
+##                       elevator's landing) instead of the player
 ##   --give-allies a,b   dev: slot spell a for Rebar and b for Gasket (they only hold the component; allies do not cast)
 ##   --drop-near a,b     dev: put component pickups for spells a, b on the floor just ahead of the player
 ##   --slay-near         dev: 1.5 s in, kill the --spawn-near monsters (to watch their drops)
@@ -58,8 +59,10 @@ extends Node3D
 ##                       "Leave this job and join?" question (screenshots; M7)
 ##   --no-grime          dev: no grime / damage decal layer (scripts/world/grime)
 ##   --grime-demo        dev: 1 s in, cast fireball / corn / tentacles 6 cells from the crew and drop teeth / scuff marks (screenshots)
-##   --no-van-intro      dev: skip the van's arrival animation (the van is still parked and the crew stands beside it). Tests (--run-test)
-##                       and --shot screenshots skip it by default; --van-intro plays it anyway (--shot-after 1.2 catches the landing)
+##   --no-van-intro      dev: skip the van's arrival animation (the van is still parked and the crew stands beside it) and, below
+##                       floor 1, the elevator's (the crew stands outside its open doors). Tests (--run-test) and --shot screenshots
+##                       skip them by default; --van-intro plays them anyway (--shot-after 1.2 catches the van landing; on --floor 2
+##                       --shot-after 1.6 catches the crew stepping out of the elevator)
 ##   --net-wait N        dev, online host: stay on the job board until the crew has N members, then take offer --contract
 ##                       (default 0) after a second (two-window local play: README "Online play")
 ##   --net-bot           dev, online: this window's hero walks a loop of the start area by itself once the floor has started
@@ -104,12 +107,12 @@ static func all_spells() -> PackedStringArray:
 const PLAYER_COLOR := Color(0.3, 0.55, 0.95)
 const SCREEN_LAYER := 60          ## full-screen screens (board, elevator, invoice) sit above the debug panel (50)
 const ELEVATOR_REARM_DIST := 2    ## --auto-elevator only: after "stay", walk this many cells off before it asks again
-const ELEVATOR_USE_DIST := 1      ## the player can press E at the elevator from this many cells (on it or next to it)
+const ELEVATOR_USE_DIST := 1      ## the player can press E at the elevator from this many cells of its landing (or in its car)
 const PROMPT_ABOVE_VAN := 2.7     ## the use prompt floats this far above the floor in front of the van's side door
 const PROMPT_ABOVE_ELEVATOR := 3.0
 const PROMPT_ABOVE_PICKUP := 1.75 ## above the pickup's own name label
 const NOTE_CLOSE_SLACK := 0.6      ## an open note's slip closes once its reader is this far past ClueNote.READ_RANGE
-const VAN_FLOOR := 1              ## the van parks on the top floor only; floors 2 and 3 have no van and no arrival
+const VAN_FLOOR := 1              ## the van parks on the top floor only; below it the crew arrives by elevator (ElevatorArrival)
 const VAN_USE_DIST := 2.8         ## the player can press E at the van from this far (world units) from its side door
 const DROPOFF_DIST := 2.5         ## a FOLLOWING employee this close (world units) to the van door or the elevator leaves right away
 const OBJECTIVE_INTERVAL := 0.25
@@ -195,6 +198,8 @@ var _invite: InviteConfirm = null   ## M7: "Leave this job and join?" (a Steam o
 var _invite_paused := false         ## the invite question paused the tree (solo; a crew plays on)
 var _flow_wired := false
 var _arrival_held := false          ## the van arrival is parked at its first frame until the shared start
+var _lift: ElevatorArrival = null   ## the elevator set piece (every floor) and the crew's arrival in it (floors 2 and 3)
+var _lift_held := false             ## the elevator arrival is parked at its first frame until the shared start
 var _barrier_up := false            ## the floor is built and frozen, waiting for the shared start
 var _floor_begun := false
 var heroes_by_seat: Dictionary = {} ## seat (1-3) -> Hero
@@ -596,7 +601,7 @@ func _heroes() -> Array[Hero]:
 # --- World --------------------------------------------------------------------------------------
 
 func _build_world() -> void:
-	map = DungeonGen.generate(_run.floor_seed(_floor_n()))
+	map = DungeonGen.for_run(_run, _floor_n())   # (the job's elevator: every floor of a job uses the same style)
 	if opts.has("stage_ledge"):
 		_stage_plateau()
 	# Plan the site now: it writes each cell's floor / wall material (Cell.mat_id, FloorMaterials) before the terrain
@@ -750,12 +755,13 @@ func _seat_of(hero: Hero) -> int:
 	return 0
 
 
+## Full floor cells (never wall-cut, never under the elevator) within `radius` of c at about its level.
 func _free_cells_near(c: Vector2i, radius: int) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	var base: int = map.get_cell(c).level
 	for n in Hex.range_cells(c, radius):
 		var cell: HexMap.Cell = map.get_cell(n)
-		if n != c and cell != null and cell.type == HexMap.Tile.FLOOR and absi(cell.level - base) <= 1:
+		if n != c and cell != null and cell.type == HexMap.Tile.FLOOR and absi(cell.level - base) <= 1 and map.is_walkable_cell(n):
 			out.append(n)
 	if out.is_empty():
 		out.append(c)
@@ -980,6 +986,7 @@ func _start() -> void:
 			h._refresh_bar()
 	_populate_site()
 	_arrive_by_van()
+	_arrive_by_elevator()
 	if not opts.has("no_grime"):
 		GrimeLayer.attach(self, map, _site.plan, _run.floor_seed(_floor_n()))
 		if opts.has("grime_demo"):
@@ -997,6 +1004,12 @@ func _start() -> void:
 		marker.global_position = _dev_centroid()
 		rig.target = marker
 		rig.snap()
+	elif opts.get("focus", "") == "elevator" and _lift != null:
+		var lm := Node3D.new()   # the camera looks at the elevator's landing (screenshots of a floor-1 elevator, shut)
+		GameWorld.root.add_child(lm)
+		lm.global_position = Hex.to_world(_exit_cell, float(map.get_cell(_exit_cell).level))
+		rig.target = lm
+		rig.snap()
 	_enter_barrier()
 	if opts.has("slay_near"):
 		get_tree().create_timer(1.5).timeout.connect(_slay_dev_monsters)
@@ -1007,7 +1020,7 @@ func _start() -> void:
 		if _shared:
 			# A shared run (M4): the world is frozen behind the barrier, so cast once the floor runs and the crew is out of
 			# the van (the cast is an event that lands on every screen).
-			while is_inside_tree() and not (_floor_begun and (_arrival == null or _arrival.is_done())):
+			while is_inside_tree() and not (_floor_begun and _arrivals_done()):
 				await get_tree().process_frame
 			await get_tree().create_timer(float(opts.get("autocast_after", 0.5))).timeout
 			if not is_inside_tree() or player == null:
@@ -1046,8 +1059,8 @@ func _start() -> void:
 ## The crew arrives in the work van on the FIRST floor only: it teleports in over a summoning circle in the start room and
 ## the heroes step out beside its door (docs/design/environment.md, "Van arrival"). Player control comes back when they are
 ## out (~2.5 s), any key or click skips ahead, and the van stays parked as solid decor (and an exit, see _use_van). Floors 2
-## and 3 have no van and no arrival: the crew starts on the start cell and its free neighbours (see _build_world). Without
-## room for the van the crew stays at the start too.
+## and 3 have no van: the crew arrives in the elevator instead (_arrive_by_elevator). Without room for the van the crew
+## stays at the start.
 func _arrive_by_van() -> void:
 	if _floor_n() != VAN_FLOOR or _site == null or _site.plan.van.is_empty():
 		return
@@ -1070,10 +1083,48 @@ func _arrive_by_van() -> void:
 			_arrival_held = true
 
 
+## The crew arrives by elevator on the floors below the first (user, 2026-10-18): it stands in the car's front row, the
+## doors open and it steps out onto the landing (ElevatorArrival, ~1.9 s, skippable like the van's). On every floor the
+## elevator itself is built here (floor 1: shut until a hero comes to it). The same switch as the van's intro plays it.
+func _arrive_by_elevator() -> void:
+	if _site == null or _site.plan.elevator.is_empty():
+		return
+	var arriving: Array[Hero] = []
+	if _floor_n() > VAN_FLOOR:
+		# the car's spots: seat 1 (Wick) in the middle, seat 3 (Gasket) left, seat 2 (Rebar) right, on every machine alike
+		for seat: int in [1, 3, 2]:
+			if heroes_by_seat.has(seat):
+				arriving.append(heroes_by_seat[seat])
+	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
+	var play := _van_intro_enabled() and not moved_away and not player.dead
+	_lift = ElevatorArrival.spawn(_site.plan.elevator, _floor_n(), arriving, _heroes(), play)
+	if _lift == null:
+		return
+	if _lift.is_running():
+		rig.snap()
+		controller.enabled = false
+		_lift.finished.connect(_on_arrival_finished)
+		if _shared:
+			_lift.playing = false   # parked at its first frame until the shared start (_begin_floor)
+			_lift_held = true
+	elif not arriving.is_empty():
+		rig.snap()
+
+
+## Both arrivals (the van on floor 1, the elevator below it) are over, or there was none.
+func _arrivals_done() -> bool:
+	return (_arrival == null or _arrival.is_done()) and (_lift == null or _lift.is_done())
+
+
+## An arrival is still playing (the player has no control yet).
+func _arrival_running() -> bool:
+	return (_arrival != null and _arrival.is_running()) or (_lift != null and _lift.is_running())
+
+
 ## --pause-demo: open the pause overlay 1.5 s into the floor (a shared run: 1.5 s after the shared start and the arrival).
 func _pause_demo() -> void:
 	if _shared:
-		while is_inside_tree() and not (_floor_begun and (_arrival == null or _arrival.is_done())):
+		while is_inside_tree() and not (_floor_begun and _arrivals_done()):
 			await get_tree().process_frame
 	await get_tree().create_timer(1.5).timeout
 	if is_inside_tree() and _can_pause():
@@ -1083,7 +1134,7 @@ func _pause_demo() -> void:
 ## --invite-demo: the overlay-invite question 1.5 s into the floor, as if Steam had sent one (M7 screenshots).
 func _invite_demo() -> void:
 	if _shared:
-		while is_inside_tree() and not (_floor_begun and (_arrival == null or _arrival.is_done())):
+		while is_inside_tree() and not (_floor_begun and _arrivals_done()):
 			await get_tree().process_frame
 	await get_tree().create_timer(1.5).timeout
 	if is_inside_tree() and not _leaving:
@@ -1156,6 +1207,9 @@ func _enter_barrier() -> void:
 		if _arrival != null:
 			_arrival_held = false
 			_arrival.skip()
+		if _lift != null:
+			_lift_held = false
+			_lift.skip()
 		_flow.local_sums = sums
 		_refresh_join_slip("Catching up with the crew...")
 		if opts.has("join_hold"):
@@ -1189,6 +1243,11 @@ func _begin_floor(elapsed: float) -> void:
 	if _arrival != null and _arrival_held:
 		_arrival.time = elapsed
 		_arrival.playing = true
+		controller.enabled = false
+	if _lift != null and _lift_held:
+		_lift_held = false
+		_lift.time = elapsed
+		_lift.playing = true
 		controller.enabled = false
 	_announce_floor()
 	_log("floor started (%.3f s past the shared start)" % elapsed, Color(0.6, 0.9, 1.0))
@@ -1232,7 +1291,7 @@ func _drop_departed_seats() -> void:
 func _update_hero_sync() -> void:
 	if not _shared or Session.snap == null:
 		return
-	var on := _floor_begun and (_arrival == null or _arrival.is_done()) and not _leaving
+	var on := _floor_begun and _arrivals_done() and not _leaving
 	Session.snap.set_active(on)
 	if on and opts.has("net_bot") and _bot == null and player != null and controller != null and not player.dead:
 		_bot = NetBot.new()
@@ -1780,9 +1839,14 @@ func _on_actor_died(a: Actor) -> void:
 
 # --- The elevator ----------------------------------------------------------------------------------------
 
-## True when the living player stands on or next to the elevator (the exit cell).
+## True when the living player stands at the elevator: on or next to its landing (the exit cell, in front of the doors: the
+## doorway cells are next to it) or in its car, for both placements.
 func _player_at_elevator() -> bool:
-	return player != null and not player.dead and Hex.distance(player.current_cell(), _exit_cell) <= ELEVATOR_USE_DIST
+	if player == null or player.dead:
+		return false
+	if Hex.distance(player.current_cell(), _exit_cell) <= ELEVATOR_USE_DIST:
+		return true
+	return _site != null and ElevatorGeo.inside(_site.plan.elevator, Vector2(player.global_position.x, player.global_position.z))
 
 
 ## True when the van is parked on this floor (floor 1 only) and its plan is there.
@@ -1802,8 +1866,10 @@ func _near_van(pos: Vector3, dist: float) -> bool:
 	return _has_van() and Vector2(pos.x, pos.z).distance_to(_van_door_pos()) <= dist
 
 
-## True when `pos` is within `dist` (world units) of the elevator.
+## True when `pos` is within `dist` (world units) of the elevator: its doorway or its landing (or in the car).
 func _near_elevator_world(pos: Vector3, dist: float) -> bool:
+	if _site != null and not _site.plan.elevator.is_empty():
+		return ElevatorGeo.door_distance(_site.plan.elevator, Vector2(pos.x, pos.z)) <= dist
 	var ex := Hex.to_world(_exit_cell)
 	return Vector2(pos.x, pos.z).distance_to(Vector2(ex.x, ex.z)) <= dist
 
@@ -1830,8 +1896,8 @@ class UseTarget extends RefCounted:
 func use_target() -> UseTarget:
 	if _menu != null or _van_menu != null or _leaving or _ended or _ending or _session == null:
 		return null
-	if player == null or player.dead:
-		return null
+	if player == null or player.dead or _arrival_running():
+		return null   # (nothing to use while the crew is still arriving: the van's or the elevator's beat)
 	var t := UseTarget.new()
 	if _player_at_van():
 		var door := _van_door_pos()
@@ -1919,6 +1985,8 @@ func _check_elevator() -> void:
 		return   # without --auto-elevator the menu opens only on E (see _use_key)
 	if _shared and not _floor_begun:
 		return   # (a shared floor: not behind the barrier)
+	if not _arrivals_done():
+		return   # (not while the crew is still stepping out of the car)
 	var on_exit := false
 	for h in _heroes():
 		if not h.dead and h.current_cell() == _exit_cell:
@@ -2360,8 +2428,12 @@ static func _is_skip_press(event: InputEvent) -> bool:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _arrival != null and _arrival.is_running() and _is_skip_press(event):
-		_arrival.skip()   # never trap the player: any key or click jumps to the end of the arrival
+	if _arrival_running() and _is_skip_press(event):
+		# never trap the player: any key or click jumps to the end of the arrival
+		if _arrival != null and _arrival.is_running():
+			_arrival.skip()
+		if _lift != null and _lift.is_running():
+			_lift.skip()
 	if _confirm != null or _invite != null:
 		return   # the leave question (or the invite question) has the keys
 	if event.is_action_pressed("restart"):
@@ -2417,7 +2489,7 @@ func _close_pause() -> void:
 	_pause.queue_free()
 	_pause = null
 	get_tree().paused = false
-	if _crewed() and controller != null and player != null and not player.dead and not _ended and (_arrival == null or not _arrival.is_running()):
+	if _crewed() and controller != null and player != null and not player.dead and not _ended and not _arrival_running():
 		controller.enabled = true
 	if voice != null:
 		voice.reset()   # drop audio heard while the game was stopped

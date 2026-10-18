@@ -36,8 +36,11 @@ extends RefCounted
 ##    BUDGET_SCALE (0.7) and each room holds at most one monster per MonsterFactory.CELLS_PER_MONSTER
 ##    walkable cells, placed spread out.
 ##
-## Clear zones (hex distance): START_CLEAR / EXIT_CLEAR around the start and exit, CORRIDOR_CLEAR around
-## any corridor cell.
+##  - the ELEVATOR (SitePlan.elevator: HexMap.elevator plus the job's look): its car, doorway and landing
+##    (ElevatorGeo.keep_cells) are avoided and blocked like the exit zone, and it is a body in its room's ThemeCtx.
+##
+## Clear zones (hex distance): START_CLEAR / EXIT_CLEAR around the start and exit (the exit is the elevator's landing),
+## CORRIDOR_CLEAR around any corridor cell.
 
 const START_CLEAR := 3
 const EXIT_CLEAR := 3
@@ -93,6 +96,12 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 		avoid[c] = true
 	for c in near_exit:
 		avoid[c] = true
+	# The elevator (the job's look on the generator's record): its car, doorway and landing stay clear of everything.
+	p.elevator = map.elevator.duplicate(true)
+	if not p.elevator.is_empty():
+		p.elevator["look"] = run.elevator_look
+	for c in ElevatorGeo.keep_cells(p.elevator):
+		avoid[c] = true
 
 	_plan_gates(map, run, floor_n, p, rng, avoid, near_corr)
 	_plan_employees(map, run, floor_n, p, rng, avoid)
@@ -100,6 +109,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	var t0 := Time.get_ticks_usec()
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
 	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
+	_elevator_body(p, ctx)
 	last_theme_usec = Time.get_ticks_usec() - t0
 	_plan_van(map, p, ctx, floor_n)
 	t0 = Time.get_ticks_usec()
@@ -143,6 +153,21 @@ static func _plan_van(map: HexMap, p: SitePlan, ctx: ThemeCtx, floor_n: int) -> 
 	ctx.add_body(room, p.van["pos"], float(p.van["yaw"]), float(p.van["w"]), float(p.van["d"]), -1, "van")
 	for c: Vector2i in p.van["cells"]:
 		ctx.solid[c] = true
+
+
+## The elevator as a body in its room, so no prop, note, decor piece or package overlaps it (its cells are avoided too).
+static func _elevator_body(p: SitePlan, ctx: ThemeCtx) -> void:
+	if p.elevator.is_empty():
+		return
+	var room: ThemeCtx.RoomInfo = ctx.rooms.get(p.exit_room)   # (the landing is the exit cell, the elevator's room's)
+	if room == null:
+		return
+	var pos: Vector2 = p.elevator["pos"]
+	var yaw := float(p.elevator["yaw"])
+	if str(p.elevator["place"]) == ElevatorGeo.PLACE_WALL:
+		ctx.add_body(room, ElevatorGeo.to_world(p.elevator, Vector2(0.0, -0.45)), yaw, 2.0 * ElevatorGeo.JAMB_OUT + 0.4, 2.6, -1, "elevator")
+	else:
+		ctx.add_body(room, pos, yaw, 2.0 * ElevatorGeo.SHAFT_R + 1.6, 2.0 * ElevatorGeo.SHAFT_R + 1.6, -1, "elevator")
 
 
 static func _index_rooms(map: HexMap, p: SitePlan) -> void:
@@ -821,6 +846,9 @@ static func _block_cells(p: SitePlan) -> void:
 	for c: Vector2i in (p.van.get("cells", []) as Array):
 		p.blocked[c] = true
 	for c: Vector2i in (p.van.get("crew_cells", []) as Array):
+		p.blocked[c] = true
+	# The elevator's car, doorway and landing (the crew steps out there).
+	for c in ElevatorGeo.keep_cells(p.elevator):
 		p.blocked[c] = true
 	# Walk-blocking decor (racks, bunks, barrels, ...): monsters are not placed inside it.
 	for dc in p.decor:

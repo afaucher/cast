@@ -10,7 +10,8 @@ extends Node3D
 ## ledges, ziggurats, pillars) read as wooden CRATES, stairs as warm wood planks. Cliff
 ## sides keep a subtle band at every height level (count them to judge step / climb /
 ## blocked) plus a faint glow down the column corners; pits get an amber glow at the
-## bottom. The "start" / "exit" cells get cyan-green / magenta glowing seams + a ring.
+## bottom. The "start" / "exit" cells get cyan-green / magenta glowing seams + a ring (the exit only on a map without an
+## elevator: the elevator's sill strip and car light mark its landing).
 ##
 ## Midpoint walls (HexMap.cut_walls): a cut cell is drawn in two parts. Its floor kites are a floor tile (the
 ## same inset top, bevel and seam, but only along its hex edges: the floor runs flush into the wall line) and its
@@ -733,7 +734,7 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 			col = col.lerp(Color(0.4, 1.0, 0.8), 0.14)
 			rim = col.lerp(START_COLOR, 0.55)
 			seam = START_COLOR
-		elif cell.tag == "exit":
+		elif cell.tag == "exit" and _map.elevator.is_empty():   # (an elevator marks its own landing: sill and car light)
 			col = col.lerp(Color(1.0, 0.5, 1.0), 0.14)
 			rim = col.lerp(EXIT_COLOR, 0.55)
 			seam = EXIT_COLOR
@@ -774,7 +775,7 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 			_side_quad(side_b, p0, p1, y_bot + gh, y_bot, n, 0.0, 1.0, side_col, SEAM_DROP, 0.0, 0.6)
 		else:
 			_side_quad(side_b, p0, p1, y_top, y_bot, n, 0.0, 1.0, side_col, SEAM_DROP)
-	if not is_wall and (cell.tag == "start" or cell.tag == "exit"):
+	if not is_wall and (cell.tag == "start" or (cell.tag == "exit" and _map.elevator.is_empty())):
 		_add_ring(center, y + 0.02, START_COLOR if cell.tag == "start" else EXIT_COLOR)
 
 

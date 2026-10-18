@@ -148,7 +148,8 @@ How they fit together, from the top down:
      down: more pests, more gates, closer to the origin.
    - Objectives can span floors (e.g. "close all 4 gates" across 2 floors), and pay rises with depth.
    - **The elevator is always available** (the early-exit rule). It needs a key press: while the player
-     stands on or next to the exit cell the HUD says "E: use elevator" and E opens its menu (E never casts). At each floor the crew decides:
+     stands on or next to the exit cell (its landing, in front of the doors) or in its car the HUD says "E: use elevator"
+     and E opens its menu (E never casts). At each floor the crew decides:
      go down for more pay and more risk, or exit. Unmet objectives don't pay, and damage is
      taken out of earnings (that part never below $0; revival fees for heroes left down can still make the net negative, see Decisions 9).
    - **The invoice** at the end totals every floor.
@@ -156,8 +157,12 @@ How they fit together, from the top down:
 ### Mission structure [decided, user, 2026-10-17]
 - **Floors 1-3, no backtracking.** The crew only ever goes down.
 - **The van parks on floor 1 only.** It teleports in at the start of floor 1 (see `environment.md`, "Van arrival") and
-  stays parked there. Floors 2 and 3 have **no van and no arrival**: the crew just starts on the start cell and its free
-  neighbours (`SiteBuilder` plans no van below floor 1, `game.gd` spawns none).
+  stays parked there. Floors 2 and 3 have **no van**: the crew **arrives in the elevator** (user, 2026-10-18): it stands
+  in the car's front row, the doors open and it steps out onto the landing (~1.9 s, skippable; `ElevatorArrival`), and
+  no pack or employee is planned in that room (`SiteBuilder.arrival_room`).
+- **The elevator** is a set piece in one of four styles, one per job, all its floors alike: a service (freight) or fancy
+  (brass) look, in a notch of a room's wall or free-standing in the middle of a room. The exit cell is its landing, in
+  front of its doors. See `elevator-options.md`, "Built".
 - **Two exits, and leaving early is always allowed at either** (unfinished objectives simply don't pay):
   - **The elevator**, on every floor, offers **go down to the next floor** and **exit** (clock out and invoice). On
     floor 3 it offers only exit. HUD prompt "E: use elevator".
@@ -212,9 +217,10 @@ the crew's marks are the record of the job.
 - What "serviced" means (the condition for signing a floor out) is not decided yet: every gate on it closed, or every
   objective on it met.
 
-**How it works today (for comparison):** every floor spawns the crew on its start cell (the blue-bordered hex, tag
-`start`), including after the elevator; the elevator stands on the separate `exit` cell. The van is on floor 1 only.
-The elevator offers down and exit, and only exit on floor 3.
+**How it works today (for comparison):** floor 1 starts the crew at the van on its start cell (the blue-bordered hex,
+tag `start`); floors 2 and 3 start it inside the elevator, which steps it out onto its landing (the `exit` cell). The
+start cell still exists on every floor (generation uses it). The van is on floor 1 only. The elevator offers down and
+exit, and only exit on floor 3.
 
 **Open:**
 - Backtracking: can the crew go back to a floor it has already visited (the earlier rule was "down only")? The sheet

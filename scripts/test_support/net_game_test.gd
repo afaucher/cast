@@ -303,13 +303,14 @@ func place_hero(hero: Hero, cell: Vector2i) -> void:
 	hero.snap_to_ground()
 
 
-## A floor cell exactly `dist` cells from `c` at about its level (Vector2i.MAX when there is none).
+## A full floor cell (never wall-cut, never under the elevator) exactly `dist` cells from `c` at about its level
+## (Vector2i.MAX when there is none).
 func cell_at(c: Vector2i, dist: int) -> Vector2i:
 	var map := game.get("map") as HexMap
 	var base: HexMap.Cell = map.get_cell(c)
 	for n in Hex.range_cells(c, dist):
 		var cell: HexMap.Cell = map.get_cell(n)
-		if Hex.distance(n, c) == dist and cell != null and cell.type == HexMap.Tile.FLOOR and base != null and absi(cell.level - base.level) <= 1:
+		if Hex.distance(n, c) == dist and cell != null and cell.type == HexMap.Tile.FLOOR and base != null and absi(cell.level - base.level) <= 1 and map.is_walkable_cell(n):
 			return n
 	return Vector2i.MAX
 

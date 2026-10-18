@@ -65,6 +65,10 @@ var packages: Array[Dictionary] = []
 ## start room, solid set dressing (not priced). {} on floors 2 and 3 (the van parks on floor 1 only) and when the start
 ## room has no flat space for it.
 var van: Dictionary = {}
+## The elevator (ElevatorGeo's record from HexMap.elevator, plus "look": the job's "service" / "fancy"): where its car
+## stands, its landing (= `exit`), its doorway and the crew's spots in it and outside it. Nothing else is planned on the
+## cells it keeps (ElevatorGeo.keep_cells). {} on a map without one.
+var elevator: Dictionary = {}
 ## Rooms ordered by distance from the nearest gate, farthest first (start room left out).
 var ranked_rooms: Array[String] = []
 ## Monster pack budget per room tag (the start room has none).
@@ -82,7 +86,7 @@ func net_fields() -> Dictionary:
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "packages": Net.SPAWN,
 		"room_themes": Net.SPAWN, "decor": Net.SPAWN, "lights": Net.SPAWN, "entrances": Net.SPAWN,
 		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "dispatch": Net.SPAWN, "ranked_rooms": Net.SPAWN,
-		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN, "van": Net.SPAWN,
+		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN, "van": Net.SPAWN, "elevator": Net.SPAWN,
 	}
 
 

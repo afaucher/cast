@@ -126,6 +126,20 @@ func run_host() -> void:
 		return
 	for w: Employee in emps:
 		w.set_modifier("test_ward", 0.0, 999.0)   # (the floor's monsters may roam near them: only the test loses one)
+	# The employees the test uses: first those with no other employee near (E acts on the NEAREST one, so with two side by
+	# side c1's press may recruit the other), then the calmest (one a monster comes near PANICs and stops following, which
+	# this test is not about). Which employees those are depends on the floor's layout.
+	emps.sort_custom(func(a: Employee, b: Employee) -> bool:
+		var ia := _employee_gap(a, emps) >= 4.5
+		var ib := _employee_gap(b, emps) >= 4.5
+		if ia != ib:
+			return ia
+		return _monster_gap(a) > _monster_gap(b))
+	# ... and the monsters near the three the test uses hold still (a hero walking up would draw them in)
+	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
+		for w: Employee in emps.slice(0, 3):
+			if GameWorld.flat_distance(m.global_position, w.global_position) < 14.0:
+				m.process_mode = Node.PROCESS_MODE_DISABLED
 	var e: Employee = emps[0]
 	var eid := NetFloor.id_of(e)
 	command(c1, "recruit", {"id": eid})
@@ -266,13 +280,17 @@ func run_client() -> void:
 				report("loadouts", _loadouts())
 			"recruit":
 				var e := NetRegistry.node(int(cmd["id"])) as Employee
-				_stand_beside(e.global_position, 1.0)
+				# beside it on the side away from the nearest other employee (E acts on the nearest one: two can stand close)
+				_stand_beside_alone(e)
 				await sleep(0.3)
 				var used := (game.get("controller") as PlayerController).press_use()
 				check(used, "E is used on the employee (it is a request)")
 				await until(func() -> bool: return e.is_following(), 4.0)
 				# Walk a few steps away: it follows.
 				var away := my_hero().global_position + (my_hero().global_position - e.global_position).normalized() * 2.5
+				var map := game.get("map") as HexMap
+				if not map.is_walkable_cell(Hex.from_world(away)) or map.blocks_point(away, 0.5):
+					away = _open_spot(e.global_position, 3.5)   # (straight back was no open floor on this layout)
 				my_hero().global_position = Vector3(away.x, my_hero().global_position.y, away.z)
 				my_hero().snap_to_ground()
 				report("recruit", true)
@@ -384,6 +402,24 @@ func _open_spot_from(p: Vector3, dist: float, k0: int) -> Vector3:
 	return p
 
 
+## How far the nearest other employee of `list` is from `a`.
+static func _employee_gap(a: Actor, list: Array) -> float:
+	var best := INF
+	for o: Actor in list:
+		if o != a:
+			best = minf(best, GameWorld.flat_distance(a.global_position, o.global_position))
+	return best
+
+
+## How far the nearest living monster is from `a`.
+static func _monster_gap(a: Actor) -> float:
+	var best := INF
+	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
+		if not m.dead:
+			best = minf(best, GameWorld.flat_distance(a.global_position, m.global_position))
+	return best
+
+
 func _peer_named(n: String) -> int:
 	for p: int in Session.roster:
 		if str(Session.roster[p]["name"]) == n:
@@ -416,6 +452,25 @@ func _loadouts() -> Dictionary:
 
 
 ## Put this machine's hero `dist` from `p`, on open floor.
+## Stand 1.0 from employee `e` on its far side from the nearest other employee, so E picks `e`.
+func _stand_beside_alone(e: Employee) -> void:
+	var other: Node3D = null
+	for n in get_tree().get_nodes_in_group("employees"):
+		if n != e and (other == null or GameWorld.flat_distance(e.global_position, (n as Node3D).global_position) < GameWorld.flat_distance(e.global_position, other.global_position)):
+			other = n
+	var map := game.get("map") as HexMap
+	if other != null:
+		var dir := e.global_position - other.global_position
+		dir.y = 0.0
+		if dir.length() > 0.01:
+			var q := e.global_position + dir.normalized()
+			if map.is_walkable_cell(Hex.from_world(q)) and not map.blocks_point(q, 0.5) and absf(map.ground_height(q) - e.global_position.y) < 0.6:
+				my_hero().global_position = Vector3(q.x, map.ground_height(q), q.z)
+				my_hero().snap_to_ground()
+				return
+	_stand_beside(e.global_position, 1.0)
+
+
 func _stand_beside(p: Vector3, dist: float) -> void:
 	var spot := _open_spot(p, dist)
 	my_hero().global_position = spot

@@ -31,6 +31,13 @@ extends RefCounted
 ##
 ## Pathing stays on cells: find_path only uses FULL cells as nodes (a half cell's center lies on its wall
 ## line). A half cell may be the start (the path steps out of it) or the goal (the path ends beside it).
+##
+## SET PIECES (the elevator, docs/design/elevator-options.md): `solids` are convex polygons (world X/Z) that block
+## bodies like a wall face does (blocks_point, clip_move, sweep, nearest_wall, segments_near) without being cells: the
+## elevator's jambs, the glass shaft's sides, the platform's railings. They are not drawn here and line of sight,
+## projectiles and the height rules ignore them (glass and railings). `no_stand` cells are floor a set piece stands on
+## (the shaft's posts sit on their centers): not full cells for pathing or placement. `elevator` is the elevator's
+## record (ElevatorGeo). All three are built from the floor seed on every machine.
 
 enum Tile { FLOOR, WALL, STAIRS, BRIDGE }
 enum Move { OK, CLIMB, BLOCKED }
@@ -56,12 +63,18 @@ class Cell:
 
 var cells: Dictionary = {}       ## Vector2i -> Cell
 var midpoint_walls := false      ## cut_walls() ran: walls follow the lines between hex centers
+var solids: Array[PackedVector2Array] = []   ## convex polygons (world X/Z) that block bodies: set-piece walls (see above)
+var no_stand: Dictionary = {}    ## Vector2i -> true: floor under a set piece (not a full cell: no path node, no standing spot)
+var elevator: Dictionary = {}    ## the elevator's record (ElevatorGeo.make_*), {} when the floor has none
 var _segs: Dictionary = {}       ## Vector2i -> PackedVector2Array [a, b, n, ...]: wall faces bordering that cell's floor (lazy cache)
+var _solid_segs: Dictionary = {} ## Vector2i -> PackedVector2Array [a, b, n, ...]: pieces of the solids' edges, filed under the cell of their middle
+var _solid_box := Rect2()        ## the bounding box of every solid
 
 
 ## Who may write each var (see Net). The map is built from the floor seed on every machine.
 func net_fields() -> Dictionary:
-	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "_segs": Net.LOCAL}
+	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "solids": Net.SPAWN, "no_stand": Net.SPAWN,
+		"elevator": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL}
 
 
 func set_cell(c: Vector2i, level: int, type: int = Tile.FLOOR) -> Cell:
@@ -90,10 +103,11 @@ func has_cell(c: Vector2i) -> bool:
 	return cells.has(c)
 
 
-## A FULL floor cell: present, not a wall, not cut by a midpoint wall. Path nodes, spawn and placement spots.
+## A FULL floor cell: present, not a wall, not cut by a midpoint wall, no set piece on it. Path nodes, spawn and
+## placement spots.
 func is_walkable_cell(c: Vector2i) -> bool:
 	var cell: Cell = cells.get(c)
-	return cell != null and cell.type != Tile.WALL and cell.wall_mask == 0
+	return cell != null and cell.type != Tile.WALL and cell.wall_mask == 0 and not no_stand.has(c)
 
 
 ## A floor cell cut by a midpoint wall (part floor, part wall).
@@ -206,7 +220,7 @@ func line_of_sight(from: Vector3, to: Vector3, step: float = 0.25) -> bool:
 
 ## Does a circle of `radius` at world X/Z point p touch a wall? radius 0 is the point test (wall_at).
 func blocks_point(p: Vector3, radius: float = 0.0) -> bool:
-	if wall_at(p):
+	if wall_at(p) or solid_at(p):
 		return true
 	if radius <= 0.0:
 		return false
@@ -225,7 +239,7 @@ func blocks_point(p: Vector3, radius: float = 0.0) -> bool:
 ## overlaps (so it stops touching the face, slides along it and settles in corners without jitter). Returns
 ## `from` if no wall-free spot is found (Y is taken from `to`). `from` is assumed clear.
 func clip_move(from: Vector3, to: Vector3, radius: float) -> Vector3:
-	if wall_at(to):
+	if wall_at(to) or solid_at(to):
 		return from
 	if radius <= 0.0:
 		return to
@@ -405,7 +419,98 @@ func _gather(p: Vector3, radius: float) -> PackedVector2Array:
 	for c in Hex.range_cells(c0, reach):
 		if cells.has(c):
 			out.append_array(wall_segments(c))
+	if not _solid_segs.is_empty() and _solid_box.grow(radius + 0.5).has_point(Vector2(p.x, p.z)):
+		# a solid's pieces are filed under the cell of their middle, which can be one cell farther out than a wall face
+		for c in Hex.range_cells(c0, reach + 1):
+			if _solid_segs.has(c):
+				out.append_array(_solid_segs[c])
 	return out
+
+
+# --- Set-piece solids -------------------------------------------------------------------------------------------
+
+const SOLID_PIECE := 0.5        ## a solid's edges are filed in pieces this long (so _gather's cell reach finds them)
+
+
+## Add a convex polygon (world X/Z, either winding) that blocks bodies. Deterministic: the same polygons in the same
+## order give the same collision on every machine.
+func add_solid(poly: PackedVector2Array) -> void:
+	if poly.size() < 3:
+		return
+	solids.append(poly)
+	var area := 0.0
+	for i in poly.size():
+		var a := poly[i]
+		var b := poly[(i + 1) % poly.size()]
+		area += a.x * b.y - b.x * a.y
+	var box := Rect2(poly[0], Vector2.ZERO)
+	for i in poly.size():
+		var a := poly[i]
+		var b := poly[(i + 1) % poly.size()]
+		box = box.expand(a)
+		var e := b - a
+		var n := Vector2(e.y, -e.x).normalized() if area > 0.0 else Vector2(-e.y, e.x).normalized()   # outward
+		var pieces := maxi(1, int(ceilf(e.length() / SOLID_PIECE)))
+		for k in pieces:
+			var pa := a + e * (float(k) / pieces)
+			var pb := a + e * (float(k + 1) / pieces)
+			var mid := (pa + pb) * 0.5
+			var c := Hex.from_world(Vector3(mid.x, 0.0, mid.y))
+			var arr: PackedVector2Array = _solid_segs.get(c, PackedVector2Array())
+			arr.append(pa)
+			arr.append(pb)
+			arr.append(n)
+			_solid_segs[c] = arr
+	_solid_box = box if solids.size() == 1 else _solid_box.merge(box)
+
+
+## Is the world X/Z point inside one of the set-piece solids?
+func solid_at(p: Vector3) -> bool:
+	if solids.is_empty():
+		return false
+	var q := Vector2(p.x, p.z)
+	if not _solid_box.grow(0.001).has_point(q):
+		return false
+	for poly in solids:
+		if _in_convex(q, poly):
+			return true
+	return false
+
+
+## Does the straight walk a -> b (world X/Z) come within `margin` of a set-piece solid? Steering asks this before it walks
+## straight at a goal (movement_check samples points, and the elevator's sides are thinner than a step).
+func crosses_solid(a: Vector3, b: Vector3, margin: float = 0.0) -> bool:
+	if solids.is_empty():
+		return false
+	var p := Vector2(a.x, a.z)
+	var q := Vector2(b.x, b.z)
+	if not Rect2(p, Vector2.ZERO).expand(q).grow(margin + 0.01).intersects(_solid_box):
+		return false
+	for poly in solids:
+		if _in_convex(p, poly) or _in_convex(q, poly):
+			return true
+		for i in poly.size():
+			var c := poly[i]
+			var d := poly[(i + 1) % poly.size()]
+			var pts := Geometry2D.get_closest_points_between_segments(p, q, c, d)
+			if pts[0].distance_to(pts[1]) < margin + 0.0001:
+				return true
+	return false
+
+
+static func _in_convex(q: Vector2, poly: PackedVector2Array) -> bool:
+	var sgn := 0.0
+	for i in poly.size():
+		var a := poly[i]
+		var b := poly[(i + 1) % poly.size()]
+		var cr := (b - a).cross(q - a)
+		if absf(cr) < 0.0000001:
+			continue
+		if sgn == 0.0:
+			sgn = signf(cr)
+		elif signf(cr) != sgn:
+			return false
+	return true
 
 
 static func _closest(p: Vector2, a: Vector2, b: Vector2) -> Vector2:

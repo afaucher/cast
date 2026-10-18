@@ -1,4 +1,4 @@
-﻿extends TestCase
+extends TestCase
 ## Midpoint walls (HexMap.cut_walls, DungeonGen): walls run from hex center to hex center through the edge
 ## midpoints, the border cells are cut in half, and everything that collides or places things treats the wall LINE
 ## as the boundary.
@@ -23,6 +23,8 @@ func setup() -> void:
 	timeout_sec = 180.0
 	for s in SEEDS:
 		_check_floor(DungeonGen.generate(s), "seed %d" % s)
+	for s in [1, 2, 42, 777]:
+		_check_floor(DungeonGen.generate(s, {"elevator": ElevatorGeo.PLACE_FREE}), "seed %d (free elevator)" % s)
 	_check_doors()
 	_check_determinism()
 	print("midpoint walls: %d cut cells, %d wall segments over %d seeds" % [_halves, _segments, SEEDS.size()])
@@ -92,8 +94,42 @@ func _check_floor(m: HexMap, tag: String) -> void:
 	eq(bad_mask, 0, tag + ": cut cells agree on every triangle")
 	eq(bad_seg, 0, tag + ": every wall segment runs center -> edge midpoint and continues to the next center")
 	eq(spikes, 0, tag + ": no sliver of floor between two wall faces")
+	_check_elevator_cut(m, tag)
 	_check_floor_connected(m, tag)
 	_check_rooms_reachable(m, tag)
+
+
+## The elevator's cut: a wall car opens exactly the five triangles of its trapezoid (the mouth on the room's wall line, the
+## car's back wall on the next line, nothing open behind it) with a jamb solid over each sliver; a free car has its five
+## closed sides as solids and stands on floor that the walls do not cut.
+func _check_elevator_cut(m: HexMap, tag: String) -> void:
+	var e := m.elevator
+	if not check(not e.is_empty(), tag + ": the floor has an elevator"):
+		return
+	var cs: Array = e["cells"]
+	if str(e["place"]) == ElevatorGeo.PLACE_WALL:
+		var ms: Array = e["mouth"]
+		var tris := [[ms[0], cs[0], ms[1]], [cs[0], cs[1], ms[1]], [ms[1], cs[1], ms[2]], [cs[1], cs[2], ms[2]], [ms[2], cs[2], ms[3]]]
+		for tri: Array in tris:
+			check(_tri_open(m, tri[0], tri[1], tri[2]), tag + ": the car's triangle %s is open floor" % str(tri))
+		var k := int(e["k"])
+		for c: Vector2i in cs:
+			check(m.kite_blocked(c, k) and m.kite_blocked(c, k - 1) and m.kite_blocked(c, k + 1), tag + ": behind the car is wall at %s" % str(c))
+		eq(m.solids.size(), 2, tag + ": two jamb solids")
+	else:
+		for c: Vector2i in cs:
+			eq(m.wall_mask_of(c), 0, tag + ": the free car's cell %s is not cut" % str(c))
+		eq(m.solids.size(), 5, tag + ": five closed sides")
+
+
+## Is the triangle of the three adjacent cells a, b, c open (no corner a wall, not blocked)?
+func _tri_open(m: HexMap, a: Vector2i, b: Vector2i, c: Vector2i) -> bool:
+	for k in 6:
+		var x: Vector2i = a + Hex.DIRS[k]
+		var y: Vector2i = a + Hex.DIRS[(k + 1) % 6]
+		if (x == b and y == c) or (x == c and y == b):
+			return m._tri_all_floor(a, k) and not m._tri_blocked(a, k)
+	return false
 
 
 ## Every open triangle of floor (heights aside) joins the start's floor: no pocket cut off by a wall line.

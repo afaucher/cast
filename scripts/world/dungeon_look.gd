@@ -99,7 +99,8 @@ static func add_pools(parent: Node3D, map: HexMap) -> Node3D:
 		holder.add_child(l)
 
 	_marker_light(map, holder, "start", HexMapView.START_COLOR)
-	_marker_light(map, holder, "exit", HexMapView.EXIT_COLOR)
+	if map.elevator.is_empty():
+		_marker_light(map, holder, "exit", HexMapView.EXIT_COLOR)   # (an elevator lights its own car and sill instead)
 	return holder
 
 

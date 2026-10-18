@@ -302,6 +302,11 @@ Monsters idle until a hero is within aggro range with line of sight, then act.
 `DungeonGen.generate(seed: int, params := {}) -> HexMap`. Cells are tagged: `"start"` (one cell),
 `"exit"` (one cell), `"room:<n>"` for room floors (so monsters can be packed per room; a room's cut border cells
 carry its tag too), `"corridor"`. `HexMapView` (`scripts/world/hex_map_view.gd`, extends Node3D): `build(map)`.
+A contract's floor is `DungeonGen.for_run(run, floor)` (the job's elevator placement). The `"exit"` cell is the
+elevator's landing: `ElevatorGeo` (`scripts/world/elevator_geo.gd`) places the car (a notch cut into a wall, or
+free-standing) and writes `HexMap.elevator`, its solids (`HexMap.solids`: convex polygons the collision queries treat
+like wall faces) and its `HexMap.no_stand` cells; `ElevatorArrival` (`scripts/contracts/elevator_arrival.gd`) builds the
+model and the crew's arrival. See `docs/design/elevator-options.md`, "Built".
 
 Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
 To keep that clean:

@@ -59,8 +59,14 @@ Contract sites can be either type: a **luxury bunker** (billionaire client) or a
 
 ## 4. The surface the contract came through
 The first room is the **service entrance**: hazard tape, a dispatcher's job card pinned to the wall,
-the crew's van keys, a "WET FLOOR" sign. It sets the tone in one glance. The **exit** is a freight
-elevator with its light on.
+the crew's van keys, a "WET FLOOR" sign. It sets the tone in one glance. The **exit** is an elevator with its light on:
+one style per job, a freight car or a brass one, set in a notch of a room's wall or free-standing in a room (a glass
+shaft or a hex freight platform), its doors on a camera-facing side (`ElevatorModel`, `ElevatorGeo`, `ElevatorArrival`;
+`elevator-options.md`, "Built"). Its sill strip (red shut, green open) and car light replace the old magenta exit hex.
+- **Mesh rules it follows:** the wall car is a 3-cell notch the midpoint walls cut open (its back wall is a hex wall line;
+  the slivers beside it sit under the jambs, which are solids); the free cars' corners stand on neighbour centres, so
+  their sides lie on midpoint-wall lines. Their thin sides block bodies through `HexMap.solids`, not wall cells, so the
+  terrain mesh (walls, caps, UVs) is unchanged.
 
 ## 5. Gameplay-tied props (later, but plan the hooks now)
 - **Breakables:** crates, barrels and pods. Some contain components, and shoving into them breaks them.
@@ -156,7 +162,8 @@ midpoint walls. Corridors take a neutral material per site, so the rooms stand o
 | **Lair corridors** | dark rough flagstone | 1.0 | rough stone blocks (courses) |
 
 "Seams" is the gain on the glowing seam and bevel glow of that floor (1 = the classic look): carpet and wood dim
-them, tile and diamond plate keep them bright. Start / exit seams keep their cyan / magenta. Raised ledges stay
+them, tile and diamond plate keep them bright. Start seams keep their cyan (the exit's magenta only on a map without an
+elevator). Raised ledges stay
 wooden crates, stairs stay warm planks, cliff sides keep their slate bands (heights stay countable).
 - **Data** (`scripts/world/floor_materials.gd`, `FloorMaterials`): `Cell.mat_id` packs the floor material (bits
   0-7) and the wall material (bits 8-15); 0 / 0 is the classic slate, so a map nobody assigned (menu garage, labs)

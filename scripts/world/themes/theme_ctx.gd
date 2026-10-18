@@ -100,7 +100,8 @@ static func make(map_: HexMap, plan_: SitePlan, avoid_: Dictionary, near_corr_: 
 	for e in plan_.employees:
 		var er := ctx.room_of(e["cell"])
 		if er != null:
-			ctx.add_body(er, ThemeGeo.world(e["cell"]), 0.0, 1.0, 1.0, -1, "employee")
+			# (1.45 across: even a candle keeps 0.7 from where the employee stands)
+			ctx.add_body(er, ThemeGeo.world(e["cell"]), 0.0, 1.45, 1.45, -1, "employee")
 	return ctx
 
 

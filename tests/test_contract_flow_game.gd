@@ -382,6 +382,14 @@ func _check_elevator_floors() -> void:
 		check(_prompt_text(g) != "E Clock out", "floor %d: no van prompt at the start" % f)
 		check(Hex.distance(player.current_cell(), g.get("_exit_cell")) <= 2, "floor %d: the crew starts at the elevator" % f)
 		eq(_prompt_text(g), "E Elevator", "floor %d: standing at the elevator on arrival" % f)
+		var lift: ElevatorArrival = g.get("_lift")
+		check(lift != null and lift.is_done() and lift.crew.size() == 3, "floor %d: the crew came down in the elevator (its beat is skipped in tests)" % f)
+		# E works in the doorway and in the car too, for either placement
+		var e: Dictionary = site.plan.elevator
+		for spot: Vector2 in [e["door"], (e["inside"] as Array)[1]]:
+			player.global_position = Vector3(spot.x, player.global_position.y, spot.y)
+			await frames(4)
+			eq(_prompt_text(g), "E Elevator", "floor %d: E Elevator at %s" % [f, "the door" if spot == e["door"] else "a spot in the car"])
 		if f == 3:
 			var origin: Actor = site.origin_gate
 			if check(origin != null, "floor 3 has the origin gate"):

@@ -77,6 +77,14 @@ func _physics_process(delta: float) -> void:
 		_follow(delta)
 
 
+## Seed the formation's heading before the leader has walked anywhere: the slots trail opposite `dir`. The elevator's
+## arrival passes the way INTO the car, so the allies settle out in the room in front of it, not back in the car.
+func set_heading(dir: Vector3) -> void:
+	dir.y = 0.0
+	if dir.length() > 0.001:
+		_heading = dir.normalized()
+
+
 func _anchor() -> Vector3:
 	return leader.global_position if leader and not leader.dead else hero.global_position
 
@@ -288,11 +296,13 @@ func _move_toward(goal: Vector3, delta: float) -> void:
 	hero.move(step.normalized(), delta)
 
 
-## True if walking a straight line is free of ledges, walls and holes.
+## True if walking a straight line is free of ledges, walls and holes (and the elevator's thin sides).
 func _direct_clear(from: Vector3, to: Vector3) -> bool:
 	var map: HexMap = GameWorld.map
 	if map == null:
 		return true
+	if map.crosses_solid(from, to, hero.radius):
+		return false
 	var flat := Vector3(to.x - from.x, 0, to.z - from.z)
 	var n := maxi(1, int(flat.length() / PROBE_STEP))
 	var prev := from

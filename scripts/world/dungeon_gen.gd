@@ -17,7 +17,17 @@ extends RefCounted
 ##  5. Ring everything walkable with WALL cells, BFS-validate (start reaches exit and every
 ##     room without climbing), tag cells, and retry with a derived seed on failure.
 ##
-## params (all optional): rooms, size, room_radius_min, room_radius_max, gap, loops, wall_height.
+## THE ELEVATOR (ElevatorGeo, docs/design/elevator-options.md): after the start and the exit room are chosen and before
+## the features and the walls, the elevator takes its spot, so the "exit" cell is the LANDING in front of its doors:
+##   - "wall" (the default): a 3-cell notch behind a straight, camera-facing stretch of the exit room's wall (nothing
+##     walkable behind it); the three cells become floor, so cut_walls() opens the car. If the exit room has no such wall
+##     the next-farthest rooms are tried; if none has one, or the notch spoils the layout, the floor gets the free car
+##     instead (`fallback` in the record);
+##   - "free": the hexagonal car on the exit room's centre cell (door toward the camera), solid sides, no_stand cells.
+## The record goes to HexMap.elevator, the jambs / sides to HexMap.solids. It draws no random numbers.
+##
+## params (all optional): rooms, size, room_radius_min, room_radius_max, gap, loops, wall_height, elevator ("wall" |
+## "free"; a contract's floors use for_run(), which passes the job's choice).
 
 const MAX_ATTEMPTS := 24
 const MAX_BASE_LEVEL := 8
@@ -32,6 +42,8 @@ const DEFAULT_RMAX := 8
 const DEFAULT_GAP := 8          ## minimum empty cells between two rooms
 const FEATURE_CENTER_CLEAR := 2 ## no raised feature / pit within this many cells of a room's center
 const FEATURE_DOOR_CLEAR := 3   ## ... nor within this many cells of a corridor cell (the doors)
+const EXIT_ROOM_TRIES := 3      ## the elevator tries the farthest rooms from the start, this many
+const WALL_DOOR_CAP := 10.0     ## a notch's distance from the doors counts up to this many cells
 
 enum Ev { TERRACE, CLIMB, STAIRS }
 enum Feature { PLATFORM, ZIGGURAT, LEDGE, PILLAR, PIT }
@@ -43,13 +55,25 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 		var s: int = seed if attempt == 0 else ((seed * 1103515245 + attempt * 12345 + 1) & 0x7fffffff)
 		var b := Builder.new(s, params)
 		var m: HexMap = b.build()
+		if m == null and b.notched:
+			# the notch spoiled this layout: the same layout with the free-standing car (the documented fallback)
+			var free := params.duplicate()
+			free["elevator"] = ElevatorGeo.PLACE_FREE
+			free["fallback"] = true
+			b = Builder.new(s, free)
+			m = b.build()
 		if m != null:
 			return m
 	push_warning("DungeonGen: no valid map for seed %d after %d attempts; using fallback" % [seed, MAX_ATTEMPTS])
 	return _fallback()
 
 
-## Tiny always-valid map (a lone room with stairs), used only if every attempt fails.
+## Floor `floor_n` of a contract: its floor seed and the job's elevator placement (every floor of a job alike).
+static func for_run(run: ContractRun, floor_n: int) -> HexMap:
+	return generate(run.floor_seed(floor_n), {"elevator": run.elevator_place})
+
+
+## Tiny always-valid map (a lone room with stairs), used only if every attempt fails. It has no elevator.
 static func _fallback() -> HexMap:
 	var m := HexMap.new()
 	for c in Hex.range_cells(Vector2i.ZERO, 5):
@@ -117,6 +141,11 @@ class Builder:
 	var start: Vector2i = Vector2i.ZERO
 	var exit_cell: Vector2i = Vector2i.ZERO
 	var narrow_used := false
+	var p_elevator := ElevatorGeo.PLACE_WALL
+	var p_fallback := false
+	var exit_order: Array[int] = []     ## room indices by walking distance from the start, farthest first (start room left out)
+	var elevator: Dictionary = {}       ## the elevator's record (ElevatorGeo)
+	var notched := false                ## the wall notch was cut (a failure afterwards is retried with the free car)
 
 	func _init(s: int, params: Dictionary) -> void:
 		rng.seed = s
@@ -127,6 +156,8 @@ class Builder:
 		p_gap = int(params.get("gap", DEFAULT_GAP))
 		p_loops = int(params.get("loops", -1))
 		p_wall = int(params.get("wall_height", 3))
+		p_elevator = str(params.get("elevator", ElevatorGeo.PLACE_WALL))
+		p_fallback = bool(params.get("fallback", false))
 
 	# ------------------------------------------------------------------ build
 
@@ -136,9 +167,12 @@ class Builder:
 		if not _plan_and_carve():
 			return null
 		_choose_start_exit()
+		if not _place_elevator():
+			return null
 		_decorate()
 		_add_walls()
 		map.cut_walls()
+		_add_elevator()
 		if not _validate_and_tag():
 			return null
 		return map
@@ -713,6 +747,120 @@ class Builder:
 			if dist[i] > dist[best]:
 				best = i
 		exit_cell = rooms[best].center
+		# the rooms the elevator may go in, farthest first (ties: lower index); the farthest is the exit room unless the
+		# wall elevator needs another
+		exit_order.clear()
+		for i in range(1, n):
+			exit_order.append(i)
+		exit_order.sort_custom(func(a: int, b: int) -> bool: return dist[a] > dist[b] or (dist[a] == dist[b] and a < b))
+		exit_order.erase(best)
+		exit_order.push_front(best)
+		if exit_order.size() > EXIT_ROOM_TRIES:
+			exit_order.resize(EXIT_ROOM_TRIES)
+
+	# ------------------------------------------------------------------ the elevator
+
+	## Put the elevator in the exit room (or the next-farthest one, for a wall slot): the exit cell becomes its landing. A
+	## wall job whose rooms have no wall slot gets the free car (fallback). False when not even the free car fits.
+	func _place_elevator() -> bool:
+		if p_elevator == ElevatorGeo.PLACE_WALL:
+			for ri in exit_order:
+				var slot := _best_wall_slot(rooms[ri])
+				if slot.is_empty():
+					continue
+				var room := rooms[ri]
+				var g := ElevatorGeo.notch_cells(slot["m0"], int(slot["k"]))
+				for nc: Vector2i in (g["n"] as Array):
+					map.set_cell(nc, room.level)
+					room.cells[nc] = true
+					room_of[nc] = room.index
+				elevator = ElevatorGeo.make_wall(slot["m0"], int(slot["k"]), room.level, room.index)
+				exit_cell = elevator["landing"]
+				notched = true
+				return true
+		for ri in exit_order:
+			var room := rooms[ri]
+			for j in ElevatorGeo.FREE_JS:
+				if ElevatorGeo.free_ok(room.cells, room.center, j):
+					elevator = ElevatorGeo.make_free(room.center, j, room.level, room.index)
+					elevator["fallback"] = p_fallback or p_elevator == ElevatorGeo.PLACE_WALL
+					exit_cell = elevator["landing"]
+					return true
+		return false
+
+	## The best notch for `room`: back walls 15 degrees off the camera first, then a wall line that runs straight past
+	## the jambs, then far from the doors and near the room's middle. {m0, k} or {}.
+	func _best_wall_slot(room: Room) -> Dictionary:
+		var door_d := _corridor_dist()
+		var cand: Array[Vector2i] = room.boundary.duplicate()
+		cand.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
+		var best := {}
+		var best_s := -INF
+		for m0 in cand:
+			for k in ElevatorGeo.WALL_KS:
+				var ok := ElevatorGeo.wall_slot(map, room.cells, m0, k)
+				if ok.is_empty():
+					continue
+				var land: Vector2i = ElevatorGeo.notch_cells(m0, k)["landing"]
+				var s := (100.0 if k == ElevatorGeo.WALL_KS[0] else 0.0) + (20.0 if bool(ok["strict"]) else 0.0) \
+						+ 2.0 * minf(float(door_d.get(land, WALL_DOOR_CAP)), WALL_DOOR_CAP) - 0.5 * Hex.distance(land, room.center)
+				if s > best_s + 0.0001:
+					best_s = s
+					best = {"m0": m0, "k": k}
+		return best
+
+	var _corr_d: Dictionary = {}
+
+	## Hex steps from each floor cell to the nearest corridor cell (up to WALL_DOOR_CAP), through the floor.
+	func _corridor_dist() -> Dictionary:
+		if not _corr_d.is_empty():
+			return _corr_d
+		var frontier: Array[Vector2i] = []
+		for c: Vector2i in corr_cells:
+			_corr_d[c] = 0
+			frontier.append(c)
+		for step in range(1, int(WALL_DOOR_CAP) + 1):
+			var next: Array[Vector2i] = []
+			for c in frontier:
+				for d in Hex.DIRS:
+					var nb: Vector2i = c + d
+					if not _corr_d.has(nb) and map.has_cell(nb):
+						_corr_d[nb] = step
+						next.append(nb)
+			frontier = next
+		return _corr_d
+
+	## After the walls are cut: the elevator's solids (the jambs, or the free car's sides), its no_stand cells and its record.
+	func _add_elevator() -> void:
+		if elevator.is_empty():
+			return
+		for poly in ElevatorGeo.solids(elevator):
+			map.add_solid(poly)
+		if str(elevator["place"]) == ElevatorGeo.PLACE_FREE:
+			for c: Vector2i in (elevator["cells"] as Array):
+				map.no_stand[c] = true
+		map.elevator = elevator
+
+	## The car opened as planned: the landing is full floor, and so is the doorway (the notch's two middle mouth cells,
+	## with the car's cells cut by its back wall) or the walk round the free car.
+	func _elevator_intact() -> bool:
+		if elevator.is_empty():
+			return true
+		if not map.is_walkable_cell(elevator["landing"]):
+			return false
+		if str(elevator["place"]) == ElevatorGeo.PLACE_WALL:
+			var ms: Array = elevator["mouth"]
+			if not map.is_walkable_cell(ms[1]) or not map.is_walkable_cell(ms[2]):
+				return false
+			for c: Vector2i in (elevator["cells"] as Array):
+				if not map.is_half(c):
+					return false
+			return true
+		var c0: Vector2i = (elevator["cells"] as Array)[0]
+		for c in Hex.ring(c0, 2):
+			if not map.is_walkable_cell(c):
+				return false
+		return true
 
 	# ------------------------------------------------------------------ decoration
 
@@ -721,6 +869,8 @@ class Builder:
 		for c in Hex.range_cells(start, 2):
 			clear[c] = true
 		for c in Hex.range_cells(exit_cell, 2):
+			clear[c] = true
+		for c in ElevatorGeo.keep_cells(elevator):
 			clear[c] = true
 		var near_corr := {}
 		for c in corr_cells:
@@ -860,16 +1010,17 @@ class Builder:
 				return false
 		if map.find_path(start, exit_cell, false).is_empty():
 			return false
-		if not _walls_clean():
+		if not _walls_clean() or not _elevator_intact():
 			return false
 		for c in reached:
 			var cell: HexMap.Cell = map.cells[c]
 			if cell.tag == "" and room_of.has(c):
 				cell.tag = "room:%d" % room_of[c]
-		# Cut cells (part floor, part wall) belong to their room too: placement reads the tag, then checks the wall.
+		# Cut cells (part floor, part wall) and the cells under the free elevator belong to their room too: placement
+		# reads the tag, then checks the wall.
 		for c: Vector2i in map.cells:
 			var cell: HexMap.Cell = map.cells[c]
-			if cell.tag == "" and room_of.has(c) and cell.type != HexMap.Tile.WALL and cell.wall_mask != 0:
+			if cell.tag == "" and room_of.has(c) and cell.type != HexMap.Tile.WALL and (cell.wall_mask != 0 or map.no_stand.has(c)):
 				cell.tag = "room:%d" % room_of[c]
 		map.cells[start].tag = "start"
 		map.cells[exit_cell].tag = "exit"

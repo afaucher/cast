@@ -1,7 +1,8 @@
 extends TestCase
 ## DungeonGen invariants (big airy rooms, corridors with a full centre lane, sparse features kept out of room
-## centers, generation time) + HexMapView smoke test + prototype textures. The midpoint-wall geometry itself
-## (half cells, collision, doorways, placement) is tests/test_midpoint_walls.gd.
+## centers, generation time, the elevator on its landing for both placements) + HexMapView smoke test + prototype
+## textures. The midpoint-wall geometry itself (half cells, collision, doorways, placement) is tests/test_midpoint_walls.gd;
+## the elevator in depth is tests/test_elevator.gd.
 
 const SEEDS: Array[int] = [1, 2, 3, 7, 42, 99, 1234, 31337]
 
@@ -21,6 +22,11 @@ func setup() -> void:
 	print("dungeon gen: avg %.0f ms, worst %.0f ms over %d seeds" % [total_ms / SEEDS.size(), worst_ms, SEEDS.size()])
 	check(worst_ms < 300.0, "generation under 300 ms (worst %.0f ms)" % worst_ms)
 	_check_features(s_list())
+	# the free-standing elevator (the default is the wall notch): the same invariants hold
+	for s in [1, 2, 3, 42]:
+		var mf := DungeonGen.generate(s, {"elevator": ElevatorGeo.PLACE_FREE})
+		_check_map(mf, s, false)
+		eq(str(mf.elevator.get("place", "")), ElevatorGeo.PLACE_FREE, "seed %d: the free elevator was asked for" % s)
 
 	# determinism
 	var a := DungeonGen.generate(5)
@@ -73,6 +79,10 @@ func _check_map(m: HexMap, s: int, deep: bool) -> void:
 	var start := starts[0]
 	var exit := exits[0]
 	check(not m.find_path(start, exit, false).is_empty(), tag + "start->exit without climbing")
+	# the elevator stands at the exit: the exit cell is its landing, full floor in front of its doors
+	if check(not m.elevator.is_empty(), tag + "the floor has an elevator"):
+		eq(m.elevator["landing"], exit, tag + "the exit is the elevator's landing")
+		check(m.is_walkable_cell(exit), tag + "the landing is full floor")
 
 	# BFS reach (no climbing) from start
 	var reached := {start: true}
@@ -112,6 +122,8 @@ func _check_map(m: HexMap, s: int, deep: bool) -> void:
 			rooms[cell.tag].append(c)
 			if m.is_walkable_cell(c):
 				check(reached.has(c), tag + "room cell reachable " + str(c))
+			elif m.no_stand.has(c):
+				check(m.elevator.get("cells", []).has(c), tag + "a cell under the elevator %s is the free car's" % str(c))
 			else:
 				check(m.is_half(c) and _touches_full(m, c), tag + "cut room cell %s borders the room's floor" % str(c))
 	check(rooms.size() >= 5 and rooms.size() <= 9, tag + "room count %d" % rooms.size())

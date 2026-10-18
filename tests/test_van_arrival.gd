@@ -8,7 +8,8 @@ extends TestCase
 ##  - in the game the arrival plays (crew hidden, control off), finishes in about 2.5 s, enables control, leaves the heroes
 ##    on walkable ground next to the van, and the van stays solid (blockers push heroes out) and unpriced;
 ##  - --no-van-intro parks it at once, skip() jumps to the end, tests default to no intro;
-##  - floors 2 and 3 in the game have no van and no arrival: the crew simply starts on walkable cells next to the start cell;
+##  - floors 2 and 3 in the game have no van: the crew arrives by ELEVATOR instead (its own beat, test_elevator.gd): no van
+##    arrival plays even with the intro flag, and once the crew is out it stands at the elevator's landing, in control;
 ##  - the model is within its triangle budget and its door and lights respond.
 
 const GAME := preload("res://scripts/app/game.gd")
@@ -254,13 +255,18 @@ func _check_arrival_in_game() -> void:
 	await _drop(g)
 
 
-## Floors 2 and 3: the crew has no van and no arrival. It starts as it did before the van existed: Wick on the start cell,
-## Rebar and Gasket on free floor cells next to it, all visible, standing on walkable ground, with control on at once.
+## Floors 2 and 3: the crew has no van. It arrives in the elevator (user, 2026-10-18; ElevatorArrival): with the intro flag on
+## that beat plays instead of the van's, and once it is over Wick stands on the elevator's landing (the exit cell), Rebar
+## and Gasket beside it, all visible, on walkable ground, in control.
 func _check_no_van_floors() -> void:
 	for f in [2, 3]:
-		var g := _make_game({"floor": f, "van_intro": true})     # even with the intro flag on: there is nothing to play
+		var g := _make_game({"floor": f, "van_intro": true})     # the intro flag on: the ELEVATOR's arrival plays, not a van's
 		add_child(g)
 		await frames(6)
+		var lift: ElevatorArrival = g.get("_lift")
+		check(lift != null and lift.is_running(), "floor %d: the crew arrives by elevator" % f)
+		check(not (g.get("controller") as PlayerController).enabled, "floor %d: no control while it steps out" % f)
+		await frames(int(ElevatorArrival.DURATION * 60.0) + 6)
 		var map: HexMap = g.get("map")
 		var site: SiteBuilder.Site = g.get("_site")
 		var start: Vector2i = g.get("_exit_cell")   # (below floor 1 the crew arrives by elevator, at the exit cell)
@@ -268,7 +274,7 @@ func _check_no_van_floors() -> void:
 		check(g.get("_arrival") == null, "floor %d: no van arrival" % f)
 		check(site.plan.van.is_empty(), "floor %d: the plan has no van" % f)
 		check(g.find_children("VanArrival", "", true, false).is_empty(), "floor %d: no van in the scene" % f)
-		check((g.get("controller") as PlayerController).enabled, "floor %d: control is on from the first frame" % f)
+		check((g.get("controller") as PlayerController).enabled, "floor %d: control is on once the crew is out" % f)
 		var heroes: Array[Hero] = g.call("_heroes")
 		eq(heroes[0].current_cell(), start, "floor %d: Wick starts at the elevator" % f)
 		for h in heroes:

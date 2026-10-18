@@ -42,6 +42,13 @@ var pest_floor_pay: Array[int] = []
 ## {kind: "gate"|"origin"|"pest", floor: int, pay: int, label: String}
 var objectives: Array[Dictionary] = []
 var contract_value := 0
+## The job's elevator (docs/design/elevator-options.md): its look ("service" freight or "fancy" brass) and its placement
+## ("wall": a car in a notch of a room's wall; "free": a free-standing car in the middle of a room, the glass shaft or the
+## freight platform). Every floor of the job uses the same; dealt from the contract seed by its own generator.
+var elevator_look := "service"
+var elevator_place := "wall"
+
+const ELEVATOR_STYLES := [["service", "wall"], ["fancy", "wall"], ["service", "free"], ["fancy", "free"]]
 
 
 ## Who may write each var (see Net). Built identically on every machine from (archetype, seed,
@@ -53,6 +60,7 @@ func net_fields() -> Dictionary:
 		"invoice_number": Net.SPAWN, "floor_gates": Net.SPAWN, "floor_employees": Net.SPAWN,
 		"gate_pay": Net.SPAWN, "origin_pay": Net.SPAWN, "pest_pay": Net.SPAWN,
 		"pest_floor_pay": Net.SPAWN, "objectives": Net.SPAWN, "contract_value": Net.SPAWN,
+		"elevator_look": Net.SPAWN, "elevator_place": Net.SPAWN,
 	}
 
 
@@ -85,7 +93,17 @@ static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 	var pest_total: float = PEST_PAY * scale * (EVERYTHING_MULT if r.pest == "everything" else 1.0)
 	r.pest_pay = ClientArchetype.round_pay(pest_total)
 	r._build_objectives()
+	var style: Array = ELEVATOR_STYLES[elevator_style_index(run_seed)]
+	r.elevator_look = str(style[0])
+	r.elevator_place = str(style[1])
 	return r
+
+
+## Which of the four ELEVATOR_STYLES a contract seed gets: its own generator, so no other roll of the job moves.
+static func elevator_style_index(run_seed: int) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = run_seed * 3266489917 + 101
+	return rng.randi_range(0, ELEVATOR_STYLES.size() - 1)
 
 
 static func _roll_pest(d: Dictionary, rng: RandomNumberGenerator) -> String:
