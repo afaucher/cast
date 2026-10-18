@@ -300,8 +300,6 @@ func _sub_text() -> void:
 	var a := _ids[0] if _ids.size() > 0 else "heal"
 	var b := _ids[1] if _ids.size() > 1 else a
 	_sub.text = "You will say them out loud: \"%s\", \"%s\"..." % [_incantation_of(a).to_lower(), _incantation_of(b).to_lower()]
-	if not requisition.is_empty():
-		_sub.text = "The AI covers your seat until this is approved. " + _sub.text
 
 
 func _hint_for(id: String) -> String:

@@ -1318,7 +1318,7 @@ func _on_join_changed() -> void:
 	_hide_wait()
 	var step := j.note
 	if j.license and j.signed.is_empty():
-		step = "Sign your license to clock in. The AI holds your seat meanwhile."
+		step = "File your requisition to clock in."
 	_refresh_join_slip(step)
 	_update_join_license()
 
