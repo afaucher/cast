@@ -189,6 +189,26 @@ no global randomness is used. Nothing in the game loads these files.
 | elevator "do 2 dings" | `elevator_ding_v2` (rising major third, C6 then E6), `elevator_ding_v2b` (the falling "ding-dong", E6 then C6, warmer) |
 | accidental sting (not understood) | the original stays; `accidental_sting_v2` is a record scratch + bonk alternative, **rejected by the probe** (heard as "OH WHAT", and it broke 2 of 3 casts in C) |
 
+**Round 3 (the user's second listen, 2026-10-18): recordings first.** Pure synthesis didn't land for physical sounds,
+so `tools/sfx_proto/sfx_round3.gd` builds the cues from the CC0 files in `assets/audio/third_party/` with
+`tools/sfx_proto/sfx_rec.gd` (a GDScript WAV parser and Ogg decoder, plus trim, fade, reverse, pitch, filters, peaking
+EQ, a band notch, layering and normalise). `make_sfx.gd -- <out_dir> v4` writes them; `describe_rec.gd` prints a
+loudness outline and spectrum of any recording to choose cuts. Each cue's sources are in `sfx_round3.gd` (`SOURCES`).
+| Cue | Built from | What it is |
+|---|---|---|
+| `cast_armed_v4a` | Kenney RPG `knifeSlice2` | the metal "shing" reversed into a swell, top only (above 4.5 kHz) |
+| `cast_armed_v4b` | synth + Kenney Interface `tick_002` | a warm hum (55 -> 110 Hz) pulsing faster as it rises, holding at the lock, a high "tk"; air on top for small speakers |
+| `cast_armed_v4c` | Kenney Interface `scratch_001`, `tick_002`; qubodup Fire Spell (top) | a spark igniting: "fssh-tk" and a brief flare |
+| `cast_armed_v4d` | qubodup Fire Spell reversed; Kenney Interface `bong_001` (low) | the spell breathing in: a fire burst reversed (sub and air only), a soft low lock |
+| `fizzle_pfft_v4` | synth | v2b's short-circuit start exactly, then a dying high sizzle (no thud, no clunk) |
+| `fizzle_pfft_v4b` | synth + Kenney Interface `glitch_001`-`004` | the same, each cut sparking with a recorded glitch (Kenney has no real spark recording) |
+| `spell_fireball_v4` | qubodup Fire Spell (442871) + Kenney Impact `impactPunch_heavy_000` (low-passed) | the burst with a thump under the attack, 2.5 kHz cut, 0.5 s |
+| `spell_fireball_v4b` | qubodup Fire Magic (442872), -2 semitones + Kenney Impact `impactPunch_heavy_001` | bigger, with the longer roar, 0.8 s |
+| `stamp_thunk_v4` | kermite607 Stamp take 3 (362624) + Kenney Impact `impactPlank_medium_000` (low-passed, -9 dB) | the first hit only (the lift-off ~0.35 s later is cut), +5 dB at 90 Hz, a desk thud under it |
+| `stamp_thunk_v4b` | kermite607 Stamp take 1 (362622) + the same plank | crisper, shorter |
+| `elevator_ding_v4` | Kenney Impact `impactBell_heavy_000` | a real bell pitched up into chime range, two tones falling a major third, strike softened |
+| `elevator_ding_v4b` | synth | v2b refined into a lobby chime: two soft vibraphone-like tones, A5 then F5, gentle decay |
+
 ### Which of the top 10 suit procedural
 | Sound | Procedural? | Why |
 |---|---|---|
@@ -247,6 +267,18 @@ voice, i.e. while "cast" or the spell word's onset is still being said):**
 - **C, said over a teammate's loud revised cue:** 23/27 cast. Misses: `accidental_sting_v2` 2 (rejected),
   `elevator_ding_v2` 1, `fizzle_pfft_v2b` 1 ("CASCORD"); the fireballs and stamps never broke a cast.
 
+**Round 3 (`mic_leak_probe.gd -- v4`):**
+- **A:** nothing casts. The charge-ups, fireballs and stamps produce no words at all (one stray "ONE"/"FOUR"); the two
+  chimes read as "OH".
+- **B (40 runs each):** `cast_armed_v4c` (spark) **0 misses**; `v4b` (hum) 1; `v4d` (breath-in) 1; `v4a` (reversed
+  shing) 5. At the realistic leak only `v4a` missed (2). A loud *high* swell (v4a is 96% above 4.5 kHz) still masks
+  "h"/"k" onsets when it peaks over the spell word, so the band rule is not enough: **the cue should also be short or
+  front-loaded** (v4c's energy is mostly over before the spell word starts).
+- **C:** 22/24. Both fizzles, which keep v2b's short-circuit start, broke "cast corn" (as v2b did); the fireballs,
+  stamps and chimes never broke a cast.
+- **Small speakers:** v4b and v4d carry most of their energy under 300 Hz, which laptop speakers barely play; their
+  air layer is what those players will hear.
+
 ### Rules that follow
 1. **No voices in any sound effect.** No spoken words, no grunts or "ahh"s, no mouth pops, no Voiceover packs, no
    trombone "wah". Monsters stay non-vocal (scrapes, creaks, thuds) or get heavily processed and short.
@@ -254,7 +286,9 @@ voice, i.e. while "cast" or the spell word's onset is still being said):**
    formant-like noise sweeps (100 Hz-3 kHz) short and rare.
 3. **The "cast heard" cue leaves the speech band (~300 Hz-4.5 kHz) nearly empty**: a charge-up built from a sub swell
    and "air" above 5 kHz (`cast_armed_v3`, after the user found the round-1 chime too twinkly), quiet, ~0.4 s. It plays
-   the instant the trigger is armed, not delayed: B shows that is safe at a realistic leak.
+   the instant the trigger is armed, not delayed: B shows that is safe at a realistic leak. Round 3 adds: keep it
+   short or front-loaded, so its loudest part is over before the spell word (the spark `cast_armed_v4c` had 0 misses;
+   a reversed swell that peaks late had 5).
 4. **Duck the game while the local player speaks.** On `VoiceCaster.voice_activity(true)` tween the SFX and Music buses
    down ~8 dB (attack 30 ms, release 250 ms after `false`); UI and Voice-feedback stay. The gate's look-ahead means the
    first ~100 ms of the trigger word is not ducked, which is the C-case risk, so ducking reduces it, not removes it.

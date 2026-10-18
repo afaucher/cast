@@ -4,10 +4,10 @@ extends SceneTree
 ##   A. a cue on its own produces no words and no casts (gate on and off), and
 ##   B. the "cast heard" chime, overlapping the spell word, does not break a real "cast <spell>".
 ##   C. a "cast <spell>" said over a teammate's loud cue starting with the voice still casts.
-##   Godot --path . --headless --script res://tools/sfx_proto/mic_leak_probe.gd [-- v2 | -- <cue> ...]
+##   Godot --path . --headless --script res://tools/sfx_proto/mic_leak_probe.gd [-- v2 | -- v4 | -- <cue> ...]
 ## With cues given, A runs them, B runs the cast_armed* ones among them and C the others.
 ## Needs the model and the TTS clips (tests/voice_clips). Not part of the test suite.
-const Synth = preload("res://tools/sfx_proto/sfx_synth.gd")
+const Synth = preload("res://tools/sfx_proto/sfx_round3.gd")   # all rounds: it extends sfx_synth.gd
 const RATE := 16000
 const STEP := 320
 const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
@@ -45,7 +45,7 @@ func _run() -> void:
 	var synth := Synth.new()
 
 	var args := OS.get_cmdline_user_args()
-	var cues: Array = Synth.CUES if args.is_empty() else (Synth.V2 if Array(args) == ["v2"] else Array(args))
+	var cues: Array = Synth.CUES if args.is_empty() else (Synth.V2 if Array(args) == ["v2"] else (Synth.CUES3 if Array(args) == ["v4"] else Array(args)))
 	var armed: Array = cues.filter(func(c: String) -> bool: return c.begins_with("cast_armed"))
 	var others: Array = ["spell_whoosh", "spell_heal", "fizzle_pfft", "accidental_sting", "pickup_bloop",
 			"typewriter_clack"] if args.is_empty() else cues.filter(func(c: String) -> bool: return not c.begins_with("cast_armed"))
