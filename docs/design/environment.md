@@ -132,6 +132,52 @@ into `SiteBuilder.plan()`; the result is on the `SitePlan` (`room_themes`, `deco
   at most one per room (8-9 a floor).
 - **Dev flag:** `--to-theme <id>` puts the crew in the middle of the first room with that theme.
 
+## Materials: floors and walls per theme [built, 2026-10-17]
+Rooms look like the place they are, inside the same look (dark hex columns, glowing amber seams). The **floor
+material** drives the top face of each hex; the **wall material** drives the flat wall faces and caps of the
+midpoint walls. Corridors take a neutral material per site, so the rooms stand out.
+
+| Theme | Floor | Seams | Wall |
+|---|---|---|---|
+| Service entrance (start room) | concrete slabs | 0.9 | site wall |
+| Home cinema | patterned carpet (deep maroon, faint gold lattice) | 0.3 (dim) | wood panelling |
+| Wine cellar | wood boards (staggered planks) | 0.6 | wood panelling |
+| Wellness spa | travertine tile | 1.0 | concrete |
+| Indoor pool | aqua pool tile | 1.0 | concrete |
+| Gym | rubber mats (studs, mat joints) | 0.55 | concrete |
+| Server room | steel diamond plate | 1.0 | concrete |
+| Panic room | diamond plate, dark rust | 1.0 | concrete |
+| Throne room | dark marble slabs with pale veins | 0.85 | marble |
+| Lab / vat room | pale green lab tile (small tiles) | 1.0 | stone blocks |
+| Henchmen barracks | concrete slabs | 0.9 | stone blocks |
+| Torture chamber | flagstone | 0.8 | stone blocks |
+| Shark moat | flagstone | 0.8 | stone blocks |
+| **Bunker corridors** | plain dark concrete | 1.0 | poured concrete (formwork lines, tie holes) |
+| **Lair corridors** | dark rough flagstone | 1.0 | rough stone blocks (courses) |
+
+"Seams" is the gain on the glowing seam and bevel glow of that floor (1 = the classic look): carpet and wood dim
+them, tile and diamond plate keep them bright. Start / exit seams keep their cyan / magenta. Raised ledges stay
+wooden crates, stairs stay warm planks, cliff sides keep their slate bands (heights stay countable).
+- **Data** (`scripts/world/floor_materials.gd`, `FloorMaterials`): `Cell.mat_id` packs the floor material (bits
+  0-7) and the wall material (bits 8-15); 0 / 0 is the classic slate, so a map nobody assigned (menu garage, labs)
+  looks as before. `SiteBuilder.plan()` calls `FloorMaterials.assign()` after the themes are dealt: room cells from
+  their theme, corridors from the site type (`bunker` / `lair`), start / exit cells from their room, loose ledge
+  cells from a neighbouring room, wall cells from the site. One pass over the cells (about 1 ms a floor, timed on
+  its own in `FloorMaterials.last_usec`, outside `last_plan_usec`), no random numbers: spawn data from the seed.
+  `game.gd` now plans the site in `_build_world()` (before the terrain is built) and spawns that plan after the
+  spell picker.
+- **Shader** (`HexMapView.MATERIAL_SHADER`): the floor tops and wall surfaces use a variant of the terrain shader.
+  The per-vertex material index rides in `UV2.y`; the colours, pattern ids and roughness come from three small
+  uniform arrays (`FloorMaterials.table_arrays()`). Patterns are procedural from the world position (floors: XZ;
+  walls: along the flat face, taken from its normal, and height, so neighbouring faces continue each other):
+  concrete slabs, flagstone (Voronoi), carpet, tile, wood boards, marble, rubber, diamond plate; formwork concrete,
+  ashlar blocks, panelling, marble facing. No textures, no new draw calls or triangles (same surfaces as before;
+  `tests/test_floor_materials.gd` checks it), and an unassigned map keeps the original shader. The vertex colour
+  still tints each hex by height and per-hex variation, so heights and the hex grid read on every material.
+- **Readability:** materials stay mid-dark (wall caps are darker than floors, like the slate caps); aim ring, grime
+  decals, scorch, puddles and stairs were checked on each theme under its accent light.
+- **Dev flags:** `--to-theme <id> --zoom 11` (any theme), `--to-corridor` (the middle of the floor's corridors).
+
 ## Mail packages (interactive set dressing) [built, 2026-10-17]
 **The premise:** the client never even opened their mail, so the crew can steal it. Taped-up brown
 boxes, sometimes stacked 2–3 high, sit near room entrances as if just delivered: 4–6 stacks per floor.

@@ -39,6 +39,7 @@ extends Node3D
 ##   --to-theme <id>     dev: put the crew in the middle of the first room with that theme (wine_cellar, home_cinema, spa, gym,
 ##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, service_entrance); the
 ##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing
+##   --to-corridor       dev: put the crew in the middle of the floor's corridors (to see the site's corridor material)
 ##   --to-package        dev: put the crew two cells from the first mail package stack of the floor (zoom in with --zoom 10)
 ##   --to-employee       dev: put the crew 1.5 cells from the first employee (it latches on; E prompts "tell X to wait")
 ##   --press-e S         dev: press E (the controller's context key) S seconds in
@@ -109,6 +110,7 @@ var _ticker: Control
 var _banner: DispatchBanner        ## dispatch on the headset: the floor line, the origin-closed line
 var _note_slip: NoteSlip           ## the note being read, lower left (E opens it; E or walking away closes it)
 var _open_note: ClueNote = null    ## the note whose slip is open
+var _plan: SitePlan                ## this floor's site plan (made in _build_world, spawned by _populate_site)
 var _site: SiteBuilder.Site
 var _menu: ElevatorMenu = null
 var _van_menu: VanExitMenu = null    ## the clock-out slip at the van (floor 1 only)
@@ -194,6 +196,7 @@ func _parse_args() -> void:
 			"--to-gate": opts["to_gate"] = true
 			"--to-theme": opts["to_theme"] = nxt
 			"--to-exit": opts["to_exit"] = true
+			"--to-corridor": opts["to_corridor"] = true
 			"--to-package": opts["to_package"] = true
 			"--to-employee": opts["to_employee"] = true
 			"--to-note": opts["to_note"] = int(nxt)
@@ -299,6 +302,9 @@ func _build_world() -> void:
 	map = DungeonGen.generate(_run.floor_seed(_floor_n()))
 	if opts.has("stage_ledge"):
 		_stage_plateau()
+	# Plan the site now: it writes each cell's floor / wall material (Cell.mat_id, FloorMaterials) before the terrain
+	# is built. _populate_site() spawns this plan once the crew has picked its spells.
+	_plan = SiteBuilder.plan(map, _run, _floor_n(), ContractParts.prop_catalog(_run.site_type))
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)
@@ -370,7 +376,7 @@ func _free_cells_near(c: Vector2i, radius: int) -> Array[Vector2i]:
 ## Everything the contract puts on this floor: hellgates, employees, priced props, two notes, and the
 ## monster packs (one per room but the start room, leaning toward the pest). Then the session starts the floor.
 func _populate_site() -> void:
-	_site = SiteBuilder.build(map, _run, _floor_n())
+	_site = SiteBuilder.spawn(map, _run, _plan)
 	var origin := _site.origin_gate != null
 	var small := _site.gates.size() - (1 if origin else 0)
 	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned)
@@ -602,7 +608,7 @@ func _arrive_by_van() -> void:
 	if allies.size() >= 2:
 		crew.append(allies[1])   # Gasket
 		crew.append(allies[0])   # Rebar
-	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee")
+	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_arrival = VanArrival.spawn(_site.plan.van, crew, play)
 	if _arrival == null:
@@ -1442,6 +1448,15 @@ func _dev_teleports() -> void:
 				if map.get_cell(focus) == null or map.get_cell(focus).type != HexMap.Tile.FLOOR:
 					focus = _site.plan.centers[themed[0]]
 			_teleport_crew(focus)
+			return
+	if opts.has("to_corridor"):
+		var corr: Array[Vector2i] = []
+		for cc: Vector2i in map.cells:
+			if map.cells[cc].tag == "corridor" and map.is_walkable_cell(cc):
+				corr.append(cc)
+		if not corr.is_empty():
+			corr.sort()
+			_teleport_crew(corr[int(corr.size() * 0.5)])
 			return
 	if opts.has("to_note") and _site != null and not _site.plan.notes.is_empty():
 		# beside note N (the story note is 0, the hint slip 1), off to its side so nobody hides it from the camera

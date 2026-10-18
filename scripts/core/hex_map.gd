@@ -51,7 +51,7 @@ class Cell:
 	var tag: String = ""     ## free-form (e.g. "room:3", "exit", "spawn")
 	var wall_mask: int = 0   ## midpoint walls: bit k set = kite k (between DIRS[k] and DIRS[k+1]) is wall. 0 = full cell
 	var wall_top: int = 0    ## level of the top of this cell's wall part (cells with a wall_mask)
-	var mat_id: int = 0      ## material slot for the floor / wall look (0 = default); a hook for per-room materials
+	var mat_id: int = 0      ## look: floor material in bits 0-7, wall material in bits 8-15 (FloorMaterials; 0 = classic slate). Spawn data written by SiteBuilder.plan()
 
 
 var cells: Dictionary = {}       ## Vector2i -> Cell

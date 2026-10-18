@@ -11,6 +11,7 @@ extends RefCounted
 ##  - employees (2-4): the rooms farthest from the floor's gates (the origin on floor 3);
 ##  - ROOM THEMES (scripts/world/themes): every room gets a theme from the site's pool (the start room is the
 ##    "service entrance", the origin room gets the theme the story names), recorded as SitePlan.room_themes;
+##    the themes (and the site type) then pick each cell's floor / wall MATERIAL, written to Cell.mat_id (FloorMaterials);
 ##  - priced props: at most MAX_PROPS (6) a floor, one per room first (rooms in a shuffled order), the kind
 ##    picked by the room's theme (wine rack in the cellar, projector in the cinema, ...), only on cells next to
 ##    a wall on flat floor, never within 3 of the start or the exit, never within 2 cells of a corridor (so
@@ -112,6 +113,9 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	_plan_packs(run, floor_n, p)
 	_block_cells(p)
 	last_plan_usec = Time.get_ticks_usec() - t_start
+	# The look of the floor: every cell's floor / wall material from its room's theme (FloorMaterials). Not planning, so
+	# it is timed on its own (FloorMaterials.last_usec) and not counted in last_plan_usec.
+	FloorMaterials.assign(map, p, run.site_type)
 	return p
 
 
