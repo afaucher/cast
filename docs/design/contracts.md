@@ -166,7 +166,7 @@ How they fit together, from the top down:
     exactly like the elevator's exit. It is a request the host arbitrates, like the elevator.
   - Closing the floor-3 **origin gate does not end the contract**; the crew still has to leave at the elevator or the van.
 - **Extraction:** employees FOLLOWING the crew within ~3 cells of the exit being used (van door or elevator) when the crew
-  leaves are extracted, **$100 each**. Any other living employee counts $10. Going down the elevator extracts its
+  leaves are extracted, **$100 each**. Staff left behind pay nothing (user, 2026-10-18). Going down the elevator extracts its
   followers too, before the floor changes.
 - **`use` (E) priority:** the van exit (at the van), then the elevator (at it), then employees, otherwise nothing. E never
   casts.
@@ -179,6 +179,27 @@ How they fit together, from the top down:
   excludes it. The objective tracker's employee row shows it at once ("1 rescued · 2 alive").
   Tests: `tests/test_exit_dropoff.gd`.
 - **Not part of this:** restocking spell components at the van (see `poc-backlog.md`).
+
+### Floors by risk: spawn, origin and the elevator [direction, user, 2026-10-18; NOT built]
+A rework of "Mission structure" above, to be built later. Floors are named by **risk**, not by number.
+- **Spawn floor (lowest risk):** the crew always starts here, **in the van**. Only this floor has a starting point.
+- **Exits:** on the spawn floor, the **elevator or the van**. On every other floor, **only the elevator**.
+- **The elevator is the arrival point.** Taking it puts the crew **inside the elevator** on the new floor. There is no
+  start cell ("blue hex") anywhere.
+- **The elevator offers:** Exit, go to the medium-risk floor, go to the origin floor (the floors other than the one
+  you are on).
+- **Nothing ties the spawn floor to "floor 1" or the origin to "floor 3".** The spawn floor isn't necessarily the top
+  of the building and the origin isn't necessarily the bottom.
+
+**How it works today (for comparison):** every floor spawns the crew on its start cell (the blue-bordered hex, tag
+`start`), including after the elevator; the elevator stands on the separate `exit` cell. The van is on floor 1 only.
+The elevator offers down and exit, and only exit on floor 3.
+
+**Open:**
+- Backtracking: can the crew go back to a floor it has already visited (the earlier rule was "down only")?
+- What the elevator panel and the floor tracker call the floors (by risk, by a site-specific name, by number?).
+- What happens to the start cell's role in generation (room layout, gate placement and the van spot use it today).
+- Networking: the floor barrier and the join-mid-job flow assume "the next floor"; going to any floor changes that.
 
 ### Open questions
 - ~~**Floors:** how many per contract?~~ **Decided: 3 floors per contract, and no backtracking** (the crew only ever goes
