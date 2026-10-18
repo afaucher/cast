@@ -365,6 +365,7 @@ static func _cast_fireball(caster: Actor, power: float, aim: Vector3, extra: Dic
 			Fx.attach_hit_feedback(n)
 		Combat.explode(pos, radius, dmg, GameWorld.TEAM_NEUTRAL, src, 1.0)
 		Burning.on_blast(pos, radius, power, src)   # anyone near may catch fire (all teams, see burning.gd)
+		MonsterSenses.noise(pos, MonsterSenses.NOISE_FIREBALL, "fireball")   # (only the monsters this machine runs hear)
 		Fx.explosion(pos, radius, col)
 		Grime.mark(Grime.SCORCH, pos, radius)   # a scorch that fades after 30 s (no-op without a GrimeLayer)
 	var size := 0.22 + 0.12 * power

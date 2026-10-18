@@ -42,6 +42,10 @@ extends Node3D
 ##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, service_entrance); the
 ##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing
 ##   --to-corridor       dev: put the crew in the middle of the floor's corridors (to see the site's corridor material)
+##   --to-pool [pool|specimen]  dev: put the crew at the floor's first in-ground pool (of that look): the player wading in
+##                       it, the next seat on the deck at the rim, the third wading by the rim (screenshots; the log lists the
+##                       floor's pools; the AI allies hold their spots). --focus pool_corner looks at the pool's corner farthest
+##                       from the camera instead
 ##   --to-package        dev: put the crew two cells from the first mail package stack of the floor (zoom in with --zoom 10)
 ##   --to-employee       dev: put the crew 1.5 cells from the first employee (it latches on; E prompts "tell X to wait")
 ##   --press-e S         dev: press E (the controller's context key) S seconds in
@@ -350,6 +354,8 @@ func _parse_args() -> void:
 			"--to-theme": opts["to_theme"] = nxt
 			"--to-exit": opts["to_exit"] = true
 			"--to-corridor": opts["to_corridor"] = true
+			"--to-pool":
+				opts["to_pool"] = args[i + 1] if i + 1 < args.size() and not args[i + 1].begins_with("--") else ""
 			"--to-package": opts["to_package"] = true
 			"--to-employee": opts["to_employee"] = true
 			"--to-note": opts["to_note"] = int(nxt)
@@ -1069,7 +1075,7 @@ func _arrive_by_van() -> void:
 	for seat: int in [1, 3, 2]:
 		if heroes_by_seat.has(seat):
 			crew.append(heroes_by_seat[seat])
-	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
+	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_arrival = VanArrival.spawn(_site.plan.van, crew, play)
 	if _arrival == null:
@@ -1095,7 +1101,7 @@ func _arrive_by_elevator() -> void:
 		for seat: int in [1, 3, 2]:
 			if heroes_by_seat.has(seat):
 				arriving.append(heroes_by_seat[seat])
-	var moved_away := opts.has("to_theme") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
+	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_lift = ElevatorArrival.spawn(_site.plan.elevator, _floor_n(), arriving, _heroes(), play)
 	if _lift == null:
@@ -2748,6 +2754,8 @@ func _take_shot_later(path: String, after: float) -> void:
 
 ## Dev flags --to-gate / --to-exit: move the crew (screenshots).
 func _dev_teleports() -> void:
+	if opts.has("to_pool") and _to_pool(str(opts["to_pool"])):
+		return
 	if opts.has("to_theme") and _site != null:
 		var themed := _site.plan.rooms_with_theme(str(opts["to_theme"]))
 		if not themed.is_empty():
@@ -2836,6 +2844,48 @@ func _break_crates_dev() -> void:
 	for a in GameWorld.breakables_in_radius(player.global_position, 9.0):
 		if a is BreakableCrate:
 			a.apply_damage(5.0, player)
+
+
+## --to-pool: the crew at the floor's first pool (of `look`, any when ""): seat 1 wading in the middle, seat 2 on the deck at
+## the camera-near rim, seat 3 wading by the far rim. False when the floor has no such pool.
+func _to_pool(look: String) -> bool:
+	for rec in map.pools:
+		_log("pool: %s in %s (%s), %d basin cells" % [rec["look"], rec["room"], _site.plan.theme_of(str(rec["room"])) if _site != null else "", (rec["basin"] as Array).size()], Color(0.6, 0.9, 1.0))
+	for rec in map.pools:
+		if look != "" and str(rec["look"]) != look:
+			continue
+		var c: Vector2 = rec["center"]
+		var ax: Vector2 = rec["axis"]
+		var n := Vector2(-ax.y, ax.x)
+		if n.dot(ThemeGeo.CAMERA_DIR) < 0.0:
+			n = -n   # toward the camera
+		var hw := float(rec["half_wid"])
+		var spots: Array[Vector2] = [c + ax * 0.6, c + n * (hw + 0.75) - ax * 0.4, c - n * (hw - 0.75) - ax * 1.2]
+		var list: Array[Hero] = []
+		for seat in range(1, NetSession.MAX_CREW + 1):
+			if heroes_by_seat.has(seat):
+				list.append(heroes_by_seat[seat])
+		for i in list.size():
+			var p: Vector2 = spots[mini(i, spots.size() - 1)]
+			list[i].global_position = Vector3(p.x, 0.0, p.y)
+			list[i].snap_to_ground()
+			list[i].facing = Vector3(-n.x, 0.0, -n.y) if i == 1 else Vector3(n.x, 0.0, n.y)
+			var brain := list[i].get_node_or_null("AllyBrain")
+			if brain != null:
+				brain.set_physics_process(false)   # (the allies hold their spots for the screenshot)
+		if opts.get("focus", "") == "pool_corner":
+			# the corner farthest from the camera: the liner, the coping and the deck all show there
+			var best: Vector2 = (rec["outline"] as Array)[0]
+			for q: Vector2 in (rec["outline"] as Array):
+				if q.dot(ThemeGeo.CAMERA_DIR) < best.dot(ThemeGeo.CAMERA_DIR):
+					best = q
+			var mk := Node3D.new()
+			GameWorld.root.add_child(mk)
+			mk.global_position = Vector3(best.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, best.y)
+			rig.target = mk
+		rig.snap()
+		return true
+	return false
 
 
 func _teleport_crew(cell: Vector2i) -> void:

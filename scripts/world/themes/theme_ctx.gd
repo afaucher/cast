@@ -115,8 +115,8 @@ func _room_info(tag: String) -> RoomInfo:
 	r.center_w = ThemeGeo.world(r.center)
 	for c in r.cells:
 		var cell: HexMap.Cell = map.cells[c]
-		if cell.type != HexMap.Tile.FLOOR or cell.level != r.base:
-			continue
+		if cell.type != HexMap.Tile.FLOOR or cell.level != r.base or cell.pool_mask != 0 or map.no_stand.has(c):
+			continue   # (a pool's rim cells and a set piece's cells hold nothing else)
 		var flat := true
 		for d in Hex.DIRS:
 			var nb: HexMap.Cell = map.get_cell(c + d)

@@ -18,6 +18,12 @@ extends Node3D
 ## wall kites are raised to the cell's wall_top with a capped top. The wall FACE is a flat quad on the line from
 ## the cell's center to the edge midpoint, so neighbouring cut cells join into one straight face from center to
 ## center.
+##
+## POOLS (HexMap pool cells, PoolGeo; docs/design/pool-options.md "Built"): the INSET drawing mode. A ring cell is drawn
+## like a cut cell turned downward: its deck kites are a floor tile running flush into the rim line, its pool kites are
+## the tiled pool floor at pool_level (no bevel, no seam glow), and on each rim line (center -> edge midpoint) a tiled
+## LINER face runs from the deck down to the pool floor, facing the water. Basin cells are pool floor only. Water,
+## coping, foam line, ladder and gantry are PoolView's (a child node).
 
 const FLOOR_DEPTH := -2          ## level where columns end (and where pit bottoms are)
 const LH := Hex.LEVEL_HEIGHT
@@ -30,11 +36,12 @@ const SEAM_COLOR := Color(1.0, 0.40, 0.07)
 const START_COLOR := Color(0.2, 1.0, 0.72)
 const EXIT_COLOR := Color(1.0, 0.28, 1.0)
 
-enum Surf { FLOOR_TOP, WALL_TOP, CRATE_TOP, STAIRS_TOP, CLIFF, WALL_SIDE, CRATE_SIDE, STAIRS_SIDE, SEAM }
+enum Surf { FLOOR_TOP, WALL_TOP, CRATE_TOP, STAIRS_TOP, CLIFF, WALL_SIDE, CRATE_SIDE, STAIRS_SIDE, SEAM, POOL }
 
 ## Filled by build(): triangles, vertices, surfaces, cells, stair_steps, crates.
 var stats: Dictionary = {}
 var mesh_instance: MeshInstance3D
+var pool_view: PoolView = null   ## water, coping, foam, ladders, gantries of the map's pools (null without any)
 ## How loud the glowing seams are (read by build()). 1 = the game's look. Menu backdrops turn it down because
 ## bright seams under a UI are noisy: `seam_gain` scales every seam / rim glow, and seams closer to the camera than
 ## `seam_near_range` (view-space units, 0 = off) are further scaled by `seam_near_gain` (fading back to full at the
@@ -47,6 +54,7 @@ static var _tex_cache: Dictionary = {}
 static var _terrain_shader: Shader
 static var _glow_shader: Shader
 static var _material_shader: Shader
+static var _pool_shader: Shader
 
 var _batches: Array = []
 var _map: HexMap
@@ -54,6 +62,7 @@ var _stair_steps := 0
 var _crates: Dictionary = {}     ## Vector2i -> true for floor cells drawn as crates
 var _pits: Dictionary = {}       ## void cells that are enclosed pits
 var _use_mats := false           ## some cell has a Cell.mat_id (FloorMaterials): floor / wall surfaces use the material shader
+var _pool_looks: Dictionary = {}  ## pool cell -> its pool's look (filled on first use per build)
 
 
 class Batch:
@@ -103,6 +112,8 @@ func build(map: HexMap) -> void:
 	_map = map
 	_stair_steps = 0
 	_batches.clear()
+	_pool_looks.clear()
+	pool_view = null
 	_crates = _find_crates(map)
 	_pits = _find_pits(map)
 	_use_mats = false
@@ -116,6 +127,9 @@ func build(map: HexMap) -> void:
 	for c in map.cells:
 		var cell: HexMap.Cell = map.cells[c]
 		var wm: int = 0 if cell.type == HexMap.Tile.WALL else cell.wall_mask
+		if cell.pool_mask != 0 and cell.type != HexMap.Tile.WALL:
+			_add_pool_cell(c, cell)
+			continue
 		if wm == HexMap.ALL_KITES:
 			_add_wall_part(c, cell, wm)       # a cut cell walled in completely
 		elif wm != 0:
@@ -153,6 +167,11 @@ func build(map: HexMap) -> void:
 	mesh_instance.name = "TerrainMesh"
 	mesh_instance.mesh = mesh
 	add_child(mesh_instance)
+	if not map.pools.is_empty():
+		pool_view = PoolView.new()
+		pool_view.name = "Pools"
+		add_child(pool_view)
+		pool_view.build(map)
 	stats = {
 		"triangles": tris, "vertices": verts, "surfaces": mesh.get_surface_count(),
 		"cells": map.cells.size(), "stair_steps": _stair_steps, "crates": _crates.size(),
@@ -412,6 +431,43 @@ void fragment() {
 }
 """
 
+## The pool's tiled floor and liner (the lab's look): square tiles with light grout in world units (floors in XZ, the
+## liner along its face from its normal). UV2.y picks the look: 0 the indoor pool (aqua tile, white grout), 1 the
+## specimen pool (dark green tile, glowing green grout). Vertex COLOR shades the liner a touch darker than the floor.
+const POOL_SHADER := """
+shader_type spatial;
+uniform vec4 pool_base : source_color = vec4(0.55, 0.85, 0.9, 1.0);
+uniform vec4 pool_grout : source_color = vec4(0.92, 0.98, 1.0, 1.0);
+uniform vec4 spec_base : source_color = vec4(0.32, 0.42, 0.38, 1.0);
+uniform vec4 spec_grout : source_color = vec4(0.5, 1.0, 0.45, 1.0);
+varying vec3 wp;
+varying vec3 wn;
+void vertex() {
+	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+}
+void fragment() {
+	bool spec = UV2.y > 0.5;
+	vec2 uv;
+	if (abs(wn.y) > 0.5) {
+		uv = wp.xz;
+	} else {
+		vec2 tg = normalize(vec2(-wn.z, wn.x));
+		uv = vec2(dot(wp.xz, tg), wp.y);
+	}
+	float tile = spec ? 0.36 : 0.42;
+	vec2 g = fract(uv / tile);
+	float e = min(min(g.x, 1.0 - g.x), min(g.y, 1.0 - g.y));
+	float line = 1.0 - smoothstep(0.03, 0.08, e);
+	vec3 base = spec ? spec_base.rgb : pool_base.rgb;
+	vec3 grout = spec ? spec_grout.rgb : pool_grout.rgb;
+	ALBEDO = mix(base * COLOR.rgb, grout, line);
+	EMISSION = grout * line * (spec ? 0.6 : 0.0);
+	ROUGHNESS = 0.4;
+	SPECULAR = 0.5;
+}
+"""
+
 ## Unlit emissive surface for the seams / rings / pit floors (vertex color * energy, HDR so it blooms).
 const GLOW_SHADER := """
 shader_type spatial;
@@ -428,6 +484,12 @@ void fragment() {
 
 func _material(surf: int) -> Material:
 	var m := ShaderMaterial.new()
+	if surf == Surf.POOL:
+		if _pool_shader == null:
+			_pool_shader = Shader.new()
+			_pool_shader.code = POOL_SHADER
+		m.shader = _pool_shader
+		return m
 	if surf == Surf.SEAM:
 		if _glow_shader == null:
 			_glow_shader = Shader.new()
@@ -676,6 +738,8 @@ func _kite_level(nb: Vector2i, k: int) -> int:
 	var cell: HexMap.Cell = _map.cells.get(nb)
 	if cell == null:
 		return FLOOR_DEPTH
+	if cell.pool_mask != 0 and (cell.pool_mask >> posmod(k, 6)) & 1 == 1:
+		return cell.pool_level
 	if cell.type != HexMap.Tile.WALL and cell.wall_mask != 0 and (cell.wall_mask >> posmod(k, 6)) & 1 == 1:
 		return cell.wall_top
 	return cell.level
@@ -1220,3 +1284,52 @@ static func _strip_seg(a: Vector3, e: Vector3, axis: Vector3, u0: float, u1: flo
 	out.append(a.lerp(e, lo))
 	out.append(a.lerp(e, hi))
 	return out
+
+
+# ---------------------------------------------------------------------- pools (the inset drawing mode)
+
+## A pool cell: its deck kites as a floor tile flush with the rim (a ring cell), its pool kites as the tiled pool floor,
+## and the liner on every rim line through its center, from the deck down to the pool floor, facing the water.
+func _add_pool_cell(c: Vector2i, cell: HexMap.Cell) -> void:
+	var pool := cell.pool_mask
+	var deck := HexMap.ALL_KITES & ~pool
+	if deck != 0:
+		_add_floor_part(c, cell, deck)
+	var center := Hex.to_world(c)
+	var b: Batch = _batches[Surf.POOL]
+	b.mat = 1.0 if _pool_look(c) == PoolGeo.LOOK_SPECIMEN else 0.0
+	var y_pool := cell.pool_level * LH
+	for run: Array in _runs(pool):
+		var pts: Array = []
+		var uv: Array = []
+		for o in _cap_outline(int(run[0]), int(run[1])):
+			var p := _kpt(center, o, 1.0, y_pool)
+			pts.append(p)
+			uv.append(Vector2(p.x, p.z))
+		b.poly(pts, Vector3.UP, uv, Color.WHITE)
+	if deck == 0:
+		return
+	var y_deck := cell.level * LH
+	var liner_col := Color(0.86, 0.86, 0.86)
+	for d in 6:
+		var here := (pool >> d) & 1
+		var prev := (pool >> posmod(d - 1, 6)) & 1
+		if here == prev:
+			continue
+		# spoke d separates kites d - 1 and d: the liner faces the pool kite
+		var mid := center + Hex.edge_mid(d)
+		var t := Hex.dir_vector(d)
+		var n := Vector3(-t.z, 0.0, t.x)
+		var wet_k := d if here == 1 else posmod(d - 1, 6)
+		if n.dot(Hex.kite_corner(wet_k)) < 0.0:
+			n = -n
+		_side_quad(b, center, mid, y_deck, y_pool, n, 0.0, Hex.INNER / Hex.SIZE, liner_col)
+
+
+## The look of the pool a cell belongs to (PoolGeo.LOOK_*), cached per build.
+func _pool_look(c: Vector2i) -> String:
+	if _pool_looks.is_empty():
+		for rec in _map.pools:
+			for pc: Vector2i in (rec["basin"] as Array) + (rec["ring"] as Array):
+				_pool_looks[pc] = str(rec["look"])
+	return str(_pool_looks.get(c, PoolGeo.LOOK_POOL))

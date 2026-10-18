@@ -36,6 +36,9 @@ extends RefCounted
 ##    BUDGET_SCALE (0.7) and each room holds at most one monster per MonsterFactory.CELLS_PER_MONSTER
 ##    walkable cells, placed spread out.
 ##
+##  - POOLS (PoolGeo, docs/design/pool-options.md "Built"): the indoor pool and mad-science rooms get an in-ground pool,
+##    carved into the terrain right after the themes are dealt (clear of the doors, the start / exit / elevator zones,
+##    the gates and the employees); everything planned after it (props, notes, decor, mail, monsters) keeps to dry floor;
 ##  - the ELEVATOR (SitePlan.elevator: HexMap.elevator plus the job's look): its car, doorway and landing
 ##    (ElevatorGeo.keep_cells) are avoided and blocked like the exit zone, and it is a body in its room's ThemeCtx.
 ##
@@ -108,6 +111,8 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	var theme_seed: int = run.floor_seed(floor_n)
 	var t0 := Time.get_ticks_usec()
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
+	# the in-ground pools of the pool / mad-science rooms: terrain, carved before anything is placed in those rooms
+	PoolGeo.carve(map, p, avoid, near_corr, theme_seed * 613 + floor_n * 7 + 1)
 	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
 	_elevator_body(p, ctx)
 	last_theme_usec = Time.get_ticks_usec() - t0
@@ -1019,7 +1024,7 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 	var usable: Array[Vector2i] = []
 	for c in free:
 		var cell := map.get_cell(c)
-		if cell != null and cell.type == HexMap.Tile.FLOOR and map.is_walkable_cell(c) and not usable.has(c):   # not a wall-cut cell
+		if cell != null and cell.type == HexMap.Tile.FLOOR and map.is_walkable_cell(c) and not map.is_pool_cell(c) and not usable.has(c):   # not a wall-cut cell, not in a pool
 			usable.append(c)
 	var placed: Array[Vector2i] = []
 	for kind in kinds:
@@ -1029,6 +1034,7 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 		if kind != "swarmer":
 			var m := MonsterFactory.spawn(kind, center)
 			if m != null:
+				MonsterSenses.face_spawn(m, site.plan, rng.seed)   # toward the room's door or centre (monster-awareness.md)
 				spawned += 1
 				site.monsters.append(m)
 				if site.pest == "everything" or kind == site.pest:
@@ -1045,6 +1051,7 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 		for i in mini(want, near.size()):
 			var sm := MonsterFactory.spawn("swarmer", near[i])
 			if sm != null:
+				MonsterSenses.face_spawn(sm, site.plan, rng.seed)
 				spawned += 1
 				site.monsters.append(sm)
 				if site.pest == "everything" or site.pest == "swarmer":

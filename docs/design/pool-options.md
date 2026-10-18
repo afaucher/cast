@@ -1,6 +1,128 @@
 # Pool options: water as terrain
 
-Status: **options study** (2026-10-18). Nothing here is in the game. The renders come from a lab scene.
+Status: **option B built** (2026-10-18), wading depth only; see "Built" and "Shark (planned)" below. The rest of this page
+is the options study it was chosen from (its renders come from the lab scene).
+
+## Built [decided, user, 2026-10-18]
+
+**Decision:** build **B, the in-ground midpoint inset** (the look of the lab's inset and of its specimen pool), **wading
+depth only**, mostly as decoration for now, in the **indoor pool** theme (replacing the flat `pool_basin` decal) and a
+new **mad science** room theme. Raised glass tanks (C), breakable glass and swimming are not built. The shark moat stays
+as it is (its ring is not convex, so it cannot be an inset); turning it into water is later.
+
+**Terrain** (`scripts/core/hex_map.gd`, `scripts/world/pool_geo.gd` `PoolGeo`):
+- A pool is a convex cluster of **basin** cells sunk **one level** below the room (`Cell.level` = the pool floor,
+  `pool_mask` = all six kites). The **ring** cells round it are cut along midpoint lines like a wall cut downward: kites
+  d - 1 and d of a ring cell whose neighbour d is a basin cell are pool floor (`pool_mask`, at `pool_level`), the rest
+  is deck. So the rim runs from hex centre to hex centre at 0 / 60 / 120 degrees and every corner is 120 degrees.
+- The water is `HexMap.WATER_DEPTH` = **0.36** deep over the pool floor (the deck is 0.5 above it): knee deep.
+  `HexMap.water_at(p)`, `water_surface(p)`, `is_pool_cell(c)`; `ground_level` returns the pool floor on the pool side.
+- **The rim is a step, not a wall** (one level, `STEP_LEVELS`): everybody walks in and out anywhere along it, and
+  every pool cell is an ordinary full cell, so `find_path`, the allies, the employees and the monsters need no change.
+  No ladder or steps are needed; the indoor pool keeps a chrome **ladder** on its far rim as decoration.
+- **Shapes:** rows of 1-4 basin cells and two nested rows (trapezoids 4+3 and 3+2, parallelograms 3+3 and 2+2) in all
+  six orientations; each oriented shape is checked once to be convex (its pool kites are exactly the triangles inside
+  its outline). The indoor pool rolls its first try among the 7-, 6- and 5-cell shapes (then smaller); the specimen
+  pool is a row of 3 or 2 (a single cell last).
+- **Placement** (`PoolGeo.carve`, from `SiteBuilder.plan` right after the themes are dealt): the room's own floor at its
+  base level, nearest its centre (within 7 units). The water cells (basin and ring) are full cells, not within
+  `START_CLEAR` / `EXIT_CLEAR` of the start or the exit (the elevator's landing), not on `ElevatorGeo.keep_cells` (the
+  car), not within `CORRIDOR_CLEAR` of a corridor (doorways), not in a hellgate's clear zone, 2+ cells from every
+  employee, and at most 30 % of the room; every cell round the ring is the room's floor at base level too (dry deck all
+  round, no pillar or pit touching the water). The van and the crew's arrival spots are inside the avoided start / exit
+  zones. Props, decor, notes, mail and monster packs are planned after it and keep to dry floor.
+  Over the test runs 94 % of the pool rooms get their pool (a room crowded with pillars and platforms gets none).
+- Deterministic per floor seed with its own generator: spawn data (`HexMap.pools` is `SPAWN`), and the floor checksum
+  (`NetFloor.map_text_of`) hashes the records and every cell's `pool_mask` / `pool_level`.
+- A specimen pool's **gantry** stands across its middle basin cell on the two deck cells two rows over: its legs are
+  `HexMap.solids` and those cells are `no_stand` (like the elevator's posts), so bodies and paths go round them.
+
+**Look** (`HexMapView`'s inset mode, `scripts/world/pool_view.gd` `PoolView`):
+- A ring cell's deck kites are a floor tile running flush into the rim line; its pool kites and the basin cells are
+  the tiled pool floor (no bevel, no seam glow); on each rim line a tiled **liner** face runs from the deck down to the
+  pool floor, facing the water. One tile shader (`HexMapView.POOL_SHADER`, the lab's look) with two looks: aqua tile and
+  white grout (indoor pool), dark green tile with glowing grout (specimen pool).
+- `PoolView` adds the **water** (the outline at the surface, the lab's toon water shader on `TIME`, alpha 0.58 indoor,
+  0.68 green), the **coping**, a **foam line**, the ladder and the gantry with its dangling cage.
+- **The corners (fixed).** The lab built the coping from boxes 0.24 longer than each rim segment, so at every corner
+  two boxes crossed and stuck out (the chamfered, misaligned ends in `inset_close.png`, `lab_edge.png`), and its liner
+  stood just off the rim over `HexMapView`'s upside-down wall face. Now the coping and the foam line are **mitred
+  offsets** of the outline (`PoolGeo.offset`): each edge's strip is a trapezoid whose ends lie on the corner's bisector,
+  so neighbouring strips share one seam. The coping overhangs the water by 0.05, runs 0.34 onto the deck and stands
+  0.07 high with a nosing. The liner faces stand exactly on the rim lines and meet on the hex centre under each corner,
+  and the deck tiles end flush on the same line, so the coping sits on one clean line all round.
+- Tests: `tests/test_wall_mesh.gd` checks all 63 pool masks (deck top, seam and pool floor triangulate exactly), the
+  liner faces (on rim lines, deck to pool floor, facing the water, one texture density) and the coping (winding, no
+  overlap, the exact band area, every corner seam on the bisector `COPING_W` out from both edges).
+
+**Wading** (`scripts/world/wading.gd` `Wading`, run by `GameWorld` every physics frame on a floor with pools):
+- **Slow:** any actor (heroes, AI allies, employees, monsters) walks at **0.75x** in the water (`Actor.effective_speed`);
+  it stacks with coffee and the other speed modifiers.
+- **Casting and weapons** are unchanged in the water (knee deep: nothing about it stops a swing or a bow).
+- **Wet:** an actor in the water is soaked the whole time (`Wet.douse(actor, SpellBook.DAMP_SOAK)`, the Damp spell's
+  status, re-applied when 2 s of it have run out) and once more as it steps out, so it stays wet the normal **15 s**
+  after leaving. The soak puts a fire out and blocks ignition (`Burning.soak`), so wading in is how a burning hero
+  puts itself out, and a fireball fizzles on a wader.
+- **Down in the water:** nothing special happens.
+- **Monsters:** the simplest consistent rule: they wade like everyone else (the same 0.75x, the same soak), and land
+  AI paths straight through water cells. Monster packs spawn on dry floor.
+- A ripple ring circles every wader on the water surface (cosmetic).
+- **Networking:** the water is seed-built terrain on every machine. The soak is an **owner-applied status**: each
+  machine soaks only the actors it owns (`Net.resolves`) and `NetStatus` tells the others ("soak"); the slowdown is
+  `LOCAL` (from the position and the map); the ripple is cosmetic. No new synced field. `tests/test_net_pools.gd` (two
+  processes) checks it: the client's burning hero wades in, its own machine puts the fire out and soaks it, the host's
+  screen shows it, and so on.
+
+**Themes** (`RoomThemeDefs`, `ThemeVignettes`):
+- **Indoor pool** (bunker): the in-ground pool with loungers along its long sides facing the water, the POOL sign and the
+  marble statue. The `pool_basin` decal is gone.
+- **Mad science lab** (`mad_science`, lair, a room theme): the green specimen pool under the yellow gantry and its cage,
+  a hazard sign by the pool, two **specimen tanks** (standing vats, decor), a **pipe run**, a **lab bench**, a doomsday
+  **console** and a specimen shelf in bigger rooms; priced specimen vat / doomsday console; lab tile floor, green light.
+  The lab's models are reused (`pool_props.gd`: ladder, gantry, ripple, bench, pipes, hazard sign; `PropModels`: vat,
+  console).
+
+**Dev flag:** `--to-pool [pool|specimen]` puts the crew at the floor's first pool (the player wading in it, the next seat
+at the rim, the third wading by the far rim; the allies hold their spots), `--focus pool_corner` looks at its corner
+farthest from the camera (liner, coping and deck all show there). Seeds for `--spells heal,corn --to-pool` (no `--contract`): `--seed 4` (indoor pool, floor 1),
+`--seed 1` (mad science, floor 1).
+
+**Tests:** `tests/test_pools.gd` (generated floors: determinism and checksum, convex outlines on the midpoint grid,
+clearances, dry props / decor / notes / mail / monsters, gantry legs; walking in and out over every edge; the slowdown;
+wet while wading and 15 s after; a fire put out; owner-only soaking; an ally, a grunt and an employee crossing the pool),
+`tests/test_net_pools.gd`, and additions to `test_wall_mesh.gd` and `test_room_themes.gd`.
+
+**Open:**
+- The shark moat as real water (a ring is not convex: two or more convex pools, or an inset drawn from a non-convex
+  outline).
+- Deep water and swimming (option B's deep end), tanks (C), the flooded floor (D).
+- Whether the indoor pool should keep its decorative ladder.
+- Water-only monsters: the shark below.
+
+## Shark (planned, not built)
+
+An environmental hazard that lives in a pool. The pools are wading depth, so it is a **land shark in a paddling pool**:
+a fin cruising the water, its back breaking the surface.
+- **Where:** one shark in some indoor pools (bunker) and some specimen pools (mad science, "the specimen"), never in a
+  pool smaller than 5 basin cells. 30 % of pool rooms from floor 2 on, rolled by the host with `GameWorld.rng`.
+- **Shape:** a **host-owned actor** like a monster (`net_fields()`, its state streamed by `NetWorld`, hits through
+  `Combat`, shoves and damage through the verbs), confined to its pool: its moves are clipped to the water
+  (`HexMap.water_at`), its nav nodes are the pool's cells. It never leaves the water and cannot be shoved out of it (a
+  shove stops at the rim).
+- **Reads:** a fin and a dark shape circling at 1.5 u/s; it tracks the nearest actor in the water or within 1.2 of the
+  rim. **Telegraph** 0.6 s (the fin stops, the water bulges), then a **lunge** 2.5 units: 18 damage and a 1.5 shove
+  toward the middle of the pool (a hero at the rim gets pulled in). 3 s cooldown. Monsters wading through are fair game
+  too (shove a grunt in and it eats it).
+- **Killed or driven off:** driven off, not killed (it is set dressing with teeth). 120 HP of "nerve": at 0 it **sinks**
+  for 20 s (gone from the surface, harmless) and comes back at full nerve. No loot, no bounty.
+- **Spells:** damp: nothing (it is wet). Fireball: nothing (it is under water). **Corn:** it takes the bait and turns to
+  the kernels for 4 s (a distraction). **Tentacles:** grab it and hold it 2 s (no shove). **Vines:** cannot root it (no
+  ground). **Teeth / strike:** normal damage to its nerve. **Heal:** nothing. **Coffee:** it is faster (a joke risk).
+- **Tuning ideas:** one shark per pool; at most one hit per hero per lunge; no lunge at a downed hero (no consequence
+  for going down in water stays true); the fin glows faintly so it reads at size 24; a "fin" hazard sign by the pool
+  (the lab's) warns of it.
+
+## The study
 
 **The idea (user):** rethink the swimming pool. Could we have real pool tiles, with water as a kind of floor cell
 "for sharks and things"? Could the midpoint-wall machinery make a **pool inset**, a sunken basin whose rim follows the
@@ -10,7 +132,7 @@ hex midpoint lines like a wall cut downward? It should give us:
 - places for sharks and other water monsters;
 - a **mad science** theme for some zones.
 
-## What exists today
+## What existed before the build
 
 All the water today is **flat decor**: `blocks: false`, so you walk straight across it.
 - **Indoor pool** (bunker theme `pool`, `RoomThemeDefs`): `ThemeVignettes.pool` puts a `pool_basin` decal at the room's

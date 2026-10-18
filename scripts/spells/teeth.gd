@@ -126,6 +126,7 @@ static func _on_pop(aff: Affliction) -> void:
 		pos = carrier.global_position
 	_end(aff)
 	Grime.mark(Grime.TEETH, pos, 1.0)   # a few tooth bits that fade after 30 s
+	MonsterSenses.noise(pos, MonsterSenses.NOISE_TEETH, "teeth")   # (only the monsters this machine runs hear)
 	var power := aff.power
 	var src: Node = caster
 	var carrier_alive := carrier != null and not carrier.dead

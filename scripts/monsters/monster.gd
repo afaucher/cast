@@ -1,11 +1,23 @@
 class_name Monster
 extends Actor
-## Base class for every monster. A small state machine on top of Actor:
+## Base class for every monster. A small state machine on top of Actor (awareness: docs/design/monster-awareness.md):
 ##
-##   IDLE   -> a hero is within aggro_range AND in line of sight -> CHASE
-##   CHASE  -> path (A*) toward the target; start a windup when in attack range
-##   ATTACK -> telegraphed windup (no movement), then the strike, back to CHASE
-##   RETURN -> dragged too far from home (or lost the target): walk home, heal, IDLE
+##   IDLE       -> a hero within aggro_range AND in line of sight -> CHASE. A hero in the front cone (120 degrees) out
+##                 to aggro_range + 6 -> SUSPICIOUS; a sound (MonsterSenses.noise) -> SUSPICIOUS. Looks around every
+##                 4-9 s (never at a wall); near the crew a kind may have idle life (skeleton patrols, imp play).
+##   SUSPICIOUS -> turns to the sight or sound and edges toward it at half speed. 1.5 s of seeing a hero (in total), a
+##                 hero inside aggro_range or a hit -> CHASE. Nothing for 6 s -> IDLE (or RETURN if it wandered).
+##   ALERT      -> a monster was hit within 10 (its shout): walks to where the attacker stood at 80% speed for up to
+##                 20 s, seeing farther (all round aggro + 4, cone aggro + 8). Sees a hero -> CHASE; arrives -> SEARCH.
+##   SEARCH     -> stands and looks around for 5 s with the wide sight, then RETURN. Also where a chase that lost its
+##                 target (beyond 2.5x aggro) ends up.
+##   CHASE      -> path (A*) toward the target; start a windup when in attack range
+##   ATTACK     -> telegraphed windup (no movement), then the strike, back to CHASE
+##   RETURN     -> dragged too far from home (or lost the target): walk home, heal, IDLE. A hit turns it around.
+##
+## Online all of it runs on the host; the state rides the stream's 3 state bits (SUSPICIOUS/SEARCH/ALERT are 5-7). No
+## "?"/"!" tells (user, 2026-10-18): turning and behaviour only. `aggro_range = 0` freezes a monster (tests,
+## --idle-monsters): no sight, no look-arounds, no idle life, deaf, and it never shouts.
 ##
 ## Kinds (grunt/archer/brute/swarmer) set stats in _init(), build their look in
 ## _build_visual(), and override _strike() / _try_start_attack() / _chase_move()
@@ -18,7 +30,7 @@ extends Actor
 ## set_fade() and set_downed(). The old primitive bodies (_build_visual) stay as a fallback: set
 ## `Monster.use_proto_visuals = true` before spawning (tests, a dev flag).
 
-enum State { IDLE, CHASE, ATTACK, RETURN, DEAD }
+enum State { IDLE, CHASE, ATTACK, RETURN, DEAD, SUSPICIOUS, SEARCH, ALERT }
 
 ## A wind-up began (`length` seconds to the strike). Online the host sends it to every client (NetWorld world.windup), and
 ## each player's machine resolves the strike against its own hero (the victim decides, M4).
@@ -38,6 +50,29 @@ const WINDUP_LOCK_FRACTION := 0.4 ## facing stops tracking the target for the la
 const WINDUP_TINT := Color(1.0, 0.22, 0.0)
 const DEATH_TIME := 0.9
 const MELEE_SHOVE := 0.35         ## mild outward nudge on every melee hit
+
+# --- Awareness (docs/design/monster-awareness.md, step 1) -------------------------------------
+const CONE_COS := 0.5             ## the front cone is 120 degrees wide
+const CONE_EXTRA := 6.0           ## ... and sees this much farther than aggro_range
+const SUSPECT_CONFIRM := 1.5      ## seconds of seeing a hero (in total) before a "?" becomes a fight
+const SUSPECT_FORGET := 6.0       ## nothing seen or heard for this long: calm down
+const SUSPECT_TURN := 0.5         ## it turns first and only then edges toward the point
+const SUSPECT_SPEED := 0.5
+const ALERT_TIME := 20.0
+const ALERT_SPEED := 0.8
+const ALERT_SIGHT := 4.0          ## ALERT / SEARCH sight: all round aggro_range + this ...
+const ALERT_CONE := 8.0           ## ... and the front cone aggro_range + this
+const SEARCH_TIME := 5.0
+const SEARCH_TURN := 1.7          ## a look around this often while searching
+const ARRIVE_DIST := 1.2
+const SHOUT_RADIUS := 10.0        ## a hit wakes every resting monster this close (to ALERT), walls or not
+const SHOUT_EVERY := 2.0
+const LOOK_MIN := 4.0
+const LOOK_MAX := 9.0
+const LOOK_SPREAD_DEG := 70.0
+const NOISE_MEMORY := 30.0        ## look-arounds may turn toward a sound heard this recently
+const LIFE_RANGE := 28.0          ## idle life only within this of a hero (CPU, and bandwidth: still monsters are free)
+const STUCK_GIVE_UP := 3          ## an ALERT walk that got stuck this many times searches where it is
 
 # --- Tunables (kinds set these in _init) --------------------------------------------
 var kind := "monster"
@@ -76,6 +111,23 @@ var _windup_total := 0.1
 var _telegraph := 0.0             ## 0..1 windup progress (visual)
 var _strike_t := 0.0              ## 1 -> 0 right after a strike (visual)
 var _return_t := 0.0
+
+# Awareness (host AI working state)
+var spawn_facing := Vector3.ZERO  ## where it looks when at rest (ZERO until set: then its facing at the first tick)
+var _look_t := 0.0
+var _state_t := 0.0               ## seconds in the current awareness state
+var _aware_t := 0.0               ## SUSPICIOUS: since the last sight or sound; ALERT / SEARCH: time left
+var _seen_t := 0.0                ## SUSPICIOUS: seconds a hero has been seen in total
+var _point := Vector3.ZERO        ## SUSPICIOUS / ALERT: what it turns and walks to
+var _noise_at := -INF
+var _noise_pos := Vector3.ZERO
+var _shout_at := -INF
+var _speed_k := 1.0               ## walking speed factor for _nav_to (patrols, suspicion, alerts)
+var _stuck_n := 0
+var _room := ""                   ## its home room's tag ("" = none: no idle life)
+var _life_ok := false             ## a hero within LIFE_RANGE at the last scan
+var _suspect_at := -1.0           ## combat log: when the current "?" began
+var _first_hit_at := -1.0         ## combat log: when the crew first hit it
 
 # Navigation
 var _path: Array[Vector2i] = []
@@ -135,6 +187,7 @@ func _ready() -> void:
 	_scan_t = GameWorld.rng.randf() * SCAN_INTERVAL
 	_repath_t = GameWorld.rng.randf() * REPATH_MAX
 	_retarget_t = GameWorld.rng.randf() * RETARGET_INTERVAL
+	_look_t = GameWorld.rng.randf_range(LOOK_MIN, LOOK_MAX)
 	_prev_pos = global_position
 
 
@@ -162,6 +215,10 @@ func net_fields() -> Dictionary:
 		# AI working state.
 		"_scan_t": Net.PRIVATE, "_retarget_t": Net.PRIVATE, "_next_attack_time": Net.PRIVATE,
 		"_return_t": Net.PRIVATE,
+		"spawn_facing": Net.PRIVATE, "_look_t": Net.PRIVATE, "_state_t": Net.PRIVATE, "_aware_t": Net.PRIVATE,
+		"_seen_t": Net.PRIVATE, "_point": Net.PRIVATE, "_noise_at": Net.PRIVATE, "_noise_pos": Net.PRIVATE,
+		"_shout_at": Net.PRIVATE, "_speed_k": Net.PRIVATE, "_stuck_n": Net.PRIVATE, "_room": Net.PRIVATE,
+		"_life_ok": Net.PRIVATE, "_suspect_at": Net.PRIVATE, "_first_hit_at": Net.PRIVATE,
 		"_path": Net.PRIVATE, "_path_i": Net.PRIVATE, "_path_goal": Net.PRIVATE,
 		"_path_age": Net.PRIVATE, "_repath_t": Net.PRIVATE, "_prog_t": Net.PRIVATE,
 		"_prog_pos": Net.PRIVATE, "_nudge_t": Net.PRIVATE, "_nudge_dir": Net.PRIVATE,
@@ -186,10 +243,63 @@ func _build_visual(_root: Node3D) -> void:
 func aggro(t: Actor) -> void:
 	if dead or t == null or not is_instance_valid(t) or t.dead:
 		return
-	if state != State.IDLE and state != State.RETURN:
+	if not is_passive():
 		return
+	_end_suspicion(true)
 	_enter_chase(t)
 	_alert_pack(t)
+
+
+## Not fighting: idle, suspicious, alert, searching or walking home (a hit or a sighting can still start a fight).
+func is_passive() -> bool:
+	return state == State.IDLE or state == State.RETURN or state == State.SUSPICIOUS or state == State.ALERT or state == State.SEARCH
+
+
+## Frozen: aggro_range 0 (tests, --idle-monsters). Sees nothing, hears nothing, never shouts, has no idle life.
+func is_frozen() -> bool:
+	return aggro_range <= 0.0
+
+
+## A sound at `pos` (MonsterSenses.noise): turn SUSPICIOUS toward it. True if it reacted.
+func hear(pos: Vector3) -> bool:
+	if dead or is_frozen():
+		return false
+	_noise_at = GameWorld.time
+	_noise_pos = pos
+	match state:
+		State.IDLE, State.RETURN, State.SEARCH:
+			_suspect(pos)
+			return true
+		State.SUSPICIOUS:
+			_point = pos
+			_aware_t = 0.0
+			return true
+	return false
+
+
+## The shout of a monster that was hit: walk to `pos` (where the attacker stood) on ALERT. True if it reacted.
+func alert(pos: Vector3) -> bool:
+	if dead or is_frozen() or not is_passive():
+		return false
+	_end_suspicion(false)
+	state = State.ALERT
+	_point = pos
+	_aware_t = ALERT_TIME
+	_state_t = 0.0
+	_stuck_n = 0
+	_clear_path()
+	return true
+
+
+## Spawn facing (MonsterSenses.face_spawn): look this way now and whenever it is back home.
+func set_spawn_facing(dir: Vector3) -> void:
+	dir.y = 0.0
+	if dir.length() < 0.001:
+		return
+	spawn_facing = dir.normalized()
+	facing = spawn_facing
+	if _visual != null:
+		_visual.rotation.y = atan2(-facing.x, -facing.z)
 
 
 ## True while the monster has a target (chasing or winding up an attack).
@@ -220,6 +330,10 @@ func _physics_process(delta: float) -> void:
 		_home_set = true
 		home = global_position
 		_prog_pos = global_position
+		if spawn_facing == Vector3.ZERO:
+			spawn_facing = facing
+		_room = MonsterSenses.room_of(current_cell())
+	CombatLog.tick()
 	if is_helpless():
 		# Shoved or staggered: no steering, no attacks (and the leash does not tick).
 		_update_visual(delta)
@@ -233,17 +347,234 @@ func _physics_process(delta: float) -> void:
 			_tick_attack(delta)
 		State.RETURN:
 			_tick_return(delta)
+		State.SUSPICIOUS:
+			_tick_suspicious(delta)
+		State.ALERT:
+			_tick_alert(delta)
+		State.SEARCH:
+			_tick_search(delta)
 	_update_visual(delta)
 
 
 func _tick_idle(delta: float) -> void:
+	if is_frozen():
+		return   # stays put and silent
 	_scan_t -= delta
-	if _scan_t > 0.0:
+	if _scan_t <= 0.0:
+		_scan_t = SCAN_INTERVAL
+		var h := _nearest_hero(aggro_range, true)
+		if h != null:
+			aggro(h)
+			return
+		h = _cone_hero(aggro_range + CONE_EXTRA)
+		if h != null:
+			_suspect(h.global_position, true)
+			return
+		_life_ok = _room != "" and _hero_within(LIFE_RANGE)
+	if _life_ok and _idle_life(delta):
 		return
+	_look_t -= delta
+	if _look_t <= 0.0:
+		_look_t = GameWorld.rng.randf_range(LOOK_MIN, LOOK_MAX)
+		look_around()
+
+
+## Override: what an idle monster near the crew does this frame (only with a home room and a hero within LIFE_RANGE).
+## True = it is busy (moving), so it skips its look-around. Default: nothing.
+func _idle_life(_delta: float) -> bool:
+	return false
+
+
+## Turn to a new heading: its spawn facing +/- 70 degrees (`spread`), or toward a recent sound. Never a heading with a
+## wall within 2 hexes ahead; if every try is blocked it keeps its facing.
+func look_around(spread: float = LOOK_SPREAD_DEG) -> void:
+	var base := spawn_facing if spawn_facing != Vector3.ZERO else facing
+	var tries: Array[Vector3] = []
+	if GameWorld.time - _noise_at < NOISE_MEMORY and GameWorld.rng.randf() < 0.5:
+		var to := _noise_pos - global_position
+		to.y = 0.0
+		if to.length() > 0.3:
+			tries.append(to.normalized())
+	for _i in 4:
+		tries.append(base.rotated(Vector3.UP, deg_to_rad(GameWorld.rng.randf_range(-spread, spread))))
+	tries.append(base)
+	for d in tries:
+		if not MonsterSenses.wall_ahead(self, d):
+			facing = d.normalized()
+			return
+	var sweep := MonsterSenses.clear_heading(self, base, base)   # every roll was blocked: the nearest open heading
+	if not MonsterSenses.wall_ahead(self, sweep):
+		facing = sweep.normalized()
+
+
+# --- Awareness ------------------------------------------------------------------------------
+
+func _tick_suspicious(delta: float) -> void:
+	_state_t += delta
+	_aware_t += delta
+	_scan_t -= delta
+	if _scan_t <= 0.0:
+		_scan_t = SCAN_INTERVAL
+		var h := _nearest_hero(aggro_range, true)
+		if h != null:
+			aggro(h)
+			return
+		h = _cone_hero(aggro_range + CONE_EXTRA)
+		if h != null:
+			_seen_t += SCAN_INTERVAL
+			_point = h.global_position
+			_aware_t = 0.0
+			if _seen_t >= SUSPECT_CONFIRM - 0.001:
+				aggro(h)
+				return
+	if _aware_t >= SUSPECT_FORGET:
+		_end_suspicion(false)
+		_calm()
+		return
+	var d := GameWorld.flat_distance(global_position, _point)
+	if _state_t < SUSPECT_TURN or d <= ARRIVE_DIST:
+		face_point(_point)
+		_prog_t = 0.0
+		return
+	_speed_k = SUSPECT_SPEED
+	_nav_to(_point, delta)
+	_speed_k = 1.0
+
+
+func _tick_alert(delta: float) -> void:
+	_state_t += delta
+	_aware_t -= delta
+	_scan_t -= delta
+	if _scan_t <= 0.0:
+		_scan_t = SCAN_INTERVAL
+		var h := _wide_sight()
+		if h != null:
+			aggro(h)
+			return
+	var far := GameWorld.flat_distance(global_position, home) > leash_range
+	if _aware_t <= 0.0 or far or _stuck_n >= STUCK_GIVE_UP or GameWorld.flat_distance(global_position, _point) <= ARRIVE_DIST:
+		_begin_search()
+		return
+	_speed_k = ALERT_SPEED
+	_nav_to(_point, delta)
+	_speed_k = 1.0
+
+
+func _tick_search(delta: float) -> void:
+	_state_t += delta
+	_aware_t -= delta
+	_scan_t -= delta
+	_prog_t = 0.0
+	if _scan_t <= 0.0:
+		_scan_t = SCAN_INTERVAL
+		var h := _wide_sight()
+		if h != null:
+			aggro(h)
+			return
+	if _aware_t <= 0.0:
+		_begin_return()
+		return
+	_look_t -= delta
+	if _look_t <= 0.0:
+		_look_t = SEARCH_TURN
+		look_around(110.0)
+
+
+## Turn SUSPICIOUS toward `pos` (a hero seen in the outer cone: `seen`, or a sound).
+func _suspect(pos: Vector3, seen: bool = false) -> void:
+	if state != State.SUSPICIOUS:
+		_suspect_at = GameWorld.time
+	state = State.SUSPICIOUS
+	_point = pos
+	_seen_t = 0.0
+	_aware_t = 0.0
+	_state_t = 0.0
 	_scan_t = SCAN_INTERVAL
-	var h := _nearest_hero(aggro_range, true)
-	if h != null:
-		aggro(h)
+	_clear_path()
+	if seen:
+		face_point(pos)
+
+
+## The "?" is over (it fought, or calmed down): the combat log's "?" -> "!" time.
+func _end_suspicion(fought: bool) -> void:
+	if state == State.SUSPICIOUS and _suspect_at >= 0.0:
+		CombatLog.suspect_ended(self, GameWorld.time - _suspect_at, fought)
+	_suspect_at = -1.0
+
+
+## Nothing came of it: back to rest (home first if it wandered off).
+func _calm() -> void:
+	if GameWorld.flat_distance(global_position, home) > HOME_ARRIVE_DIST * 3.0:
+		_begin_return()
+		return
+	state = State.IDLE
+	_look_t = GameWorld.rng.randf_range(LOOK_MIN, LOOK_MAX)
+
+
+func _begin_search() -> void:
+	state = State.SEARCH
+	target = null
+	_aware_t = SEARCH_TIME
+	_state_t = 0.0
+	_look_t = 0.0
+	_clear_path()
+
+
+func _clear_path() -> void:
+	_path.clear()
+	_path_goal = Vector2i(1 << 30, 1 << 30)
+	_repath_t = 0.0
+
+
+## ALERT / SEARCH sight: all round out to aggro + 4, the front cone out to aggro + 8 (line of sight either way).
+func _wide_sight() -> Actor:
+	var h := _nearest_hero(aggro_range + ALERT_SIGHT, true)
+	return h if h != null else _cone_hero(aggro_range + ALERT_CONE)
+
+
+## The nearest living hero inside the front cone within `max_range`, in line of sight. Cheap order: distance, the cone,
+## then the line of sight.
+func _cone_hero(max_range: float) -> Actor:
+	if is_frozen():
+		return null
+	var best: Actor = null
+	var best_d := max_range
+	var map := GameWorld.map
+	var fwd := Vector3(facing.x, 0.0, facing.z).normalized()
+	for h in heroes():
+		if not is_instance_valid(h) or h.dead:
+			continue
+		var to := h.global_position - global_position
+		to.y = 0.0
+		var d := to.length()
+		if d > best_d or d < 0.001:
+			continue
+		if fwd.dot(to / d) < CONE_COS:
+			continue
+		if map != null and not map.line_of_sight(Combat.chest(self), Combat.chest(h)):
+			continue
+		best = h
+		best_d = d
+	return best
+
+
+func _hero_within(r: float) -> bool:
+	for h in heroes():
+		if is_instance_valid(h) and not h.dead and GameWorld.flat_distance(global_position, h.global_position) <= r:
+			return true
+	return false
+
+
+## The shout: every resting monster within SHOUT_RADIUS (flat, through walls) walks to `pos` on ALERT.
+func _shout(pos: Vector3) -> void:
+	var r2 := SHOUT_RADIUS * SHOUT_RADIUS
+	for n in get_tree().get_nodes_in_group("monsters"):   # (duck-typed: see _alert_pack)
+		if n == self or n.dead or not Net.simulates(n):
+			continue
+		var d: Vector3 = n.global_position - global_position
+		d.y = 0.0
+		if d.length_squared() <= r2:
+			n.alert(pos)
 
 
 func _tick_chase(delta: float) -> void:
@@ -322,8 +653,17 @@ func _tick_return(delta: float) -> void:
 		target = null
 		hp = max_hp
 		_update_bar()
+		if spawn_facing != Vector3.ZERO:
+			facing = spawn_facing
+		_look_t = GameWorld.rng.randf_range(LOOK_MIN, LOOK_MAX)
+		_on_home()
 		return
 	_nav_to(home, delta)
+
+
+## Hook: the monster got home and is at rest again (kinds restart their idle life).
+func _on_home() -> void:
+	pass
 
 
 ## Override: deliver the attack. Default is a melee cone toward `facing`.
@@ -391,11 +731,12 @@ func _alert_pack(t: Actor) -> void:
 	# Group "monsters" only holds Monsters; duck-typed on purpose (a self-typed cast in here
 	# triggered intermittent exit crashes in Godot 4.7 for any script that references Monster).
 	for n in get_tree().get_nodes_in_group("monsters"):
-		if n == self or n.dead or n.state != State.IDLE:
+		if n == self or n.dead or not n.is_passive() or n.state == State.RETURN:
 			continue
 		var d: Vector3 = n.global_position - global_position
 		d.y = 0.0
 		if d.length_squared() <= r2:
+			n._end_suspicion(true)
 			n._enter_chase(t)
 
 
@@ -422,7 +763,7 @@ func _validate_target(delta: float) -> bool:
 				if GameWorld.flat_distance(global_position, t2.global_position) < cur_d - 2.0:
 					target = t2
 		if cur_d > aggro_range * 2.5:
-			_begin_return()
+			_begin_search()   # lost it: look around where it is, then home
 			return false
 	return true
 
@@ -567,11 +908,12 @@ func _steer_to(pos: Vector3, delta: float) -> bool:
 	var l := d.length()
 	if l < 0.05:
 		return false
-	var scale_f := minf(1.0, l / maxf(effective_speed() * delta, 0.0001))   # never overshoot the point
+	var scale_f := minf(_speed_k, l / maxf(effective_speed() * delta, 0.0001))   # never overshoot the point
 	return move(d / l * scale_f, delta)
 
 
 func _on_stuck() -> void:
+	_stuck_n += 1
 	_repath_t = 0.0
 	_path_age = 99.0
 	var side := 1.0 if GameWorld.rng.randf() < 0.5 else -1.0
@@ -647,17 +989,36 @@ func _on_shove_ended() -> void:
 func _on_damaged(_amount: float, source: Node) -> void:
 	_flash_t = FLASH_TIME
 	_update_bar()
-	if state == State.IDLE:
-		var a := source as Actor
-		if a != null and a.team != team and not a.dead:
-			aggro(a)
+	var a := source as Actor
+	if a == null or a.team == team or a.dead:
+		return
+	if _first_hit_at < 0.0 and a.team == GameWorld.TEAM_HEROES:
+		_first_hit_at = GameWorld.time
+		CombatLog.first_hit(self, a, state_name())
+	if is_passive():
+		if state == State.RETURN:
+			home = global_position   # shot on the way home: it fights from here (it neither walks off nor heals)
+		aggro(a)
+	# The shout: the room hears a fight (to ALERT, toward where the attacker stands). Frozen monsters stay silent.
+	if not is_frozen() and GameWorld.time >= _shout_at:
+		_shout_at = GameWorld.time + SHOUT_EVERY
+		_shout(a.global_position)
+
+
+## The state's name (the combat log).
+func state_name() -> String:
+	return str(State.keys()[state]).to_lower() if state >= 0 and state < State.size() else str(state)
 
 
 func _on_death() -> void:
+	var was := state_name()
 	state = State.DEAD
 	remove_from_group("monsters")
 	if Net.owns(self):
 		SpellComponents.drop_for(self)   # material components, per the drop table (the owner rolls them: a client is told)
+		CombatLog.kill(self, was, GameWorld.time - _first_hit_at if _first_hit_at >= 0.0 else -1.0)
+		if not is_frozen():
+			MonsterSenses.noise(global_position, MonsterSenses.NOISE_DEATH, "death")   # the neighbours hear it fall
 	_end_windup()
 	if model != null:
 		model.set_downed(true)

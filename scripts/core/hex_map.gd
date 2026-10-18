@@ -38,6 +38,13 @@ extends RefCounted
 ## projectiles and the height rules ignore them (glass and railings). `no_stand` cells are floor a set piece stands on
 ## (the shaft's posts sit on their centers): not full cells for pathing or placement. `elevator` is the elevator's
 ## record (ElevatorGeo). All three are built from the floor seed on every machine.
+##
+## POOLS (docs/design/pool-options.md, "Built"): an in-ground pool is a convex cluster of hex-center triangles sunk one
+## level below the room floor (PoolGeo carves it). Its BASIN cells lie wholly inside (`level` is the pool floor, `pool_mask`
+## ALL_KITES); the RING cells round them are cut along midpoint lines like a wall cut downward: their `pool_mask` kites are
+## pool floor at `pool_level`, the rest is deck at `level`. The rim is NOT a wall: it is a one-level step, so bodies walk in
+## and out anywhere along it, and ring and basin cells are ordinary full cells for pathing. Everything on the pool side is
+## under water (water_at); the record of each pool (outline, surface, look) is in `pools`. Spawn data from the floor seed.
 
 enum Tile { FLOOR, WALL, STAIRS, BRIDGE }
 enum Move { OK, CLIMB, BLOCKED }
@@ -48,6 +55,7 @@ const DROP_LEVELS := 3.05
 const ALL_KITES := 63
 const NO_CELL := Vector2i(1 << 20, 1 << 20)
 const NO_TOP := -1048576   ## wall_top not known yet (during cut_walls)
+const WATER_DEPTH := 0.36   ## world units of water over a pool floor (wading: about knee deep; the deck is one level up)
 
 
 class Cell:
@@ -59,6 +67,8 @@ class Cell:
 	var wall_mask: int = 0   ## midpoint walls: bit k set = kite k (between DIRS[k] and DIRS[k+1]) is wall. 0 = full cell
 	var wall_top: int = 0    ## level of the top of this cell's wall part (cells with a wall_mask)
 	var mat_id: int = 0      ## look: floor material in bits 0-7, wall material in bits 8-15 (FloorMaterials; 0 = classic slate). Spawn data written by SiteBuilder.plan()
+	var pool_mask: int = 0   ## pools: bit k set = kite k is pool floor (at pool_level, under water). ALL_KITES = a basin cell. 0 = dry
+	var pool_level: int = 0  ## level of the pool floor under this cell's pool kites (cells with a pool_mask)
 
 
 var cells: Dictionary = {}       ## Vector2i -> Cell
@@ -66,6 +76,7 @@ var midpoint_walls := false      ## cut_walls() ran: walls follow the lines betw
 var solids: Array[PackedVector2Array] = []   ## convex polygons (world X/Z) that block bodies: set-piece walls (see above)
 var no_stand: Dictionary = {}    ## Vector2i -> true: floor under a set piece (not a full cell: no path node, no standing spot)
 var elevator: Dictionary = {}    ## the elevator's record (ElevatorGeo.make_*), {} when the floor has none
+var pools: Array[Dictionary] = []   ## the in-ground pools (PoolGeo records: room, look, basin, ring, outline, surface ...)
 var _segs: Dictionary = {}       ## Vector2i -> PackedVector2Array [a, b, n, ...]: wall faces bordering that cell's floor (lazy cache)
 var _solid_segs: Dictionary = {} ## Vector2i -> PackedVector2Array [a, b, n, ...]: pieces of the solids' edges, filed under the cell of their middle
 var _solid_box := Rect2()        ## the bounding box of every solid
@@ -74,7 +85,7 @@ var _solid_box := Rect2()        ## the bounding box of every solid
 ## Who may write each var (see Net). The map is built from the floor seed on every machine.
 func net_fields() -> Dictionary:
 	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "solids": Net.SPAWN, "no_stand": Net.SPAWN,
-		"elevator": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL}
+		"elevator": Net.SPAWN, "pools": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL}
 
 
 func set_cell(c: Vector2i, level: int, type: int = Tile.FLOOR) -> Cell:
@@ -146,12 +157,36 @@ func wall_at(p: Vector3) -> bool:
 	return (m >> Hex.kite_of(p - Hex.to_world(c))) & 1 == 1
 
 
+## Is the world X/Z point in pool water (a basin cell, or the pool side of a ring cell's rim line)?
+func water_at(p: Vector3) -> bool:
+	var c := Hex.from_world(p)
+	var cell: Cell = cells.get(c)
+	if cell == null or cell.pool_mask == 0:
+		return false
+	return cell.pool_mask == ALL_KITES or (cell.pool_mask >> Hex.kite_of(p - Hex.to_world(c))) & 1 == 1
+
+
+## The water surface (world Y) over the point, or NAN when it is dry.
+func water_surface(p: Vector3) -> float:
+	if not water_at(p):
+		return NAN
+	return float(cells[Hex.from_world(p)].pool_level) * Hex.LEVEL_HEIGHT + WATER_DEPTH
+
+
+## A cell with any pool kites (a basin or a ring cell): no prop, note, package or spawn stands on it.
+func is_pool_cell(c: Vector2i) -> bool:
+	var cell: Cell = cells.get(c)
+	return cell != null and cell.pool_mask != 0
+
+
 ## Ground height in LEVELS at a world X/Z point, or NAN over void. On the wall side it is the wall's top.
 func ground_level(p: Vector3) -> float:
 	var c := Hex.from_world(p)
 	var cell: Cell = cells.get(c)
 	if cell == null:
 		return NAN
+	if cell.pool_mask != 0 and (cell.pool_mask == ALL_KITES or (cell.pool_mask >> Hex.kite_of(p - Hex.to_world(c))) & 1 == 1):
+		return float(cell.pool_level)
 	if cell.type != Tile.WALL and cell.wall_mask != 0:
 		if cell.wall_mask == ALL_KITES or (cell.wall_mask >> Hex.kite_of(p - Hex.to_world(c))) & 1 == 1:
 			return float(cell.wall_top)

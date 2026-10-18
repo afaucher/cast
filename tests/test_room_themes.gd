@@ -15,7 +15,7 @@ const MAX_YAW_JITTER := 10.0
 const SIGNATURE := {
 	"wine_cellar": "tasting", "home_cinema": "cinema", "spa": "circle", "gym": "bench_rack", "server_room": "racks",
 	"panic_room": "desk", "pool": "pool", "torture_chamber": "cage", "throne_room": "carpet", "lab": "shelf",
-	"barracks": "bunks", "moat": "moat",
+	"barracks": "bunks", "moat": "moat", "mad_science": "specimen_pool",
 }
 
 var _plans := 0
@@ -64,7 +64,7 @@ func _check_tables() -> void:
 	var bunker := RoomThemeDefs.pool("bunker")
 	var lair := RoomThemeDefs.pool("lair")
 	eq(bunker.size(), 7, "bunker pool: wine cellar, home cinema, spa, gym, server room, panic room, pool")
-	eq(lair.size(), 5, "lair pool: torture chamber, throne room, lab, barracks, moat")
+	eq(lair.size(), 6, "lair pool: torture chamber, throne room, lab, barracks, moat, mad science")
 	for id: String in bunker + lair + [RoomThemeDefs.SERVICE]:
 		var def := RoomThemeDefs.theme(id)
 		check(not def.is_empty(), "theme %s is defined" % id)
@@ -488,6 +488,7 @@ func _synth(theme: String, radius: int = 8, gate: bool = false) -> Array:
 		avoid[c] = true
 	for c in SiteBuilder._area(p.exit, 3):
 		avoid[c] = true
+	PoolGeo.carve(m, p, avoid, SiteBuilder._corridor_zone(m), 12345)   # (the pool rooms' pools, as SiteBuilder.plan does)
 	var ctx := ThemeCtx.make(m, p, avoid, SiteBuilder._corridor_zone(m), 12345)
 	return [m, p, ctx]
 
@@ -620,6 +621,31 @@ func _check_vignette_structure() -> void:
 			var dist := (cd["pos"] as Vector2).distance_to(circle["pos"])
 			check(absf(dist - (radius + 0.5)) < 0.15, "a candle sits on the ring around the circle (%.2f vs %.2f)" % [dist, radius + 0.5])
 			eq(int(cd["group"]), int(circle["group"]), "candles share the circle's group")
+	# the indoor pool: a real in-ground pool (PoolGeo) with loungers along its long sides, facing the water
+	var pl := _synth("pool")
+	RoomThemes.plan_decor(pl[2])
+	var pool_rec := PoolGeo.pool_of_room(pl[0], "room:1")
+	check(not pool_rec.is_empty(), "the pool room has an in-ground pool")
+	var loungers := 0
+	for dc in (pl[1] as SitePlan).decor:
+		check(String(dc["kind"]) != "pool_basin", "no flat pool decal any more")
+		if dc["kind"] != "pool_lounger" or pool_rec.is_empty():
+			continue
+		loungers += 1
+		var lf := ThemeGeo.facing(float(dc["yaw"]))
+		var to_pool: Vector2 = (pool_rec["center"] as Vector2) - (dc["pos"] as Vector2)
+		check(lf.dot(to_pool.normalized()) > 0.3, "a lounger faces the pool")
+		check(not (pl[0] as HexMap).is_pool_cell(Hex.from_world(Vector3((dc["pos"] as Vector2).x, 0.0, (dc["pos"] as Vector2).y))), "a lounger stands on the deck")
+	check(loungers >= 2, "loungers line the pool (%d)" % loungers)
+	# the mad-science lab: the specimen pool under its gantry, tanks, a bench, pipes
+	var ms := _synth("mad_science")
+	RoomThemes.plan_decor(ms[2])
+	var spec := PoolGeo.pool_of_room(ms[0], "room:1")
+	check(not spec.is_empty() and spec["look"] == PoolGeo.LOOK_SPECIMEN and not (spec["gantry"] as Dictionary).is_empty(), "the mad-science lab has a specimen pool under a gantry")
+	var ms_kinds := {}
+	for dc in (ms[1] as SitePlan).decor:
+		ms_kinds[dc["kind"]] = true
+	check(ms_kinds.has("specimen_tank") and ms_kinds.has("lab_bench") and ms_kinds.has("pipe_run"), "the mad-science lab has tanks, a bench and pipes (%s)" % str(ms_kinds.keys()))
 	# the priced projector faces the screen's wall: place a cinema with a projector
 	var pr_run := ContractRun.make("prepper", 11, 0.5)
 	var seen_proj := 0

@@ -153,10 +153,12 @@ static func map_text_of(map: HexMap) -> String:
 	var stand: Array = map.no_stand.keys()
 	stand.sort()
 	lines.append("no_stand=%s" % canon(stand))
+	# the in-ground pools (PoolGeo): their records; the cells carry their pool kites below
+	lines.append("pools=%s" % canon(map.pools))
 	for c: Vector2i in keys:
 		var cell: HexMap.Cell = map.cells[c]
-		lines.append("%d,%d:%d,%d,%d,%d,%s,%d,%d,%d" % [c.x, c.y, cell.level, cell.type, cell.stair_dir, cell.stair_rise,
-			cell.tag, cell.wall_mask, cell.wall_top, cell.mat_id])
+		lines.append("%d,%d:%d,%d,%d,%d,%s,%d,%d,%d,%d,%d" % [c.x, c.y, cell.level, cell.type, cell.stair_dir, cell.stair_rise,
+			cell.tag, cell.wall_mask, cell.wall_top, cell.mat_id, cell.pool_mask, cell.pool_level])
 	return "\n".join(lines)
 
 

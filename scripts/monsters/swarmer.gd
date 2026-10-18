@@ -14,9 +14,36 @@ const START_RANGE := 1.0
 const FLANK_RANGE := 2.8       ## inside this (with line of sight) it darts/circles instead of pathing
 const ORBIT_DIST := 1.5        ## preferred circling distance while the bite recharges
 
+## Play (idle life near the crew, docs/design/monster-awareness.md): a clump's imps hop about its centre, chase each
+## other and tussle (a tiny real shove each), and the clump's centre drifts a hex every 15-25 s within its room.
+## Restlessness R widens the drift (2 -> 5 hexes from where the clump spawned) and the hops, and makes play busier.
+const PLAY_SIT := 0
+const PLAY_HOP := 1
+const PLAY_CHASE := 2
+const PLAY_SPEED := 0.7
+const CHASE_SPEED := 0.9
+const CLUMP_RADIUS := 4.5         ## imps whose homes are this close (and in the same room) are one clump
+const BUDDY_RANGE := 4.0
+const DRIFT_MIN := 15.0
+const DRIFT_MAX := 25.0
+const DRIFT_HEX_CALM := 2
+const DRIFT_HEX_RESTLESS := 5
+const TUSSLE_SHOVE := 0.3         ## x shove_mult 1.5 = 0.45: below a wall slam, so it never hurts
+const TUSSLE_EVERY := 3.0
+const TUSSLE_REACH := 0.75
+
 var _side := 1.0
 var _los_t := 0.0
 var _los_ok := false
+var _leader = null                   ## the clump's leader (lowest instance id): owns the drifting centre
+var _clump_home := Vector3.INF
+var _clump_center := Vector3.INF
+var _drift_t := 0.0
+var _play := PLAY_SIT
+var _play_t := 0.0
+var _play_goal := Vector3.ZERO
+var _buddy = null                    ## (untyped: another Swarmer, read duck-typed)
+var _tussle_at := -INF
 
 
 func _init() -> void:
@@ -52,8 +79,169 @@ func _ready() -> void:
 ## LOS check are host-side AI choices that nobody else needs.
 func net_fields() -> Dictionary:
 	var f := super()
-	f.merge({"_side": Net.PRIVATE, "_los_t": Net.PRIVATE, "_los_ok": Net.PRIVATE})
+	f.merge({"_side": Net.PRIVATE, "_los_t": Net.PRIVATE, "_los_ok": Net.PRIVATE,
+		# Play is host AI working state.
+		"_leader": Net.PRIVATE, "_clump_home": Net.PRIVATE, "_clump_center": Net.PRIVATE, "_drift_t": Net.PRIVATE,
+		"_play": Net.PRIVATE, "_play_t": Net.PRIVATE, "_play_goal": Net.PRIVATE, "_buddy": Net.PRIVATE,
+		"_tussle_at": Net.PRIVATE,
+	})
 	return f
+
+
+# --- Play -------------------------------------------------------------------------------------
+
+func _idle_life(delta: float) -> bool:
+	if _clump_home == Vector3.INF:
+		_join_clump()
+	var r := MonsterSenses.restlessness()
+	if _leads():
+		_drift_t -= delta
+		if _drift_t <= 0.0:
+			_drift_t = GameWorld.rng.randf_range(DRIFT_MIN, DRIFT_MAX)
+			_drift(r)
+	_play_t -= delta
+	if _play_t <= 0.0:
+		_pick_play(r)
+	match _play:
+		PLAY_HOP:
+			if GameWorld.flat_distance(global_position, _play_goal) < 0.35 or _stuck_n >= 2:
+				_stuck_n = 0
+				_play = PLAY_SIT
+				return false
+			_speed_k = PLAY_SPEED
+			_nav_to(_play_goal, delta)
+			_speed_k = 1.0
+			return true
+		PLAY_CHASE:
+			if not _buddy_ok():
+				_play = PLAY_SIT
+				return false
+			var bp: Vector3 = _buddy.global_position
+			if GameWorld.flat_distance(global_position, bp) <= TUSSLE_REACH:
+				_tussle()
+				_play = PLAY_SIT
+				_play_t = GameWorld.rng.randf_range(0.6, 1.2)
+				return false
+			_speed_k = CHASE_SPEED
+			_nav_to(bp, delta)
+			_speed_k = 1.0
+			return true
+	return false
+
+
+## The clump: every imp whose home is within CLUMP_RADIUS in the same room; the one with the lowest instance id leads.
+func _join_clump() -> void:
+	_clump_home = home
+	_clump_center = home
+	_leader = self
+	var best := get_instance_id()
+	for n in get_tree().get_nodes_in_group("monsters"):
+		if n == self or n.dead or n.kind != kind or n._room != _room:
+			continue
+		var h: Vector3 = n.home if n._home_set else n.global_position
+		if GameWorld.flat_distance(h, home) <= CLUMP_RADIUS and n.get_instance_id() < best:
+			best = n.get_instance_id()
+			_leader = n
+
+
+func _leads() -> bool:
+	return _leader == self or _leader == null or not is_instance_valid(_leader) or _leader.dead
+
+
+## Where the clump plays now: the leader's drifting centre.
+func _centre() -> Vector3:
+	if _leads():
+		return _clump_center
+	var c: Vector3 = _leader._clump_center
+	return c if c != Vector3.INF else _clump_center
+
+
+## The leader moves the clump's centre one hex, staying in the room and within the drift radius of where it spawned.
+func _drift(r: float) -> void:
+	var map := GameWorld.map
+	if map == null:
+		return
+	var max_hex := roundi(lerpf(DRIFT_HEX_CALM, DRIFT_HEX_RESTLESS, r))
+	var from := Hex.from_world(_clump_center)
+	var origin := Hex.from_world(_clump_home)
+	var opts: Array[Vector2i] = []
+	for nb in Hex.neighbors(from):
+		if Hex.distance(nb, origin) <= max_hex and _play_cell(nb):
+			opts.append(nb)
+	if opts.is_empty():
+		return
+	var pick := opts[GameWorld.rng.randi_range(0, opts.size() - 1)]
+	_clump_center = Hex.to_world(pick, float(map.get_cell(pick).level))
+
+
+func _play_cell(c: Vector2i) -> bool:
+	var map := GameWorld.map
+	return map != null and map.is_walkable_cell(c) and not map.is_pool_cell(c) and MonsterSenses.room_of(c) == _room
+
+
+func _pick_play(r: float) -> void:
+	_play_t = GameWorld.rng.randf_range(1.2, 3.0) * lerpf(1.0, 0.6, r)
+	var roll := GameWorld.rng.randf()
+	var sit := lerpf(0.45, 0.25, r)
+	if roll < sit:
+		_play = PLAY_SIT
+		return
+	if roll < sit + 0.25:
+		_buddy = _find_buddy()
+		if _buddy != null:
+			_play = PLAY_CHASE
+			return
+	var centre := _centre()
+	var hop := 2 if r < 0.5 else 3
+	var cells := Hex.range_cells(Hex.from_world(centre), hop)
+	for _i in 6:
+		var c: Vector2i = cells[GameWorld.rng.randi_range(0, cells.size() - 1)]
+		if _play_cell(c):
+			_play = PLAY_HOP
+			_play_goal = Hex.to_world(c, float(GameWorld.map.get_cell(c).level))
+			return
+	_play = PLAY_SIT
+
+
+func _find_buddy() -> Variant:
+	var opts: Array = []
+	for n in get_tree().get_nodes_in_group("monsters"):
+		if n == self or n.dead or n.kind != kind or n.state != State.IDLE or n.is_frozen():
+			continue
+		if GameWorld.flat_distance(n.global_position, global_position) <= BUDDY_RANGE:
+			opts.append(n)
+	return opts[GameWorld.rng.randi_range(0, opts.size() - 1)] if not opts.is_empty() else null
+
+
+func _buddy_ok() -> bool:
+	return _buddy != null and is_instance_valid(_buddy) and not _buddy.dead and _buddy.state == State.IDLE \
+			and GameWorld.flat_distance(_buddy.global_position, global_position) <= BUDDY_RANGE * 1.5
+
+
+## Bump and bounce: a tiny real shove each (the verb), never toward a drop or the void.
+func _tussle() -> void:
+	if GameWorld.time < _tussle_at:
+		return
+	_tussle_at = GameWorld.time + TUSSLE_EVERY
+	var d: Vector3 = _buddy.global_position - global_position
+	d.y = 0.0
+	if d.length() < 0.01:
+		d = facing
+	d = d.normalized()
+	if not _safe_ground(_buddy.global_position + d * 0.8) or not _safe_ground(global_position - d * 0.8):
+		return
+	_buddy.shove(d, TUSSLE_SHOVE, self)
+	shove(-d, TUSSLE_SHOVE, self)
+
+
+func _safe_ground(p: Vector3) -> bool:
+	var map := GameWorld.map
+	if map == null:
+		return true
+	var c := Hex.from_world(p)
+	var cell := map.get_cell(c)
+	return cell != null and cell.type == HexMap.Tile.FLOOR and map.is_walkable_cell(c) \
+			and absf(map.ground_level(p) - map.ground_level(global_position)) < 1.0
 
 
 func _build_visual(root: Node3D) -> void:

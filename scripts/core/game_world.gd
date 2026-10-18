@@ -24,6 +24,8 @@ var time := 0.0              ## game clock (seconds of physics time); use for co
 
 func _physics_process(delta: float) -> void:
 	time += delta
+	if map != null and not map.pools.is_empty():
+		Wading.tick()   # pool water: the owners soak their waders; ripples everywhere
 
 
 ## Who may write each var (see Net). The host owns the floor; clients will follow its clock.

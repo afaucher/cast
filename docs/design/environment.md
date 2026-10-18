@@ -19,7 +19,7 @@ accents and light colour. All props are faceted low-poly and built in code, like
 | **Wellness spa / yoga studio** | yoga mats, a zen fountain, crystals, a himalayan salt lamp | a chalk **summoning circle** surrounded by candles: the wellness guru's "manifesting" went wrong | the circle is a demon spawner / portal (the room's objective) |
 | **Gym** | dumbbells, a treadmill, a mirror wall | a bent barbell, a brute-sized dent in the mirror | heavy props as shove obstacles |
 | **Server room** | rack rows with blinking LEDs, cable trays | cables torn out and sparking, a rogue house-AI eye on the monitors | sparks deal light damage on contact (a hazard), and the racks create corridors |
-| **Indoor pool** | a sunken pool (a pit cell cluster), loungers, a towel rack | purple glowing water, tentacle-ish shapes below | the pool IS a pit, so shoving monsters in is the point |
+| **Indoor pool** | an in-ground pool (built: a wading-depth midpoint inset, `pool-options.md` "Built"), loungers, a ladder | purple glowing water, tentacle-ish shapes below | wading is slow and soaks you: a refuge from fire; a shark later |
 
 ## 1b. Second site type: the villain lair [decided direction]
 Same two-layer rule, but the site was **already evil before the demons wrecked it**: a supervillain
@@ -32,6 +32,7 @@ or cult boss's lair, overrun by the very demons they were dabbling with.
 | **Lab / vat room** | glowing vats, specimen jars, a lever wall | vats cracked and leaking ichor, jars smashed | leaking vats = goo hazard; pulling levers opens areas |
 | **Shark/lava moat** | a moat with a retractable bridge (a classic) | the bridge half-broken | the moat is a pit: shove villains' demons in |
 | **Henchmen barracks** | bunk rows, matching jumpsuits, a "days since accident: 0" sign | bunks overturned, jumpsuits shredded | henchmen survivors could be the "employees" to protect |
+| **Mad science lab** [built] | a green specimen pool under a yellow gantry with a dangling cage, specimen tanks, pipes, a lab bench, a console | the cage's occupant got out | the pool soaks and slows like any pool; the specimen / shark later |
 
 Contract sites can be either type: a **luxury bunker** (billionaire client) or a **villain lair**
 (the villain is the client, which is funnier: "I need my lair back by Thursday").
@@ -158,6 +159,7 @@ midpoint walls. Corridors take a neutral material per site, so the rooms stand o
 | Henchmen barracks | concrete slabs | 0.9 | stone blocks |
 | Torture chamber | flagstone | 0.8 | stone blocks |
 | Shark moat | flagstone | 0.8 | stone blocks |
+| Mad science lab | pale green lab tile | 1.0 | stone blocks |
 | **Bunker corridors** | plain dark concrete | 1.0 | poured concrete (formwork lines, tie holes) |
 | **Lair corridors** | dark rough flagstone | 1.0 | rough stone blocks (courses) |
 
@@ -189,6 +191,15 @@ wooden crates, stairs stay warm planks, cliff sides keep their slate bands (heig
   kites (a room's 120-degree corner seen from the wall side, an inside corner seen from the floor) are concave, so
   caps and seams fan from the hex center; all 63 wall masks are checked.
 - **Dev flags:** `--to-theme <id> --zoom 11` (any theme), `--to-corridor` (the middle of the floor's corridors).
+
+## Pools [built, 2026-10-18]
+The indoor pool and the mad science lab have a real **in-ground pool**, terrain rather than a decal: option B of
+`pool-options.md` (see its "Built" section), wading depth only. Its rim follows the midpoint lines like a wall cut
+downward (`PoolGeo`, `HexMap` pool cells), one level down: you step in and out anywhere, wade at 0.75x and stay wet (no
+fire) while in it and 15 s after. `HexMapView` draws it in an inset mode (tiled pool floor, a liner on the rim lines) and
+`PoolView` adds the water, a mitred coping, the foam line, the indoor pool's ladder and the specimen pool's gantry. The
+pool is placed clear of the doors, the start, the exit and elevator, the gates and the employees, with dry deck all
+round; `tests/test_pools.gd` and `tests/test_wall_mesh.gd` hold it to that. The shark moat is still the ring decal.
 
 ## Mail packages (interactive set dressing) [built, 2026-10-17]
 **The premise:** the client never even opened their mail, so the crew can steal it. Taped-up brown

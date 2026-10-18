@@ -12,7 +12,24 @@ const REACH := 1.4            ## strike reach (the target's radius is added on t
 const START_RANGE := 1.5      ## windup starts at this center distance
 const ARC_DEG := 120.0
 
+## Patrol (idle life near the crew, docs/design/monster-awareness.md): walks between 2-3 points in its room, pausing at
+## each to look around. Restlessness R (MonsterSenses.restlessness) speeds it up (60% -> 80% of its speed) and shortens
+## the pauses (6 s -> 2.5 s); once R reaches 0.5, one skeleton in 3 adds a point in the next room through the corridor.
+const PATROL_SPEED_CALM := 0.6
+const PATROL_SPEED_RESTLESS := 0.8
+const PAUSE_CALM := 6.0
+const PAUSE_RESTLESS := 2.5
+const VISITOR_AT := 0.5
+const VISITOR_CHANCE := 1.0 / 3.0
+const POINT_REACHED := 0.5
+
 var _sword_arm: Node3D = null
+var _route: Array[Vector3] = []
+var _route_built := false
+var _route_i := 0
+var _pause_t := 0.0
+var _visitor_rolled := false
+var visitor := false              ## its patrol reaches into the next room (tests, the combat log)
 
 
 func _init() -> void:
@@ -37,8 +54,58 @@ func _init() -> void:
 ## Who may write each var (see Net); Monster's come from super().
 func net_fields() -> Dictionary:
 	var f := super()
-	f.merge({"_sword_arm": Net.LOCAL})
+	f.merge({
+		"_sword_arm": Net.LOCAL,
+		# The patrol is host AI working state.
+		"_route": Net.PRIVATE, "_route_built": Net.PRIVATE, "_route_i": Net.PRIVATE, "_pause_t": Net.PRIVATE,
+		"_visitor_rolled": Net.PRIVATE, "visitor": Net.PRIVATE,
+	})
 	return f
+
+
+# --- Patrol ---------------------------------------------------------------------------------
+
+func _idle_life(delta: float) -> bool:
+	if not _route_built:
+		_route_built = true
+		_route = MonsterSenses.patrol_route(self, _room)
+		_route_i = 1 if _route.size() > 1 else 0
+		_pause_t = GameWorld.rng.randf_range(0.0, PAUSE_CALM)   # (a room's skeletons don't all set off at once)
+	if _route.size() < 2:
+		return false
+	var r := MonsterSenses.restlessness()
+	if not _visitor_rolled and r >= VISITOR_AT:
+		_visitor_rolled = true
+		if GameWorld.rng.randf() < VISITOR_CHANCE:
+			var v := MonsterSenses.visitor_point(self, _room)
+			if v != Vector3.INF:
+				visitor = true
+				_route.append(v)
+				CombatLog.visitor(self)
+	if _pause_t > 0.0:
+		_pause_t -= delta
+		return false   # standing at a point: the usual look-arounds
+	var goal := _route[_route_i]
+	if GameWorld.flat_distance(global_position, goal) <= POINT_REACHED or _stuck_n >= 3:
+		_stuck_n = 0
+		_route_i = (_route_i + 1) % _route.size()
+		_pause_t = lerpf(PAUSE_CALM, PAUSE_RESTLESS, r)
+		if _route_i == 1 and spawn_facing != Vector3.ZERO and GameWorld.flat_distance(global_position, home) <= POINT_REACHED:
+			facing = spawn_facing   # back at its post: face the door again
+		else:
+			look_around()
+		_look_t = GameWorld.rng.randf_range(LOOK_MIN, LOOK_MAX)
+		return false
+	_speed_k = lerpf(PATROL_SPEED_CALM, PATROL_SPEED_RESTLESS, r)
+	_nav_to(goal, delta)
+	_speed_k = 1.0
+	return true
+
+
+## Home again after a fight or a scare: the patrol starts over from its post.
+func _on_home() -> void:
+	_route_i = 1 if _route.size() > 1 else 0
+	_pause_t = PAUSE_CALM * 0.5
 
 
 func _build_visual(root: Node3D) -> void:

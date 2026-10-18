@@ -58,6 +58,7 @@ func _burst() -> void:
 	var dist := SpellBook.tentacles_distance(power)
 	var dmg := SpellBook.tentacles_damage(power)
 	Grime.mark(Grime.CRACKS, global_position, radius)   # floor cracks that fade after 30 s
+	MonsterSenses.noise(global_position, MonsterSenses.NOISE_TENTACLES, "tentacles")   # (only the monsters this machine runs hear)
 	for a in GameWorld.actors_in_radius(global_position, radius):
 		if a.team == GameWorld.TEAM_MONSTERS:
 			Fx.attach_hit_feedback(a)

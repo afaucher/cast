@@ -203,10 +203,10 @@ func move_speed_mult() -> float:
 	return clampf(stat_mult(STAT_MOVE_SPEED), MOVE_MULT_MIN, MOVE_MULT_MAX)
 
 
-## Units per second the actor really walks at: move_speed x its modifiers, 0 while rooted. Movement code
-## reads this, never move_speed (which stays the base value kits and AI set).
+## Units per second the actor really walks at: move_speed x its modifiers (x Wading.SPEED_MULT in pool water), 0 while
+## rooted. Movement code reads this, never move_speed (which stays the base value kits and AI set).
 func effective_speed() -> float:
-	return 0.0 if is_rooted() else move_speed * move_speed_mult()
+	return 0.0 if is_rooted() else move_speed * move_speed_mult() * (Wading.speed_mult(global_position) if is_inside_tree() else 1.0)
 
 
 ## Attacks-per-second multiplier from every STAT_ATTACK_RATE modifier, clamped to ATTACK_RATE_MIN..ATTACK_RATE_MAX.

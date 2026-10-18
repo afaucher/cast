@@ -1,7 +1,7 @@
 # Monster awareness: alerts, idle life and the out-of-range problem
 
-Status: **audit and options** (2026-10-18). Nothing here is built. Line numbers refer to the working tree on
-2026-10-18. Another agent was editing `site_builder.gd`, `actor.gd`, `game_world.gd` and `hex_map.gd` at the time, so
+Status: **step 1 built** (2026-10-18): see "Step 1 as built" at the end. The audit below describes the code before
+it. Line numbers refer to the working tree on 2026-10-18. Another agent was editing `site_builder.gd`, `actor.gd`, `game_world.gd` and `hex_map.gd` at the time, so
 those numbers may drift.
 
 **The observation (user, playtest 2026-10-18):** "You can walk into a room and until you hit a very specific distance,
@@ -474,3 +474,77 @@ It ran against the working tree of 2026-10-18 (including the in-progress pool an
 - **Fireworks wake a hellgate that is ready to spawn.**
 - **Open, not defined yet:** what a fully restless floor does (hunters).
 - **Deferred:** speech as noise. Idea to keep: yelling a spell could have its own alert component.
+
+## Step 1 as built (2026-10-18)
+
+Options 0, 1 and 2 and the movement half of Option 3, with the decisions above. No "?"/"!" tells, no invoice change,
+no brute fights, no archer target practice, no goblin, no speech-as-noise (all step 2 or later).
+
+### Where it lives
+- `scripts/monsters/monster.gd`: the states (`SUSPICIOUS` 5, `SEARCH` 6, `ALERT` 7: the free values of the stream's 3
+  state bits, so no codec change), the front cone, look-arounds, the hit shout, `hear()` / `alert()`, the walking-home
+  fix, spawn facing on return, and the `_idle_life()` hook gated by the relevance limit.
+- `scripts/monsters/monster_senses.gd` (new, static): `noise()`, `face_spawn()`, `wall_ahead()`, the restlessness ramp,
+  patrol routes and visitor points.
+- `scripts/monsters/grunt.gd`: skeleton patrols. `scripts/monsters/swarmer.gd`: imp play and clump drift.
+- `scripts/monsters/combat_log.gd` (new): the passive host log, `user://combat_log.csv`.
+- Small hooks: `site_builder.gd` `_place_kinds` (spawn facing, two lines), noise calls in `corn_strike.gd`,
+  `spell_book.gd` (fireball), `teeth.gd`, `tentacles.gd`, `arrow_shot.gd`, `hero.gd` (melee and spin).
+- Test: `tests/test_monster_awareness.gd`.
+
+### The numbers
+
+| What | Value |
+|---|---|
+| Spawn facing | toward the room's main door (`SitePlan.entrances`; the centre if the monster stands within 2.5 of the door), +/- 35 degrees |
+| Wall-facing at spawn (12 floors: seeds 1, 2, 3, 7 x floors 1-3, 369 monsters) | **0.0%** with a wall within 2 hexes ahead (all facing -Z: 32.2%) |
+| Look-around | every 4-9 s while idle (and at each patrol stop): spawn facing +/- 70 degrees, or (half the time) toward a sound heard in the last 30 s; never a heading with a wall within 3.5 |
+| Front cone | 120 degrees, out to aggro + 6 (skeleton 14, archer 16, brute and imp 15); all round stays aggro, line of sight always |
+| SUSPICIOUS | turns to the point for 0.5 s, then edges toward it at 50% speed. CHASE after 1.5 s of seeing a hero in total, or at once for a hero inside aggro or a hit. Nothing seen or heard for 6 s: back to rest (walks home if it wandered more than 1.5) |
+| Hit shout | a hit from the crew sends every resting monster within **10** (flat, through walls) to ALERT toward where the attacker stood; at most once per 2 s per victim. The old pack call (within 5, straight to CHASE) stays |
+| ALERT | walks to the point at 80% speed for up to 20 s; sight all round aggro + 4, cone aggro + 8. Arrives, times out, gets stuck 3 times or goes past its leash (18 from home): SEARCH |
+| SEARCH | 5 s standing, turning every 1.7 s (+/- 110 degrees), wide sight; then RETURN. A chase whose target got beyond 2.5x aggro also searches (it used to walk straight home) |
+| Noise radii | corn 14, fireball 10, teeth 8, tentacles 8, a monster's death 6, a hero melee or spin that lands 4, a Wick arrow's end (impact or range) 3; x0.6 without line of sight from 1.2 above the sound |
+| Walking home | a hit turns it around (CHASE) and re-homes it where it was hit, so the leash doesn't send it straight back; it no longer walks off and heals while shot |
+| Restlessness R | clamp((t - 120 s) / 360 s, 0, 1) on the floor clock (GameWorld.time since the floor's world began; the solo pause stops it) |
+| Skeleton patrol | 2-3 points in its room (home first, 3+ hexes apart, path of 150 nodes or less); 60% -> 80% speed and 6 s -> 2.5 s pauses as R goes 0 -> 1; at R >= 0.5 one in three (rolled once) adds a point 6 cells into the nearest other room through the corridor |
+| Imp play | per imp, every 1.2-3 s (x0.6 at R 1): sit (45% -> 25%), chase a clump-mate (25%: a 0.3 shove each on contact, at most every 3 s, only on level floor) or hop to a cell within 2 hexes (3 at R >= 0.5) of the clump centre at 70% speed. The clump's leader (lowest id) drifts the centre one hex every 15-25 s, within 2 -> 5 hexes of where it spawned, inside the room |
+| Relevance limit | idle life only for a monster with a home room and a hero within **28**; others stand still (look-arounds only) |
+| Frozen (`aggro_range = 0`) | no sight, no look-arounds, no idle life, deaf, never shouts, no death noise. A hit still wakes it, and the old 5-unit pack call still reaches it, as before |
+
+### Deviations from the plan above
+- **Spawn facing roll.** Rolled on a generator seeded from the site's seed and the cell (`hash([seed, q, r])`), not drawn
+  from the site rng itself: deterministic per seed, and the plan's later rolls (placements) don't shift. A heading with a
+  wall close ahead is swapped for the nearest clear one (+/- 35, 70, 105, 140, 180 degrees from the door), so the share
+  is 0% rather than the ~4% predicted.
+- **Gate spawns** get no facing: they aggro the nearest hero at once, as before.
+- **ALERT has its own wire value (7)** instead of sharing 5 with a host flag. With no tells there was nothing to share,
+  and idle life needs no BUSY state (patrolling and playing are IDLE).
+- **Sightings don't shout**; only hits do (plus the old 5-unit pack call on any aggro). That keeps a "?" that confirms
+  from pulling the room on top of the crew.
+- **SEARCH stands where it is.** The ALERT walk already brought it to the last known position; a chase that lost its
+  target searches in place.
+- **Idle life runs from R 0**, at the calm end of each ramp. Restlessness speeds it up and gates the corridor visitors;
+  nothing *restless* (visitors) happens in the first 2 minutes. Idle life needs a room tag on the home cell (pack
+  monsters always have one; gate spawns do too; test arenas don't).
+- **A walker that leaves the 28-unit range stops** where it is until the crew comes back within range.
+- **The noise hooks** fire on every machine (casts and swings replay everywhere) but only reach the monsters that
+  machine simulates (the host's). Melee only makes noise when the blow lands.
+- **Combat log** columns: `time, seed, floor_s, restless, event, kind, state, dist, secs, count, value, detail`. Events:
+  `facing` (per floor: idle monsters and the wall-facing share), `first_hit` (state and distance), `suspect` (how long a
+  "?" lasted and whether it became a fight), `fight` (peak monsters fighting at once, length, monsters involved; ends
+  after 3 s with nobody fighting), `kill` (state at death, seconds since the first hit), `noise` (the four spells, how
+  many heard), `visitor`. Rows are buffered and written every 10 s, when 40 pile up, and when the floor's world goes
+  away. Spell-vs-arrow damage share, melee reached and downs are not in it (PlayLog and the telemetry cover some of it).
+- **Dev flag `--restless <0..1>`** pins R (read by `MonsterSenses`, so `game.gd` didn't change).
+
+### How to playtest it
+- `.\run.ps1 --seed 7 --contract 0 --spells heal,corn --no-mic`, then walk into a room. Monsters face the door. Stand
+  9-14 in front of a skeleton: it turns, edges in, and fights 1.5 s later. Behind it (or outside its 120 degree cone)
+  you're only seen at its old 8.
+- Snipe one with Wick: everything resting within 10 walks over (80% speed), looks around 5 s where you stood, then
+  goes home. Corn or a fireball near a room makes its monsters turn and edge toward the blast.
+- `--restless 1` gives a fully restless floor at once (fast patrols, short pauses, skeletons visiting the next room,
+  wider imp drift). Without it, restlessness starts after 2 minutes on a floor and is full at 8.
+- After playing, `%APPDATA%\Godot\app_userdata\Cast\combat_log.csv` holds the rows (PlayLog's `play_log.csv` is next to
+  it).

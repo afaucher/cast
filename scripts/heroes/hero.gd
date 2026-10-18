@@ -416,7 +416,8 @@ func melee(dir: Vector3) -> bool:
 func _melee_effect(dir: Vector3) -> void:
 	for foe in GameWorld.actors_in_radius(global_position, melee_reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
-	Combat.melee_arc(self, dir, melee_reach, melee_arc, melee_damage, melee_shove)
+	if not Combat.melee_arc(self, dir, melee_reach, melee_arc, melee_damage, melee_shove).is_empty():
+		MonsterSenses.noise(global_position, MonsterSenses.NOISE_MELEE, "melee")   # a blow that lands is heard
 	Fx.slash_arc(global_position, dir, melee_reach, melee_arc, hero_color.lightened(0.5))
 	_swing_pose()
 
@@ -615,7 +616,8 @@ func _spin() -> bool:
 func _spin_effect(dir: Vector3) -> void:
 	for foe in GameWorld.actors_in_radius(global_position, SPIN_REACH, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
-	Combat.melee_arc(self, dir, SPIN_REACH, 360.0, SPIN_DAMAGE, SPIN_SHOVE)
+	if not Combat.melee_arc(self, dir, SPIN_REACH, 360.0, SPIN_DAMAGE, SPIN_SHOVE).is_empty():
+		MonsterSenses.noise(global_position, MonsterSenses.NOISE_MELEE, "melee")
 	Combat.shove_radius(global_position, SPIN_REACH, SPIN_SHOVE, self, team, self, 2.1 * Hex.LEVEL_HEIGHT)   # teammates too
 	Fx.slash_arc(global_position, dir, SPIN_REACH, 360.0, hero_color.lightened(0.5))
 	_spin_pose()

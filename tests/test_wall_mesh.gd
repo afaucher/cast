@@ -10,6 +10,11 @@ extends TestCase
 ##    length or height, so long and short, tall and low faces show the texture at the same size. Midpoint wall faces
 ##    used to get half that horizontally (stretched 2x). Tops (floors and wall caps) are sampled in world XZ at one
 ##    rate, and the face normals are true (the material shader takes a wall's along-axis from its normal).
+##  - POOLS (the inset drawing mode): for all 63 pool masks a ring cell's deck top and seam and its pool floor triangulate
+##    exactly (winding, kites, no overlap, area); on carved pools the pool floor covers exactly the pool kites, every liner
+##    face stands on a rim line (center -> edge midpoint) from the deck down to the pool floor, facing the water, at the
+##    one texture density; the coping (PoolView) is a mitred ring: its top winds up, nothing overlaps, it covers exactly
+##    the band between its two offsets, and every corner seam lies on the bisector, COPING_W out from both edges.
 
 const LH := Hex.LEVEL_HEIGHT
 const FLOOR_LV := 2
@@ -20,6 +25,8 @@ const SEEDS: Array[int] = [3, 7, 42, 1234]
 var _faces := 0
 var _midpoint_faces := 0
 var _caps := 0
+var _liners := 0
+var _corners := 0
 
 
 func setup() -> void:
@@ -30,12 +37,21 @@ func setup() -> void:
 		_check_caps(view.mesh_instance.mesh, mask)
 		_check_sides(view.mesh_instance.mesh, "mask %d" % mask)
 		view.free()
+	for mask in range(1, HexMap.ALL_KITES + 1):
+		var pview := _build(_pool_cell_map(mask))
+		_check_pool_caps(pview.mesh_instance.mesh, mask)
+		_check_sides(pview.mesh_instance.mesh, "pool mask %d" % mask)
+		pview.free()
+	for theme in ["pool", "mad_science"]:
+		for r in [7, 9]:
+			_check_pool_mesh(theme, r)
 	for s in SEEDS:
 		var view := _build(DungeonGen.generate(s))
 		_check_sides(view.mesh_instance.mesh, "seed %d" % s)
 		_check_tops(view.mesh_instance.mesh, "seed %d" % s)
 		view.free()
-	print("wall mesh: %d caps over 63 masks, %d vertical faces (%d on midpoint wall lines) at one texture density" % [_caps, _faces, _midpoint_faces])
+	print("wall mesh: %d caps over 63 masks, %d vertical faces (%d on midpoint wall lines) at one texture density; %d liner faces, %d coping corners" % [_caps, _faces, _midpoint_faces, _liners, _corners])
+	check(_liners > 20 and _corners > 10, "the pools have liner faces and coping corners to measure")
 	check(_midpoint_faces > 100, "the generated floors have midpoint wall faces to measure (%d)" % _midpoint_faces)
 	finish()
 
@@ -121,6 +137,173 @@ func _cap(groups: Dictionary, y: float, area: float, kites: int, ref_sign: int, 
 	check(outside == 0, "%s: %d triangles lie over kites that are not part of it" % [tag, outside])
 	check(overlap < 1e-5, "%s: triangles overlap by %.5f" % [tag, overlap])
 	near(total, area, 1e-4, "%s: the triangles cover the polygon's area exactly" % tag)
+
+
+# --- pools ----------------------------------------------------------------------------------------------------------------
+
+## One ring cell (deck at FLOOR_LV, pool kites `mask` one level down) in a patch of level-0 floor.
+func _pool_cell_map(mask: int) -> HexMap:
+	var m := HexMap.new()
+	for c in Hex.range_cells(Vector2i.ZERO, 2):
+		m.set_cell(c, 0).tag = "room:0"
+	var cell := m.set_cell(Vector2i.ZERO, FLOOR_LV)
+	cell.tag = "room:0"
+	cell.pool_mask = mask
+	cell.pool_level = FLOOR_LV - 1
+	m.midpoint_walls = true
+	return m
+
+
+func _check_pool_caps(mesh: ArrayMesh, mask: int) -> void:
+	var groups := _flat_groups(mesh)
+	var pool := _bits(mask)
+	var deck := 6 - pool
+	var top2 := HexMapView.TOP_SCALE * HexMapView.TOP_SCALE
+	var ref_sign := _sign_of(groups.get(0.0, []))
+	check(ref_sign != 0, "pool mask %d: the plain hex tops wind one way" % mask)
+	_cap(groups, FLOOR_LV * LH, deck * KITE_AREA * top2, HexMap.ALL_KITES & ~mask, ref_sign, "pool mask %d deck top" % mask)
+	_cap(groups, FLOOR_LV * LH - HexMapView.SEAM_DROP, deck * KITE_AREA, HexMap.ALL_KITES & ~mask, ref_sign, "pool mask %d deck seam" % mask)
+	_cap(groups, (FLOOR_LV - 1) * LH, pool * KITE_AREA, mask, ref_sign, "pool mask %d pool floor" % mask)
+
+
+## Flat up-facing triangles of a mesh grouped by height: y (rounded) -> Array of [a, b, c] Vector2 triangles.
+func _flat_groups(mesh: ArrayMesh) -> Dictionary:
+	var groups := {}
+	for s in mesh.get_surface_count():
+		var arr := mesh.surface_get_arrays(s)
+		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var n: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+		var idx: Variant = arr[Mesh.ARRAY_INDEX]
+		var ids := PackedInt32Array()
+		if idx is PackedInt32Array and not (idx as PackedInt32Array).is_empty():
+			ids = idx
+		else:
+			for i in v.size():
+				ids.append(i)
+		var t := 0
+		while t < ids.size():
+			var p0 := v[ids[t]]
+			var p1 := v[ids[t + 1]]
+			var p2 := v[ids[t + 2]]
+			var n0 := n[ids[t]]
+			t += 3
+			if n0.y < 0.999 or absf(p0.y - p1.y) > 1e-5 or absf(p0.y - p2.y) > 1e-5:
+				continue
+			var key := snappedf(p0.y, 0.001)
+			if not groups.has(key):
+				groups[key] = []
+			groups[key].append([Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), Vector2(p2.x, p2.z)])
+	return groups
+
+
+## A carved pool in a round room: the pool floor, the liner and the coping.
+func _check_pool_mesh(theme: String, radius: int) -> void:
+	var m := HexMap.new()
+	for c in Hex.range_cells(Vector2i.ZERO, radius):
+		m.set_cell(c, 0).tag = "room:0"
+	for c in Hex.ring(Vector2i.ZERO, radius + 1):
+		m.set_cell(c, 3, HexMap.Tile.WALL)
+	m.cut_walls()
+	var p := SitePlan.new()
+	SiteBuilder._index_rooms(m, p)
+	p.room_themes = {"room:0": theme}
+	PoolGeo.carve(m, p, {}, {}, radius)
+	var tag := "%s pool (room %d)" % [theme, radius]
+	if not check(m.pools.size() == 1, "%s: carved" % tag):
+		return
+	var rec: Dictionary = m.pools[0]
+	var view := _build(m)
+	var mesh := view.mesh_instance.mesh
+	_check_sides(mesh, tag)
+	# the pool floor: exactly the pool kites, one way round, no overlap
+	var groups := _flat_groups(mesh)
+	var ref_sign := _sign_of(groups.get(0.0, []))
+	var tris: Array = groups.get(snappedf(float(rec["floor_level"]) * LH, 0.001), [])
+	var kites := 0
+	for c: Vector2i in m.cells:
+		kites += _bits(m.cells[c].pool_mask)
+	var total := 0.0
+	var wrong := 0
+	var dry := 0
+	for tri: Array in tris:
+		var a := _signed_area(tri)
+		if absf(a) < 1e-9:
+			continue
+		total += absf(a)
+		if (1 if a > 0.0 else -1) != ref_sign:
+			wrong += 1
+		var ctr: Vector2 = (tri[0] + tri[1] + tri[2]) / 3.0
+		if not m.water_at(Vector3(ctr.x, 0.0, ctr.y)):
+			dry += 1
+	near(total, kites * KITE_AREA, 1e-3, "%s: the pool floor covers the pool kites exactly" % tag)
+	eq(wrong, 0, "%s: the pool floor winds like every top" % tag)
+	eq(dry, 0, "%s: no pool floor outside the water" % tag)
+	# the liner: on rim lines, deck to pool floor, facing the water
+	var deck_y := float(rec["deck_level"]) * LH
+	var floor_y := float(rec["floor_level"]) * LH
+	var bad := 0
+	for s in mesh.get_surface_count():
+		var sm := mesh.surface_get_material(s) as ShaderMaterial
+		if sm == null or sm.shader == null or sm.shader.code != HexMapView.POOL_SHADER:
+			continue
+		var arr := mesh.surface_get_arrays(s)
+		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var n: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+		var t := 0
+		while t < idx.size():
+			var i0 := idx[t]
+			var q0 := v[idx[t]]
+			var q1 := v[idx[t + 1]]
+			var q2 := v[idx[t + 2]]
+			t += 3
+			if absf(n[i0].y) > 0.01:
+				continue
+			_liners += 1
+			var hi := maxf(q0.y, maxf(q1.y, q2.y))
+			var lo := minf(q0.y, minf(q1.y, q2.y))
+			var mid := (q0 + q1 + q2) / 3.0
+			var on_line := _on_midpoint_line(q0, q1, q2)
+			var spans := absf(hi - deck_y) < 1e-4 and absf(lo - floor_y) < 1e-4
+			var faces_water := m.water_at(mid + n[i0] * 0.1) and not m.water_at(mid - n[i0] * 0.1)
+			if not on_line or not spans or not faces_water:
+				bad += 1
+	eq(bad, 0, "%s: every liner face stands on a rim line, deck to pool floor, facing the water" % tag)
+	# the coping: a mitred ring
+	var outline: Array = rec["outline"]
+	var cm := PoolView.coping_mesh(outline, deck_y, Color.WHITE, Color.YELLOW, theme == "mad_science")
+	var cg := _flat_groups(cm)
+	var top: Array = cg.get(snappedf(deck_y + PoolView.COPING_H, 0.001), [])
+	var inner := PoolGeo.offset(outline, -PoolView.COPING_OVER)
+	var outer := PoolGeo.offset(outline, PoolView.COPING_W)
+	var want := absf(PoolGeo.area(outer)) - absf(PoolGeo.area(inner))
+	var ctotal := 0.0
+	var cwrong := 0
+	for tri: Array in top:
+		var a := _signed_area(tri)
+		ctotal += absf(a)
+		if (1 if a > 0.0 else -1) != ref_sign:
+			cwrong += 1
+	near(ctotal, want, 1e-3, "%s: the coping top covers exactly the band between its offsets" % tag)
+	eq(cwrong, 0, "%s: the coping top faces up" % tag)
+	var overlap := 0.0
+	for i in top.size():
+		for j in range(i + 1, top.size()):
+			for poly: PackedVector2Array in Geometry2D.intersect_polygons(_pv(top[i]), _pv(top[j])):
+				overlap += absf(_poly_area(poly))
+	check(overlap < 1e-4, "%s: no two coping pieces overlap (%.5f)" % [tag, overlap])
+	var normals := PoolGeo.edge_normals(outline)
+	var k := outline.size()
+	for i in k:
+		_corners += 1
+		var o: Vector2 = outline[i]
+		for e: int in [(i - 1 + k) % k, i]:
+			var a: Vector2 = outline[e]
+			near((outer[i] - a).dot(normals[e]), PoolView.COPING_W, 1e-4, "%s: corner %d sits COPING_W out from edge %d" % [tag, i, e])
+			near((inner[i] - a).dot(normals[e]), -PoolView.COPING_OVER, 1e-4, "%s: corner %d overhangs edge %d by COPING_OVER" % [tag, i, e])
+		var bis := (normals[(i - 1 + k) % k] + normals[i]).normalized()
+		near((outer[i] - o).normalized().dot(bis), 1.0, 1e-4, "%s: corner %d's seam lies on the bisector" % [tag, i])
+	view.free()
 
 
 # --- side faces ---------------------------------------------------------------------------------------------------

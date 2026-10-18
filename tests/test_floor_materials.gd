@@ -181,8 +181,12 @@ func _check_view() -> void:
 				max_mat = maxf(max_mat, uv.y)
 	check(mat_shader >= 2, "the floor tops and the wall faces use the material shader (%d surfaces)" % mat_shader)
 	check(max_mat >= 1.0, "the vertices carry their material ids (largest %.0f)" % max_mat)
-	# the same map without materials: classic shader, the same number of surfaces (one draw call each)
+	# the same map without materials: classic shader, the same number of surfaces (one draw call each). (The same planned
+	# terrain, its materials cleared: planning also carves the pool rooms' pools, which are terrain, not materials.)
 	var classic_map := DungeonGen.generate(run.floor_seed(1))
+	SiteBuilder.plan(classic_map, run, 1, ContractParts.prop_catalog(run.site_type))
+	for c: Vector2i in classic_map.cells:
+		classic_map.cells[c].mat_id = 0
 	var classic := HexMapView.new()
 	add_child(classic)
 	classic.build(classic_map)

@@ -32,6 +32,11 @@ static func run(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, op: Dictionary) -> bool:
 		"shelf": return not wall_one(ctx, room, "specimen_shelf").is_empty()
 		"bunks": return wall_row(ctx, room, "bunk_bed", 3, 2.15, 2)
 		"moat": return moat(ctx, room)
+		"specimen_pool": return specimen_pool(ctx, room)
+		"tanks": return tanks(ctx, room)
+		"pipes": return not wall_one(ctx, room, "pipe_run", {"params": {"length": 3.2}}).is_empty()
+		"bench": return not wall_one(ctx, room, "lab_bench").is_empty()
+		"console": return not wall_one(ctx, room, "lab_console").is_empty()
 		"sign": return neon(ctx, room, op)
 		"hazard": return hazard(ctx, room)
 		"wet_floor": return wet_floor(ctx, room)
@@ -186,6 +191,11 @@ static func cinema(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 		ctx.rollback(room, mk)
 		if seats >= min_seats:
 			pose["value"] = float(seats) + float(pose["score"]) * 0.25
+			if not proj.is_empty():
+				# a seat more is not worth a projector that does not point at the screen (more than ~75 degrees off)
+				var to_screen: Vector2 = (pose["pos"] as Vector2) - (proj["pos"] as Vector2)
+				if ThemeGeo.facing(float(proj["yaw"])).dot(to_screen.normalized()) < 0.26:
+					pose["value"] = float(pose["value"]) - 4.0
 			ranked.append(pose)
 	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["value"]) > float(b["value"]))
 	for pose in ranked:
@@ -428,49 +438,74 @@ static func mats(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 # --- pool, moat, carpet -------------------------------------------------------------------------------------------
 
-## A pool basin at the focal point with loungers along its sides, each facing the water.
+## Loungers along the long sides of the room's in-ground pool (PoolGeo carved it into the terrain before the decor),
+## each facing the water. False when the room got no pool (no room for one) or no lounger fits.
 static func pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
-	for c in cells_near(ctx, room, room.center_w, 9.0, 28):
-		var pos := ThemeGeo.world(c)
-		var mk := ctx.mark(room)
-		var group := ctx.new_group()
+	var rec := PoolGeo.pool_of_room(ctx.map, room.tag)
+	if rec.is_empty():
+		return false
+	var c: Vector2 = rec["center"]
+	var ax: Vector2 = rec["axis"]
+	var n := Vector2(-ax.y, ax.x)
+	var half_w := float(rec["half_wid"])
+	var half_l := float(rec["half_len"])
+	var group := ctx.new_group()
+	var placed := 0
+	var steps: Array[float] = [0.0]
+	var k := 1.3
+	while k <= half_l - 0.4:
+		steps.append(k)
+		steps.append(-k)
+		k += 1.3
+	for side: float in [1.0, -1.0]:
+		var on_side := 0
+		for along: float in steps:
+			if on_side >= 3:
+				break
+			for gap: float in [1.95, 2.35, 2.8]:
+				var target := c + ax * along
+				var lp := target + n * (side * (half_w + gap))
+				var lyaw := ThemeGeo.yaw_of(-n * side) + jit(ctx)
+				if not ctx.place(room, "pool_lounger", lp, lyaw, {"group": group, "role": "seat", "target": target, "lane": false}).is_empty():
+					placed += 1
+					on_side += 1
+					break
+	return placed >= 2
+
+
+## The mad-science lab's specimen pool (PoolGeo: green water under a gantry with a dangling cage) gets a hazard sign on
+## the deck beside it, facing the door. False when the room got no pool.
+static func specimen_pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+	var rec := PoolGeo.pool_of_room(ctx.map, room.tag)
+	if rec.is_empty():
+		return false
+	var c: Vector2 = rec["center"]
+	var ax: Vector2 = rec["axis"]
+	var n := Vector2(-ax.y, ax.x)
+	var cands: Array[Dictionary] = []
+	for side: float in [1.0, -1.0]:
+		for along: float in [0.0, 0.9, -0.9]:
+			for gap: float in [1.3, 1.7]:
+				var p := c + ax * (float(rec["half_len"]) * 0.55 * signf(along) if along != 0.0 else 0.0) + n * side * (float(rec["half_wid"]) + gap)
+				cands.append({"pos": p, "s": p.distance_to(room.entrance_w) + ctx.rng.randf() * 0.5})
+	cands.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["s"]) < float(b["s"]))
+	for cd in cands:
+		var pos: Vector2 = cd["pos"]
 		var to_door := room.entrance_w - pos
-		var yaw := ThemeGeo.yaw_of(to_door.normalized() if to_door.length() > 0.5 else Vector2(0, 1)) + jit(ctx)
-		var basin := ctx.place(room, "pool_basin", pos, yaw, {"group": group, "role": "pool", "center_ok": true, "lane": false})
-		if basin.is_empty():
-			continue
-		if _loungers(ctx, room, pos, yaw, group, [1.0, -1.0]) >= 2:
+		var yaw := ThemeGeo.yaw_of(to_door.normalized() if to_door.length() > 0.5 else -n) + jit(ctx, 4.0)
+		var target := pos + ThemeGeo.facing(yaw) * 3.0
+		if not ctx.place(room, "hazard_sign", pos, yaw, {"role": "sign", "target": target, "lane": false}).is_empty():
 			return true
-		ctx.rollback(room, mk)
-	# the middle is taken (a hellgate, the elevator, raised floor): a pool along a wall, loungers on the room side
-	var tries := 0
-	for pose in wall_poses(ctx, room, "pool_basin", 4.0):
-		tries += 1
-		if tries > 8:
-			break
-		var mk2 := ctx.mark(room)
-		var group2 := ctx.new_group()
-		var basin2 := ctx.place(room, "pool_basin", pose["pos"], pose["yaw"], {"group": group2, "role": "pool", "place": "wall", "orient": "away_from_wall", "lane": false})
-		if basin2.is_empty():
-			continue
-		if _loungers(ctx, room, pose["pos"], pose["yaw"], group2, [1.0]) >= 2:
-			return true
-		ctx.rollback(room, mk2)
-	return false
+	return true   # the pool and its gantry are the room's centrepiece; the sign is a garnish
 
 
-## Loungers beside a basin at (pos, yaw), on the given sides (+1 = the basin's front), each facing the water.
-static func _loungers(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, pos: Vector2, yaw: float, group: int, sides: Array[float]) -> int:
-	var f := ThemeGeo.facing(yaw)
-	var lat := ThemeGeo.lateral(yaw)
+## Two specimen tanks standing in the room's corners (along a wall where there is no corner left).
+static func tanks(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 	var n := 0
-	for side: float in sides:
-		for k: float in [-1.0, 1.0]:
-			var lp := pos + f * (side * 2.55) + lat * (k * 1.15)
-			var lyaw := ThemeGeo.yaw_of((pos - lp).normalized()) + jit(ctx)
-			if not ctx.place(room, "pool_lounger", lp, lyaw, {"group": group, "role": "seat", "target": pos, "lane": false}).is_empty():
-				n += 1
-	return n
+	for i in 2:
+		if not corner_one(ctx, room, "specimen_tank").is_empty():
+			n += 1
+	return n >= 1
 
 
 ## A moat ring around the focal point (the hellgate when there is one) with a plank bridge at the door side

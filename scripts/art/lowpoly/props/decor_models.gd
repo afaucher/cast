@@ -10,7 +10,7 @@ extends RefCounted
 ##   DecorModels.build("neon_sign", {"text": "EVIL", "color": Color(1, .2, .15), "dead": [3]})
 ##
 ## Animated pieces (neon sign letters, the cinema screen, the patrolling shark fin) carry a DecorAnim child.
-## Flat floor decals (chalk circle, pool, moat, carpet, mats) have no ink outline.
+## Flat floor decals (chalk circle, moat, carpet, mats) have no ink outline. (The pool is terrain now: PoolGeo / PoolView.)
 
 const GLYPHS := {
 	"A": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
@@ -31,7 +31,9 @@ const GLYPHS := {
 }
 const PIXEL := 0.085                ## neon sign: world size of one glyph pixel
 const LETTER_GAP := 0.12
-const FLAT_KINDS: Array[String] = ["summoning_circle", "pool_basin", "moat_water", "red_carpet", "yoga_mat"]
+const FLAT_KINDS: Array[String] = ["summoning_circle", "moat_water", "red_carpet", "yoga_mat"]
+## The pool lab's models (scripts/art/lowpoly/props/pool_props.gd) dress the mad-science lab: lab bench, pipe run, hazard sign.
+const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
 
 const CHALK := Color(0.93, 0.9, 0.82)
 const WATER := Color(0.2, 0.8, 0.92)
@@ -77,7 +79,11 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 		"hazard_tape": _hazard_tape(s)
 		"wet_floor_sign": _wet_floor_sign(s)
 		"pool_lounger": _pool_lounger(s)
-		"pool_basin": _pool_basin(s)
+		"specimen_tank": PropModels._specimen_vat(s)
+		"lab_bench": PoolProps._lab_bench(s)
+		"lab_console": PropModels._doomsday_console(s)
+		"pipe_run": PoolProps._pipe_run(s, float(params.get("length", 3.2)))
+		"hazard_sign": PoolProps._hazard_sign(s, PoolProps.HAZARD)
 		"moat_water": _moat_water(s, float(params.get("radius", 3.0)), float(params.get("width", 0.95)), float(params.get("gap", 48.0)))
 		"shark_fin": _shark_fin(s)
 		"red_carpet": _red_carpet(s, float(params.get("length", 5.0)))
@@ -407,19 +413,6 @@ static func _pool_lounger(s: LowPoly.Soup) -> void:
 	for i in 3:
 		_b(s, Vector3(0.74, 0.115, 0.1), Vector3(0, 0.31, 0.0 + 0.3 * float(i)), Color(0.2, 0.7, 0.9))
 	_b(s, Vector3(0.5, 0.1, 0.34), Vector3(0, 0.66, -0.56), Color(1.0, 0.55, 0.45), Vector3(30, 0, 0))
-
-
-static func _pool_basin(s: LowPoly.Soup) -> void:
-	# a stone rim, glowing water, lane lines and a ladder
-	_oval(s, 2.2, 1.6, 0.14, 18, Vector3(0, 0.07, 0), Color(0.86, 0.84, 0.8))
-	_oval(s, 1.98, 1.38, 0.05, 18, Vector3(0, 0.155, 0), _g(WATER))
-	_oval(s, 1.7, 1.1, 0.03, 18, Vector3(0, 0.185, 0), _g(Color(0.5, 0.95, 1.0)))
-	for i in 5:
-		var x := -1.3 + 0.65 * float(i)
-		_b(s, Vector3(0.45, 0.04, 0.08), Vector3(x, 0.21, -0.3 + 0.28 * float(i % 3)), _g(Color(0.85, 1.0, 1.0)), Vector3(0, 18 * float(i), 0))
-	for sx: float in [-0.3, 0.3]:
-		_rod(s, Vector3(sx, 0.16, 1.5), Vector3(sx, 0.62, 1.5), 0.03, 0.03, 5, PropModels.IRON_LT)
-		_rod(s, Vector3(sx, 0.62, 1.5), Vector3(sx, 0.64, 1.18), 0.03, 0.03, 5, PropModels.IRON_LT)
 
 
 static func _moat_water(s: LowPoly.Soup, radius: float, width: float, gap_deg: float) -> void:

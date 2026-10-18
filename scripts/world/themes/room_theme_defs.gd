@@ -18,7 +18,7 @@ const SERVICE := "service_entrance"     ## the start room's theme
 
 const POOLS := {
 	"bunker": ["wine_cellar", "home_cinema", "spa", "gym", "server_room", "panic_room", "pool"],
-	"lair": ["torture_chamber", "throne_room", "lab", "barracks", "moat"],
+	"lair": ["torture_chamber", "throne_room", "lab", "barracks", "moat", "mad_science"],
 }
 
 ## Story origin ("where it started", ClientArchetype events) -> the theme of the floor-3 origin room.
@@ -53,6 +53,7 @@ const ORIGIN_KEYWORDS := {
 	"server": "server_room", "data": "server_room", "panic": "panic_room", "vault": "panic_room",
 	"torture": "torture_chamber", "dungeon": "torture_chamber", "throne": "throne_room", "stage": "throne_room",
 	"vat": "lab", "lab": "lab", "barrack": "barracks", "moat": "moat", "shark": "moat",
+	"science": "mad_science", "specimen": "mad_science",
 }
 
 ## id -> {name, site, min_cells (the smallest room it is dealt), priced (PricedProp kinds it prefers),
@@ -122,6 +123,7 @@ const THEMES := {
 		"light": {"color": Color(1.0, 0.14, 0.1), "energy": 6.8, "range": 8.5, "flicker": 0.0, "pulse": 0.5},
 	},
 	"pool": {
+		## an in-ground pool (PoolGeo, carved by SiteBuilder before the decor) with loungers along its long sides
 		"name": "Indoor pool", "site": "bunker", "min_cells": 100, "needs_center": true,
 		"priced": ["marble_statue"],
 		"recipe": [
@@ -176,6 +178,21 @@ const THEMES := {
 		],
 		"light": {"color": Color(0.2, 0.85, 0.8), "energy": 6.8, "range": 9.0, "flicker": 0.2},
 	},
+	"mad_science": {
+		## a green specimen pool (PoolGeo, the gantry with its dangling cage over it), specimen tanks, a lab bench, a console,
+		## pipes and shelves
+		"name": "Mad science lab", "site": "lair", "min_cells": 80, "needs_center": true,
+		"priced": ["specimen_vat", "doomsday_console"],
+		"recipe": [
+			{"op": "specimen_pool"},
+			{"op": "tanks"},
+			{"op": "pipes"},
+			{"op": "bench"},
+			{"op": "console", "min_cells": 110},
+			{"op": "shelf", "min_cells": 130},
+		],
+		"light": {"color": Color(0.45, 1.0, 0.4), "energy": 6.8, "range": 9.0, "flicker": 0.35},
+	},
 	"service_entrance": {
 		"name": "Service entrance", "site": "any", "min_cells": 0,
 		"priced": [],
@@ -206,7 +223,11 @@ const DECOR := {
 	"hazard_tape": {"place": "wall", "orient": "away_from_wall", "w": 2.4, "d": 0.3, "h": 0.9, "blocks": false, "weight": 0.3},
 	"wet_floor_sign": {"place": "floor", "orient": "face_start", "w": 0.6, "d": 0.5, "h": 1.0, "blocks": false, "weight": 0.3},
 	"pool_lounger": {"place": "group", "orient": "face_target", "w": 0.85, "d": 1.9, "h": 0.6, "blocks": false, "weight": 0.5},
-	"pool_basin": {"place": "center", "orient": "face_entrance", "w": 4.4, "d": 3.2, "h": 0.2, "blocks": false, "weight": 1.2},
+	"specimen_tank": {"place": "corner", "orient": "face_center", "w": 1.5, "d": 1.5, "h": 2.1, "blocks": true, "weight": 1.0},
+	"lab_bench": {"place": "wall", "orient": "away_from_wall", "w": 1.85, "d": 0.8, "h": 1.45, "blocks": true, "weight": 1.0},
+	"lab_console": {"place": "wall", "orient": "away_from_wall", "w": 1.55, "d": 1.0, "h": 1.9, "blocks": true, "weight": 1.0},
+	"pipe_run": {"place": "wall", "orient": "away_from_wall", "w": 3.4, "d": 0.45, "h": 1.0, "blocks": false, "weight": 0.5},
+	"hazard_sign": {"place": "group", "orient": "face_target", "w": 0.9, "d": 0.3, "h": 1.85, "blocks": false, "weight": 0.3},
 	"moat_water": {"place": "center", "orient": "face_entrance", "w": 5.0, "d": 5.0, "h": 0.1, "blocks": false, "weight": 1.2},
 	"shark_fin": {"place": "ring", "orient": "free", "w": 0.4, "d": 0.8, "h": 0.6, "blocks": false, "weight": 0.2},
 	"red_carpet": {"place": "floor", "orient": "away_from_wall", "w": 1.5, "d": 5.0, "h": 0.05, "blocks": false, "weight": 0.5},

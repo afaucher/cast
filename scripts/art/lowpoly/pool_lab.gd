@@ -379,21 +379,23 @@ static func _region_kite_at(region: Dictionary, a: Vector3, b: Vector3, out: Vec
 	return key
 
 
-## A stone coping along the outline, on the deck side, its top just above `top`.
+## A stone coping along the outline, on the deck side, its top just above `top`: the game's mitred coping (PoolView), so
+## the corners meet on one seam (the lab's first version used overlong boxes that crossed at every corner).
 func _coping(segs: Array, top: float, col: Color) -> void:
-	var s := LowPoly.Soup.new(5, 0.04)
+	var pts := PackedVector2Array()
 	for sg: Array in segs:
-		var a: Vector3 = sg[0]
-		var b: Vector3 = sg[1]
-		var out: Vector3 = sg[2]
-		var seg_len := a.distance_to(b)
-		var mid := (a + b) * 0.5
-		var yaw := rad_to_deg(atan2(out.x, out.z))
-		PropModels.box(s, Vector3(seg_len + 0.24, 0.1, 0.46), Vector3(mid.x, top + 0.05, mid.z) + out * 0.17, col, Vector3(0, yaw, 0))
+		for p: Vector3 in [sg[0], sg[1]]:
+			pts.append(Vector2(p.x, p.z))
+	var hull := PoolGeo._clean_hull(Geometry2D.convex_hull(pts))
+	var outline: Array = []
+	for p in hull:
+		outline.append(p)
 	var mi := MeshInstance3D.new()
-	mi.mesh = s.to_mesh()
-	var mat := MonsterMaterial.make(1.6)
-	mat.set_shader_parameter("glow_gain", 1.4)
+	mi.mesh = PoolView.coping_mesh(outline, top, col, col.darkened(0.15), false)
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.vertex_color_is_srgb = true
+	mat.roughness = 0.55
 	mi.material_override = mat
 	add_child(mi)
 

@@ -84,6 +84,8 @@ func _strike(a: Actor, pos: Vector3) -> void:
 
 ## The arrow ends (range, terrain or its last hit). Hits were already dealt in _strike().
 func _impact(_hit: Actor, pos: Vector3) -> void:
+	if target_team == GameWorld.TEAM_MONSTERS:
+		MonsterSenses.noise(pos, MonsterSenses.NOISE_ARROW, "arrow")   # the thunk (only this machine's monsters hear)
 	impacted.emit(pos, hits.back() if not hits.is_empty() else null)
 	queue_free()
 
