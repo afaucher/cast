@@ -308,7 +308,7 @@ Impact, Segoe Print). Swap fonts in `FormTheme._font()` callers only.
 the main menu has no dead items); the damage ticker as receipt tape; paper that is rotated other than the clipboard.
 A stamp is plain alpha, not multiply: Godot's canvas multiply blend turns every glyph quad into a solid block.
 
-**Notes for the next form:** build it with `FormSheet` (pick the carbon), put `FormRow`s or `FormSection`s in `body`,
+**Notes for the next form:** follow `form-rules.md` (what is printed, typed and marked; what to leave off). Build it with `FormSheet` (pick the carbon), put `FormRow`s or `FormSection`s in `body`,
 set `theme = FormTheme.theme()` on the screen root (popups inherit it), call `FormTheme.chain(...)` for focus order and
 grab focus on the first control. Keep long text in the typed font only for values; printed descriptions use the
 condensed label font. A Button subclass must set `custom_minimum_size`, not override `_get_minimum_size` (the native

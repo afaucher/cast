@@ -69,6 +69,11 @@ var of `Hero` or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELD
 When the test fails, fix the code or the declaration. Don't widen an allowlist without a written
 reason, and treat adding one as a design decision to report.
 
+## UI forms
+Every screen is a carbon-copy trade form (`scripts/ui/forms/`). Follow `docs/design/form-rules.md`: per-copy values
+are typed in one typewriter, captions are printed, player marks are the red grease pencil and the red name stamp, and
+nothing on the paper explains the game or shows a key binding.
+
 ## Tests
 - `.\test_runner.ps1 -TestAll` runs everything (the voice audio tests take about 5 minutes). Net tests with
   `const PEERS := N` run as N processes over ENet localhost (`NetTest`; `docs/ARCHITECTURE.md`, Tests).
