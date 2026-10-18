@@ -17,6 +17,10 @@ extends Control
 ##
 ## Works without a model ("no model, typed input only"): typed text, fed through
 ## VoiceCaster.inject_text(), is shown as heard (marked typed) and logged.
+##
+## Online (M7) the panel is still ONE recognizer: this machine's own (each player's mic is heard on that
+## player's machine, and a teammate's cast arrives as an event, never through here). set_mic_owner() puts a
+## line under the title saying whose mic it is ("THIS MACHINE'S MIC  ·  c1, seat 2").
 
 const PANEL_WIDTH := 400.0
 const HISTORY := 160           # mic level samples (~2.7 s at 60 fps)
@@ -50,6 +54,7 @@ var _voice_hist := PackedByteArray()
 var _voice := false
 
 var _status: Label
+var _owner: Label
 var _trigger_menu: OptionButton
 var _strict_menu: OptionButton
 var _custom_row: HBoxContainer
@@ -118,6 +123,21 @@ func attach(voice_caster: VoiceCaster) -> void:
 	_log("[color=#8890c0]attached: trigger '%s', %s[/color]" % [caster.get_trigger_word(), caster.get_strictness()])
 
 
+## Online: whose recognizer this is ("" hides the line).
+func set_mic_owner(text: String) -> void:
+	_owner.text = text
+	_owner.visible = text != ""
+
+
+func mic_owner_text() -> String:
+	return _owner.text if _owner.visible else ""
+
+
+## Casts this panel's recognizer made (tests: a teammate's casts never count here).
+func cast_count() -> int:
+	return _n_casts
+
+
 ## The game appends its reactions here ("player cast HEAL p=0.87 -> healed 3").
 func log_game(text: String, color: Color = Color.WHITE) -> void:
 	_log("[color=#%s]GAME[/color]  [color=#%s]%s[/color]" % [C_GAME.to_html(false), color.to_html(false), _esc(text)])
@@ -165,6 +185,9 @@ func _build() -> void:
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title_row.add_child(_status)
+	_owner = _label("", 12, C_WARN)
+	_owner.visible = false
+	root.add_child(_owner)
 
 	var opts := HBoxContainer.new()
 	opts.add_theme_constant_override("separation", 6)

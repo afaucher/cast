@@ -18,6 +18,11 @@ extends Node
 ## of that hero when the puppet shows the moment `t` (Hero.net_act): the swing and the shot show, and a teammate's spin
 ## or boulder shoves THIS machine's hero if it reaches it here (the victim applies a shove on itself, rule 5). The
 ## attacker's machine already decided every monster (rule 2).
+##
+## TELEMETRY (M7, passive): every cast is a row in the casts sheet (NetSession.note_cast): `sent` on the caster's machine,
+## with the voice onset and end on the shared clock and the recognition latency when the recognizer made it (Net.note_voice,
+## called by the game just before the cast), and `applied` on every machine when its effect lands (how late). A client's
+## rows are filed on the host, so the host's file shows each cast landing once on every machine.
 
 signal cast_applied(spell: String, caster: Actor, node: Node)
 
@@ -26,6 +31,8 @@ signal cast_applied(spell: String, caster: Actor, node: Node)
 const LEAD := 0.2
 ## A replayed attack waits at most this long for its puppet to show the moment it happened.
 const ACT_WAIT_MAX := 0.45
+## A recognizer note older than this when the cast goes out is not that cast's (the cast came from somewhere else).
+const VOICE_FRESH := 1.0
 
 var active := false
 var stats := {}
@@ -35,6 +42,7 @@ var last_applied := {}
 var _session: NetSession = null
 var _pending: Array[Dictionary] = []   ## casts waiting for their moment, by `at`
 var _acts: Array = []                  ## [t, hero id, kind, dir, drawn, arrival]
+var _voice: Dictionary = {}            ## the recognizer behind the next cast: {spell, info, t (host_time)}
 
 
 func _ready() -> void:
@@ -60,6 +68,7 @@ func begin() -> void:
 
 func end() -> void:
 	active = false
+	_voice = {}
 	_pending.clear()
 	_acts.clear()
 	last_applied.clear()
@@ -71,6 +80,15 @@ func shares(caster: Node) -> bool:
 
 
 # --- Casts ----------------------------------------------------------------------------------------------
+
+## The recognizer is about to cast `spell` (Net.note_voice): its detail goes with the cast's row in the casts sheet.
+func note_voice(spell: String, info: Dictionary) -> void:
+	_voice = {"spell": spell, "info": info, "t": _now()}
+
+
+## Cast id in the casts sheet: the caster's id and the moment it lands, the same on every machine.
+static func cast_id(d: Dictionary) -> String:
+	return "%d@%.3f" % [int(d.get("c", 0)), float(d.get("at", 0.0))]
 
 ## The caster's machine: send the cast and schedule it here too (SpellBook.cast built `spec`).
 func send_cast(caster: Actor, spec: Dictionary) -> void:
@@ -85,7 +103,32 @@ func send_cast(caster: Actor, spec: Dictionary) -> void:
 	}
 	_session.send_event(0, "cast", d)
 	stats["casts_out"] = int(stats["casts_out"]) + 1
+	_note_sent(d)
 	_schedule(d)
+
+
+## The casts sheet's `sent` row: the voice onset (voice_start) and end on the shared clock, onset -> cast (speech_ms) and
+## end -> cast (recog_ms, the recognition latency); blank for a typed or game-made cast.
+func _note_sent(d: Dictionary) -> void:
+	var spell := str(d.get("s", ""))
+	var row := {"kind": "sent", "cast": cast_id(d), "spell": spell, "power": "%.3f" % float(d.get("p", 1.0)), "source": "game",
+		"at": "%.3f" % float(d.get("at", 0.0))}
+	if not _voice.is_empty() and str(_voice.get("spell", "")) == spell and _now() - float(_voice.get("t", 0.0)) <= VOICE_FRESH:
+		var info: Dictionary = _voice["info"]
+		var t := float(_voice["t"])
+		var typed := bool(info.get("typed", false))
+		row["source"] = "typed" if typed else "voice"
+		row["label"] = "accidental" if bool(info.get("accidental", false)) else "deliberate"
+		var recog := float(info.get("latency_ms", -1.0))
+		var speech := float(info.get("speech_ms", -1.0))
+		if not typed and recog >= 0.0:
+			row["recog_ms"] = "%d" % roundi(recog)
+			row["voice_end"] = "%.3f" % (t - recog / 1000.0)
+		if not typed and speech >= 0.0:
+			row["speech_ms"] = "%d" % roundi(speech)
+			row["voice_start"] = "%.3f" % (t - speech / 1000.0)
+	_voice = {}
+	_session.note_cast(row)
 
 
 func _schedule(d: Dictionary) -> void:
@@ -112,6 +155,8 @@ func _apply(d: Dictionary, now: float) -> void:
 		stats["late"] = int(stats["late"]) + 1
 	stats["max_late"] = maxf(float(stats["max_late"]), late)
 	last_applied[str(spec["spell"])] = {"at": at, "applied": now, "late": late, "caster": int(d.get("c", 0))}
+	_session.note_cast({"kind": "applied", "cast": cast_id(d), "spell": str(spec["spell"]), "power": "%.3f" % float(spec["power"]),
+		"at": "%.3f" % at, "late_ms": "%d" % roundi(late * 1000.0)})
 	cast_applied.emit(str(spec["spell"]), caster, node)
 
 

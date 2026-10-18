@@ -43,7 +43,20 @@ extends Node
 ## late-join snapshot) and into an AI's seat (SeatHandover).
 ##
 ## CLOCK: NetClock, pinged over unreliable packets; `host_time()` is the shared clock.
-## TELEMETRY: NetTelemetry, one row a second, clients' rows collected on the host.
+## TELEMETRY: NetTelemetry, one row a second, clients' rows collected on the host. M7 adds two passive sheets: every cast
+## (`note_cast`: sent with its voice onset and recognition latency, applied on every machine) and hits taken per player per
+## minute (`note_hit`, every HITS_WINDOW); a client's rows reach the host as reliable `tele.cast` / `tele.hits` events.
+##
+## M7 (polish):
+##   LINK SIMULATOR. The host's Settings > Diagnostics "Simulate a long link" (GameSettings link_sim: off / coast / rough) is
+##   the crew's link: applied on the host when it opens the crew, carried in sys.welcome and re-sent as `sys.link {preset}`
+##   when it changes (set_link), and every machine applies it to what IT receives: NetLink on ENet, Steam's FakePacket*
+##   config on Steam (NetSteamLink). A --net-link dev flag (and a test) sets the host's instead of the setting.
+##   INVITES. Steam's join_requested (an overlay invite accepted while the game runs) becomes `invite_received(lobby,
+##   inviter)`: the screen that is up asks first (the game: "Leave this job and join?") and calls accept_invite() or
+##   decline_invite(); with nobody listening it joins at once. `+connect_lobby <id>` (Steam launching the game for an
+##   invite) joins at start. `invite_crew()` opens the overlay's invite dialog for this lobby (`can_invite()`).
+##   AVATARS. `avatars` (SteamAvatars): roster pictures by steam id, null without Steam.
 ##
 ## Dev flags (after `--`; also README "Online play"):
 ##   --net-host               host over ENet on --net-port (and open the job board)
@@ -55,6 +68,10 @@ extends Node
 ##   +connect_lobby <id>      Steam launched us to accept an invite: join that lobby
 
 signal session_started(as_host: bool)
+## An overlay invite arrived while the game runs (M7): ask the player, then accept_invite() / decline_invite().
+signal invite_received(lobby_id: int, inviter: String)
+## The crew's simulated link changed (M7: "off", "coast", "rough").
+signal link_changed(preset: String)
 signal session_ended(reason: String)
 signal roster_changed()
 signal peer_joined(peer: int)
@@ -91,6 +108,8 @@ const CONNECT_FAILED := "Couldn't reach the crew"
 const NO_ANSWER := "The crew never answered"
 const NO_CREWS := "No crews hiring right now"
 const STEAM_OFF := "Steam not running"
+## Seconds per row of the hits sheet (hits taken per player per minute). Tests shorten it.
+const HITS_WINDOW := 60.0
 ## (M0-M5: a crew on a job refused new hellos with this; from M6 a hello mid-job is admitted as a joiner. Kept for the logs.)
 const JOB_RUNNING := "That crew is already on a job"
 const DESYNC := "Desync: different floor"
@@ -140,6 +159,19 @@ var status: NetStatus = null
 var join: NetJoin = null
 ## Hits this machine's own heroes took since the last telemetry row (the `hits` column, M4).
 var hits_taken := 0
+## The crew's simulated link (M7): the host decides, every machine applies it to what it receives.
+var link_preset := "off"
+## Host: take the crew's link from Settings > Diagnostics when the crew opens. Only the game's own Session does (its flags
+## set it: not with a --net-link dev flag, not in a test), so a test's NetSession never reads the player's settings.
+var link_from_settings := false
+## Steam roster pictures (M7): child "Avatars".
+var avatars: SteamAvatars = null
+## An overlay invite waiting for the player's answer: {lobby, inviter} ({} = none).
+var pending_invite: Dictionary = {}
+## Seconds per row of the hits sheet (HITS_WINDOW; tests shorten it).
+var hits_window := HITS_WINDOW
+## Host: the whole session's hits per player, "peer:seat" -> {name, who, hits, damage, floor_s} (printed at the end).
+var hits_totals: Dictionary = {}
 var clock := NetClock.new()
 var telemetry: NetTelemetry = null
 
@@ -152,6 +184,11 @@ var _next_ping_usec := 0
 var _next_row_usec := 0
 var _find_first := false           ## a join_first() is waiting for the lobby list
 var _probe := false                ## --net-steam-probe
+var _steam_link := false           ## Steam's fake-lag config is set (cleared when the session ends)
+var _tally: Dictionary = {}        ## seat this machine owns -> {hits, damage, floor_s, sources {kind: n}} this window
+var _next_hits_usec := 0
+var _hits_minute := 0
+var _last_frame_usec := 0
 
 
 func _ready() -> void:
@@ -186,6 +223,9 @@ func _ready() -> void:
 	join = NetJoin.new()
 	join.name = "Join"
 	add_child(join)
+	avatars = SteamAvatars.new()
+	avatars.name = "Avatars"
+	add_child(avatars)
 	lobby = SteamLobby.new()
 	lobby.name = "Lobby"
 	add_child(lobby)
@@ -411,6 +451,192 @@ func set_members(peer: int, fields: Dictionary) -> void:
 	roster_changed.emit()
 
 
+# --- M7: the link simulator, invites, the passive sheets --------------------------------------------------
+
+## Host: the crew's simulated link ("off", "coast", "rough"): applied here and sent to every member, who applies it to what
+## it receives. False on a client or for an unknown preset.
+func set_link(preset: String) -> bool:
+	if not NetLink.PRESETS.has(preset) or (state == State.ONLINE and not hosting):
+		return false
+	_apply_link(preset)
+	if hosting and state == State.ONLINE:
+		_to_crew("sys.link", {"preset": preset})
+	return true
+
+
+## Every machine: simulate `preset` on what this process receives (NetLink on ENet, Steam's fake-lag config on Steam).
+func _apply_link(preset: String) -> void:
+	if not NetLink.PRESETS.has(preset):
+		preset = "off"
+	if transport == Transport.STEAM and SteamIdentity.steam() != null:
+		if wire.link.preset != "off":
+			wire.link.configure("off")
+		NetSteamLink.apply(SteamIdentity.steam(), preset)
+		_steam_link = preset != "off"
+	elif wire.link.preset != preset:
+		wire.link.configure(preset)
+	var changed := preset != link_preset
+	link_preset = preset
+	if changed:
+		_log("simulated link: %s" % preset)
+		link_changed.emit(preset)
+
+
+## True when the overlay's invite dialog can be opened for this crew: a Steam crew with a seat free.
+func can_invite() -> bool:
+	return state == State.ONLINE and transport == Transport.STEAM and lobby.lobby_id != 0 and seats_free() > 0
+
+
+## "Invite crew": the Steam overlay's invite dialog for this lobby. False when it can't (see can_invite).
+func invite_crew() -> bool:
+	return can_invite() and lobby.open_invite_dialog()
+
+
+## The player said yes to the pending invite: leave whatever this is and join that crew. The caller (the screen that asked)
+## takes the player to the menu, where the join's progress shows. False with no invite pending.
+func accept_invite() -> bool:
+	if pending_invite.is_empty():
+		return false
+	var id := int(pending_invite["lobby"])
+	pending_invite = {}
+	if state != State.OFFLINE:
+		leave()
+	return join_lobby(id)
+
+
+func decline_invite() -> void:
+	if not pending_invite.is_empty():
+		_log("invite from %s declined" % str(pending_invite.get("inviter", "?")))
+	pending_invite = {}
+
+
+## A cast row for the casts sheet (NetCasts): `fields` keyed by NetTelemetry.CAST_COLUMNS; t, role, from and seat are
+## filled here. Written on this machine; a client's also goes to the host (tele.cast).
+func note_cast(fields: Dictionary) -> void:
+	if state != State.ONLINE:
+		return
+	var row := _row(NetTelemetry.CAST_COLUMNS, fields)
+	if telemetry != null:
+		telemetry.casts.write(row)
+	if not hosting:
+		wire.send_event(1, "tele.cast", {"row": row})
+
+
+## A hero this machine owns took a hit (Actor.apply_damage through Net.note_hit): the `hits` column and the hits sheet.
+func note_hit(a: Node, dealt: float, source: Node) -> void:
+	if state != State.ONLINE or not Net.owns(a):
+		return
+	hits_taken += 1
+	var seat := _seat_of_hero(a)
+	if seat == 0:
+		return
+	var t := _tally_for(seat)
+	t["hits"] = int(t["hits"]) + 1
+	t["damage"] = float(t["damage"]) + dealt
+	var src := source_kind(source)
+	var by: Dictionary = t["sources"]
+	by[src] = int(by.get(src, 0)) + 1
+
+
+func _row(columns: Array[String], fields: Dictionary) -> Array:
+	var e := local_entry()
+	var base := {"t": "%.3f" % host_time(), "role": "host" if hosting else "client", "from": local_id(), "seat": int(e.get("seat", 0))}
+	var row: Array = []
+	for c in columns:
+		row.append(fields.get(c, base.get(c, "")))
+	return row
+
+
+static func _seat_of_hero(a: Node) -> int:
+	var id := NetFloor.id_of(a)
+	return id if id >= 1 and id <= MAX_CREW else 0
+
+
+## What hit a hero, for the hits sheet: a monster's kind ("swarmer"), "crew" for a teammate or a teammate's spell, else
+## the node's class.
+static func source_kind(source: Node) -> String:
+	if source == null or not is_instance_valid(source):
+		return "other"
+	if source is Monster:
+		return str((source as Monster).kind)
+	if source is Hero:
+		return "crew"
+	var caster: Variant = source.get("caster")
+	if caster is Hero:
+		return "crew"
+	return source.get_class().to_lower()
+
+
+func _tally_for(seat: int) -> Dictionary:
+	if not _tally.has(seat):
+		_tally[seat] = {"hits": 0, "damage": 0.0, "floor_s": 0.0, "sources": {}}
+	return _tally[seat]
+
+
+## Every frame: the time each hero this machine owns spends standing on a running floor (the hits sheet's exposure).
+func _count_exposure(dt: float) -> void:
+	if flow == null or flow.phase != CrewFlow.FLOOR:
+		return
+	for seat in range(1, MAX_CREW + 1):
+		var h := NetRegistry.hero(seat)
+		if h != null and is_instance_valid(h) and not h.dead and Net.owns(h) and h.is_inside_tree():
+			var t := _tally_for(seat)
+			t["floor_s"] = float(t["floor_s"]) + dt
+
+
+## The hits sheet's rows for the window that just ended (`send`: a client also files them on the host).
+func _flush_hits(send: bool) -> void:
+	_hits_minute += 1
+	for seat: int in _tally.keys():
+		var t: Dictionary = _tally[seat]
+		var floor_s := float(t["floor_s"])
+		if floor_s <= 0.0 and int(t["hits"]) == 0:
+			continue
+		var h := NetRegistry.hero(seat)
+		var mine := seat == int(local_entry().get("seat", 0))
+		var name_ := str(local_entry().get("name", "")) if mine else (str(h.display_name) if h != null and is_instance_valid(h) else "seat %d" % seat)
+		var parts: PackedStringArray = []
+		var by: Dictionary = t["sources"]
+		for k: String in by:
+			parts.append("%s:%d" % [k, int(by[k])])
+		parts.sort()
+		var fields := {"name": name_, "who": "player" if mine else "ai", "minute": _hits_minute, "floor_s": "%.1f" % floor_s,
+			"hits": int(t["hits"]), "damage": "%.1f" % float(t["damage"]),
+			"per_min": "%.2f" % (float(t["hits"]) * 60.0 / maxf(floor_s, 1.0)), "sources": ";".join(parts), "seat": seat}
+		var row := _row(NetTelemetry.HIT_COLUMNS, fields)
+		if telemetry != null:
+			telemetry.hits.write(row)
+		if hosting:
+			_note_hits_total(local_id(), row)
+		elif send:
+			wire.send_event(1, "tele.hits", {"row": row})
+	_tally.clear()
+
+
+## Host: the session's running totals per player (from the hits rows: its own and the clients').
+func _note_hits_total(peer: int, row: Array) -> void:
+	var cols := NetTelemetry.HIT_COLUMNS
+	var key := "%d:%s" % [peer, str(row[cols.find("seat")])]
+	var tot: Dictionary = hits_totals.get(key, {"name": str(row[cols.find("name")]), "who": str(row[cols.find("who")]),
+		"hits": 0, "damage": 0.0, "floor_s": 0.0})
+	tot["hits"] = int(tot["hits"]) + int(row[cols.find("hits")])
+	tot["damage"] = float(tot["damage"]) + float(row[cols.find("damage")])
+	tot["floor_s"] = float(tot["floor_s"]) + float(row[cols.find("floor_s")])
+	hits_totals[key] = tot
+
+
+## Host, at the end: hits per minute per player for the whole session, one log line (the "keep them level" check).
+func _print_hits_totals() -> void:
+	if hits_totals.is_empty():
+		return
+	var parts: PackedStringArray = []
+	for key: String in hits_totals:
+		var tot: Dictionary = hits_totals[key]
+		parts.append("%s (%s, seat %s) %.2f/min over %.1f min" % [str(tot["name"]), str(tot["who"]), key.get_slice(":", 1),
+			float(tot["hits"]) * 60.0 / maxf(float(tot["floor_s"]), 1.0), float(tot["floor_s"]) / 60.0])
+	_log("hits taken per minute this session: " + ", ".join(parts))
+
+
 func _can_start() -> bool:
 	if state != State.OFFLINE:
 		push_warning("[Net] already in a session")
@@ -430,6 +656,10 @@ func _begin_host(peer: MultiplayerPeer, via: Transport) -> void:
 	wire.reset()
 	_set_state(State.ONLINE, 0.0, "")
 	roster[1] = {"peer": 1, "seat": 1, "name": _local_name(1), "character": local_character(), "steam_id": SteamIdentity.steam_id()}
+	hits_totals.clear()
+	_hits_minute = 0
+	_next_hits_usec = 0
+	_apply_link(str(GameSettings.load_settings()["link_sim"]) if link_from_settings else wire.link.preset)
 	_open_telemetry()
 	_publish_lobby()
 	_log("hosting via %s" % ("steam" if via == Transport.STEAM else "enet"))
@@ -456,6 +686,10 @@ func _set_state(s: State, timeout: float, status: String) -> void:
 ## while the process is quitting).
 func _end(reason: String, close_now: bool = false) -> void:
 	var was := state
+	if was == State.ONLINE:
+		_flush_hits(false)   # (the last window of the hits sheet; before the peer goes: the rows need this machine's seat)
+		if hosting:
+			_print_hits_totals()
 	var peer := multiplayer.multiplayer_peer
 	if peer != null and not (peer is OfflineMultiplayerPeer):
 		# Deferred: _end often runs inside the peer's own poll (an RPC or a disconnect signal), and freeing the
@@ -464,6 +698,11 @@ func _end(reason: String, close_now: bool = false) -> void:
 			_close_peer(peer)
 		else:
 			_close_peer.call_deferred(peer)
+	if _steam_link and SteamIdentity.steam() != null:
+		NetSteamLink.apply(SteamIdentity.steam(), "off")
+	_steam_link = false
+	_tally.clear()
+	pending_invite = {}
 	lobby.leave()
 	wire.reset()
 	if telemetry != null:
@@ -607,13 +846,20 @@ func _on_lobby_failed(reason: String) -> void:
 		_end(reason)
 
 
-## An overlay invite while the game runs: leave whatever this is and join, then show the menu (M0 has no
-## shared run, so a joiner always waits on the menu). M7 asks first ("Leave this job and join?").
-func _on_invite(lobby_id: int) -> void:
-	print("[Net] invite accepted: lobby ", lobby_id)
-	if state != State.OFFLINE:
-		leave()
-	join_lobby(lobby_id)
+## An overlay invite accepted while the game runs (M7). Already in that lobby: nothing to do. Otherwise the screen that
+## is up asks the player (invite_received; the game shows "Leave this job and join?", the menu joins at once) and calls
+## accept_invite() / decline_invite(). With nobody listening, it leaves whatever this is, joins and shows the menu.
+func _on_invite(lobby_id: int, friend_id: int = 0) -> void:
+	if lobby_id != 0 and lobby_id == lobby.lobby_id and state != State.OFFLINE:
+		_log("invite to the lobby we are in: ignored")
+		return
+	var inviter := lobby.friend_name(friend_id)
+	print("[Net] invite accepted in the overlay: lobby %d from %s" % [lobby_id, inviter if inviter != "" else "?"])
+	pending_invite = {"lobby": lobby_id, "inviter": inviter}
+	if not get_signal_connection_list("invite_received").is_empty():
+		invite_received.emit(lobby_id, inviter)
+		return
+	accept_invite()
 	var scene := get_tree().current_scene
 	if scene != null and scene.scene_file_path != Boot.MENU_SCENE:
 		get_tree().change_scene_to_file.call_deferred(Boot.MENU_SCENE)
@@ -632,6 +878,9 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 			_client_sys(from, kind, data)
 		return
 	if state != State.ONLINE or (hosting and not roster.has(from)) or (not hosting and from != 1):
+		return
+	if kind.begins_with("tele."):
+		_host_tele(from, kind, data)
 		return
 	Net.apply_begin()   # (M4c: what an event changes on a copy is the owner's word; the debug guard lets it)
 	event_received.emit(from, kind, data, stamp)
@@ -675,13 +924,31 @@ func _host_sys(from: int, kind: String, data: Dictionary) -> void:
 	if joining:
 		roster[from]["joining"] = true
 	wire.send_event(from, "sys.welcome", {"seat": seat, "peer": from, "entries": crew(),
-		"host_unix": Time.get_unix_time_from_system() - host_time()})
+		"host_unix": Time.get_unix_time_from_system() - host_time(), "link": link_preset})
 	_to_crew("sys.roster", {"entries": crew()})
 	_publish_lobby()
 	_log("%s clocked in (peer %d, seat %d%s)" % [name_, from, seat, ", joining the job" if joining else ""])
 	status_changed.emit("%s clocked in." % name_)
 	peer_joined.emit(from)
 	roster_changed.emit()
+
+
+## Host: a client's sheet row (M7): filed in the host's casts / hits sheet under the transport's peer id.
+func _host_tele(from: int, kind: String, data: Dictionary) -> void:
+	if not hosting:
+		return
+	var row: Variant = data.get("row")
+	if not (row is Array):
+		return
+	match kind:
+		"tele.cast":
+			if telemetry != null:
+				telemetry.casts.write_peer(from, row as Array)
+		"tele.hits":
+			if telemetry != null:
+				telemetry.hits.write_peer(from, row as Array)
+			if (row as Array).size() == NetTelemetry.HIT_COLUMNS.size():
+				_note_hits_total(from, row as Array)
 
 
 ## Host: an event to every client in the roster (one send each: a broadcast would also reach peers still
@@ -724,6 +991,9 @@ func _client_sys(from: int, kind: String, data: Dictionary) -> void:
 				return
 			host_unix_epoch = float(data.get("host_unix", 0.0))
 			_set_roster(data.get("entries", []) as Array)
+			_apply_link(str(data.get("link", link_preset)))
+			_hits_minute = 0
+			_next_hits_usec = 0
 			clock.start_client(Time.get_ticks_usec())
 			_pings_sent = 0
 			_next_ping_usec = 0
@@ -737,6 +1007,9 @@ func _client_sys(from: int, kind: String, data: Dictionary) -> void:
 			if state == State.ONLINE:
 				_set_roster(data.get("entries", []) as Array)
 				roster_changed.emit()
+		"sys.link":
+			if state == State.ONLINE:
+				_apply_link(str(data.get("preset", "off")))
 		"sys.refuse":
 			_end(str(data.get("reason", CONNECT_FAILED)))
 		"sys.bye":
@@ -786,9 +1059,19 @@ func _on_packet(from: int, type: int, seq: int, stamp_ms: int, payload: PackedBy
 
 func _process(_delta: float) -> void:
 	if state == State.OFFLINE:
+		_last_frame_usec = 0
 		return
 	var now := Time.get_ticks_usec()
 	clock.advance(now)
+	if state == State.ONLINE:
+		if _last_frame_usec > 0:
+			_count_exposure(float(now - _last_frame_usec) / 1e6)
+		_last_frame_usec = now
+		if _next_hits_usec == 0:
+			_next_hits_usec = now + int(hits_window * 1e6)
+		elif now >= _next_hits_usec:
+			_next_hits_usec = now + int(hits_window * 1e6)
+			_flush_hits(true)
 	if _deadline_usec > 0 and now > _deadline_usec and state != State.ONLINE:
 		match state:
 			State.OPENING: _end("Steam didn't answer")
@@ -854,7 +1137,7 @@ func _telemetry_row() -> void:
 		"" if hosting else "%.1f" % clock.jitter_ms, "" if hosting else "%.2f" % clock.pending_correction_ms(),
 		"%.3f" % (float(arrived) / float(expected) if expected > 0 else 1.0),
 		c["bytes_out"], c["bytes_in"], c["packets_out"], c["packets_in"], c["events_out"], c["events_in"], c["gaps"], c["stale"],
-		wire.link.preset, wire.link.held(), wire.link.dropped, "", hits_taken,
+		link_preset, wire.link.held(), wire.link.dropped, "", hits_taken,
 	]
 	hits_taken = 0
 	telemetry.write_row(row)
@@ -892,6 +1175,8 @@ func _apply_flags(args: PackedStringArray, engine_args: PackedStringArray) -> vo
 	var link := Boot.arg_value(args, "--net-link")
 	if link != "" and not wire.link.configure(link):
 		push_warning("[Net] unknown --net-link %s (off, coast, rough)" % link)
+	# The crew's link comes from Settings > Diagnostics unless a dev flag (or a test) sets it (M7).
+	link_from_settings = link == "" and not args.has("--run-test")
 	wire.link.seed_with(OS.get_process_id())
 	var name_ := Boot.arg_value(args, "--net-name")
 	if name_ != "":

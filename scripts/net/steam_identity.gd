@@ -40,6 +40,20 @@ static func steam_id() -> int:
 	return int(_steam.call("getSteamID")) if _steam != null else 0
 
 
+## Test seam (M7): stand a fake Steam object in for the singleton (lobbies, invites, avatars and the fake-lag config are
+## then exercised against it with no Steam client). `reset_for_tests()` forgets it and Steam is looked for again.
+static func use_for_tests(fake: Object) -> void:
+	_tried = true
+	_steam = fake
+	_name = str(fake.call("getPersonaName")).strip_edges() if fake != null else ""
+
+
+static func reset_for_tests() -> void:
+	_tried = false
+	_steam = null
+	_name = ""
+
+
 static func _ensure() -> void:
 	if _tried:
 		return

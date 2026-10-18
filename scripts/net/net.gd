@@ -226,11 +226,20 @@ static func status_changed(a: Node, kind: String) -> void:
 		s.status.changed(a, kind)
 
 
-## This machine's hero took a hit (telemetry's `hits` column).
-static func note_hit(a: Node) -> void:
+## This machine's hero took a hit (telemetry's `hits` column and, M7, the hits-per-player-per-minute sheet: how much, and
+## what dealt it).
+static func note_hit(a: Node, dealt: float = 0.0, source: Node = null) -> void:
 	var s := session()
 	if s != null and s.online() and owns(a):
-		s.hits_taken += 1
+		s.note_hit(a, dealt, source)
+
+
+## The recognizer behind the cast about to be made (M7, the casts sheet): `info` is VoiceCaster's cast detail (latency_ms,
+## speech_ms, typed, accidental). The cast event that follows on this machine carries its onset and recognition latency.
+static func note_voice(spell: String, info: Dictionary) -> void:
+	var s := session()
+	if s != null and s.casts != null and s.online():
+		s.casts.note_voice(spell, info)
 
 
 # --- Runtime guard (M4c, layer 5) -----------------------------------------------------------------------------------------

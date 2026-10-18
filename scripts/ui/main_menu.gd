@@ -13,7 +13,8 @@ extends Node
 ## host clocked out", ...). A joined client does not stay here: it goes straight to the shared run's job board (the
 ## host picks the job; game.gd, scripts/net/crew_flow.gd), and comes back with the reason when the session ends.
 ## Opening the menu as a host closes the crew (the host left the job). The menu only ASKS Session (the
-## autoload in scripts/net/); it never touches the network or Steam itself.
+## autoload in scripts/net/); it never touches the network or Steam itself. A Steam overlay invite accepted while the
+## menu is up joins at once (nothing to lose here; in a job the game asks first, M7).
 ## Keyboard (arrows / Tab / Enter) and mouse; Esc backs out of a sub-screen. Everything is built in code.
 ##
 ## Dev flags (after `--`; see Boot): --no-mic, --menu-screen main|voice|settings, --menu-shot <png>
@@ -342,6 +343,7 @@ func _wire_session() -> void:
 	Session.session_started.connect(_on_session_started)
 	Session.session_ended.connect(_on_session_ended)
 	Session.roster_changed.connect(_refresh_net)
+	Session.invite_received.connect(_on_invite)
 	if Session.hosting:
 		Session.leave()   # the host came back to the menu: the job (and the crew) is over
 	if Session.last_reason != "" and not Session.online():
@@ -349,6 +351,15 @@ func _wire_session() -> void:
 	_refresh_net()
 	if Session.is_client():
 		_enter_shared_run.call_deferred()   # joined before the menu was up (--net-join, an invite)
+
+
+## An overlay invite while on the menu: join that crew now (stop looking for another one first).
+func _on_invite(_lobby_id: int, inviter: String) -> void:
+	_hosting_attempt = false
+	Session.accept_invite()
+	if inviter != "" and Session.busy():
+		_set_status("Joining %s's crew..." % inviter)
+	_refresh_net()
 
 
 func _on_net_status(text: String) -> void:

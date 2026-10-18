@@ -37,7 +37,14 @@ RESOLVES: a hero's hits by its owner (the victim decides), anything else's hits 
 (`Net.resolves_hit`, `Combat.resolves`; a client's hit or shove on the host's actor becomes a request), statuses (modifiers,
 fires, soaks, heals, coffee) by the target's owner (`Net.resolves`), which announces them (`Session.status`). A monster's
 wind-up is an event and each client resolves the strike on its own hero (`world.windup`, `Monster.net_strike`). A debug
-guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). A new `OWNER`
+guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). M7 (polish) is
+built locally; the two-PC Steam sign-off is `docs/design/steam-playtest-checklist.md`. Steam's overlay invites ask first in a
+job (`Session.invite_received` -> "Leave this job and join?"), "Invite crew" is on the job board and the pause form
+(`Session.invite_crew`), roster badges show Steam avatars (`Session.avatars`, a lettered square without one), and the host's
+Settings > Diagnostics "Simulate a long link" is the crew's link (`Session.set_link`: NetLink on ENet, Steam's FakePacket*
+config on Steam, `NetSteamLink`). Data stays passive: every cast (`Net.note_voice` before a voice cast, `NetSession.note_cast`)
+and hits per player per minute (`Net.note_hit`) go to telemetry sheets the host collects. All of it is Steam-agnostic outside
+`scripts/net/`; tests stand a fake Steam object in with `SteamIdentity.use_for_tests`. A new `OWNER`
 var of `Hero` or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELDS`, `NetWorldCodec.*_FIELDS`,
 `NetEvents.CARRIES` or `NetEvents.WORLD_CARRIES`), and a new replicated class says how a late joiner gets its state
 (`NetEvents.LATE_JOIN`: keyframe, gone ids, an event replay or the seat handover). Every change has to keep co-op possible:

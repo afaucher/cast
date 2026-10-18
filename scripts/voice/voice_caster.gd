@@ -26,9 +26,11 @@ signal voice_activity(active: bool)
 ## everything that matched nothing. Typed text (inject_text) arrives as a final.
 signal heard(text: String, final: bool)
 ## One per cast. Keys: spell, power, heard, accidental, accidental_score, why,
-## signals, gap, cast_q, spell_q, penalty, latency_ms (-1 when typed), typed.
+## signals, gap, cast_q, spell_q, penalty, latency_ms (-1 when typed), speech_ms (-1 when typed), typed.
 ## latency_ms is audio time from the true end of the voice (SpeechGate.voice_end_sample, raw input)
-## to the cast; ~150 ms with the gate's flush on voice end (see SpeechGate).
+## to the cast; ~150 ms with the gate's flush on voice end (see SpeechGate). speech_ms is from the
+## utterance's voice ONSET (the first voice span after the previous utterance's end,
+## SpeechGate.voice_start_sample) to the cast: speaking time plus recognition (online telemetry, M7).
 signal cast_detail(info: Dictionary)
 ## A cast swallowed by the repeat lockout (same spell within ~1 s).
 signal ignored(spell_id: String, heard_text: String, reason: String)
@@ -94,6 +96,9 @@ var _applied_saved := false
 var _clock_t := 0.0
 var _audio_driven := false
 var _last_voice_clock := -1e9   ## clock() at the true end of the latest voice (SpeechGate.voice_end_sample)
+var _seen_voice_start := -1
+var _span_starts: Array[float] = []   ## clock() at the start of recent voice spans (SpeechGate.voice_start_sample)
+var _prev_voice_end := -1e9     ## clock() at the end of the voice the previous utterance (or cast) was made of
 var _seen_voice_end := -1
 var _utt_events: Array = []
 var _last_text := ""
@@ -407,6 +412,10 @@ func _dispatch(events: Array, in_utterance: bool) -> void:
 			var info: Dictionary = ev.duplicate(true)
 			info["typed"] = _typed
 			info["latency_ms"] = -1.0 if _typed else maxf(0.0, (clock() - _last_voice_clock) * 1000.0)
+			var onset := -1.0 if _typed else _utterance_onset()
+			info["speech_ms"] = -1.0 if onset < 0.0 else maxf(0.0, (clock() - onset) * 1000.0)
+			if not _typed:
+				_prev_voice_end = _last_voice_clock
 			_last_cast = info
 			spell_spoken.emit(str(info["spell"]), float(info["power"]), str(info["heard"]))
 			cast_detail.emit(info)
@@ -437,7 +446,18 @@ func _finish_utterance(text: String) -> void:
 		outcome["kind"] = "fizzle"
 	_log_rows(text, _utt_events, _typed)
 	_utt_events = []
+	if not _typed:
+		_prev_voice_end = maxf(_prev_voice_end, _last_voice_clock)
 	utterance_finished.emit(text, outcome, _typed)
+
+
+## The voice onset of the utterance being cast: the first voice span that began after the previous utterance's voice
+## ended (-1 when none is known: no gate, or a typed line).
+func _utterance_onset() -> float:
+	for t in _span_starts:
+		if t >= _prev_voice_end - 0.001:
+			return t
+	return -1.0
 
 
 func _log_rows(text: String, events: Array, typed: bool) -> void:
@@ -480,6 +500,11 @@ static func _signals_text(ev: Dictionary) -> String:
 ## mapped onto the audio clock. (It used to be the last frame WordListener.is_hearing_voice() was true,
 ## which runs ~230 ms late: the gate's 80 ms delay plus its 150 ms hold.)
 func _note_voice_end(rate: int) -> void:
+	if gate.voice_start_sample >= 0 and gate.voice_start_sample != _seen_voice_start:
+		_seen_voice_start = gate.voice_start_sample
+		_span_starts.append(_clock_t - float(gate.samples_in - gate.voice_start_sample) / float(maxi(rate, 1)))
+		if _span_starts.size() > 16:
+			_span_starts.pop_front()
 	if gate.voice_end_sample < 0 or gate.voice_end_sample == _seen_voice_end:
 		return
 	_seen_voice_end = gate.voice_end_sample
@@ -491,6 +516,10 @@ func _update_voice_activity() -> void:
 		return
 	var active: bool = _listener.is_hearing_voice()
 	if active and not gate.enabled:
+		if not _voice_active:
+			_span_starts.append(clock())   # (no gate: the recognizer's own voice tracker marks the onset)
+			if _span_starts.size() > 16:
+				_span_starts.pop_front()
 		_last_voice_clock = clock()   # no gate: fall back to the recognizer's own voice tracker
 	if active != _voice_active:
 		_voice_active = active

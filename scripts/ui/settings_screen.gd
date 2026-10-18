@@ -1,10 +1,14 @@
 class_name SettingsScreen
 extends Control
-## The menu's Settings screen (FORM 3, goldenrod, scripts/ui/forms/): master volume, fullscreen / windowed, window resolution, and whether the voice
-## debug panel is open when a contract starts. Every change is applied at once and saved through GameSettings
-## (user://settings.cfg, section "game"). Emits `back` for the Back button (the menu also handles Esc).
+## The menu's Settings screen (FORM 3, goldenrod, scripts/ui/forms/): master volume, fullscreen / windowed, window resolution, whether the voice
+## debug panel is open when a contract starts, and (4. Diagnostics, M7) "Simulate a long link": off / coast / rough, the
+## lag the host's crew plays under (playtests of the netcode; the host's choice is broadcast to the crew). Every change is
+## applied at once and saved through GameSettings (user://settings.cfg, section "game"). Emits `back` for the Back button
+## (the menu also handles Esc).
 
 signal back
+
+const LINK_TEXT := {"off": "Off", "coast": "Coast to coast", "rough": "Rough evening"}
 
 ## "" = GameSettings.path. Tests point this at a temp file.
 var settings_path := ""
@@ -17,6 +21,8 @@ var volume_value: Label
 var fullscreen_check: FormCheck
 var resolution_menu: OptionButton
 var panel_check: FormCheck
+var link_menu: OptionButton
+var link_state: Label
 var back_button: Button
 var fullscreen_state: Label
 var panel_state: Label
@@ -59,6 +65,16 @@ func set_resolution(res: Vector2i) -> void:
 
 func set_voice_panel_visible(on: bool) -> void:
 	_commit("voice_panel_visible", on)
+	_sync()
+
+
+## Diagnostics: the crew's simulated link ("off", "coast", "rough"). A host with a crew open applies it at once.
+func set_link_sim(preset: String) -> void:
+	if not GameSettings.LINK_PRESETS.has(preset):
+		return
+	_commit("link_sim", preset)
+	if apply_live and Session.online() and Session.hosting:
+		Session.set_link(preset)
 	_sync()
 
 
@@ -148,6 +164,22 @@ func _build() -> void:
 	rig.box.add_child(game_row)
 	rig.box.add_child(FormTheme.small("The panel shows what the microphone hears and what each cast did. Cast word, strictness and the mic line live on FORM 7: Rig calibration (main menu, Voice setup).", 18))
 
+	# 4. Diagnostics (M7): the link simulator, for playtesting the netcode.
+	var diag := FormSection.new("4. Diagnostics")
+	body.add_child(diag)
+	link_menu = OptionButton.new()
+	for p in GameSettings.LINK_PRESETS:
+		link_menu.add_item(LINK_TEXT[p])
+	link_menu.custom_minimum_size = Vector2(280, 48)
+	link_menu.item_selected.connect(func(i: int) -> void:
+		if not _syncing:
+			set_link_sim(GameSettings.LINK_PRESETS[i]))
+	link_state = FormTheme.label("", 20, FormTheme.INK, true)
+	var link_row := FormField.new("Simulate a long link", link_menu)
+	link_row.add(link_state, false, false)
+	diag.box.add_child(link_row)
+	diag.box.add_child(FormTheme.small("When you host, your whole crew plays as if the line were this long (every machine delays and drops what it receives). Coast: 45 ms each way, 1.5% loss. Rough: 80 ms, 4%. Solo: no effect.", 18))
+
 	# Footer
 	var foot := FormSection.new("", true)
 	body.add_child(foot)
@@ -170,7 +202,7 @@ func _build() -> void:
 	keys.offset_bottom = -20.0
 	add_child(keys)
 
-	FormTheme.chain([volume_slider, fullscreen_check, resolution_menu, panel_check, back_button])
+	FormTheme.chain([volume_slider, fullscreen_check, resolution_menu, panel_check, link_menu, back_button])
 
 
 func _sync() -> void:
@@ -181,6 +213,9 @@ func _sync() -> void:
 	resolution_menu.select(maxi(0, GameSettings.RESOLUTIONS.find(GameSettings.parse_resolution(str(settings["resolution"])))))
 	resolution_menu.disabled = bool(settings["fullscreen"])
 	panel_check.button_pressed = bool(settings["voice_panel_visible"])
+	link_menu.select(maxi(0, GameSettings.LINK_PRESETS.find(str(settings["link_sim"]))))
+	link_state.text = "CREW-WIDE" if str(settings["link_sim"]) != "off" else "REAL LINE"
+	link_state.add_theme_color_override("font_color", FormTheme.RED if str(settings["link_sim"]) != "off" else FormTheme.INK)
 	_state(fullscreen_state, bool(settings["fullscreen"]), "FULLSCREEN", "WINDOWED")
 	_state(panel_state, bool(settings["voice_panel_visible"]), "ON", "OFF")
 	_syncing = false

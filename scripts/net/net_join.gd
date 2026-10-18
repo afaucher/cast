@@ -105,7 +105,7 @@ func _now() -> float:
 func _on_peer_joined(peer: int) -> void:
 	if not _hosting() or not CrewFlow.is_joining(_session.roster.get(peer, {}) as Dictionary):
 		return
-	joiners[peer] = {"state": WAIT, "ticket": 0, "note": ""}
+	joiners[peer] = {"state": WAIT, "ticket": 0, "note": "", "hello_t": _now()}
 	_tell_wait(peer)
 
 
@@ -196,6 +196,7 @@ func _dispatch(peer: int) -> void:
 	j["state"] = BUILD
 	j["ticket"] = _ticket
 	j["note"] = ""
+	j["go_t"] = _now()
 	var flow := _session.flow
 	_session.send_event(peer, "join.go", {"ticket": _ticket, "job": flow.job, "floor": flow.floor_n, "seat": seat, "seats": flow.floor_seats,
 		"start_at": flow.start_at, "floor_start": flow.floor_start})
@@ -224,6 +225,7 @@ func _host_event(from: int, kind: String, data: Dictionary) -> void:
 		_session.kick(from, NetSession.DESYNC)
 		return
 	j["state"] = READY
+	j["built_t"] = _now()
 	built_ready.emit(from)
 
 
@@ -252,6 +254,10 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		if s != seat:
 			heroes[s] = [h.global_position, h.facing, h.hp, h.dead, Array(h.spell_slots), h._charges.duplicate(), h.held_slot]
 	var gone := gone_ids()
+	var jt: Dictionary = joiners[peer]
+	# (M7: the join's timings, passively in the host's log: the wait for a running floor, the joiner's build, ready -> seated)
+	var timings := {"wait_s": float(jt.get("go_t", now)) - float(jt.get("hello_t", now)),
+		"build_s": float(jt.get("built_t", now)) - float(jt.get("go_t", now)), "seat_ms": (now - float(jt.get("built_t", now))) * 1000.0}
 	var waits := {}
 	for id in NetRegistry.ids():
 		var emp := NetRegistry.node(id) as Employee
@@ -269,7 +275,9 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 	var size := var_to_bytes(d).size()
 	_session.send_event(peer, "join.snapshot", d)
 	admitted[peer] = {"t": now, "bytes": size, "gone": gone.keys(), "alive": living_ids(), "seat": seat, "take": state,
-		"slots": Array(hero.spell_slots), "charges": hero._charges.duplicate()}
+		"slots": Array(hero.spell_slots), "charges": hero._charges.duplicate(), "timings": timings}
+	print("[Net] join timings for %s: waited %.1f s for a running floor, built it in %.1f s, seated %d ms after ready" % [
+		str(e.get("name", peer)), float(timings["wait_s"]), float(timings["build_s"]), roundi(float(timings["seat_ms"]))])
 	print("[Net] late-join snapshot to %s: %d bytes (%d gone, %d runtime monsters, %d Ledger lines)" % [
 		str(e.get("name", peer)), size, gone.size(), (d["spawns"] as Array).size(), Ledger.lines.size()])
 	joiners.erase(peer)

@@ -499,10 +499,13 @@ func _host_request(from: int, data: Dictionary) -> void:
 			var e := NetRegistry.node(int(data.get("id", 0))) as Employee
 			if e == null or e.dead:
 				return
-			if what == "follow":
-				e.request_follow(hero, at)
-			else:
-				e.request_wait(hero, at)
+			var granted := e.request_follow(hero, at) if what == "follow" else e.request_wait(hero, at)
+			if not granted:
+				# (a refused E is the player's word against the host's picture: log both, the playtest logs are passive)
+				var p := hero.global_position if at == Vector3.INF else at
+				print("[Net] %s from seat %d refused: %s is %s, leader %s, %.2f away (%s)" % [what, seat,
+					e.display_name, e.state_name(), str(NetFloor.id_of(e.leader())) if e.leader() != null else "none",
+					GameWorld.flat_distance(e.global_position, p), "from the client's spot" if at != Vector3.INF else "host's picture"])
 
 
 ## Host: a shove request. The host's own actors (monsters, the AI heroes, employees) are shoved here, from where the host

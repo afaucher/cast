@@ -139,7 +139,9 @@ func run_host() -> void:
 		check(d < 1.5, "%s shows it about where the host has it (%.2f)" % [who, d])
 	check(e.global_position.distance_to(hero_at(2).global_position) < 4.0, "it walked after c1's hero on the host")
 	command(c1, "dismiss", {"id": eid})
-	check(await until(func() -> bool: return e.is_waiting() and e.state == Employee.State.WAIT, 6.0), "c1's second E told it to wait, on the host")
+	# (told to wait = dismissed: a monster near makes a waiting employee PANIC within a scan, 0.2 s, so WAIT itself can be
+	# gone before this looks; the next check compares every screen's state, whatever it is)
+	check(await until(func() -> bool: return e.is_waiting() and e.leader() == null, 6.0), "c1's second E told it to wait, on the host")
 	check(await wait_reports("dismiss", 1, 20.0), "c1 pressed E again")
 	# Every screen agrees with the host about it (its state can move on: a waiting employee still panics at a monster).
 	var agreed := false
@@ -196,6 +198,9 @@ func run_host() -> void:
 func run_client() -> void:
 	if not await enter_floor(SEED, 1):
 		return
+	# (since M4 the host's monsters hurt a client's hero, decided on the client: ward it like the host's, or a roaming brute
+	# can down it mid-test and its E does nothing)
+	my_hero().set_modifier("test_ward", 0.0, 999.0)
 	if not await wait_sync():
 		return
 	var asked := {}
@@ -267,10 +272,33 @@ func run_client() -> void:
 				report("recruit", true)
 			"dismiss":
 				var e := NetRegistry.node(int(cmd["id"])) as Employee
-				_stand_beside(e.global_position, 1.0)
-				await sleep(0.4)
-				var used := (game.get("controller") as PlayerController).press_use()
-				check(used, "E is used again (tell it to wait)")
+				# WALK up to it, to about 1.75: inside the follower's resting band (Employee.FOLLOW_MIN 1.5 .. FOLLOW_SETTLE 2.2), where
+				# it stands still. The old way, a jump to 1.0 on any open side, was the M6 flake (networking-build-plan.md, M7 as
+				# built): inside FOLLOW_MIN the follower backs off and overshoots to 1.7-2.3, and a jump of under 3 units is no
+				# teleport to the snapshot, so the host showed c1's hero LUNGING at the employee at the velocity clamp (15.9 u/s,
+				# extrapolated), which pushed the follower further out still; the E then landed on the edge of WAIT_RANGE (2.2),
+				# judged by the host against an employee moving away. A real player walks, and so does this one.
+				var c := game.get("controller") as PlayerController
+				var used := false
+				var tries := 0
+				while tries < 3 and not e.is_dismissed():
+					tries += 1
+					await until(func() -> bool:
+						var to := e.global_position - my_hero().global_position
+						to.y = 0.0
+						if to.length() <= 1.8:
+							return true
+						c.move_override = to.normalized()
+						return false, 3.0)
+					c.move_override = Vector3.INF
+					await sleep(0.4)
+					if c.press_use():
+						used = true
+						await until(func() -> bool: return e.is_dismissed(), 1.2)   # (the host's answer, in the snapshot)
+					else:
+						print("[test] E found nothing: c1 shows it %s, %.2f away (try %d)" % [e.state_name(),
+							GameWorld.flat_distance(e.global_position, my_hero().global_position), tries])
+				check(used, "E is used again (tell it to wait), in %d tries" % tries)
 				report("dismiss", true)
 			"employee":
 				var e := NetRegistry.node(int(cmd["id"])) as Employee

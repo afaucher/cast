@@ -53,6 +53,9 @@ extends Node3D
 ##                       that option 1.2 s later ("down" on the last floor cashes out)
 ##   --invoice-demo      dev: show a sample invoice (no game), for screenshots
 ##   --pause-demo        dev: open the pause overlay 1.5 s into the floor (screenshots)
+##   --show-invite-row   dev: the pause overlay shows its "Invite crew" row without a Steam crew (screenshots; M7)
+##   --invite-demo <name>  dev: 1.5 s into the floor, act as if <name> invited this player from the Steam overlay: the
+##                       "Leave this job and join?" question (screenshots; M7)
 ##   --no-grime          dev: no grime / damage decal layer (scripts/world/grime)
 ##   --grime-demo        dev: 1 s in, cast fireball / corn / tentacles 6 cells from the crew and drop teeth / scuff marks (screenshots)
 ##   --no-van-intro      dev: skip the van's arrival animation (the van is still parked and the crew stands beside it). Tests (--run-test)
@@ -186,6 +189,8 @@ var _backdrop: MenuBackdrop = null
 var _board_shown := -1              ## the board seed the board on screen was dealt from
 var _wait_label: Label = null       ## "License signed. Waiting for ..."
 var _confirm: CrewConfirm = null    ## the host's "this ends the job for everyone" question
+var _invite: InviteConfirm = null   ## M7: "Leave this job and join?" (a Steam overlay invite)
+var _invite_paused := false         ## the invite question paused the tree (solo; a crew plays on)
 var _flow_wired := false
 var _arrival_held := false          ## the van arrival is parked at its first frame until the shared start
 var _barrier_up := false            ## the floor is built and frozen, waiting for the shared start
@@ -210,6 +215,7 @@ func _ready() -> void:
 	if opts.has("invoice_demo"):
 		_invoice_demo()
 		return
+	Session.invite_received.connect(_on_invite)   # (M7: a Steam overlay invite while playing: ask first)
 	_flow = Net.flow()
 	if Session.busy():
 		await _wait_for_session()   # --net-join together with game flags: the connection is still opening
@@ -263,6 +269,8 @@ static func reset_flow() -> void:
 
 func _exit_tree() -> void:
 	_unwire_flow()
+	if Session.invite_received.is_connected(_on_invite):
+		Session.invite_received.disconnect(_on_invite)
 	if Session.session_ended.is_connected(_on_session_ended):
 		Session.session_ended.disconnect(_on_session_ended)
 		Session.peer_left.disconnect(_on_peer_left)
@@ -289,7 +297,7 @@ func _exit_tree() -> void:
 		Session.casts.end()
 	if Session.status != null:
 		Session.status.end()
-	if _pause != null:
+	if _pause != null or _invite_paused:
 		get_tree().paused = false   # never leave the next scene frozen
 	if GameWorld.actor_died.is_connected(_on_actor_died):
 		GameWorld.actor_died.disconnect(_on_actor_died)
@@ -344,6 +352,9 @@ func _parse_args() -> void:
 			"--auto-elevator": opts["auto_elevator"] = nxt
 			"--invoice-demo": opts["invoice_demo"] = true
 			"--pause-demo": opts["pause_demo"] = true
+			"--show-invite-row": opts["show_invite_row"] = true
+			"--invite-demo":
+				opts["invite_demo"] = args[i + 1] if i + 1 < args.size() and not args[i + 1].begins_with("--") else "Rosa"
 			"--no-grime": opts["no_grime"] = true
 			"--grime-demo": opts["grime_demo"] = true
 			"--no-van-intro": opts["no_van_intro"] = true
@@ -786,6 +797,8 @@ func _setup_voice() -> void:
 	debug_layer.add_child(debug_panel)
 	debug_panel.attach(voice)
 	debug_panel.visibility_changed.connect(_fit_hud_to_panel)
+	voice.voice_log.context = _voice_log_context   # (online: which seat, and the shared clock, on every voice log row)
+	_refresh_voice_owner()
 
 	game_stats = Label.new()
 	game_stats.add_theme_font_size_override("font_size", 13)
@@ -818,6 +831,26 @@ func _setup_voice() -> void:
 	_log("voice: %s" % ("listening" if ok else "no mic/model - type with Enter"), Color(0.6, 0.9, 1.0))
 
 
+## The voice log's net columns (M7): this machine's role and seat in the crew and the shared clock; nothing offline.
+func _voice_log_context() -> Dictionary:
+	if not Session.online():
+		return {}
+	return {"net": "host" if Session.hosting else "client", "seat": int(Session.local_entry().get("seat", 0)),
+		"host_time": "%.3f" % Session.host_time()}
+
+
+## Online the debug panel says whose recognizer it shows: this machine's only (M7).
+func _refresh_voice_owner() -> void:
+	if debug_panel == null or not debug_panel.has_method("set_mic_owner"):
+		return
+	if not Session.online() or Session.roster.size() < 2:
+		debug_panel.set_mic_owner("")
+		return
+	var e := Session.local_entry()
+	debug_panel.set_mic_owner("THIS MACHINE'S MIC  ·  %s, seat %d  ·  teammates' casts arrive as events" % [
+		str(e.get("name", "you")), int(e.get("seat", 0))])
+
+
 func _fit_hud_to_panel() -> void:
 	var inset := VoiceDebugPanel.PANEL_WIDTH if debug_panel.visible else 0.0
 	hud.set_right_inset(inset)
@@ -825,6 +858,7 @@ func _fit_hud_to_panel() -> void:
 
 
 func _on_spell_spoken(id: String, power: float, heard: String) -> void:
+	Net.note_voice(id, voice.last_cast())   # (online: the cast's row in the casts sheet carries its onset and latency)
 	_cast(id, power, heard, voice.last_cast_accidental())
 
 
@@ -976,6 +1010,8 @@ func _start() -> void:
 		_cast(str(opts["autocast"]), 1.0, "autocast")
 	if opts.has("pause_demo"):
 		_pause_demo()
+	if opts.has("invite_demo"):
+		_invite_demo()
 	if opts.has("press_e"):
 		get_tree().create_timer(float(opts["press_e"])).timeout.connect(func() -> void:
 			if opts.has("to_note") and not _site.notes.is_empty():
@@ -1031,6 +1067,17 @@ func _pause_demo() -> void:
 	await get_tree().create_timer(1.5).timeout
 	if is_inside_tree() and _can_pause():
 		_open_pause()
+
+
+## --invite-demo: the overlay-invite question 1.5 s into the floor, as if Steam had sent one (M7 screenshots).
+func _invite_demo() -> void:
+	if _shared:
+		while is_inside_tree() and not (_floor_begun and (_arrival == null or _arrival.is_done())):
+			await get_tree().process_frame
+	await get_tree().create_timer(1.5).timeout
+	if is_inside_tree() and not _leaving:
+		Session.pending_invite = {"lobby": 0, "inviter": str(opts["invite_demo"])}
+		_on_invite(0, str(opts["invite_demo"]))
 
 
 ## The animation plays unless --no-van-intro; tests and screenshots skip it unless --van-intro.
@@ -2201,8 +2248,8 @@ static func _is_skip_press(event: InputEvent) -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if _arrival != null and _arrival.is_running() and _is_skip_press(event):
 		_arrival.skip()   # never trap the player: any key or click jumps to the end of the arrival
-	if _confirm != null:
-		return   # the leave question has the keys
+	if _confirm != null or _invite != null:
+		return   # the leave question (or the invite question) has the keys
 	if event.is_action_pressed("restart"):
 		if _joining or _join_slip != null:
 			return   # (M6: not on the job yet)
@@ -2237,6 +2284,7 @@ func _open_pause() -> void:
 	_pause = PauseMenu.new()
 	_pause.online = _crewed()
 	_pause.hosting = Net.is_host()
+	_pause.can_invite = Session.can_invite() or opts.has("show_invite_row")   # (M7: a Steam crew with a free seat)
 	_screens().add_child(_pause)
 	_shot_stage("pause", 1.0)
 	get_tree().paused = not _crewed()   # with a crew the others play on: no local pause (M5)...
@@ -2245,6 +2293,7 @@ func _open_pause() -> void:
 	_pause.resume.connect(_close_pause)
 	_pause.abandon.connect(_abandon_to_board)
 	_pause.main_menu.connect(_request_leave)
+	_pause.invite.connect(func() -> void: Session.invite_crew())
 
 
 func _close_pause() -> void:
@@ -2345,6 +2394,51 @@ func _request_leave() -> void:
 	_to_main_menu()
 
 
+## M7: a Steam overlay invite was accepted while this screen is up. Ask "Leave this job and join?" first (Stay is the
+## default). Solo, the tree stops while it asks; with a crew the job runs on (no local pause online).
+func _on_invite(_lobby_id: int, inviter: String) -> void:
+	if _leaving:
+		Session.decline_invite()
+		return
+	_close_invite()
+	_close_pause()
+	_invite = InviteConfirm.new()
+	_invite.inviter = inviter
+	_invite.on_job = _session != null and not _ended
+	_invite.hosting_crew = Session.online() and Session.hosting and Net.crewed()
+	_invite.in_crew = Session.is_client()
+	_screens().add_child(_invite)
+	_invite_paused = not _crewed() and not get_tree().paused
+	if _invite_paused:
+		get_tree().paused = true
+	_invite.confirmed.connect(_accept_invite)
+	_invite.declined.connect(func() -> void:
+		Session.decline_invite()
+		_close_invite())
+
+
+func _accept_invite() -> void:
+	_close_invite()
+	if _leaving:
+		return
+	_leaving = true   # (the session ending under us must not send us to the menu a second time)
+	get_tree().paused = false
+	reset_flow()
+	Ledger.end_contract()
+	Session.accept_invite()   # leaves this crew (if any) and joins theirs; the menu shows how it goes
+	_change_scene(Boot.MENU_SCENE)
+
+
+func _close_invite() -> void:
+	if _invite == null:
+		return
+	_invite.queue_free()
+	_invite = null
+	if _invite_paused:
+		_invite_paused = false
+		get_tree().paused = _pause != null and not _crewed()
+
+
 func _close_confirm() -> void:
 	if _confirm != null:
 		_confirm.queue_free()
@@ -2390,6 +2484,7 @@ func _on_peer_left(peer: int) -> void:
 func _note_names() -> void:
 	for e: Dictionary in Session.crew():
 		_names[int(e["peer"])] = str(e["name"])
+	_refresh_voice_owner()
 
 
 ## True while someone else is in the crew of a shared run: no local pause; exits are first-to-choose (M3).

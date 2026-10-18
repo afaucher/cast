@@ -15,8 +15,9 @@ signal created(lobby_id: int)
 signal joined(lobby_id: int)
 signal failed(reason: String)
 signal listed(lobbies: Array)
-## The player accepted an invite or "Join game" in the Steam overlay while the game was running.
-signal invite_accepted(lobby_id: int)
+## The player accepted an invite or "Join game" in the Steam overlay while the game was running. `friend_id` is who
+## invited them (0 when Steam doesn't say).
+signal invite_accepted(lobby_id: int, friend_id: int)
 
 const LOBBY_GAME_KEY := "cast_licensed_sorcery"
 ## Steam's chat-room enter responses (EChatRoomEnterResponse).
@@ -24,7 +25,7 @@ const ENTER_SUCCESS := 1
 const ENTER_FULL := 4
 
 var lobby_id := 0
-var _wired := false
+var _wired_to: Object = null   ## the Steam object whose signals are connected (a test's fake replaces the real one)
 var _join_requested := false   ## Steam also sends lobby_joined to a lobby's creator: only a join we asked for counts
 
 
@@ -36,8 +37,7 @@ func _process(_delta: float) -> void:
 	var steam := SteamIdentity.steam()   # initialises Steam on the first frame (invites need the callbacks)
 	if steam == null:
 		return
-	if not _wired:
-		_wire(steam)
+	_wire(steam)
 	steam.call("run_callbacks")
 
 
@@ -108,6 +108,23 @@ func leave() -> void:
 	_join_requested = false
 
 
+## The Steam overlay's invite dialog for this lobby (M7, "Invite crew"). False without Steam or a lobby.
+func open_invite_dialog() -> bool:
+	var steam := SteamIdentity.steam()
+	if steam == null or lobby_id == 0:
+		return false
+	steam.call("activateGameOverlayInviteDialog", lobby_id)
+	return true
+
+
+## A Steam friend's persona name ("" when unknown or without Steam).
+func friend_name(steam_id: int) -> String:
+	var steam := SteamIdentity.steam()
+	if steam == null or steam_id == 0:
+		return ""
+	return str(steam.call("getFriendPersonaName", steam_id)).strip_edges()
+
+
 func owner_id() -> int:
 	var steam := SteamIdentity.steam()
 	if steam == null or lobby_id == 0:
@@ -127,9 +144,9 @@ func set_data(key: String, value: String) -> void:
 
 
 func _wire(steam: Object) -> void:
-	if _wired:
+	if _wired_to == steam:
 		return
-	_wired = true
+	_wired_to = steam
 	steam.connect("lobby_created", _on_lobby_created)
 	steam.connect("lobby_joined", _on_lobby_joined)
 	steam.connect("lobby_match_list", _on_lobby_match_list)
@@ -171,8 +188,8 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 	listed.emit(lobbies)
 
 
-func _on_join_requested(id: int, _friend_id: int) -> void:
-	invite_accepted.emit(id)
+func _on_join_requested(id: int, friend_id: int) -> void:
+	invite_accepted.emit(id, friend_id)
 
 
 static func _const(name_: String, fallback: int) -> int:

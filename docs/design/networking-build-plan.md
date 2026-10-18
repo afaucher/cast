@@ -1,9 +1,10 @@
 # Networking build plan: online co-op, step by step
 
-Status: **M0, M1 and M2 built** 2026-10-17, **M3, M4 and M5 built** 2026-10-18, **M6 built** 2026-10-18 (see
-[M0 as built](#m0-as-built-2026-10-17), [M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17),
-[M3 as built](#m3-as-built-2026-10-18), [M4 as built](#m4-as-built-2026-10-18), [M5 as built](#m5-as-built-2026-10-18) and
-[M6 as built](#m6-as-built-2026-10-18) after the milestones); M7 is still the plan. The architecture is fixed by
+Status: **M0, M1 and M2 built** 2026-10-17, **M3, M4 and M5 built** 2026-10-18, **M6 built** 2026-10-18, **M7 built locally**
+2026-10-18 (see [M0 as built](#m0-as-built-2026-10-17), [M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17),
+[M3 as built](#m3-as-built-2026-10-18), [M4 as built](#m4-as-built-2026-10-18), [M5 as built](#m5-as-built-2026-10-18),
+[M6 as built](#m6-as-built-2026-10-18) and [M7 as built](#m7-as-built-2026-10-18) after the milestones); M7's two-PC Steam
+sign-off ([steam-playtest-checklist.md](steam-playtest-checklist.md)) and the swarmer wind-up decision are the user's. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -267,7 +268,7 @@ leaves and the AI is back. Plus a negative case: with 3 players in, a 4th join g
 changes on the floor.
 *Playable:* drop-in, drop-out co-op.
 
-### M7 Polish *(2 sessions)*
+### M7 Polish *(2 sessions)* — built locally, see [M7 as built](#m7-as-built-2026-10-18); the Steam sign-off is the user's
 Voice debug per player (each panel shows only its own recognizer; casts in telemetry with onset and recognition
 latency; `voice_log.csv` per machine, with the host collecting cast summary rows passively). Steam overlay invites:
 `join_requested` mid-game ("Leave this job and join?"), `+connect_lobby`, and an "Invite crew" row
@@ -1367,6 +1368,208 @@ after the handover; add `-Bot 3` to see the joiner walk) or `--shot-at clockin -
 5. **Reuse**: a new replicated class needs a `NetEvents.LATE_JOIN` entry and, if it has state the seed does not rebuild, a
    part in the snapshot (`late_join_state` / `apply_late_join` is the pattern in NetObjects and NetStatus).
 
+### M7 as built (2026-10-18)
+One session, the LOCAL half of M7: everything that can be built and tested on one machine is done and tested (ENet on
+localhost, and a fake Steam object for the Steam calls). **What is left is the user's:** the two-PC, two-account Steam
+sign-off, scripted step by step in [steam-playtest-checklist.md](steam-playtest-checklist.md) (M7's "done when"), and the
+swarmer wind-up decision (measured below, three options).
+
+**Files.** `scripts/net/`: `steam_avatars.gd` (new: `SteamAvatars`, child `Session/Avatars`), `net_steam_link.gd` (new:
+`NetSteamLink`, the link presets as Steam config values), `net_session.gd` (`set_link` / `link_preset` / `link_changed` and
+`sys.link`; `invite_received`, `accept_invite`, `decline_invite`, `pending_invite`, `can_invite`, `invite_crew`; `note_cast`,
+`note_hit`, the hits sheet and `hits_totals`; `tele.cast` / `tele.hits`), `net_telemetry.gd` (`Sheet`: the casts and hits
+sheets), `net_casts.gd` (`note_voice`, the `sent` / `applied` rows, `cast_id`), `steam_lobby.gd` (`open_invite_dialog`,
+`friend_name`, `invite_accepted(lobby, friend)`, rewiring when the Steam object changes), `steam_identity.gd`
+(`use_for_tests` / `reset_for_tests`), `net.gd` (`note_hit(a, dealt, source)`, `note_voice`), `net_join.gd` (the join's
+timings), `net_objects.gd` (a refused follow / wait is logged). Voice: `speech_gate.gd` (`voice_start_sample`, the onset),
+`voice_caster.gd` (`speech_ms` in the cast detail: onset to cast), `voice_log.gd` (the `net`, `seat`, `host_time` columns, an
+old-header file set aside), `voice_debug_panel.gd` (`set_mic_owner`, `cast_count`). UI: `scripts/ui/invite_confirm.gd` (new:
+`InviteConfirm`, FORM 27-C), `scripts/ui/crew_badge.gd` (new: `CrewBadge`), `pause_menu.gd` (`can_invite`, the "Invite crew"
+row, `invite`), `job_board.gd` (badges, the invite button and the I key, the link note), `settings_screen.gd` (4. Diagnostics),
+`main_menu.gd` (an invite joins at once). `game_settings.gd` (`link_sim`, `LINK_PRESETS`), `actor.gd` (`Net.note_hit` gets
+the damage and the source), `game.gd` (the invite question, `Net.note_voice`, the voice log's context, the panel's owner
+line, the pause row; dev flags `--invite-demo <name>`, `--show-invite-row`). Tests: `test_net_m7_steam` (1 process),
+`test_net_m7_link`, `test_net_m7_voice`, `test_net_m7_swarmers` (3 processes each); `test_net_m3_objects` fixed (below).
+Docs: `steam-playtest-checklist.md` (new), `AGENTS.md` (the networking paragraph).
+
+**1. Voice per player.** Each machine's debug panel was already only its own recognizer (a teammate's cast is an event and
+never passes through VoiceCaster); online the panel now says so under its title: "THIS MACHINE'S MIC · c1, seat 2 ·
+teammates' casts arrive as events". Casts are telemetry: a third sheet per machine, `net_casts_<role>_*.csv`, one row per cast
+`sent` on the caster's machine and one `applied` on every machine:
+
+| column | |
+|---|---|
+| `t`, `role`, `from`, `seat` | the shared clock, and who wrote the row (`from` = the transport's peer id on the host's copy) |
+| `kind`, `cast` | `sent` / `applied`; the cast's id, `<caster id>@<landing host_time>`, the same on every machine |
+| `spell`, `power`, `source`, `label` | `voice` / `typed` / `game` (a cast the recognizer did not make); deliberate / accidental |
+| `voice_start`, `voice_end` | the utterance's voice onset and end on the shared clock (`sent`, spoken casts only) |
+| `speech_ms`, `recog_ms` | onset -> cast (speaking plus recognition) and end of voice -> cast (the recognition latency) |
+| `at`, `late_ms` | when the effect lands (cast + `NetCasts.LEAD`); how late it was applied on that machine (`applied`) |
+
+The onset is new: the speech gate marks where a voice span begins (`SpeechGate.voice_start_sample`, as it already marked the
+end), and the caster takes the first span after the previous utterance's voice ended (`VoiceCaster._utterance_onset`). The game
+hands the recognizer's detail to the net layer just before the cast (`Net.note_voice` in `_on_spell_spoken`); NetCasts uses it
+if the cast that goes out is that spell within a second. A client's rows go to the host as a reliable `tele.cast` event (no
+UI anywhere), so **the host's file shows every cast once as `sent` and once per machine as `applied`**: checklist item 7
+("nobody's casts fire twice") is a filter on that file. `voice_log.csv` stays per machine (user:// is per machine and user);
+its rows gained `net` (host / client), `seat` and `host_time` (the game sets `VoiceLog.context`); a file with the old header is
+renamed `voice_log_<date>.csv` before the first new row, so no column shifts. Measured (`test_net_m7_voice`, `coast`): a cast
+is applied 2-16 ms after its `at` on the three machines (`late_ms`).
+
+**2. Steam overlay invites.** `join_requested` (an invite accepted in the overlay while the game runs) becomes
+`Session.invite_received(lobby, inviter)` with the friend's persona name, and the invite waits in `pending_invite`. In the game
+scene, `game.gd` shows **"Leave this job and join?"** (`InviteConfirm`, FORM 27-C on the canary dispatch copy: "FROM Rosa's
+crew", what leaving costs: "no invoice for it" solo, "the AI takes your seat" for a client, "ends this job for the whole crew"
+for a host with a crew; rows Stay (default, Esc) / Leave and join). Solo it pauses the tree while it asks; crewed it does not
+(the M5 rule). Leave and join: the game drops the contract, `Session.accept_invite()` leaves the current session (a host's
+crew gets "The host clocked out") and joins the lobby, and the game opens the menu, which shows the join's progress. On the
+main menu an invite joins at once (nothing to lose). With no screen listening the old behaviour stays (join, then the menu).
+An invite to the lobby we are already in is ignored. `+connect_lobby <id>` on the command line was already read at start
+(M0); the fake-Steam test drives it end to end. **"Invite crew"** opens `activateGameOverlayInviteDialog(lobby)`
+(`Session.invite_crew`), offered only while `Session.can_invite()` (a Steam crew with a free seat): as a button under the job
+board's crew strip ("Invite crew (I)", the I key too) and as a fourth row of the pause form ("Invite crew · steam overlay").
+The main menu is unchanged (a host is never on it: opening the menu closes the crew). Without Steam none of it shows.
+
+**3. Avatars on the roster.** `Session.avatars.texture(steam_id)` asks GodotSteam's `getPlayerAvatar(AVATAR_MEDIUM, id)` and
+turns its `avatar_loaded(id, size, rgba)` answer into a 64 x 64 texture (cached; at once when Steam has it, `avatar_ready` when
+it arrives later; asked again after 5 s if Steam never answers). The job board's crew strip is now a row of `CrewBadge`s:
+the avatar, else (no Steam, an id of 0, still loading) a square in the seat's colour with the name's initial, then "<seat>
+<name> · <Character> (you)". Names everywhere else are unchanged (nameplates, the HUD, the main menu's crew list).
+
+**4. The link simulator in game.** Settings > **4. Diagnostics** > "Simulate a long link": Off / Coast to coast / Rough evening
+(`GameSettings.link_sim`, "off" by default; a bad saved value reads off). The host applies its setting when it opens the crew
+(`_begin_host`); `sys.welcome` carries it and `sys.link {preset}` re-sends it when the host changes it (`Session.set_link`;
+the Settings screen calls it when a host with a crew open changes the row). **Every machine applies the host's preset to what
+IT receives**, as NetLink always did: on ENet `wire.link.configure(preset)`, on Steam `NetSteamLink.apply` (the ENet simulator
+stays off). A client cannot set it; a client's own setting is not used. The board's crew strip says "simulated link: coast
+(Settings > Diagnostics)" on every machine, and the telemetry `link` column is the crew's preset. A `--net-link` dev flag (and
+every test) still sets the link of its own process and the settings are not read then.
+Steam values (global config, receive side, so both directions with every machine set):
+
+| preset | FakePacketLag_Recv (5, int32) | FakePacketLoss_Recv (3, %) | Jitter_Recv_Avg / Max / Pct (56 / 57 / 58, raw ints) |
+|---|---|---|---|
+| off | 0 | 0 | 0 / 0 / 0 |
+| coast | 30 ms | 1.5 | 15 / 30 ms / 100 |
+| rough | 50 ms | 4 | 30 / 60 ms / 100 |
+
+GodotSteam 4.17 names lag and loss (`NETWORKING_CONFIG_FAKE_PACKET_LAG_RECV` ...) but has no jitter names, hence the raw ints.
+Steam's jitter is an exponential extra delay clamped at Max on Pct % of packets, so lag = latency - jitter and Max = 2 x jitter
+reproduce NetLink's spread (coast 30-60 ms, mean about 42). A value Steam refuses as a float is retried as an int32 (the jitter
+values' type is the one guess here: the checklist's soak confirms it; the log prints each value's result: `[Net] Steam fake
+link: coast {...}`). The session's end sets them back to 0. ENet path and broadcast: `test_net_m7_link`.
+
+**5. Hits per player per minute.** `Actor.apply_damage` hands `Net.note_hit` the damage and its source; the owner of the hero
+(the victim decides, so every hit is counted exactly once, where it was decided) tallies it per seat with the source's kind
+(`swarmer`, `brute`, ..., `crew` for a teammate or a teammate's spell). A fourth sheet, `net_hits_<role>_*.csv`, gets one row
+per seat this machine owns every `HITS_WINDOW` (60 s): `minute`, `floor_s` (seconds that hero stood alive on a running floor
+that window), `hits`, `damage`, `per_min` (hits / floor minutes), `sources` ("swarmer:3;grunt:1"), `who` (player / ai: the
+host's AI seats get rows too). A client's rows go to the host (`tele.hits`), so the host's file is the whole crew; the host
+also keeps session totals and prints one line when the session ends: `[Net] hits taken per minute this session: host (player,
+seat 1) 2.1/min over 14.0 min, c1 (player, seat 2) 3.4/min ...` (the "keep them level" check, host vs clients). The per-second
+`hits` column is unchanged.
+
+**Join timings (M6 note 4).** The host logs each join: `[Net] join timings for c2: waited 3.2 s for a running floor, built it
+in 0.9 s, seated 0 ms after ready` (`NetJoin.admitted[peer].timings`).
+
+**6. Swarmer wind-up (open risk, measured; the user decides).** `test_net_m7_swarmers`: three players standing by the van,
+six swarmers split two per hero, 10 s standing still, then 10 s of a perfect bot that steps away the frame ITS screen first
+shows a swarmer winding up at it (0 ms reaction; a person needs 200+). Two runs of each link (about 20 strikes per hero per
+phase per run):
+
+| | host's hero | a client's hero, `off` | a client's hero, `coast` |
+|---|---|---|---|
+| wind-up visible on the victim's own screen before its strike is decided there | 150 ms (167 measured: one frame of sampling) | mean 110-126 ms (min 98-116) | mean 120-127 ms (min 50-116) |
+| `world.windup` event arrives after the wind-up's start | (0) | 6-15 ms | 53-71 ms (max 92) |
+| render delay (when the snapshot shows the wind-up) | (0) | 100 ms | 105-122 ms |
+| hits per wind-up aimed at it, standing still | 86-95% | 78-100% | 77-100% |
+| hits per wind-up with the 0 ms reflex bot | 7-22% (12 of 81: 15%) | 22-43% | 6-45% (all clients: 53 of 175, 30%) |
+
+What it says: the victim-decides rule (M4) already made the swarmer FAIR on a client: its telegraph is never invisible (every
+client strike showed a wind-up first, none zero; the strike is resolved when the client's screen shows the strike's moment,
+against where its hero really is), it is just **25-50 ms shorter** than the host's 150 ms (the 30 Hz snapshot can start the pose
+up to a tick late, and the strike resolves 20 ms early so the snapshot's swing never plays first). With a superhuman 0 ms reflex
+that shorter window is visible in the numbers: **a client is bitten about twice as often as the host (30% vs 15%)**. For a
+person (200-250 ms to react) **the 150 ms bite is undodgeable on every machine**: standing still 80-100% land everywhere. So the
+networking gap is real but only matters for reflexes nobody has; the design question is whether swarmers SHOULD be dodgeable.
+Options:
+- **A. Lengthen `Swarmer.WINDUP` to about 0.3 s** (compensate with a shorter cooldown or more damage per bite). Everyone sees
+  250-300 ms, a reaction is possible; it changes solo play and the swarmer's character (a fast nibbler becomes a telegraphed
+  biter). One constant; balance pass on the pack fights.
+- **B. Draw a client's telegraph from the event, not the snapshot.** The `world.windup` event arrives 10-70 ms after the start,
+  50-90 ms before the snapshot shows it, so a client could start the wind-up pose (and a brief tell, e.g. the spikes flaring) on
+  arrival, ahead of the shown motion: visible about 190 ms under `coast` (240 ms clean), MORE than the host's 150. Cosmetic,
+  clients only, solo unchanged, no gameplay or balance change; the cost is a pose that runs a little ahead of the monster's shown
+  position (at most a tenth of a second) and the host's own player still gets 150 ms. Small change in `NetWorld._on_event` /
+  `Monster.net_show`.
+- **C. Accept them as chip damage** (the networking.md fallback) and say so: keep 0.15 s; swarmers are a damage-over-time
+  threat you answer by killing them or keeping distance, not by dodging. Optionally soften the bite (`Swarmer.DAMAGE` 4 -> 3)
+  if the hits sheet shows packs dominating. No code; the telemetry's `sources` column tracks it in playtests.
+My read: B costs least and helps clients most; A only if swarmers are meant to be dodged at all; C is fine if they are not.
+
+**7. The `test_net_m3_objects` [coast] flake: three real causes, all in the test** (none in M6 code; it was latent since M4).
+Reproduced: 3 failures in 24 `coast` runs of the M6 build. Measured with prints on both ends (the dismiss step: c1 stands
+beside its follower and presses E to tell it to wait):
+1. **The E landed on the edge of `WAIT_RANGE` (2.2) against a follower still moving away.** The test JUMPED c1's hero to 1.0
+   from where c1 showed the employee. That is inside `Employee.FOLLOW_MIN` (1.5), so the follower backs off, and worse: a jump
+   of under 3 units is not a teleport to the snapshot (M2's rule), so the host showed c1's hero lunging at the employee at the
+   velocity clamp (15.9 u/s, then extrapolated up to 120 ms), and the follower backed off from THAT. It ended 1.7-2.5 away. On
+   c1's screen 0.4 s later it was 1.68-2.26 away; the host judges the request from c1's spot against ITS employee, ~150 ms
+   further along: one run c1 said 2.03 and the host measured 2.27 (`[Net] wait from seat 2 refused: ... 2.27 away`, the new
+   log line), another c1 itself saw 2.26 and E found no target. (Jumping 1.75 away instead still failed 1 in 25, and retrying
+   the jump made it worse each time, 2.20 -> 2.37 -> 2.42: the lunge, not the placement, was pushing it.) Fix: c1 WALKS up to
+   the follower, to about 1.8 (inside its resting band, 1.5-2.2, where it stands still), and presses E again if the first
+   press found nothing (up to three tries, as a player would).
+2. **WAIT lasts one scan.** A monster is within `PANIC_RANGE` there, so a waiting employee panics at its next scan (0.2 s);
+   the host's check `state == WAIT` could miss that window (the request was granted). Fix: the check is "dismissed and
+   following nobody", the state the test's next check compares on every screen anyway.
+3. **Clients' heroes were not warded.** The host wards its own hero from the roaming floor monsters; since M4 the host's
+   monsters hurt a client's hero (decided on the client), so a brute could down c1's hero mid-test ("Wick is down!"), and a
+   downed hero's E does nothing. Fix: each client wards its own hero too.
+After the fixes: **25 of 25 `coast` runs passed** (before: 21 of 24); in 3 of them the first E found the follower at 2.2-2.4
+on c1's screen (or the host refused it at 2.20) and the second press did it. In real play cause 1 is a small rough edge, not a bug: even walking up, the follower settles near the edge of E's reach
+(those 3 runs), and online the host judges the press ~150 ms after the client saw it. If testers report "E on my
+follower sometimes does nothing" online, a 0.3-unit slack for a client's `wait` / `follow` request (the host already judges
+from the client's spot) is the one-line fix; not done here (a gameplay rule).
+
+**8. The checklist** is [steam-playtest-checklist.md](steam-playtest-checklist.md): build (`.\build.ps1` ->
+`build\Cast_Windows_v<stamp>.zip`, `steam_appid.txt` 480 next to the exe), the lobby, invites (running, closed via a manual
+`+connect_lobby`, since on app 480 Steam launches Spacewar), three players through a contract, joining mid-floor 2 and
+leaving, the host quitting, a 20-minute `coast` soak on Steam's fake lag with the telemetry to read, voice per player, the
+swarmers, and the files to send back.
+
+**What the tests prove.**
+- `test_net_m7_steam` (1 process, fake Steam): the Steam link values (ids 5 / 3 / 56-58, the coast and rough numbers), a
+  refused float retried as an int32; avatars at once and late, wrong-size bytes ignored, badges with the picture or the
+  initial; an invite asks the screen with the friend's name, Stay joins nothing, Leave and join joins that lobby;
+  `+connect_lobby` parsed and joined; Invite crew only in a Steam crew with a seat free, opening the dialog for its lobby; the
+  link on the Steam transport sets Steam's config (ENet simulator off) and the end sets it back to 0; the forms (the question,
+  the pause row, the board button, Settings > Diagnostics saved); the voice log's net columns and the old file set aside; the
+  telemetry sheets; the gate's onset within 30 ms of a tone's start; the caster's utterance onset.
+- `test_net_m7_link` [off] (3 processes): the host's coast reaches c1 (`sys.link`) and c1's round trips grow past 80 ms; a
+  later joiner gets it in the welcome; a client can't set it; back to off, round trips fall under 60 ms; the host's telemetry
+  `link` column follows.
+- `test_net_m7_voice` [off, coast]: c1's panel counts its own cast, the host's and c2's none, every panel names its owner;
+  the host's casts sheet has c1's two `sent` rows (the voiced one with its onset, end, 212 ms recognition and 655 ms onset to
+  cast; the typed one without) and each cast `applied` exactly once on each machine; c1's voice log rows say client, seat 2;
+  the host's hits sheet has the host's hits by a brute, c1's (decided on c1, filed from c1) and c2's floor time with none.
+- `test_net_m7_swarmers` [off, coast]: the measurement above (it asserts only that there was something to measure).
+- `test_net_m3_objects` [off, coast]: the employee step walks up and retries (above); 25 of 25 `coast` runs passed.
+- Unchanged and passing: every other test. Full run: **All 118 test(s) passed** (the 44 net runs in 389 s, two at a time;
+the four new M7 tests add about 2 minutes of net runs).
+
+**Known gaps (left for later, on purpose).**
+1. Everything Steam-only is unproven until the checklist: lobbies found across accounts, the overlay's invite and
+   `join_requested`, avatars from real Steam, the jitter values' type, the late-join snapshot's size over Steam's relays (M6
+   note 1), the `seats_free` filter with a full crew.
+2. `+connect_lobby` from a closed game only works once Cast has its own app id (on 480 Steam launches Spacewar).
+3. `pending_rel` stays blank (SteamMultiplayerPeer does not expose the connection's status).
+4. A client's own Diagnostics setting is never used (the host's is the crew's); solo it does nothing.
+5. The swarmer decision (above) and the E slack (cause 1 of the flake) are the user's calls.
+6. README's "Online play" section still describes M3; M7 left it alone (a docs pass is due before a public playtest).
+7. For test writers: moving a hero by setting its position less than 3 units is NOT a teleport to the snapshot; the other
+   screens see a lunge at the velocity clamp (15.9 u/s, extrapolated). Walk it (`PlayerController.move_override`), or jump
+   more than 3 units.
+
 ---
 
 ## 3. Test strategy
@@ -1429,6 +1632,8 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 | M6 (built) | Late-join coverage: every replicated class declares how a joiner gets its state (`NetEvents.LATE_JOIN`: keyframe, gone ids, an event replay or the seat handover); run against tables that must fail |
 
 ### Real Steam (manual checklist, two PCs and two accounts)
+Scripted step by step (build, what to click, what to look for, where the logs land, what to send back) in
+[steam-playtest-checklist.md](steam-playtest-checklist.md) (M7).
 1. Both on the same build; A: **Start a job**; B: **Join a crew** finds it. A different build is refused with a reason.
 2. Invite from the overlay while B's game runs, and while it's closed (`+connect_lobby`).
 3. Three players: walk, fight, cast at each other, go down a floor, invoice.
@@ -1483,4 +1688,10 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 - **"Next contract" online** (chosen in M5, like the exits): **any** player's Next on the invoice takes the whole crew back
   to the host's board.
 
-No open questions remain. The main menu in §1 is still a proposal.
+**Open (M7):**
+- **Swarmer wind-up** (networking.md open risk): measured in M7 as built; options A (lengthen to about 0.3 s), B (draw a
+  client's telegraph from the wind-up event, cosmetic) or C (accept as chip damage). The user picks.
+- **E slack for a client's employee request** (optional, M7 as built item 7): judge a client's `wait` / `follow` with 0.3 units
+  of slack, or leave it.
+
+The main menu in §1 is still a proposal.

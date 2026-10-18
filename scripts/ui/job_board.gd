@@ -12,7 +12,9 @@ extends Control
 ##
 ## Under the cards, the CREW strip: the roster (seat, name, character) while hosting a crew (Session, the
 ## autoload in scripts/net/), or why this job is solo ("Steam not running: solo only"). Opening the board tells
-## the lobby the crew is on the board; taking a job says it's on a job.
+## the lobby the crew is on the board; taking a job says it's on a job. M7: each member is a CrewBadge with their Steam
+## avatar (a lettered square without one), the strip names the crew's simulated link when there is one, and with a seat
+## free in a Steam crew an "Invite crew (I)" button opens the overlay's invite dialog (Session.invite_crew).
 ##
 ## Nothing here is full-screen and opaque except the fallback shade, which only shows while `backdrop_behind` is
 ## false: the game sets it to true because the garage (MenuBackdrop, the main menu's backdrop) is behind the
@@ -59,6 +61,11 @@ var _fallback: ColorRect = null
 var _lift_tweens: Dictionary = {}
 ## The crew strip under the cards (hidden when there's nothing to say).
 var crew_strip: Label = null
+## M7: the crew's badges (avatar and name) above the strip's note, and the invite button.
+var crew_badges: HBoxContainer = null
+var invite_button: Button = null
+## Show the invite button even without a Steam crew (screenshots, tests).
+var force_invite := false
 
 
 func _init(new_offers: Array[ContractRun] = []) -> void:
@@ -133,6 +140,22 @@ func _ready() -> void:
 	for i in offers.size():
 		row.add_child(_make_slot(offers[i], i))
 
+	var badges_row := HBoxContainer.new()
+	badges_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	badges_row.add_theme_constant_override("separation", 26)
+	badges_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(badges_row)
+	crew_badges = HBoxContainer.new()
+	crew_badges.name = "CrewBadges"
+	crew_badges.add_theme_constant_override("separation", 26)
+	crew_badges.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badges_row.add_child(crew_badges)
+	invite_button = FormTheme.button("Invite crew  (I)", 20)
+	invite_button.name = "InviteCrew"
+	invite_button.custom_minimum_size = Vector2(220, 42)
+	invite_button.focus_mode = Control.FOCUS_NONE   # (the cards keep the keys; I or a click opens the overlay)
+	invite_button.pressed.connect(invite_crew)
+	badges_row.add_child(invite_button)
 	crew_strip = FormTheme.label("", 20, Color(1, 1, 1, 0.92), true)
 	crew_strip.name = "CrewStrip"
 	crew_strip.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
@@ -140,6 +163,9 @@ func _ready() -> void:
 	crew_strip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(crew_strip)
 	Session.roster_changed.connect(refresh_crew)
+	Session.link_changed.connect(refresh_crew.unbind(1))
+	if Session.avatars != null:
+		Session.avatars.avatar_ready.connect(refresh_crew.unbind(1))
 	if not read_only:
 		Session.set_crew_state("board")
 	refresh_crew()
@@ -149,6 +175,10 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_I and invite_button != null and invite_button.visible:
+		invite_crew()
+		get_viewport().set_input_as_handled()
+		return
 	if read_only:
 		return
 	if offers.is_empty():
@@ -189,22 +219,36 @@ static func signer_name() -> String:
 	return n if n != "" else SteamIdentity.player_name(Session.local_character().capitalize())
 
 
-## The crew strip's text: the roster while hosting, else why it's solo, else nothing.
+## The crew strip: the roster as badges (avatar, seat, name, character) while in a crew, with the open seats, the
+## simulated link and the invite button; else why it's solo; else nothing.
 func refresh_crew() -> void:
 	if crew_strip == null:
 		return
 	var text := ""
+	for c in crew_badges.get_children():
+		crew_badges.remove_child(c)
+		c.queue_free()
 	if Session.online():
-		var parts: PackedStringArray = []
 		for e: Dictionary in Session.crew():
-			parts.append("%d %s · %s" % [int(e["seat"]), str(e["name"]), str(e["character"]).capitalize()])
-		text = "CREW   " + "     ".join(parts)
+			var tex: Texture2D = Session.avatars.texture(int(e.get("steam_id", 0))) if Session.avatars != null else null
+			crew_badges.add_child(CrewBadge.new(e, tex, int(e["peer"]) == Session.local_id()))
+		var notes: PackedStringArray = []
 		if Session.roster.size() < NetSession.MAX_CREW:
-			text += "     ·  seats open: friends can Join a crew"
+			notes.append("seats open: friends can Join a crew")
+		if Session.link_preset != "off":
+			notes.append("simulated link: %s (Settings > Diagnostics)" % Session.link_preset)
+		text = "  ·  ".join(notes)
 	elif Session.offline_note != "":
 		text = Session.offline_note
 	crew_strip.text = text
 	crew_strip.visible = text != ""
+	crew_badges.visible = crew_badges.get_child_count() > 0
+	invite_button.visible = force_invite or Session.can_invite()
+
+
+## "Invite crew": the Steam overlay's invite dialog for this crew's lobby.
+func invite_crew() -> void:
+	Session.invite_crew()
 
 
 ## The highlighted offer (keyboard / controller / the last one the mouse touched).

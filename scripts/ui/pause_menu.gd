@@ -8,10 +8,14 @@ extends Control
 ## `online` (set before adding it): another player is in the crew, so NOTHING pauses (networking-build-plan.md M5): the
 ## form says the job runs on, Abandon takes the whole crew back to the board, and Main menu ends the job for everyone
 ## (`hosting`) or leaves the crew (a client).
+##
+## `can_invite` (M7, a Steam crew with a free seat): one more row, "Invite crew", which opens the Steam overlay's invite
+## dialog (`invite`). Solo and offline the form is exactly as before.
 
 signal resume
 signal abandon
 signal main_menu
+signal invite
 
 ## Keys are ignored briefly after opening (the Esc that opened it must not close it again).
 const INPUT_GUARD_MS := 150
@@ -19,10 +23,13 @@ const INPUT_GUARD_MS := 150
 var resume_button: Button
 var abandon_button: Button
 var menu_button: Button
+var invite_button: Button = null
 ## A crew is on the job: the tree is NOT paused (see above). Set before the overlay enters the tree.
 var online := false
 ## This machine hosts the crew (Main menu ends the job for everyone). Read only when `online`.
 var hosting := true
+## The Steam overlay can invite a friend into this crew (a seat is free): show the "Invite crew" row. Set before adding it.
+var can_invite := false
 
 var _born_ms := 0
 
@@ -40,10 +47,11 @@ func _ready() -> void:
 	add_child(center)
 
 	var holder := Control.new()
-	holder.custom_minimum_size = Vector2(640.0, 660.0)
+	var tall := 660.0 + (76.0 if can_invite else 0.0)
+	holder.custom_minimum_size = Vector2(640.0, tall)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(holder)
-	var board := FormClipboard.new(640.0, 660.0, 1.0)
+	var board := FormClipboard.new(640.0, tall, 1.0)
 	holder.add_child(board)
 	var sheet := FormSheet.new("27-B", "On break" if online else "On hold", "CAST  ·  the job runs on" if online else "CAST  ·  shift paused",
 		"Status", "ON THE CLOCK" if online else "STANDING BY", "white", 46)
@@ -56,6 +64,9 @@ func _ready() -> void:
 	abandon_button.pressed.connect(func() -> void: abandon.emit())
 	menu_button = _row(body, "Main menu", "03", ("ends the job" if hosting else "leave the crew") if online else "")
 	menu_button.pressed.connect(func() -> void: main_menu.emit())
+	if can_invite:
+		invite_button = _row(body, "Invite crew", "04", "steam overlay")
+		invite_button.pressed.connect(func() -> void: invite.emit())
 
 	var note_text := "The crew is standing by. Esc resumes. Abandoning drops this contract: back to the job board, no invoice."
 	if online:
@@ -71,10 +82,13 @@ func _ready() -> void:
 	body.add_child(FormTheme.margin(build, 22, 6, 22, 14))
 
 	var stamp := FormStamp.new("LIVE" if online else "ON HOLD", 34, -9.0)
-	stamp.position = Vector2(350.0, 430.0)
+	stamp.position = Vector2(350.0, 430.0 + (120.0 if can_invite else 0.0))
 	board.add_child(stamp)
 
-	FormTheme.chain([resume_button, abandon_button, menu_button])
+	var rows: Array = [resume_button, abandon_button, menu_button]
+	if invite_button != null:
+		rows.append(invite_button)
+	FormTheme.chain(rows)
 	_focus.call_deferred()
 
 

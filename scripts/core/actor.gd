@@ -248,7 +248,7 @@ func apply_damage(amount: float, source: Node = null) -> float:
 	var dealt := amount * damage_taken_mult()
 	hp = maxf(0.0, hp - dealt)
 	if dealt > 0.0 and self is Hero:
-		Net.note_hit(self)   # (telemetry: hits taken per player)
+		Net.note_hit(self, dealt, source)   # (telemetry: hits taken per player, and by what)
 	damaged.emit(dealt, source)
 	if hp <= 0.0:
 		die()

@@ -81,6 +81,7 @@ var flush_pad_sec := FLUSH_PAD_SEC
 var flushes := 0                  ## voice ends flushed (stats)
 var samples_in := 0               ## raw samples received while enabled (since the start)
 var voice_end_sample := -1        ## raw sample position where the most recent voice ended (-1 = none yet)
+var voice_start_sample := -1      ## raw sample position where the most recent voice span began (-1 = none yet; the voice onset)
 
 var _rate := 0
 var _frame_len := 0
@@ -142,6 +143,7 @@ func reset() -> void:
 	_span_quiet = 0
 	_debt = 0
 	voice_end_sample = -1
+	voice_start_sample = -1
 	_acc = PackedFloat32Array()
 	_delay.clear()
 	_run = 0
@@ -255,6 +257,8 @@ func _emit(outgoing: PackedFloat32Array) -> PackedFloat32Array:
 
 ## End-of-voice tracking on the raw input; true when this frame ends a voice span (flush now).
 func _track_end(ms: float, loud: bool, repeated: bool) -> bool:
+	if _run >= MIN_RUN and not _span:
+		voice_start_sample = _frame_end - _run * _frame_len   # (the first frame of the run that opened this span)
 	if _run >= MIN_RUN:
 		_span = true
 	if not _span:

@@ -7,6 +7,9 @@ extends RefCounted
 ##   fullscreen           true = borderless fullscreen, false = a window (default false)
 ##   resolution           "1280x720" | "1600x900" (default) | "1920x1080": the window size when windowed
 ##   voice_panel_visible  the voice debug panel (F1) is open when a contract starts (default true)
+##   link_sim             Diagnostics, "Simulate a long link": "off" (default) | "coast" | "rough". The host's choice is
+##                        the whole crew's (NetSession applies it when the crew opens and sends it to everyone); solo it
+##                        does nothing
 ##
 ## Every function takes an optional settings path (tests use a temp file); "" means `path`, which is
 ## user://settings.cfg unless a dev flag (--settings-file) moved it.
@@ -15,13 +18,16 @@ const DEFAULT_PATH := "user://settings.cfg"
 const SECTION := "game"
 const RESOLUTIONS: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 const DEFAULT_RESOLUTION := Vector2i(1600, 900)
+## Link simulator presets (NetLink.PRESETS / NetSteamLink): what Settings > Diagnostics offers.
+const LINK_PRESETS: Array[String] = ["off", "coast", "rough"]
 
 ## Where settings live. Boot sets it from --settings-file (screenshots must not touch the player's file).
 static var path: String = DEFAULT_PATH
 
 
 static func defaults() -> Dictionary:
-	return {"master_volume": 1.0, "fullscreen": false, "resolution": resolution_text(DEFAULT_RESOLUTION), "voice_panel_visible": true}
+	return {"master_volume": 1.0, "fullscreen": false, "resolution": resolution_text(DEFAULT_RESOLUTION), "voice_panel_visible": true,
+		"link_sim": "off"}
 
 
 static func resolution_text(res: Vector2i) -> String:
@@ -49,6 +55,7 @@ static func load_settings(settings_path: String = "") -> Dictionary:
 	out["fullscreen"] = bool(out["fullscreen"])
 	out["voice_panel_visible"] = bool(out["voice_panel_visible"])
 	out["resolution"] = resolution_text(parse_resolution(str(out["resolution"])))
+	out["link_sim"] = str(out["link_sim"]) if LINK_PRESETS.has(str(out["link_sim"])) else "off"
 	return out
 
 
