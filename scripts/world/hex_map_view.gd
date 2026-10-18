@@ -282,54 +282,26 @@ vec3 marble(vec2 p, vec3 base, vec3 alt, float sc, inout float rgh) {
 	float vein2 = pow(1.0 - abs(2.0 * vn(sp * 2.3 + 5.0) - 1.0), 28.0);
 	vec3 c = base * (0.85 + 0.35 * fbm(sp * 0.5));
 	c = mix(c, alt, clamp(vein * 0.6 + vein2 * 0.3, 0.0, 1.0) * 0.55);
-	float joint = 1.0 - smoothstep(0.004, 0.016, grid_d(p, vec2(sc)));
-	c = mix(c, base * 0.35, joint);
-	rgh = mix(rgh, 0.8, joint);
 	return c;
 }
+// Floor TEXTURE only: no square joints, grout, board gaps or per-tile colour blocks. Square lines fought the hex
+// grid and its seams (user, 2026-10-17); the hex seams are the only lines on a floor.
 vec3 material_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float rgh) {
 	vec3 c = base;
 	if (pat == 1) {                       // concrete slabs
 		float m = fbm(p * 1.3);
-		c = base * (0.82 + 0.36 * m) * (0.94 + 0.12 * h21(floor(p * 9.0)));
-		c *= 0.94 + 0.12 * h21(floor(p / sc));
-		float joint = 1.0 - smoothstep(0.0, 0.05, grid_d(p, vec2(sc)));
-		c = mix(c, alt, joint * 0.85);
+		c = base * (0.82 + 0.36 * m) * (0.94 + 0.12 * vn(p * 9.0));
 	} else if (pat == 2) {                // flagstone
-		vec4 v = voro(p / sc);
-		float mortar = 1.0 - smoothstep(0.015, 0.06, v.y);
-		c = base * (0.72 + 0.55 * h21(v.zw)) * (0.85 + 0.3 * fbm(p * 2.0));
-		c *= 0.88 + 0.12 * smoothstep(0.02, 0.22, v.y);
-		c = mix(c, alt, mortar * 0.7);
+		c = base * (0.78 + 0.4 * fbm(p / sc * 0.8)) * (0.85 + 0.3 * fbm(p * 2.0));
 	} else if (pat == 3) {                // carpet: soft pile, a faint lattice
 		float n1 = h21(floor(p * 14.0));
 		c = base * (0.82 + 0.22 * n1 + 0.18 * vn(p * 3.0));
-		vec2 d = abs(fract(vec2(p.x + p.y, p.x - p.y) / sc) - 0.5);
-		float lat = 1.0 - smoothstep(0.0, 0.035, min(d.x, d.y));
-		c = mix(c, alt, lat * 0.28);
 		rgh = 1.0;
 	} else if (pat == 4) {                // glazed tile
-		vec2 q = p / sc;
-		vec2 g = abs(fract(q) - 0.5);
-		float edge = (0.5 - max(g.x, g.y)) * sc;
-		float grout = 1.0 - smoothstep(0.012, 0.034, edge);
-		c = base * (0.9 + 0.16 * h21(floor(q))) * (0.93 + 0.1 * vn(p * 4.0));
-		c *= 1.0 + 0.1 * smoothstep(0.06, 0.0, edge - 0.03);
-		c = mix(c, alt, grout);
-		rgh = mix(rgh, 0.85, grout);
+		c = base * (0.9 + 0.14 * vn(p / sc * 1.7)) * (0.93 + 0.1 * vn(p * 4.0));
 	} else if (pat == 5) {                // wood boards along x
-		float row = floor(p.y / sc);
-		float off = h21(vec2(row, 3.0)) * 3.0;
-		float len = 2.6;
-		float xx = p.x + off;
-		vec2 bid = vec2(floor(xx / len), row);
-		float grain = vn(vec2(xx * 0.9, p.y * 18.0 + bid.y * 3.7));
-		c = base * (0.7 + 0.55 * h21(bid)) * (0.84 + 0.32 * grain);
-		float gy = min(fract(p.y / sc), 1.0 - fract(p.y / sc)) * sc;
-		float ex = fract(xx / len) * len;
-		float gx = min(ex, len - ex);
-		float gap = 1.0 - smoothstep(0.0, 0.022, min(gy, gx));
-		c = mix(c, alt, gap * 0.92);
+		float grain = vn(vec2(p.x * 0.9, p.y * 18.0));
+		c = base * (0.8 + 0.3 * vn(p * 0.35)) * (0.84 + 0.32 * grain);
 	} else if (pat == 6) {                // marble slabs
 		c = marble(p, base, alt, sc, rgh);
 	} else if (pat == 7) {                // rubber gym mats: studs, joints every unit
@@ -337,8 +309,6 @@ vec3 material_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float 
 		float dd = length(fract(q) - 0.5);
 		float stud = smoothstep(0.34, 0.24, dd);
 		c = base * (0.78 + 0.3 * stud) * (0.9 + 0.2 * vn(p * 2.0));
-		float joint = 1.0 - smoothstep(0.0, 0.03, grid_d(p, vec2(1.0)));
-		c = mix(c, alt * 0.55, joint * 0.8);
 	} else if (pat == 8) {                // diamond tread plate in 2-unit panels
 		vec2 q = p * sc;
 		vec2 id = floor(q);
@@ -350,9 +320,6 @@ vec3 material_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float 
 		float e = (r.x * r.x) / (0.34 * 0.34) + (r.y * r.y) / (0.1 * 0.1);
 		float bar = 1.0 - smoothstep(0.55, 1.0, e);
 		c = base * (0.78 + 0.2 * vn(p * 1.5)) + alt * bar * 0.4;
-		float seam = 1.0 - smoothstep(0.0, 0.03, grid_d(p, vec2(2.0)));
-		c = mix(c, base * 0.25, seam);
-		rgh = mix(rgh, 0.8, seam);
 	}
 	return c;
 }
