@@ -1,8 +1,8 @@
 # Networking build plan: online co-op, step by step
 
-Status: **M0, M1 and M2 built** 2026-10-17, **M3 and M4 built** 2026-10-18 (see [M0 as built](#m0-as-built-2026-10-17),
-[M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17), [M3 as built](#m3-as-built-2026-10-18) and
-[M4 as built](#m4-as-built-2026-10-18) after the milestones); M5 onward is still the plan. The architecture is fixed by
+Status: **M0, M1 and M2 built** 2026-10-17, **M3, M4 and M5 built** 2026-10-18 (see [M0 as built](#m0-as-built-2026-10-17),
+[M1 as built](#m1-as-built-2026-10-17), [M2 as built](#m2-as-built-2026-10-17), [M3 as built](#m3-as-built-2026-10-18),
+[M4 as built](#m4-as-built-2026-10-18) and [M5 as built](#m5-as-built-2026-10-18) after the milestones); M6 onward is still the plan. The architecture is fixed by
 [`networking.md`](networking.md) (option A: each player's machine owns that player's hero, and the host owns
 everything else). This doc is about the **order of work**: what to port from Bridge to Friendship, the milestones,
 how they get tested, and what is still the user's call.
@@ -218,7 +218,7 @@ peers after 30 s of scripted fighting; and the debug guard fires in a negative t
 *Playable:* **the real game for two or three, on one floor**: fighting, casting at each other, shoving each other
 into pits.
 
-### M5 Contract flow *(2 sessions)* — **Risk (moderate)**
+### M5 Contract flow *(2 sessions)* — **Risk (moderate)** — built, see [M5 as built](#m5-as-built-2026-10-18)
 **M5a Floors and exits.** Using the elevator or the van is a **request**; the host arbitrates the first one and
 broadcasts `floor_change(n, carry)` or `contract_end(reason)`. Each machine reloads the scene; a **load barrier**
 (everyone builds, checksums and reports ready, then the host starts the floor clock) replaces the fade-in.
@@ -1054,6 +1054,132 @@ shows the same HP for each player. `--autocast corn` instead drops three cobs on
    `Net.status_changed(actor, kind)` on the owner and a case in `NetStatus._on_event`; a new monster attack only needs `_strike()`
    to go through `Combat` (the wind-up event and the client resolution come with `Monster`).
 
+### M5 as built (2026-10-18)
+One session (M5a and M5b together). Much of M5 was already in place: M3 built the first-to-choose exits, the floor change
+through the barrier (`crew.next`, a fresh `crew.go` per floor), HP and downed state carried by seat, the cash-out and van ending
+with the host's invoice on every client, the host's authoritative Ledger with every client mirroring it, the host-only drop-offs
+and extraction, and exit menus that freeze only your own hero; M1 built "no local pause while crewed". M5 adds what was left,
+proves the whole loop end to end, and everything in M5's "done when" passes under `off` and `coast`. Playable as the plan says:
+**a full contract online, from the board to the invoice and back to the board**, for a crew that started together.
+
+**What M5 added.**
+- **Back to the board, by anyone (decided).** A client's "Abandon contract" (the pause menu, or F5) and its "Next contract" on
+  the invoice used to leave the crew / wait for the host. Now they are requests to the host: `CrewFlow.request_abandon()` sends
+  `crew.abandon`, `request_again()` sends `crew.again`; the host's flow emits `abandon_requested(peer)` /
+  `again_requested(peer)` and the host's game does exactly what its own press does (`_abandon_now`, `_on_next_contract`): it
+  reloads onto a new board and its `crew.board` brings every client (M1's `_on_flow_board` -> `_back_to_board_local`). The
+  host ignores an abandon once the job has ended and a Next while it is not on the invoice, so two presses at once make one
+  board. The crew stays in the same lobby (the roster and the Steam lobby are untouched; the host's board sets the lobby back
+  to "board").
+- **"Next contract": any player's Next takes everyone (the choice M5 had to make).** Picked because it is the rule the crew
+  already plays by (the first player to choose an exit decides) and it matches "anyone can abandon"; the cost is that a player
+  still reading the invoice is taken to the board by a teammate's press (the invoice says so: "Takes the whole crew back to the
+  board." under the row while crewed).
+- **The board says who abandoned.** `crew.board` carries `note` (`CrewFlow.board_note`, cleared when a job is taken); the host
+  sets it from the asking peer's roster name (`_board_note`, a static that survives the reload), and every board shows it in
+  the red grease pencil on the side ("c2 abandoned the job", `JobBoard.notice`).
+- **Pause online (decided, M1 had the mechanism).** `PauseMenu.online` / `hosting` (set by `game._open_pause` from `_crewed()`):
+  the same FORM 27-B, titled "On break", status "ON THE CLOCK", a "LIVE" stamp, "Nothing is paused: the job runs on and only you
+  stand still. Abandoning sends the whole crew to the board."; the rows' hints are "whole crew" (Abandon) and "ends the job"
+  (host) / "leave the crew" (client) (Main menu). Solo, and a host alone in a lobby, keep the real pause and the old form.
+- **Crew incapacitated (confirmed, one fix).** `_check_crew` already ran on the host over every hero, puppets included, whose
+  `dead` comes from the owners' snapshots; a client only shows "Crew incapacitated" and waits for the host's invoice. Fixed: the
+  revival lines are named by player while crewed (`game._crew_label`: the seat's owner's roster name; the AI seats and solo keep
+  the hero's name). Before, three Wicks were billed as "Revival - Wick" three times, and the host's own hero was always "Wick".
+- **The pause overlay closes** when an exit is decided or the job ends (`_on_exit_decided`, `_end_contract`, `_end_from_host`
+  call `_close_pause`): online it is not modal, and it stayed under the invoice.
+- `_on_next_contract` reloads through `_change_scene("")` like every other scene change (the same reload solo; the test seam
+  saw `reload_current_scene()` reload the TEST scene instead).
+- Dev: `--shot-at pause|invoice`, `--shot-floor N` (the floor picture after the elevator), `--pause-demo` waits for the shared
+  start in a crew, `--auto-elevator` waits for the shared start (it opened the menu behind the barrier and its `_freeze(false)`
+  unfroze the world early), and the dev crew teleports (`--to-exit`, `--to-gate`, ...) place heroes in SEAT order (they used the
+  local player first, so every machine put different heroes on the cells and the floor checksum disagreed; solo is the same order
+  as before).
+
+**Files.** `scripts/net/crew_flow.gd` (`board_note`, `request_abandon`, `request_again`, the two signals, `crew.abandon`,
+`crew.again`, `note` on `crew.board`); `scripts/app/game.gd` (above); `scripts/ui/pause_menu.gd` (`online`, `hosting`),
+`scripts/ui/invoice_screen.gd` (`next_note`), `scripts/ui/job_board.gd` (`notice`); test support
+`scripts/test_support/net_game_test.gd` (`place_hero`, `cell_at`, `press_esc`, `canon`, `invoice_text`, `ledger_text`,
+`peer_named`; `board()`, `picker()` and `wait_floor()` are safe while a reload is under way). Tests: `test_net_m5_contract`,
+`test_net_m5_crew` (3 processes each).
+
+**Events (reliable; the protocol version did not change).**
+| Event | From -> to | Data |
+|---|---|---|
+| `crew.abandon` | client -> host | (empty): this player abandons the contract for the crew (ignored on the board and once the job has ended) |
+| `crew.again` | client -> host | (empty): this player pressed "Next contract" on the invoice (ignored unless the host is on the invoice) |
+| `crew.board` gains | host -> clients | `note`: a short line every board shows ("" for none) |
+Nothing else changed on the wire: the exits (`obj.exit`), the floor change (`crew.next` / `crew.ready` / `crew.go`), the money
+(`obj.ledger`, `obj.contract`) and the invoice (`obj.end`) are M3's.
+
+**Followers and the elevator.** "Riding the elevator" is extraction, as solo (contracts.md): employees FOLLOWING the crew within
+`FOLLOW_EXTRACT_CELLS` (3) of the exit being used are extracted, $100 each, and do not appear on the next floor; one within
+`DROPOFF_DIST` (2.5 units) of the van door or the elevator leaves at once (the drop-off). Both are decided on the host only
+(`_descend_shared`, `_use_elevator`, `_use_van`, `_check_dropoffs` run there), whoever the employee follows; the extraction reaches
+the clients as `world.extract`, the pay as Ledger lines.
+
+**What the tests prove** (three real-time processes each; this machine's timings).
+- `test_net_m5_contract` [off 20.0 s, coast 21.8 s]: each owner marks its hero's HP (78 / 71 / 64 by seat). c1 and c2 stand at the
+  elevator and press **E in the same frame** (the controller's `press_use`, the menu's own "go down" row): ONE decision (by
+  whichever reached the host first), ONE floor change (every process reloaded exactly once), floor 2 is the same floor everywhere
+  (checksum) and every process shows every seat's carried HP. On floor 2 an employee follows c1's hero two cells from the elevator
+  and the host takes the elevator: the follower rides out (extracted by the host, one $100 line), and on floor 3 every client's
+  Ledger is the host's line for line. On floor 3 c2 presses E and cashes out: every process shows the **same invoice dict**
+  (canonical JSON, every key: lines, floors, blame, employees, payout, stars, date). c1 presses "Next contract": all three are
+  back on the host's new board (same seed), with no contract, no Ledger mirror, the crew still three. Contract 2 (offer 0, every
+  license signed by hand): **c1 clocks out at the van on floor 1** (E at the van door, the slip's row): the contract ends for
+  everyone with the same invoice. The host then quits with the clients on the invoice: both are told "The host clocked out" and
+  their game asks for the main menu.
+- `test_net_m5_crew` [off 18.0 s, coast 19.6 s]: **Esc on c2** opens the online pause menu and the tree is NOT paused: c2's floor
+  clock ran 0.6 s behind the menu, the world is not frozen, only c2's hero stopped, the form's rows say "whole crew" / "leave the
+  crew"; the same on the host ("ends the job"), and Resume closes it. **c2 picks "Abandon contract"**: the host and both clients
+  are back on a new board (reloaded once each), the contract dropped, the crew still three, and every board says "c2 abandoned the
+  job". Contract 2: every player's hero goes down on its own machine at one shared moment: the host decides **crew incapacitated**
+  from the replicated `dead`, bills **three revivals of $10,000** named host / c1 / c2 (payout -$30,000: uncapped, negative), every
+  client saw the crew down, shows the host's invoice key for key and holds the same Ledger, revival fees and payout. **The host's
+  "Next contract"** takes everyone back to the board (the board note cleared). The host then quits with the crew on the board: the
+  clients go to the menu with "The host clocked out".
+- Single-player is unchanged: `test_main_menu` (the real pause, Abandon, Main menu), `test_contract_flow_game` (the elevator, the
+  invoice, revivals by hero name) and the rest of the suite pass as before. M3's `test_net_m3_exit` still covers two choices sent
+  through `_choose_exit` at once (the same rule, without the keys) and is unchanged.
+
+**Try it.** `.\run.ps1 -Crew 3 --seed 7 --net-wait 3 --contract 1 --spells heal,corn` (add `-Link coast`): walk to the elevator in
+any window and press E: whoever picks a row first takes the crew down (every window reloads onto floor 2 behind the barrier);
+Esc in a client window: the menu opens and the game keeps running; "Abandon contract" there sends all three windows to a new board
+that says who did it; at the end, "Next contract" in any window takes all three back to the board. Screenshots of client windows:
+`--shot <png> --shot-at floor --shot-floor 2` / `--shot-at pause --pause-demo` / `--shot-at invoice` on that window, with the
+same `--van-intro` (or `--no-van-intro`) and dev teleport flags on every window (they decide where the heroes stand, which is in
+the floor checksum).
+
+**Known gaps (left for later, on purpose).**
+1. **Abandon has no confirm**: one press ends the job for the whole crew (decided: anyone can abandon). F5 on a client now
+   abandons for everyone too (it used to leave the crew); a client leaves through the pause menu's Main menu.
+2. **No shared fade**: each machine fades out when it learns the decision and fades in on its own reload; the floor itself
+   starts at one shared moment (`crew.go`). M3's note had "a fade on every machine at once"; it is cosmetic and left.
+3. **A client's objective mirror can miss one update during a floor reload** (`obj.contract` arriving between the old scene and
+   the new one): the tracker catches up at the next change and the invoice is the host's dict, so nothing visible is wrong.
+4. **"Crew incapacitated" on a client** is shown from its own view (about 100 ms behind for the others' heroes); the host's view
+   decides the end and the bill.
+5. **A crashed host** is noticed after `CLIENT_SILENCE` (10 s); a host that quits is noticed at once (M2 note 6).
+6. **Mixed screenshot flags desync a crew** (`--shot` skips the van arrival, `--to-exit` moves heroes): dev only; pass the same
+   flags to every window (above).
+7. Joining mid-contract (M6) is still refused (`JOB_RUNNING`), including on the invoice.
+
+**Notes for M6.**
+1. **Where a joiner can arrive.** On a floor (the plan), during a floor change (wait for the next barrier: `CrewFlow._judge` waits
+   for a checksum from EVERY roster member, so a joiner mid-`LOADING` must either build that floor or be left out of the wait),
+   or on the invoice (simplest: refuse until the board, or put them on the host's next board: `_on_peer_joined` already sends
+   `crew.board` with the note).
+2. **Seats and names.** `_seat_info` is taken at the job pick and only refreshed at a barrier (`_drop_departed_seats`); a handover
+   must update it (`_begin_hero_sync` reads it every floor). Revival names read `Session.seats.owners` (`_crew_label`), so a joiner
+   who took a seat is billed by name once the seat table says so.
+3. **The static run state** (`_run`, `_session`, `_spells`, `_board_seed`, `_board_note`, `_dev_released`, `_fade_in` in
+   `game.gd`) is what survives a reload; a joiner builds `_run` from `Flow.job` (as a client does) and its `_session` from the
+   host's mirror (`ContractSession.apply_mirror`, carry by seat) plus every Ledger line so far.
+4. **Pause and abandon need nothing new**: a joiner is crewed, so its Esc does not pause and its Abandon / Next go to the host.
+5. **Test pattern.** `test_net_m5_*` drive whole contracts through the game's own keys in about 20 s; `NetGameTest.place_hero`,
+   `cell_at`, `invoice_text` / `ledger_text` (canonical JSON) and the reload-safe getters are there for the late-join test.
+
 ---
 
 ## 3. Test strategy
@@ -1167,5 +1293,7 @@ all but the first. `--shot` works per instance, so an agent can screenshot every
 - **The elevator online:** the **first** player to choose decides for the crew.
 - **Pause online:** no pause while someone else is connected; **anyone** can abandon the contract (it ends it for the
   whole crew).
+- **"Next contract" online** (chosen in M5, like the exits): **any** player's Next on the invoice takes the whole crew back
+  to the host's board.
 
 No open questions remain. The main menu in §1 is still a proposal.

@@ -61,8 +61,10 @@ extends Node3D
 ##                       (default 0) after a second (two-window local play: README "Online play")
 ##   --net-bot           dev, online: this window's hero walks a loop of the start area by itself once the floor has started
 ##                       (a scripted PlayerController walk, so the other windows see it move; the keyboard is ignored)
-##   --shot-at board|license|wait|floor  dev, online: which screen --shot takes (a client's read-only board, its license checkout, 
-##                       the waiting-for-the-crew overlay, or the floor 3 s after the shared start, the default)
+##   --shot-at board|license|wait|floor|pause|invoice  dev, online: which screen --shot takes (a client's read-only board, its
+##                       license checkout, the waiting-for-the-crew overlay, the floor 3 s after the shared start (the default),
+##                       the pause overlay (with --pause-demo) or the invoice)
+##   --shot-floor N      dev, online: with --shot-at floor, take it on floor N (after the elevator) instead of the first
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
@@ -77,8 +79,11 @@ extends Node3D
 ## the host grants, the host keeps the Ledger and the objectives and every client mirrors them. The elevator and the van
 ## are first-to-choose: the first player to pick a row decides for the crew (down: every machine builds the next floor
 ## behind the barrier; out: the host's invoice for everyone). A host alone (Steam lobby, nobody joined) plays exactly
-## the solo game. While crewed there is no local pause. Esc on a client's board or checkout leaves the crew; the host
-## confirms first (it ends the job for all).
+## the solo game. M5: while crewed Esc opens the pause menu WITHOUT pausing (the world, the floor clock and the cast
+## schedule run on; only your own hero stands still), and ANY player's "Abandon contract" (or F5), or "Next contract" on
+## the invoice, takes the whole crew back to the host's board (a client asks the host: CrewFlow crew.abandon / crew.again).
+## The host decides "crew incapacitated" from every hero's replicated `dead` and bills the revivals on its Ledger. Esc on a
+## client's board or checkout leaves the crew; the host confirms first (it ends the job for all).
 
 ## Every castable spell, straight from SpellBook (new spells need no change here).
 static func all_spells() -> PackedStringArray:
@@ -117,6 +122,7 @@ static var _dev_released := false   ## F5 pressed: the dev flags that skip the b
 static var _fade_in := false        ## the next scene fades in from black (arrived by elevator)
 static var _board_seed := -1        ## the job board's seed while a contract is being set up, so backing out of the
                                     ## license screen shows the same three offers; -1 = deal a new board
+static var _board_note := ""        ## online host: the line the next board shows everyone ("c1 abandoned the job")
 
 var opts := {}
 ## Test seam for "Abandon contract" / "Main menu": called with "" (reload the board) or a scene path.
@@ -231,6 +237,7 @@ static func reset_flow() -> void:
 	_spells.clear()
 	_dev_released = false
 	_fade_in = false
+	_board_note = ""
 
 
 func _exit_tree() -> void:
@@ -273,6 +280,7 @@ func _parse_args() -> void:
 			"--net-wait": opts["net_wait"] = int(nxt)
 			"--net-bot": opts["net_bot"] = true
 			"--shot-at": opts["shot_at"] = nxt
+			"--shot-floor": opts["shot_floor"] = int(nxt)
 			"--contract": opts["contract"] = int(nxt)
 			"--floor": opts["floor"] = clampi(int(nxt), 1, ContractRun.FLOOR_COUNT)
 			"--spells": opts["spells"] = nxt
@@ -367,10 +375,11 @@ func _screens() -> CanvasLayer:
 
 
 ## The board on screen: the host's (it picks, and rolls the seed) or a client's (the host's seed, read-only).
-func _make_board(board_seed: int, read_only: bool) -> JobBoard:
+func _make_board(board_seed: int, read_only: bool, note: String = "") -> JobBoard:
 	_board_shown = board_seed
 	var board := JobBoard.new(ContractBoard.offers(board_seed))
 	board.read_only = read_only
+	board.notice = note
 	_board = board
 	# The same garage as the main menu behind the cards. The menu scene is already gone (Start changes scene), so
 	# this is a fresh MenuBackdrop; it picks the same mood and featured hero itself (pick_mood, hero_from_args).
@@ -394,7 +403,9 @@ func _drop_board() -> void:
 func _show_board() -> void:
 	var board_seed := _board_seed if _board_seed >= 0 else int(opts.get("seed", randi() % 100000))
 	_board_seed = board_seed
-	var board := _make_board(board_seed, false)
+	var note := _board_note if Session.online() else ""
+	_board_note = ""
+	var board := _make_board(board_seed, false, note)
 	board.picked.connect(func(run: ContractRun) -> void:
 		_drop_board()
 		_begin_contract(run)
@@ -403,7 +414,7 @@ func _show_board() -> void:
 	if Session.is_host() and Session.online() and _flow != null:
 		# The host rolled this board: every client draws the same offers and follows the highlighted card.
 		board.highlight_changed.connect(_flow.host_highlight)
-		_flow.host_board(board_seed, board.highlighted())
+		_flow.host_board(board_seed, board.highlighted(), note)
 		if opts.has("net_wait"):
 			Session.roster_changed.connect(_net_wait_check.bind(board))
 			_net_wait_check(board)
@@ -439,6 +450,8 @@ func _wire_flow() -> void:
 	_flow.load_requested.connect(_on_flow_load)
 	_flow.waiting_changed.connect(_update_waiting)
 	_flow.floor_started.connect(_begin_floor)
+	_flow.abandon_requested.connect(_on_abandon_requested)
+	_flow.again_requested.connect(_on_again_requested)
 	if Session.is_client():
 		_flow.board_changed.connect(_on_flow_board)
 		_flow.job_changed.connect(_on_flow_job)
@@ -451,6 +464,8 @@ func _unwire_flow() -> void:
 	_flow.load_requested.disconnect(_on_flow_load)
 	_flow.waiting_changed.disconnect(_update_waiting)
 	_flow.floor_started.disconnect(_begin_floor)
+	_flow.abandon_requested.disconnect(_on_abandon_requested)
+	_flow.again_requested.disconnect(_on_again_requested)
 	if _flow.board_changed.is_connected(_on_flow_board):
 		_flow.board_changed.disconnect(_on_flow_board)
 		_flow.job_changed.disconnect(_on_flow_job)
@@ -485,7 +500,7 @@ func _on_flow_board() -> void:
 		return
 	_drop_board()
 	_hide_wait()
-	var board := _make_board(_flow.board_seed, true)
+	var board := _make_board(_flow.board_seed, true, _flow.board_note)
 	board.set_highlight(_flow.board_hi)
 	_shot_stage("board", 1.0)
 
@@ -660,6 +675,16 @@ func _spawn_crew(start: Vector2i, spots: Array[Vector2i], faceted: bool) -> void
 		if Net.is_host():
 			var ai: Dictionary = AI_SEATS[_seat_of(h)]
 			HeroFactory.make_ally(h, leader, false, float(ai["angle"]), float(ai["hexes"]))
+
+
+## The name a hero goes by on the books: its player's roster name while crewed (two players may both be Wick), else the
+## hero's own name (solo, and the AI seats).
+func _crew_label(hero: Hero) -> String:
+	if _crewed() and Session.seats != null:
+		var peer := int(Session.seats.owners.get(_seat_of(hero), 0))
+		if peer != 0 and _names.has(peer):
+			return str(_names[peer])
+	return hero.display_name
 
 
 func _seat_of(hero: Hero) -> int:
@@ -914,9 +939,7 @@ func _start() -> void:
 			controller.aim_override = centre
 		_cast(str(opts["autocast"]), 1.0, "autocast")
 	if opts.has("pause_demo"):
-		get_tree().create_timer(1.5).timeout.connect(func() -> void:
-			if _can_pause():
-				_open_pause())
+		_pause_demo()
 	if opts.has("press_e"):
 		get_tree().create_timer(float(opts["press_e"])).timeout.connect(func() -> void:
 			if opts.has("to_note") and not _site.notes.is_empty():
@@ -962,6 +985,16 @@ func _arrive_by_van() -> void:
 		if _shared:
 			_arrival.playing = false   # parked at its first frame until the shared start (_begin_floor)
 			_arrival_held = true
+
+
+## --pause-demo: open the pause overlay 1.5 s into the floor (a shared run: 1.5 s after the shared start and the arrival).
+func _pause_demo() -> void:
+	if _shared:
+		while is_inside_tree() and not (_floor_begun and (_arrival == null or _arrival.is_done())):
+			await get_tree().process_frame
+	await get_tree().create_timer(1.5).timeout
+	if is_inside_tree() and _can_pause():
+		_open_pause()
 
 
 ## The animation plays unless --no-van-intro; tests and screenshots skip it unless --van-intro.
@@ -1041,7 +1074,7 @@ func _begin_floor(elapsed: float) -> void:
 		controller.enabled = false
 	_announce_floor()
 	_log("floor started (%.3f s past the shared start)" % elapsed, Color(0.6, 0.9, 1.0))
-	if opts.get("shot_at", "floor") == "floor":
+	if opts.get("shot_at", "floor") == "floor" and _floor_n() == int(opts.get("shot_floor", _floor_n())):
 		_shot_stage("floor", 3.0)
 	_update_hero_sync()
 
@@ -1499,6 +1532,8 @@ func _update_use_prompts() -> void:
 func _check_elevator() -> void:
 	if _menu != null or _van_menu != null or _leaving or not opts.has("auto_elevator"):
 		return   # without --auto-elevator the menu opens only on E (see _use_key)
+	if _shared and not _floor_begun:
+		return   # (a shared floor: not behind the barrier)
 	var on_exit := false
 	for h in _heroes():
 		if not h.dead and h.current_cell() == _exit_cell:
@@ -1678,6 +1713,7 @@ func _choose_exit(choice: String) -> void:
 func _on_exit_decided(choice: String, seat: int) -> void:
 	if _leaving or _ended or _session == null:
 		return
+	_close_pause()
 	_close_elevator(false)
 	var who := str(_names.get(Session.seats.owners.get(seat, 0), "")) if Session.seats != null else ""
 	if who == "" and heroes_by_seat.has(seat):
@@ -1764,12 +1800,15 @@ func _end_contract(reason: String) -> void:
 	if _ended:
 		return
 	_ended = true
+	_close_pause()
 	_close_elevator(false)
 	_freeze(true)
-	var downed: Array[String] = []   # corporate revives every hero still down, and the client is billed (Ledger.revival)
+	# Corporate revives every hero still down, and the client is billed (Ledger.revival). Online the host decides it from
+	# every hero's replicated `dead` and names each by its player (two players may both be Wick); solo it is the hero's name.
+	var downed: Array[String] = []
 	for h in _heroes():
 		if h.dead:
-			downed.append(h.display_name)
+			downed.append(_crew_label(h))
 	_session.finish(reason, downed)
 	var inv := ContractInvoice.build(_session)
 	if _crewed() and Net.is_host():
@@ -1784,6 +1823,7 @@ func _end_from_host(inv: Dictionary) -> void:
 	if _ended or _session == null or _keeps_books():
 		return
 	_ended = true
+	_close_pause()
 	_close_elevator(false)
 	_freeze(true)
 	_session.finished = true
@@ -1799,25 +1839,37 @@ func _show_invoice(inv: Dictionary) -> void:
 	if debug_panel != null:
 		debug_panel.visible = false
 	_invoice = InvoiceScreen.new(inv)
+	if _crewed():
+		_invoice.next_note = "Takes the whole crew back to the board."   # (M5: anyone's Next does)
 	_screens().add_child(_invoice)
 	_invoice.next_contract.connect(_on_next_contract)
 	if opts.has("shot") and _session != null:
 		_take_shot_later(str(opts["shot"]), 1.5)
 
 
+## "Next contract" on the invoice: back to the job board for a new contract. In a crew ANY player's Next takes everyone
+## back (M5, decided like the exits: the first player to choose decides): a client asks the host (crew.again), and the
+## host's new board (crew.board) brings the whole crew, the asking client included.
 func _on_next_contract() -> void:
 	if _leaving:
 		return
 	if _shared and not Net.is_host() and Net.crewed():
-		hud.show_message("Waiting for the host's job board...", Color(0.8, 0.9, 1.0))
-		return   # the host's next board brings the whole crew (crew.board)
+		_flow.request_again()
+		return
 	_leaving = true
 	_dev_released = true
 	_run = null
 	_session = null
 	_spells.clear()
 	Ledger.end_contract()
-	get_tree().reload_current_scene()
+	_change_scene("")   # (the job board; a test records it)
+
+
+## Host (M5): a client pressed "Next contract" on its invoice; the host's own Next does it for everyone.
+func _on_again_requested(peer: int) -> void:
+	if _invoice != null and _ended and not _leaving:
+		_log("next contract: asked by %s" % str(_names.get(peer, peer)), Color(1.0, 0.9, 0.6))
+		_on_next_contract()
 
 
 ## --invoice-demo: a sample contract with a believable ledger, straight to the invoice.
@@ -1949,10 +2001,14 @@ func _can_pause() -> bool:
 
 
 ## The pause overlay; the whole tree stops (GameWorld's clock, actors, spells, tweens, the voice caster)
-## except the overlay itself, which runs while paused.
+## except the overlay itself, which runs while paused. With another player in the crew nothing pauses (decided, M5: the
+## floor clock and the cast schedule run on host_time()): the overlay opens, says so, and only your own hero stands still.
 func _open_pause() -> void:
 	_pause = PauseMenu.new()
+	_pause.online = _crewed()
+	_pause.hosting = Net.is_host()
 	_screens().add_child(_pause)
+	_shot_stage("pause", 1.0)
 	get_tree().paused = not _crewed()   # with a crew the others play on: no local pause (M5)...
 	if _crewed() and controller != null:
 		controller.enabled = false          # ... but your own hero stands still while the menu is open
@@ -1974,13 +2030,39 @@ func _close_pause() -> void:
 
 
 ## F5 and "Abandon contract": back to the job board; the contract is dropped, and the dev flags that skip
-## the board stop applying. In a shared run the host's abandon takes the whole crew back to a new board (the
-## clients follow its crew.board); a client's abandon leaves the crew.
+## the board stop applying. In a crew ANYONE's abandon takes the whole crew back to a new board (M5): the host does it
+## (a client asks, crew.abandon) and the clients follow its crew.board, whose note says who abandoned.
 func _abandon_to_board() -> void:
 	if _leaving:
 		return
 	if _shared and not Net.is_host():
-		_request_leave()
+		if not Net.crewed():
+			_request_leave()   # (the host is gone: nothing to abandon together)
+			return
+		_close_pause()
+		if controller != null:
+			controller.enabled = false
+		if hud != null:
+			hud.show_message("Abandoning the job...", Color(1.0, 0.75, 0.45))
+		_flow.request_abandon()
+		return
+	if _crewed() and _session != null and not _ended:
+		_board_note = "%s abandoned the job" % str(Session.local_entry().get("name", "The host"))
+	_abandon_now()
+
+
+## Host (M5): a client abandoned the contract; the whole crew goes back to the board.
+func _on_abandon_requested(peer: int) -> void:
+	if _leaving or _session == null or _ended:
+		return
+	var who := str(_names.get(peer, "A player"))
+	_log("abandon: asked by %s" % who, Color(1.0, 0.75, 0.45))
+	_board_note = "%s abandoned the job" % who
+	_abandon_now()
+
+
+func _abandon_now() -> void:
+	if _leaving:
 		return
 	_leaving = true
 	get_tree().paused = false
@@ -2246,7 +2328,14 @@ func _break_crates_dev() -> void:
 
 func _teleport_crew(cell: Vector2i) -> void:
 	var spots := _free_cells_near(cell, 2)
-	var list := _heroes()
+	# In seat order (solo that is the player, Rebar, Gasket, as before), so every machine of a crew puts every hero on the
+	# same cell and the floor checksum agrees (the player is a different seat on each machine).
+	var list: Array[Hero] = []
+	for seat in range(1, NetSession.MAX_CREW + 1):
+		if heroes_by_seat.has(seat):
+			list.append(heroes_by_seat[seat])
+	if list.size() != _heroes().size():
+		list = _heroes()
 	for i in list.size():
 		var c := cell if i == 0 else spots[(i - 1) % spots.size()]
 		var lv := map.ground_level(Hex.to_world(c))

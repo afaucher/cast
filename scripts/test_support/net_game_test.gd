@@ -56,11 +56,11 @@ func _reload_game() -> void:
 
 
 func board() -> JobBoard:
-	return game.get("_board") as JobBoard
+	return game.get("_board") as JobBoard if game != null else null
 
 
 func picker() -> SpellPicker:
-	return game.get("_picker") as SpellPicker
+	return game.get("_picker") as SpellPicker if game != null else null
 
 
 func flow() -> CrewFlow:
@@ -111,7 +111,7 @@ func wait_picker(seconds: float = 20.0) -> bool:
 
 
 func wait_floor(seconds: float = 30.0) -> bool:
-	return await until(func() -> bool: return bool(game.get("_floor_begun")), seconds)
+	return await until(func() -> bool: return game != null and bool(game.get("_floor_begun")), seconds)
 
 
 ## The hero this machine controls, and the seat it sits in.
@@ -284,3 +284,56 @@ func client_peers() -> Array[int]:
 		if p != 1:
 			out.append(p)
 	return out
+
+
+# --- M5: the contract flow (exits, the invoice, the board, pause) ----------------------------------------------
+
+## Put `hero` (this machine's own) on `cell`, on the ground.
+func place_hero(hero: Hero, cell: Vector2i) -> void:
+	var map := game.get("map") as HexMap
+	var lv := map.ground_level(Hex.to_world(cell))
+	hero.global_position = Hex.to_world(cell, 0.0 if is_nan(lv) else lv)
+	hero.snap_to_ground()
+
+
+## A floor cell exactly `dist` cells from `c` at about its level (Vector2i.MAX when there is none).
+func cell_at(c: Vector2i, dist: int) -> Vector2i:
+	var map := game.get("map") as HexMap
+	var base: HexMap.Cell = map.get_cell(c)
+	for n in Hex.range_cells(c, dist):
+		var cell: HexMap.Cell = map.get_cell(n)
+		if Hex.distance(n, c) == dist and cell != null and cell.type == HexMap.Tile.FLOOR and base != null and absi(cell.level - base.level) <= 1:
+			return n
+	return Vector2i.MAX
+
+
+## The pause key (Esc) as the game's own input handler gets it.
+func press_esc() -> void:
+	var ev := InputEventAction.new()
+	ev.action = "pause"
+	ev.pressed = true
+	game.call("_unhandled_input", ev)
+
+
+## A value as one canonical string (sorted keys), to compare what two machines show.
+static func canon(v: Variant) -> String:
+	return JSON.stringify(v, "", true)
+
+
+## The invoice on screen (canonical), "" when there is none.
+func invoice_text() -> String:
+	var inv: Dictionary = game.get("_last_invoice")
+	return "" if inv.is_empty() else canon(inv)
+
+
+## Every Ledger line (canonical).
+static func ledger_text() -> String:
+	return canon(Ledger.lines)
+
+
+## The crew member named `who` ("host", "c1", ...): its peer id, 0 when absent.
+static func peer_named(who: String) -> int:
+	for e: Dictionary in Session.crew():
+		if str(e["name"]) == who:
+			return int(e["peer"])
+	return 0

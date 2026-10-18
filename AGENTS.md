@@ -21,8 +21,12 @@ back to the AI, `Session.seats`). The host's world is synced (M3): the host simu
 and streams them after the heroes (`Session.world`, `NetWorldCodec`); on a client they are puppets (`Net.is_puppet`), and props,
 crates, mail and pickups are copies the host arbitrates (`Session.objects`): a client's hit on a breakable, its pickups, its E on
 an employee and its exit choice are requests (`Net.request`, `Net.route_hit`), the host decides once and tells everyone, and a
-client's Ledger and objectives mirror the host's (`Ledger.mirror`, `game._keeps_books`). The elevator and van are
-first-to-choose. Combat crosses owners (M4): a cast is an event that lands `NetCasts.LEAD` later on every machine
+client's Ledger and objectives mirror the host's (`Ledger.mirror`, `game._keeps_books`). A whole contract is shared (M5): the
+elevator and van are first-to-choose and every floor change goes back through the barrier; the host decides drop-offs,
+extraction and "crew incapacitated" (from every hero's replicated `dead`) and its invoice is everyone's; there is no pause
+while crewed (Esc opens the menu, the tree runs: the floor clock and casts run on `host_time()`); any player's "Abandon
+contract" or "Next contract" takes the whole crew back to the host's board (`CrewFlow`, `crew.abandon` / `crew.again`); the
+host leaving ends the session for everyone (no host migration). Combat crosses owners (M4): a cast is an event that lands `NetCasts.LEAD` later on every machine
 (`Session.casts`, `SpellBook.apply`; scheduled effects take their start time as a `SPAWN` param), a hero's attack is
 replayed on its puppet everywhere (`act`), and every effect runs on every machine but each machine applies only what it
 RESOLVES: a hero's hits by its owner (the victim decides), anything else's hits by the attacker's machine

@@ -38,6 +38,9 @@ var offers: Array[ContractRun] = []
 ## A client's board in a shared run: the host picks, so keys and clicks do nothing here (the host's highlighted
 ## card is set from outside with set_highlight). Esc (through the game) leaves the crew.
 var read_only := false
+## A short line from the crew's last job, written on the side in the red grease pencil (M5: "c1 abandoned the job").
+## "" for none. Set before the board enters the tree.
+var notice := ""
 ## True when a 3D backdrop (the garage) is rendered behind the board: the opaque dark shade goes and a light
 ## vignette stays. Set it any time.
 var backdrop_behind := false:
@@ -114,6 +117,12 @@ func _ready() -> void:
 		host_note.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 		host_note.add_theme_constant_override("outline_size", 6)
 		side.add_child(host_note)
+	if notice != "":
+		var note := FormTheme.hand(notice, 30, FormTheme.GREASE)
+		note.name = "Notice"
+		note.add_theme_color_override("font_outline_color", Color(0.96, 0.93, 0.86, 0.9))
+		note.add_theme_constant_override("outline_size", 6)
+		side.add_child(note)
 	top.add_child(side)
 
 	var row := HBoxContainer.new()

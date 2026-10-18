@@ -4,6 +4,10 @@ extends Control
 ## FORM 27-B on a clipboard (scripts/ui/forms/). The game pauses the scene tree while it is open; this overlay
 ## runs while paused (process mode ALWAYS). Add it under a CanvasLayer. Esc resumes.
 ## Emits resume / abandon / main_menu; the game does the work.
+##
+## `online` (set before adding it): another player is in the crew, so NOTHING pauses (networking-build-plan.md M5): the
+## form says the job runs on, Abandon takes the whole crew back to the board, and Main menu ends the job for everyone
+## (`hosting`) or leaves the crew (a client).
 
 signal resume
 signal abandon
@@ -15,6 +19,10 @@ const INPUT_GUARD_MS := 150
 var resume_button: Button
 var abandon_button: Button
 var menu_button: Button
+## A crew is on the job: the tree is NOT paused (see above). Set before the overlay enters the tree.
+var online := false
+## This machine hosts the crew (Main menu ends the job for everyone). Read only when `online`.
+var hosting := true
 
 var _born_ms := 0
 
@@ -37,18 +45,22 @@ func _ready() -> void:
 	center.add_child(holder)
 	var board := FormClipboard.new(640.0, 660.0, 1.0)
 	holder.add_child(board)
-	var sheet := FormSheet.new("27-B", "On hold", "CAST  ·  shift paused", "Status", "STANDING BY", "white", 46)
+	var sheet := FormSheet.new("27-B", "On break" if online else "On hold", "CAST  ·  the job runs on" if online else "CAST  ·  shift paused",
+		"Status", "ON THE CLOCK" if online else "STANDING BY", "white", 46)
 	board.set_content(sheet)
 	var body := sheet.body
 
 	resume_button = _row(body, "Resume", "01", "esc")
 	resume_button.pressed.connect(func() -> void: resume.emit())
-	abandon_button = _row(body, "Abandon contract", "02", "no invoice")
+	abandon_button = _row(body, "Abandon contract", "02", "whole crew" if online else "no invoice")
 	abandon_button.pressed.connect(func() -> void: abandon.emit())
-	menu_button = _row(body, "Main menu", "03", "")
+	menu_button = _row(body, "Main menu", "03", ("ends the job" if hosting else "leave the crew") if online else "")
 	menu_button.pressed.connect(func() -> void: main_menu.emit())
 
-	var note := FormTheme.typed_wrapped("The crew is standing by. Esc resumes. Abandoning drops this contract: back to the job board, no invoice.", 19)
+	var note_text := "The crew is standing by. Esc resumes. Abandoning drops this contract: back to the job board, no invoice."
+	if online:
+		note_text = "Nothing is paused: the job runs on and only you stand still. Abandoning sends the whole crew to the board."
+	var note := FormTheme.typed_wrapped(note_text, 19)
 	body.add_child(FormTheme.margin(note, 22, 14, 22, 8))
 	body.add_child(FormTheme.spacer())
 	var build := HBoxContainer.new()
@@ -58,7 +70,7 @@ func _ready() -> void:
 	build.add_child(FormTheme.typed(BuildVersion.text(), 16))
 	body.add_child(FormTheme.margin(build, 22, 6, 22, 14))
 
-	var stamp := FormStamp.new("ON HOLD", 34, -9.0)
+	var stamp := FormStamp.new("LIVE" if online else "ON HOLD", 34, -9.0)
 	stamp.position = Vector2(350.0, 430.0)
 	board.add_child(stamp)
 

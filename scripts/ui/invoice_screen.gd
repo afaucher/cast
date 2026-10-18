@@ -28,6 +28,9 @@ const INPUT_GUARD_MS := 900
 
 var inv: Dictionary = {}
 var next_button: FormRow = null
+## A short printed line under the Next contract row ("" for none). Online (M5) anyone's Next takes the whole crew back to
+## the board, and this says so. Set it before the screen enters the tree.
+var next_note := ""
 var _born_ms := 0
 var _accent := Color(0.2, 0.3, 0.5)
 var _scroll: ScrollContainer = null
@@ -381,6 +384,11 @@ func _build_side() -> Control:
 	next_button.row_h = 66.0
 	next_button.pressed.connect(func() -> void: next_contract.emit())
 	v.add_child(next_button)
+	if next_note != "":
+		var note := FormTheme.small(next_note, 17)
+		note.name = "NextNote"
+		note.custom_minimum_size = Vector2(SIDE_W, 0)
+		v.add_child(note)
 	slip.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	return slip
 

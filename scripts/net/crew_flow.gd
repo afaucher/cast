@@ -31,6 +31,10 @@ extends Node
 ##   NEXT      (M3) the crew took the elevator down (NetObjects' first-to-choose exit): the host sends crew.next and every
 ##             machine reloads onto the next floor of the same contract and goes through the barrier again (LOADING:
 ##             build, checksum, crew.ready, crew.go), with no board and no license (`floor_change` is true).
+##   BACK      (M5) ANY player can take the whole crew back to the host's board: a client's "Abandon contract" is
+##             crew.abandon and its "Next contract" on the invoice is crew.again, both client -> host; the host's game
+##             does it (abandon_requested / again_requested) exactly as for its own press, and its new board's
+##             crew.board brings everyone (with `note`, e.g. "c1 abandoned the job", shown on every board).
 ##
 ## The host is the only one that decides; clients only draw what they are told. A client that leaves, or is
 ## sent out, just stops being waited for. Joining mid-contract is M6 (until then a crew on a job is closed to
@@ -41,6 +45,8 @@ signal job_changed()                       ## the host took a job: open the lice
 signal load_requested()                    ## everyone signed: build the floor behind the barrier, then report_built()
 signal waiting_changed()                   ## who we're waiting on changed (signed / ready flags, phase)
 signal floor_started(elapsed: float)       ## start_at reached on the shared clock; `elapsed` seconds past it
+signal abandon_requested(peer: int)        ## host (M5): a client's "Abandon contract" (the whole crew goes back to the board)
+signal again_requested(peer: int)          ## host (M5): a client's "Next contract" on the invoice (the same)
 
 const BOARD := "board"
 const LICENSE := "license"
@@ -56,6 +62,8 @@ const SNAP_SEC := 1.0        ## ... and an error this big is set outright
 var phase := IDLE
 var board_seed := -1
 var board_hi := 0
+## A short line the host's board carries for everyone (M5: who abandoned the job; "" for none).
+var board_note := ""
 ## The job the host took: {archetype, seed, difficulty}.
 var job: Dictionary = {}
 ## On the shared clock (host_time seconds): when the floor starts, and the epoch of the floor clock.
@@ -98,6 +106,7 @@ func reset() -> void:
 	phase = IDLE
 	board_seed = -1
 	board_hi = 0
+	board_note = ""
 	job = {}
 	start_at = 0.0
 	floor_start = 0.0
@@ -129,17 +138,19 @@ func _entry(peer: int) -> Dictionary:
 # --- Board -------------------------------------------------------------------------------------------
 
 ## Host: the board (re)opened with this seed. Clients draw the same offers. Also run after "back to the board".
-func host_board(seed_value: int, highlight: int = 0) -> void:
+## `note` is a short line every board shows (who abandoned the job), "" for none.
+func host_board(seed_value: int, highlight: int = 0, note: String = "") -> void:
 	if not _hosting():
 		return
 	phase = BOARD
 	floor_change = false
 	board_seed = seed_value
 	board_hi = highlight
+	board_note = note
 	job = {}
 	_clear_run_state()
 	_session.set_members(0, {"signed": false, "ready": false, "spells": []})
-	_session.send_event(0, "crew.board", {"seed": seed_value, "hi": highlight})
+	_session.send_event(0, "crew.board", {"seed": seed_value, "hi": highlight, "note": note})
 	board_changed.emit()
 	waiting_changed.emit()
 
@@ -159,6 +170,7 @@ func host_pick(run: ContractRun) -> void:
 		return
 	phase = LICENSE
 	floor_change = false
+	board_note = ""
 	job = {"archetype": run.archetype_id, "seed": run.seed, "difficulty": run.difficulty}
 	_clear_run_state()
 	_session.set_members(0, {"signed": false, "ready": false, "spells": []})
@@ -187,6 +199,20 @@ func job_run() -> ContractRun:
 	if job.is_empty():
 		return null
 	return ContractRun.make(str(job["archetype"]), int(job["seed"]) + debug_seed_shift, float(job["difficulty"]))
+
+
+# --- Back to the board (M5): anyone can take the crew there ---------------------------------------------
+
+## Client: this player abandons the contract for the whole crew (the host does it and every machine follows its board).
+func request_abandon() -> void:
+	if _client():
+		_session.send_event(1, "crew.abandon", {})
+
+
+## Client: this player pressed "Next contract" on the invoice: the whole crew goes back to the host's board.
+func request_again() -> void:
+	if _client():
+		_session.send_event(1, "crew.again", {})
 
 
 # --- License checkout (the ready step) ----------------------------------------------------------------
@@ -294,6 +320,11 @@ func _host_event(from: int, kind: String, data: Dictionary) -> void:
 			_sums[from] = data.get("sums", {}) as Dictionary
 			_session.set_members(from, {"ready": true})
 			_check_progress()
+		"crew.abandon":
+			if phase != BOARD and phase != IDLE:
+				abandon_requested.emit(from)
+		"crew.again":
+			again_requested.emit(from)
 
 
 func _client_event(kind: String, data: Dictionary) -> void:
@@ -303,6 +334,7 @@ func _client_event(kind: String, data: Dictionary) -> void:
 			floor_change = false
 			board_seed = int(data.get("seed", -1))
 			board_hi = int(data.get("hi", 0))
+			board_note = str(data.get("note", ""))
 			job = {}
 			_clear_run_state()
 			board_changed.emit()
@@ -313,6 +345,7 @@ func _client_event(kind: String, data: Dictionary) -> void:
 		"crew.job":
 			phase = LICENSE
 			floor_change = false
+			board_note = ""
 			job = data.duplicate()
 			_clear_run_state()
 			job_changed.emit()
@@ -335,7 +368,7 @@ func _client_event(kind: String, data: Dictionary) -> void:
 ## Host: a new member on the board gets the board (the offers and the highlighted card) at once.
 func _on_peer_joined(peer: int) -> void:
 	if _hosting() and phase == BOARD and board_seed >= 0:
-		_session.send_event(peer, "crew.board", {"seed": board_seed, "hi": board_hi})
+		_session.send_event(peer, "crew.board", {"seed": board_seed, "hi": board_hi, "note": board_note})
 
 
 func _on_roster_changed() -> void:
