@@ -47,10 +47,19 @@ func setup() -> void:
 	eq(hud.trigger_word, "pickle", "trigger word stored")
 	hud.set_mic_level(0.6)
 	hud.show_center("Exit reached", Color.WHITE, 0.5)
+	check(not hud._mic_bar.visible, "no mic meter during play")
+	check(not hud.console.visible, "the type box is hidden until Enter")
+	var enter := InputEventKey.new()
+	enter.keycode = KEY_ENTER
+	enter.pressed = true
+	hud._unhandled_input(enter)
+	check(hud.console.visible and hud.console.has_focus(), "Enter shows and focuses the type box")
 	var typed: Array = []
 	hud.console_submitted.connect(func(t: String) -> void: typed.append(t))
 	hud.console.text_submitted.emit("cast heal")
 	eq(typed, ["cast heal"], "console emits what was typed")
+	await frames(1)
+	check(not hud.console.visible, "and hides again once submitted")
 	hero.apply_damage(30.0)
 	await frames(3)
 	near(hud._player_bar.value, 0.7, 0.001, "player bar follows hp")

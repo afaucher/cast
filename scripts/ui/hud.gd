@@ -113,6 +113,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _console_enabled and console != null and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+			console.visible = true   # hidden until Enter (user, 2026-10-18); it hides again when it loses focus
 			console.grab_focus()
 			get_viewport().set_input_as_handled()
 
@@ -212,7 +213,8 @@ func clear_center() -> void:
 	_center.visible = false
 
 
-## Add the typed-spell box (bottom right). Enter focuses it; submit emits console_submitted.
+## Add the typed-spell box (bottom right). It stays hidden until Enter shows and focuses it; submit, Esc or a click
+## away hides it again. Submit emits console_submitted.
 func enable_console() -> void:
 	if console != null:
 		return
@@ -225,6 +227,8 @@ func enable_console() -> void:
 	console.offset_right = -16
 	console.offset_top = -92
 	console.offset_bottom = -60
+	console.visible = false
+	console.focus_exited.connect(func() -> void: console.visible = false)
 	console.text_submitted.connect(func(t: String) -> void:
 		console.clear()
 		console.release_focus()
@@ -329,8 +333,10 @@ func _build_mic() -> void:
 	lbl.offset_right = -16
 	lbl.offset_bottom = -30
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.visible = false   # the mic meter is hidden during play (user, 2026-10-18); Voice setup and F1 still show the mic
 	_root.add_child(lbl)
 	_mic_bar = HudBar.new()
+	_mic_bar.visible = false
 	_mic_bar.fill = Color(0.95, 0.75, 0.25)
 	_mic_bar.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_mic_bar.offset_left = -320
