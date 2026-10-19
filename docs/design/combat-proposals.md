@@ -21,10 +21,12 @@ A1, A3, B6, D11 and the environment notes in 5.3). **[proposal]** marks every nu
 
 ### 1.0 Decided (user, 2026-10-19). This replaces the three-order proposal in 1.1 where they differ.
 - **Every named character has one order, or none (its default behaviour).** That includes employees, not only AI heroes.
-- **Two orders:**
+- **Three orders:**
   - **"<name> go"** sets a waypoint where the speaker aims. The character walks there, then **holds** there until a new
-    order: an AI hero fights what comes, an employee stays put. Aimed at a monster, an AI hero attacks it. A new "go"
-    replaces the old one.
+    order: an AI hero fights what comes to it, an employee stays put. A new "go" replaces the old one.
+  - **"<name> attack"** is a stance: **fight freely**, engaging anything nearby on its own (lifting the restraint
+    baseline) until the fight is over (no monster fighting near it), then back to **follow** the speaker. Henchmen take
+    it (weak and funny); staff refuse with a bark ("I'm in accounts!"). On a human-played hero it is a marker only.
   - **"<name> follow"** clears the order: the character follows **the speaker** (allies today always follow seat 1's
     hero). There is no way to tell one character to follow another.
 - **On a human-played hero** an order is only a world marker on that player's screen ("Fox: go here"); it controls
