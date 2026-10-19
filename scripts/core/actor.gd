@@ -39,6 +39,7 @@ const STAT_DAMAGE_TAKEN := "damage_taken"   ## multiplies incoming damage (armor
 const STAT_MOVE_SPEED := "move_speed"       ## multiplies walking speed (coffee 1.6, crash 0.7, goo)
 const STAT_ATTACK_RATE := "attack_rate"     ## multiplies attacks per second: cooldowns and the bow draw divide by it
 const STAT_ROOT := "root"                   ## present = rooted: cannot move and cannot be shoved (vines); mult is unused
+const STAT_DAZE := "daze"                   ## present = dazed: cannot move or attack, still casts (the brute's slam); mult is unused
 const MOVE_MULT_MIN := 0.2
 const MOVE_MULT_MAX := 2.5
 const ATTACK_RATE_MIN := 0.25
@@ -62,6 +63,10 @@ const FALL_STAGGER := 0.4
 const VOID_FALL_TIME := 0.7       ## non-heroes fall this long into a pit, then die
 const VOID_TICK_DAMAGE := 5.0     ## heroes pulled back from a pit take this
 const PULL_TIME := 0.3
+
+# --- Daze (the brute's direct slam) --------------------------------------------------------
+const DAZE_ID := "daze"           ## the modifier id a daze lives under (STAT_DAZE)
+const DAZE_GUARD := 1.5           ## seconds after a daze ends during which no new daze takes (no stun-lock)
 
 var hp: float:
 	set(v):
@@ -99,6 +104,7 @@ var _pull_to := Vector3.ZERO
 var _src_team := -1               ## team of whoever caused the current shove (-1 unknown)
 var _src_ref: WeakRef = null
 var _stagger_until := -1.0
+var _daze_guard_until := -1.0     ## GameWorld.time until which a new daze is refused (the daze plus DAZE_GUARD)
 var _safe_cell := Vector2i(1 << 20, 1 << 20)   ## last cell this actor stood on, for pit rescues
 
 
@@ -125,6 +131,9 @@ func net_fields() -> Dictionary:
 		"_pull": Net.PRIVATE, "_pull_t": Net.PRIVATE, "_pull_from": Net.PRIVATE,
 		"_pull_to": Net.PRIVATE, "_src_team": Net.PRIVATE, "_src_ref": Net.PRIVATE,
 		"_stagger_until": Net.PRIVATE, "_safe_cell": Net.PRIVATE,
+		# The daze itself is a modifier (_modifiers, announced like any status); the immunity after it is the owner's
+		# bookkeeping: only the owner applies a daze (Combat asks who resolves the target).
+		"_daze_guard_until": Net.PRIVATE,
 	}
 
 
@@ -157,14 +166,16 @@ func clear_modifier(id: String) -> void:
 
 ## The modifiers this actor's owner announced (NetStatus, M4), on a copy: replaces the whole set. `mods` is id ->
 ## [mult, seconds left, stat]; `grace` keeps each one a little past its end, so a buff the owner keeps refreshing
-## (armor) does not blink between two announcements.
+## (armor) does not blink between two announcements. A daze is one blow, never refreshed, so it gets no grace (the stars
+## leave every screen when they leave the owner's).
 func net_set_modifiers(mods: Dictionary, grace: float) -> void:
 	_modifiers.clear()
 	for id: Variant in mods:
 		var e := mods[id] as Array
 		if e == null or e.size() < 3:
 			continue
-		_modifiers[str(id)] = {"mult": float(e[0]), "until": _now() + float(e[1]) + grace, "stat": str(e[2])}
+		var g := 0.0 if str(e[2]) == STAT_DAZE else grace
+		_modifiers[str(id)] = {"mult": float(e[0]), "until": _now() + float(e[1]) + g, "stat": str(e[2])}
 
 
 ## The live modifiers as id -> [mult, seconds left, stat] (what the owner announces).
@@ -224,6 +235,37 @@ func scaled_cooldown(base: float) -> float:
 ## Rooted (vines): cannot walk and cannot be shoved, but may still attack and cast.
 func is_rooted() -> bool:
 	return stat_mult_present(STAT_ROOT)
+
+
+## Dazed (a direct hit from the brute's slam): cannot walk or attack (move refuses, is_helpless), but casts still go off.
+func is_dazed() -> bool:
+	return stat_mult_present(STAT_DAZE)
+
+
+## Daze this actor for `seconds` (the verb; Combat.slam calls it on the targets this machine resolves, so the target's
+## owner applies it, and the modifier is announced to the other screens like any status). It ignores shove_mult: an
+## immovable hero still reels. Refused while already dazed or within DAZE_GUARD of the last daze ending (no stun-lock),
+## while dead, and on a copy (its owner decides). Returns true when the daze took.
+func daze(seconds: float, _source: Node = null) -> bool:
+	if dead or seconds <= 0.0 or Net.is_copy(self) or not is_inside_tree():
+		return false
+	if is_dazed() or _now() < _daze_guard_until:
+		return false
+	_daze_guard_until = _now() + seconds + DAZE_GUARD
+	set_modifier(DAZE_ID, 1.0, seconds, STAT_DAZE)
+	_on_interrupted()
+	_on_dazed(seconds)
+	return true
+
+
+## Seconds of immunity to a new daze left (0 when one would take; tests and the HUD).
+func daze_guard_left() -> float:
+	return maxf(0.0, _daze_guard_until - _now())
+
+
+## Override: a daze just took (a hero lowers its bow and drops its swing).
+func _on_dazed(_seconds: float) -> void:
+	pass
 
 
 ## True if any live modifier has this stat (for stats where only presence matters).
@@ -308,9 +350,9 @@ func move(dir: Vector3, delta: float) -> bool:
 	dir.y = 0.0
 	if _forced:
 		return false   # being shoved: steering is ignored
-	if dir.length() < 0.001 or dead:
+	if dir.length() < 0.001 or dead or is_dazed():
 		climbing = false
-		return false
+		return false   # (dazed: the brute's slam; no walking until it wears off)
 	if dir.length() > 1.0:
 		dir = dir.normalized()
 	facing = dir.normalized()
@@ -429,9 +471,9 @@ func is_staggered() -> bool:
 	return _now() < _stagger_until
 
 
-## Shoved or staggered: AI and input should not steer or attack.
+## Shoved, staggered or dazed: AI and input should not steer or attack (voice casts still work).
 func is_helpless() -> bool:
-	return _forced or _now() < _stagger_until
+	return _forced or _now() < _stagger_until or is_dazed()
 
 
 ## True while a shove has the actor off the ground.

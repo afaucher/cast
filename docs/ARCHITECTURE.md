@@ -237,7 +237,10 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
   rules, slide, climb slow-down, separation and ground snap. Also `apply_damage(amount, source)`,
   `heal(amount)`, `set_modifier(id, mult, duration)` (damage-taken multiplier; the same id
   refreshes), `peck(source)` (the Chicken spell's hit for nothing: no damage, a monster turns on the pecker; through
-  `Combat.peck`), `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`, `pecked`.
+  `Combat.peck`), `daze(seconds, source)` (the brute's direct slam through `Combat.slam`: a `STAT_DAZE` modifier, so
+  `is_dazed()` / `is_helpless()` are true, `move()` refuses and the hero can't attack, but casts go off; then
+  `DAZE_GUARD` 1.5 s of immunity; the owner applies it, a copy refuses; `docs/design/characters.md`, "The daze"),
+  `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`, `pecked`.
   Override `_on_death()` for death visuals (the default is `queue_free`). Actors join the group `"actors"`.
   `net_fields()` says who may write each var (`Net.SPAWN/OWNER/PRIVATE/LOCAL`, `scripts/net/net.gd`);
   subclasses merge theirs into `super()`, and `test_net_contract` fails on any undeclared var.
@@ -287,7 +290,7 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool
 `Actor.shove(dir, distance, source = null)` starts a short (0.2-0.35 s, ease-out) kinematic slide of
 `distance * shove_mult` along `dir` on X/Z (`shove_mult` 0 = immovable: Rebar; brute 0.4, swarmer 1.5).
 It is driven by the tree's `physics_frame` signal only while active. While `is_shoved()` the actor ignores
-`move()`; `is_helpless()` (shoved or staggered) is what the player controller, `AllyBrain`, `Monster` and the
+`move()`; `is_helpless()` (shoved, staggered or dazed) is what the player controller, `AllyBrain`, `Monster` and the
 training dummy check before steering or attacking (voice casts still work). Terrain rules differ from walking:
 - a wall, or a rise of 2+ levels, stops the slide: "slam", 8 damage + 0.4 s stagger (shoves under 1.0 just stop);
 - drops of up to 3 levels are free; a higher ledge is fine too: the actor falls under gravity and takes 6 damage
