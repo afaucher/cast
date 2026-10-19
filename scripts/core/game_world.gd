@@ -102,8 +102,8 @@ func breakables_in_radius(pos: Vector3, radius: float) -> Array[Actor]:
 	return out
 
 
-## Living priced props (group "priced_props": the client's property) within radius. Arrows and bolts hit them
-## (user, 2026-10-18: "all arrows hit props"); swings do not.
+## Living priced props (group "priced_props": the client's property) within radius. Every arrow and bolt and the crew's
+## swings hit them (user, 2026-10-18: "all arrows hit props", "let player attacks break them"); a monster's swing does not.
 func props_in_radius(pos: Vector3, radius: float) -> Array[Actor]:
 	var out: Array[Actor] = []
 	if root == null or not root.is_inside_tree():

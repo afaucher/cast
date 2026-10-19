@@ -343,6 +343,9 @@ func _check_floors() -> void:
 		eq(g.kind, GOBLIN, "a goblin")
 		check(not site.monsters.has(g), "not in the packs")
 		check((g.route as Array).size() >= 3, "with his route")
+		# He counts toward an "exterminate everything" contract (user, 2026-10-18: "Yes, count him"): the game's pest
+		# count (game.gd _pest_alive) is every living Monster in the "monsters" group when the pest is "everything".
+		check(g is Monster and get_tree().get_nodes_in_group("monsters").has(g), "a scout counts toward \"exterminate everything\"")
 
 
 func _check_log() -> void:

@@ -16,7 +16,8 @@ static func resolves(target: Actor, source: Node) -> bool:
 
 
 ## Hit every actor of the other team within `reach` of the attacker and
-## inside a cone of `arc_deg` around `dir`, plus any breakable (mail package, GameWorld.hittable_in_radius).
+## inside a cone of `arc_deg` around `dir`, plus any breakable (mail package, GameWorld.hittable_in_radius). A hero's
+## swing also hits the priced props in it (user, 2026-10-18: "let player attacks break them"); a monster's does not.
 ## Returns the actors hit. `shove` > 0 also pushes each target that distance directly away from the
 ## attacker (scaled by its shove_mult).
 static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: float, damage: float, shove: float = 0.0) -> Array[Actor]:
@@ -24,7 +25,7 @@ static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: floa
 	dir = dir.normalized()
 	var hit: Array[Actor] = []
 	var foe := GameWorld.other_team(attacker.team)
-	for a in GameWorld.hittable_in_radius(attacker.global_position, reach, foe):
+	for a in GameWorld.hittable_in_radius(attacker.global_position, reach, foe, attacker.team == GameWorld.TEAM_HEROES):
 		var to := a.global_position - attacker.global_position
 		to.y = 0.0
 		if arc_deg < 360.0 and to.length() > 0.001 and rad_to_deg(dir.angle_to(to.normalized())) > arc_deg * 0.5:   # (a full circle skips the test: a target exactly behind measured 180.0000x degrees and was missed)

@@ -17,7 +17,9 @@ extends Actor
 ##     of shove distance, less once it has slowed), credited to whoever caused the shove
 ##   - arrows and bolts that run into it (Wick's arrows, the hero bolt, an archer's arrow, in a fight or at target
 ##     practice: Projectile.hits_props, user 2026-10-18 "all arrows hit props"), credited to the shooter
-##   - hero melee does not target neutral actors, so nobody breaks props by accident with a swing
+##   - a hero's melee swing that reaches it (Combat.melee_arc: Wick's bow bash, Gasket's hammer and spin, Rebar's fist;
+##     AI allies too, which avoid swinging at a target with a prop in the arc), credited to the hero (user, 2026-10-18:
+##     "let player attacks break them"). Employees are still never hit by the crew's weapons
 ##
 ## Usage:
 ##   var p := PricedProp.spawn(cell, "gold_toilet", {})

@@ -156,7 +156,8 @@ func _check_basics() -> void:
 # --- Every way to break one --------------------------------------------------------------
 
 func _check_hits() -> void:
-	# Hero melee (primary), and it still leaves priced props and employees alone.
+	# Hero melee (primary). Since 2026-10-18 a hero's swing also chips a priced prop in its arc (user: "let player attacks
+	# break them"); a dent is still free.
 	_fresh()
 	var hero := _hero(Vector3(-1.2, 0, 0), "Wick")
 	var pkg := _box(Vector3(0.3, 0, 0), {"contents": "skulls"})
@@ -164,8 +165,8 @@ func _check_hits() -> void:
 	var prop_hp := prop.hp
 	check(hero.melee(Vector3.RIGHT), "the swing fires")
 	check(pkg.dead, "a melee swing breaks a package")
-	near(prop.hp, prop_hp, 0.0001, "melee still does not touch priced props")
-	eq(Ledger.damages(), 0, "breaking mail is not property damage")
+	check(prop.hp < prop_hp and not prop.dead, "the swing chips the priced prop in its arc (%.1f of %.1f)" % [prop.hp, prop_hp])
+	eq(Ledger.damages(), 0, "breaking mail is not property damage, and a dent is free")
 	# Out of reach / outside the arc: untouched
 	_fresh()
 	hero = _hero(Vector3(-4, 0, 0), "Wick")

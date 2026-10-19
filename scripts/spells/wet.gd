@@ -140,7 +140,7 @@ func _footprint(at: Vector3) -> void:
 		_print_mesh.height = 0.01
 		_print_mesh.radial_segments = 8
 	while _feet.size() >= MAX_FEET:
-		var old: MeshInstance3D = _feet.pop_front()
+		var old: Variant = _feet.pop_front()   # (a print that faded out on its own is already freed)
 		if is_instance_valid(old):
 			old.queue_free()
 	var mat := Fx.glow_material(PRINT, false)

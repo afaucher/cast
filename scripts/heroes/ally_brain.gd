@@ -6,6 +6,11 @@ extends Node
 ## (closes in), the other ranged (kites at a distance, melees when cornered).
 ## Allies do not cast spells in the POC.
 ##
+## THE CLIENT'S PROPERTY. The crew's swings and every arrow, bolt and boulder hit priced props (user, 2026-10-18), so an
+## AI ally is careful where a player may not be (`prop_care`): it only ever targets monsters, picks the side of its arc
+## that keeps a prop out of a swing, holds Gasket's spin while a prop is within reach, never bowls or shoots down a lane
+## a prop stands in, and otherwise steps around its target to a clean angle (SIDESTEP_TIME at a time) before it attacks.
+##
 ## Formation: each ally settles FORMATION_HEX_MIN..MAX hexes from the leader, trailing behind it to one
 ## side (formation_angle - PI is the side offset in radians, so two allies are always at distinct angles),
 ## snapped to real floor so a slot never lands in a wall. Heroes keep PERSONAL_SPACE from each other, and
@@ -32,6 +37,12 @@ const PROBE_STEP := 0.4
 const BOWL_MIN := 3.0          ## Rebar bowls at enemies this far ...
 const BOWL_MAX := 9.0          ## ... up to this far
 const BOWL_LANE := 1.0         ## skip a throw that would pass this close to another hero
+const PROP_MARGIN := 0.3       ## a prop this much beyond a swing's reach / a lane's width still counts as in the way
+const ARC_SLACK_DEG := 8.0     ## a swing turned this far short of its half-arc still has the target in it
+const SIDESTEP_TIME := 0.45    ## a blocked attack steps around the target for this long before it tries again
+
+## True: AI allies keep the client's property out of their swings, spins, bowls and shots (tests measure it off too).
+static var prop_care := true
 
 @export var prefers_ranged := false
 @export var formation_angle := 2.4   ## radians; where around the leader this ally likes to stand (PI = straight behind)
@@ -48,6 +59,10 @@ var _path: Array[Vector2i] = []
 var _path_goal := Vector2i(1 << 20, 1 << 20)
 var _path_idx := 0
 var _repath_at := 0.0
+var _sidestep_until := -1.0       ## stepping around the target to a clean angle until then
+var _sidestep_dir := Vector3.ZERO
+## Measurements (tests): attacks held for a prop in the way.
+var held_for_props := 0
 
 
 func _ready() -> void:
@@ -63,6 +78,7 @@ func net_fields() -> Dictionary:
 		"_following": Net.PRIVATE, "_heading": Net.PRIVATE, "_leader_prev": Net.PRIVATE,
 		"_leader_walking_until": Net.PRIVATE,
 		"_path": Net.PRIVATE, "_path_goal": Net.PRIVATE, "_path_idx": Net.PRIVATE, "_repath_at": Net.PRIVATE,
+		"_sidestep_until": Net.PRIVATE, "_sidestep_dir": Net.PRIVATE, "held_for_props": Net.PRIVATE,
 	}
 
 
@@ -107,6 +123,10 @@ func _pick_target() -> Actor:
 
 
 func _fight(foe: Actor, delta: float) -> void:
+	if GameWorld.time < _sidestep_until:
+		hero.move(_sidestep_dir, delta)   # stepping around the target to a clean angle (a prop was in the way)
+		hero.face_point(foe.global_position)
+		return
 	if _try_secondary(foe):
 		return
 	var to := foe.global_position - hero.global_position
@@ -115,26 +135,92 @@ func _fight(foe: Actor, delta: float) -> void:
 	var dir := to.normalized() if d > 0.001 else hero.facing
 	if prefers_ranged:
 		if d < hero.melee_reach - 0.2:
-			hero.face_point(foe.global_position)
-			hero.melee(dir)
+			_swing(foe, dir)
 		elif d < RANGED_MIN:
 			hero.move(-dir, delta)
 			hero.face_point(foe.global_position)
 			if _has_los(foe):
-				hero.shoot(dir)
+				_shoot(foe, dir, d)
 		elif d <= RANGED_MAX and _has_los(foe):
 			hero.face_point(foe.global_position)
-			hero.shoot(dir)
+			_shoot(foe, dir, d)
 		else:
 			_move_toward(foe.global_position, delta)
 	else:
 		if d <= _melee_stop() + 0.2:
-			hero.face_point(foe.global_position)
-			hero.melee(dir)
+			_swing(foe, dir)
 		else:
 			_move_toward(foe.global_position, delta)
 			if d <= hero.melee_reach - 0.2:
-				hero.melee(dir)
+				_swing(foe, dir)
+
+
+# --- The client's property ---------------------------------------------------------------------
+
+## A melee swing at `foe`: straight at it, or turned to one side of the arc (the target still in it) to keep a priced prop
+## out; with no clean side it steps around the target instead.
+func _swing(foe: Actor, dir: Vector3) -> void:
+	if not prop_care:
+		hero.face_point(foe.global_position)
+		hero.melee(dir)
+		return
+	if hero.cooldown_left(Hero.KEY_MELEE) > 0.0:
+		hero.face_point(foe.global_position)
+		return
+	var turn := maxf(0.0, hero.melee_arc * 0.5 - ARC_SLACK_DEG)
+	for k: float in [0.0, turn, -turn]:
+		var d := dir.rotated(Vector3.UP, deg_to_rad(k))
+		if _arc_clear(d, hero.melee_reach, hero.melee_arc):
+			hero.face_point(hero.global_position + d)
+			hero.melee(d)
+			return
+	_hold(foe)
+
+
+## A shot (arrow or bolt) at `foe` `dist` away: only down a lane with no prop before the target.
+func _shoot(foe: Actor, dir: Vector3, dist: float) -> void:
+	if prop_care and not _lane_clear(dir, dist, 0.3):
+		_hold(foe)
+		return
+	hero.shoot(dir)
+
+
+## Hold the attack: step around the target, to the side away from the nearest prop in the way.
+func _hold(foe: Actor) -> void:
+	held_for_props += 1
+	var to := foe.global_position - hero.global_position
+	to.y = 0.0
+	var side := Vector3(-to.z, 0.0, to.x).normalized()
+	var near := GameWorld.props_in_radius(hero.global_position, 4.0)
+	if not near.is_empty():
+		var away := hero.global_position - near[0].global_position
+		if side.dot(away) < 0.0:
+			side = -side
+	_sidestep_dir = side
+	_sidestep_until = GameWorld.time + SIDESTEP_TIME
+
+
+## No priced prop inside a swing of `reach` and `arc_deg` along `dir` (Combat.melee_arc's own test, a little wider).
+func _arc_clear(dir: Vector3, reach: float, arc_deg: float) -> bool:
+	for p in GameWorld.props_in_radius(hero.global_position, reach + PROP_MARGIN):
+		var to := p.global_position - hero.global_position
+		to.y = 0.0
+		if arc_deg >= 360.0 or to.length() < 0.001:
+			return false
+		if rad_to_deg(dir.angle_to(to.normalized())) <= arc_deg * 0.5 + ARC_SLACK_DEG:
+			return false
+	return true
+
+
+## No priced prop within `width` (plus its radius) of the lane from this hero along `dir` for `length`.
+func _lane_clear(dir: Vector3, length: float, width: float) -> bool:
+	var from := Vector2(hero.global_position.x, hero.global_position.z)
+	var to := from + Vector2(dir.x, dir.z) * length
+	for p in GameWorld.props_in_radius(hero.global_position, length + 2.0):
+		var q := Vector2(p.global_position.x, p.global_position.z)
+		if Geometry2D.get_closest_point_to_segment(q, from, to).distance_to(q) <= width + p.radius + PROP_MARGIN:
+			return false
+	return true
 
 
 ## How close a melee ally closes in: a little inside its own primary's reach (Rebar's long fist stops
@@ -325,12 +411,15 @@ func _try_secondary(foe: Actor) -> bool:
 		var reach := Hero.SPIN_REACH
 		var close := GameWorld.actors_in_radius(hero.global_position, reach, GameWorld.TEAM_MONSTERS)
 		if close.size() >= 2 or (close.size() == 1 and hero.cooldown_left(Hero.KEY_RANGED) <= 0.0):
+			if prop_care and not _arc_clear(hero.facing, reach, 360.0):
+				return false   # a prop within the spin: the hammer will do
 			return hero.shoot(hero.facing)
 	elif hero.secondary_kind == "bowl":
 		var to := foe.global_position - hero.global_position
 		to.y = 0.0
 		var d := to.length()
-		if d >= BOWL_MIN and d <= BOWL_MAX and _has_los(foe) and _bowl_lane_clear(to / d):
+		if d >= BOWL_MIN and d <= BOWL_MAX and _has_los(foe) and _bowl_lane_clear(to / d) \
+				and (not prop_care or _lane_clear(to / d, Hero.BOWL_RANGE, BowlBoulder.HIT_RADIUS)):   # (it rolls on past the target)
 			hero.face_point(foe.global_position)
 			return hero.shoot(to / d)
 	return false

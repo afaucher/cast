@@ -639,6 +639,27 @@ indicator.
 - **No per-room activity cap** (Option 3's "1-2 activities per room"): fights are rare and practice is per archer.
 - **Not built:** room-heard agitation (+0.25 R for 60 s), hunters.
 
+### Later the same day (user, 2026-10-18)
+- **"Let's let player attacks break them."** A hero's melee swing (Wick's bash, Gasket's hammer and spin, Rebar's fist)
+  hits the priced props in its arc too (`Combat.melee_arc` asks `hittable_in_radius(..., props)` for a hero attacker):
+  chip damage, and a break bills the last damager as usual. A monster's swing still leaves props alone, and employees
+  are never hit by the crew's weapons. Covered in `test_arrow_props`.
+- **"Double check our AI teammates won't go wild."** Measured on 5 real contract floors (`test_ally_props`: a stand-in
+  leader that never attacks walks every room and waits out each fight; Rebar and Gasket fight as AI allies; 150 s a
+  floor), run careless and careful:
+
+  | AI allies | props hit / floor | props broken / floor | billed / floor | kills a minute |
+  |---|---|---|---|---|
+  | careless (the new rules, no care) | 0.4 (up to 36 HP: a bowl) | 0 | $0 | 14.3 |
+  | careful (`AllyBrain.prop_care`) | 0.2 (12 HP: a monster knocked into a prop) | 0 | $0 | 16.9 |
+
+  The allies never went wild, but they are careful anyway (cheap, and it only changes the AI): they never target a
+  prop, turn a swing to the side of its arc that keeps a prop out (the target still in it), hold Gasket's spin while a
+  prop is within reach, never bowl or shoot down a lane with a prop in it, and otherwise step around the target for
+  0.45 s before trying again. Player-controlled heroes are unchanged. The kill rate did not drop (the first careless
+  floor's leader got stuck, which explains most of the difference).
+- **The goblin counts toward "exterminate everything"** ("Yes, count him").
+
 ### How to playtest it
 - `.\run.ps1 --seed 7 --contract 0 --spells heal,damp --no-mic --restless 1`: archers practise on cheap props near the
   crew, brutes may pick fights, scouts walk the corridors. Without `--restless`, nothing restless happens for 2 minutes.

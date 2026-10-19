@@ -121,4 +121,50 @@ func setup() -> void:
 	archer._on_strike_visual()                                     # a fight's visual (harmless)
 	await frames(40)
 	near(vase.hp, vase.max_hp, 0.01, "... nor does a fight's visual arrow")
+	await _check_melee()
 	finish()
+
+
+func _kit_hero(pos: Vector3, kit: String) -> Hero:
+	var h := Hero.new()
+	HeroKit.apply_to(h, kit)
+	h.display_name = kit.capitalize()
+	GameWorld.spawn(h, pos)
+	h.snap_to_ground()
+	return h
+
+
+## The crew's swings too (user, 2026-10-18: "let player attacks break them"): a hero's melee and Gasket's spin chip and
+## break props (billed to the hero); employees are never hit by the crew's weapons; a monster's swing leaves props alone.
+func _check_melee() -> void:
+	# Gasket's hammer (28): chips the wine rack (45), the second swing breaks it and bills Gasket.
+	_fresh()
+	var gasket := _kit_hero(Vector3(-1.2, 0, 0), "gasket")
+	var rack := _prop("wine_rack", Vector3(0.2, 0, 0))
+	var emp := ContractParts.spawn_employee(Hex.from_world(Vector3(-0.2, 0, 1.2)), {"style": "staff", "name": "Pat"})
+	await frames(2)
+	var emp_hp := emp.hp if emp != null else 0.0
+	check(gasket.melee(Vector3.RIGHT), "the hammer swings")
+	near(rack.hp, rack.max_hp - gasket.melee_damage, 0.01, "a hero's swing chips a priced prop")
+	eq(Ledger.damages(), 0, "a dent is free")
+	if emp != null:
+		near(emp.hp, emp_hp, 0.001, "the employee beside it is never hit by the crew's weapons")
+	await frames(int(60.0 * gasket.melee_cooldown) + 5)
+	check(gasket.melee(Vector3.RIGHT), "the hammer swings again")
+	check(rack.dead, "two swings break the rack")
+	eq(Ledger.damages(), PricedProp.price_of("wine_rack"), "the break bills its price")
+	eq(str(Ledger.lines.back().get("who", "")), "Gasket", "... to Gasket")
+	# Gasket's spin: every prop around him.
+	_fresh()
+	var spinner := _kit_hero(Vector3(0, 0, 0), "gasket")
+	var east := _prop("server_rack", Vector3(1.3, 0, 0))
+	var west := _prop("server_rack", Vector3(-1.3, 0, 0))
+	check(spinner.shoot(Vector3.RIGHT), "the spin fires")
+	check(east.hp < east.max_hp and west.hp < west.max_hp, "the spin chips the props all around")
+	# A monster's swing leaves props alone (it strikes at heroes; only the crew's weapons hit the client's property).
+	_fresh()
+	var grunt := MonsterFactory.spawn("grunt", Hex.from_world(Vector3(-1.2, 0, 0)))
+	grunt.aggro_range = 0.0
+	var statue := _prop("marble_statue", Vector3(0.2, 0, 0))
+	Combat.melee_arc(grunt, Vector3.RIGHT, 1.6, 120.0, 10.0)
+	near(statue.hp, statue.max_hp, 0.01, "a monster's swing does not hit a prop")

@@ -342,6 +342,8 @@ The lab views are written as `<base>_<view>.png` at the resolution given:
 - **He restocks** about 60 s after a volley (not one volley per floor).
 - **One per floor, sometimes two** (1-2).
 - **HUD name: "Goblin Scout".**
+- **He counts toward "exterminate everything" contracts** ("Yes, count him", 2026-10-18, after step 2): a living scout
+  keeps such a floor from being clean. He is never a pest kind of his own (open question 8 stays open).
 - Not answered yet: "fireball lights the rack" and "vines stop him lighting" stay as designed until the playtest says otherwise.
 
 ## Step 2 as built (2026-10-18)
@@ -359,7 +361,7 @@ propagation is `MonsterSenses.alarm` (`monster-awareness.md`, "Step 2 as built")
 | After a volley | HIDE: behind the nearest monster farther from the crew (else 4-6 hexes away from the crew), cowering; cornered (a hero within 2): a firecracker, a 0.45 s wind-up, a pop 1.2 ahead of him (radius 1.5, 3 damage, shove 1.0) through `Combat`, every 3 s; after **20 s** with nobody within 4 he rejoins his route (rack empty) |
 | Restock | **60 s** after a volley or a dud, once he is patrolling or hiding |
 | Second scout | within 18 of a volley: runs to S (10 s at most), no volley of his own for 30 s |
-| Spawning | 1 on floor 1, 1 on floor 2 (2 at difficulty 0.6 or more), 2 on floor 3 (`SiteBuilder.scout_count`), fewer if the floor lacks corridors: each a different corridor link longer than 8 cells, never touching the start or arrival room, links with packs in both rooms first; a generator of its own seeded from the floor (nothing else in the plan moves). 15 floors measured: 20 scouts, every floor 1-2, the scouts' planning at most about 7 ms, the whole plan at most 160 ms (limit 600). Not in the packs, not in `Site.monsters`; a pest only on an "everything" contract |
+| Spawning | 1 on floor 1, 1 on floor 2 (2 at difficulty 0.6 or more), 2 on floor 3 (`SiteBuilder.scout_count`), fewer if the floor lacks corridors: each a different corridor link longer than 8 cells, never touching the start or arrival room, links with packs in both rooms first; a generator of its own seeded from the floor (nothing else in the plan moves). 15 floors measured: 20 scouts, every floor 1-2, the scouts' planning at most about 7 ms, the whole plan at most 160 ms (limit 600). Not in the packs, not in `Site.monsters`; he counts toward an "exterminate everything" contract (user: "Yes, count him") |
 
 ### Online (as §7, with these details)
 - His wire state stands for the phase: PATROL / LOOK IDLE, TELL SUSPICIOUS, LIGHT ATTACK (with the telegraph byte, so
