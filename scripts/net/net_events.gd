@@ -63,12 +63,17 @@ const WORLD_CARRIES := {
 	"res://scripts/spells/component_pickup.gd": {
 		"charges": "obj.pickup / obj.pick (NetObjects)", "_used": "obj.gone (NetObjects)",
 	},
+	"res://scripts/spells/chicken.gd": {
+		"dead": "world.die (NetWorld): a feather explosion, or the poof when it was puffing up (its state rode the stream)",
+		"pass_through_until": _ACTOR_WORLD["pass_through_until"],
+		"_modifiers": "st {k mods} from the host when they change (NetStatus, M4): vines roots, coffee on a chicken",
+	},
 }
 
 ## The packet types and event kinds the sync uses (documented here, defined where they are sent).
 ##   T_SNAP (unreliable)   hero snapshots, both ways (NetCodec); host -> client also the world (NetWorldCodec, M3)
 ##   seat.ai (reliable)    host -> clients: a seat went back to the AI as its original character
-##   world.* (reliable)    host -> clients (NetWorld): spawn, die, say, extract, phase, shove
+##   world.* (reliable)    host -> clients (NetWorld): spawn (monsters and chickens), die, say, extract, phase, shove
 ##   obj.* (reliable)      NetObjects: req / loadout (client -> host; M4: req hit on any host-owned actor, shove, mod);
 ##                         break, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
 ##                         shove / mod passed on to the owner of a player's hero (host -> clients)
@@ -100,5 +105,6 @@ const LATE_JOIN := {
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",
 	"res://scripts/world/themes/breakable_crate.gd": "gone ids (broken)",
 	"res://scripts/contracts/mail_package.gd": "gone ids (opened: removed; its prize is a pickup, replayed)",
+	"res://scripts/spells/chicken.gd": "runtime spawns: replay of world.spawn (kind chicken); then the keyframe (a monster-format entry); statuses: replay",
 	"res://scripts/spells/component_pickup.gd": "replay of obj.pickup for every pickup on the floor (charges and age); a used seed-built one: gone ids",
 }

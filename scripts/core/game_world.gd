@@ -102,13 +102,28 @@ func breakables_in_radius(pos: Vector3, radius: float) -> Array[Actor]:
 	return out
 
 
-## What a swing or a shot against `team` can hit: that team's living actors in radius plus every breakable.
-## (Priced props and employees stay out of it on purpose: nobody breaks the client's property by accident.)
+## Living chickens (the Chicken spell, group "chickens") within radius. Neutral, like the mail, and as fragile.
+func chickens_in_radius(pos: Vector3, radius: float) -> Array[Actor]:
+	var out: Array[Actor] = []
+	if root == null or not root.is_inside_tree():
+		return out
+	for n in root.get_tree().get_nodes_in_group(Chicken.GROUP):
+		var a := n as Actor
+		if a != null and not a.dead and flat_distance(a.global_position, pos) <= radius + a.radius:
+			out.append(a)
+	return out
+
+
+## What a swing or a shot against `team` can hit: that team's living actors in radius plus every breakable, and the
+## chickens (a monster's swing always; the crew's while Chicken.WEAPONS_HIT). (Priced props and employees stay out of it on
+## purpose: nobody breaks the client's property by accident.)
 func hittable_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Actor]:
 	var out := actors_in_radius(pos, radius, team)
 	if team == -1:
-		return out   # everyone, breakables included
+		return out   # everyone, breakables and chickens included
 	out.append_array(breakables_in_radius(pos, radius))
+	if team == TEAM_HEROES or Chicken.WEAPONS_HIT:
+		out.append_array(chickens_in_radius(pos, radius))
 	return out
 
 

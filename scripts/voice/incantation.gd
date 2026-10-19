@@ -3,7 +3,7 @@ extends RefCounted
 ## Pure incantation parsing and power scoring. No audio, no engine nodes, so it
 ## is unit-testable: feed it speech-recognizer hypotheses and read back events.
 ##
-##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]))
+##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]))
 ##   inc.vocabulary()                       # words to give the recognizer as hotwords
 ##   for ev in inc.feed("cast heel", false, t): ...   # streaming partial (or final=true)
 ##   for ev in inc.tick(t): ...             # call regularly so a lone trigger can time out
@@ -129,6 +129,18 @@ extends RefCounted
 ## Chatter: none of the new words fires in strict or loose without the trigger, and the extra hotwords created no
 ## phantoms (idle noise and digital silence give the same nothing / "HE" "AND" as with six spells, none through the
 ## gate). Also measured: "summon vines" is heard as "SUM IN VINES", so "sum in" joined the summon trigger's aliases.
+##
+## CHICKEN (10th spell; measured 2026-10-18 with TTS, David + Zira, rates -3/0/+3, through the real model with the ten-word
+## vocabulary: tests/test_voice_audio.gd). Every deliberate clip (13 of 13: clean, both rates in both voices, "okay / please
+## cast chicken", "cast chicken now", "cast chickens", a 300 / 500 ms pause) fired chicken and nothing else, 0.96 to 1.00, about
+## 150-300 ms after the voice stops (partial ladder "CAST CHI" / "CAST CHICK" / "CAST CHICKEN"; CHI and CHICK do nothing). No
+## other clip fired chicken. "chickens" is accepted exactly. The look-alikes are heard as themselves and NOT aliased: "kitchen"
+## is "KITCHEN" ("cast kitchen" fizzles, "unknown_spell"), "chick" is "CHI CK" / "CHICK" ("cast chick" is spell-ish:
+## "garbled"), "thicken" is "THICKEN". EXCEPT "check in": Zira writes it "CHICK CHICKEN" and "cast check in" "CAST CHICKEN"
+## (David: "CHECK IN", "CAST CHEQUE IN"), a true hearing of the spell word like "binds" for vines: bare it casts in chaos only,
+## after the trigger it casts. "don't chicken out" / "watch out for the chicken" cast in chaos only. Not a mention word.
+## Adding the hotword: one chaos pass heard David's "fines" as "VI VINES" (it was "FI NES" in the other passes and before),
+## so "fines" now counts as heard-as-vines in chaos, like "binds".
 ##
 ## POWER = cast_q * spell_q * gap_factor * (1 - extras), in (0, 1]:
 ##   cast_q, spell_q  quality of the matched words (tables below; 1.0 exact or
@@ -273,6 +285,10 @@ const TUNING := {
 			"coffee": 1.0,
 			"coughing": 0.8, "cough": 0.75,
 		},
+		# chicken: the word and its plural (see the CHICKEN note in the header).
+		"chicken": {
+			"chicken": 1.0, "chickens": 1.0,
+		},
 	},
 }
 
@@ -302,7 +318,7 @@ var _last_fire: Dictionary = {}
 var _last_final_t := -1e9
 
 
-func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]), overrides: Dictionary = {}) -> void:
+func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]), overrides: Dictionary = {}) -> void:
 	_cfg = TUNING.duplicate(true)
 	for k in overrides:
 		_cfg[k] = overrides[k]

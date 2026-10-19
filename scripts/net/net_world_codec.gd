@@ -30,6 +30,9 @@ extends RefCounted
 ##   u8  burst_in  seconds to the burst in 1/50 s while the flare is up (255 = no flare)
 ##   u8  shove_t   seconds to the origin gate's shove in centiseconds (255 = none winding up)
 ##
+## CHICKEN (16, the Chicken spell): a MONSTER entry. state = Chicken.State (WANDER 0, RUN 1, PECK 2, FLAP 3, POOF 4), telegraph =
+##   the peck's wind-up, strikes = its pecks (mod 256). NetWorld knows which ids are chickens (their `world.spawn` says so).
+##
 ## Deaths, spawns, speech, extraction, breaks and pickups are reliable EVENTS (NetWorld, NetObjects), not snapshot
 ## fields: the field tables below and NetEvents.WORLD_CARRIES together cover every OWNER var of these classes
 ## (test_net_contract holds them to it).
@@ -68,6 +71,15 @@ const EMPLOYEE_FIELDS := {
 	"state": "head",
 	"_dismissed": "head",
 	"_leader": "leader",
+}
+## Chicken / Actor var -> the part of the (monster-format) entry that carries it.
+const CHICKEN_FIELDS := {
+	"hp": "hp",
+	"facing": "angle",
+	"climbing": "flags",
+	"state": "flags",
+	"_peck_t": "telegraph",
+	"pecks": "strikes",
 }
 ## Hellgate / Actor var -> the part of the entry that carries it.
 const GATE_FIELDS := {
@@ -266,6 +278,25 @@ static func write_monster(m: Monster, st: NetHeroState) -> void:
 	m.global_position = st.pos
 	var f := st.facing_vector()
 	m.net_show(f, st.climbing, st.hp, st.mode, st.telegraph, st.extra)
+
+
+# --- Chickens (a monster entry) --------------------------------------------------------------------------------
+
+## Fill `st` from a chicken (host).
+static func read_chicken(c: Chicken, st: NetHeroState) -> void:
+	st.hp = c.hp
+	st.angle = atan2(c.facing.z, c.facing.x)
+	st.climbing = c.climbing
+	st.mode = c.state
+	st.helpless = c.is_helpless()
+	st.telegraph = c._peck_t
+	st.extra = c.pecks & 255
+
+
+## Show a state on a chicken puppet (client): its own net_show plays a new peck, a hit, the poof.
+static func write_chicken(c: Chicken, st: NetHeroState) -> void:
+	c.global_position = st.pos
+	c.net_show(st.facing_vector(), st.climbing, st.hp, st.mode, st.telegraph, st.extra)
 
 
 # --- Employees ---------------------------------------------------------------------------------------------

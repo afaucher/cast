@@ -214,7 +214,7 @@ building it.
 | Shape | Examples | What it needs |
 |---|---|---|
 | **Scheduled effect**: one broadcast, then every machine computes it from `(SPAWN params, start time)` | corn, tentacles, boulder, fireball, arrows, Gasket's spin | Params `SPAWN`, motion `LOCAL`, hits through `Combat` |
-| **Owned actor** | heroes, monsters, employees | `net_fields()`, changes through verbs |
+| **Owned actor** | heroes, monsters, employees, the Chicken spell's chickens (host-owned: the cast lands everywhere, the host spawns them) | `net_fields()`, changes through verbs |
 | **Host-arbitrated world object** | pickups, doors, elevator, priced props | Host-owned. Players request; the host grants with a reliable event |
 | **Cosmetic** | debris, sparks, grime, decor animation | Nothing: local only, `fx_rng` |
 

@@ -80,7 +80,7 @@ function Same([string]$group, [string]$text, [string]$expect, [double]$minPower,
     Add-Clip $group $text $expect $expect $expect $minPower $voice $rate
 }
 
-$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth"; vines = "vines"; damp = "damp"; coffee = "coffee" }
+$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth"; vines = "vines"; damp = "damp"; coffee = "coffee"; chicken = "chicken" }
 
 # Clean casts, both voices, normal pace: must fire at >= 0.9 in every mode.
 foreach ($v in @($v1, $v2)) {
@@ -107,6 +107,8 @@ foreach ($r in @(-3, 3)) { Same "rate" "cast teeth" "teeth" 0.7 $v2 $r }
 Same "rate" "cast tooth" "teeth" 0.7 $v1 3
 # vines / damp / coffee: the pace extremes in the other voice too.
 foreach ($r in @(-3, 3)) { foreach ($id in @("vines", "damp", "coffee")) { Same "rate" "cast $id" $id 0.7 $v2 $r } }
+# chicken: the pace extremes in the other voice too.
+foreach ($r in @(-3, 3)) { Same "rate" "cast chicken" "chicken" 0.7 $v2 $r }
 # Sloppy but intended: preamble, suffix, mispronunciations, spelling variants.
 Same "sloppy" "okay cast heal"            "heal"     0.8 $v1 0
 Same "sloppy" "cast fireball now"         "fireball" 0.8 $v2 0
@@ -145,6 +147,12 @@ Same "sloppy" "cast damp now"               "damp"   0.8 $v1 0
 Same "sloppy" "okay cast coffee"            "coffee" 0.7 $v1 0   # David: "O K CAST COUGHING" (alias 0.8, less the preamble)
 Same "sloppy" "please cast coffee"          "coffee" 0.8 $v2 0
 Same "sloppy" "cast coffee now"             "coffee" 0.8 $v1 0
+# chicken: preamble, suffix, the plural, the other voice.
+Same "sloppy" "okay cast chicken"           "chicken" 0.8 $v1 0
+Same "sloppy" "please cast chicken"         "chicken" 0.8 $v2 0
+Same "sloppy" "cast chicken now"            "chicken" 0.8 $v1 0
+Same "sloppy" "cast chickens"               "chicken" 0.8 $v1 0
+Same "sloppy" "cast chickens"               "chicken" 0.8 $v2 0
 # Hesitation between the keyword and the spell word.
 Same "hesitate" "cast <b300> heal"                    "heal"     0.8 $v1 0
 Same "hesitate" "cast <b300> tentacles"               "tentacles" 0.6 $v1 0
@@ -156,6 +164,8 @@ Same "hesitate" "cast <b300> coffee"                  "coffee" 0.6 $v1 0
 Same "hesitate" "cast <b300> teeth"                   "teeth" 0.6 $v1 0
 Same "hesitate" "cast <b500> teeth"                   "teeth" 0.6 $v2 0
 Same "hesitate" "cast <b800> teeth"                   "teeth" 0.5 $v1 0
+Same "hesitate" "cast <b300> chicken"                 "chicken" 0.6 $v1 0
+Same "hesitate" "cast <b500> chicken"                 "chicken" 0.6 $v2 0
 Same "hesitate" "cast <b700> fireball"                "any"      0.3 $v1 0
 Same "hesitate" "cast <b400> uh <b400> heal"          "heal"     0.5 $v2 0
 Same "hesitate" "cast <b1200> armor"                  "any"      0.4 $v2 0
@@ -201,15 +211,31 @@ foreach ($v in @($v1, $v2)) {
 # vines mishearings, "copy"/"coughing" the coffee ones. Nothing may cast in any mode, except that chaos (any spell
 # word anywhere) fires on the real word in "nice vines" / "I need coffee" / "damp towel".
 foreach ($v in @($v1, $v2)) {
-    foreach ($t in @("wines", "vibes", "fines", "damn", "that was damn good", "dump", "camp", "dam", "copy", "coughing", "goddamn it",
+    foreach ($t in @("wines", "vibes", "damn", "that was damn good", "dump", "camp", "dam", "copy", "coughing", "goddamn it",
             "cast wines", "cast vibes", "cast fines", "cast binds", "cast dump", "cast camp", "cast dam", "cast copy")) {
         Add-Clip "negative" $t "none" "none" "none" 0.0 $v 0
     }
     # The recognizer writes "binds" as VINES (measured, both voices): it fires vines in chaos only, like "nice vines".
+    # "fines" is usually "FI NES" / "FINES", but once (2026-10-18, David, a chaos pass) "VI VINES": the same, in chaos only.
     Add-Clip "negative" "binds" "none" "none" "any" 0.0 $v 0
+    Add-Clip "negative" "fines" "none" "none" "any" 0.0 $v 0
     foreach ($t in @("nice vines", "damp towel", "I need coffee", "coffee break")) {
         $chaos = if ($t -like "*vines*") { "vines" } elseif ($t -like "*damp*") { "damp" } else { "coffee" }
         Add-Clip "negative" $t "none" "none" $chaos 0.4 $v 0
+    }
+}
+# Chicken: the words it can be mistaken for ("kitchen", "chick", "thicken"; "chicken out" is real chatter), and chatter
+# that really says it. Nothing may cast in any mode, except that chaos (any spell word anywhere) fires on the real word.
+# "check in" is a true hearing of the spell word for Zira ("CHICK CHICKEN", "CAST CHICKEN": measured 2026-10-18, like
+# "binds" for vines): bare it casts in chaos only, after the trigger it is a cast. David hears "CHECK IN" / "CHEQUE IN".
+foreach ($v in @($v1, $v2)) {
+    foreach ($t in @("kitchen", "chick", "thicken", "cast kitchen", "cast thicken")) {
+        Add-Clip "negative" $t "none" "none" "none" 0.0 $v 0
+    }
+    Add-Clip "negative" "check in" "none" "none" "any" 0.0 $v 0
+    Add-Clip "negative" "cast check in" "any" "any" "any" 0.0 $v 0
+    foreach ($t in @("don't chicken out", "watch out for the chicken")) {
+        Add-Clip "negative" $t "none" "none" "chicken" 0.4 $v 0
     }
 }
 # Hero names (Rebar, Gasket, Wick) may become voice callsigns, so they must never cast by themselves.

@@ -16,6 +16,7 @@ const SPELLS := {
 	"vines": {"label": "VINES", "color": Color(0.45, 0.78, 0.22)},
 	"damp": {"label": "DAMP", "color": Color(0.30, 0.82, 0.92)},
 	"coffee": {"label": "COFFEE", "color": Color(0.66, 0.43, 0.24)},
+	"chicken": {"label": "CHICKEN", "color": Color(0.94, 0.33, 0.27)},
 }
 const GLOW_SECONDS := 1.6
 const C_BG := Color(0.07, 0.08, 0.16)

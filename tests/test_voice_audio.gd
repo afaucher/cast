@@ -16,7 +16,7 @@ const STEP := 320              # 20 ms chunks, like the mic
 const LEAD := 0.5              # seconds of silence before each clip
 const TAIL := 0.8              # and after
 const SPEED := 4.0             # audio seconds per wall second
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
 const DELIBERATE_GROUPS := ["clean", "rate", "sloppy", "hesitate"]
 ## Stress clips (fastest TTS rate, long hesitations) sit on the recognizer's edge:
 ## shifting the audio by 80 ms flips some of them (measured). Their MISSES use a
@@ -27,13 +27,14 @@ const STRESS_MISS_BUDGET := 4   # was 2 for six spells; the nine-spell vocabular
 ## Clips whose recognizer text is printed in full (the measurement tables for the
 ## tentacles and teeth spell words and their chatter sound-alikes, and the hero names, which must never cast).
 const MEASURE_WORDS := ["gasket", "rebar", "wick", "tentacle", "attack", "ten tickets", "testicles", "tackle", "teeth", "tooth", "these", "tea", "tease", "teach",
-	"vine", "wines", "vibes", "fines", "binds", "damp", "damn", "dump", "camp", "coffee", "copy", "cough"]
+	"vine", "wines", "vibes", "fines", "binds", "damp", "damn", "dump", "camp", "coffee", "copy", "cough",
+	"chicken", "kitchen", "chick", "check in", "thicken"]
 ## The spells whose confusion with every other spell is checked, and the text stems
 ## of their clips ("tentacle" covers tentacles/tentacle, "teeth"/"tooth" the teeth forms).
-const FOCUS_STEMS := {"tentacles": ["tentacle"], "teeth": ["teeth", "tooth"], "vines": ["vine"], "damp": ["damp"], "coffee": ["coffee"]}
-## Chatter the recognizer writes as a spell word (measured): "binds" comes out as VINES in both voices, so a chaos-mode
-## vines cast on it is a true hearing, not a confusion between spells.
-const HEARD_AS_SPELL := ["binds"]
+const FOCUS_STEMS := {"tentacles": ["tentacle"], "teeth": ["teeth", "tooth"], "vines": ["vine"], "damp": ["damp"], "coffee": ["coffee"], "chicken": ["chicken"]}
+## Chatter the recognizer writes as a spell word (measured): "binds" comes out as VINES in both voices (and "fines" now and
+## then), and Zira's "check in" as CHICKEN, so a cast on it is a true hearing, not a confusion between spells.
+const HEARD_AS_SPELL := ["binds", "fines", "check in"]
 
 var caster: VoiceCaster
 var _casts: Array = []         # {spell, power, heard, accidental, t}
@@ -311,7 +312,11 @@ func _play(c: Dictionary, speed: float = SPEED) -> Dictionary:
 
 func _ensure_clips(dir: String) -> bool:
 	if FileAccess.file_exists(dir.path_join("manifest.csv")) and FileAccess.file_exists(dir.path_join("triggers.csv")):
-		return true
+		# Clips made before a spell was added have no "cast <spell>" clip for it: make them again (the clips are generated).
+		var text := FileAccess.get_file_as_string(dir.path_join("manifest.csv"))
+		if SPELLS.all(func(id: String) -> bool: return text.contains("\"cast %s\"" % id)):
+			return true
+		print("the voice clips predate a spell in SPELLS: generating them again")
 	if OS.get_name() != "Windows":
 		return false
 	var script := ProjectSettings.globalize_path("res://tools/make_voice_clips.ps1")
