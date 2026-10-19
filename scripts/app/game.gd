@@ -1778,14 +1778,14 @@ func _on_gate_closed(gate: Actor) -> void:
 		# A client: the host closed it (world.die). Its bookkeeping and pay arrive from the host (obj.contract, obj.ledger).
 		if is_origin:
 			hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
-			_show_banner("The origin gate is shut. The site calms down. The invoice does not.", 6.0)
+			_show_banner(NoteCopy.ORIGIN_SHUT, 6.0)
 		_log("%s closed" % ("ORIGIN gate" if is_origin else "hellgate"), Color(0.6, 1.0, 0.7))
 		return
 	var pay := _session.gate_closed(is_origin)
 	_publish_contract()
 	if is_origin:
 		hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
-		_show_banner("The origin gate is shut. The site calms down. The invoice does not.", 6.0)
+		_show_banner(NoteCopy.ORIGIN_SHUT, 6.0)
 	_log("%s closed  +%s" % ["ORIGIN gate" if is_origin else "hellgate", ContractRun.money(pay)], Color(0.6, 1.0, 0.7))
 	_objective_t = 0.0   # re-check cleanliness now
 
@@ -2111,31 +2111,16 @@ func _extract_followers(riders: Array[Actor], line: String) -> void:
 	_update_tracker()
 
 
-## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
-## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No
-## pay in the line (user, 2026-10-19: "trim all the mentions of {pay}"): every line can be voiced ahead of time.
-const RESCUE_ONE: Array[String] = [
-	"Copy, %s is out.",
-	"%s just walked past my desk.",
-	"Got %s. All fingers accounted for.",
-	"%s is topside and asking for a lawyer.",
-]
-const RESCUE_MANY: Array[String] = [
-	"Copy, %d staff out.",
-	"%d of them just came through.",
-	"Headcount up by %d.",
-]
-
-
+## Dispatch calls in on the headset to confirm a rescue (the lines are NoteCopy.RESCUE_ONE / RESCUE_MANY).
 func _dispatch_rescue(riders: Array[Actor], pay: String) -> void:
 	if _banner == null:
 		hud.show_message("%s out  +%s" % [riders[0].display_name if riders.size() == 1 else str(riders.size()), pay], Color(0.6, 1.0, 0.7))
 		return
 	var line: String
 	if riders.size() == 1:
-		line = RESCUE_ONE[GameWorld.fx_rng.randi() % RESCUE_ONE.size()] % riders[0].display_name
+		line = NoteCopy.RESCUE_ONE[GameWorld.fx_rng.randi() % NoteCopy.RESCUE_ONE.size()] % riders[0].display_name
 	else:
-		line = RESCUE_MANY[GameWorld.fx_rng.randi() % RESCUE_MANY.size()] % riders.size()
+		line = NoteCopy.RESCUE_MANY[GameWorld.fx_rng.randi() % NoteCopy.RESCUE_MANY.size()] % riders.size()
 	_banner.show_line(line, 4.0)
 
 
