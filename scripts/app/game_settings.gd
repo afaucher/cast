@@ -4,9 +4,6 @@ extends RefCounted
 ## Applied once at boot (Boot) and live from the Settings screen; the game reads voice_panel_visible.
 ##
 ##   master_volume        0..1, the Master audio bus (default 1.0)
-##   sfx_volume           0..1, the SFX bus: world sounds and stings ("Effects", default 1.0)
-##   ui_volume            0..1, the UI bus: the forms' stamps ("Paperwork", default 1.0)
-##   voice_feedback_volume  0..1, the VoiceFeedback bus: "cast heard" and your fizzle ("Spell feedback", default 1.0: on)
 ##   fullscreen           true = borderless fullscreen, false = a window (default false)
 ##   resolution           "1280x720" | "1600x900" (default) | "1920x1080": the window size when windowed
 ##   voice_panel_visible  the voice debug panel (F1) is open when a contract starts (default true)
@@ -21,8 +18,9 @@ const DEFAULT_PATH := "user://settings.cfg"
 const SECTION := "game"
 const RESOLUTIONS: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 const DEFAULT_RESOLUTION := Vector2i(1600, 900)
-## Each volume setting and the bus it drives (default_bus_layout.tres). The Music bus has no setting yet.
-const BUS_VOLUMES := {"master_volume": "Master", "sfx_volume": "SFX", "ui_volume": "UI", "voice_feedback_volume": "VoiceFeedback"}
+## Each volume setting and the bus it drives (default_bus_layout.tres). Only the master: the other buses' levels are tuned
+## in the game itself (Sfx cue volumes and the bus layout), not by players (user, 2026-10-18: "no individual sound controls").
+const BUS_VOLUMES := {"master_volume": "Master"}
 ## Link simulator presets (NetLink.PRESETS / NetSteamLink): what Settings > Diagnostics offers.
 const LINK_PRESETS: Array[String] = ["off", "coast", "rough"]
 
@@ -31,7 +29,7 @@ static var path: String = DEFAULT_PATH
 
 
 static func defaults() -> Dictionary:
-	return {"master_volume": 1.0, "sfx_volume": 1.0, "ui_volume": 1.0, "voice_feedback_volume": 1.0, "fullscreen": false, "resolution": resolution_text(DEFAULT_RESOLUTION), "voice_panel_visible": true,
+	return {"master_volume": 1.0, "fullscreen": false, "resolution": resolution_text(DEFAULT_RESOLUTION), "voice_panel_visible": true,
 		"link_sim": "off"}
 
 

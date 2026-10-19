@@ -67,12 +67,9 @@ sounds play then) and for typed lines (`inject_text`). In loose mode a mid-sente
 **Fireball: the burst, not the cast.** The recording is a roar with an impact thump on the attack, so it reads as
 the explosion. A whoosh at the caster is a separate later cue (#2's cast layer).
 
-**Settings (FORM 3).** Under 1. Audio: Master volume, **Effects** (SFX), **Paperwork** (UI) and **Spell feedback**
-(VoiceFeedback), each a 10-box `BoxScale` with a typed percentage, saved in `[game]` as `sfx_volume`, `ui_volume` and
-`voice_feedback_volume` (default 1.0: spell feedback is on). `GameSettings.apply` sets every bus by name
-(`BUS_VOLUMES`, `apply_bus_volume`; a missing bus is skipped). To fit the four volume rows, they are 46 px high, and
-the display row carries the window size (printed "WINDOW" caption, the size menu) instead of a separate "Window size"
-row. There is no Music slider and no headphones/speakers option yet.
+**Settings (FORM 3).** Only the master volume (user, 2026-10-18: "No individual sound controls. Let's just tune them
+ourselves"). The other buses' levels are ours to tune, in the Sfx cue table and `default_bus_layout.tres`.
+`GameSettings.BUS_VOLUMES` maps just `master_volume` to Master; `apply_bus_volume` stays for any bus.
 
 **Tests.** `tests/test_sfx.gd` checks:
 - the buses, their sends and effects, and every cue on an existing bus with a render recipe that exists;

@@ -58,8 +58,7 @@ Dev: `--menu-screen voice|settings`, `--menu-shot <png> [--menu-after s]`, `--me
 `--settings-file <path>` (so screenshots never touch the player's settings).
 
 Settings live in `user://settings.cfg`: `[voice]` (`trigger_word`, `strictness`, `min_voice_db`: `VoiceSettings`) and
-`[game]` (`master_volume`, `sfx_volume`, `ui_volume`, `voice_feedback_volume` 0..1, one audio bus each:
-`GameSettings.BUS_VOLUMES`; `fullscreen`, `resolution` "WxH", `voice_panel_visible`: `GameSettings`). The game reads
+`[game]` (`master_volume` 0..1, the Master bus, the only player volume: `GameSettings.BUS_VOLUMES`; `fullscreen`, `resolution` "WxH", `voice_panel_visible`: `GameSettings`). The game reads
 both: `VoiceCaster.start()` applies `[voice]`, `game.gd` reads `voice_panel_visible` when it builds the debug panel.
 
 In game (`game.gd`): **Esc** during a contract (no picker, elevator menu, invoice or "crew incapacitated" under way)

@@ -312,58 +312,23 @@ func _check_paper() -> void:
 
 func _check_settings() -> void:
 	_rm(TMP)
-	var d := GameSettings.defaults()
+	# No per-sound controls for players (user, 2026-10-18): the master volume is the only one; the rest is tuned in the game.
+	eq(GameSettings.BUS_VOLUMES.keys(), ["master_volume"], "the master is the only volume setting")
 	for key in ["sfx_volume", "ui_volume", "voice_feedback_volume"]:
-		eq(d[key], 1.0, "%s defaults to 100%% (spell feedback on)" % key)
-		eq(str(GameSettings.BUS_VOLUMES[key]), {"sfx_volume": "SFX", "ui_volume": "UI", "voice_feedback_volume": "VoiceFeedback"}[key], "%s drives its bus" % key)
-	check(GameSettings.save_settings({"sfx_volume": 0.3, "ui_volume": 0.6, "voice_feedback_volume": 0.0}, TMP), "saved")
-	var s := GameSettings.load_settings(TMP)
-	near(float(s["sfx_volume"]), 0.3, 0.0001, "Effects reloads")
-	near(float(s["ui_volume"]), 0.6, 0.0001, "Paperwork reloads")
-	near(float(s["voice_feedback_volume"]), 0.0, 0.0001, "Spell feedback reloads (off)")
-	near(float(s["master_volume"]), 1.0, 0.0001, "master untouched")
-	var cfg := ConfigFile.new()
-	cfg.load(TMP)
-	cfg.set_value("game", "ui_volume", 4.0)
-	cfg.save(TMP)
-	near(float(GameSettings.load_settings(TMP)["ui_volume"]), 1.0, 0.0001, "clamped")
-
+		check(not GameSettings.defaults().has(key), "no %s setting" % key)
 	var before := {}
 	for bus: String in ["Master", "SFX", "UI", "VoiceFeedback"]:
 		var i := AudioServer.get_bus_index(bus)
 		before[bus] = [AudioServer.get_bus_volume_db(i), AudioServer.is_bus_mute(i)]
-	GameSettings.apply({"master_volume": 0.8, "sfx_volume": 0.3, "ui_volume": 0.6, "voice_feedback_volume": 0.0}, false)
+	GameSettings.apply({"master_volume": 0.8}, false)
 	near(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master")), linear_to_db(0.8), 0.01, "apply sets Master")
-	near(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX")), linear_to_db(0.3), 0.01, "apply sets SFX")
-	near(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("UI")), linear_to_db(0.6), 0.01, "apply sets UI")
-	check(AudioServer.is_bus_mute(AudioServer.get_bus_index("VoiceFeedback")), "0 mutes VoiceFeedback")
-	check(not AudioServer.is_bus_mute(AudioServer.get_bus_index("SFX")), "SFX not muted")
 	GameSettings.apply_bus_volume("NoSuchBus", 0.5)   # (skipped, no error)
-
-	# The settings form: the three new rows save and apply like the master.
-	_rm(TMP)
 	var screen := SettingsScreen.new()
 	screen.settings_path = TMP
 	screen.apply_live = false
 	add_child(screen)
-	for key in ["master_volume", "sfx_volume", "ui_volume", "voice_feedback_volume"]:
-		check(screen.volume_sliders.has(key), "a %s row" % key)
-	(screen.volume_sliders["sfx_volume"] as BoxScale).value = 40.0
-	(screen.volume_sliders["ui_volume"] as BoxScale).value = 70.0
-	(screen.volume_sliders["voice_feedback_volume"] as BoxScale).value = 0.0
-	s = GameSettings.load_settings(TMP)
-	near(float(s["sfx_volume"]), 0.4, 0.001, "the Effects row saves")
-	near(float(s["ui_volume"]), 0.7, 0.001, "the Paperwork row saves")
-	near(float(s["voice_feedback_volume"]), 0.0, 0.001, "the Spell feedback row saves")
-	eq((screen.volume_values["ui_volume"] as Label).text, "70%", "its typed value")
+	check(screen.volume_slider != null, "the settings form has the master volume")
 	screen.queue_free()
-	var again := SettingsScreen.new()
-	again.settings_path = TMP
-	again.apply_live = false
-	add_child(again)
-	near((again.volume_sliders["sfx_volume"] as BoxScale).value, 40.0, 0.01, "reopened: Effects")
-	near((again.volume_sliders["voice_feedback_volume"] as BoxScale).value, 0.0, 0.01, "reopened: Spell feedback")
-	again.queue_free()
 
 	for bus: String in before:
 		var i := AudioServer.get_bus_index(bus)
