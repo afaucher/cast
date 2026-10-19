@@ -39,6 +39,7 @@ func setup() -> void:
 	eq(f2[cols.find("reason")], ContractSession.END_CASHED_OUT, "and ended the contract")
 	var end := lines[4].split(",")
 	eq(end[cols.find("role")], "solo", "a solo play")
+	eq(end[cols.find("hero")], Session.local_character(), "the hero this player picked (%s)" % Session.local_character())
 	check(end[cols.find("payout")] != "", "the end row has the payout")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	finish()

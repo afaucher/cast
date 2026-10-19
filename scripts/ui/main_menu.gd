@@ -9,6 +9,11 @@ extends Node
 ##                    right now" when there is none; greyed out "Steam not running" without Steam. While in a
 ##                    crew it reads "Leave the crew".
 ##   03 Voice setup (VoiceSetupScreen: live mic test), 04 Settings (SettingsScreen), 05 Quit.
+## Under the clipboard lies FORM 31, the personnel file (PersonnelFile): the hero the player clocks in as. Clicking a hero in
+## the garage picks it (the backdrop's `hero_at`; a hovered hero gets a warm outline and the pointer becomes a hand): it steps
+## to the front, the card is typed up for it, the pick goes into Session.character_id (the roster carries it) and is saved
+## (GameSettings "character"). Keyboard and controller: the card's NAME line is the last stop in the focus chain; Left /
+## Right or Enter there step through the three. Picking is locked while a crew is opening or open (the roster has it).
 ## A typed status line under the rows says what the session is doing or why it ended ("Crew is full", "The
 ## host clocked out", ...). A joined client does not stay here: it goes straight to the shared run's job board (the
 ## host picks the job; game.gd, scripts/net/crew_flow.gd), and comes back with the reason when the session ends.
@@ -19,7 +24,9 @@ extends Node
 ## form-rules.md §6). On this screen Esc does nothing: the main menu has nothing to void. Everything is built in code.
 ##
 ## Dev flags (after `--`; see Boot): --no-mic, --menu-screen main|voice|settings, --menu-shot <png>
-## [--menu-after s], --menu-say <text>, --menu-void (void the sub-screen just before the shot and hold the stamp);
+## [--menu-after s], --menu-say <text>, --menu-void (void the sub-screen just before the shot and hold the stamp),
+## --backdrop-hero <id> (pick this hero for this run, unsaved), --menu-hover <id> (outline that hero, for a picture),
+## --menu-focus-file (focus the personnel file's NAME line, for a picture);
 ## online: --net-join <ip[:port]> (README "Online play").
 
 const GAME_SCRIPT := preload("res://scripts/app/game.gd")
@@ -28,6 +35,12 @@ const TAGLINE := "Licensed Budget Sorcery"
 const FOOTER_MOTTO := "IN. OUT. INVOICED."
 const FOOTER_LINE := "Hexes, demons and portals  ·  Free estimates  ·  Referrals welcome"
 const WAITING_NOTE := "Opening the job board..."
+## Layout of the left third (canvas units): the clipboard over the personnel file.
+const LEFT_X := 58.0
+const CLIP_W := 600.0
+const CARD_W := 560.0
+const CARD_GAP := -16.0   ## (negative: the card lies over the clipboard's wooden bottom lip, not over the paper)
+const ROW_H := 54.0
 
 signal screen_changed(screen_name: String)
 
@@ -53,6 +66,9 @@ var voice_button: Button
 var settings_button: Button
 var quit_button: Button
 var clipboard: FormClipboard
+## FORM 31: the picked hero's card, under the clipboard.
+var card: PersonnelFile
+var keys: KeyHints
 var build_label: Label
 ## What the session is doing, or why it ended.
 var status_label: Label
@@ -67,6 +83,8 @@ var _entering := false          ## a joined client is on its way to the shared r
 var _status_box: Control = null
 var _crew_box: Control = null
 var _stamp: Control = null   ## gives way to the session notice, which uses the same strip
+var _pointer_hand := false   ## the pointer is a hand (over a hero in the garage)
+var _strip: Control = null   ## the blank strip above the ads (the notice, or the stamp)
 
 
 func _ready() -> void:
@@ -82,14 +100,20 @@ func _ready() -> void:
 	ui.name = "UI"
 	add_child(ui)
 	_build_main()
+	_load_pick(args)
 	_wire_session()
 	var wanted := Boot.arg_value(args, "--menu-screen")
 	if wanted != "" and wanted != "main":
 		show_screen(wanted)
+	elif args.has("--menu-focus-file"):
+		_grab.call_deferred(card.name_row)   # (dev: a screenshot of the personnel file's NAME line in focus)
 	else:
 		_focus_start.call_deferred()
 	if backdrop_enabled and DisplayServer.get_name() != "headless":
 		_fade_in()
+	var hover := Boot.arg_value(args, "--menu-hover")
+	if hover != "" and backdrop != null:
+		backdrop.set_hover.call_deferred(hover)   # (dev: a screenshot of the hover outline)
 	var shot := Boot.arg_value(args, "--menu-shot")
 	if shot != "":
 		var after := Boot.arg_value(args, "--menu-after")
@@ -100,6 +124,94 @@ func _unhandled_input(event: InputEvent) -> void:
 	if screen != "main" and event.is_action_pressed("pause"):
 		void_screen()
 		get_viewport().set_input_as_handled()
+		return
+	# The garage: a click on a hero picks it (the paper's own rows took their clicks already).
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		var id := garage_hero_at((event as InputEventMouseButton).position)
+		if id != "":
+			pick_hero(id)
+			get_viewport().set_input_as_handled()
+
+
+## The pointer over a hero outlines it (every motion, even one a control under the pointer takes, so the outline never sticks).
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_hover_at((event as InputEventMouseMotion).position)
+
+
+func _exit_tree() -> void:
+	_set_pointer(false)
+
+
+# --- The character select ----------------------------------------------------------------------------
+
+## The hero under `point` in the garage, "" for none (or while picking is locked, or off the main screen).
+func garage_hero_at(point: Vector2) -> String:
+	if backdrop == null or not can_pick() or _over_paper(point):
+		return ""
+	return backdrop.hero_at(point)
+
+
+## Whether the pick can change now: on the main screen, with no crew opening or open.
+func can_pick() -> bool:
+	return screen == "main" and not Session.online() and not Session.busy() and not _hosting_attempt
+
+
+func _over_paper(point: Vector2) -> bool:
+	for c: Control in [clipboard, card]:
+		if c != null and c.is_visible_in_tree() and c.get_global_rect().has_point(point):
+			return true
+	return false
+
+
+func _hover_at(point: Vector2) -> void:
+	var id := garage_hero_at(point)
+	if backdrop != null:
+		backdrop.set_hover(id)
+	_set_pointer(id != "")
+
+
+func _set_pointer(hand: bool) -> void:
+	if hand == _pointer_hand:
+		return
+	_pointer_hand = hand
+	Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if hand else Input.CURSOR_ARROW)
+
+
+## Pick `id` as this player's hero: it steps to the front of the garage, the personnel file is typed up for it, and it is
+## this player's character from now on (Session.character_id, saved). False when it can't change now or is unknown.
+func pick_hero(id: String) -> bool:
+	id = id.to_lower()
+	if not HeroKit.has_kit(id) or not can_pick():
+		return false
+	var changed := id != Session.local_character() or (card != null and card.hero_id != id)
+	Session.character_id = id
+	GameSettings.save_settings({"character": id}, _settings_file())
+	if backdrop != null:
+		backdrop.set_featured_hero(id, true)
+	if card != null:
+		card.show_hero(id)
+	if changed:
+		Sfx.play("paper")
+	return true
+
+
+## Step the pick through the crew (the NAME line: Left / Right, Enter, a click).
+func step_hero(dir: int) -> void:
+	var ids := HeroKit.ids()
+	var i := ids.find(Session.local_character())
+	pick_hero(ids[posmod(i + dir, ids.size())])
+
+
+## The pick at start: `--backdrop-hero` (this run only), else the saved one (Boot loaded it too; a test's own settings file
+## wins here). The garage and the card show it.
+func _load_pick(args: PackedStringArray) -> void:
+	var flag := Boot.arg_value(args, MenuBackdrop.HERO_FLAG).to_lower()
+	Session.character_id = flag if HeroKit.has_kit(flag) else str(GameSettings.load_settings(_settings_file())["character"])
+	var id := Session.local_character()
+	if backdrop != null:
+		backdrop.set_featured_hero(id)
+	card.show_hero(id)
 
 
 ## Esc on a sub-screen: void its form; its `back` then shows the main screen. False when there is nothing to void.
@@ -117,7 +229,6 @@ func void_screen() -> bool:
 func start_game() -> void:
 	if Session.is_client() or Session.busy():
 		return
-	Session.character_id = _featured_hero()
 	if Session.steam_available():
 		_hosting_attempt = true
 		Session.host_steam()
@@ -142,13 +253,8 @@ func join_crew() -> void:
 	if not Session.steam_available():
 		_set_status(NetSession.STEAM_OFF)
 		return
-	Session.character_id = _featured_hero()
 	Session.join_first()
 	_refresh_net()
-
-
-func _featured_hero() -> String:
-	return backdrop.featured_hero if backdrop != null and backdrop.featured_hero != "" else NetSession.DEFAULT_CHARACTER
 
 
 func quit() -> void:
@@ -168,6 +274,9 @@ func _go(path: String) -> void:
 ## "main", "voice" or "settings". Sub-screens replace the title and buttons over the backdrop.
 func show_screen(which: String) -> void:
 	_close_sub_screens()
+	if backdrop != null:
+		backdrop.set_hover("")
+	_set_pointer(false)
 	match which:
 		"voice":
 			voice_screen = VoiceSetupScreen.new()
@@ -247,17 +356,34 @@ func _build_main() -> void:
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	main_panel.add_child(shade)
 
-	# The work order on the clipboard, on the left third of the screen.
-	clipboard = FormClipboard.new(600.0, 838.0, -1.2)
+	# The left third: the work order on the clipboard, and under it the personnel file (FORM 31) of the picked hero. The
+	# card is built first: the clipboard gets the height the card leaves (both centred, 900 canvas units at 16:9).
+	card = PersonnelFile.new(CARD_W)
+	card.theme = FormTheme.theme()
+	card.step.connect(step_hero)
+	main_panel.add_child(card)
+	var card_h := card.get_combined_minimum_size().y
+	var clip_h := minf(838.0, 880.0 - CARD_GAP - card_h)
+	var top := -(clip_h + CARD_GAP + card_h) * 0.5
+	clipboard = FormClipboard.new(CLIP_W, clip_h, -1.2)
 	clipboard.anchor_left = 0.0
 	clipboard.anchor_right = 0.0
 	clipboard.anchor_top = 0.5
 	clipboard.anchor_bottom = 0.5
-	clipboard.offset_left = 58.0
-	clipboard.offset_right = 658.0
-	clipboard.offset_top = -419.0
-	clipboard.offset_bottom = 419.0
+	clipboard.offset_left = LEFT_X
+	clipboard.offset_right = LEFT_X + CLIP_W
+	clipboard.offset_top = top
+	clipboard.offset_bottom = top + clip_h
 	main_panel.add_child(clipboard)
+	main_panel.move_child(card, -1)   # (the card lies on top of the clipboard's foot)
+	card.anchor_left = 0.0
+	card.anchor_right = 0.0
+	card.anchor_top = 0.5
+	card.anchor_bottom = 0.5
+	card.offset_left = LEFT_X + (CLIP_W - CARD_W) * 0.5
+	card.offset_right = card.offset_left + CARD_W
+	card.offset_top = top + clip_h + CARD_GAP
+	card.offset_bottom = card.offset_top + card_h
 
 	var sheet := FormSheet.new("27-B", "Work order", "CAST  ·  " + TAGLINE, "Copy", "OFFICE", "white", 46)
 	clipboard.set_content(sheet)
@@ -279,9 +405,8 @@ func _build_main() -> void:
 	settings_button = _menu_row(body, "Settings", "04", "", func() -> void: _open(settings_button, "settings"))
 	quit_button = _menu_row(body, "Quit", "05", "", func() -> void: quit())
 
-	var note := FormTheme.typed_wrapped("First time? Open Voice setup first and make sure the crew can hear you.", 19, FormTheme.TYPED)
-	body.add_child(FormTheme.margin(note, 22, 10, 22, 4))
-
+	# (The "First time? Open Voice setup first..." note went to make room for the personnel file: a tutorial line, which
+	# form-rules.md 13 keeps off the paper anyway.)
 	var office_head := HBoxContainer.new()
 	office_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	office_head.add_theme_constant_override("separation", 10)
@@ -292,7 +417,7 @@ func _build_main() -> void:
 	build_label = FormTheme.typed(BuildVersion.text(), 16)
 	build_label.name = "BuildVersion"
 	office_head.add_child(build_label)
-	body.add_child(FormTheme.margin(office_head, 22, 6, 22, 0))
+	body.add_child(FormTheme.margin(office_head, 22, 10, 22, 0))
 	# The session notice and the crew go in the blank strip above the ads (collapsed while empty).
 	status_label = FormTheme.typed_wrapped("", 19, FormTheme.RED, true)
 	status_label.name = "NetStatus"
@@ -302,7 +427,8 @@ func _build_main() -> void:
 	crew_label.name = "Crew"
 	_crew_box = FormTheme.margin(crew_label, 22, 4, 22, 0)
 	body.add_child(_crew_box)
-	body.add_child(FormTheme.spacer())
+	_strip = FormTheme.spacer()
+	body.add_child(_strip)
 	body.add_child(FormTheme.rule(2.0))
 	var foot := VBoxContainer.new()
 	foot.add_theme_constant_override("separation", 2)
@@ -317,23 +443,36 @@ func _build_main() -> void:
 	body.add_child(FormTheme.margin(foot, 22, 10, 22, 14))
 
 	_stamp = FormStamp.new("LICENSED · BONDED · MOSTLY", 18, -8.0)
-	_stamp.position = Vector2(235.0, 650.0)   # the blank strip above the ads, clear of the BUILD line
-	clipboard.add_child(_stamp)
+	clipboard.add_child(_stamp)   # (placed in the blank strip above the ads once laid out: _fit_notice)
+	_strip.resized.connect(_fit_notice)
 
-	var keys := KeyHints.new([["Up", "Down", "move"], ["Enter", "sign"]])
+	keys = KeyHints.new()
 	keys.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	keys.offset_left = 720.0
 	keys.offset_top = -52.0
 	keys.offset_bottom = -20.0
 	main_panel.add_child(keys)
+	_refresh_keys()
 
-	FormTheme.chain([start_button, join_button, voice_button, settings_button, quit_button])
+	FormTheme.chain([start_button, join_button, voice_button, settings_button, quit_button, card.name_row])
+	card.name_row.focus_entered.connect(_refresh_keys)
+	card.name_row.focus_exited.connect(_refresh_keys)
 	_refresh_info()
+
+
+## The key strip under the forms: the NAME line steps through the crew with Left / Right.
+func _refresh_keys() -> void:
+	if keys == null:
+		return
+	if card != null and card.name_row.has_focus():
+		keys.set_hints([["Left", "Right", "hero"], ["Up", "Down", "move"]])
+	else:
+		keys.set_hints([["Up", "Down", "move"], ["Enter", "sign"]])
 
 
 func _menu_row(parent: Control, text: String, number: String, hint: String, on_press: Callable) -> FormRow:
 	var r := FormRow.new(text, number, hint)
-	r.row_h = 66.0
+	r.row_h = ROW_H
 	r.pressed.connect(on_press)
 	parent.add_child(r)
 	return r
@@ -417,13 +556,17 @@ func _set_status(text: String) -> void:
 	_fit_notice()
 
 
-## Collapse the empty notice lines; the stamp shows only when the strip is free.
+## Collapse the empty notice lines; the stamp shows only when the strip is free (and tall enough for it), centred in it.
 func _fit_notice() -> void:
 	if _status_box == null:
 		return
 	_status_box.visible = status_label.text != ""
 	_crew_box.visible = crew_label.text != ""
-	_stamp.visible = not _status_box.visible and not _crew_box.visible
+	var room := _strip.size.y >= _stamp.size.y + 12.0
+	_stamp.visible = room and not _status_box.visible and not _crew_box.visible
+	if _stamp.visible:
+		var at := clipboard.get_global_transform().affine_inverse() * _strip.get_global_rect().get_center()
+		_stamp.position = at - _stamp.size * 0.5
 
 
 ## Rows, hints, the status line and the crew list from the session state.

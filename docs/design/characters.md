@@ -77,6 +77,39 @@ hair-trigger.
 (`tests/test_voice_audio.gd`). The recognizer hears "gasket" as GASKET (never "cast"), "rebar" as
 REBAR or RIBAR, and "wick" as WICK, WIG or WHITCOMBE, so "Wick" will be the flakiest callsign.
 
+**Character select (as built, 2026-10-19; the user's decisions).** The player picks their hero on the main menu itself.
+- **Click a hero in the garage to pick them.** No confirm step. The picked hero walks to the front spot, turned to the camera,
+  and strikes its cast pose; the other two step back (`MenuBackdrop.set_featured_hero(id, true)`). Hovering a hero gives it a
+  warm outline and a faint lift (`set_hover`), and the pointer becomes a hand. The hit test is the camera's ray against each
+  model's own mesh bounds (`MenuBackdrop.hero_at`; the nearest hit wins), with no physics.
+- **Keyboard and controller:** the personnel file's NAME line is the last stop of the menu's focus chain (after Quit); Left /
+  Right step through the three, Enter steps on. The key strip under the forms says "Left Right HERO" while it has focus; the
+  paper says nothing about keys.
+- **FORM 31, Personnel file** (`PersonnelFile`, `scripts/ui/personnel_file.gd`, green carbon) lies under the work order's
+  clipboard on the left third. Printed captions, typed values: NAME, ROLE (one deadpan line per hero, the only text kept in
+  the card: "Tank. Immovable. Not a closer."), HP, PRIMARY (name and damage), SPEED (the primary's cooldown), SECONDARY
+  (name, damage, cooldown), CLIMBING, WEIGHT. Every number is read from `HeroKit` (and, for bowl and spin, `Hero`'s
+  constants). Box bars (ten printed boxes, typed X's) put the three on one scale per stat: the best of the three fills all
+  ten (HP, primary damage, swings per second, +2 climb pace, and weight, where immovable fills all ten). The card is retyped
+  (with the paper sound) whenever the pick changes.
+- **Saved:** `GameSettings` key "character" in user://settings.cfg; `Boot` loads it into `Session.character_id` at start
+  and the menu reads it again from its own settings file. `--backdrop-hero <id>` (menu) and `--hero <id>` (game) pick for
+  one run without saving. Picking is locked while a crew is opening or open (the roster already carries the pick).
+- **Solo:** seat 1 is the pick; the AI seats are the other two (`CrewSeats.fill`): an AI seat keeps its own hero (seat 2
+  Rebar, seat 3 Gasket) when nobody plays it, else takes the first free one of Rebar, Gasket, Wick. Wick: AI Rebar (2) and
+  Gasket (3), as before. Rebar: AI Wick (2) and Gasket (3). Gasket: AI Rebar (2) and Wick (3). The formation spots stay per
+  seat (`game.gd` `AI_SEATS`); an AI Wick keeps its distance and shoots (`AllyBrain.prefers_ranged`, from the arrow kit).
+- **Online:** the roster carries each player's pick (`hello` -> roster "character"). Two players may pick the same hero
+  (allowed). The AI seats play the heroes nobody human picked, the same `CrewSeats.fill` over the roster on every machine (so
+  the floor checksum agrees); a duplicate only if all three are taken, which three seats never need. A player who leaves
+  gives the seat back to the AI as a hero nobody else plays (`CrewSeats.ai_for`, `SeatHandover.ai_character`), which is the
+  hero the next floor gives that seat too. A late joiner still takes an AI already playing its pick first
+  (`SeatHandover.pick_seat`).
+- **What assumed Wick:** seat 1's character in solo (`game.gd` `_crew_seats`), the fixed AI table (`AI_SEATS` held each seat's
+  character), the "original character" a dropped seat went back to, the AI brains (always melee), the `--kit-demo` and
+  `--give-allies` dev flags (seat order), and comments about the van and elevator spots (they are by seat, whoever plays it).
+  The HP carry between floors was already keyed by seat. `PlayLog` gained a `hero` column. Tests: `tests/test_character_select.gd`.
+
 ### Rebar: the rock
 *A gentle, slow-talking boulder, formerly the bunker's foundation stone. Loves the team and
 never notices what it's standing on.*
