@@ -9,9 +9,9 @@ reloadable = false
 linux.debug.x86_64 = "res://addons/hero_listen/bin/libhero_listen.linux.template_debug.x86_64.so"
 linux.release.x86_64 = "res://addons/hero_listen/bin/libhero_listen.linux.template_release.x86_64.so"
 windows.debug.x86_64 = "res://addons/hero_listen/bin/libhero_listen.windows.template_debug.x86_64.dll"
-; Only a template_debug build of the extension exists (Hero-Reader builds that one);
-; the same DLL serves release exports until a release build is added.
-windows.release.x86_64 = "res://addons/hero_listen/bin/libhero_listen.windows.template_debug.x86_64.dll"
+; Release exports need the template_release build: the template_debug DLL in a release exe
+; corrupts the heap on exit (0xC0000374). Build it in ..\Hero-Reader (README: Not committed).
+windows.release.x86_64 = "res://addons/hero_listen/bin/libhero_listen.windows.template_release.x86_64.dll"
 macos.debug = "res://addons/hero_listen/bin/libhero_listen.macos.template_debug.universal.dylib"
 macos.release = "res://addons/hero_listen/bin/libhero_listen.macos.template_release.universal.dylib"
 android.debug.arm64 = "res://addons/hero_listen/bin/libhero_listen.android.template_debug.arm64.so"

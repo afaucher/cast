@@ -183,7 +183,12 @@ further), **coffee** (+60% move and attack speed for six seconds, twitchy, then 
 - **Engine:** Godot 4.7. `godot_env.ps1` uses `$env:CAST_GODOT`, or the copy installed in `..\Hero-Reader`.
 - **Not committed:** the speech DLLs (`addons/hero_listen/bin`), the zipformer model (`models/`) and
   the pronunciation dictionary (`data/pron_dict.txt`). Copy them from `..\Hero-Reader` (see
-  `.gitignore`). The GodotSteam binaries (`addons/godotsteam/win64/*`) come from
+  `.gitignore`). `bin` needs both `libhero_listen.windows.template_debug.x86_64.dll` (editor and tests) and
+  `libhero_listen.windows.template_release.x86_64.dll` (release exports; the debug one in a release exe corrupts the
+  heap on exit). Hero-Reader's `tools/setup.py` builds only the debug one; build the release one in
+  `..\Hero-Reader\native\hero_listen` with `SHERPA_ONNX_DIR=../../third_party/sherpa-onnx/windows-x64
+  GODOT_CPP_DIR=../../third_party/godot-cpp ../../stt-eval/.venv/Scripts/python.exe -m SCons platform=windows
+  target=template_release` (scons finds MSVC itself) and copy it from `..\Hero-Reader\godot\addons\hero_listen\bin`. The GodotSteam binaries (`addons/godotsteam/win64/*`) come from
   `..\bridge-to-friendship\addons\godotsteam\win64`. Steam (running) supplies the player's name on the HUD;
   `steam_appid.txt` is 480 (Valve's Spacewar test app) until Cast has its own app id. The Godot 4.7 export templates go in `build\deps`.
 - **Sounds, not committed either:** the CC0 recordings in `assets/audio/third_party/` (where each came from:

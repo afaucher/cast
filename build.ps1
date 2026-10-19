@@ -58,7 +58,7 @@ try {
 } finally { $env:APPDATA = $oldAppData }
 
 # Godot exits 0 on some failed exports -- the artifacts decide.
-foreach ($f in @("Cast.exe", "Cast.pck", "libhero_listen.windows.template_debug.x86_64.dll", "sherpa-onnx-c-api.dll", "onnxruntime.dll", "steam_api64.dll")) {
+foreach ($f in @("Cast.exe", "Cast.pck", "libhero_listen.windows.template_release.x86_64.dll", "sherpa-onnx-c-api.dll", "onnxruntime.dll", "steam_api64.dll")) {
     if (-not (Test-Path (Join-Path $outDir $f))) { Write-Host "BUILD FAILED: missing $f" -ForegroundColor Red; exit 1 }
 }
 Set-Content -Path (Join-Path $outDir "version.txt") -Value $buildVersion

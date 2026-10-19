@@ -81,5 +81,6 @@ nothing on the paper explains the game or shows a key binding.
 - Run them after any code change.
 - In a worktree, set `$env:CAST_GODOT` to `..\Hero-Reader\third_party\godot\Godot_v4.7-stable_win64_console.exe`
   (an absolute path), and copy the untracked speech files (`addons/hero_listen/bin`, `models/`,
-  `data/pron_dict.txt`) from the main checkout. For sound, copy `assets/audio/third_party/` too and run
+  `data/pron_dict.txt`) from the main checkout; `bin` holds both the template_debug and the template_release
+  hero_listen DLLs (README, "Not committed"). For sound, copy `assets/audio/third_party/` too and run
   `.\tools\render_sfx.ps1` (it writes the untracked `assets/audio/sfx/*.wav`); without them the cues are silent.
