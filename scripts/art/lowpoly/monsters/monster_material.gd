@@ -30,7 +30,11 @@ static func _code() -> String:
 			+ "uniform float tint_k = 0.0;         // additive flash / windup pulse\n"
 			+ "uniform float glow_gain = 1.8;      // emissive faces (vertex alpha < 0.75)\n"
 			+ "varying vec3 wnormal;")
-	code = code.replace("EMISSION = min(e, vec3(0.95));",
+	# Match the line's prefix only: LowPolyMaterial appends its own spell glow (+ glow_color * glow_strength) after it, and
+	# matching the whole old line silently stopped patching once it did (the monster glow went flat).
+	var at := "EMISSION = min(e, vec3(0.95))"
+	assert(code.contains(at), "MonsterMaterial: LowPolyMaterial's EMISSION line moved")
+	code = code.replace(at,
 			"float glow_m = 1.0 - step(0.75, COLOR.a);\n"
-			+ "\tEMISSION = min(e, vec3(0.95)) * (1.0 - glow_m) + c * glow_m * glow_gain + tint_color.rgb * tint_k * 0.8;")
+			+ "\tEMISSION = min(e, vec3(0.95)) * (1.0 - glow_m) + c * glow_m * glow_gain + tint_color.rgb * tint_k * 0.8")
 	return code
