@@ -125,7 +125,8 @@ but every seam would need its coping, liner and foam suppressed and the copings 
 - **Fallback:** a ring needs a clear area about 7-11 cells across; where none fits (crates, platforms or doors in the way)
   the room gets a **shark pool**, a convex pool of the indoor pool's shapes in the moat's look with its fins circling half
   a row inside the rim. Over the `test_pools` floors: 24 rings and 9 shark pools in 44 moat rooms; the other 11
-  (mostly rooms with a hellgate in the middle) get no water, like a crowded indoor pool room.
+  (mostly rooms with a hellgate in the middle) get no water, like a crowded indoor pool room. **Decided** (user, 2026-10-18):
+  keep the shark-pool fallback; the ring does not circle a hellgate.
 - Tests: `test_pools.gd` (the ring is one connected, closed ring round a dry island; one body of water: the channel is
   wet all the way round at one surface and every rim line lies on the outline or the island; a step in and out over every
   outer and island edge; A* and a walking body reach the island and leave it, slowed and soaked; the fins stay in the

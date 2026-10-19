@@ -267,6 +267,10 @@ voice, i.e. while "cast" or the spell word's onset is still being said):**
 - **C, said over a teammate's loud revised cue:** 23/27 cast. Misses: `accidental_sting_v2` 2 (rejected),
   `elevator_ding_v2` 1, `fizzle_pfft_v2b` 1 ("CASCORD"); the fireballs and stamps never broke a cast.
 
+**Round 3 picks (user, 2026-10-18):** `fizzle_pfft_v4`, `stamp_thunk_v4`, `elevator_ding_v4b`. Still to pick: the
+cast-heard charge-up (v4a-d) and the fireball (v4/v4b). The fizzle broke "cast corn" when it overlapped the spell word
+in test C, so in the game it must not play over a new utterance (it is cut when the listener hears speech start).
+
 **Round 3 (`mic_leak_probe.gd -- v4`):**
 - **A:** nothing casts. The charge-ups, fireballs and stamps produce no words at all (one stray "ONE"/"FOUR"); the two
   chimes read as "OH".
