@@ -120,7 +120,7 @@ func _check_elevator_dropoff() -> void:
 	check(_g.get("_menu") == null and not _g.get("_ended"), "nothing opened and the contract goes on")
 	var tracker: ObjectiveTracker = _g.get("_tracker")
 	var row := _employee_row(tracker)
-	check(row.contains("1 rescued") and row.contains("%d alive" % (site.employees.size() - 1)), "the tracker shows it at once (%s)" % row)
+	check(row.contains("1 rescued") and not row.contains("alive"), "the tracker shows it at once (%s)" % row)
 	await frames(60)
 	eq(_extracted_lines(), 1, "nothing pays it a second time while it fades out")
 	eq(_session().extracted_total, 1, "or counts it twice")

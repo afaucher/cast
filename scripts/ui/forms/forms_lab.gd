@@ -140,7 +140,7 @@ BONDED", 40, -6.0)
 				{"text": "Close hellgates", "detail": "2 / 4", "state": "partial"},
 				{"text": "ORIGIN gate", "detail": "OPEN", "state": "todo"},
 				{"text": run.pest_label(), "detail": "24 left", "state": "todo"},
-				{"text": "Employees", "detail": "2 rescued · 3 alive · 2 with you · 1 lost", "state": "fail"},
+				{"text": "Employees", "detail": "2 rescued · 1 lost", "state": "fail"},
 			]
 			t.show_state("FLOOR 2 / 3", run.company, rows, 6000, 1500)
 		"employees":

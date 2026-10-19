@@ -1968,25 +1968,17 @@ func _update_tracker() -> void:
 		var clean := bool(st["pest_paid"])
 		rows.append({"text": _run.pest_label(), "detail": "clean" if clean else "%d left" % left, "state": "done" if clean else "todo"})
 		var alive_here := 0
-		var following := 0
 		for e in _site.employees:
 			if is_instance_valid(e) and not e.dead and not bool(e.call("is_extracted")):
 				alive_here += 1
-				if e.has_method("is_following") and bool(e.call("is_following")):
-					following += 1
 		var spawned := int(st["employees"])
 		if spawned > 0:
+			# "2 rescued · 1 lost": alive is whatever is left, lost only when there is one (user, 2026-10-19, option A)
 			var lost := int(st["lost"])
 			var rescued := int(st["extracted"])
-			var parts: Array[String] = []
-			if rescued > 0:
-				parts.append("%d rescued" % rescued)
-			parts.append("%d alive" % alive_here)
-			if following > 0:
-				parts.append("%d with you" % following)
+			var detail := "%d rescued" % rescued
 			if lost > 0:
-				parts.append("%d lost" % lost)
-			var detail := " · ".join(parts)
+				detail += " · %d lost" % lost
 			rows.append({"text": "Employees", "detail": detail, "state": "fail" if lost > 0 else ("done" if rescued > 0 and alive_here == 0 else "todo")})
 	_tracker.show_state("FLOOR %d / %d" % [_floor_n(), ContractRun.FLOOR_COUNT], _run.company, rows, Ledger.payout(), Ledger.deducted())
 	if _ticker != null:
