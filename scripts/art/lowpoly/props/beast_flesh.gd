@@ -1,21 +1,24 @@
 class_name BeastFlesh
 extends RefCounted
-## The flesh of the monster under a hellgate room (HellgateBeast): the ENEMY toon look (MonsterMaterial: ink outline,
-## amber rim, faces painted with vertex alpha 0.5 glow) plus three things the GPU does, so a limb costs one mesh and no
-## CPU work a frame:
+## The flesh of the monster under a hellgate room (HellgateBeast): the ENEMY toon look (the heroes' LowPolyMaterial with
+## the monsters' glow faces: vertex alpha < 0.75 is emissive) plus what the GPU does, so a tentacle is one mesh and a
+## frame costs a couple of uniform writes:
 ##
-##   - BEND: a tentacle is built straight up its local +Y (s = rest y, 0 at the base) and the vertex shader bends it
-##     along a centreline whose heading at s is two angles: `a` (towards local +Z: the curl, the lean, the sway) and `b`
-##     (towards local +X: the side sway). Per-limb numbers ride in the mesh (CUSTOM1 = length, phase, curl, sway;
-##     UV = base lean, twitch), so every limb of a room shares ONE material pair (flesh + outline) and a frame costs
-##     two uniform writes (`t`, `beat`). The outline pass bends the same way. Faces get a flat normal from screen
-##     derivatives, so a bent limb stays faceted.
-##   - FADE: flesh below `fade_hi` (world y) darkens towards the background by `fade_lo`: the limbs rise out of the dark
-##     under the floor, their roots never show.
-##   - PULSE: the glowing faces (suckers, veins) brighten in a wave that leaves the base on the gate's beat and runs up
-##     the limb (`beat_rate` is the gate's: HellgateModel beats at 2.6 rad/s, the origin at 1.7).
-## A mesh without CUSTOM1 / UV (any LowPoly soup) passes straight through: it only gets the fade and the pulse.
+##   - PATH tubes (path_tube): a long tentacle is built in place along its path. The mesh carries, per vertex, its
+##     distance along the path and a phase (UV), its sway (CUSTOM1.xyz: zero where it grips, larger at the free tip) and
+##     the tube's radius there (CUSTOM1.w). The vertex shader moves the free part (sway) and swells the tube with a bulge
+##     that leaves the root on the gate's beat and travels to the tip (peristalsis). The outline pass moves the same way.
+##     Faces get a flat normal from screen derivatives, so the moving tube stays faceted.
+##   - FADE: flesh below `fade_hi` (world y) darkens towards the background by `fade_lo`: the roots, under the floor slab,
+##     are lost in the dark.
+##   - PULSE: the glowing faces (suckers) brighten with the travelling beat (`beat_rate` is the gate's: HellgateModel
+##     beats at 2.6 rad/s, the origin at 1.7).
+##   - SINK: `sink` 0..1 slides everything down into the dark (the gate closing).
+## A mesh without CUSTOM1 / UV (any LowPoly soup, Limb.to_mesh) does not move: it only gets the fade and the pulse.
 ## Headless-safe: ordinary spatial shaders, no textures.
+##
+## The shader is the heroes' source text (LowPolyMaterial.SHADER) patched like MonsterMaterial's, but against the
+## EMISSION line's stable prefix: MonsterMaterial's own patch no longer matches that line (reported separately).
 
 const FLESH_DARK := Color(0.07, 0.025, 0.045)
 const FLESH := Color(0.17, 0.045, 0.06)
@@ -24,65 +27,26 @@ const UNDER := Color(0.56, 0.25, 0.24)
 const TIP := Color(0.27, 0.075, 0.17)
 const SUCKER := Color(1.0, 0.40, 0.09)      ## glow (the gate's LAVA)
 const SUCKER_HOT := Color(1.0, 0.70, 0.22)
-const VEIN := Color(1.0, 0.22, 0.07)        ## glow (the gate's CRACK)
 const OBSIDIAN := Color(0.15, 0.105, 0.19)  ## the gate's shard stone
 const OBSIDIAN_LIGHT := Color(0.27, 0.19, 0.33)
+## A brighter amber rim than the heroes' (0.30): dark red flesh in a red-carpeted room still has an edge.
+const RIM := 0.62
 
-const BEND_GLSL := """
+const PATH_GLSL := """
 uniform float t = 0.0;
-uniform float sway_rate = 0.55;      // rad/s of the slow sway
-uniform float wave_k = 0.6;          // how much the sway lags up the limb (per world unit)
-uniform float twitch_rate = 7.0;
-uniform float sink = 0.0;            // 0..1: the limb slides down out of sight by this fraction of its length
+uniform float sway_rate = 0.45;      // rad/s of the tip sway
+uniform float wave_k = 0.35;         // how much the sway lags along the tube (per world unit)
+uniform float sink = 0.0;            // 0..1: everything slides down into the dark
 uniform float beat_rate = 2.6;       // the gate core's beat
 uniform float pulse_amp = 0.7;       // how much the glow swells on the travelling beat
-uniform float pulse_k = 0.9;         // phase lag of the beat per world unit up the limb
+uniform float pulse_k = 0.9;         // phase lag of the beat per world unit along the tube
 uniform float pulse_base = 1.0;      // the glow between beats
-uniform float fade_lo = -3.6;        // world y: flesh this deep is lost in the dark
-uniform float fade_hi = 0.4;         // world y: flesh this high is fully lit
-uniform float wiggle = 0.0;          // a still S-curve along the limb (radians), so it reads as a tentacle, not a horn
-uniform float wiggle_k = 6.0;
-uniform bool path_mode = false;      // PATH tubes: built along their path, CUSTOM1 = sway (xyz) and radius (w), UV = (s, phase)
-uniform float swell_amp = 0.14;      // PATH: the beat swells the tube as it travels along it (peristalsis)
+uniform float swell_amp = 0.14;      // how much the beat bulges the tube (x its radius)
+uniform float fade_lo = -5.2;        // world y: flesh this deep is lost in the dark
+uniform float fade_hi = -1.9;        // world y: flesh this high is fully lit
 varying float v_fade;
 varying float v_pulse;
 
-vec2 beast_ang(float s, vec4 P, vec2 Q) {
-	float L = max(P.x, 0.01);
-	float u = clamp(s / L, 0.0, 1.25);
-	float ph = P.y;
-	float a = Q.x * (1.0 - u) + P.z * u * u + P.w * u * sin(t * sway_rate + ph - s * wave_k);
-	float b = P.w * 0.75 * u * sin(t * sway_rate * 0.71 + ph * 1.7 - s * wave_k * 0.8 + 1.3);
-	a += wiggle * u * sin(u * wiggle_k + ph * 1.3);
-	b += wiggle * 0.6 * u * sin(u * wiggle_k * 0.8 + ph * 2.1);
-	float tw = Q.y * u * u * u * sin(t * twitch_rate + ph * 3.1) * max(0.0, sin(t * 0.9 + ph * 2.3));
-	return vec2(a + tw, b + tw * 0.6);
-}
-
-vec3 beast_dir(vec2 ab) {
-	return vec3(cos(ab.x) * sin(ab.y), cos(ab.x) * cos(ab.y), sin(ab.x));
-}
-
-// Rotate a rest-pose offset into the frame at heading ab: about X by a (Y towards Z), then about Z by -b (towards X).
-vec3 beast_rot(vec3 v, vec2 ab) {
-	float ca = cos(ab.x);
-	float sa = sin(ab.x);
-	v = vec3(v.x, v.y * ca - v.z * sa, v.y * sa + v.z * ca);
-	float cb = cos(ab.y);
-	float sb = sin(ab.y);
-	return vec3(v.x * cb + v.y * sb, -v.x * sb + v.y * cb, v.z);
-}
-
-vec3 beast_center(float s, vec4 P, vec2 Q) {
-	vec3 p = vec3(0.0);
-	float ds = s / 10.0;
-	for (int i = 0; i < 10; i++) {
-		p += beast_dir(beast_ang((float(i) + 0.5) * ds, P, Q)) * ds;
-	}
-	return p;
-}
-
-// PATH tubes: the beat bulges the tube along its length; the sway (zero where it grips) moves the free end.
 vec3 path_move(vec3 v, vec3 wn, vec2 uv, vec4 c1) {
 	float s = uv.x;
 	float w = 0.5 + 0.5 * sin(t * beat_rate - s * pulse_k);
@@ -93,22 +57,14 @@ vec3 path_move(vec3 v, vec3 wn, vec2 uv, vec4 c1) {
 	off.y -= sink * 4.0;
 	return v + off;
 }
-
-vec3 beast_bend(vec3 v, vec4 P, vec2 Q) {
-	float s = v.y;
-	vec2 ab = beast_ang(s, P, Q);
-	vec3 p = beast_center(s, P, Q) + beast_rot(vec3(v.x, 0.0, v.z), ab);
-	p.y -= sink * (P.x + 1.0);
-	return p;
-}
 """
 
 static var _flesh_shader: Shader
 static var _outline_shader: Shader
 
 
-## The flesh material (its next_pass is the bending outline). Set `t` / `beat` on both with set_time().
-static func make(outline_px: float = 2.4, path: bool = false) -> ShaderMaterial:
+## The flesh material (its next_pass is the moving outline). Set uniforms on both with set_both().
+static func make(outline_px: float = 2.4) -> ShaderMaterial:
 	if _flesh_shader == null:
 		_flesh_shader = Shader.new()
 		_flesh_shader.code = flesh_code()
@@ -117,13 +73,13 @@ static func make(outline_px: float = 2.4, path: bool = false) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = _flesh_shader
 	m.set_shader_parameter("glow_gain", 1.9)
+	m.set_shader_parameter("amber_rim", RIM)
 	if outline_px > 0.0:
 		var o := ShaderMaterial.new()
 		o.shader = _outline_shader
 		o.set_shader_parameter("outline_color", LowPolyMaterial.INK)
 		o.set_shader_parameter("width_px", outline_px)
 		m.next_pass = o
-	set_both(m, "path_mode", path)
 	return m
 
 
@@ -135,29 +91,18 @@ static func set_both(m: ShaderMaterial, key: StringName, value: Variant) -> void
 
 
 static func flesh_code() -> String:
-	# Built from the heroes' shader like MonsterMaterial's (its own glow patch no longer matches LowPolyMaterial's
-	# EMISSION line, so it is done here against the line's stable prefix).
 	var code: String = LowPolyMaterial.SHADER.replace("\r", "")
 	code = _patch(code, "varying vec3 wnormal;",
 			"uniform vec4 tint_color : source_color = vec4(1.0, 0.25, 0.0, 1.0);\n"
 			+ "uniform float tint_k = 0.0;\n"
 			+ "uniform float glow_gain = 1.9;      // emissive faces (vertex alpha < 0.75)\n"
-			+ "varying vec3 wnormal;\n" + BEND_GLSL)
+			+ "varying vec3 wnormal;\n" + PATH_GLSL)
 	code = _patch(code, "\twnormal = normalize((MODEL_NORMAL_MATRIX * NORMAL));",
-			"\tvec4 P = CUSTOM1;\n"
-			+ "\tvec2 Q = UV;\n"
-			+ "\tfloat s0 = VERTEX.y;\n"
-			+ "\tif (path_mode) {\n"
-			+ "\t\ts0 = UV.x;\n"
-			+ "\t\tVERTEX = path_move(VERTEX, normalize(CUSTOM0.rgb * 2.0 - 1.0), UV, P);\n"
-			+ "\t} else {\n"
-			+ "\t\tNORMAL = beast_rot(NORMAL, beast_ang(s0, P, Q));\n"
-			+ "\t\tVERTEX = beast_bend(VERTEX, P, Q);\n"
-			+ "\t}\n"
+			"\tVERTEX = path_move(VERTEX, normalize(CUSTOM0.rgb * 2.0 - 1.0), UV, CUSTOM1);\n"
 			+ "\twnormal = normalize((MODEL_NORMAL_MATRIX * NORMAL));\n"
 			+ "\tfloat wy = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;\n"
 			+ "\tv_fade = mix(0.05, 1.0, smoothstep(fade_lo, fade_hi, wy));\n"
-			+ "\tfloat w = 0.5 + 0.5 * sin(t * beat_rate - max(s0, 0.0) * pulse_k);\n"
+			+ "\tfloat w = 0.5 + 0.5 * sin(t * beat_rate - UV.x * pulse_k);\n"
 			+ "\tv_pulse = pulse_base + pulse_amp * (w * w * w * 1.6 - 0.25);")
 	code = _patch(code, "void fragment() {\n\tvec3 c = COLOR.rgb;",
 			"void fragment() {\n"
@@ -175,17 +120,10 @@ static func flesh_code() -> String:
 
 static func outline_code() -> String:
 	var code: String = LowPolyMaterial.OUTLINE_SHADER.replace("\r", "")
-	code = _patch(code, "uniform float z_push = 0.04;", "uniform float z_push = 0.04;\n" + BEND_GLSL)
+	code = _patch(code, "uniform float z_push = 0.04;", "uniform float z_push = 0.04;\n" + PATH_GLSL)
 	code = _patch(code, "\tvec3 sn = CUSTOM0.rgb * 2.0 - 1.0;",
-			"\tvec4 P = CUSTOM1;\n"
-			+ "\tvec2 Q = UV;\n"
-			+ "\tvec3 sn = CUSTOM0.rgb * 2.0 - 1.0;\n"
-			+ "\tif (path_mode) {\n"
-			+ "\t\tVERTEX = path_move(VERTEX, normalize(sn), UV, P);\n"
-			+ "\t} else {\n"
-			+ "\t\tsn = beast_rot(sn, beast_ang(VERTEX.y, P, Q));\n"
-			+ "\t\tVERTEX = beast_bend(VERTEX, P, Q);\n"
-			+ "\t}")
+			"\tvec3 sn = CUSTOM0.rgb * 2.0 - 1.0;\n"
+			+ "\tVERTEX = path_move(VERTEX, normalize(sn), UV, CUSTOM1);")
 	return code
 
 
@@ -194,34 +132,10 @@ static func _patch(code: String, find: String, repl: String) -> String:
 	return code.replace(find, repl)
 
 
-# ------------------------------------------------------------------ the centreline on the CPU (fitting a pose)
+# ------------------------------------------------------------------ still pieces
 
-## The same centreline the shader draws, at time t, in the limb's local frame (for placing a limb so its apex and tip
-## land where we want them). p = [length, phase, curl, sway], q = [lean, twitch].
-static func center(s: float, p: Vector4, q: Vector2, t: float = 0.0, sway_rate: float = 0.55, wave_k: float = 0.6,
-		wiggle: float = 0.0, wiggle_k: float = 6.0) -> Vector3:
-	var out := Vector3.ZERO
-	var ds := s / 10.0
-	for i in 10:
-		var ab := angles((float(i) + 0.5) * ds, p, q, t, sway_rate, wave_k, wiggle, wiggle_k)
-		out += Vector3(cos(ab.x) * sin(ab.y), cos(ab.x) * cos(ab.y), sin(ab.x)) * ds
-	return out
-
-
-static func angles(s: float, p: Vector4, q: Vector2, t: float, sway_rate: float, wave_k: float, wiggle: float = 0.0,
-		wiggle_k: float = 6.0) -> Vector2:
-	var u := clampf(s / maxf(p.x, 0.01), 0.0, 1.25)
-	var a := q.x * (1.0 - u) + p.z * u * u + p.w * u * sin(t * sway_rate + p.y - s * wave_k)
-	var b := p.w * 0.75 * u * sin(t * sway_rate * 0.71 + p.y * 1.7 - s * wave_k * 0.8 + 1.3)
-	a += wiggle * u * sin(u * wiggle_k + p.y * 1.3)
-	b += wiggle * 0.6 * u * sin(u * wiggle_k * 0.8 + p.y * 2.1)
-	return Vector2(a, b)
-
-
-# ------------------------------------------------------------------ building a limb
-
-## A triangle bag like LowPoly.Soup, but wound explicitly (outward from a given inside point: a long bent limb's faces
-## are not outward from its origin) and turned into a mesh that also carries the limb's numbers (CUSTOM1, UV).
+## A triangle bag like LowPoly.Soup, but wound explicitly (outward from a given inside point) and turned into a mesh
+## the flesh material reads (CUSTOM0 = the welded normal for the outline; no CUSTOM1: it does not move).
 class Limb extends RefCounted:
 	var verts := PackedVector3Array()
 	var cols := PackedColorArray()
@@ -240,7 +154,7 @@ class Limb extends RefCounted:
 		verts.append(a)
 		verts.append(b)
 		verts.append(c)
-		cols.append(_paint(col))
+		cols.append(BeastFlesh._paint(rng, col, vary))
 
 	func quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3, col: Color, inside: Vector3) -> void:
 		tri(a, b, c, col, inside)
@@ -255,45 +169,7 @@ class Limb extends RefCounted:
 	func tri_count() -> int:
 		return cols.size()
 
-	## A gnarled tube along `pts` (rings of `sides`, radius per point, colour per segment; no caps: its ends sink
-	## into something). Cheaper and smoother than a chain of capped cylinders.
-	func tube(pts: Array[Vector3], radii: Array[float], seg_cols: Array[Color], sides: int, gnarl: float = 0.12) -> void:
-		var n := pts.size()
-		if n < 2:
-			return
-		var rings: Array = []
-		var ref := Vector3.UP
-		for i in n:
-			var t := (pts[mini(i + 1, n - 1)] - pts[maxi(i - 1, 0)]).normalized()
-			if absf(t.dot(ref)) > 0.95:
-				ref = Vector3.RIGHT if absf(t.dot(Vector3.RIGHT)) < 0.9 else Vector3.FORWARD
-			var x := ref.cross(t).normalized()
-			var y := t.cross(x).normalized()
-			ref = y
-			var row: Array[Vector3] = []
-			for k in sides:
-				var a := TAU * float(k) / sides + 0.4 * i
-				var r := radii[i] * (1.0 + rng.randf_range(-gnarl, gnarl))
-				row.append(pts[i] + (x * cos(a) + y * sin(a)) * r)
-			rings.append(row)
-		for i in n - 1:
-			var r0: Array[Vector3] = rings[i]
-			var r1: Array[Vector3] = rings[i + 1]
-			var mid := (pts[i] + pts[i + 1]) * 0.5
-			var col: Color = seg_cols[mini(i, seg_cols.size() - 1)]
-			for k in sides:
-				var k1 := (k + 1) % sides
-				quad(r0[k], r0[k1], r1[k1], r1[k], col, mid)
-
-	func _paint(col: Color) -> Color:
-		var h := col.h + rng.randf_range(-1.0, 1.0) * vary * 0.12
-		var s := clampf(col.s * (1.0 + rng.randf_range(-1.0, 1.0) * vary * 1.6), 0.0, 1.0)
-		var v := clampf(col.v * (1.0 + rng.randf_range(-1.0, 1.0) * vary), 0.0, 1.0)
-		return Color.from_hsv(fposmod(h, 1.0), s, v, col.a)
-
-	## p = [length, phase, curl, sway] (CUSTOM1), q = [lean, twitch] (UV). reach: how far the bend can carry a vertex
-	## from the rest pose (the cull box grows by it).
-	func to_mesh(p: Vector4, q: Vector2, reach: float, top_light: float = 0.22) -> ArrayMesh:
+	func to_mesh(top_light: float = 0.22) -> ArrayMesh:
 		var weld := {}
 		var face_n := PackedVector3Array()
 		for t in range(0, verts.size(), 3):
@@ -305,8 +181,6 @@ class Limb extends RefCounted:
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA8_UNORM)
-		st.set_custom_format(1, SurfaceTool.CUSTOM_RGBA_FLOAT)
-		var custom1 := Color(p.x, p.y, p.z, p.w)
 		for t in range(0, verts.size(), 3):
 			var fn: Vector3 = face_n[t / 3]
 			if fn.length() < 0.0000001:
@@ -322,109 +196,56 @@ class Limb extends RefCounted:
 				w = w.normalized() if w.length() > 0.00001 else n
 				st.set_color(base)
 				st.set_normal(n)
-				st.set_uv(q)
 				st.set_custom(0, Color(w.x * 0.5 + 0.5, w.y * 0.5 + 0.5, w.z * 0.5 + 0.5, 1.0))
-				st.set_custom(1, custom1)
 				st.add_vertex(v)
-		var mesh := st.commit()
-		var aabb := mesh.get_aabb().grow(reach)
-		mesh.custom_aabb = aabb
-		return mesh
-
-
-## A tentacle, straight up +Y in its rest pose: `rings` faceted rings (closer towards the tip), radius r_base -> r_tip,
-## a pointed tip. The +Z side (the inside of a curl) is the pale underside with a row of glowing suckers; the -Z side
-## (the back) can carry obsidian spines like the gate's shards. Colours run from the dark root to the flesh.
-## opts: suckers (int), spines (int), sides (int), under (bool), tip_col (Color)
-static func tentacle(length: float, r_base: float, r_tip: float, rings: int, seed_value: int, opts: Dictionary = {}) -> Limb:
-	var lb := Limb.new(seed_value)
-	var sides: int = int(opts.get("sides", 6))
-	var twist := 0.18
-	var ss: Array[float] = []
-	var rs: Array[float] = []
-	for i in rings + 1:
-		var u := float(i) / rings
-		ss.append(length * (1.0 - pow(1.0 - u, 1.35)))
-		rs.append(lerpf(r_base, r_tip, pow(u, 0.85)) * (1.0 + lb.rng.randf_range(-0.07, 0.07) * (1.0 if i > 0 and i < rings else 0.0)))
-	var tip_col: Color = opts.get("tip_col", TIP)
-	var under: bool = bool(opts.get("under", true))
-	var ring_pts: Array = []
-	for i in rings + 1:
-		var row: Array[Vector3] = []
-		for k in sides:
-			var th := TAU * float(k) / sides + twist * i
-			row.append(Vector3(cos(th) * rs[i], ss[i], sin(th) * rs[i]))
-		ring_pts.append(row)
-	for i in rings:
-		var u := (float(i) + 0.5) / rings
-		var col := FLESH_DARK.lerp(FLESH, smoothstep(0.0, 0.35, u)).lerp(FLESH_HI, smoothstep(0.35, 0.7, u) * 0.7).lerp(tip_col, smoothstep(0.7, 1.0, u))
-		var r0: Array[Vector3] = ring_pts[i]
-		var r1: Array[Vector3] = ring_pts[i + 1]
-		var axis := Vector3(0.0, (ss[i] + ss[i + 1]) * 0.5, 0.0)
-		for k in sides:
-			var k1 := (k + 1) % sides
-			var mid := (r0[k] + r0[k1]) * 0.5
-			var c := col
-			if under and mid.z > rs[i] * 0.45:
-				c = col.lerp(UNDER, 0.65 * smoothstep(0.15, 0.4, u))
-			lb.quad(r0[k], r0[k1], r1[k1], r1[k], c, axis)
-	# the tip: a short cone to a point
-	var last: Array[Vector3] = ring_pts[rings]
-	var apex := Vector3(0.0, length + r_tip * 2.6, 0.0)
-	for k in sides:
-		lb.tri(last[k], last[(k + 1) % sides], apex, tip_col, Vector3(0.0, length, 0.0))
-	# suckers: glowing studs in a double row up the underside
-	var n_suck: int = int(opts.get("suckers", 0))
-	for i in n_suck:
-		var u := lerpf(0.32, 0.93, (float(i) + 0.5) / n_suck)
-		var s := length * u
-		var r := lerpf(r_base, r_tip, pow(u, 0.85))
-		var side := 0.42 if i % 2 == 0 else -0.42
-		var pos := Vector3(side * r, s, r * 0.93)
-		var rad := maxf(r * 0.4, 0.035)
-		var hot := SUCKER_HOT if i % 3 == 0 else SUCKER
-		var b := LowPoly.boulder(Vector3(rad, rad * 0.8, rad * 0.55), 0, 0.1, MonsterModel.glow(hot), seed_value * 31 + i, 0.05)
-		lb.merge(b, Transform3D(Basis(), pos))
-	# obsidian spines down the back (the gate's shards growing out of the limb)
-	var n_spine: int = int(opts.get("spines", 0))
-	for i in n_spine:
-		var u := lerpf(0.22, 0.7, (float(i) + 0.5) / n_spine)
-		var s := length * u
-		var r := lerpf(r_base, r_tip, pow(u, 0.85))
-		var h := r * lb.rng.randf_range(1.4, 2.1)
-		var w := r * 0.42
-		var sp := LowPoly.cylinder(w, w * 0.06, h, 4, OBSIDIAN if i % 2 == 0 else OBSIDIAN_LIGHT, seed_value * 17 + i, 0.03)
-		# lean the spine back (-Z) and a little up the limb
-		var xf := Transform3D(Basis(Vector3(1, 0, 0), deg_to_rad(-68.0)), Vector3(0.0, s + h * 0.18, -r * 0.55 - h * 0.44))
-		lb.merge(sp, xf)
-	return lb
+		return st.commit()
 
 
 # ------------------------------------------------------------------ PATH tubes
 
-## A long tube along `pts` (world space; the mesh sits at the origin) for the PATH material: rings of `sides`,
-## radius per point, sway amplitude per point (0 where it grips, up to ~0.4 at a free tip). Colours run from the dark
-## root through the flesh to the tip; the side facing down is the pale underside. Glowing studs (suckers) every
-## `sucker_gap` along the top, obsidian spines along the back every `spine_gap` (0 = none) of the gripping stretch.
+## Vertex streams for path_tube.
+class _Streams extends RefCounted:
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
+	var c0 := PackedFloat32Array()
+	var c1 := PackedFloat32Array()
+
+	func emit(p: Vector3, wn: Vector3, col: Color, s: float, phase: float, sway: Vector3, r: float) -> void:
+		verts.append(p)
+		norms.append(wn)
+		colors.append(col)
+		uvs.append(Vector2(s, phase))
+		c0.append(wn.x * 0.5 + 0.5)
+		c0.append(wn.y * 0.5 + 0.5)
+		c0.append(wn.z * 0.5 + 0.5)
+		c0.append(1.0)
+		c1.append(sway.x)
+		c1.append(sway.y)
+		c1.append(sway.z)
+		c1.append(r)
+
+
+## A long tube along `pts` (world space; the mesh sits at the origin): rings of `sides`, a radius and a sway amplitude
+## per point (0 where it grips, up to ~0.4 at a free tip), a pointed tip. Colours run from the dark root through the
+## flesh to the tip; the side facing down is the pale underside. Studs (suckers, a third of them glowing) every
+## `sucker_gap` along the top; obsidian spines along the back every `spine_gap` (0 = none) of the first 60 %.
 static func path_tube(pts: Array[Vector3], radii: Array[float], sway: Array[float], seed_value: int, sides: int = 7,
 		sucker_gap: float = 0.55, spine_gap: float = 0.0, phase: float = 0.0) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var n := pts.size()
-	var verts := PackedVector3Array()
-	var norms := PackedVector3Array()
-	var colors := PackedColorArray()
-	var uvs := PackedVector2Array()
-	var c0 := PackedFloat32Array()      # RGBA float: weld normal * 0.5 + 0.5 (read as CUSTOM0)
-	var c1 := PackedFloat32Array()      # RGBA float: sway direction * amplitude, radius
-	var s_at: Array[float] = [0.0]
+	var out := _Streams.new()
+	var s_at := PackedFloat32Array([0.0])
 	for i in range(1, n):
 		s_at.append(s_at[i - 1] + pts[i].distance_to(pts[i - 1]))
 	var total := s_at[n - 1]
-	# ring frames (parallel transport)
-	var xs: Array[Vector3] = []
-	var ys: Array[Vector3] = []
-	var ts: Array[Vector3] = []
+	# ring frames (parallel transport) and each point's sway vector (sideways to the path)
+	var xs := PackedVector3Array()
+	var ys := PackedVector3Array()
+	var ts := PackedVector3Array()
+	var sw := PackedVector3Array()
 	var ref := Vector3.UP
 	for i in n:
 		var t := (pts[mini(i + 1, n - 1)] - pts[maxi(i - 1, 0)]).normalized()
@@ -436,92 +257,78 @@ static func path_tube(pts: Array[Vector3], radii: Array[float], sway: Array[floa
 		xs.append(x)
 		ys.append(y)
 		ts.append(t)
-	var rings: Array = []
+		var side := Vector3(-t.z, 0.0, t.x)
+		side = side.normalized() if side.length() > 0.01 else Vector3.RIGHT
+		sw.append(side * sway[i])
+	# ring offsets (from the path point), one row per point
+	var ring := PackedVector3Array()
 	for i in n:
-		var row: Array[Vector3] = []
 		for k in sides:
 			var a := TAU * float(k) / sides + 0.35 * i
 			var r := radii[i] * (1.0 + rng.randf_range(-0.07, 0.07))
-			row.append(xs[i] * cos(a) * r + ys[i] * sin(a) * r)
-		rings.append(row)
-	var sway_dir := func(i: int) -> Vector3:
-		var side := Vector3(-ts[i].z, 0.0, ts[i].x)
-		side = side.normalized() if side.length() > 0.01 else Vector3.RIGHT
-		return side * sway[i]
-	var emit := func(p: Vector3, wn: Vector3, col: Color, i: int) -> void:
-		verts.append(p)
-		norms.append(wn)
-		colors.append(col)
-		uvs.append(Vector2(s_at[i], phase))
-		c0.append_array([wn.x * 0.5 + 0.5, wn.y * 0.5 + 0.5, wn.z * 0.5 + 0.5, 1.0])
-		var sd: Vector3 = sway_dir.call(i)
-		c1.append_array([sd.x, sd.y, sd.z, radii[i]])
+			ring.append(xs[i] * (cos(a) * r) + ys[i] * (sin(a) * r))
 	for i in n - 1:
 		var u := s_at[i] / maxf(total, 0.01)
 		var base_col := FLESH_DARK.lerp(FLESH, smoothstep(0.0, 0.25, u)).lerp(FLESH_HI, 0.5 * smoothstep(0.3, 0.8, u)).lerp(TIP, smoothstep(0.85, 1.0, u))
-		var r0: Array[Vector3] = rings[i]
-		var r1: Array[Vector3] = rings[i + 1]
 		for k in sides:
 			var k1 := (k + 1) % sides
-			var a := pts[i] + r0[k]
-			var b := pts[i] + r0[k1]
-			var c := pts[i + 1] + r1[k1]
-			var d := pts[i + 1] + r1[k]
-			var mid_n := (r0[k] + r0[k1]).normalized()
-			var col := base_col
-			if mid_n.y < -0.35:
-				col = base_col.lerp(UNDER, 0.55)
-			col = _paint(rng, col)
-			var lin := col.srgb_to_linear()
+			var o00 := ring[i * sides + k]
+			var o01 := ring[i * sides + k1]
+			var o11 := ring[(i + 1) * sides + k1]
+			var o10 := ring[(i + 1) * sides + k]
+			var a := pts[i] + o00
+			var b := pts[i] + o01
+			var c := pts[i + 1] + o11
+			var d := pts[i + 1] + o10
+			var mid_n := (o00 + o01).normalized()
+			var col := base_col.lerp(UNDER, 0.55) if mid_n.y < -0.35 else base_col
+			var lin := _paint(rng, col).srgb_to_linear()
 			lin.a = 1.0
-			# outward winding: (b - a) x (d - a) points out for this ring order; emit clockwise for Godot
-			var fn := (b - a).cross(d - a)
-			var flip := fn.dot(mid_n) < 0.0
-			var quad: Array = [[a, r0[k], i], [b, r0[k1], i], [c, r1[k1], i + 1], [d, r1[k], i + 1]]
-			var order: Array = [0, 2, 1, 0, 3, 2] if not flip else [0, 1, 2, 0, 2, 3]
-			for o: int in order:
-				var e: Array = quad[o]
-				emit.call(e[0], (e[1] as Vector3).normalized(), lin, e[2])
-	# a closed tip cone
-	var last: Array[Vector3] = rings[n - 1]
-	var apex := pts[n - 1] + ts[n - 1] * radii[n - 1] * 2.5
+			# Godot's front faces are clockwise: emit (a, c, b), (a, d, c) when a, b, c, d run counter-clockwise outward,
+			# else (c, a, b), (c, d, a)
+			if (b - a).cross(d - a).dot(mid_n) >= 0.0:
+				_quad_out(out, a, c, b, d, o00, o11, o01, o10, i, i + 1, i, i + 1, lin, s_at, phase, sw, radii)
+			else:
+				_quad_out(out, c, a, b, d, o11, o00, o01, o10, i + 1, i, i, i + 1, lin, s_at, phase, sw, radii)
+	# the tip: a cone to a point
+	var last := n - 1
+	var apex := pts[last] + ts[last] * radii[last] * 2.5
 	var tip_lin := _paint(rng, TIP).srgb_to_linear()
 	for k in sides:
-		var a := pts[n - 1] + last[k]
-		var b := pts[n - 1] + last[(k + 1) % sides]
-		var fn := (b - a).cross(apex - a)
-		var out := (last[k] + last[(k + 1) % sides]).normalized()
-		var tri: Array = [a, apex, b] if fn.dot(out) > 0.0 else [a, b, apex]
-		for v: Vector3 in tri:
-			emit.call(v, (v - pts[n - 1]).normalized(), tip_lin, n - 1)
-	# studs and spines, placed by arc length
-	var studs: Array = []
+		var oa := ring[last * sides + k]
+		var ob := ring[last * sides + (k + 1) % sides]
+		var a := pts[last] + oa
+		var b := pts[last] + ob
+		var tri := PackedVector3Array([a, apex, b])
+		if (b - a).cross(apex - a).dot(oa + ob) <= 0.0:
+			tri = PackedVector3Array([a, b, apex])
+		for v in tri:
+			out.emit(v, (v - pts[last]).normalized(), tip_lin, s_at[last], phase, sw[last], radii[last])
+	# studs and spines, placed by distance along the tube
+	var studs: Array[Vector2] = []     # (s, 1 = sucker / 0 = spine)
 	if sucker_gap > 0.0:
-		var sg := sucker_gap
 		var at := total * 0.12
 		while at < total * 0.97:
-			studs.append([at, true])
-			at += sg * rng.randf_range(0.8, 1.25) * (0.7 if at > total * 0.6 else 1.0)
+			studs.append(Vector2(at, 1.0))
+			at += sucker_gap * rng.randf_range(0.8, 1.25) * (0.7 if at > total * 0.6 else 1.0)
 	if spine_gap > 0.0:
 		var at := total * 0.15
 		while at < total * 0.62:
-			studs.append([at, false])
+			studs.append(Vector2(at, 0.0))
 			at += spine_gap * rng.randf_range(0.8, 1.2)
-	for st: Array in studs:
-		var sa: float = st[0]
-		var i := 0
-		while i < n - 2 and s_at[i + 1] < sa:
+	var i := 0
+	for st in studs:
+		i = 0
+		while i < n - 2 and s_at[i + 1] < st.x:
 			i += 1
-		var f := clampf((sa - s_at[i]) / maxf(s_at[i + 1] - s_at[i], 0.001), 0.0, 1.0)
+		var f := clampf((st.x - s_at[i]) / maxf(s_at[i + 1] - s_at[i], 0.001), 0.0, 1.0)
 		var center := pts[i].lerp(pts[i + 1], f)
 		var r := lerpf(radii[i], radii[i + 1], f)
-		var up := ys[i]
-		if up.y < 0.0:
-			up = -up
+		var up := ys[i] if ys[i].y >= 0.0 else -ys[i]
 		var side := xs[i] if xs[i].y >= 0.0 else -xs[i]
 		var soup: LowPoly.Soup
 		var place: Transform3D
-		if bool(st[1]):
+		if st.y > 0.5:
 			var off := (up * 0.75 + side * (0.5 if rng.randf() < 0.5 else -0.5)).normalized()
 			var rad := maxf(r * 0.3, 0.05)
 			var roll := rng.randf()
@@ -540,23 +347,36 @@ static func path_tube(pts: Array[Vector3], radii: Array[float], sway: Array[floa
 			lin.a = col.a
 			for kk in [0, 2, 1]:
 				var v: Vector3 = place * soup.verts[tri_i * 3 + kk]
-				emit.call(v, (v - center).normalized(), lin, i)
+				out.emit(v, (v - center).normalized(), lin, s_at[i], phase, sw[i], radii[i])
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = verts
-	arr[Mesh.ARRAY_NORMAL] = norms
-	arr[Mesh.ARRAY_COLOR] = colors
-	arr[Mesh.ARRAY_TEX_UV] = uvs
-	arr[Mesh.ARRAY_CUSTOM0] = c0
-	arr[Mesh.ARRAY_CUSTOM1] = c1
+	arr[Mesh.ARRAY_VERTEX] = out.verts
+	arr[Mesh.ARRAY_NORMAL] = out.norms
+	arr[Mesh.ARRAY_COLOR] = out.colors
+	arr[Mesh.ARRAY_TEX_UV] = out.uvs
+	arr[Mesh.ARRAY_CUSTOM0] = out.c0
+	arr[Mesh.ARRAY_CUSTOM1] = out.c1
 	var fmt := (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr, [], {}, fmt)
 	var max_sway := 0.0
-	for sw in sway:
-		max_sway = maxf(max_sway, sw)
-	mesh.custom_aabb = mesh.get_aabb().grow(max_sway * 1.7 + 0.5)
+	for s in sway:
+		max_sway = maxf(max_sway, s)
+	mesh.custom_aabb = mesh.get_aabb().grow(max_sway * 1.7 + 0.5)   # (the sway and the beat move it outside its rest box)
 	return mesh
+
+
+## One quad as two clockwise triangles (p0, p1, p2) and (p0, p3, p1), with each corner's ring offset (its weld normal)
+## and path index.
+static func _quad_out(out: _Streams, p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, o0: Vector3, o1: Vector3,
+		o2: Vector3, o3: Vector3, i0: int, i1: int, i2: int, i3: int, lin: Color, s_at: PackedFloat32Array, phase: float,
+		sw: PackedVector3Array, radii: Array[float]) -> void:
+	out.emit(p0, o0.normalized(), lin, s_at[i0], phase, sw[i0], radii[i0])
+	out.emit(p1, o1.normalized(), lin, s_at[i1], phase, sw[i1], radii[i1])
+	out.emit(p2, o2.normalized(), lin, s_at[i2], phase, sw[i2], radii[i2])
+	out.emit(p0, o0.normalized(), lin, s_at[i0], phase, sw[i0], radii[i0])
+	out.emit(p3, o3.normalized(), lin, s_at[i3], phase, sw[i3], radii[i3])
+	out.emit(p1, o1.normalized(), lin, s_at[i1], phase, sw[i1], radii[i1])
 
 
 static func _paint(rng: RandomNumberGenerator, col: Color, vary: float = 0.08) -> Color:
@@ -566,7 +386,8 @@ static func _paint(rng: RandomNumberGenerator, col: Color, vary: float = 0.08) -
 	return Color.from_hsv(fposmod(h, 1.0), s, v, col.a)
 
 
-## Catmull-Rom through `ctrl`, resampled to points about `step` apart (with their radius and sway interpolated).
+## Catmull-Rom through `ctrl`, resampled to points about `step` apart (with their radius and sway interpolated):
+## [points, radii, sways].
 static func smooth_path(ctrl: Array[Vector3], rad: Array[float], sw: Array[float], step: float) -> Array:
 	var dense: Array[Vector3] = []
 	var dr: Array[float] = []

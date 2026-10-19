@@ -1,21 +1,24 @@
 class_name HellgateBeast
 extends Node3D
-## LOOK-DEV (options round, not in the game yet): the monster UNDER a hellgate room. The gate is a wound in its hide;
-## the rest of it lives under the level and grips it from below: long tentacles come out from UNDER the floor slab
-## (their roots hidden by the level itself), hug the cliff faces and the outside of the room's walls for several hexes
-## and lift their tips over the wall tops. Cosmetic only: no collision, no gameplay, no net traffic. Every machine
-## builds the same look from the floor (the room's cells and a seed from the gate), so co-op screens match; it never
-## draws from GameWorld.rng (nor GameWorld.fx_rng: a seeded generator of its own, the same on every machine).
+## The monster UNDER a hellgate room. The gate is a wound in its hide; the rest of it lives under the level and grips it
+## from below: long tentacles come out from UNDER the floor slab (their roots hidden by the level itself), hug the cliff
+## faces and the outside of the room's walls for several hexes and lift their tips over the wall tops. Every hellgate
+## room has one (the "abyss" look, chosen by the user 2026-10-19); the origin gate's is bigger.
+##
+## COSMETIC ONLY (networking.md: the "cosmetic" shape): no collision, no gameplay state, no net traffic. SiteBuilder.spawn
+## builds it on every machine from the floor (the room's cells, a seed from the gate's cell and the floor seed), so co-op
+## screens match; it never draws from GameWorld.rng (nor GameWorld.fx_rng: a seeded generator of its own, the same on every
+## machine). It WATCHES its gate (watch()): when the gate dies (closed on the host, Net.remote_die on a client, the
+## late-join snapshot's gone ids on a joiner) it sinks back into the dark over SINK_TIME and hides. A gate already dead or
+## gone on the beast's FIRST frame (a late joiner applies the snapshot while the world is frozen, before the floor starts)
+## means it is gone at once: a joiner never sees a closed gate's beast.
 ##
 ## STYLES (make(style, ...)):
 ##   abyss   a few huge, thick wrapping tentacles: out from under the slab, up and along the walls, tips over the top.
-##   cracks  more, thinner, livelier tentacles, plus glowing veins from the gate under the hex seams to a split at the
-##           foot of the wall where each one grips the room from outside: the beat travels out from the gate.
-##   peek    one huge eye watching over the back wall, a lower jaw of fangs rising from under the front edge (the room
-##           sits in its mouth), and two giant wrapping tentacles.
-##   roots   gnarled fleshy roots wrap the walls' rim, roots drop down the cliff faces and tuck under the slab,
-##           glowing blisters, twitching tips over the inner edge, two wrapping tentacles. Lowest motion.
-## The ORIGIN gate's room gets a bigger, hotter version of each (more and longer limbs, thicker, a slower heavier beat).
+##           The game's look.
+##   peek    (lab only, scenes/hellgate_beast_lab.tscn) one huge eye watching over the back wall, a lower jaw of fangs
+##           rising from under the front edge, two giant wrapping tentacles.
+## The ORIGIN gate's room gets a bigger version (more, longer and thicker tentacles, the origin gate's slower beat).
 ##
 ## PLACEMENT: rim() walks the room's boundary WALL cells; every hex edge of a wall cell that faces the VOID (no cell
 ## beyond it) is a rim edge (midpoint, outward normal, wall top). Wall cells within DOOR_CLEAR of anything that is not
@@ -24,12 +27,13 @@ extends Node3D
 ## camera sees from outside (the front and the sides: `back` low) it climbs the cliff face; on one behind the room it
 ## rises behind the wall and lies along the wall top. Nothing reaches past the wall band into the room.
 ##
-## ANIMATION: one clock, the gate model's (HellgateModel._t) when one is given, so the beast pulses on the gate core's
-## beat. Tentacles are PATH tubes (BeastFlesh.path_tube): the beat runs along them as a bulge and the free tips sway,
-## all on the GPU; a frame costs a few uniform writes (plus the eye's pivot for `peek`). freeze_at(t) for screenshots.
-## set_close(k) sinks it all back into the dark (the gate closing).
+## ANIMATION: one clock, the gate model's (HellgateModel._t) while the gate lives, so the beast pulses on the gate core's
+## beat. Tentacles are PATH tubes (BeastFlesh.path_tube): the beat runs along them as a bulge and the free tips sway, all
+## on the GPU; a frame costs a few uniform writes (plus the eye's pivot for `peek`). freeze_at(t) for screenshots.
 
-const STYLES: Array[String] = ["abyss", "cracks", "peek", "roots"]
+const STYLES: Array[String] = ["abyss", "peek"]
+const GROUP := &"hellgate_beasts"
+const SINK_TIME := 2.6                         ## seconds the beast takes to sink away once its gate closed
 const VIEW := Vector3(0.3949, 0.8290, 0.3949)  ## towards the game camera, unit (yaw 45, pitch -56)
 const CAM := Vector3(0.7071, 0.0, 0.7071)      ## towards the game camera, flat
 const DOOR_CLEAR := 3                          ## hex cells kept clear of a room's doors
@@ -45,33 +49,17 @@ const IRIS := Color(1.0, 0.32, 0.05)
 const IRIS_HOT := Color(1.0, 0.58, 0.14)
 const PUPIL := Color(0.01, 0.0, 0.01)
 
-const VEIN_SHADER := """
-shader_type spatial;
-render_mode unshaded, cull_disabled, shadows_disabled;
-
-uniform float t = 0.0;
-uniform float beat_rate = 2.6;
-uniform float k = 0.75;              // phase lag per world unit out from the gate
-uniform float gain = 1.0;
-uniform vec3 hot : source_color = vec3(1.0, 0.42, 0.10);
-uniform vec3 deep : source_color = vec3(0.42, 0.02, 0.02);
-
-void fragment() {
-	float w = 0.5 + 0.5 * sin(t * beat_rate - UV.x * k);
-	w = w * w * w;
-	vec3 c = mix(deep, hot, w) * (0.9 + 1.9 * w) * gain * COLOR.rgb;
-	ALBEDO = c;
-}
-"""
-
 const Limb := BeastFlesh.Limb
 
-static var _vein_shader: Shader
+## Microseconds the last for_gate() calls spent building (summed since reset_build_clock()): the floor's cost.
+static var build_usec := 0
 
 var style := "abyss"
 var origin := false
 var gate_model: HellgateModel = null
 var beat_rate := 2.6
+## The gate's cell (the beast's key: the same on every machine).
+var gate_cell := Vector2i.ZERO
 ## Build stats: tris, meshes (MeshInstance3D), nodes (every node under this one, itself included), limbs.
 var stats: Dictionary = {}
 ## A point worth a close look (labs): the eye, the first tentacle's emergence.
@@ -80,10 +68,13 @@ var focus := Vector3.ZERO
 var _t := 0.0
 var _frozen := false
 var _close := 0.0
+var _gate: Node = null                  ## the Hellgate it belongs to (watch())
+var _watching := false
+var _seen_frame := false                ## the first animated frame happened
+var _sinking := false
+var _gone := false
 var _rng := RandomNumberGenerator.new()
-var _flesh: ShaderMaterial              ## PATH material: tentacles and every still piece
-var _bend: ShaderMaterial = null        ## BEND material: the short twitching tips
-var _vein_mat: ShaderMaterial = null
+var _flesh: ShaderMaterial              ## the flesh material: tentacles and every still piece
 var _map: HexMap
 var _cells: Array[Vector2i] = []
 var _gate_pos := Vector3.ZERO
@@ -93,7 +84,6 @@ var _runs: Array[Dictionary] = []
 var _taken: Array[Vector3] = []         ## run points already used by a tentacle
 var _tris := 0
 var _limbs := 0
-var _bar_n := 0                          ## bars laid so far: each sits a hair higher, so overlapping bars never z-fight
 var _static := Limb.new(1)             ## every non-moving flesh piece of the style, one mesh
 # peek: the eye
 var _eye_root: Node3D = null
@@ -104,13 +94,14 @@ var _eye_target := Vector3.ZERO
 
 
 ## Build a style around `room_cells` (one room's cells, its cut border cells included). gate_pos: the gate's world
-## position. avoid: world X/Z of things standing against the walls (priced props, decor) that floor pieces keep off.
+## position. avoid: world X/Z of things standing against the walls (priced props, decor) that pieces keep off.
 static func make(style_id: String, map: HexMap, room_cells: Array[Vector2i], gate_pos: Vector3, is_origin: bool,
 		seed_value: int, avoid: Array[Vector2] = []) -> HellgateBeast:
 	var b := HellgateBeast.new()
 	b.style = style_id
 	b.origin = is_origin
 	b.beat_rate = 1.7 if is_origin else 2.6
+	b.gate_cell = Hex.from_world(gate_pos)
 	b._map = map
 	b._cells = room_cells
 	b._gate_pos = gate_pos
@@ -118,6 +109,56 @@ static func make(style_id: String, map: HexMap, room_cells: Array[Vector2i], gat
 	b._rng.seed = seed_value
 	b._build()
 	return b
+
+
+## THE GAME'S HOOK (SiteBuilder.spawn): the abyss beast for one spawned gate, in the gate's room of `plan`, added to the
+## world (GameWorld.root, so it freezes with the world behind a load barrier) and watching the gate. Null when the gate's
+## room has no rim to grip (every wall by a door).
+static func for_gate(gate: Node3D, map: HexMap, plan: SitePlan, floor_seed: int) -> HellgateBeast:
+	var t0 := Time.get_ticks_usec()
+	var cell := Hex.from_world(gate.global_position)
+	var room := ""
+	var is_origin := false
+	for g in plan.gates:
+		if g["cell"] == cell:
+			room = str(g["room"])
+			is_origin = bool(g["origin"])
+	if room == "":
+		room = plan.room_of_cell(cell)
+	if room == "" or not plan.rooms.has(room):
+		return null
+	var cells: Array[Vector2i] = []
+	cells.assign(plan.rooms[room])
+	var avoid: Array[Vector2] = []
+	for pr in plan.props:
+		if pr.has("pos"):
+			avoid.append(pr["pos"])
+	for d in plan.decor:
+		avoid.append(d["pos"])
+	var seed_value := hash(Vector3i(cell.x, cell.y, floor_seed))
+	var b := make("abyss", map, cells, gate.global_position, is_origin, seed_value, avoid)
+	build_usec += Time.get_ticks_usec() - t0
+	if int(b.stats.get("limbs", 0)) == 0:
+		b.free()
+		return null
+	b.name = "Beast_%d_%d" % [cell.x, cell.y]
+	var parent: Node = GameWorld.root if GameWorld.root != null else gate.get_parent()
+	parent.add_child(b)
+	b.watch(gate)
+	return b
+
+
+static func reset_build_clock() -> void:
+	build_usec = 0
+
+
+## Follow a Hellgate: its model's clock (the beat) while it lives; sink away once it is dead or gone.
+func watch(gate: Node) -> void:
+	_gate = gate
+	_watching = true
+	var m: Variant = gate.get("model")
+	if m is HellgateModel:
+		gate_model = m
 
 
 func set_gate(m: HellgateModel) -> void:
@@ -131,9 +172,16 @@ func freeze_at(seconds: float) -> void:
 	_animate()
 
 
-## 0 = out, 1 = sunk back into the dark (the gate closing).
+## 0 = out, 1 = sunk back into the dark (labs; the game's beast sinks by itself when its gate closes).
 func set_close(k: float) -> void:
 	_close = clampf(k, 0.0, 1.0)
+
+
+## "out", "sinking" or "gone" (tests and labs).
+func state() -> String:
+	if _gone:
+		return "gone"
+	return "sinking" if _sinking else "out"
 
 
 # ------------------------------------------------------------------ the rim
@@ -311,7 +359,7 @@ func _spread(items: Array[Dictionary], count: int, min_gap: float, score: Callab
 
 func _build() -> void:
 	name = "HellgateBeast_" + style
-	_flesh = BeastFlesh.make(2.6 if origin else 2.3, true)
+	_flesh = BeastFlesh.make(2.6 if origin else 2.3)
 	BeastFlesh.set_both(_flesh, "beat_rate", beat_rate)
 	BeastFlesh.set_both(_flesh, "fade_lo", CLIFF_Y - 4.2)
 	BeastFlesh.set_both(_flesh, "fade_hi", CLIFF_Y - 0.9)
@@ -322,23 +370,12 @@ func _build() -> void:
 			BeastFlesh.set_both(_flesh, "sway_rate", 0.45)
 			BeastFlesh.set_both(_flesh, "wave_k", 0.35)
 			_build_abyss()
-		"cracks":
-			BeastFlesh.set_both(_flesh, "sway_rate", 1.2)
-			BeastFlesh.set_both(_flesh, "wave_k", 0.9)
-			BeastFlesh.set_both(_flesh, "pulse_k", 0.7)
-			_build_cracks()
 		"peek":
 			BeastFlesh.set_both(_flesh, "sway_rate", 0.35)
 			BeastFlesh.set_both(_flesh, "wave_k", 0.3)
 			_build_peek()
-		"roots":
-			BeastFlesh.set_both(_flesh, "sway_rate", 0.3)
-			BeastFlesh.set_both(_flesh, "wave_k", 0.5)
-			BeastFlesh.set_both(_flesh, "pulse_k", 0.55)
-			BeastFlesh.set_both(_flesh, "swell_amp", 0.1)
-			_build_roots()
 	if _static.tri_count() > 0:
-		_add_mesh("Flesh", _static.to_mesh(Vector4.ZERO, Vector2.ZERO, 0.0), Transform3D.IDENTITY)
+		_add_mesh("Flesh", _static.to_mesh(0.0), Transform3D.IDENTITY)
 	_animate()
 	stats = {"tris": _tris, "meshes": _count_meshes(self), "nodes": _count_nodes(self), "limbs": _limbs, "rim_edges": _rim.size()}
 
@@ -530,219 +567,6 @@ func _build_abyss() -> void:
 		_wrap(st, along, _rng.randf_range(0.8, 1.0) * k, lift, {"sides": 8, "suckers": 0.5, "spines": 1.4})
 
 
-# ------------------------------------------------------------------ B. cracks
-
-func _build_cracks() -> void:
-	var count := 11 if origin else 8
-	var k := 1.2 if origin else 1.0
-	var starts := _pick_wraps(count, 3.0, 3.0, _wrap_score)
-	var fissures: Array[Dictionary] = []
-	for st in starts:
-		var along := minf(float(st["ahead"]) - 0.4, _rng.randf_range(3.5, 6.0) * k)
-		var lift := lerpf(0.5, 1.0, float(st["back"]))
-		_wrap(st, along, _rng.randf_range(0.34, 0.44) * k, lift, {"sides": 6, "suckers": 0.45})
-		# where it grips the room from outside, the floor at the foot of the wall splits
-		var f := _foot_of_wall(st["mid"])
-		if not f.is_empty():
-			fissures.append(f)
-	var crack := LowPoly.Soup.new(_rng.randi(), 0.0)
-	for f in fissures:
-		var inward: Vector3 = f["inward"]
-		_fissure(crack, f["mid"], inward, Vector3(-inward.z, 0.0, inward.x), k)
-	_static.merge(crack, Transform3D.IDENTITY)
-	_veins(fissures)
-
-
-## The floor spot inside the room at the foot of the wall nearest a rim point: {mid, inward} or {} (a prop is there).
-func _foot_of_wall(p: Vector3) -> Dictionary:
-	var best := Vector2i.ZERO
-	var best_d := 1.0e9
-	var found := false
-	for c in _cells:
-		if not _map.is_half(c):
-			continue
-		var d := Hex.to_world(c).distance_to(Vector3(p.x, 0.0, p.z))
-		if d < best_d:
-			best_d = d
-			best = c
-			found = true
-	if not found:
-		return {}
-	var wall_dir := Vector3.ZERO
-	for d in 6:
-		var cell := _map.get_cell(best + Hex.DIRS[d])
-		if cell != null and cell.type == HexMap.Tile.WALL:
-			wall_dir += Hex.dir_vector(d)
-	if wall_dir.length() < 0.1:
-		return {}
-	var inward := -wall_dir.normalized()
-	var pos := Hex.to_world(best, float(_map.get_cell(best).level)) + inward * 0.45
-	for a in _avoid:
-		if Vector2(pos.x, pos.z).distance_to(a) < 1.4:
-			return {}
-	if Vector2(pos.x - _gate_pos.x, pos.z - _gate_pos.z).length() < (4.2 if origin else 2.8):
-		return {}
-	return {"mid": pos, "inward": inward}
-
-
-## A split in the floor at the foot of the wall: a glowing zigzag along it with short branches into the room.
-func _fissure(s: LowPoly.Soup, pos: Vector3, inward: Vector3, along: Vector3, k: float) -> void:
-	var y := pos.y + 0.022
-	var hot := MonsterModel.glow(Color(1.0, 0.30, 0.08))
-	var p := Vector3(pos.x, y, pos.z) - along * 1.0 * k
-	var wid := 0.15 * k
-	for i in 4:
-		var q := p + along * 0.5 * k + inward * _rng.randf_range(-0.12, 0.12)
-		_bar(s, p, q, wid, hot, y)
-		if i == 1 or i == 2:
-			var r := q + (inward * _rng.randf_range(0.35, 0.6) + along * _rng.randf_range(-0.3, 0.3)) * k
-			_bar(s, q, r, wid * 0.6, hot, y)
-		p = q
-
-
-func _bar(s: LowPoly.Soup, p: Vector3, q: Vector3, wid: float, col: Color, y: float) -> void:
-	var d := q - p
-	d.y = 0.0
-	var l := d.length()
-	if l < 0.01:
-		return
-	var bar := LowPoly.box(Vector3(wid, 0.03, l * 1.1), col, _rng.randi(), 0.0, 1, 0.0)
-	_bar_n += 1
-	var lift := 0.0015 * float(_bar_n % 8)
-	s.merge(bar, Transform3D(Basis(Vector3.UP, atan2(d.x, d.z)), Vector3((p.x + q.x) * 0.5, y + lift, (p.z + q.z) * 0.5)))
-
-
-## Glowing veins from the gate out to each fissure, along the hex seams (the gaps between the floor tiles).
-func _veins(picks: Array[Dictionary]) -> void:
-	var level := roundi(_gate_pos.y / LH)
-	var ok := {}
-	for c in _cells:
-		var cell := _map.get_cell(c)
-		if cell != null and cell.type == HexMap.Tile.FLOOR and cell.level == level and _map.is_walkable_cell(c):
-			ok[c] = true
-	var adj := {}      # corner key -> Array of corner keys
-	var pos_of := {}   # corner key -> Vector3
-	for c: Vector2i in ok:
-		var cw := Hex.to_world(c, float(level))
-		for d in 3:
-			var n: Vector2i = c + Hex.DIRS[d]
-			if not ok.has(n):
-				continue
-			var nrm := Hex.dir_vector(d)
-			var mid := cw + Hex.edge_mid(d)
-			var perp := Vector3(-nrm.z, 0.0, nrm.x)
-			var a := mid - perp * 0.5
-			var b := mid + perp * 0.5
-			var ka := _k(a)
-			var kb := _k(b)
-			pos_of[ka] = a
-			pos_of[kb] = b
-			if not adj.has(ka):
-				adj[ka] = []
-			if not adj.has(kb):
-				adj[kb] = []
-			(adj[ka] as Array).append(kb)
-			(adj[kb] as Array).append(ka)
-	if adj.is_empty():
-		return
-	var gate_r := (HellgateModel.R * 1.38) * (HellgateModel.ORIGIN_SCALE if origin else 1.0)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var tris := 0
-	var laid := {}      # seam stretches already carrying a vein (veins share their first stretches out of the gate)
-	for s in picks:
-		var target: Vector3 = s["mid"]
-		var dir := Vector3(target.x - _gate_pos.x, 0.0, target.z - _gate_pos.z).normalized()
-		var path := _bfs(adj, _nearest_corner(pos_of, _gate_pos + dir * gate_r), _nearest_corner(pos_of, target))
-		if path.size() < 2:
-			continue
-		var pts: Array[Vector3] = []
-		for key in path:
-			pts.append(pos_of[key])
-		pts.append(Vector3(target.x, pts[0].y, target.z))
-		var dist := 0.0
-		var w := 0.085 * (1.3 if origin else 1.0)
-		for i in pts.size() - 1:
-			var a: Vector3 = pts[i]
-			var b: Vector3 = pts[i + 1]
-			var seg := b - a
-			var l := seg.length()
-			if l < 0.001:
-				continue
-			var key := [_k(a), _k(b)] if _k(a) < _k(b) else [_k(b), _k(a)]
-			if laid.has(key):
-				dist += l
-				continue
-			laid[key] = true
-			var side := Vector3(-seg.z, 0.0, seg.x) / l * w * (1.0 - 0.5 * float(i) / pts.size())
-			# in the seam, below the tile tops; the last stretch leaves the seams and runs across a tile to the split
-			var y := a.y - 0.014 if i < pts.size() - 2 else a.y + 0.02
-			y += 0.0013 * float(tris % 5)       # joints overlap: never two strips at one height
-			var a0 := Vector3(a.x, y, a.z) - side
-			var a1 := Vector3(a.x, y, a.z) + side
-			var b0 := Vector3(b.x, y, b.z) - side
-			var b1 := Vector3(b.x, y, b.z) + side
-			for v: Array in [[a0, dist], [b0, dist + l], [b1, dist + l], [a0, dist], [b1, dist + l], [a1, dist]]:
-				st.set_uv(Vector2(float(v[1]), 0.0))
-				st.set_color(Color.WHITE)
-				st.set_normal(Vector3.UP)
-				st.add_vertex(v[0])
-			tris += 2
-			dist += l
-	if tris == 0:
-		return
-	if _vein_shader == null:
-		_vein_shader = Shader.new()
-		_vein_shader.code = VEIN_SHADER
-	_vein_mat = ShaderMaterial.new()
-	_vein_mat.shader = _vein_shader
-	_vein_mat.set_shader_parameter("beat_rate", beat_rate)
-	_add_mesh("Veins", st.commit(), Transform3D.IDENTITY, _vein_mat)
-
-
-static func _nearest_corner(pos_of: Dictionary, p: Vector3) -> Vector3i:
-	var best := Vector3i.ZERO
-	var best_d := 1.0e9
-	for key: Vector3i in pos_of:
-		var q: Vector3 = pos_of[key]
-		var d := Vector2(q.x - p.x, q.z - p.z).length()
-		if d < best_d:
-			best_d = d
-			best = key
-	return best
-
-
-static func _bfs(adj: Dictionary, a: Vector3i, b: Vector3i) -> Array:
-	var prev := {a: a}
-	var queue: Array = [a]
-	var qi := 0
-	while qi < queue.size():
-		var cur: Vector3i = queue[qi]
-		qi += 1
-		if cur == b:
-			break
-		for n: Vector3i in adj.get(cur, []):
-			if not prev.has(n):
-				prev[n] = cur
-				queue.append(n)
-	if not prev.has(b):
-		return []
-	var path: Array = [b]
-	var cur: Vector3i = b
-	while cur != a:
-		cur = prev[cur]
-		path.append(cur)
-	path.reverse()
-	return path
-
-
-## A basis with +Y up and +Z towards `toward` (flattened).
-static func _basis_z(toward: Vector3) -> Basis:
-	var z := Vector3(toward.x, 0.0, toward.z).normalized()
-	var x := Vector3.UP.cross(z)
-	return Basis(x, Vector3.UP, z)
-
-
 # ------------------------------------------------------------------ C. peek
 
 func _build_peek() -> void:
@@ -854,7 +678,7 @@ func _build_eye(e: Dictionary, k: float) -> void:
 
 
 func _child_mesh(parent: Node3D, node_name: String, lb: Limb) -> void:
-	var mi := _add_mesh(node_name, lb.to_mesh(Vector4.ZERO, Vector2.ZERO, 0.0), Transform3D.IDENTITY)
+	var mi := _add_mesh(node_name, lb.to_mesh(0.0), Transform3D.IDENTITY)
 	remove_child(mi)
 	parent.add_child(mi)
 
@@ -898,165 +722,49 @@ func _build_jaw(edges: Array[Dictionary], k: float) -> void:
 			dir = (dir - nrm * 0.18).normalized()       # curving back in towards the wall, like a closing jaw
 		# the gum they grow from, tucked under the cliff's foot
 		s.merge(LowPoly.boulder(Vector3(0.8, 0.5, 0.7) * k, 0, 0.15, GUM, _rng.randi(), 0.08), Transform3D(Basis(Vector3.UP, _rng.randf() * TAU), base + Vector3(0, 0.25, 0) - nrm * 0.3))
-	_add_mesh("Jaw", s.to_mesh(Vector4.ZERO, Vector2.ZERO, 0.0), Transform3D.IDENTITY)
-
-
-# ------------------------------------------------------------------ D. roots
-
-func _build_roots() -> void:
-	var k := 1.35 if origin else 1.0
-	var s := _static
-	var tips: Array[Dictionary] = []
-	var hook_every := 2.8 if origin else 3.6
-	var drop_every := 2.3
-	var knot_every := 2.4
-	for run in _runs:
-		var pts: Array[Vector3] = run["pts"]
-		var nrms: Array[Vector3] = run["nrms"]
-		var closed: bool = run["closed"]
-		var n_pts := pts.size()
-		var main: Array[Vector3] = []
-		var strand: Array[Vector3] = []
-		var radii: Array[float] = []
-		var thin: Array[float] = []
-		var cols: Array[Color] = []
-		var dark: Array[Color] = []
-		for i in n_pts:
-			var n := nrms[i]
-			var r := (0.27 + 0.07 * sin(float(i) * 1.3)) * k
-			var q := pts[i] - n * (0.5 + 0.12 * sin(float(i) * 0.9)) + Vector3(0, r * 0.4, 0)
-			main.append(q)
-			radii.append(r)
-			strand.append(q + Vector3(0, r * 0.8, 0) + n * r * 0.85 * sin(float(i) * 1.7))
-			thin.append(r * 0.34)
-			cols.append(BeastFlesh.FLESH.lerp(BeastFlesh.FLESH_HI, 0.45 * float(i % 2)))
-			dark.append(BeastFlesh.FLESH_DARK.lerp(BeastFlesh.FLESH, 0.4))
-		if not closed:
-			# an open run's ends go over the edge, down the face and under the slab
-			for end in [0, n_pts - 1]:
-				var n := nrms[end]
-				var into := (pts[end] - pts[1 if end == 0 else n_pts - 2]).normalized()
-				var extra: Array[Vector3] = [pts[end] + n * 0.35 + into * 0.3 + Vector3(0, -0.1, 0),
-						pts[end] + n * 0.4 + into * 0.5 + Vector3(0, CLIFF_Y - 0.2 - pts[end].y, 0),
-						pts[end] - n * 1.0 + into * 0.6 + Vector3(0, CLIFF_Y - 1.2 - pts[end].y, 0)]
-				for e in extra:
-					if end == 0:
-						main.push_front(e)
-						radii.push_front(radii[0] * 1.08)
-						cols.push_front(BeastFlesh.FLESH)
-					else:
-						main.append(e)
-						radii.append(radii[radii.size() - 1] * 1.08)
-						cols.append(BeastFlesh.FLESH)
-		s.tube(main, radii, cols, 6, 0.14)
-		s.tube(strand, thin, dark, 4, 0.1)
-		var since_drop := 0.0
-		var since_hook := hook_every * 0.5
-		var since_knot := 0.0
-		for i in n_pts - 1:
-			var seg_len := pts[i].distance_to(pts[i + 1])
-			since_drop += seg_len
-			since_hook += seg_len
-			since_knot += seg_len
-			var n := nrms[i].lerp(nrms[i + 1], 0.5).normalized()
-			var p := pts[i].lerp(pts[i + 1], 0.5) - n * 0.5 + Vector3(0, 0.1, 0)
-			var t := (pts[i + 1] - pts[i]).normalized()
-			if since_drop >= drop_every:
-				since_drop = _rng.randf_range(-0.9, 0.4)
-				_root_drop(s, p, n, t, k)
-			var back := _back(n)
-			if since_hook >= hook_every and back > 0.3:
-				since_hook = 0.0
-				var tip := _root_hook(s, p, n, t, k, back)
-				if not tip.is_empty():
-					tips.append(tip)
-			elif since_knot >= knot_every:
-				since_knot = _rng.randf_range(-0.5, 0.5)
-				# a swollen knot, often a glowing blister
-				var col := MonsterModel.glow(BeastFlesh.SUCKER) if _rng.randf() < 0.6 else BeastFlesh.FLESH_HI
-				s.merge(LowPoly.boulder(Vector3(0.4, 0.28, 0.36) * k, 0, 0.12, BeastFlesh.FLESH, _rng.randi(), 0.08),
-						Transform3D(Basis(Vector3.UP, _rng.randf() * TAU), p + Vector3(0, 0.04, 0)))
-				s.merge(LowPoly.boulder(Vector3(0.17, 0.14, 0.16) * k, 0, 0.1, col, _rng.randi(), 0.05),
-						Transform3D(Basis(), p + Vector3(0, 0.3 * k, 0) - n * 0.1))
-	# twitching tips where the hooks reach the room
-	if not tips.is_empty():
-		_bend = BeastFlesh.make(2.3)
-		BeastFlesh.set_both(_bend, "beat_rate", beat_rate)
-		BeastFlesh.set_both(_bend, "twitch_rate", 11.0)
-		BeastFlesh.set_both(_bend, "sway_rate", 0.3)
-	for tp in tips:
-		var lb := BeastFlesh.tentacle(_rng.randf_range(1.0, 1.5) * k, 0.15 * k, 0.03, 7, _rng.randi_range(1, 1 << 20), {"sides": 5, "suckers": 4})
-		var p := Vector4(1.25 * k, _rng.randf_range(0.0, TAU), _rng.randf_range(0.8, 1.6), 0.12)
-		_limbs += 1
-		_add_mesh("Tip%d" % _limbs, lb.to_mesh(p, Vector2(0.45, 0.6), 2.0), Transform3D(_basis_z(tp["dir"]), tp["pos"]), _bend)
-	# and the thing they belong to: two long tentacles wrapping the walls from below
-	for st in _pick_wraps(3 if origin else 2, 4.0, 6.0, _wrap_score):
-		var along := minf(float(st["ahead"]) - 0.6, _rng.randf_range(6.0, 8.0) * k)
-		_wrap(st, along, 0.55 * k, 0.9, {"sides": 7, "suckers": 0.7})
-
-
-## A root down the outer cliff face, hugging it, then tucking in under the slab out of sight.
-func _root_drop(s: Limb, p: Vector3, n: Vector3, t: Vector3, k: float) -> void:
-	var r := 0.2 * k * _rng.randf_range(0.8, 1.15)
-	var slant := t * _rng.randf_range(-0.6, 0.6)
-	var top := p.y
-	var pts: Array[Vector3] = [
-		p + Vector3(0, -r * 0.3, 0),
-		p + n * 0.55 + Vector3(0, -r * 0.1, 0),
-		p + n * (0.5 + r + 0.05) + slant * 0.4 + Vector3(0, -0.6, 0),
-		p + n * (0.5 + r + 0.05) + slant * 0.8 + Vector3(0, CLIFF_Y + 0.4 - top, 0),
-		p + n * (0.5 + r * 0.6) + slant + Vector3(0, CLIFF_Y - 0.35 - top, 0),
-		p - n * 0.6 + slant * 1.1 + Vector3(0, CLIFF_Y - 0.9 - top, 0),
-	]
-	var radii: Array[float] = [r, r * 1.05, r * 1.1, r * 1.15, r * 1.2, r * 1.25]
-	var cols: Array[Color] = [BeastFlesh.FLESH_HI, BeastFlesh.FLESH, BeastFlesh.FLESH, BeastFlesh.FLESH, BeastFlesh.FLESH_DARK]
-	s.tube(pts, radii, cols, 5, 0.15)
-
-
-## A root crossing the wall top towards the room and hooking over the inner edge. Returns where a twitching tip
-## grows ({pos, dir}) or {} when the hook is in front of the room (it would hide the floor).
-func _root_hook(s: Limb, p: Vector3, n: Vector3, t: Vector3, k: float, back: float) -> Dictionary:
-	var inward := -n
-	var r := 0.18 * k
-	var face := 1.85            # the wall face is about this far in from the root (which runs 0.5 in from the outer edge)
-	var wob := t * _rng.randf_range(-0.35, 0.35)
-	var pts: Array[Vector3] = [
-		p + Vector3(0, -r * 0.2, 0),
-		p + inward * 0.8 + wob * 0.5 + Vector3(0, r * 0.75, 0),
-		p + inward * (face - 0.3) + wob + Vector3(0, r * 0.8, 0),
-		p + inward * (face + 0.15) + wob + Vector3(0, -0.1, 0),
-		p + inward * (face + 0.25) + wob * 1.2 + Vector3(0, -0.8, 0),
-	]
-	var radii: Array[float] = [r * 1.1, r, r * 0.9, r * 0.8, r * 0.6]
-	var cols: Array[Color] = [BeastFlesh.FLESH, BeastFlesh.FLESH_HI, BeastFlesh.FLESH, BeastFlesh.FLESH_DARK]
-	s.tube(pts, radii, cols, 5, 0.12)
-	if back < 0.55:
-		return {}
-	return {"pos": pts[2] + Vector3(0, r * 0.4, 0), "dir": inward}
+	_add_mesh("Jaw", s.to_mesh(0.0), Transform3D.IDENTITY)
 
 
 # ------------------------------------------------------------------ animation
 
+func _ready() -> void:
+	add_to_group(GROUP)
+
+
 func _process(delta: float) -> void:
-	if _frozen:
+	if _frozen or _gone:
 		return
-	if gate_model != null and is_instance_valid(gate_model):
-		_t = gate_model._t
-	else:
-		_t += delta
+	var live := gate_model != null and is_instance_valid(gate_model)
+	if _watching:
+		var dead := not is_instance_valid(_gate) or bool(_gate.get("dead"))
+		if dead and not _sinking:
+			if not _seen_frame:
+				_vanish()      # dead before the floor even started (a late joiner): never shown
+				return
+			_sinking = true
+		live = live and not dead
+	_t = gate_model._t if live else _t + delta
+	_seen_frame = true
+	if _sinking:
+		_close = minf(1.0, _close + delta / SINK_TIME)
+		if _close >= 1.0:
+			_vanish()
+			return
 	_animate()
 
 
+func _vanish() -> void:
+	_gone = true
+	_sinking = true
+	_close = 1.0
+	visible = false
+	set_process(false)
+
+
 func _animate() -> void:
-	for m: ShaderMaterial in [_flesh, _bend]:
-		if m == null:
-			continue
-		BeastFlesh.set_both(m, "t", _t)
-		BeastFlesh.set_both(m, "sink", _close * _close)
-		m.set_shader_parameter("glow_gain", 1.9 * (1.0 - _close))
-	if _vein_mat != null:
-		_vein_mat.set_shader_parameter("t", _t)
-		_vein_mat.set_shader_parameter("gain", 1.0 - _close)
+	BeastFlesh.set_both(_flesh, "t", _t)
+	BeastFlesh.set_both(_flesh, "sink", _close * _close)
+	_flesh.set_shader_parameter("glow_gain", 1.9 * (1.0 - _close))
 	if _eye_ball != null:
 		_animate_eye()
 
