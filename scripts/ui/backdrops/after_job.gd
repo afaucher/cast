@@ -201,7 +201,8 @@ static func van_damage(root: Node3D) -> void:
 		Kit.rod(s, Vector3(fx, 1.3, 1.93), Vector3(fx * 0.7 + 0.04, 2.15 + 0.25 * float(i % 2), 1.93), 0.22 - 0.05 * float(i % 2), 0.0, 5, Kit.glow(Color(1.0, 0.48, 0.1)))
 	Kit.rod(s, Vector3(0.0, 1.31, 1.93), Vector3(0.02, 1.85, 1.93), 0.12, 0.0, 5, Kit.glow(Color(1.0, 0.85, 0.4)))
 	# the hole in the roof the cob went through: a black ring, torn flaps of roof turned up
-	s.merge(LowPoly.cylinder(0.62, 0.62, 0.03, 12, CHAR, 4250, 0.0, 1, 0.08).jitter(0.07, 4250, Vector3(1.0, 0.0, 1.0)), LowPoly.at(Vector3(-0.1, 1.93, -1.3)))
+	# (its top 1 cm above the roof's, clear of the roof's dents: level with it, the two z-fought)
+	s.merge(LowPoly.cylinder(0.62, 0.62, 0.03, 12, CHAR, 4250, 0.0, 1, 0.08).jitter(0.07, 4250, Vector3(1.0, 0.0, 1.0)), LowPoly.at(Vector3(-0.1, 1.94, -1.3)))
 	for i in 6:
 		var a := float(i) / 6.0 * TAU + 0.3
 		var p := Vector3(-0.1 + cos(a) * 0.46, 1.98, -1.3 + sin(a) * 0.46)

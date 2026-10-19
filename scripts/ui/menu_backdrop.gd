@@ -409,7 +409,8 @@ func _build_dressing() -> void:
 	for i in torches.size():
 		var yaw := 90.0 if torches[i].x <= -WALL_X else 0.0
 		var t := Kit.torch(31 + i, 2.6, i < 2)
-		Kit.put(self, t, torches[i], yaw)
+		# the bracket's plate 2 cm proud of the stones (flush with the wall's face, it z-fought them)
+		Kit.put(self, t, torches[i] + (Vector3(0.02, 0, 0) if yaw == 90.0 else Vector3(0, 0, 0.02)), yaw)
 		if i < 2:
 			_torches.append(t)
 	# the dispatch sign and a couple of notices, tacked to the back wall

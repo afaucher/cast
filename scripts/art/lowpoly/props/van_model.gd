@@ -34,6 +34,7 @@ const RIDE_HEIGHT := 0.045        ## tyre bottoms and the chassis rest this far 
 const DECAL_BASE := 0.016
 const DECAL_STEP := 0.01
 const DENT := 0.005
+const SHELL_TUCK := 0.01          ## the cargo shell's slabs stop this far inside each other's outer faces (see _shell)
 const SEED := 4107
 
 const PAINT := Color(0.80, 0.81, 0.79)
@@ -229,17 +230,23 @@ func _body_soup() -> LowPoly.Soup:
 
 
 ## Cargo box as slabs around the door opening on the -X side (so the open door shows a real interior).
+## No two slabs share an outer face (ZFightCheck, tests/test_zfight.gd): the walls' tops end inside the roof slab, the roof
+## and floor are SHELL_TUCK inside the walls' outer faces, the side walls end inside the rear wall and the pillar ends
+## where the cab starts. Flush, the dented faces crossed each other and flickered along the seams.
 func _shell(s: LowPoly.Soup) -> void:
 	var y0 := 0.5
 	var y1 := 1.9
+	var t := SHELL_TUCK
+	var wy := (y0 + y1 - 6.0 * t) * 0.5             # walls: y0 .. y1 - 6t, their tops inside the roof slab
+	var wh := y1 - 6.0 * t - y0
 	# roof, floor, rear, +X wall, -X rear segment, header over the door, pillar in front of it
-	_dented(s, Vector3(2.0, 0.12, 3.05), Vector3(0, y1 - 0.06, -0.525), PAINT_LT, DENT, 3)
-	_b(s, Vector3(2.0, 0.12, 3.05), Vector3(0, y0 + 0.06, -0.525), TRIM)
-	_dented(s, Vector3(2.0, 1.4, 0.1), Vector3(0, (y0 + y1) * 0.5, -2.0), PAINT, DENT)
-	_dented(s, Vector3(0.08, 1.4, 3.05), Vector3(0.96, (y0 + y1) * 0.5, -0.525), PAINT, DENT, 3)
-	_dented(s, Vector3(0.08, 1.4, 1.9), Vector3(-0.96, (y0 + y1) * 0.5, -1.1), PAINT, DENT, 3)
-	_b(s, Vector3(0.08, 0.1, 1.2), Vector3(-0.96, 1.85, 0.4), PAINT_LT)
-	_b(s, Vector3(0.08, 1.4, 0.1), Vector3(-0.96, (y0 + y1) * 0.5, 0.99), PAINT)
+	_dented(s, Vector3(2.0 - 2.0 * t, 0.12, 3.05 - t), Vector3(0, y1 - 0.06, -0.525 + t * 0.5), PAINT_LT, DENT, 3)
+	_b(s, Vector3(2.0 - 2.0 * t, 0.12, 3.05 - t), Vector3(0, y0 + 0.06, -0.525 + t * 0.5), TRIM)
+	_dented(s, Vector3(2.0 - 2.0 * t, wh, 0.1), Vector3(0, wy, -2.0), PAINT, DENT)
+	_dented(s, Vector3(0.08, wh, 3.05 - t), Vector3(0.96, wy, -0.525 + t * 0.5), PAINT, DENT, 3)
+	_dented(s, Vector3(0.08, wh, 1.9 - t), Vector3(-0.96, wy, -1.1 + t * 0.5), PAINT, DENT, 3)
+	_b(s, Vector3(0.08, 0.1, 1.14), Vector3(-0.96, 1.84, 0.37), PAINT_LT)
+	_b(s, Vector3(0.08, wh, 0.06), Vector3(-0.96, wy, 0.97), PAINT)
 
 
 ## The cab: lower body + hood, the sloped windscreen, side windows, door seams.
@@ -256,7 +263,7 @@ func _cab(s: LowPoly.Soup) -> void:
 	# side windows (both sides) and door seams
 	for side: float in [-1.0, 1.0]:
 		_b(s, Vector3(0.03, 0.34, 0.46), Vector3(side * 0.995, 1.44, 1.28), GLASS)
-		_b(s, Vector3(0.034, 0.14, 0.14), Vector3(side * 0.997, 1.52, 1.12), GLASS_LT)
+		_b(s, Vector3(0.034, 0.14, 0.14), Vector3(side * 0.997, 1.52, 1.13), GLASS_LT)          # glint clear of the pane's edge
 		_b(s, Vector3(0.03, 0.62, 0.025), Vector3(side * 0.998, 1.42, 1.64), TRIM)           # B-pillar seams
 		_b(s, Vector3(0.03, 0.74, 0.025), Vector3(side * 0.998, 1.0, 1.06), TRIM)
 		_b(s, Vector3(0.03, 0.025, 0.58), Vector3(side * 0.998, 0.66, 1.34), TRIM)
@@ -270,10 +277,10 @@ func _front_and_rear(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(1.5, 0.34, 0.05), Vector3(0, 0.88, 2.06), TRIM)
 	for i in 5:
 		_b(s, Vector3(0.84, 0.025, 0.06), Vector3(0, 0.76 + 0.07 * float(i), 2.07), TRIM_LT)
-	_b(s, Vector3(0.52, 0.3, 0.05), Vector3(-0.72, 0.9, 2.055), TRIM)
-	_b(s, Vector3(0.52, 0.3, 0.05), Vector3(0.72, 0.9, 2.055), TRIM)
+	_b(s, Vector3(0.52, 0.28, 0.05), Vector3(-0.72, 0.9, 2.055), TRIM)        # 1 cm lower than the grille's top
+	_b(s, Vector3(0.52, 0.28, 0.05), Vector3(0.72, 0.9, 2.055), TRIM)
 	_b(s, Vector3(2.08, 0.22, 0.2), Vector3(0, 0.56, 2.0), TRIM)
-	_b(s, Vector3(2.0, 0.07, 0.22), Vector3(0, 0.66, 2.0), PAINT_DK)
+	_b(s, Vector3(2.04, 0.07, 0.22), Vector3(0, 0.66, 2.0), PAINT_DK)                         # proud of the cab's sides
 	_b(s, Vector3(0.5, 0.2, 0.03), Vector3(0, 0.52, 2.13), PAINT_LT)
 	_b(s, Vector3(0.36, 0.03, 0.035), Vector3(0, 0.54, 2.145), TRIM)
 	_b(s, Vector3(1.9, 0.07, 0.3), Vector3(0, 1.22, 1.9), PAINT_LT)                           # hood lip
@@ -300,7 +307,7 @@ func _roof_and_rack(s: LowPoly.Soup) -> void:
 	for zc: float in [-1.75, -0.9, -0.05, 0.8]:
 		_b(s, Vector3(1.78, 0.07, 0.07), Vector3(0, 2.02, zc), TRIM_LT)
 		for sx: float in [-1.0, 1.0]:
-			_b(s, Vector3(0.07, 0.14, 0.07), Vector3(sx * 0.84, 1.97, zc), TRIM)
+			_b(s, Vector3(0.06, 0.14, 0.06), Vector3(sx * 0.84, 1.97, zc), TRIM)             # legs thinner than bar and rail
 	# the ladder (orange fibreglass) on the +X half of the rack, hanging a little out over the rear
 	var lx := 0.4
 	for sx: float in [-1.0, 1.0]:
@@ -372,9 +379,10 @@ static func _pipe_wrench(s: LowPoly.Soup, side: float, u: float, v: float) -> vo
 ## roof, the arches, the door opening or a sign).
 func _wear(s: LowPoly.Soup) -> void:
 	for side: float in [-1.0, 1.0]:
-		# the dark arches behind the tyres: they stop above the floor so a compressed chassis never dips them under it
+		# the dark arches behind the tyres: they stop above the floor so a compressed chassis never dips them under it.
+		# 12 sides against the tyre's 10, so no flat of the arch lines up with a flat of the tyre (they z-fought)
 		for wz: float in [1.5, -1.35]:
-			_cyl(s, 0.42, 0.42, 0.04, 10, Vector3(side * 1.005, 0.48, wz), TRIM, Vector3(0, 0, 90))
+			_cyl(s, 0.42, 0.42, 0.04, 12, Vector3(side * 1.005, 0.48, wz), TRIM, Vector3(0, 0, 90))
 	_decal(s, -1.0, -0.85, 1.55, 0.3, 0.14, RUST, 4.0)
 	_decal(s, 1.0, 0.75, 0.82, 0.3, 0.12, RUST_LT, -5.0)
 
