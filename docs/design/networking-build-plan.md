@@ -23,7 +23,9 @@ how they get tested, and what is still the user's call.
   refused with "Crew is full".
 - **Character select is out of scope.** Everyone plays the default character (Wick today), but **the protocol carries
   each player's character id** (in the hello message and the roster), so a future character select only has to set
-  it (`MenuBackdrop.featured_hero` is the local source).
+  it (`MenuBackdrop.featured_hero` is the local source). **Built 2026-10-19:** clicking a hero in the main menu's garage sets
+  `Session.character_id` (saved); the AI seats then play the heroes nobody human picked (`CrewSeats`), see
+  `characters.md`, "Character select (as built)".
 
 **Proposed, not yet confirmed:** the main menu below, everything marked *(proposal)*, and the open questions in §5.
 
@@ -1393,7 +1395,8 @@ seat's slots, usually empty. Now:
   its license on every machine. `test_net_m6_join_flow`: c2 (joining during the elevator, `--spells vines,damp`) arrives with
   vines + damp; c3 on the invoice opens no checkout, then signs the next job's ordinary checkout and starts in its seat from
   the barrier. `test_forms`: the form's License line and status.
-- **Try it.** `.un.ps1 -Crew 3 -JoinLate 25 --seed 13 --net-wait 2 --contract 1` (no `--spells`: every window signs by
+- **Try it.** `.
+un.ps1 -Crew 3 -JoinLate 25 --seed 13 --net-wait 2 --contract 1` (no `--spells`: every window signs by
   hand): 25 s in, the third window's checkout opens over its form while the crew plays on, and it arrives with what it
   signed. With `--spells` on the command line every window, the joiner too, signs those at once.
 - **Files.** `net_join.gd` (`license_open`, `join.signed`, `licensed_state`, the joiner's `sign` / `license` / `signed`),
@@ -1405,7 +1408,8 @@ seat's slots, usually empty. Now:
 1. **Steam checklist item 4** ("B joins mid-floor 2 and takes an AI seat; B quits and the AI takes it back") is now buildable;
    check the lobby's `seats_free` filter there (a full crew must not be listed) and the snapshot's size over Steam's relays.
 2. **Character select** only has to set `Session.character_id`: the hello and the roster carry it, `choose_seat`'s first rule
-   (an AI already playing that character) and the re-kit (`CREW_LOOKS`) use it.
+   (an AI already playing that character) and the re-kit (`CREW_LOOKS`) use it. (Built 2026-10-19: the AI seats' heroes and
+   a dropped seat's hero now come from `CrewSeats`, not a fixed seat 2 Rebar / seat 3 Gasket.)
 3. **Voice debug per player**: a joiner builds its voice caster with the floor; nothing in M6 touches it.
 4. **Telemetry**: a join could log its wait, build and ready-to-seat times on the host (`NetJoin.admitted` has them).
 5. **Reuse**: a new replicated class needs a `NetEvents.LATE_JOIN` entry and, if it has state the seed does not rebuild, a

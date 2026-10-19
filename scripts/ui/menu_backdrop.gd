@@ -12,9 +12,13 @@ extends Node3D
 ## thirds (`FRAME_SHIFT`). The glowing hex seams are turned down (HexMapView.seam_gain / seam_near_gain) because
 ## bright seams under a UI are loud.
 ##
-## CREW: the hero the local player plays (`featured_hero`, `set_featured_hero(id)`; Wick today, a character select
-## later) stands in FRONT, large and turned three-quarters to the camera, left of the van's open cargo door; the other two
-## stand back (one by the cab, one beyond the nose) in a loose triangle. Swapping re-poses the three in place.
+## CREW: the hero the local player plays (`featured_hero`, `set_featured_hero(id)`: the pick, Session.character_id) stands in
+## FRONT, large and turned three-quarters to the camera, left of the van's open cargo door; the other two stand back (one by
+## the cab, one beyond the nose) in a loose triangle. Swapping re-poses the three in place; `animate` walks them there.
+##
+## PICKING (the character select, user 2026-10-19; the main menu drives it): `hero_at(screen_point)` casts the camera's ray
+## at each hero's box (the model's own mesh bounds, in its space; the nearest hit wins), so a click on a hero picks it, and
+## `set_hover(id)` gives the hero under the pointer a soft warm outline. No physics: plain ray-box maths.
 ##
 ## MOODS (`mood`, `set_mood()`):
 ##   dawn   cool light through the ceiling grate over warm work lights and torches (the default)
@@ -38,9 +42,14 @@ const NIGHT_UNTIL_HOUR := 5          ## ... until 05:00
 const MOOD_FLAG := "--backdrop-mood"
 const HERO_FLAG := "--backdrop-hero"
 const HEROES: Array[String] = ["wick", "gasket", "rebar"]
-## The hero the local player plays. game.gd still hard-codes Wick (there is no character select yet), so this is the
-## default for `featured_hero`; a character select should call set_featured_hero() instead of editing this.
+## The default hero (NetSession.DEFAULT_CHARACTER) before anybody picks one. The pick itself is Session.character_id.
 const PLAYER_HERO := "wick"
+## The hover look: the ink outline turns warm and a little wider, and the figure lifts a touch (LowPolyMaterial params).
+const HOVER_OUTLINE := Color(1.0, 0.8, 0.42)
+const HOVER_OUTLINE_W := 0.06        ## world units (the default is 0.035 under a perspective camera)
+const HOVER_GLOW := Color(1.0, 0.78, 0.5)
+const HOVER_GLOW_STRENGTH := 0.1
+const STEP_TIME := 0.85              ## seconds the crew takes to walk to new spots when the pick changes
 
 const WALL_Z := -5.0                 ## the back wall's front face
 const WALL_X := 12.5                 ## side walls at +-this
@@ -63,8 +72,9 @@ const SPOT_BACK := Vector3(5.7, 0.0, -0.6)
 const YAW_FRONT := 24.0
 const YAW_CAB := -20.0
 const YAW_BACK := -28.0
-## Sideways nudge of the front spot per hero (world X): the short dwarf with his hammer needs to clear the clipboard.
-const FRONT_NUDGE := {"gasket": 0.8}
+## Sideways nudge of the front spot per hero (world X): the short dwarf with his hammer and the broad rock need to clear the
+## clipboard and the personnel file.
+const FRONT_NUDGE := {"gasket": 0.8, "rebar": 0.45}
 ## Which of the two supporting spots a hero prefers (the dwarf with the hammer by the cab, then Wick; Rebar stands back).
 const CAB_ORDER: Array[String] = ["gasket", "wick", "rebar"]
 ## Camera slide (Camera3D.h_offset, world units, sideways without turning) that moves the picture toward the right so the
@@ -119,6 +129,11 @@ var _corn_sign_node: Node3D
 var _work_lamp: OmniLight3D            ## the overhead work lamp of the day moods (it fails after a bad job)
 var _crew_extras: Array[Node] = []     ## plasters and soot smudges on the crew's faces (the after mood), freed with the mood
 var _face_yaw := 0.0                  ## yaw (degrees) that turns a model to face the camera
+## The hero under the pointer ("" = none), outlined.
+var hovered := ""
+var _spots := {}                      ## id -> where the hero stands (or is walking to)
+var _boxes := {}                      ## id -> the model's mesh bounds, in its own space
+var _steps := {}                      ## id -> the Tween walking it to a new spot
 
 
 func _ready() -> void:
@@ -189,22 +204,109 @@ func set_mood(new_mood: String) -> void:
 		_apply_mood()
 
 
-## The featured hero named by `--backdrop-hero`, else the player's hero.
+## The featured hero named by `--backdrop-hero`, else the player's pick (Session.local_character(): Wick until one is picked).
 static func hero_from_args(args: PackedStringArray) -> String:
 	var i := args.find(HERO_FLAG)
 	if i >= 0 and i + 1 < args.size() and HEROES.has(args[i + 1]):
 		return args[i + 1]
-	return PLAYER_HERO
+	var pick := Session.local_character()
+	return pick if HEROES.has(pick) else PLAYER_HERO
 
 
-## Put this hero in front and step the other two back; re-poses the three models in place (no rebuild).
-func set_featured_hero(id: String) -> void:
+## Put this hero in front and step the other two back; re-poses the three models in place (no rebuild). `animate`: they
+## walk to their new spots (STEP_TIME) and the new front hero strikes a pose when it arrives (the menu's pick); otherwise
+## they are simply there.
+func set_featured_hero(id: String, animate: bool = false) -> void:
 	if not HEROES.has(id):
 		push_warning("MenuBackdrop: unknown hero '%s'" % id)
 		return
+	var changed := id != featured_hero
 	featured_hero = id
 	if _built:
-		_pose_crew()
+		_pose_crew(animate and changed)
+
+
+## The hero whose figure is under `screen_point` (viewport coordinates, as a mouse event gives them), "" for none. The
+## camera's ray against each model's mesh bounds; the nearest hit wins (a hero standing in front covers the one behind).
+func hero_at(screen_point: Vector2) -> String:
+	if camera == null or not camera.is_inside_tree():
+		return ""
+	var origin := camera.project_ray_origin(screen_point)
+	var dir := camera.project_ray_normal(screen_point)
+	var best := ""
+	var best_d := INF
+	for id in HEROES:
+		var m := hero_model(id)
+		if m == null or not _boxes.has(id):
+			continue
+		var inv := m.global_transform.affine_inverse()
+		var hit: Variant = (_boxes[id] as AABB).intersects_ray(inv * origin, inv.basis * dir)
+		if hit == null:
+			continue
+		var d := origin.distance_to(m.global_transform * (hit as Vector3))
+		if d < best_d:
+			best_d = d
+			best = id
+	return best
+
+
+## Where a hero's figure is on screen (the middle of its box), for tests and screenshots.
+func hero_screen_point(id: String) -> Vector2:
+	var m := hero_model(id)
+	if m == null or camera == null or not _boxes.has(id):
+		return Vector2(-1, -1)
+	return camera.unproject_position(m.global_transform * (_boxes[id] as AABB).get_center())
+
+
+## Outline the hero under the pointer ("" = none). Only the outline and a faint lift change; nothing moves.
+func set_hover(id: String) -> void:
+	if id == hovered or (id != "" and not HEROES.has(id)):
+		return
+	if hovered != "":
+		_set_outline(hero_model(hovered), false)
+	hovered = id
+	if id != "":
+		_set_outline(hero_model(id), true)
+
+
+func _set_outline(m: LowPolyModel, on: bool) -> void:
+	if m == null:
+		return
+	var seen := {}
+	for n in m.find_children("*", "MeshInstance3D", true, false):
+		var mat := (n as MeshInstance3D).material_override as ShaderMaterial
+		if mat == null or seen.has(mat):
+			continue
+		seen[mat] = true
+		var line := mat.next_pass as ShaderMaterial
+		if line == null:
+			continue   # (the after mood's plasters and soot: no outline of their own)
+		if on and not mat.has_meta(&"hover_was"):
+			mat.set_meta(&"hover_was", [line.get_shader_parameter("outline_color"), line.get_shader_parameter("width_world"),
+				mat.get_shader_parameter("glow_color"), mat.get_shader_parameter("glow_strength")])
+			line.set_shader_parameter("outline_color", HOVER_OUTLINE)
+			line.set_shader_parameter("width_world", HOVER_OUTLINE_W)
+			mat.set_shader_parameter("glow_color", HOVER_GLOW)
+			mat.set_shader_parameter("glow_strength", HOVER_GLOW_STRENGTH)
+		elif not on and mat.has_meta(&"hover_was"):
+			var was: Array = mat.get_meta(&"hover_was")
+			line.set_shader_parameter("outline_color", was[0] if was[0] != null else LowPolyMaterial.INK)
+			line.set_shader_parameter("width_world", was[1] if was[1] != null else 0.035)
+			mat.set_shader_parameter("glow_color", was[2] if was[2] != null else Color(0, 0, 0, 1))
+			mat.set_shader_parameter("glow_strength", was[3] if was[3] != null else 0.0)
+			mat.remove_meta(&"hover_was")
+
+
+## True while the outline is on `id` (tests).
+func is_outlined(id: String) -> bool:
+	var m := hero_model(id)
+	if m == null:
+		return false
+	for n in m.find_children("*", "MeshInstance3D", true, false):
+		var mat := (n as MeshInstance3D).material_override as ShaderMaterial
+		if mat != null and mat.has_meta(&"hover_was"):
+			return true
+	return false
 
 
 ## The model of a hero id.
@@ -216,10 +318,20 @@ func hero_model(id: String) -> LowPolyModel:
 	return null
 
 
-## Where a hero stands now (its position), for tests and the lab.
+## Where a hero stands (or is walking to, after an animated swap), for tests and the lab.
 func hero_spot(id: String) -> Vector3:
+	if _spots.has(id):
+		return _spots[id]
 	var m := hero_model(id)
 	return m.position if m != null else Vector3.ZERO
+
+
+## True while the crew is still walking to new spots.
+func is_stepping() -> bool:
+	for t: Tween in _steps.values():
+		if t != null and t.is_valid() and t.is_running():
+			return true
+	return false
 
 
 ## The camera's sway about its focus at time t (degrees): a slow drift, so the shot is never still.
@@ -368,11 +480,28 @@ func _build_crew() -> void:
 	rebar = RebarModel.new()
 	for m: LowPolyModel in [wick, gasket, rebar]:
 		add_child(m)
+	for id in HEROES:
+		_boxes[id] = _mesh_bounds(hero_model(id))
 	_pose_crew()
 
 
-## Stand the featured hero at the front point and the other two at the supporting spots.
-func _pose_crew() -> void:
+## The union of a model's mesh bounds in its own space (weapons and hats included), for picking.
+static func _mesh_bounds(m: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	var inv := m.global_transform.affine_inverse()
+	for n in m.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var b: AABB = (inv * mi.global_transform) * mi.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box
+
+
+## Stand the featured hero at the front point and the other two at the supporting spots (`animate`: walk there).
+func _pose_crew(animate: bool = false) -> void:
 	var others: Array[String] = []
 	for id in HEROES:
 		if id != featured_hero:
@@ -386,21 +515,41 @@ func _pose_crew() -> void:
 	for id in others:
 		if id != cab:
 			back = id
-	_place(featured_hero, SPOT_FRONT + Vector3(float(FRONT_NUDGE.get(featured_hero, 0.0)), 0.0, 0.0), YAW_FRONT)
-	_place(cab, SPOT_CAB, YAW_CAB)
-	_place(back, SPOT_BACK, YAW_BACK)
+	_place(featured_hero, SPOT_FRONT + Vector3(float(FRONT_NUDGE.get(featured_hero, 0.0)), 0.0, 0.0), YAW_FRONT, animate)
+	_place(cab, SPOT_CAB, YAW_CAB, animate)
+	_place(back, SPOT_BACK, YAW_BACK, animate)
 
 
-func _place(id: String, offset: Vector3, yaw: float) -> void:
+func _place(id: String, offset: Vector3, yaw: float, animate: bool = false) -> void:
 	var m := hero_model(id)
 	if m == null:
 		return
-	m.position = VAN_AT + offset
-	m.rotation.y = deg_to_rad(_face_yaw + yaw)
+	var spot := VAN_AT + offset
+	var turn := deg_to_rad(_face_yaw + yaw)
+	_spots[id] = spot
 	# after a bad job they slump: the weight forward onto the feet, a little askew
 	var slump := mood == "after"
 	m.rotation.x = deg_to_rad(-12.0) if slump else 0.0
 	m.rotation.z = deg_to_rad(SLUMP_ROLL.get(id, 4.0)) if slump else 0.0
+	var old: Tween = _steps.get(id)
+	if old != null and old.is_valid():
+		old.kill()
+	_steps.erase(id)
+	if not animate or not is_inside_tree() or m.position.distance_to(spot) < 0.05:
+		m.position = spot
+		m.rotation.y = turn
+		return
+	# A short walk: face the way it goes, walk (the model's own walk cycle reads the speed), then turn to its spot's yaw.
+	var to := spot - m.position
+	var head := m.rotation.y + wrapf(atan2(-to.x, -to.z) - m.rotation.y, -PI, PI)   # (models face local -Z; the short way round)
+	turn = head + wrapf(turn - head, -PI, PI)
+	var tw := create_tween()
+	tw.tween_property(m, "rotation:y", head, 0.12)
+	tw.tween_property(m, "position", spot, STEP_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(m, "rotation:y", turn, 0.18)
+	if id == featured_hero and m.has_method("cast_pose"):
+		tw.tween_callback(m.cast_pose)   # the new front hero: "present"
+	_steps[id] = tw
 
 
 func _build_dressing() -> void:

@@ -233,9 +233,17 @@ and settings share it, as before). Kit pieces (torches, signs, neon, light shaft
 - **Crew:** the player's hero stands in FRONT, large and three-quarter to the camera, left of the van's open cargo door;
   the other two stand back (one by the cab with a tool, one beyond the nose) in a loose triangle, all right of the
   clipboard. `featured_hero` / `set_featured_hero(id)` (wick, gasket or rebar) re-poses the three in place; the default is
-  `MenuBackdrop.PLAYER_HERO` (Wick, because game.gd hard-codes Wick; a character select should call the setter).
-  Dev flag `--backdrop-hero wick|gasket|rebar`. The camera sits higher (about 5 units, looking down a little more) and
+  the player's pick (`Session.local_character()`, Wick until one is picked). Dev flag `--backdrop-hero wick|gasket|rebar`
+  (it also picks that hero for the run, unsaved). The camera sits higher (about 5 units, looking down a little more) and
   drifts by about 3 degrees.
+- **Character select (as built, 2026-10-19):** the garage is where the player picks their hero. A click on a hero picks it
+  (`hero_at(screen_point)`: the camera ray against each model's own mesh bounds, the nearest hit wins; no physics); the crew
+  walks to the new spots (`set_featured_hero(id, true)`, `STEP_TIME` 0.85 s, the models' own walk cycle) and the new front
+  hero strikes its cast pose. The hero under the pointer gets a warm outline and a faint lift (`set_hover`: the LowPolyMaterial
+  outline turns `HOVER_OUTLINE` and widens, a small `glow_strength`), and the pointer becomes a hand. Rebar's front spot is
+  nudged right too (`FRONT_NUDGE`), so the broad rock clears the personnel file. The main menu drives it (`MainMenu.pick_hero`,
+  `garage_hero_at`); details in `characters.md`, "Character select (as built)". Dev flag `--menu-hover <id>` outlines a hero
+  for a screenshot.
 - **Composition:** the picture is slid right with `Camera3D.h_offset` (`FRAME_SHIFT`) so the van and crew sit in the
   right 60% of a 16:9 screen, clear of the clipboard (which is about 40% wide, tabs included).
 - **Seams:** `HexMapView` has three new fields, `seam_gain`, `seam_near_gain` and `seam_near_range`. Defaults keep the
@@ -304,6 +312,7 @@ Impact, Segoe Print). Swap fonts in `FormTheme._font()` callers only.
 | Screen | Form |
 |---|---|
 | `MainMenu` | FORM 27-B Work order on a tilted clipboard, left third. Rows Start / Voice setup / Settings / Quit; the office-use box shows the saved cast word, strictness, min voice and the build (`BuildVersion.text()`); three classified ads; a stamp; index tabs (decoration) |
+| `MainMenu` (2026-10-19) | Under the clipboard (lying over its bottom lip): FORM 31 Personnel file (green, `PersonnelFile`): NAME (focusable: the band and tick; Left / Right / Enter step the pick), ROLE, HP, PRIMARY, SPEED, SECONDARY, CLIMBING, WEIGHT, typed from `HeroKit`, with ten-box bars of typed X's comparing the three. To make room the rows are 54 high (were 66), the "First time? Open Voice setup first..." note is gone (a tutorial line, rule 13) and the LICENSED · BONDED · MOSTLY stamp shows only when the strip above the ads has room for it (normally it does not) |
 | `VoiceSetupScreen` | FORM 7 Rig calibration: cast word and strictness pickers, the live meter (restyled `MicMeter`), min voice as a `BoxScale`, "Try it" with the HEARD box, spell chips and the type-it field. The mic status sits in the header's copy box |
 | `SettingsScreen` | FORM 3 Options (goldenrod): box scale, boxed checks, boxed picker |
 | `PauseMenu` | FORM 27-B "On hold" on a clipboard, with the build |

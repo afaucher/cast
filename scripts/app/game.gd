@@ -23,6 +23,7 @@ extends Node3D
 ##                       crew is out of the van, plus --autocast-after S (default 0.5)
 ##   --aim-offset x,z    dev: --autocast aims at the player's position plus this offset (world units) instead of at the monsters
 ##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
+##   --hero wick|gasket|rebar  play this hero (Session.character_id) instead of the one picked on the main menu
 ##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer) near the player;
 ##                       --autocast then aims at them
 ##   --idle-monsters     dev: --spawn-near monsters ignore heroes until hurt
@@ -32,11 +33,12 @@ extends Node3D
 ##   --zoom S            dev: camera size (default 24; 6 is a close-up of the crew)
 ##   --focus rebar|gasket|dev|elevator  dev: the camera follows that ally (or the --spawn-near monsters, or looks at the
 ##                       elevator's landing) instead of the player
-##   --give-allies a,b   dev: slot spell a for Rebar and b for Gasket (they only hold the component; allies do not cast)
+##   --give-allies a,b   dev: slot spell a for the seat-2 ally and b for seat 3 (Rebar and Gasket when you play Wick; they only
+##                       hold the component; allies do not cast)
 ##   --drop-near a,b     dev: put component pickups for spells a, b on the floor just ahead of the player
 ##   --slay-near         dev: 1.5 s in, kill the --spawn-near monsters (to watch their drops)
-##   --kit-demo draw|hammer|fist  dev: at 0.8 s Wick starts drawing his bow on the --spawn-near monsters (a drawn shot
-##                       fires 1.3 s later), or Gasket (hammer) / Rebar (fist) steps up to them and swings once
+##   --kit-demo draw|hammer|fist  dev: at 0.8 s the player (Wick) starts drawing his bow on the --spawn-near monsters (a drawn
+##                       shot fires 1.3 s later), or the AI Gasket (hammer) / Rebar (fist) steps up to them and swings once
 ##   --to-gate           dev: put the crew 5 cells from the first hellgate of the floor (the camera follows)
 ##   --to-theme <id>     dev: put the crew in the middle of the first room with that theme (wine_cellar, home_cinema, spa, gym,
 ##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, science, service_entrance); the
@@ -125,16 +127,18 @@ const OBJECTIVE_INTERVAL := 0.25
 const FOLLOW_EXTRACT_CELLS := 3   ## followers within this many cells of the elevator ride along
 const INCAP_DELAY := 2.2
 const JOIN_LICENSE_BEAT := 0.6    ## a joiner sees its "Clocking in..." form this long before the license checkout opens over it
-## The three crew seats. Seat 1 is the host's hero (the AI allies follow it); an empty seat is an AI ally: seat 2
-## Rebar, seat 3 Gasket. A human takes the seat with the character id the roster carries (Wick for everyone today).
+## The three crew seats. Seat 1 is the host's hero (the AI allies follow it); solo it is the hero picked on the main menu
+## (Session.character_id). A human takes the seat with the character id the roster carries; an empty seat is an AI ally
+## playing a hero nobody human picked (CrewSeats: seat 2 Rebar and seat 3 Gasket unless someone plays them).
 const CREW_LOOKS := {
 	"wick": {"name": "Wick", "color": PLAYER_COLOR},
 	"rebar": {"name": "Rebar", "color": Color(0.85, 0.5, 0.25)},
 	"gasket": {"name": "Gasket", "color": Color(0.7, 0.4, 0.85)},
 }
+## Where each AI seat follows seat 1 (AllyBrain formation_angle / hexes). Its hero comes from CrewSeats.
 const AI_SEATS := {
-	2: {"character": "rebar", "angle": 2.4, "hexes": 2.6},
-	3: {"character": "gasket", "angle": 3.9, "hexes": 3.3},
+	2: {"angle": 2.4, "hexes": 2.6},
+	3: {"angle": 3.9, "hexes": 3.3},
 }
 
 ## Survive scene reloads (next floor, next contract, F5).
@@ -227,6 +231,8 @@ var _seat_notices: Array[String] = []   ## every "takes over" line this screen s
 func _ready() -> void:
 	InputSetup.ensure_actions()
 	_parse_args()
+	if opts.has("hero") and HeroKit.has_kit(str(opts["hero"])):
+		Session.character_id = str(opts["hero"]).to_lower()   # (dev: before a crew opens, so the roster carries it too)
 	if opts.has("invoice_demo"):
 		_invoice_demo()
 		return
@@ -341,6 +347,7 @@ func _parse_args() -> void:
 			"--autocast-after": opts["autocast_after"] = float(nxt)
 			"--aim-offset": opts["aim_offset"] = nxt
 			"--proto-heroes": opts["proto_heroes"] = true
+			"--hero": opts["hero"] = nxt
 			"--spawn-near": opts["spawn_near"] = nxt
 			"--stage-ledge": opts["stage_ledge"] = true
 			"--idle-monsters": opts["idle_monsters"] = true
@@ -632,9 +639,9 @@ func _build_world() -> void:
 	if not exits.is_empty():
 		_exit_cell = exits[0]
 
-	# The crew: three seats. Solo, the player is Wick and Rebar and Gasket are AI allies on free neighbours. In a
-	# shared run each human takes their seat (a client's own hero is the one it controls), and the AI allies
-	# (host only) fill the empty seats and follow the host's hero.
+	# The crew: three seats. Solo, the player is the hero picked on the main menu and the other two are AI allies on free
+	# neighbours. In a shared run each human takes their seat (a client's own hero is the one it controls), and the AI
+	# allies (host only) fill the empty seats with the heroes nobody picked (CrewSeats) and follow the host's hero.
 	# Faceted low-poly models by default; --proto-heroes brings back the capsule bodies.
 	var faceted: bool = not bool(opts.get("proto_heroes", false))
 	# The crew starts a job at the van (floor 1's start cell); taking the elevator down puts it at the elevator on the
@@ -675,8 +682,9 @@ func _build_world() -> void:
 	hud.console_submitted.connect(_on_console)
 
 
-## Who sits where: [{seat, character, local, peer, name}] for seats 1-3, in seat order. Solo: Wick (you) and the
-## AI allies Rebar and Gasket. A shared run: every human at their roster seat with their character id, the rest AI.
+## Who sits where: [{seat, character, local, peer, name}] for seats 1-3, in seat order. Solo: the picked hero (you,
+## Session.local_character()) and the other two as AI allies. A shared run: every human at their roster seat with their
+## character id, the rest AI playing the heroes nobody human picked (CrewSeats.fill).
 func _crew_seats() -> Array[Dictionary]:
 	if _joining and not _join_seats.is_empty():
 		return _joined_seats()
@@ -686,18 +694,37 @@ func _crew_seats() -> Array[Dictionary]:
 			if CrewFlow.is_joining(e):
 				continue   # (M6: still joining: its seat is the AI's on this floor until it takes it)
 			by_seat[int(e["seat"])] = e
+	var humans := {}
+	for seat: int in by_seat:
+		humans[seat] = _known_character(str((by_seat[seat] as Dictionary)["character"]))
+	if not by_seat.has(1):
+		humans[1] = _known_character(Session.local_character())   # solo: seat 1 is you
+	var heroes := CrewSeats.fill(humans, NetSession.MAX_CREW)
 	var out: Array[Dictionary] = []
 	for seat in range(1, NetSession.MAX_CREW + 1):
 		if by_seat.has(seat):
 			var e: Dictionary = by_seat[seat]
-			var character := str(e["character"])
-			out.append({"seat": seat, "character": character if CREW_LOOKS.has(character) else NetSession.DEFAULT_CHARACTER,
-				"local": int(e["peer"]) == Session.local_id(), "peer": int(e["peer"]), "name": str(e["name"])})
+			out.append({"seat": seat, "character": str(heroes[seat]), "local": int(e["peer"]) == Session.local_id(), "peer": int(e["peer"]),
+				"name": str(e["name"])})
 		elif seat == 1:
-			out.append({"seat": 1, "character": NetSession.DEFAULT_CHARACTER, "local": true, "peer": 0, "name": ""})
+			out.append({"seat": 1, "character": str(heroes[1]), "local": true, "peer": 0, "name": ""})
 		else:
-			out.append({"seat": seat, "character": str((AI_SEATS[seat] as Dictionary)["character"]), "local": false, "peer": 0, "name": ""})
+			out.append({"seat": seat, "character": str(heroes[seat]), "local": false, "peer": 0, "name": ""})
 	return out
+
+
+## A character id the crew has a look for, else the default (an unknown id from a newer build plays Wick).
+static func _known_character(character: String) -> String:
+	return character if CREW_LOOKS.has(character) else NetSession.DEFAULT_CHARACTER
+
+
+## The hero an AI plays when it takes `seat` now, beside the heroes in the other seats of `seat_info` (CrewSeats.ai_for).
+static func _ai_character(seat: int, seat_info: Array[Dictionary]) -> String:
+	var others: Array = []
+	for s: Dictionary in seat_info:
+		if int(s["seat"]) != seat:
+			others.append(str(s["character"]))
+	return CrewSeats.ai_for(seat, others)
 
 
 func _model_for(character: String) -> Node3D:
@@ -742,8 +769,14 @@ func _spawn_crew(start: Vector2i, spots: Array[Vector2i], faceted: bool) -> void
 				hero.set_player_name(str(s["name"]))   # a person plays it: a puppet here, their name over its head
 	for h in ai_heroes:
 		if Net.is_host():
-			var ai: Dictionary = AI_SEATS[_seat_of(h)]
-			HeroFactory.make_ally(h, leader, false, float(ai["angle"]), float(ai["hexes"]))
+			_make_ai(h, _seat_of(h), leader)
+
+
+## An AllyBrain on `hero` in `seat`'s formation spot behind `leader`. An archer (an "arrow" kit: Wick) keeps its distance
+## and shoots; the others close in.
+func _make_ai(hero: Hero, seat: int, leader: Hero) -> void:
+	var ai: Dictionary = AI_SEATS.get(seat, AI_SEATS[2])
+	HeroFactory.make_ally(hero, leader, hero.secondary_kind == "arrow", float(ai["angle"]), float(ai["hexes"]))
 
 
 ## The name a hero goes by on the books: its player's roster name while crewed (two players may both be Wick), else the
@@ -1073,7 +1106,8 @@ func _start() -> void:
 func _arrive_by_van() -> void:
 	if _floor_n() != VAN_FLOOR or _site == null or _site.plan.van.is_empty():
 		return
-	# The van's crew spots: seat 1 (Wick), seat 3 (Gasket), seat 2 (Rebar) on every machine alike.
+	# The van's crew spots (VanPlan: opposite the door, toward the cab, toward the tail): seat 1, seat 3, seat 2, on every
+	# machine alike, whoever plays them.
 	var crew: Array[Hero] = []
 	for seat: int in [1, 3, 2]:
 		if heroes_by_seat.has(seat):
@@ -1100,7 +1134,7 @@ func _arrive_by_elevator() -> void:
 		return
 	var arriving: Array[Hero] = []
 	if _floor_n() > VAN_FLOOR:
-		# the car's spots: seat 1 (Wick) in the middle, seat 3 (Gasket) left, seat 2 (Rebar) right, on every machine alike
+		# the car's spots: seat 1 in the middle, seat 3 left, seat 2 right, on every machine alike (whoever plays them)
 		for seat: int in [1, 3, 2]:
 			if heroes_by_seat.has(seat) and not _session.carried_down(heroes_by_seat[seat]):
 				arriving.append(heroes_by_seat[seat])   # (a downed hero stayed behind on the floor above)
@@ -1282,21 +1316,22 @@ func _begin_hero_sync() -> void:
 		owners[int(s["seat"])] = int(s["peer"])
 	var originals := {}
 	for seat: int in AI_SEATS:
-		originals[seat] = str((AI_SEATS[seat] as Dictionary)["character"])
+		originals[seat] = _ai_character(seat, _seat_info)   # (the hero the AI plays there if the seat's player leaves)
 	Session.seats.begin(owners, originals)
 	Session.snap.begin(heroes_by_seat, 0 if _joining else _seat_of(player))
 
 
 ## The heroes were built when the job was picked, from the roster of that moment. A player who left during the license
-## checkout is not on the roster any more: their seat is the AI's, as its original character, like a player who drops
-## later. Every machine reads the same roster here (the host's roster update travels ahead of `crew.load` on the same
-## ordered channel), so all of them convert the same seats and the floor checksum still agrees.
+## checkout is not on the roster any more: their seat is the AI's, as a hero nobody else plays (CrewSeats.ai_for), like a
+## player who drops later. Every machine reads the same roster here (the host's roster update travels ahead of `crew.load`
+## on the same ordered channel), so all of them convert the same seats and the floor checksum still agrees.
 func _drop_departed_seats() -> void:
 	for s: Dictionary in _seat_info:
 		var seat := int(s["seat"])
 		if int(s["peer"]) != 0 and not Session.roster.has(int(s["peer"])) and AI_SEATS.has(seat):
 			s["peer"] = 0
-			_on_seat_to_ai(seat, str((AI_SEATS[seat] as Dictionary)["character"]))
+			s["character"] = _ai_character(seat, _seat_info)
+			_on_seat_to_ai(seat, str(s["character"]))
 
 
 ## Streaming and showing run once the floor has started AND this machine's own van arrival is over (the arrival
@@ -1324,8 +1359,10 @@ func _on_seat_to_ai(seat: int, character: String) -> void:
 	var look: Dictionary = CREW_LOOKS[character]
 	hero.become(character, str(look["name"]), look["color"], _model_for(character) if not bool(opts.get("proto_heroes", false)) else null)
 	if Net.is_host() and AI_SEATS.has(seat) and heroes_by_seat.has(1):
-		var ai: Dictionary = AI_SEATS[seat]
-		HeroFactory.make_ally(hero, heroes_by_seat[1], false, float(ai["angle"]), float(ai["hexes"]))
+		_make_ai(hero, seat, heroes_by_seat[1])
+	for s: Dictionary in _seat_info:
+		if int(s["seat"]) == seat:
+			s["character"] = character
 	if hud != null and player != null:
 		hud.bind(player, allies)   # the ally rows read the new name
 
@@ -3009,7 +3046,10 @@ func _kit_demo(kind: String) -> void:
 		await get_tree().create_timer(1.3).timeout
 		player.release_draw(centre - player.global_position)
 		return
-	var hero: Hero = allies[1] if kind == "hammer" else allies[0]
+	var hero: Hero = allies[0]
+	for h: Hero in allies:   # (by kit, not seat: the AI seats depend on the pick)
+		if h.kit_id == (HeroKit.GASKET if kind == "hammer" else HeroKit.REBAR):
+			hero = h
 	var away := (centre - player.global_position)
 	away.y = 0.0
 	away = away.normalized()
