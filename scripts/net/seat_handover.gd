@@ -12,7 +12,8 @@ extends Node
 ##   2. NetSnapshot lets go of the puppet: the hero stops being a copy and stands where the last snapshot left it
 ##      (position, HP, downed);
 ##   3. `to_ai(seat, character)` fires on the host and the game re-kits that hero node in place as the seat's
-##      ORIGINAL character (the Rebar or Gasket the seat started as) and attaches an AllyBrain;
+##      AI's character for that seat (`ai_character`: a hero nobody in the other seats plays, CrewSeats; the Gasket or
+##      Rebar the seat started as unless a player picked it) and attaches an AllyBrain;
 ##   4. the host tells every client in a reliable event (`seat.ai {seat, character, epoch}`), whose `to_ai` makes
 ##      the same re-kit on their screens (the hero stays a puppet there: the host streams it from now on).
 ## The hero node and its net id never change, so followers, HUD rows and every reference to it stay valid.
@@ -41,7 +42,7 @@ signal to_ai(seat: int, character: String)
 signal to_player(seat: int, peer: int, character: String)
 
 var owners: Dictionary = {}       ## seat -> peer (0 = AI)
-var originals: Dictionary = {}    ## seat -> the character an AI plays in that seat
+var originals: Dictionary = {}    ## seat -> the character an AI plays in that seat (as the floor was built; ai_character)
 var epoch: Dictionary = {}        ## seat -> int, up at every handover
 ## Every handover this machine has seen: [{kind "ai" | "player", seat, peer, character, epoch, t}] (tests and logs). For a
 ## drop `peer` is the player who left; for a join it is the joiner.
@@ -113,7 +114,7 @@ func release(seat: int) -> void:
 	if _session == null or not _session.hosting or not owners.has(seat) or owner_of(seat) == 0:
 		return
 	var peer := owner_of(seat)
-	var character := str(originals.get(seat, NetSession.DEFAULT_CHARACTER))
+	var character := ai_character(seat)
 	owners[seat] = 0
 	epoch[seat] = epoch_of(seat) + 1
 	if _session.snap != null:
@@ -122,6 +123,20 @@ func release(seat: int) -> void:
 	print("[Net] seat %d: peer %d is gone, the AI plays %s (epoch %d)" % [seat, peer, character, epoch_of(seat)])
 	to_ai.emit(seat, character)
 	_session.send_event(0, NetEvents.KIND_SEAT_AI, {"seat": seat, "character": character, "epoch": epoch_of(seat)})
+
+
+## Host: the hero the AI plays when it takes `seat` back now: one nobody in the other seats plays (CrewSeats.ai_for, the
+## same rule the next floor's seats follow), from the heroes as they stand. Without them (no floor), `originals`.
+func ai_character(seat: int) -> String:
+	var others: Array = []
+	for s: int in owners:
+		if s == seat:
+			continue
+		var h := NetRegistry.hero(s)
+		if h == null:
+			return str(originals.get(seat, NetSession.DEFAULT_CHARACTER))
+		others.append(h.kit_id)
+	return CrewSeats.ai_for(seat, others)
 
 
 # --- M6: a joiner takes an AI's seat ---------------------------------------------------------------------

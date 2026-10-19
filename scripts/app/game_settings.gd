@@ -10,6 +10,8 @@ extends RefCounted
 ##   link_sim             Diagnostics, "Simulate a long link": "off" (default) | "coast" | "rough". The host's choice is
 ##                        the whole crew's (NetSession applies it when the crew opens and sends it to everyone); solo it
 ##                        does nothing
+##   character            the hero this player plays: "wick" (default) | "gasket" | "rebar". Picked by clicking a hero in
+##                        the main menu's garage; Boot loads it into Session.character_id
 ##
 ## Every function takes an optional settings path (tests use a temp file); "" means `path`, which is
 ## user://settings.cfg unless a dev flag (--settings-file) moved it.
@@ -30,7 +32,7 @@ static var path: String = DEFAULT_PATH
 
 static func defaults() -> Dictionary:
 	return {"master_volume": 1.0, "fullscreen": false, "resolution": resolution_text(DEFAULT_RESOLUTION), "voice_panel_visible": true,
-		"link_sim": "off"}
+		"link_sim": "off", "character": NetSession.DEFAULT_CHARACTER}
 
 
 static func resolution_text(res: Vector2i) -> String:
@@ -60,6 +62,8 @@ static func load_settings(settings_path: String = "") -> Dictionary:
 	out["voice_panel_visible"] = bool(out["voice_panel_visible"])
 	out["resolution"] = resolution_text(parse_resolution(str(out["resolution"])))
 	out["link_sim"] = str(out["link_sim"]) if LINK_PRESETS.has(str(out["link_sim"])) else "off"
+	var hero := str(out["character"]).to_lower()
+	out["character"] = hero if HeroKit.has_kit(hero) else NetSession.DEFAULT_CHARACTER
 	return out
 
 

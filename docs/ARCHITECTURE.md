@@ -37,7 +37,7 @@ window mode and size) and then changes scene to `Boot.route(args)`:
 | `--run-test <name>` | the test (headless harness, nothing else runs) |
 | `--scene <res path>` | that scene |
 | `--menu` | `scenes/main_menu.tscn`, even with other flags (they still reach the game) |
-| no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after`, `--backdrop-mood` | the main menu |
+| no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after`, `--menu-void`, `--menu-hover`, `--menu-focus-file`, `--backdrop-mood`, `--backdrop-hero` | the main menu |
 | `--net-join <ip[:port]>`, `--net-port`, `--net-link`, `--net-name` (online dev flags, see Networking) | the main menu (a joiner goes on to the host's job board; with other game flags it goes straight to the game scene and waits for the connection there) |
 | any other `--flag` (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, every `game.gd` flag, `--net-host`, `--net-steam-probe`, flags added later) | `scenes/game.tscn`, as before |
 
@@ -45,7 +45,13 @@ window mode and size) and then changes scene to `Boot.route(args)`:
 garage, a slowly drifting camera over the three `*Model` heroes idling around the real `VanModel` on its chalk circle,
 torches, a `HellgateModel` glowing through a breach; mood dawn / night / after, see `MenuBackdrop.pick_mood` and
 `LastContract`; no GameWorld, no actors) behind the rows 01 Start a job, 02 Join a crew, 03 Voice setup, 04 Settings,
-05 Quit, a status line and (while joined) the crew list. Start a job hosts a Steam lobby when Steam is up, else plays
+05 Quit, a status line and (while joined) the crew list, and under the clipboard FORM 31, the personnel file
+(`PersonnelFile`, `scripts/ui/personnel_file.gd`) of the hero the player picked. **Character select (2026-10-19):** a click
+on a hero in the garage picks it (`MenuBackdrop.hero_at`: the camera ray against each model's mesh bounds; `set_hover`
+outlines the hero under the pointer), as does the card's NAME line (Left / Right / Enter, last in the focus chain). The pick
+is `Session.character_id` (the hello and the roster carry it), saved as `GameSettings` "character" and loaded by `Boot` at
+start (`--hero` / `--backdrop-hero` override it for one run). Seats: `CrewSeats` (`scripts/heroes/crew_seats.gd`, below).
+Start a job hosts a Steam lobby when Steam is up, else plays
 solo; Join a crew joins the first lobby hiring (see Networking). The job board uses
 the same garage: `game.gd`'s `_show_board` adds its own `MenuBackdrop` (the menu scene is already gone after Start's
 scene change, so it is a fresh one that picks the same mood and hero) and sets `board.backdrop_behind`, which swaps
@@ -107,8 +113,10 @@ behind a barrier (`game.gd` `_start` then `_enter_barrier`: ids, copies, world f
 `crew.ready`); the host compares the checksums (a client that built another floor is sent out with "Desync: different
 floor") and sends `crew.go {start_at, floor_start}`; at `start_at` on the shared clock every machine unfreezes and the
 van arrival plays (`CrewFlow.floor_started`), and each client's `GameWorld.time` is slewed to `host_time() - floor_start`.
-Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero; an EMPTY seat is an
-AI ally (seat 2 Rebar, seat 3 Gasket: `AI_SEATS`, the seat's original character) that only the host runs; on a client every
+Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero (solo: seat 1, the hero
+picked on the menu); an EMPTY seat is an AI ally that only the host runs, playing a hero NOBODY human picked (`CrewSeats.fill`:
+seat 2 keeps Rebar and seat 3 Gasket when free, else the first free of Rebar, Gasket, Wick; `AI_SEATS` is only the formation),
+and a seat its player leaves goes back to the AI as `CrewSeats.ai_for` (`SeatHandover.ai_character`); on a client every
 host-owned actor is a copy (`Net.make_copy`: no physics process, no damage, no shove, no E).
 While crewed there is no local pause (M5); the exits are first-to-choose (M3, below). `NetFloor`, `CrewFlow`, `CrewConfirm` (the host's leave question)
 and `NetGameTest` are the pieces to read first.
@@ -238,7 +246,10 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
   rules, slide, climb slow-down, separation and ground snap. Also `apply_damage(amount, source)`,
   `heal(amount)`, `set_modifier(id, mult, duration)` (damage-taken multiplier; the same id
   refreshes), `peck(source)` (the Chicken spell's hit for nothing: no damage, a monster turns on the pecker; through
-  `Combat.peck`), `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`, `pecked`.
+  `Combat.peck`), `daze(seconds, source)` (the brute's direct slam through `Combat.slam`: a `STAT_DAZE` modifier, so
+  `is_dazed()` / `is_helpless()` are true, `move()` refuses and the hero can't attack, but casts go off; then
+  `DAZE_GUARD` 1.5 s of immunity; the owner applies it, a copy refuses; `docs/design/characters.md`, "The daze"),
+  `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`, `pecked`.
   Override `_on_death()` for death visuals (the default is `queue_free`). Actors join the group `"actors"`.
   `net_fields()` says who may write each var (`Net.SPAWN/OWNER/PRIVATE/LOCAL`, `scripts/net/net.gd`);
   subclasses merge theirs into `super()`, and `test_net_contract` fails on any undeclared var.
@@ -293,7 +304,7 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool
 `Actor.shove(dir, distance, source = null)` starts a short (0.2-0.35 s, ease-out) kinematic slide of
 `distance * shove_mult` along `dir` on X/Z (`shove_mult` 0 = immovable: Rebar; brute 0.4, swarmer 1.5).
 It is driven by the tree's `physics_frame` signal only while active. While `is_shoved()` the actor ignores
-`move()`; `is_helpless()` (shoved or staggered) is what the player controller, `AllyBrain`, `Monster` and the
+`move()`; `is_helpless()` (shoved, staggered or dazed) is what the player controller, `AllyBrain`, `Monster` and the
 training dummy check before steering or attacking (voice casts still work). Terrain rules differ from walking:
 - a wall, or a rise of 2+ levels, stops the slide: "slam", 8 damage + 0.4 s stagger (shoves under 1.0 just stop);
 - drops of up to 3 levels are free; a higher ledge is fine too: the actor falls under gravity and takes 6 damage
