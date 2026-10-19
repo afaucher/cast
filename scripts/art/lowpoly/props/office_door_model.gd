@@ -17,6 +17,7 @@ extends Node3D
 
 const STYLES: Array[String] = ["single", "double", "slider"]
 const TRIM := Color(0.9, 0.88, 0.82)
+const FRAME := Color(0.6, 0.55, 0.48)   ## greige: the default frame (the user: "less stark than white", 2026-10-19)
 const TRIM_DK := Color(0.62, 0.6, 0.56)
 const OAK := Color(0.7, 0.48, 0.27)
 const OAK_DK := Color(0.5, 0.33, 0.18)
@@ -40,6 +41,7 @@ const SINGLE_LEAF := 1.25        ## the single door's leaf width (centred on the
 const SWING_DEG := 92.0
 
 var style := "single"
+var frame_color := FRAME         ## the architrave's paint (posts and header); the stop bead is a shade darker
 var width := 3.0                 ## the door line's length, jamb to jamb
 var height := 1.5                ## the wall height
 var open_k := 0.0
@@ -56,14 +58,16 @@ var _inner := 2.7
 ## Who may write each var (see Net). All of it is presentation.
 func net_fields() -> Dictionary:
 	return {
-		"style": Net.LOCAL, "width": Net.LOCAL, "height": Net.LOCAL, "open_k": Net.LOCAL, "swing": Net.LOCAL, "broken": Net.LOCAL,
+		"style": Net.LOCAL, "frame_color": Net.LOCAL, "width": Net.LOCAL, "height": Net.LOCAL, "open_k": Net.LOCAL, "swing": Net.LOCAL, "broken": Net.LOCAL,
 		"_leaves": Net.LOCAL, "_leaf_dir": Net.LOCAL, "_glass": Net.LOCAL, "_sign": Net.LOCAL, "_inner": Net.LOCAL,
 	}
 
 
-static func make(door_style: String, door_width: float, wall_height: float) -> OfficeDoorModel:
+static func make(door_style: String, door_width: float, wall_height: float, frame: Color = Color(0, 0, 0, 0)) -> OfficeDoorModel:
 	var m := OfficeDoorModel.new()
 	m.style = door_style
+	if frame.a > 0.0:
+		m.frame_color = frame
 	m.width = door_width
 	m.height = wall_height
 	m.name = "OfficeDoor_" + door_style
@@ -130,11 +134,11 @@ func _build() -> void:
 	var frame := LowPoly.Soup.new(29, 0.05)
 	var top := height + PROUD
 	for side in [-1.0, 1.0]:
-		frame.merge(LowPoly.box(Vector3(POST, top, DEPTH), TRIM, 3), LowPoly.at(Vector3(side * (width * 0.5 - POST * 0.5), top * 0.5, 0.0)))
+		frame.merge(LowPoly.box(Vector3(POST, top, DEPTH), frame_color, 3), LowPoly.at(Vector3(side * (width * 0.5 - POST * 0.5), top * 0.5, 0.0)))
 		# a darker stop bead down the post's inner edge
-		frame.merge(LowPoly.box(Vector3(0.03, top - HEAD, DEPTH * 0.45), TRIM_DK, 4),
+		frame.merge(LowPoly.box(Vector3(0.03, top - HEAD, DEPTH * 0.45), frame_color.darkened(0.3), 4),
 				LowPoly.at(Vector3(side * (width * 0.5 - POST - 0.015), (top - HEAD) * 0.5, 0.0)))
-	frame.merge(LowPoly.box(Vector3(_inner - 0.004, HEAD, DEPTH - 0.02), TRIM, 5), LowPoly.at(Vector3(0.0, top - HEAD * 0.5, 0.0)))
+	frame.merge(LowPoly.box(Vector3(_inner - 0.004, HEAD, DEPTH - 0.02), frame_color, 5), LowPoly.at(Vector3(0.0, top - HEAD * 0.5, 0.0)))
 	_mesh(frame, self, "Frame")
 	match style:
 		"double":

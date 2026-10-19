@@ -12,6 +12,7 @@
 ## seen, L space labels. The monsters stand frozen (the lab is about what shows, not the fight); the brute is live.
 
 const RUN_ARCHETYPE := "prepper"
+const THRESHOLD_FLOOR := FloorMaterials.F_DIAMOND   ## option c's threshold: the diamond tread plate
 const WALK_STEP := 0.22          ## the staged fast walk: world units a physics frame
 const TRAIL_GAP := 14            ## the followers walk this many trail points behind the one ahead
 
@@ -28,6 +29,7 @@ var wick: Hero
 var crew: Array[Hero] = []
 var doors: Array[OfficeDoor] = []
 var door_ids: Array[int] = []
+var terrain: HexMapView
 var door_style := OfficeDoor.DEFAULT_STYLE
 var prompt: UsePrompt
 var caption: Label
@@ -66,10 +68,10 @@ func _build() -> void:
 	world.name = "World"
 	add_child(world)
 	GameWorld.begin(map, world, run.floor_seed(1))
-	var view := HexMapView.new()
-	view.name = "Terrain"
-	add_child(view)
-	view.build(map)
+	terrain = HexMapView.new()
+	terrain.name = "Terrain"
+	add_child(terrain)
+	terrain.build(map)
 	DungeonLook.apply(self, map)
 	site = SiteBuilder.spawn(map, run, plan)
 	for m in site.monsters + site.scouts:
@@ -140,7 +142,7 @@ func _spawn_doors() -> void:
 
 
 ## A door in `style` on doorway `id` (the lab's showcase), replacing any door there.
-func door_at(id: int, style: String) -> OfficeDoor:
+func door_at(id: int, style: String, frame: Color = Color(0, 0, 0, 0)) -> OfficeDoor:
 	for d in doors:
 		if is_instance_valid(d) and d.doorway_id == id:
 			doors.erase(d)
@@ -148,7 +150,7 @@ func door_at(id: int, style: String) -> OfficeDoor:
 			break
 	if map.blockers.has("door:%d" % id):
 		map.clear_blocker("door:%d" % id)
-	var nd := OfficeDoor.spawn(fog.doorways[id], style, true)
+	var nd := OfficeDoor.spawn(fog.doorways[id], style, true, frame)
 	doors.append(nd)
 	fog_view.watch_doors([nd])
 	return nd
@@ -381,6 +383,10 @@ func _shots() -> void:
 		await _door_variants(_facing_doorway(false))
 		finish_shots()
 		return
+	if only == "v4":   # (seed 2) the double door's frame colours, and the floor at the doorway three ways
+		await _v4(_facing_doorway(false))
+		finish_shots()
+		return
 	if only == "bend":
 		await _bend_shot(_facing_doorway(true))
 		finish_shots()
@@ -459,6 +465,9 @@ func _shots() -> void:
 ## The narrow doorway whose door faces the camera best from its room side (`bend`: the longest chord among those facing it
 ## well: a doorway at a bend in the room wall).
 func _facing_doorway(bend: bool) -> Dictionary:
+	var pick := _arg(OS.get_cmdline_user_args(), "--show")
+	if pick != "":
+		return fog.doorways[int(pick)]
 	var cam := Vector2(1, 1).normalized()   # (CameraRig.YAW_DEG 45: the camera sits toward +X +Z)
 	var best := {}
 	var best_s := -INF
@@ -478,6 +487,89 @@ func _facing_doorway(bend: bool) -> Dictionary:
 	print("fog lab: showcase doorway %s (%s|%s), chord %.2f" % [best.get("id"), best.get("room"), best.get("hall"),
 		(best["a"] as Vector2).distance_to(best["b"]) if not best.is_empty() else 0.0])
 	return best
+
+
+const FRAMES := [
+	["greige", Color(0.6, 0.55, 0.48)],
+	["gunmetal", Color(0.33, 0.35, 0.39)],
+	["dark bronze", Color(0.4, 0.29, 0.19)],
+	["light navy", Color(0.25, 0.31, 0.46)],
+]
+
+
+## v4: the double door shut in each frame colour (doors_v4_frames.png), then the floor at its doorway three ways, shut and
+## open (doors_v4_floor_{a,b,c}_{shut,open}.png): a, today (per cell by tag); b, split on the door line (each cell by the
+## side of the chord its centre is on); c, a threshold (the cells the chord crosses get their own floor).
+func _v4(dw: Dictionary) -> void:
+	await walk_to(cell_off(dw, -3.4, 0.0))
+	_crew_behind(-(dw["axis"] as Vector3))
+	caption.visible = false
+	var id := int(dw["id"])
+	var tag := Label.new()
+	tag.add_theme_font_size_override("font_size", 24)
+	tag.add_theme_color_override("font_color", Color(0.96, 0.94, 0.88))
+	tag.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.04))
+	tag.add_theme_constant_override("outline_size", 7)
+	caption.get_parent().add_child(tag)
+	# 1. Frame colours.
+	var parts: Array[Image] = []
+	for fr: Array in FRAMES:
+		var d := door_at(id, "double", fr[1])
+		await _settle()
+		rig.target = d
+		rig.snap()
+		await _until(func() -> bool: return false, 2)
+		var vs := get_viewport().get_visible_rect().size
+		var sp := rig.camera.unproject_position(d.center() + Vector3.UP * CameraRig.FOCUS_HEIGHT)
+		var img := await _grab()
+		var k := float(img.get_width()) / vs.x
+		var x0 := clampi(int(sp.x * k) - 240, 0, img.get_width() - 480)
+		var y0 := clampi(int(sp.y * k) - 330, 0, img.get_height() - 560)
+		tag.position = Vector2(x0 + 14, y0 + 10) / k
+		tag.text = str(fr[0])
+		img = await _grab()
+		parts.append(img.get_region(Rect2i(x0, y0, 480, 560)))
+	var strip := Image.create(480 * parts.size(), 560, false, Image.FORMAT_RGBA8)
+	for i in parts.size():
+		parts[i].convert(Image.FORMAT_RGBA8)
+		strip.blit_rect(parts[i], Rect2i(0, 0, 480, 560), Vector2i(480 * i, 0))
+	print("shot ", strip.save_png(shot_dir.path_join("doors_v4_frames.png")))
+	tag.queue_free()
+	# 2. The floor at the doorway.
+	var keep := {}
+	for c: Vector2i in map.cells:
+		keep[c] = map.cells[c].mat_id
+	var room_mat := int(map.get_cell(fog.doorways[id]["door_cells"][0]).mat_id)
+	var hall_mat := int(map.get_cell(dw["cell"]).mat_id)
+	print("v4 floors: room %s, corridor %s, threshold %s" % [FloorMaterials.floor_name(FloorMaterials.floor_of(room_mat)),
+		FloorMaterials.floor_name(FloorMaterials.floor_of(hall_mat)), FloorMaterials.floor_name(THRESHOLD_FLOOR)])
+	for opt in ["a", "b", "c"]:
+		for c: Vector2i in keep:
+			map.cells[c].mat_id = keep[c]
+		var n := DoorFloors.apply(map, fog, dw, opt, THRESHOLD_FLOOR)
+		print("v4 floor %s: %d cells changed" % [opt, n])
+		terrain.build(map)
+		var d := door_at(id, "double", FRAMES[0][1])
+		rig.target = d
+		await _settle()
+		rig.target = d
+		rig.snap()
+		for st in ["shut", "open"]:
+			if st == "open":
+				d.request(false, wick)
+				await _until(func() -> bool: return false, 30)
+			for view in ["", "_close"]:
+				var size := CameraRig.SIZE_DEFAULT if view == "" else 10.0
+				rig.camera.size = size
+				rig._zoom_target = size
+				rig.snap()
+				await _snap("doors_v4_floor_%s_%s%s" % [opt, st, view])
+		rig.camera.size = CameraRig.SIZE_DEFAULT
+		rig._zoom_target = CameraRig.SIZE_DEFAULT
+	for c: Vector2i in keep:
+		map.cells[c].mat_id = keep[c]
+	terrain.build(map)
+	caption.visible = true
 
 
 ## A door across a bend in the room wall (the chord between the jambs cuts across the corner): shut and open, close and at

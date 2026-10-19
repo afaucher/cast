@@ -33,7 +33,7 @@ const GROUP := "office_doors"
 const NETWORKED := false        ## doors are host / solo only this round (see the header)
 const LABEL := "Office door"
 const PRICE := 900              ## the Ledger line when a brute smashes one
-const DEFAULT_STYLE := "single"
+const DEFAULT_STYLE := "double"   ## the user's pick (2026-10-19)
 const OPEN_TIME := 0.32
 const SHUT_TIME := 0.45
 const TOUCH := 0.5              ## a body this close to the door (past its radius) and walking toward it opens it
@@ -68,6 +68,7 @@ var _smash_t := -1.0
 var open_k := 0.0               ## 0 shut .. 1 open
 var hold_k := -1.0              ## >= 0: the look stays at this open_k (the lab's "opening" shot)
 var model: OfficeDoorModel = null
+var frame_color := Color(0, 0, 0, 0)   ## the architrave's paint (alpha 0: OfficeDoorModel's default)
 var _rattle := 0.0
 
 static var _actors_frame := -1
@@ -82,17 +83,18 @@ func net_fields() -> Dictionary:
 		"height": Net.SPAWN, "half": Net.SPAWN, "width": Net.SPAWN,
 		"shut": Net.OWNER, "broken": Net.OWNER, "swing": Net.OWNER,
 		"_hold": Net.PRIVATE, "_last": Net.PRIVATE, "_smasher": Net.PRIVATE, "_smash_t": Net.PRIVATE,
-		"open_k": Net.LOCAL, "hold_k": Net.LOCAL, "model": Net.LOCAL, "_rattle": Net.LOCAL,
+		"open_k": Net.LOCAL, "hold_k": Net.LOCAL, "model": Net.LOCAL, "frame_color": Net.LOCAL, "_rattle": Net.LOCAL,
 	}
 
 
 ## A door on doorway `dw` (Doorways.find; needs dw["door_ok"]). Null when it has no door place.
-static func spawn(dw: Dictionary, door_style: String = DEFAULT_STYLE, start_shut: bool = true) -> OfficeDoor:
+static func spawn(dw: Dictionary, door_style: String = DEFAULT_STYLE, start_shut: bool = true, frame: Color = Color(0, 0, 0, 0)) -> OfficeDoor:
 	if not bool(dw.get("door_ok", false)) or GameWorld.root == null:
 		return null
 	var d := OfficeDoor.new()
 	d.doorway_id = int(dw["id"])
 	d.style = door_style
+	d.frame_color = frame
 	d.cell = dw["cell"]
 	d.axis = dw["axis"]
 	d.a = dw["a"]
@@ -160,7 +162,7 @@ func _ready() -> void:
 	var t := (b - a).normalized()
 	var tx := Vector3(t.x, 0.0, t.y)
 	global_transform = Transform3D(Basis(tx, Vector3.UP, tx.cross(Vector3.UP)), global_position)
-	model = OfficeDoorModel.make(style, width, height)
+	model = OfficeDoorModel.make(style, width, height, frame_color)
 	add_child(model)
 	model.set_open(open_k, float(swing))
 	_apply_blocker()
