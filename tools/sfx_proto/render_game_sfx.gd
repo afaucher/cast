@@ -18,6 +18,7 @@ const GAME_CUES := {
 	"stamp": "stamp_thunk_v4",
 	"elevator_ding": "elevator_ding_v4b",
 	"paper": "paper_flip",
+	"fuse": "fuse_hiss_v6",
 }
 
 

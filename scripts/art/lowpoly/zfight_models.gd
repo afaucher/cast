@@ -220,7 +220,7 @@ static func scan_site(parent: Node, archetype: String, seed_value: int, floor_n:
 	view.build(map)
 	await parent.get_tree().process_frame
 	var ts := ZFightCheck.TriSet.new()
-	var groups: Array = [site.decor, site.props, site.packages, site.notes]
+	var groups: Array = [site.decor, site.props, site.hazards, site.packages, site.notes]
 	for g: Array in groups:
 		for n in g:
 			if n is Node3D and is_instance_valid(n):

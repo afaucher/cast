@@ -83,6 +83,15 @@ static func priced_kinds(theme: String, catalog: Array[String]) -> Array[String]
 	return out
 
 
+## The explosive props (ExplosiveProp) this theme may hold, in preference order (empty: none fit the room).
+static func hazard_kinds(theme: String) -> Array[String]:
+	var out: Array[String] = []
+	for k: String in (RoomThemeDefs.theme(theme).get("hazards", []) as Array):
+		if PricedProp.is_hazard(k):
+			out.append(k)
+	return out
+
+
 ## Valid poses for a priced prop on the given anchor cells (wall-adjacent flat floor), best first. Corner kinds
 ## try a concave corner first; everything else is wall-backed. Each pose is
 ## {cell, pos, yaw, place, orient, normal, foot, radius}.
