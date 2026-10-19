@@ -2311,12 +2311,33 @@ func _show_invoice(inv: Dictionary) -> void:
 	if debug_panel != null:
 		debug_panel.visible = false
 	_invoice = InvoiceScreen.new(inv)
+	_invoice.backdrop_behind = _garage_behind()
 	if _crewed():
 		_invoice.next_note = "Takes the whole crew back to the board."   # (M5: anyone's Next does)
 	_screens().add_child(_invoice)
 	_invoice.next_contract.connect(_on_next_contract)
 	if opts.has("shot") and _session != null:
 		_take_shot_later(str(opts["shot"]), 1.5)
+
+
+## The garage behind the invoice (user, 2026-10-19), as behind the job board: the floor's 3D (the world, its look and
+## lights, the camera) is hidden and the same MenuBackdrop comes in. It picks its own mood, so a bad job shows the morning
+## after (LastContract is recorded before the invoice). The floor is frozen and over, so nothing needs it on screen.
+func _garage_behind() -> bool:
+	if _backdrop != null:
+		return true
+	for c in get_children():
+		if c is WorldEnvironment:
+			remove_child(c)   # (one WorldEnvironment at a time: the garage brings its own)
+			c.queue_free()
+		elif c is Node3D:
+			(c as Node3D).visible = false
+	if hud != null:
+		hud.visible = false
+	_backdrop = MenuBackdrop.new()
+	_backdrop.name = "Backdrop"
+	add_child(_backdrop)
+	return true
 
 
 ## "Next contract" on the invoice: back to the job board for a new contract. In a crew ANY player's Next takes everyone

@@ -187,6 +187,9 @@ func _check_floor_and_elevator() -> void:
 			if inv != null:
 				eq(int(inv.inv["payout"]), Ledger.payout(), "the invoice shows the Ledger's payout")
 				eq(str(inv.inv["reason"]), ContractSession.END_CASHED_OUT, "reason: cashed out")
+				var garage: MenuBackdrop = g.get("_backdrop")
+				check(garage != null and garage.camera.current and inv.backdrop_behind, "the garage is behind the invoice")
+				check(not (GameWorld.root as Node3D).visible, "and the floor is hidden")
 				check(int(inv.inv["earned"]) >= run.gate_pay, "the closed gate is on the invoice")
 	g.queue_free()
 	await frames(3)
