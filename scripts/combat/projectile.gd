@@ -89,7 +89,7 @@ func _physics_process(delta: float) -> void:
 
 func _impact(hit: Actor, pos: Vector3) -> void:
 	if hit and Net.resolves_hit(hit, source):   # (online: the shot flies on every screen; one machine decides the hit; a
-		hit.apply_damage(damage, source)        # client's hit on the host's prop or monster becomes a request: Net.route_hit)
+		hit.apply_damage(ExplosiveProp.shot_damage(hit, damage), source)   # client's hit on the host's prop or monster becomes a request: Net.route_hit)
 	if on_hit.is_valid():
 		on_hit.call(self, hit, pos)
 	impacted.emit(pos, hit)

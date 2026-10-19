@@ -20,6 +20,14 @@ rendered offline to WAVs (below), because three of them are cut from recordings 
 | `stamp` | `stamp_thunk_v4` | `SignLine.signature` (stamp style, a new name, in the tree: the job board's Take line and every `SignRow`, such as the license checkout's "Requested by") and `FormVoid` (once per void, as the stamp lands at `SLAM_S`) | UI | whoever sees the form, flat |
 | `paper` | `paper_flip` (Kenney RPG `bookFlip3`, as recorded: no speech-band notch, forms are not open while casting) | A form sliding in: the `_ready` of `SettingsScreen` and `VoiceSetupScreen` (the main menu's pages, also from the pause menu), `JobBoard`, `SpellPicker` (the requisition), `InvoiceScreen`, `PauseMenu`, `ElevatorMenu` and `VanExitMenu`; the requisition's spec sheet turning to another spell's page (`SpellPicker._show_spec`, not its first page); going back (`FormVoid._fire`, as the voided form goes, 0.3 s after the stamp). min_gap 0.18 s, so fast scrolling or two forms at once play it once. Not on focus moves or typed values | UI | whoever sees the form, flat |
 | `elevator_ding` | `elevator_ding_v4b` | `ElevatorArrival.doors_opened`, connected in `game.gd` `_arrive_by_elevator`, played 2 units above the elevator. The signal also fires now when the shut doors open for a hero walking up (floor 1, or any floor after the arrival), not only in the arrival on floors 2 and 3 | World | everyone near, 3D |
+| `fuse` (2026-10-19) | `fuse_hiss_v6` (synth) | An explosive prop's fuse lights (`FuseFx`, `docs/design/hazards.md`; on every machine from the host's `obj.fuse`); a soak that puts the fuse out cuts it. The blast reuses `fireball` (`BlastFx` through `Fx.explosion`) | World | everyone near, 3D |
+
+**The fuse and mic safety (2026-10-19).** `mic_leak_probe.gd -- fuse_hiss_v5 fuse_hiss_v6`:
+- `v5` was a "pssht" plus a high hiss that fell to 30% over 1.3 s. Probe A heard nothing. In probe C, "cast heal" said
+  over it was heard as "CAST VEAL": the hiss, still loud when the spell word starts, masked the "h".
+- `v6` keeps the "pssht" and drops at once to a narrow 7 kHz sizzle at a fifth of the level, which dies over the fuse.
+  Probe A heard nothing. Probe B (all 10 casts clean) and probe C (heal, fireball and corn all cast) passed. Front-loaded,
+  as §4 asks. The warning is mostly visual: the ring, the sparks and the glow.
 
 **Files and assets.**
 - `tools/sfx_proto/render_game_sfx.gd` maps each game cue (six, with `paper_flip` added to `sfx_round3.gd`) to its recipe (`GAME_CUES`) and writes `assets/audio/sfx/<cue>.wav`;

@@ -56,7 +56,8 @@ const ORIGIN_KEYWORDS := {
 	"science": "science", "specimen": "science",
 }
 
-## id -> {name, site, min_cells (the smallest room it is dealt), priced (PricedProp kinds it prefers),
+## id -> {name, site, min_cells (the smallest room it is dealt), priced (PricedProp kinds it prefers), hazards (the
+##        explosive props it may hold, ExplosiveProp: SiteBuilder._plan_hazards; none = a room without them),
 ##        recipe (ops run in order while the room's decor budget lasts), light (the accent light),
 ##        needs_center (true: its centrepiece wants the middle of the room, so it is not dealt to the exit room or to a
 ##        room with a hellgate in the middle), avoid_exit (not dealt to the exit room: the elevator sits in its middle)}.
@@ -86,6 +87,7 @@ const THEMES := {
 	"spa": {
 		"name": "Wellness spa", "site": "bunker", "min_cells": 90,
 		"priced": ["zen_fountain", "crystal_lamp"],
+		"hazards": ["propane_tank"],              ## the sauna heater's gas
 		"recipe": [
 			{"op": "sign", "text": "OM", "color": Color(0.7, 0.45, 1.0)},
 			{"op": "circle"},
@@ -106,6 +108,7 @@ const THEMES := {
 	"server_room": {
 		"name": "Server room", "site": "bunker", "min_cells": 60,
 		"priced": ["server_rack"],
+		"hazards": ["battery_pack"],              ## the UPS
 		"recipe": [
 			{"op": "racks"},
 			{"op": "desk"},
@@ -115,6 +118,7 @@ const THEMES := {
 	"panic_room": {
 		"name": "Panic room", "site": "bunker", "min_cells": 60,
 		"priced": ["gold_toilet"],
+		"hazards": ["gas_cylinders", "battery_pack"],   ## the air supply and the backup power
 		"recipe": [
 			{"op": "sign", "text": "PANIC", "color": Color(1.0, 0.12, 0.1)},
 			{"op": "desk"},
@@ -126,6 +130,7 @@ const THEMES := {
 		## an in-ground pool (PoolGeo, carved by SiteBuilder before the decor) with loungers along its long sides
 		"name": "Indoor pool", "site": "bunker", "min_cells": 100, "needs_center": true,
 		"priced": ["marble_statue"],
+		"hazards": ["propane_tank"],              ## the pool heater
 		"recipe": [
 			{"op": "sign", "text": "POOL", "color": Color(0.3, 0.95, 1.0)},
 			{"op": "pool"},
@@ -135,6 +140,7 @@ const THEMES := {
 	"torture_chamber": {
 		"name": "Torture chamber", "site": "lair", "min_cells": 60,
 		"priced": ["torture_rack", "brazier"],
+		"hazards": ["oil_drum"],                  ## lamp oil for the braziers
 		"recipe": [
 			{"op": "cage"},
 			{"op": "cage", "min_cells": 110},
@@ -153,6 +159,7 @@ const THEMES := {
 	"lab": {
 		"name": "Lab / vat room", "site": "lair", "min_cells": 60,
 		"priced": ["specimen_vat"],
+		"hazards": ["gas_cylinders"],             ## lab gas
 		"recipe": [
 			{"op": "sign", "text": "LAB", "color": Color(0.35, 1.0, 0.5)},
 			{"op": "shelf"},
@@ -164,6 +171,7 @@ const THEMES := {
 	"barracks": {
 		"name": "Henchmen barracks", "site": "lair", "min_cells": 60,
 		"priced": ["henchman_locker"],
+		"hazards": ["oil_drum"],                  ## the generator's fuel
 		"recipe": [
 			{"op": "bunks"},
 			{"op": "bunks", "min_cells": 110},
@@ -185,6 +193,7 @@ const THEMES := {
 		## bench, a console, pipes and shelves
 		"name": "Science", "site": "lair", "min_cells": 80, "needs_center": true,
 		"priced": ["specimen_vat", "doomsday_console"],
+		"hazards": ["gas_cylinders", "oil_drum"], ## lab gas, and drums of whatever is in the pool
 		"recipe": [
 			{"op": "sign", "text": "SCIENCE", "color": Color(0.72, 1.0, 0.22)},
 			{"op": "specimen_pool"},

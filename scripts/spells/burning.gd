@@ -139,6 +139,15 @@ static func is_burning(a: Actor) -> bool:
 	return b != null
 
 
+## Who set `a` on fire (the fire's culprit, as its owner knows it), or null: unknown, gone, or not burning. A burning actor
+## that walks into an explosive prop lights it, and the bill goes to whoever lit the walker (ExplosiveProp).
+static func culprit(a: Actor) -> Node:
+	var b := _of(a)
+	if b == null or b._source == null:
+		return null
+	return b._source.get_ref() as Node
+
+
 ## Seconds of fire left, 0 when not burning.
 static func remaining(a: Actor) -> float:
 	var b := _of(a)

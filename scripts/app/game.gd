@@ -194,6 +194,7 @@ var _closed_gates: Dictionary = {}  ## instance id -> true, so a gate pays once
 var _emp_cause: Dictionary = {}     ## employee instance id -> last culprit name
 var _player_down_noted := false
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
+var _dev_hazards: Array[PricedProp] = []  ## --hazard-near (ExplosiveProp)
 var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 var _arrival: VanArrival = null     ## the work van and its arrival sequence (null when the start room had no room for it)
 
@@ -357,6 +358,10 @@ func _parse_args() -> void:
 			"--zoom": opts["zoom"] = float(nxt)
 			"--focus": opts["focus"] = nxt
 			"--drop-near": opts["drop_near"] = nxt
+			"--hazard-near": opts["hazard_near"] = nxt
+			"--hazard-demo": opts["hazard_demo"] = nxt
+			"--demo-after": opts["demo_after"] = float(nxt)
+			"--to-hazard": opts["to_hazard"] = nxt
 			"--slay-near": opts["slay_near"] = true
 			"--kit-demo": opts["kit_demo"] = nxt
 			"--to-gate": opts["to_gate"] = true
@@ -1041,12 +1046,15 @@ func _start() -> void:
 		if opts.has("grime_demo"):
 			GrimeDemo.run(self, player)
 	_spawn_near()
+	_hazard_near()
 	_build_contract_ui()
 	_dev_teleports()
 	if not _shared:
 		_announce_floor()
 	_log("floor %d/%d  seed %d  %s  spells %s" % [_floor_n(), ContractRun.FLOOR_COUNT, _run.floor_seed(_floor_n()), _run.company, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
 	_drop_near()
+	if opts.has("hazard_demo"):
+		_hazard_demo(str(opts["hazard_demo"]))
 	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
 		var marker := Node3D.new()
 		GameWorld.root.add_child(marker)
@@ -2857,6 +2865,8 @@ func _take_shot_later(path: String, after: float) -> void:
 
 ## Dev flags --to-gate / --to-exit: move the crew (screenshots).
 func _dev_teleports() -> void:
+	if opts.has("to_hazard") and _to_hazard(str(opts["to_hazard"])):
+		return
 	if opts.has("to_pool") and _to_pool(str(opts["to_pool"])):
 		return
 	if opts.has("to_theme") and _site != null:
@@ -3084,6 +3094,112 @@ func _drop_near() -> void:
 		_log("drop-near: %s %s" % [id, "ok" if p != null else "no floor"], Color(0.8, 0.8, 1.0))
 
 
+## Dev flag --hazard-near kind[,kind...]: explosive props (ExplosiveProp) in a cluster on open floor 3-6 cells from seat 1's
+## hero, each 2.4-3.1 units from the one before (inside its blast: they chain). Built in _start, before the barrier numbers
+## the floor, so every machine of a crew builds the same ones (tests, screenshots).
+func _hazard_near() -> void:
+	if not opts.has("hazard_near"):
+		return
+	var near_hero: Hero = heroes_by_seat.get(1, player) if _shared else player
+	var here := near_hero.current_cell()
+	var level: int = map.get_cell(here).level
+	var cands: Array[Vector2i] = []
+	for c in Hex.range_cells(here, 6):
+		if Hex.distance(c, here) >= 3 and map.is_walkable_cell(c) and map.get_cell(c).level == level:
+			cands.append(c)
+	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var da := Hex.distance(a, here)
+		var db := Hex.distance(b, here)
+		return da < db or (da == db and (a.x < b.x or (a.x == b.x and a.y < b.y))))
+	var placed: Array[Vector3] = []
+	for k in str(opts["hazard_near"]).split(","):
+		var kind := k.strip_edges()
+		for c in cands:
+			var w := Hex.to_world(c)
+			var ok := true
+			var near_last := placed.is_empty()
+			for q in placed:
+				var d := GameWorld.flat_distance(q, w)
+				ok = ok and d >= 2.4
+			if not placed.is_empty():
+				var d_last := GameWorld.flat_distance(placed.back(), w)
+				near_last = d_last >= 2.4 and d_last <= 3.1
+			if not ok or not near_last:
+				continue
+			var e := PricedProp.spawn(c, kind, {})
+			if e != null:
+				placed.append(w)
+				_dev_hazards.append(e)
+			break
+	_log("hazard-near: %d explosive props" % placed.size(), Color(0.8, 0.8, 1.0))
+
+
+## Dev flag --to-hazard kind[:n] ("any": any kind): the crew stands a few steps beside the floor's first (n-th) explosive
+## prop of that kind, and --focus dev puts the camera on it (screenshots).
+func _to_hazard(want: String) -> bool:
+	if _site == null:
+		return false
+	var skip := int(want.get_slice(":", 1)) if want.contains(":") else 0   # kind:n = the n-th of that kind
+	want = want.get_slice(":", 0)
+	for h in _site.hazards:
+		var e := h as ExplosiveProp
+		if e == null or (want != "any" and e.kind != want):
+			continue
+		if skip > 0:
+			skip -= 1
+			continue
+		# off to one side of it (in front, the crew would stand between the camera and the prop)
+		var f := e.facing_vector()
+		var best := Hex.from_world(e.global_position)
+		var best_d := INF
+		for side: float in [1.0, -1.0]:
+			var target := e.global_position + Vector3(f.x, 0.0, f.y) * 1.2 + Vector3(-f.y, 0.0, f.x) * 3.6 * side
+			for c in Hex.range_cells(Hex.from_world(target), 2):
+				var d := Hex.to_world(c).distance_to(target) + (0.0 if side > 0.0 else 0.5)
+				if map.is_walkable_cell(c) and not _site.plan.blocked.has(c) and d < best_d:
+					best_d = d
+					best = c
+		_teleport_crew(best)
+		_dev_hazards.append(e)
+		_log("to-hazard: %s in %s" % [e.display_name, _site.plan.theme_of(str(_site.plan.hazards[_site.hazards.find(h)]["room"]))], Color(0.8, 0.8, 1.0))
+		return true
+	return false
+
+
+## Dev flag --hazard-demo fuse|chain|invoice (with --hazard-near or --to-hazard; screenshots): after --demo-after seconds (1.0)
+## the player sets off the first one. "chain" and "invoice" stand two frozen grunts beside each explosive first;
+## "invoice" cashes out 2.5 s after the last blast, so the invoice shows the bill.
+func _hazard_demo(stage: String) -> void:
+	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
+	var list: Array[ExplosiveProp] = []
+	for h in _dev_hazards:
+		if is_instance_valid(h) and h is ExplosiveProp and not h.dead:
+			list.append(h as ExplosiveProp)
+	if list.is_empty() or player == null:
+		return
+	if stage != "fuse":
+		var k := 0
+		for e in list:
+			for a: float in [0.6, 2.4]:
+				var ang := a + float(k) * 1.1
+				var at := e.global_position + Vector3(cos(ang), 0.0, sin(ang)) * 1.7
+				if not map.is_walkable_cell(Hex.from_world(at)):
+					continue
+				var m := MonsterFactory.spawn("grunt", Hex.from_world(at))
+				if m != null:
+					m.global_position = Vector3(at.x, m.global_position.y, at.z)
+					m.snap_to_ground()
+					m.set_physics_process(false)
+			k += 1
+	list[0].ignite(player)
+	if stage != "invoice":
+		return
+	while list.any(func(e: ExplosiveProp) -> bool: return is_instance_valid(e) and not e.dead):
+		await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(2.5).timeout
+	_end_contract(ContractSession.END_CASHED_OUT)
+
+
 ## Dev flag --kit-demo: show one hero's primary / secondary on the --spawn-near monsters (screenshots).
 func _kit_demo(kind: String) -> void:
 	for ally in allies:   # only the demo hero acts
@@ -3188,6 +3304,10 @@ func _dev_centroid() -> Vector3:
 	for m in _dev_monsters:
 		if is_instance_valid(m) and not m.dead:
 			sum += m.global_position
+			count += 1
+	for h in _dev_hazards:   # (--hazard-near / --to-hazard: the explosives)
+		if is_instance_valid(h) and not h.dead:
+			sum += h.global_position
 			count += 1
 	return sum / count if count > 0 else Vector3.INF
 

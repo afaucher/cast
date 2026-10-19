@@ -19,6 +19,9 @@ extends RefCounted
 ##    the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw. The
 ##    anchor cells next to a wall are cut by the midpoint wall (HexMap.cut_walls): the prop stands flush against the
 ##    flat face and no footprint reaches the wall side (ThemeCtx);
+##  - explosive props (ExplosiveProp, docs/design/hazards.md): planned right after the priced props with their own dice, in
+##    the rooms whose theme has some (RoomThemeDefs "hazards"), on the same wall cells and poses, at most MAX_HAZARDS a floor,
+##    sometimes a chained pair: SitePlan.hazards (_plan_hazards);
 ##  - standing spots (gates, employees, notes, monsters, the van) are FULL cells only (HexMap.is_walkable_cell);
 ##  - notes (ClueNote, docs/design/notes-rethink.md): two a floor, a story note and a hint slip in a side room, their
 ##    text from NoteCopy filled with this floor's facts (NoteFacts), plus the dispatch banner line: SitePlan.notes /
@@ -51,6 +54,15 @@ const CORRIDOR_CLEAR := 2
 const GATE_START_CLEAR := 5
 const PROP_SPACING := 4
 const MAX_PROPS := 6
+const MAX_HAZARDS := 3                 ## explosive props a floor (a pair counts two)
+const HAZARD_PAIR_ODDS := 0.5           ## a hazard room gets a second one close by, so they chain
+const HAZARD_PAIR_MIN := 2.0            ## world units between the two of a pair (centre to centre) ...
+const HAZARD_PAIR_MAX := 3.2            ## ... and at most this: inside each other's blast
+const HAZARD_GATE_CLEAR := 4            ## hex cells from a hellgate
+const HAZARD_EMPLOYEE_CLEAR := 3        ## ... from an employee's spot
+const HAZARD_PROP_CLEAR := 2            ## ... from a priced prop (still inside the blast: the money call)
+const HAZARD_SPACING := 4               ## ... from another room's explosive
+const HAZARD_ANCHORS := 14              ## wall cells of a room tried for its explosive (a random sample)
 const PACKAGE_MIN := 4                  ## mail package spots a floor
 const PACKAGE_MAX := 6
 const PACKAGE_SPACING := 5              ## hex cells between two spots (relaxed on tight floors)
@@ -119,6 +131,9 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	_plan_van(map, p, ctx, floor_n)
 	t0 = Time.get_ticks_usec()
 	_plan_props(map, run, p, rng, avoid, near_corr, catalog, ctx)
+	var t_hz := Time.get_ticks_usec()
+	_plan_hazards(map, run, floor_n, p, avoid, near_corr, ctx)
+	last_hazard_usec = Time.get_ticks_usec() - t_hz
 	_plan_notes(map, run, floor_n, p, ctx)
 	last_theme_usec += Time.get_ticks_usec() - t0
 	t0 = Time.get_ticks_usec()
@@ -340,6 +355,8 @@ const NOTE_YAW_SPREAD := 60.0           ## a note turns at most this far from th
 ## perf probe for tests/test_room_themes.gd.
 static var last_theme_usec := 0
 static var last_plan_usec := 0
+## Microseconds the last plan() spent placing explosive props (_plan_hazards; part of last_theme_usec).
+static var last_hazard_usec := 0
 
 
 ## The flat spot nearest the room centre that keeps clear of the start/exit, corridors and `taken` gates.
@@ -455,27 +472,7 @@ static func _plan_props(map: HexMap, run: ContractRun, p: SitePlan, rng: RandomN
 	for tag: String in tags:
 		if tag == p.start_room:
 			continue
-		var level: int = int(p.base_levels[tag])
-		var edge: Array[Vector2i] = []
-		for c in (p.rooms[tag] as Array[Vector2i]):
-			var cell: HexMap.Cell = map.cells[c]
-			if cell.type != HexMap.Tile.FLOOR or cell.level != level or avoid.has(c) or near_corr.has(c):
-				continue
-			var by_wall := false
-			var flat := true
-			for d in Hex.DIRS:
-				var nb: HexMap.Cell = map.get_cell(c + d)
-				if nb == null:
-					flat = false     # a pit edge: leave it alone
-					break
-				if nb.type == HexMap.Tile.WALL:
-					by_wall = true
-				elif nb.type == HexMap.Tile.STAIRS or absi(nb.level - level) > 1:
-					flat = false
-					break
-			if by_wall and flat:
-				edge.append(c)
-		edges[tag] = edge
+		edges[tag] = _edge_cells(map, p, tag, avoid, near_corr)
 		order.append(tag)
 	# A shuffled room order, so the first rooms do not hog the few props a floor gets.
 	for i in range(order.size() - 1, 0, -1):
@@ -536,6 +533,116 @@ static func _plan_props(map: HexMap, run: ContractRun, p: SitePlan, rng: RandomN
 					break
 				if done:
 					break
+
+
+## A room's cells a prop may stand in: flat floor at the room's level next to a wall, out of the start / exit zones and
+## the corridors' way (the doors), not at a pit edge or a stair.
+static func _edge_cells(map: HexMap, p: SitePlan, tag: String, avoid: Dictionary, near_corr: Dictionary) -> Array[Vector2i]:
+	var level: int = int(p.base_levels[tag])
+	var edge: Array[Vector2i] = []
+	for c in (p.rooms[tag] as Array[Vector2i]):
+		var cell: HexMap.Cell = map.cells[c]
+		if cell.type != HexMap.Tile.FLOOR or cell.level != level or avoid.has(c) or near_corr.has(c):
+			continue
+		var by_wall := false
+		var flat := true
+		for d in Hex.DIRS:
+			var nb: HexMap.Cell = map.get_cell(c + d)
+			if nb == null:
+				flat = false     # a pit edge: leave it alone
+				break
+			if nb.type == HexMap.Tile.WALL:
+				by_wall = true
+			elif nb.type == HexMap.Tile.STAIRS or absi(nb.level - level) > 1:
+				flat = false
+				break
+		if by_wall and flat:
+			edge.append(c)
+	return edge
+
+
+# --- explosive props ---------------------------------------------------------------------------
+
+## Explosive props (ExplosiveProp, docs/design/hazards.md): in the rooms whose theme has some (RoomThemeDefs "hazards": the
+## server room's battery pack, the lab's gas cylinders, the torture chamber's oil drum, ...), never in the start room, at most
+## MAX_HAZARDS a floor, one a room, and in HAZARD_PAIR_ODDS of them a second one HAZARD_PAIR_MIN..MAX units away (inside its
+## blast: they chain). Wall-backed like a priced prop (the same poses, bodies and lanes), on the same wall cells (out of the
+## start / exit / elevator zones and the doors), HAZARD_GATE_CLEAR from a hellgate, HAZARD_EMPLOYEE_CLEAR from an employee,
+## HAZARD_PROP_CLEAR from a priced prop and HAZARD_SPACING from the other rooms' ones. Its own dice: it moves nothing else on
+## the floor (decor only steps around what it placed).
+static func _plan_hazards(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, avoid: Dictionary, near_corr: Dictionary, ctx: ThemeCtx) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = run.floor_seed(floor_n) * 197 + floor_n * 23 + 9
+	var tags: Array[String] = []
+	for tag: String in p.rooms.keys():
+		if tag != p.start_room and not RoomThemes.hazard_kinds(p.theme_of(tag)).is_empty():
+			tags.append(tag)
+	if tags.is_empty():
+		return
+	tags.sort_custom(func(a: String, b: String) -> bool: return int(a.trim_prefix("room:")) < int(b.trim_prefix("room:")))
+	ThemeVignettes.shuffle(tags, rng)
+	var saved_rng := ctx.rng
+	ctx.rng = rng   # (the poses draw from the hazards' own dice, so the decor after them rolls exactly as before)
+	var gate_cells := p.gate_cells()
+	for tag in tags:
+		if p.hazards.size() >= MAX_HAZARDS:
+			break
+		var kinds := RoomThemes.hazard_kinds(p.theme_of(tag))
+		var edge := _edge_cells(map, p, tag, avoid, near_corr)
+		if edge.is_empty():
+			continue
+		var kind := kinds[rng.randi_range(0, kinds.size() - 1)]
+		# (a sample of the room's wall cells is plenty for one prop, and keeps the floor's planning time down)
+		ThemeVignettes.shuffle(edge, rng)
+		var first := _hazard_pose(ctx, p, tag, kind, edge.slice(0, HAZARD_ANCHORS), gate_cells, Vector2.INF)
+		if first.is_empty():
+			continue
+		_commit_hazard(ctx, p, tag, kind, first)
+		if p.hazards.size() < MAX_HAZARDS and rng.randf() < HAZARD_PAIR_ODDS:
+			var kind2 := kinds[rng.randi_range(0, kinds.size() - 1)]
+			var near: Array[Vector2i] = []
+			for c in edge:
+				var hd := Hex.distance(c, first["cell"])
+				if hd >= 1 and hd <= 2:
+					near.append(c)
+			var second := _hazard_pose(ctx, p, tag, kind2, near, gate_cells, first["pos"])
+			if not second.is_empty():
+				_commit_hazard(ctx, p, tag, kind2, second)
+	ctx.rng = saved_rng
+
+
+## The best pose for an explosive of `kind` in room `tag` that keeps the clearances; with `near` (a pair's first one, X/Z)
+## only a pose HAZARD_PAIR_MIN..MAX from it. {} when there is none.
+static func _hazard_pose(ctx: ThemeCtx, p: SitePlan, tag: String, kind: String, edge: Array[Vector2i], gate_cells: Array[Vector2i], near: Vector2) -> Dictionary:
+	for pose in RoomThemes.priced_poses(ctx, tag, kind, edge):
+		var c: Vector2i = pose["cell"]
+		var pos: Vector2 = pose["pos"]
+		if near != Vector2.INF:
+			var d := pos.distance_to(near)
+			if d < HAZARD_PAIR_MIN or d > HAZARD_PAIR_MAX:
+				continue
+		var ok := true
+		for g in gate_cells:
+			if Hex.distance(g, c) < HAZARD_GATE_CLEAR:
+				ok = false
+		for e in p.employees:
+			if Hex.distance(e["cell"], c) < HAZARD_EMPLOYEE_CLEAR:
+				ok = false
+		for pr in p.props:
+			if Hex.distance(pr["cell"], c) < HAZARD_PROP_CLEAR:
+				ok = false
+		for hz in p.hazards:
+			if str(hz["room"]) != tag and Hex.distance(hz["cell"], c) < HAZARD_SPACING:
+				ok = false
+		if ok:
+			return pose
+	return {}
+
+
+static func _commit_hazard(ctx: ThemeCtx, p: SitePlan, tag: String, kind: String, pose: Dictionary) -> void:
+	RoomThemes.commit_priced(ctx, tag, kind, pose)
+	p.hazards.append({"cell": pose["cell"], "kind": kind, "room": tag, "pos": pose["pos"], "yaw": pose["yaw"],
+			"place": pose["place"], "orient": pose["orient"], "foot": pose["foot"]})
 
 
 # --- notes -----------------------------------------------------------------------------------
@@ -841,7 +948,7 @@ static func _block_cells(p: SitePlan) -> void:
 			p.blocked[n] = true
 	for e in p.employees:
 		p.blocked[e["cell"]] = true
-	for pr in p.props:
+	for pr in p.props + p.hazards:
 		for n in Hex.range_cells(pr["cell"], 1):
 			p.blocked[n] = true
 	for nt in p.notes:
@@ -879,6 +986,7 @@ class Site:
 	var origin_gate: Actor = null
 	var employees: Array[Actor] = []
 	var props: Array[Actor] = []
+	var hazards: Array[Actor] = []      ## the explosive props (ExplosiveProp), in plan order
 	var decor: Array[Node3D] = []       ## set dressing (DecorProp nodes) and the "ThemeLights" holder
 	var monsters: Array[Monster] = []
 	var notes: Array[ClueNote] = []
@@ -920,6 +1028,10 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 		var prop := ContractParts.spawn_prop(pr["cell"], str(pr["kind"]), opts)
 		if prop != null:
 			site.props.append(prop)
+	for hz in p.hazards:
+		var hazard := ContractParts.spawn_prop(hz["cell"], str(hz["kind"]), {"site": run.site_type, "pos": hz["pos"], "yaw": hz["yaw"]})
+		if hazard != null:
+			site.hazards.append(hazard)
 	site.decor = DecorProp.spawn_plan(p)
 	for nt in p.notes:
 		var note := ClueNote.make(nt, run.archetype_id)
