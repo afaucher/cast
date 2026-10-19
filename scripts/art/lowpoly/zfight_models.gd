@@ -52,6 +52,9 @@ static func models() -> Array[Dictionary]:
 			out.append({"name": "lobby/%s/%s" % [look, kind], "make": ElevatorLobbyProps.build.bind(kind, look, {}), "ground": true})
 	out.append({"name": "hellgate", "make": HellgateModel.make.bind(false), "ground": true})
 	out.append({"name": "hellgate/origin", "make": HellgateModel.make.bind(true), "ground": true})
+	for style: String in HexDoorModel.STYLES:
+		for st: Array in [["shut", 0.0, false], ["half", 0.5, false], ["open", 1.0, false], ["smashed", 0.0, true]]:
+			out.append({"name": "door/%s/%s" % [style, st[0]], "make": HexDoorModel.sample.bind(style, float(st[1]), bool(st[2])), "ground": true})
 	for style: String in EmployeeModel.STYLES:
 		for v in [0, 1, 2]:
 			out.append({"name": "employee/%s#%d" % [style, v], "make": func() -> Node3D: return EmployeeModel.new(style, v), "ground": true})

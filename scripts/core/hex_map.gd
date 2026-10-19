@@ -77,6 +77,11 @@ var solids: Array[PackedVector2Array] = []   ## convex polygons (world X/Z) that
 var no_stand: Dictionary = {}    ## Vector2i -> true: floor under a set piece (not a full cell: no path node, no standing spot)
 var elevator: Dictionary = {}    ## the elevator's record (ElevatorGeo.make_*), {} when the floor has none
 var pools: Array[Dictionary] = []   ## the in-ground pools (PoolGeo records: room, look, basin, ring, outline, surface ...)
+## DYNAMIC SIGHT BLOCKERS (doors, docs/design/exploration.md "Doors"): key -> [a: Vector2, b: Vector2, top: float]. A
+## segment in world X/Z that line_of_sight treats as a wall face up to world height `top` (a shut office door). It blocks
+## sight only: bodies, shoves and projectiles ignore it. Every machine recomputes it from the blocker's own state (an
+## OfficeDoor's `shut`), so it is LOCAL. Empty on every floor without doors (then it costs one is_empty a query).
+var blockers: Dictionary = {}
 var _segs: Dictionary = {}       ## Vector2i -> PackedVector2Array [a, b, n, ...]: wall faces bordering that cell's floor (lazy cache)
 var _solid_segs: Dictionary = {} ## Vector2i -> PackedVector2Array [a, b, n, ...]: pieces of the solids' edges, filed under the cell of their middle
 var _solid_box := Rect2()        ## the bounding box of every solid
@@ -85,7 +90,8 @@ var _solid_box := Rect2()        ## the bounding box of every solid
 ## Who may write each var (see Net). The map is built from the floor seed on every machine.
 func net_fields() -> Dictionary:
 	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "solids": Net.SPAWN, "no_stand": Net.SPAWN,
-		"elevator": Net.SPAWN, "pools": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL}
+		"elevator": Net.SPAWN, "pools": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL,
+		"blockers": Net.LOCAL}
 
 
 func set_cell(c: Vector2i, level: int, type: int = Tile.FLOOR) -> Cell:
@@ -240,7 +246,10 @@ func _edge_move(a: Vector2i, b: Vector2i) -> int:
 ## True when nothing taller than the sight line sits between the two points.
 ## Points are world positions (Y included, e.g. eye height). Void never blocks. `step` is the sampling distance:
 ## a finer one also sees the tip of a wall corner the line only grazes (an archer deciding a shot uses one).
-func line_of_sight(from: Vector3, to: Vector3, step: float = 0.25) -> bool:
+## Shut doors (`blockers`) block it too, unless `use_blockers` is false (a sound muffled by a door asks about the walls alone).
+func line_of_sight(from: Vector3, to: Vector3, step: float = 0.25, use_blockers: bool = true) -> bool:
+	if use_blockers and not blockers.is_empty() and _blocked(from, to):
+		return false
 	var flat := Vector2(to.x - from.x, to.z - from.z).length()
 	var steps := maxi(1, int(flat / step))
 	for i in range(1, steps):
@@ -249,6 +258,44 @@ func line_of_sight(from: Vector3, to: Vector3, step: float = 0.25) -> bool:
 		if not is_nan(g) and g > p.y:
 			return false
 	return true
+
+
+## Add (or move) a dynamic sight blocker: the segment a -> b (world X/Z) blocks sight below world height `top`.
+func set_blocker(key: Variant, a: Vector2, b: Vector2, top: float) -> void:
+	blockers[key] = [a, b, top]
+
+
+func clear_blocker(key: Variant) -> void:
+	blockers.erase(key)
+
+
+## Does the flat line from -> to cross a sight blocker (at any height)? A sound through a shut door asks this.
+func crosses_blocker(from: Vector3, to: Vector3) -> bool:
+	if blockers.is_empty():
+		return false
+	var p := Vector2(from.x, from.z)
+	var q := Vector2(to.x, to.z)
+	for k: Variant in blockers:
+		var bl: Array = blockers[k]
+		if Geometry2D.segment_intersects_segment(p, q, bl[0], bl[1]) != null:
+			return true
+	return false
+
+
+## Does the sight line from -> to pass a blocker below its top?
+func _blocked(from: Vector3, to: Vector3) -> bool:
+	var p := Vector2(from.x, from.z)
+	var q := Vector2(to.x, to.z)
+	var len2 := p.distance_squared_to(q)
+	for k: Variant in blockers:
+		var bl: Array = blockers[k]
+		var hit: Variant = Geometry2D.segment_intersects_segment(p, q, bl[0], bl[1])
+		if hit == null:
+			continue
+		var t := 0.0 if len2 < 0.000001 else sqrt(p.distance_squared_to(hit as Vector2) / len2)
+		if lerpf(from.y, to.y, t) < float(bl[2]):
+			return true
+	return false
 
 
 # --- Wall collision ---------------------------------------------------------------------------------
