@@ -640,3 +640,7 @@ Items 1 and 2 fit the next playtest: both are small and change nothing on the wi
 
 **Build order**
 25. Is the order in section 5 right, with the restraint baseline and railings first?
+
+**Employee names (user, 2026-10-19: "Go").** One set everywhere, screened against the recogniser (`tests/probe_voice_names.gd`):
+staff Beatrice, Mabel, Elsie, Lionel, Pearl, Penny, Molly, Mr. Bloom, Iris, Stan; henchmen Gary, Steve, Simon, Nigel (#4),
+Brad, Todd, Gordon, Kevin, Craig, Keith. Chatter with any of 52 tested names gave no orders, casts or triggers.
