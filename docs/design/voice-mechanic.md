@@ -301,7 +301,7 @@ carelessly), because only the true ones are the feature.
   - *Hush zones:* areas where speaking wakes sleeping enemies, used for stealth rooms.
   - *Silencer enemies:* see content-ideas.md.
 - **Voice-commanding AI allies (POC-friendly).** "Fox, heal me" makes the AI ally cast.
-  This tests targeting grammar today, with no networking.
+  This tests targeting grammar today, with no networking. *Built instead (2026-10-19): voice orders, "Rebar go", see §8.*
 
 ### Mic capture: the stalled-mic loop (playtest 2026-10-17)
 About 5 minutes into a playtest the mic display filled with word-shaped input at speaking volume,
@@ -445,3 +445,33 @@ transcript are the whole data set. Anything else is a quick post-session chat.
 The most important number is **voice share when keys are available.** If players drift to
 the keyboard, the mechanic isn't earning its friction, no matter how accurate the
 recognizer is.
+
+---
+
+## 8. Voice orders (built 2026-10-19)
+
+The design and the decisions are `combat-proposals.md` §1 (1.0 decided, 1.8 as built). The grammar is
+`Incantation`'s VOICE ORDERS; this section is the recognition side.
+
+- **Grammar:** `<name> <go | attack | follow>`. The name is the trigger; the order word must be the very next word, within
+  `order_window` (1.0 s of recognition time). No "cast". A name ending one utterance waits for an order word to open the
+  next (a comma's pause is two utterances since the gate's flush). Orders fire on finals only.
+- **Strictness:** strict wants the name to open the utterance (preamble aside); loose and chaos take it anywhere; a bare
+  order word never orders anyone. A name mid-sentence is labelled accidental (stats and the log only).
+- **Chatter:** adjacency does the work. "Rebar just goes in", "Rebar goes in first" ("goes" is not "go"), "Gasket's down",
+  "everyone's dead", "let's go", "follow me guys" never order anyone. By design, "where did Wick go" and "let Gasket go
+  first" ARE orders in loose (the name and "go" sit together): measured, not judged.
+- **Gasket vs "cast":** the model hears GASKET (never CAST); no order clip casts, and no spell or chatter clip of
+  `test_voice_audio` gives an order.
+- **Hotwords: none for the orders** (`order_hotwords` empty): the recognizer's vocabulary is exactly what it was (the
+  trigger and the ten spells), so spell recognition cannot change. Measured (148 TTS clips, both voices): with the names
+  and order words as hotwords the order clips were heard right 96% (loose), without them but with the measured
+  spellings as aliases 94%: two points, not worth touching the spells' vocabulary. Without aliases and without hotwords
+  it was 64% (the model writes DENIS, TOD, GARRY, CRUE, WE BAR, CABIN for Kevin ...); with hotwords and no aliases, 79%.
+- **Typed:** the console's typed lines take orders like spoken ones.
+
+- **Measured** (`tests/test_voice_orders.gd`, 148 TTS clips): 94% of the order clips heard right in loose, 97% in strict;
+  0 chatter clips gave an order; 0 order clips cast a spell; 0 spell or chatter clips of `test_voice_audio` gave an order.
+  The spells' own numbers are unchanged. Details: `combat-proposals.md` 1.8.
+- **The floor's own employees** answer to their own first names too ("Marguerite go"): the game hands them to
+  `VoiceCaster.set_order_names` at each floor start (unmeasured words, but the adjacency rule still holds).

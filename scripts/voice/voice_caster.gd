@@ -48,6 +48,9 @@ signal trigger_heard(word: String)
 ## over the player's next words stop here.
 signal speech_started
 signal strictness_changed(mode: String)
+## A voice order (Incantation's VOICE ORDERS): `who` is the name key ("rebar", "everyone", "hench four"), `order` one of
+## "go", "attack", "follow". Typed lines too. last_order() has the detail (gap, at_start, accidental, typed).
+signal order_spoken(who: String, order: String, heard: String)
 
 const DEFAULT_SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
 ## Keyword choices for the UI. Each was measured with TTS clips through the real
@@ -115,6 +118,7 @@ var _utt_start := -1.0            ## clock of the current utterance's first hypo
 var _frag_text := ""              ## last final if it cast nothing and was short (may be half a word)
 var _frag_end := -1e9
 var _last_cast: Dictionary = {}
+var _last_order: Dictionary = {}
 var _typed := false
 var last_heard_typed := false
 
@@ -214,6 +218,19 @@ func set_trigger_word(word: String, persist: bool = true) -> Dictionary:
 	return v
 
 
+## Voice orders: the floor's own employees' names (one word each: "marguerite", "okafor"), so they answer to them too.
+## Rebuilds the grammar like a trigger change (no model reload).
+func set_order_names(names: Array[String]) -> void:
+	var list: Array = []
+	for n in names:
+		if n != "" and not list.has(n):
+			list.append(n)
+	if list == (tuning.get("order_names_extra", []) as Array):
+		return
+	tuning["order_names_extra"] = list
+	_rebuild()
+
+
 ## Quietest level (dBFS) that counts as the player's voice; raise it to ignore
 ## background speech from a TV or speakers.
 func set_min_voice_db(value: float, persist: bool = true) -> void:
@@ -247,6 +264,11 @@ func last_cast_accidental() -> bool:
 
 func last_cast() -> Dictionary:
 	return _last_cast
+
+
+## The most recent voice order's event (who, order, heard, gap, at_start, accidental, typed).
+func last_order() -> Dictionary:
+	return _last_order
 
 
 # --- audio plumbing ------------------------------------------------------------
@@ -393,7 +415,7 @@ func _on_hypothesis(text: String, is_final: bool, _detail: Array) -> void:
 	if is_final:
 		var cast_now := false
 		for ev in _utt_events:
-			if ev["kind"] == "cast":
+			if ev["kind"] == "cast" or ev["kind"] == "order":
 				cast_now = true
 		var words := feed_text.split(" ", false).size()
 		_frag_text = feed_text if not cast_now and words <= JOIN_MAX_WORDS else ""
@@ -410,7 +432,7 @@ func _starts_with_known_word(text: String) -> bool:
 		return false
 	var cfg := _inc.config()
 	var trig: Dictionary = (cfg["triggers"] as Dictionary).get(_inc.trigger_word(), {})
-	if trig.has(first) or first == _inc.trigger_word():
+	if trig.has(first) or first == _inc.trigger_word() or _inc.is_order_word(first):
 		return true
 	for id in (cfg["spells"] as Dictionary):
 		if (cfg["spells"][id] as Dictionary).has(first):
@@ -435,6 +457,12 @@ func _dispatch(events: Array, in_utterance: bool) -> void:
 			spell_spoken.emit(str(info["spell"]), float(info["power"]), str(info["heard"]))
 			cast_detail.emit(info)
 			ev = info
+		elif kind == "order":
+			var od: Dictionary = ev.duplicate(true)
+			od["typed"] = _typed
+			_last_order = od
+			order_spoken.emit(str(od["who"]), str(od["order"]), str(od["heard"]))
+			ev = od
 		elif kind == "fizzle":
 			spell_fizzled.emit(str(ev["heard"]), str(ev["reason"]))
 		elif kind == "ignored":
@@ -446,7 +474,7 @@ func _dispatch(events: Array, in_utterance: bool) -> void:
 
 
 func _finish_utterance(text: String) -> void:
-	var outcome := {"kind": "none", "casts": [], "fizzles": [], "ignored": []}
+	var outcome := {"kind": "none", "casts": [], "fizzles": [], "ignored": [], "orders": []}
 	for ev in _utt_events:
 		match ev["kind"]:
 			"cast":
@@ -455,10 +483,14 @@ func _finish_utterance(text: String) -> void:
 				outcome["fizzles"].append(ev)
 			"ignored":
 				outcome["ignored"].append(ev)
+			"order":
+				outcome["orders"].append(ev)
 	if not outcome["casts"].is_empty():
 		outcome["kind"] = "cast"
 	elif not outcome["fizzles"].is_empty():
 		outcome["kind"] = "fizzle"
+	elif not outcome["orders"].is_empty():
+		outcome["kind"] = "order"
 	_log_rows(text, _utt_events, _typed)
 	_utt_events = []
 	if not _typed:
@@ -493,6 +525,10 @@ func _log_rows(text: String, events: Array, typed: bool) -> void:
 				row["power"] = "%.3f" % float(ev["power"])
 				row["label"] = "accidental" if bool(ev["accidental"]) else "deliberate"
 				row["signals"] = _signals_text(ev)
+			"order":
+				row["spell"] = "%s %s" % [ev["who"], ev["order"]]
+				row["label"] = "order:accidental" if bool(ev.get("accidental", false)) else "order"
+				row["signals"] = "first=%d;gap=%.2f" % [int(bool(ev.get("at_start", false))), float(ev.get("gap", 0.0))]
 			"fizzle":
 				row["label"] = "fizzle:" + str(ev["reason"])
 				row["spell"] = ev.get("spell", "")

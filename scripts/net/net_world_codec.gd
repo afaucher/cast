@@ -21,7 +21,7 @@ extends RefCounted
 ##   u8  strikes   how many attacks it has struck (mod 256): a change plays the swing on the other screens
 ## EMPLOYEE (15)
 ##   u16 id | i16 x, z, y | i8 vx, vz | u8 angle | u16 hp
-##   u8  head      state (bits 0-2: COWER 0, PANIC 1, FOLLOW 2, EXTRACT 3, WAIT 4) | dismissed 8 | climbing 16 |
+##   u8  head      state (bits 0-2: COWER 0, PANIC 1, FOLLOW 2, EXTRACT 3, WAIT 4, FIGHT 5) | dismissed 8 | climbing 16 |
 ##                 teleport counter (bits 5-7)
 ##   u8  leader    the seat (1-3) of the hero it follows, 0 for nobody
 ## GATE (7)

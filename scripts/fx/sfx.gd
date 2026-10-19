@@ -22,6 +22,10 @@ const CUES := {
 	## The recognizer armed a cast (VoiceCaster.trigger_heard). Your machine only; mic-safe by length (audio-plan.md §4).
 	"cast_heard": {"file": "cast_heard.wav", "bus": "VoiceFeedback", "volume_db": -3.0, "pitch_jitter": 0.0,
 		"max_voices": 1, "min_gap": 0.12, "positional": false},
+	## A voice order was heard (VoiceCaster.order_spoken: "Rebar go"): a radio click-click. Your machine only, and not
+	## cast_heard (that one means "a cast is armed"). Mic-safe like it: two short ticks, nothing in the speech band.
+	"order_heard": {"file": "order_heard.wav", "bus": "VoiceFeedback", "volume_db": -4.0, "pitch_jitter": 0.0,
+		"max_voices": 1, "min_gap": 0.15, "positional": false},
 	## Your cast fizzled (VoiceCaster.spell_fizzled). Your machine only; cut the moment you start speaking again.
 	"fizzle": {"file": "fizzle.wav", "bus": "VoiceFeedback", "volume_db": -2.0, "pitch_jitter": 0.04,
 		"max_voices": 1, "min_gap": 0.1, "positional": false},
@@ -141,11 +145,12 @@ func stream_of(cue: String) -> AudioStream:
 	return s
 
 
-## The voice cues for the local player's caster: "cast heard" when a trigger arms, the fizzle (unless the player is
+## The voice cues for the local player's caster: "cast heard" when a trigger arms, "order heard" for a voice order, the fizzle (unless the player is
 ## already speaking again), and the fizzle cut the moment the listener hears new speech start (mic safety: a fizzle
 ## over the next "cast corn" broke it in the probe, audio-plan.md §4).
 func listen_to_voice(caster: VoiceCaster) -> void:
 	caster.trigger_heard.connect(func(_word: String) -> void: play("cast_heard"))
+	caster.order_spoken.connect(func(_who: String, _order: String, _heard: String) -> void: play("order_heard"))
 	caster.spell_fizzled.connect(func(_heard: String, _reason: String) -> void:
 		if not caster.is_speaking():
 			play("fizzle"))

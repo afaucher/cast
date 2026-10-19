@@ -157,6 +157,9 @@ var casts: NetCasts = null
 var status: NetStatus = null
 ## Joining mid-contract (M6): the late-join snapshot and the way onto a running floor: child "Join".
 var join: NetJoin = null
+## Voice orders (combat-proposals.md 1.0): a player's order is a request the host applies, then every screen shows the
+## barks and markers (scripts/net/net_orders.gd), child "Orders".
+var orders: NetOrders = null
 ## Hits this machine's own heroes took since the last telemetry row (the `hits` column, M4).
 var hits_taken := 0
 ## The crew's simulated link (M7): the host decides, every machine applies it to what it receives.
@@ -223,6 +226,9 @@ func _ready() -> void:
 	join = NetJoin.new()
 	join.name = "Join"
 	add_child(join)
+	orders = NetOrders.new()
+	orders.name = "Orders"
+	add_child(orders)
 	avatars = SteamAvatars.new()
 	avatars.name = "Avatars"
 	add_child(avatars)
