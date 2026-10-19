@@ -1,4 +1,4 @@
-class_name DoorFloors
+﻿class_name DoorFloors
 extends RefCounted
 ## The floor at a doorway, three ways (the fog lab's options; not used by the game yet). Floors are per hex cell
 ## (Cell.mat_id, FloorMaterials): today every cell takes its tag's floor, so the room / corridor seam runs along the hex
@@ -12,8 +12,20 @@ extends RefCounted
 ## Only the floor id changes (the wall id of each cell is kept). Pure and deterministic: a function of the map and the
 ## doorway, so it could be part of the floor plan (FloorMaterials.assign) and its checksum.
 
+## DECISIONS (user, 2026-10-19, "Gunmetal and tread plate."): a doorway WITH A DOOR gets option "c", the diamond tread-plate
+## threshold (DOOR_OPTION, THRESHOLD); an open archway keeps today's floors ("a", ARCHWAY_OPTION) until the user says
+## otherwise. Not wired into real floors yet (FloorMaterials.assign would call for_doorway() for each doorway).
+const DOOR_OPTION := "c"
+const ARCHWAY_OPTION := "a"
+const THRESHOLD := FloorMaterials.F_DIAMOND
+
 const REACH := 3                 ## cells this close to the doorway cell (or to the chord's middle) are looked at
 const STEP := 0.08               ## the chord is sampled this finely to find the cells it crosses
+
+
+## The decided floor for a doorway: the tread-plate threshold when it has a door, today's floors when it is an archway.
+static func for_doorway(map: HexMap, fog: RoomFog, dw: Dictionary, has_door: bool) -> int:
+	return apply(map, fog, dw, DOOR_OPTION if has_door else ARCHWAY_OPTION, THRESHOLD)
 
 
 ## Re-floor around doorway `dw` (Doorways.find, with a door line). Returns how many cells changed.

@@ -12,7 +12,7 @@
 ## seen, L space labels. The monsters stand frozen (the lab is about what shows, not the fight); the brute is live.
 
 const RUN_ARCHETYPE := "prepper"
-const THRESHOLD_FLOOR := FloorMaterials.F_DIAMOND   ## option c's threshold: the diamond tread plate
+const THRESHOLD_FLOOR := DoorFloors.THRESHOLD   ## option c's threshold: the diamond tread plate (the user's pick)
 const WALK_STEP := 0.22          ## the staged fast walk: world units a physics frame
 const TRAIL_GAP := 14            ## the followers walk this many trail points behind the one ahead
 

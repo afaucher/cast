@@ -17,7 +17,7 @@ extends Node3D
 
 const STYLES: Array[String] = ["single", "double", "slider"]
 const TRIM := Color(0.9, 0.88, 0.82)
-const FRAME := Color(0.6, 0.55, 0.48)   ## greige: the default frame (the user: "less stark than white", 2026-10-19)
+const FRAME := Color(0.33, 0.35, 0.39)  ## gunmetal: the default frame (user, 2026-10-19: "Gunmetal and tread plate.")
 const TRIM_DK := Color(0.62, 0.6, 0.56)
 const OAK := Color(0.7, 0.48, 0.27)
 const OAK_DK := Color(0.5, 0.33, 0.18)

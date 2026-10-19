@@ -6,6 +6,11 @@ extends Node3D
 ## OfficeDoorModel's STYLES ("single" swing door with a wired-glass light and a lever handle, "double" doors with push
 ## bars and a lit sign, a frosted glass "slider" suite front with a logo band).
 ##
+## DECISIONS (user, 2026-10-19): "The double door is the feel I like." and "Gunmetal and tread plate.": the double door
+## with a gunmetal frame is the default (DEFAULT_STYLE, OfficeDoorModel.FRAME), and a door's doorway gets the diamond
+## tread-plate threshold on the cells its door line crosses (DoorFloors.DOOR_OPTION "c"). Doors only for now: an open
+## archway keeps today's floors (option "a") until the user says otherwise. Not wired into real floors yet.
+##
 ##   WALK INTO IT  a hero (or anyone who is not a monster) walking into a shut door opens it at once. A MONSTER walking
 ##                 into it stops for MONSTER_DELAY (rooted, the door shudders) and then opens it: pathing needs nothing
 ##                 new, the door is never a wall for find_path.
