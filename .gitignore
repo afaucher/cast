@@ -21,3 +21,7 @@ assets/audio/third_party/*
 # The game's sound cues, rendered from the recordings above by tools/render_sfx.ps1 (tools/sfx_proto/render_game_sfx.gd)
 assets/audio/sfx/*.wav
 assets/audio/sfx/*.wav.import
+# The dispatch headset voice, rendered by tools/render_dispatch.ps1 (Kokoro TTS + radio chain); the model and runtime never go in git either
+assets/audio/dispatch/*.ogg
+assets/audio/dispatch/*.ogg.import
+assets/audio/dispatch/*.part
