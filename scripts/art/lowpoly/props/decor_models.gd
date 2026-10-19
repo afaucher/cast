@@ -193,9 +193,9 @@ static func _cinema_screen(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(3.1, 1.76, 0.16), Vector3(0, 1.45, 0.0), PropModels.OBSIDIAN)
 	for sx: float in [-1.7, 1.7]:
 		_b(s, Vector3(0.4, 2.3, 0.4), Vector3(sx, 1.4, 0.04), PropModels.VELVET)
-		_b(s, Vector3(0.06, 2.3, 0.42), Vector3(sx * 0.9, 1.4, 0.04), PropModels.VELVET.darkened(0.3))
-	_b(s, Vector3(3.8, 0.28, 0.44), Vector3(0, 2.55, 0.04), PropModels.VELVET)
-	_b(s, Vector3(3.8, 0.05, 0.46), Vector3(0, 2.4, 0.04), PropModels.GOLD)
+		_b(s, Vector3(0.07, 2.3, 0.43), Vector3(sx * 0.9, 1.4, 0.04), PropModels.VELVET.darkened(0.3))   # 5 mm proud of drape and plinth
+	_b(s, Vector3(3.84, 0.28, 0.44), Vector3(0, 2.55, 0.04), PropModels.VELVET)     # valance and trim overhang the drapes
+	_b(s, Vector3(3.86, 0.05, 0.46), Vector3(0, 2.4, 0.04), PropModels.GOLD)
 	_b(s, Vector3(0.9, 0.05, 0.4), Vector3(0, 0.33, 0.12), _g(Color(1.0, 0.8, 0.3)))
 	# speakers
 	for sx: float in [-1.4, 1.4]:
@@ -345,7 +345,7 @@ static func _specimen_shelf(s: LowPoly.Soup) -> void:
 	var glows: Array[Color] = [Color(0.3, 1.0, 0.5), Color(0.7, 0.35, 1.0), Color(1.0, 0.8, 0.3), Color(0.3, 1.0, 0.5)]
 	for tier in 4:
 		var y := 0.1 + 0.5 * float(tier)
-		_b(s, Vector3(1.78, 0.05, 0.5), Vector3(0, y, 0), PropModels.IRON_LT)
+		_b(s, Vector3(1.78, 0.05, 0.48), Vector3(0, y, 0), PropModels.IRON_LT)          # set back from the posts' faces
 		if tier == 0:
 			_b(s, Vector3(0.5, 0.3, 0.4), Vector3(-0.45, 0.28, 0), PropModels.WOOD)
 			_b(s, Vector3(0.4, 0.2, 0.36), Vector3(0.4, 0.23, 0.02), PropModels.WOOD_DK)
@@ -374,7 +374,8 @@ static func _hazard_tape(s: LowPoly.Soup) -> void:
 		for i in 14:
 			var x := -1.04 + 0.16 * float(i)
 			var sag := 0.03 * sin(PI * float(i) / 13.0)
-			_b(s, Vector3(0.17, 0.12, 0.02), Vector3(x, y - sag, 0.0), yel if i % 2 == 0 else PropModels.OBSIDIAN, Vector3(0, 0, 18 if i % 2 == 0 else -18))
+			# the black pieces lie 3 mm in front of the yellow ones where they overlap (side by side, they z-fought)
+			_b(s, Vector3(0.17, 0.12, 0.02), Vector3(x, y - sag, 0.0 if i % 2 == 0 else 0.003), yel if i % 2 == 0 else PropModels.OBSIDIAN, Vector3(0, 0, 18 if i % 2 == 0 else -18))
 
 
 static func _wet_floor_sign(s: LowPoly.Soup) -> void:
@@ -443,7 +444,7 @@ static func _shark_fin(s: LowPoly.Soup) -> void:
 static func _red_carpet(s: LowPoly.Soup, length: float) -> void:
 	_b(s, Vector3(1.3, 0.04, length), Vector3(0, 0.02, 0), PropModels.VELVET)
 	for sx: float in [-0.62, 0.62]:
-		_b(s, Vector3(0.1, 0.05, length), Vector3(sx, 0.025, 0), PropModels.GOLD)
+		_b(s, Vector3(0.1, 0.05, length + 0.02), Vector3(sx, 0.025, 0), PropModels.GOLD)   # past the carpet's ends (flush, they z-fought)
 	var n := maxi(2, int(length / 1.1))
 	for i in n:
 		var z := -length * 0.5 + (float(i) + 0.5) * length / float(n)
@@ -469,9 +470,9 @@ static func _tasting_table(s: LowPoly.Soup) -> void:
 static func _chair(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.46, 0.07, 0.46), Vector3(0, 0.5, 0), PropModels.WOOD)
 	_b(s, Vector3(0.4, 0.07, 0.4), Vector3(0, 0.56, 0.01), PropModels.VELVET)
-	for sx: float in [-0.2, 0.2]:
-		for sz: float in [-0.2, 0.2]:
-			_b(s, Vector3(0.06, 0.5, 0.06), Vector3(sx, 0.25, sz), PropModels.WOOD_DK)
+	for sx: float in [-0.195, 0.195]:
+		for sz: float in [-0.195, 0.195]:
+			_b(s, Vector3(0.06, 0.5, 0.06), Vector3(sx, 0.25, sz), PropModels.WOOD_DK)   # legs tucked under the seat's edge
 	_b(s, Vector3(0.46, 0.5, 0.06), Vector3(0, 0.82, -0.21), PropModels.WOOD, Vector3(-6, 0, 0))
 	_b(s, Vector3(0.36, 0.3, 0.04), Vector3(0, 0.84, -0.17), PropModels.VELVET, Vector3(-6, 0, 0))
 
@@ -534,8 +535,9 @@ static func _rack_cab(s: LowPoly.Soup) -> void:
 
 static func _crate_stack(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(1.0, 0.6, 1.0), Vector3(0, 0.3, 0), PropModels.WOOD)
-	for sx: float in [-0.45, 0.45]:
-		_b(s, Vector3(0.1, 0.62, 1.02), Vector3(sx, 0.3, 0), PropModels.WOOD_DK)
+	for sx: float in [-0.455, 0.455]:
+		# the end battens stand 1 cm proud of the crate's sides as they do of its top and front (flush, they z-fought)
+		_b(s, Vector3(0.11, 0.62, 1.02), Vector3(sx, 0.3, 0), PropModels.WOOD_DK)
 	_b(s, Vector3(0.84, 0.5, 0.84), Vector3(0.04, 0.85, 0.0), PropModels.WOOD.lightened(0.05), Vector3(0, 22, 0))
 	_b(s, Vector3(0.12, 0.52, 0.86), Vector3(0.04, 0.85, 0.0), PropModels.WOOD_DK, Vector3(0, 22, 0))
 	_b(s, Vector3(0.4, 0.06, 0.02), Vector3(0, 0.45, 0.52), _g(PropModels.GOLD))

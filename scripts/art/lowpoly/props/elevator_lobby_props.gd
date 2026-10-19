@@ -85,7 +85,7 @@ static func _palm(s: LowPoly.Soup, look: String) -> void:
 	var pot := ElevatorModel.BRASS if look == "fancy" else Color(0.55, 0.36, 0.22)
 	PropModels.cyl(s, 0.2, 0.28, 0.55, 8, Vector3(0, 0.275, 0), pot)
 	PropModels.cyl(s, 0.29, 0.29, 0.05, 8, Vector3(0, 0.55, 0), pot.darkened(0.25))
-	PropModels.cyl(s, 0.24, 0.24, 0.03, 8, Vector3(0, 0.56, 0), Color(0.22, 0.14, 0.08))
+	PropModels.cyl(s, 0.24, 0.24, 0.03, 8, Vector3(0, 0.565, 0), Color(0.22, 0.14, 0.08))   # soil 5 mm above the rim's top
 	var top := Vector3(0.05, 1.55, 0.0)
 	PropModels.rod(s, Vector3(0, 0.55, 0), top, 0.06, 0.04, 6, Color(0.42, 0.3, 0.18))
 	var leaf := Color(0.18, 0.48, 0.22) if look == "fancy" else Color(0.48, 0.42, 0.2)   # the service one is dying

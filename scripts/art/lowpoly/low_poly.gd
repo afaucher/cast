@@ -15,10 +15,21 @@ extends RefCounted
 ## Vertex colour alpha is a "reflective" mask (0 matte .. 1 retro-reflective tape).
 
 
+## Dev only (ZFightCheck): while true, every triangle remembers the code that made it (LowPoly.origin_name) and
+## to_mesh() stores those ids on the mesh as meta ORIGIN_META. Off in the game: then it costs one bool test a triangle.
+static var trace := false
+const ORIGIN_META := &"lowpoly_origins"
+## Wrapper functions skipped when naming a triangle's origin (the call that matters is the one above them).
+const _TRACE_SKIP: Array[String] = ["box", "cyl", "frus", "ball", "rod", "_b", "_c", "_cyl", "_rod", "_ball", "_box", "_n", "_dented", "_flat", "mesh"]
+static var _origin_names := PackedStringArray()
+static var _origin_ids := {}
+
+
 ## A bag of triangles. Three vertices per triangle, one colour per triangle.
 class Soup extends RefCounted:
 	var verts := PackedVector3Array()
 	var cols := PackedColorArray()
+	var origins := PackedInt32Array()   ## LowPoly.trace only: per-triangle origin id (LowPoly.origin_name)
 	var vary := 0.07                 ## per-face painted variation
 	var rng := RandomNumberGenerator.new()
 
@@ -40,6 +51,8 @@ class Soup extends RefCounted:
 		verts.append(b)
 		verts.append(c)
 		cols.append(paint(col))
+		if LowPoly.trace:
+			_pad_origins(LowPoly._origin_here())
 
 	## A quad (a, b, c, d in ring order) as two triangles, split along a seed-chosen diagonal so the
 	## cuts do not all run the same way.
@@ -64,8 +77,18 @@ class Soup extends RefCounted:
 	func merge(other: Soup, xf: Transform3D = Transform3D.IDENTITY) -> Soup:
 		for p in other.verts:
 			verts.append(xf * p)
+		if LowPoly.trace:
+			var here := LowPoly._origin_here()
+			_pad_origins(here)
+			for i in other.cols.size():
+				origins.append(other.origins[i] if i < other.origins.size() else here)
 		cols.append_array(other.cols)
 		return self
+
+	## Trace only: give every triangle without an origin yet (appended straight to verts / cols) `id`.
+	func _pad_origins(id: int) -> void:
+		while origins.size() < cols.size():
+			origins.append(id)
 
 	## Chisel the surface: every distinct vertex position moves by a deterministic random offset,
 	## the same for every triangle that shares it (so the shape stays closed). `axes` scales it per axis.
@@ -99,10 +122,15 @@ class Soup extends RefCounted:
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA8_UNORM)
+		var kept := PackedInt32Array()
+		if LowPoly.trace:
+			_pad_origins(LowPoly._origin_here())
 		for t in range(0, verts.size(), 3):
 			var fn: Vector3 = face_n[t / 3]
 			if fn.length() < 0.0000001:
 				continue   # degenerate (jitter collapsed it)
+			if LowPoly.trace:
+				kept.append(origins[t / 3])
 			var n := fn.normalized()
 			var col := cols[t / 3]
 			var lit := 1.0 + top_light * clampf(n.y, -1.0, 1.0)
@@ -117,7 +145,34 @@ class Soup extends RefCounted:
 				st.set_normal(n)
 				st.set_custom(0, Color(w.x * 0.5 + 0.5, w.y * 0.5 + 0.5, w.z * 0.5 + 0.5, 1.0))
 				st.add_vertex(p)
-		return st.commit()
+		var mesh := st.commit()
+		if LowPoly.trace:
+			mesh.set_meta(LowPoly.ORIGIN_META, kept)
+		return mesh
+
+
+## Trace only: the id of the code calling into LowPoly right now (the first two frames outside this file and outside
+## the plain box / cylinder wrappers, "file:line function").
+static func _origin_here() -> int:
+	var parts := PackedStringArray()
+	for f: Dictionary in get_stack():
+		var src := String(f["source"]).get_file()
+		var fn := String(f["function"])
+		if src == "low_poly.gd" or _TRACE_SKIP.has(fn):
+			continue
+		parts.append("%s:%d %s" % [src, int(f["line"]), fn])
+		if parts.size() == 2:
+			break
+	var k := " < ".join(parts)
+	if not _origin_ids.has(k):
+		_origin_ids[k] = _origin_names.size()
+		_origin_names.append(k)
+	return int(_origin_ids[k])
+
+
+## The code an origin id (from a traced mesh's ORIGIN_META) points at, e.g. "van_model.gd:241 _decal < van_model.gd:290 _side_details".
+static func origin_name(id: int) -> String:
+	return _origin_names[id] if id >= 0 and id < _origin_names.size() else "?"
 
 
 static func key(p: Vector3) -> Vector3i:

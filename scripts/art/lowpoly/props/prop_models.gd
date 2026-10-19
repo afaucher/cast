@@ -429,8 +429,8 @@ static func _torture_rack(s: LowPoly.Soup) -> void:
 	for lx in [-0.62, 0.62]:
 		for lz in [-0.34, 0.34]:
 			box(s, Vector3(0.12, 0.5, 0.12), Vector3(lx, 0.25, lz), WOOD_DK)
-	box(s, Vector3(1.5, 0.1, 0.12), Vector3(0, 0.5, -0.34), WOOD)
-	box(s, Vector3(1.5, 0.1, 0.12), Vector3(0, 0.5, 0.34), WOOD)
+	box(s, Vector3(1.5, 0.1, 0.14), Vector3(0, 0.5, -0.34), WOOD)      # rails 1 cm proud of the posts' faces
+	box(s, Vector3(1.5, 0.1, 0.14), Vector3(0, 0.5, 0.34), WOOD)
 	for i in 6:
 		box(s, Vector3(0.14, 0.06, 0.58), Vector3(-0.55 + 0.22 * float(i), 0.52, 0), WOOD, Vector3(0, 0, 0))
 	# rollers with rope and a hand wheel at the head
@@ -509,7 +509,7 @@ static func _shark_tank(s: LowPoly.Soup) -> void:
 	box(s, Vector3(1.56, 0.06, 0.96), Vector3(0, 0.25, 0), GOLD_DK)
 	# water: a deep box with a bright glowing surface and edges
 	box(s, Vector3(1.4, 1.1, 0.8), Vector3(0, 0.85, 0), Color(0.12, 0.45, 0.6))
-	box(s, Vector3(1.4, 0.05, 0.8), Vector3(0, 1.41, 0), glow(Color(0.35, 0.9, 1.0)))
+	box(s, Vector3(1.38, 0.05, 0.78), Vector3(0, 1.41, 0), glow(Color(0.35, 0.9, 1.0)))   # inside the water's sides
 	box(s, Vector3(1.0, 0.7, 0.04), Vector3(0, 0.85, 0.41), glow(Color(0.2, 0.7, 0.85)))
 	# glass corner posts and top rim
 	for sx in [-0.72, 0.72]:
