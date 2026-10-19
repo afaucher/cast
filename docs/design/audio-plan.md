@@ -412,6 +412,40 @@ in test C, so in the game it must not play over a new utterance (it is cut when 
 7. **Keep the probe.** Every new cue goes through `mic_leak_probe.gd` (or a test made from it) before it ships: no cue
    may produce a cast alone, and the armed chime may never break one.
 
+### 4b. The dispatch voice (measured 2026-10-19; PARKED)
+
+Status: **parked by the user** (2026-10-19: "Let's park that for now. And keep track of it and subsequent analysis").
+Nothing is changed in the game for it yet. Add every later probe run or decision to this section.
+
+The dispatch headset lines are spoken (Kokoro af_bella, walkie radio; `DispatchVoice`, `tools/render_dispatch.ps1`), so
+unlike the cues they are real words. `tools/dispatch_leak_probe.tscn` fed all 228 clips into `VoiceCaster` with the real
+model, at full level with no room between speaker and mic (the worst case), in loose (default) and chaos strictness,
+with all 10 spell words and the hero names in the vocabulary. Rerun: render the clips, convert them to 16 kHz mono WAVs
+(`ffmpeg -i <key>.ogg -ar 16000 -ac 1 <key>.wav`), then
+`Godot --path . --headless --fixed-fps 60 res://tools/dispatch_leak_probe.tscn -- <wav_dir> <lines.json> <report.json>`.
+
+| Clip (key) | Line | Heard | Result |
+|---|---|---|---|
+| `52aa5aeb11fc` | "The keynote stage is still a floor below, so every gate up here keeps sending more. Close the gates." | "CORN OUT STAGE IS STILL A FLOOR BELOW..." | **casts corn** (power 0.75), loose and chaos |
+| `81dcaa33e105` | "Bernadette just walked past my desk." | "CORNER THAT JUST WALKED PAST MY DESK" | casts corn (0.49), **chaos only** |
+| `fb0ad7882e11`, `f69130dce3bf`, `de635049215d`, `77a0c7f8caf8` | the four floor-2/3 lines naming the **podcast room** | "pod CAST room" | trigger armed, no spell; a spell word right after would fire |
+
+The other 222 clips: no cast, no trigger, no fizzle, no hero name, in either mode. "Summoned a stakeholder" is clean.
+
+What the risk is:
+- **Keynote stage** and **podcast room** are origin rooms, so the leak exists only on the contracts whose event rolled
+  those rooms (founder, influencer clients). Bernadette is one of 32 rescue names, in chaos mode only.
+- A floor's dispatch line plays once, at the floor's start, when the crew isn't casting yet. A rescue line can play
+  mid-fight.
+
+Options considered (none chosen):
+1. Rename the two rooms (e.g. "main stage", "recording booth"), then re-render and re-probe those lines. Cheapest, and
+   it removes the measured leaks. Bernadette could be renamed the same way.
+2. Speakers mode (point 5 above) ducking the dispatch voice deeper, or not playing the voice at all, only the clicks
+   and the hiss.
+3. The output-aware gate or AEC (point 6): the real fix for every leak, including Steam voice chat.
+4. Probe as a gate: a test that fails when a newly voiced line casts, like rule 7 for cues.
+
 ## 5. Recommendation
 
 **Mix:** procedural for the voice feedback and simple UI/tonal cues (cast heard, fizzle, out of component, accidental,

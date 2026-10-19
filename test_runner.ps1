@@ -145,7 +145,7 @@ $running = @(); $failed = @(); $total = 0
 # Real-time audio tests feed the speech model on a wall-clock schedule; under a
 # parallel batch the recognizer thread starves and borderline clips flip. They
 # run one at a time, after everything else, with the box otherwise idle.
-$serialNames = @("test_voice_audio", "test_voice_triggers", "test_voice_noise")
+$serialNames = @("test_voice_audio", "test_voice_triggers", "test_voice_noise", "test_voice_orders")
 $netRuns = @()
 foreach ($n in $names) {
     $spec = Get-NetSpec $n

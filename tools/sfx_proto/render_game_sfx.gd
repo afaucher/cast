@@ -13,6 +13,7 @@ const OUT_DIR := "res://assets/audio/sfx"
 ## Game cue (Sfx.CUES, the file name) -> prototype recipe (sfx_round3.gd / sfx_synth.gd).
 const GAME_CUES := {
 	"cast_heard": "cast_armed_v4a2",
+	"order_heard": "order_click_v1",
 	"fizzle": "fizzle_pfft_v4",
 	"fireball": "spell_fireball_v4b",
 	"stamp": "stamp_thunk_v4",

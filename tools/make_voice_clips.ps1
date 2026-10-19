@@ -20,17 +20,28 @@
   tests/voice_clips/triggers.csv   (test_voice_triggers.gd; wavs in triggers/)
     file,trigger,kind,spell,voice,text    kind = pos | neg | cross
 
+  tests/voice_clips/orders.csv     (test_voice_orders.gd; wavs in orders/): voice orders, "<name> go | attack | follow"
+    file,kind,strict,loose,spell,voice,rate,text
+    kind    pos (an official name) | alias | pace | neg (chatter) | mixed (an order and a cast)
+    strict, loose   the order that must be heard ("rebar go"), "none", or "any" (only reported)
+    spell   the spell that must be cast too ("none": no cast at all: the Gasket / "cast" collision)
+
 .PARAMETER Triggers
   Trigger words rendered in triggers.csv (VoiceCaster.TRIGGER_OPTIONS).
+
+.PARAMETER OrdersOnly
+  Render only the voice-order clips (orders.csv), not the rest.
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File tools/make_voice_clips.ps1
   powershell -NoProfile -ExecutionPolicy Bypass -File tools/make_voice_clips.ps1 -OutDir C:\tmp\clips
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools/make_voice_clips.ps1 -OrdersOnly
 #>
 param(
     [string]$OutDir = (Join-Path $PSScriptRoot "..\tests\voice_clips"),
     [string[]]$Voices = @("Microsoft David Desktop", "Microsoft Zira Desktop"),
-    [string[]]$Triggers = @("cast", "magic", "pickle", "conjure", "invoke", "summon", "presto", "abracadabra")
+    [string[]]$Triggers = @("cast", "magic", "pickle", "conjure", "invoke", "summon", "presto", "abracadabra"),
+    [switch]$OrdersOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -71,6 +82,9 @@ function Render([string]$text, [string]$file, [string]$voice, [int]$rate) {
 
 function Slug([string]$t) { ($t.ToLower() -replace "<b(\d+)>", 'b$1' -replace "[^a-z0-9]+", "_").Trim("_") }
 
+$n = 0
+$trows = New-Object System.Collections.Generic.List[string]
+if (-not $OrdersOnly) {
 # group, text, expect(strict), expect(loose), expect(chaos), min_power, voice, rate
 $clips = New-Object System.Collections.Generic.List[object]
 function Add-Clip([string]$group, [string]$text, [string]$strict, [string]$loose, [string]$chaos, [double]$minPower, [string]$voice, [int]$rate) {
@@ -260,7 +274,6 @@ Add-Clip "negative" "of course"                      "none" "none" "none"     0.
 
 $rows = New-Object System.Collections.Generic.List[string]
 $rows.Add("file,group,strict,loose,chaos,min_power,voice,rate,text")
-$n = 0
 foreach ($c in $clips) {
     $vshort = if ($c.voice -eq $v1) { "a" } else { "b" }
     $name = "{0}_{1}_{2}{3}.wav" -f $c.group, (Slug $c.text), $vshort, $c.rate
@@ -273,7 +286,6 @@ Set-Content -Path (Join-Path $OutDir "manifest.csv") -Value $rows -Encoding utf8
 # --- trigger-word clips (triggers.csv) ---------------------------------------
 $tdir = Join-Path $OutDir "triggers"
 New-Item -ItemType Directory -Force -Path $tdir | Out-Null
-$trows = New-Object System.Collections.Generic.List[string]
 $trows.Add("file,trigger,kind,spell,voice,text")
 function Add-Trig([string]$trigger, [string]$kind, [string]$spell, [string]$voice, [string]$text) {
     $vs = if ($voice -eq $v1) { "a" } else { "b" }
@@ -297,5 +309,73 @@ foreach ($t in $Triggers) {
     if ($t -ne "cast") { Add-Trig $t "cross" "none" $v1 "cast heal" }
 }
 Set-Content -Path (Join-Path $OutDir "triggers.csv") -Value $trows -Encoding utf8
+}
 
-Write-Output "wrote $n clips + manifest.csv, $($trows.Count - 1) trigger clips + triggers.csv to $OutDir (voices: $($Voices -join ', '))"
+# --- voice-order clips (orders.csv; test_voice_orders.gd) ------------------------------------------------
+# "<name> <go | attack | follow>" (Incantation's VOICE ORDERS). The name is the trigger and the order word must follow at
+# once, so chatter that names a teammate must not order anyone, and no order clip may cast a spell (the Gasket / "cast"
+# collision; the other way round, test_voice_audio checks that no spell clip gives an order).
+$odir = Join-Path $OutDir "orders"
+New-Item -ItemType Directory -Force -Path $odir | Out-Null
+$orows = New-Object System.Collections.Generic.List[string]
+$orows.Add("file,kind,strict,loose,spell,voice,rate,text")
+function Add-Order([string]$kind, [string]$text, [string]$strict, [string]$loose, [string]$spell, [string]$voice, [int]$rate) {
+    $vs = if ($voice -eq $v1) { "a" } else { "b" }
+    $name = "{0}_{1}_{2}{3}.wav" -f $kind, (Slug $text), $vs, $rate
+    Render $text (Join-Path $odir $name) $voice $rate
+    $orows.Add(("{0},{1},{2},{3},{4},{5},{6},""{7}""" -f $name, $kind, $strict, $loose, $spell, $voice, $rate, $text))
+}
+# Every official name with every order (voice a), the crew's names and the groups in voice b too.
+$names = [ordered]@{ "Everyone" = "everyone"; "Crew" = "crew"; "Pym" = "pym"; "Hench" = "hench"; "Hench Four" = "hench four";
+    "Rebar" = "rebar"; "Wick" = "wick"; "Gasket" = "gasket"; "Reginald" = "reginald"; "Beatrice" = "beatrice"; "Alphonse" = "alphonse";
+    "Hodges" = "hodges"; "Dorothea" = "dorothea"; "Gary" = "gary"; "Steve" = "steve"; "Todd" = "todd"; "Kevin" = "kevin"; "Dennis" = "dennis" }
+foreach ($said in $names.Keys) {
+    foreach ($o in @("go", "attack", "follow")) {
+        $want = "$($names[$said]) $o"
+        Add-Order "pos" "$said $o" $want $want "none" $v1 0
+        if (@("Rebar", "Wick", "Gasket", "Everyone", "Crew", "Hench") -contains $said) {
+            Add-Order "pos" "$said $o" $want $want "none" $v2 0
+        }
+    }
+}
+# With a comma's pause between the name and the order word (two utterances since the gate's flush).
+foreach ($v in @($v1, $v2)) {
+    Add-Order "pos" "Rebar, go"       "rebar go" "rebar go" "none" $v 0
+    Add-Order "pos" "Gasket, attack"  "gasket attack" "gasket attack" "none" $v 0
+    Add-Order "pos" "Wick, follow"    "wick follow" "wick follow" "none" $v 0
+}
+# Aliases.
+foreach ($v in @($v1, $v2)) {
+    foreach ($a in @(@("Everybody go", "everyone go"), @("All hands follow", "everyone follow"), @("Team attack", "crew attack"),
+            @("Squad go", "crew go"), @("Mrs. Pym follow", "pym follow"), @("Missus Pym go", "pym go"), @("Henchmen attack", "hench attack"),
+            @("Henchman follow", "hench follow"), @("Number four go", "hench four go"))) {
+        Add-Order "alias" $a[0] $a[1] $a[1] "none" $v 0
+    }
+}
+# Pace (TTS rate -3 slow, +3 fast).
+foreach ($r in @(-3, 3)) {
+    foreach ($t in @(@("Rebar go", "rebar go"), @("Gasket follow", "gasket follow"), @("Wick attack", "wick attack"), @("Everyone go", "everyone go"))) {
+        Add-Order "pace" $t[0] $t[1] $t[1] "none" $v1 $r
+    }
+}
+# Chatter that names a teammate or says an order word: nothing may be ordered. "any" = measured, not judged (the name and
+# the order word really do sit together: "where did Wick go" is an order to Wick in loose mode, by design).
+foreach ($v in @($v1, $v2)) {
+    foreach ($t in @("Rebar just goes in", "Rebar goes in first", "Gasket's down", "everyone's dead", "let's go", "follow me guys",
+            "hold on", "crew's dead", "Gasket's holding the door", "go go go", "attack", "Rebar watch out", "nice one Gasket",
+            "the henchmen are attacking", "Gary's following us", "we should go")) {
+        Add-Order "neg" $t "none" "none" "none" $v 0
+    }
+    Add-Order "neg" "where did Wick go" "none" "any" "none" $v 0
+    # "followed" counts as "follow" only as the LAST word (the model writes a final "follow" that way): this is chatter.
+    Add-Order "neg" "Steve followed us here" "none" "none" "none" $v 0
+    Add-Order "neg" "we hid in the cabin" "none" "none" "none" $v 0
+    Add-Order "neg" "let Gasket go first" "none" "any" "none" $v 0
+    Add-Order "neg" "Gasket heal me" "none" "none" "any" $v 0
+}
+# An order and a cast in one breath (loose: both).
+Add-Order "mixed" "Rebar go, cast corn" "rebar go" "rebar go" "corn" $v1 0
+Add-Order "mixed" "cast heal, Gasket follow" "any" "gasket follow" "heal" $v2 0
+Set-Content -Path (Join-Path $OutDir "orders.csv") -Value $orows -Encoding utf8
+
+Write-Output "wrote $n clips + manifest.csv, $([Math]::Max(0, $trows.Count - 1)) trigger clips + triggers.csv, $($orows.Count - 1) order clips + orders.csv to $OutDir (voices: $($Voices -join ', '))"

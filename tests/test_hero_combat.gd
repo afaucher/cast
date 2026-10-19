@@ -91,8 +91,10 @@ func _ally_tests() -> void:
 	check(follow_d < AllyBrain.FORMATION_HEX_MAX * AllyBrain.HEX_STEP + 1.0, "ally follows the leader (%.1f units)" % follow_d)
 	check(follow_d > AllyBrain.FORMATION_HEX_MIN * AllyBrain.HEX_STEP - 1.0, "ally settles at its formation distance, not on top of the leader (%.1f)" % follow_d)
 
-	# Fight: a melee ally kills a nearby dummy; a ranged ally shoots one from range.
+	# Fight: a melee ally kills a nearby dummy; a ranged ally shoots one from range. The leader starts each fight (a dent:
+	# the restraint baseline only joins fights already started, AllyBrain).
 	var d1 := _dummy(leader.global_position + Vector3(3.0, 0, 0), 60.0)
+	d1.apply_damage(1.0, leader)
 	await frames(60 * 4)
 	check(d1.dead or d1.hp < d1.max_hp, "melee ally engages a nearby monster")
 	check(GameWorld.flat_distance(ally.global_position, leader.global_position) < AllyBrain.LEASH + 1.0, "ally stays on its leash")
@@ -101,6 +103,7 @@ func _ally_tests() -> void:
 	var archer := HeroFactory.spawn_hero(Vector2i(0, 2), "Archer", Color.PURPLE, "staff")
 	HeroFactory.make_ally(archer, leader, true, 3.9)
 	var d2 := _dummy(leader.global_position + Vector3(-6.0, 0, -2.0), 200.0)
+	d2.apply_damage(1.0, leader)
 	await frames(60 * 4)
 	check(d2.hp < d2.max_hp, "ranged ally hurts a distant monster")
 	check(GameWorld.flat_distance(archer.global_position, d2.global_position) > 1.5, "ranged ally keeps its distance")
@@ -108,6 +111,7 @@ func _ally_tests() -> void:
 	# Leash: a monster far from the leader is ignored.
 	var far := _dummy(leader.global_position + Vector3(0, 0, 7.5), 100.0)
 	far.global_position = Hex.to_world(Vector2i(-3, 7))
+	far.apply_damage(1.0, leader)   # (in the fight, but too far from the leader)
 	var before := far.hp
 	await frames(60 * 2)
 	check(GameWorld.flat_distance(ally.global_position, leader.global_position) < AllyBrain.LEASH + 1.0, "ally does not wander off after far monsters")

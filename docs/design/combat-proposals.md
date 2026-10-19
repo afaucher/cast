@@ -1,6 +1,7 @@
 # Combat proposals: voice orders, the pavise, the medic and hazards
 
-Status: **design only**, 2026-10-19. Nothing here is built. It follows `combat-variety-research.md` (sections 4 and 6:
+Status: **design only**, 2026-10-19, except section 1 (voice orders and the AI restraint baseline), which is **built**:
+see 1.8 "As built". It follows `combat-variety-research.md` (sections 4 and 6:
 A1, A3, B6, D11 and the environment notes in 5.3). **[proposal]** marks every number and rule still waiting on the user;
 **decided** marks the user's calls, with the date. Open questions are numbered once across the whole doc.
 
@@ -165,6 +166,111 @@ AI damage as well.
 
 **Why it's fun:** the player decides when a fight starts and who the tank goes for (the Bosco lesson); "Rebar, hold" in a
 doorway is a call-out that does something; a mistaken "Rebar goes in" is a recoverable, attributable accident.
+
+### 1.8 As built (2026-10-19)
+Built to 1.0. Where 1.1-1.7 differ from 1.0, 1.0 won (there is no "hold": "go" walks to the spot and holds it).
+
+**Recognition** (`scripts/voice/incantation.gd`, VOICE ORDERS; `VoiceCaster.order_spoken(who, order, heard)`):
+- `<name> <go | attack | follow>`: the name is the trigger, the order word must be the **very next word**, at most
+  `order_window` (1.0 s of recognition time) after it. "cast" stays the spells' trigger; one breath can hold both
+  ("Rebar go, cast corn"). Trailing words are ignored ("Rebar follow me").
+- Orders fire on the utterance's **final** only, never a partial ("REBAR GO" may still become "REBAR GOES IN").
+- A name that ends an utterance waits `order_window` for an order word to open the next one: since the gate's flush,
+  "Rebar, go" with a comma's pause is two utterances.
+- Strict: the name opens the utterance (preamble words aside). Loose and chaos: anywhere. A bare order word never orders
+  anyone, in any mode. A name mid-sentence is labelled accidental (log and stats only, like a cast).
+- The same order to the same name within `order_lockout` (1.5 s) is one order (double fires).
+- Only the exact order words: "goes", "going", "following" are chatter. "followed" counts (the model writes a final
+  "follow" that way). Possessives are not names ("Gasket's down", "everyone's dead").
+- Names and aliases: 1.0's table, plus the model's measured spellings (DENIS, TOD, GARRY/GERRY, CRUE, WE BAR, HODGE'S,
+  KAVIN/CABIN, HENCH FOR, HENCEFORE, MISSUS PIMP, HEDGE / HEDGEMAN for hench) and fused forms (CRUGO, DENISCO,
+  WICKOW, HENCHFOREGO: a name run into its "go").
+- Typed console lines go through the same parser (the console already fed `VoiceCaster.inject_text`).
+- Every order is a row in `user://voice_log.csv` (label `order` or `order:accidental`, `who order`, the gap).
+
+**Who answers** (`scripts/heroes/voice_orders.gd`, `VoiceOrders`):
+- Everyone: the heroes but the speaker, and every employee within earshot (`EARSHOT` 16 of the speaker). Crew: the heroes
+  but the speaker. A hero's name: every hero of that character (two players may both be Wick). Hench: every henchman;
+  Hench Four: "Hench #4" or the floor's "(Henchman 4)". Any other name: the employee whose name starts with it, titles
+  skipped ("Mrs. Pym", "Gary (Henchman 1)"). The speaker is never ordered. A name nobody answers to does nothing.
+- An AI hero takes it (`AllyBrain.give_order`); a downed one does not (no bark). A hero a person plays gets a marker on
+  their own screen for go and attack ("host: go here"), nothing for follow. Employees: `Employee.order`.
+- The crew hears from anywhere (the headset); employees only within earshot. **[decision to confirm]**: without it,
+  "everyone follow" pulls every employee on the floor to you, which skips finding them.
+
+**The orders on an AI hero** (`scripts/heroes/ally_brain.gd`):
+- go: walks to a walkable spot at the speaker's aim point; on the way it fights only what attacks it; there it holds
+  (fights what is in the fight within 6 of the spot, never strays more than 8, walks back). A new go replaces it.
+- attack: fights freely (anything within 9 of itself that is in a fight or in sight, no reaction delay, the bowl opens
+  fights again; never more than 14 from the speaker) until no monster within 10 has been fighting for 1 s, then follows
+  the speaker.
+- follow: clears the order; the speaker becomes its leader (seat 1's hero until then; a new floor starts over).
+- Barks by kit: Rebar "Moving." / "Finally." / "Right behind you."; Gasket "On my way!" / "Hammer time!" / "With you!";
+  Wick "Going!" / "Loosing!" / "Behind you!". With another player in the crew the bark names the speaker ("Moving, Fox.").
+
+**The orders on an employee** (`scripts/contracts/employee.gd`):
+- go: walks to the spot and waits there (a WAIT whose spot is the point: a monster still sends them running, then they
+  walk back). follow: follows the speaker. attack: a henchman FIGHTs (a new employee state, 5 in the stream): runs at the
+  nearest monster within 8 and punches for 3 every 1.1 s, arms flailing, until none is near for 1 s, then follows the
+  speaker ("Did we win?"). Staff refuse: "I'm in accounts!", "Not in my job description!", "I have a lanyard, not a
+  sword!". Monsters punched by a henchman turn on him (30 HP): weak and funny, and the $100 is at risk.
+
+**Feedback**: the speaker's machine plays `order_heard` (a new Sfx cue: two Kenney CC0 ticks, mic-safe like cast heard;
+`tools/render_sfx.ps1` renders it) and, for a go someone took, a waypoint pin at the spot for 3 s (`OrderFx`). Every
+machine shows the AI heroes' bark over their heads (1.8 s) and a gesture (the cast pose); employees speak in their own
+bubble. A player an order names sees a pin and "<speaker>: go here" until their hero reaches it or 12 s pass.
+No stance chip (question 7 stays open).
+
+**The restraint baseline** (no order; `AllyBrain.restraint`, true): the ally only fights a monster already in a fight
+(ALERT, or chasing / attacking anything but another monster; a hellgate once dented), engages it 0.6-1.0 s after it first
+sees it in the fight (rolled per monster from a generator seeded by the floor, on the host), goes first for what attacks
+its leader, then what attacks a teammate (itself included), then the nearest, needs line of sight unless the monster is
+hitting it, and bowls only to peel a monster off a teammate (within 3 of them). No damage cut (question 6 open).
+
+Measured (`tests/test_ally_restraint.gd`: six real floors, a stand-in player that opens fights on what it sees, 110 s a
+floor, the old eager AI vs the restraint baseline, nobody can go down):
+
+| Six floors | Eager AI (before) | Restraint (after) |
+|---|---|---|
+| First hits: player / AI (player's share) | 81 / 64 (56%) | 118 / 65 (64%) |
+| Fights opened (first hit on a monster in no fight): player / AI | 0 / 3 | 5 / 1 (the AI's one: collateral of a swing beside its target) |
+| Kills: player / AI (player's share) | 55 / 90 (38%) | 86 / 93 (48%) |
+| Crew kills, per minute | 145, 13.2 | 179, 16.3 |
+| Median life after the crew's first hit | 0.33 s | 0.25 s |
+
+The player's share of first hits and kills goes up and the crew kills faster (the AI no longer drags the player into the
+next room's fight). Caveat: the stand-in player is a bot that opens on whatever it sees within 8, and monsters usually
+see the crew first (the awareness rules), so most first hits land on monsters already chasing; the AI's remaining first
+hits are on pack-mates of a fight the player started (support, by the rule). The playtest's 130 of 238 Rebar first hits
+came from Rebar walking into rooms ahead of the player, which the restraint baseline stops outright (test_ally_orders: no
+swing, no bowl, no step toward an idle monster). Re-measure on the next playtest's `combat_log.csv`.
+
+**Networking** (`scripts/net/net_orders.gd`, child "Orders" of the Session autoload): the order is heard on the speaker's
+machine, which resolves the aim point; on a crewed floor it is a request (`ord.req`) the host applies once (it runs the AI
+seats and the employees), then `ord.ok` tells everyone (the AI heroes' barks, the people it names for a marker). The
+order itself is the host's AI state (`AllyBrain.order` etc., PRIVATE) or rides the employee's stream and keyframe (state,
+leader, dismissed, wait spot); barks and markers are cosmetic, so a late joiner needs nothing replayed. Shape: a
+host-arbitrated request with a cosmetic event. Solo and a host alone apply it at once. Tested by `test_net_orders`
+(two processes, off and coast).
+
+**Recognition, measured** (`tests/test_voice_orders.gd`, 148 Windows-TTS clips, David + Zira, through the real model):
+
+| | Loose | Strict |
+|---|---|---|
+| Orders heard right (every name x order, aliases, pace) | 100 / 106 (94%) | 56 / 58 (97%) |
+| Chatter that gave an order (38 clips: "Rebar just goes in", "Rebar goes in first", "Gasket's down", "everyone's dead", "let's go", "follow me guys", "Steve followed us here" ...) | 0 | 0 |
+| Order clips that cast a spell (the Gasket / "cast" collision) | 0 | 0 |
+| Spell and chatter clips of `test_voice_audio` that gave an order (the other way round, 435 clip runs) | 0 | 0 |
+| "Rebar go, cast corn" / "cast heal, Gasket follow" (both the order and the cast) | 2 / 2 | 1 / 1 |
+
+The misses: "Pym follow" fused into PIMPHALLOW, "Missus Pym go" heard as MISSUS PHILL / PINKOT, "Alphonse go" as ALP
+VONSKOE, Zira's "Wick go" as WICKELL, Rebar at the fastest pace as REMARGO. "Where did Wick go" and "let Gasket go first"
+are orders in loose by design (measured, reported, not judged). Spells: the recognizer's vocabulary is unchanged (no order
+hotwords), and `test_voice_audio` / `test_voice_triggers` / `test_voice_noise` give the same totals before and after (0
+false fires, 0 confusions, every focus spell 100%, 2 stress misses, median latency 166-168 ms, the trigger table
+identical); 8 of 435 clip runs moved by run-to-run timing jitter (power within 0.03, one "cast coffee" heard as COUGHING
+again), none changed its verdict. Hotwords for the names were measured and dropped: 96% with them vs 94% with the
+measured spellings as aliases (64% with neither, 79% with hotwords alone), not worth touching the spells' vocabulary.
 
 ---
 

@@ -38,9 +38,20 @@ const SOURCES := {
 	"elevator_ding_v4": [K_IMPACT + "impactBell_heavy_000.ogg"],
 	"elevator_ding_v4b": ["synth"],
 	"paper_flip": [K_RPG + "bookFlip3.ogg"],
+	"order_click_v1": [K_UI + "tick_002.ogg"],
 	"fuse_hiss_v5": ["synth"],
 	"fuse_hiss_v6": ["synth"],
 }
+
+
+## A voice order heard (the game's order_heard, 2026-10-19): a radio "click-click", 0.12 s. Two Kenney ticks (tick_002), the
+## second three semitones up, only their top: mic-safe like cast heard (the speaker may go on talking: "Rebar go, cast corn").
+func _order_click_v1() -> PackedFloat32Array:
+	var tk := Rec.trim(Rec.load_mono(K_UI + "tick_002.ogg"), -45.0)
+	var a := Rec.highpass(tk, 4500.0, 2)
+	var b := Rec.highpass(Rec.pitch(tk, 3.0), 4500.0, 2)
+	var s := Rec.fade(Rec.mix(a, b, 0.07), 0.002, 0.02)
+	return _mic_safe(s, -9.0)
 
 
 ## The speech band out, then a peak level: every cast-heard cue ends here.

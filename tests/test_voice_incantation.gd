@@ -52,6 +52,7 @@ func setup() -> void:
 	_test_teeth()
 	_test_vines_damp_coffee()
 	_test_chicken()
+	_test_orders()
 	_test_panel_cards()
 	_test_misc()
 	_test_settings()
@@ -582,6 +583,95 @@ func _test_chicken() -> void:
 	check(not (_inc().config()["mention_spells"] as Array).has("chicken"), "chicken is not a mention spell")
 	for c in _say("cast chicken"):
 		eq(c["spell"], "chicken", "only itself")
+
+
+func _order_events(evs: Array) -> Array:
+	return evs.filter(func(e: Dictionary) -> bool: return e["kind"] == "order").map(func(e: Dictionary) -> String: return "%s %s" % [e["who"], e["order"]])
+
+
+## One typed utterance through a fresh Incantation: the orders, as "who order".
+func _orders_of(text: String, overrides: Dictionary = {}) -> Array:
+	return _order_events(_run(_inc(overrides), [[1.0, text, true]]))
+
+
+## Voice orders (Incantation's VOICE ORDERS): the name is the trigger, the order word follows at once.
+func _test_orders() -> void:
+	# Every official name with every order.
+	for said: String in ["everyone", "crew", "pym", "hench", "hench four", "rebar", "wick", "gasket", "reginald", "beatrice",
+			"alphonse", "hodges", "dorothea", "gary", "steve", "todd", "kevin", "dennis"]:
+		for o: String in ["go", "attack", "follow"]:
+			eq(_orders_of("%s %s" % [said, o]), ["%s %s" % [said, o]], "order: %s %s" % [said, o])
+	# Aliases, punctuation and case as the recognizer writes them.
+	var aliases := {"EVERYBODY GO": "everyone go", "all hands follow": "everyone follow", "Team attack": "crew attack",
+		"SQUAD GO": "crew go", "Mrs. Pym follow": "pym follow", "MISSUS PYM GO": "pym go", "henchmen attack": "hench attack",
+		"henchman follow": "hench follow", "number four go": "hench four go", "Hench #4 go": "hench four go", "RIBAR FOLLOW": "rebar follow",
+		"Rebar, go!": "rebar go", "okay rebar go": "rebar go", "rebar go now": "rebar go", "rebar follow me": "rebar follow"}
+	for text: String in aliases:
+		eq(_orders_of(text), [aliases[text]], "alias: " + text)
+	# A run-together name and order word is split, and the model's measured spellings of the names count.
+	var heard := {"REBARGO": "rebar go", "CRUGO": "crew go", "CREWO": "crew go", "SQUADO": "crew go", "DENISCO": "dennis go",
+		"WICKOW": "wick go", "TODGO": "todd go", "GERRYGO": "gary go", "HENCHFOREGO": "hench four go", "GASKETATTACK": "gasket attack",
+		"STEVE FOLLOWED": "steve follow", "GARRY ATTACK": "gary attack", "TOD FOLLOW": "todd follow", "DENIS ATTACK": "dennis attack",
+		"HENCH FOR ATTACK": "hench four attack", "HENCEFORE FOLLOW": "hench four follow", "MISSUS PIMP FOLLOW": "pym follow",
+		"WE BAR ATTACK": "rebar attack", "CRUE ATTACK": "crew attack", "HEDGE GO": "hench go", "HODGE'S ATTACK": "hodges attack",
+		"ALPHON'S ATTACK": "alphonse attack", "KAVIN FOLLOW": "kevin follow", "CABIN GO": "kevin go"}
+	for text: String in heard:
+		eq(_orders_of(text), [heard[text]], "heard as: " + text)
+	for text: String in ["CASTLE", "TOMATO", "GO TO", "A CABIN IN THE WOODS", "TRIM THE HEDGE", "HODGEPODGE"]:
+		eq(_orders_of(text), [], "no order: " + text)
+	# Chatter: the order word must follow the name at once; possessives and other forms are not the name / order word.
+	for text: String in ["Rebar just goes in", "Rebar goes in first", "Gasket's down", "everyone's dead", "let's go", "follow me guys",
+			"hold on", "crew's dead", "Gasket's holding the door", "go go go", "attack", "nice one Gasket", "the henchmen are attacking",
+			"Gary's following us", "we should go", "rebar going", "gasket heal me", "cast heal", "go rebar", "attack wick",
+			"Steve followed us here"]:
+		eq(_orders_of(text), [], "no order: " + text)
+	# A bare order word never orders anyone, in any mode.
+	for mode: String in ["strict", "loose", "chaos"]:
+		eq(_orders_of("go", {"strictness": mode}), [], "[%s] a bare go" % mode)
+		eq(_orders_of("rebar go", {"strictness": mode}), ["rebar go"], "[%s] rebar go" % mode)
+	# Strict: the name opens the utterance (preamble aside); loose and chaos take it anywhere.
+	eq(_orders_of("where did Wick go", {"strictness": "strict"}), [], "strict: a name mid-sentence is chatter")
+	eq(_orders_of("where did Wick go"), ["wick go"], "loose: name and order word together anywhere (by design)")
+	eq(_orders_of("okay wick go", {"strictness": "strict"}), ["wick go"], "strict: preamble words are fine")
+	var mid: Array = _run(_inc(), [[1.0, "where did Wick go", true]]).filter(func(e: Dictionary) -> bool: return e["kind"] == "order")
+	check(mid.size() == 1 and bool(mid[0]["accidental"]) and not bool(mid[0]["at_start"]), "a mid-sentence order is labelled accidental")
+	# The name and the order word in two utterances (a comma's pause): within order_window it is one order; later, nothing.
+	var inc := _inc()
+	var evs := _run(inc, [[1.0, "REBAR", false], [1.2, "REBAR", true], [1.6, "GO", false], [1.7, "GO", true]])
+	eq(_order_events(evs), ["rebar go"], "REBAR | GO (a short pause) is one order")
+	inc = _inc()
+	evs = _run(inc, [[1.0, "REBAR", true], [3.5, "GO", true]])
+	eq(_order_events(evs), [], "REBAR ... 2.5 s ... GO is not")
+	inc = _inc()
+	evs = _run(inc, [[1.0, "REBAR", true]], 1.0 + float(inc.config()["order_window"]) + 0.2)
+	evs.append_array(_run(inc, [[3.0, "GO", true]]))
+	eq(_order_events(evs), [], "a name waiting for its order word expires")
+	# Partials do not fire an order: only the final ("REBAR GO" could still become "REBAR GOES IN").
+	inc = _inc()
+	eq(_order_events(_run(inc, [[1.0, "REBAR GO", false]])), [], "no order on a partial")
+	eq(_order_events(_run(inc, [[1.3, "REBAR GOES IN", true]])), [], "and the final that turned into chatter gives none")
+	# The double fire: the same order again within order_lockout is one order.
+	inc = _inc()
+	evs = _run(inc, [[1.0, "rebar go", true], [1.6, "rebar go", true], [4.0, "rebar go", true]])
+	eq(_order_events(evs), ["rebar go", "rebar go"], "a repeat within the lockout is dropped, a later one counts")
+	check(evs.any(func(e: Dictionary) -> bool: return e["kind"] == "ignored" and bool(e.get("order", false))), "the dropped one is reported ignored")
+	# Orders and casts in one breath, and the Gasket / "cast" collision both ways.
+	evs = _run(_inc(), [[1.0, "rebar go cast corn", true]])
+	eq(_order_events(evs), ["rebar go"], "an order and a cast: the order")
+	eq(_casts(evs).size(), 1, "... and the cast")
+	eq(_say("gasket go"), [], "Gasket is not the trigger: no cast")
+	eq(_say("gasket heal"), [], "gasket heal: no cast in loose")
+	eq(_orders_of("cast heal"), [], "cast heal: no order")
+	eq(_orders_of("cast go"), [], "cast go: no order (cast is not a name)")
+	# Orders off: nothing.
+	eq(_orders_of("rebar go", {"orders": false}), [], "orders off")
+	# The floor's own employees' names (VoiceCaster.set_order_names).
+	eq(_orders_of("marguerite go"), [], "a name the floor does not have: nothing")
+	eq(_orders_of("Marguerite go", {"order_names_extra": ["marguerite", "gary"]}), ["marguerite go"], "the floor's employee by name")
+	eq(_orders_of("garry follow", {"order_names_extra": ["gary"]}), ["gary follow"], "a name already listed keeps its aliases")
+	# The recognizer's vocabulary: the order hotwords only when set.
+	eq(_inc().vocabulary().size(), 1 + SPELLS.size(), "no order hotwords by default")
+	check(_inc({"order_hotwords": ["rebar", "go"]}).vocabulary().has("rebar"), "order hotwords when set")
 
 
 ## Eleven cards (trigger + ten spells) in a 3-column grid: four rows, and a long

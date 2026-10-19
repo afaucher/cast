@@ -46,6 +46,8 @@ var _bad := 0
 var _confusions: Array = []    # "file [mode]: clip says X, fired Y" (see _confusion_of)
 var _focus_clips := {}         # spell -> deliberate clips about it seen (loose) ...
 var _focus_fired := {}         # ... and how many of them fired that spell
+var _orders: Array = []        # voice orders heard during the current clip (none may be: no clip here says one)
+var _stray_orders: Array = []  # "file [mode]: who order" (the "cast" / Gasket collision the other way round)
 
 
 func _init() -> void:
@@ -87,6 +89,7 @@ func setup() -> void:
 		_fizzles.append({"heard": h, "reason": reason}))
 	caster.heard.connect(func(text: String, is_final: bool) -> void:
 		_hyps.append(("[%s]" if is_final else "%s") % text))
+	caster.order_spoken.connect(func(who: String, o: String, _h: String) -> void: _orders.append("%s %s" % [who, o]))
 
 	var chatter := manifest.filter(func(c: Dictionary) -> bool: return c["group"] in ["bare", "negative"] and str(c["file"]).ends_with("_a0.wav"))
 	print("\n=== loose (default): all clips ===")
@@ -100,6 +103,10 @@ func setup() -> void:
 	_set_mode("loose")
 	_print_matrix(manifest)
 	_print_confusion()
+	# Voice orders (Incantation's VOICE ORDERS) never come out of a spell or chatter clip: "cast" is not heard as a name.
+	print("\nvoice orders from spell and chatter clips: %d" % _stray_orders.size())
+	for line in _stray_orders:
+		_fail("a spell / chatter clip gave a voice order: " + str(line))
 	_realtime_latency(manifest)
 	print("\n%s" % ("all clips behaved" if _bad == 0 else "%d clip(s) misbehaved" % _bad))
 	finish()
@@ -140,6 +147,8 @@ func _run_all(clips: Array, mode: String) -> void:
 			if c["group"] == "clean" and fired.size() == 1:
 				clean_min = minf(clean_min, fired[0]["power"])
 		_note_confusion(c, fired, mode)
+		for o in res["orders"]:
+			_stray_orders.append("%s [%s]: \"%s\" ordered %s" % [c["file"], mode, c["text"], o])
 		if (status == "MISS" or status == "WEAK") and c["group"] in STRESS_GROUPS:
 			stress_misses += 1
 			status = "%s (stress, budget %d)" % [status, STRESS_MISS_BUDGET]
@@ -276,6 +285,7 @@ func _play(c: Dictionary, speed: float = SPEED) -> Dictionary:
 	_casts.clear()
 	_fizzles.clear()
 	_hyps.clear()
+	_orders.clear()
 	var stream := PackedFloat32Array()
 	stream.resize(int(LEAD * RATE))
 	stream.append_array(samples)
@@ -305,7 +315,8 @@ func _play(c: Dictionary, speed: float = SPEED) -> Dictionary:
 	var lat := "-"
 	if not _casts.is_empty():
 		lat = "%+.0fms" % ((float(_casts[0]["t"]) - _voiced_end) * 1000.0)
-	return {"casts": _casts.duplicate(), "fizzles": _fizzles.duplicate(), "hyps": _hyps.duplicate(), "latency": lat}
+	return {"casts": _casts.duplicate(), "fizzles": _fizzles.duplicate(), "hyps": _hyps.duplicate(), "latency": lat,
+		"orders": _orders.duplicate()}
 
 
 # --- clips -----------------------------------------------------------------

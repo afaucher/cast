@@ -144,6 +144,20 @@ extends RefCounted
 ## Adding the hotword: one chaos pass heard David's "fines" as "VI VINES" (it was "FI NES" in the other passes and before),
 ## so "fines" now counts as heard-as-vines in chaos, like "binds".
 ##
+## VOICE ORDERS (2026-10-19; docs/design/combat-proposals.md 1.0 / 1.8): "<name> <go | attack | follow>" gives an event
+## {"kind": "order", "who": name key, "order", "heard", "gap", "at_start", "accidental", "t"}. The name is the trigger (no
+## "cast"); the order word must be the very next token, within `order_window` of recognition time (timed from when each
+## word's slot first appeared, so a word still being heard, "AT" -> "ATTACK", is not a pause). Finals only: a partial
+## "REBAR GO" may still become "REBAR GOES IN". A name that ends an utterance waits `order_window` (from that final) for an
+## order word to open the next one. Strict: the name opens the utterance (preamble aside); loose / chaos: anywhere; a bare
+## order word never orders anyone. The same order to the same name within `order_lockout` is one order ("ignored").
+## Names (`order_names`) are the decided ones plus measured spellings; a name fused with its "go" ("CRUGO", "DENISCO",
+## "WICKOW") is split (`order_fused_go`). Possessives are not names. Spells and orders never share a word, so they never
+## interfere; "GASKET" is never heard as the trigger. Measured with tests/test_voice_orders.gd (148 TTS clips, David + Zira):
+## 94% of the order clips heard right in loose (97% strict), 0 false orders from 38 chatter clips, 0 casts from order clips,
+## 0 orders from test_voice_audio's clips. No order hotwords (`order_hotwords` empty, so the spells' vocabulary is what it
+## was): with the names as hotwords it was 96%, without aliases 64%. Details: combat-proposals.md 1.8.
+##
 ## POWER = cast_q * spell_q * gap_factor * (1 - extras), in (0, 1]:
 ##   cast_q, spell_q  quality of the matched words (tables below; 1.0 exact or
 ##                    homophone, down to ~0.6 for a near miss).
@@ -292,6 +306,49 @@ const TUNING := {
 			"chicken": 1.0, "chickens": 1.0,
 		},
 	},
+	# --- Voice orders (see VOICE ORDERS below) ---
+	# Orders on or off (the game turns them on; Incantation on its own parses them too).
+	"orders": true,
+	# Recognition-time budget from the end of the name to the order word (seconds). Like the spells' gap_free: a fluent
+	# "Rebar go" measures 0-0.35 s, a 0.3 s pause (two utterances since the gate's flush) about 0.65-0.95 s.
+	"order_window": 1.0,
+	# The same order to the same name again sooner than this is one order (the recognizer's double fires).
+	"order_lockout": 1.5,
+	# Order -> {heard word: quality}. Only the exact words: "goes" / "going" are chatter ("Rebar goes in first").
+	# "followed": the model writes a final "follow" so (both voices, measured).
+	"order_words": {
+		"go": {"go": 1.0},
+		"attack": {"attack": 1.0},
+		"follow": {"follow": 1.0, "followed": 0.9},
+	},
+	# Name key (VoiceOrders resolves it to characters) -> {heard phrase: quality}. The key is the official name; the
+	# aliases are the decided ones (combat-proposals.md 1.0) plus the model's measured spellings of each name (VOICE ORDERS).
+	"order_names": {
+		"everyone": {"everyone": 1.0, "everybody": 1.0, "every one": 1.0, "every body": 1.0, "all hands": 1.0},
+		"crew": {"crew": 1.0, "team": 1.0, "squad": 1.0, "crue": 0.9, "cru": 0.9},
+		"pym": {"pym": 1.0, "pim": 1.0, "mrs pym": 1.0, "mrs pim": 1.0, "missus pym": 1.0, "missus pim": 1.0,
+			"misses pym": 1.0, "misses pim": 1.0, "missus pimp": 0.9, "mrs pimp": 0.9, "missus pin": 0.9},
+		"hench": {"hench": 1.0, "henchmen": 1.0, "henchman": 1.0, "hedge": 0.8, "hedgeman": 0.9, "hedgemen": 0.9},
+		"hench four": {"hench four": 1.0, "hench 4": 1.0, "number four": 1.0, "number 4": 1.0, "hench for": 0.9,
+			"henchfore": 0.9, "hencefore": 0.9, "hedgefore": 0.9},
+		"rebar": {"rebar": 1.0, "ribar": 0.9, "we bar": 0.9, "ribard": 0.9},
+		"wick": {"wick": 1.0, "whit": 0.8, "whig": 0.8, "wig": 0.8},
+		"gasket": {"gasket": 1.0},
+		"reginald": {"reginald": 1.0}, "beatrice": {"beatrice": 1.0},
+		"alphonse": {"alphonse": 1.0, "alphons": 0.9, "alphon's": 0.9, "alp vons": 0.9, "alp von's": 0.9},
+		"hodges": {"hodges": 1.0, "hodge's": 0.9, "hodge": 0.9}, "dorothea": {"dorothea": 1.0},
+		"gary": {"gary": 1.0, "garry": 1.0, "gerry": 0.9}, "steve": {"steve": 1.0},
+		"todd": {"todd": 1.0, "tod": 1.0}, "kevin": {"kevin": 1.0, "kavin": 0.9, "cabin": 0.8},
+		"dennis": {"dennis": 1.0, "denis": 1.0},
+	},
+	# A name run together with its order word ("CRUGO", "DENISCO", "WICKOW") ends in one of these: read as "go".
+	"order_fused_go": ["go", "ko", "co", "ow", "o"],
+	# Extra words handed to the recognizer as hotwords for the orders (besides the trigger and the spells). Empty: the
+	# names and order words are left to the plain model (see VOICE ORDERS for why).
+	"order_hotwords": [],
+	# More one-word names, each its own key: the floor's employees (VoiceCaster.set_order_names). A word that is already a
+	# name or an alias above is skipped.
+	"order_names_extra": [],
 }
 
 const STRICTNESS := ["strict", "loose", "chaos"]
@@ -311,6 +368,7 @@ var _preamble: Dictionary = {}
 var _serial := 0
 var _toks: PackedStringArray = PackedStringArray()
 var _tok_t: Array[float] = []
+var _tok_first: Array[float] = []   # when each token slot first appeared in this utterance (the orders' timing)
 var _utt_last_t := -1e9
 var _consumed := -1             # token indexes <= this were used by a fired cast
 var _spent: Dictionary = {}     # trigger token idx -> true once resolved this utterance
@@ -321,6 +379,13 @@ var _pending: Dictionary = {}
 var _armed_key := ""            # "<utterance serial>:<token idx>" of the last trigger_armed (a revised partial re-arms nothing)
 var _last_fire: Dictionary = {}
 var _last_final_t := -1e9
+
+# Voice orders (see VOICE ORDERS).
+var _orders_on := true
+var _name_phrases: Array = []   # [{who, toks, q}], longest then best first
+var _order_tokens: Dictionary = {}   # heard word -> [order, q]
+var _pending_name: Dictionary = {}   # a name that ended the last utterance: {who, t, at_start, token}; its order word may open the next
+var _last_order: Dictionary = {}     # "who|order" -> t of the last one fired
 
 
 func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]), overrides: Dictionary = {}) -> void:
@@ -337,6 +402,7 @@ func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball",
 	for w in _cfg["preamble"]:
 		_preamble[str(w)] = true
 	_build_trigger_phrases()
+	_build_order_phrases()
 	var table: Dictionary = _cfg["spells"]
 	for id in spell_ids:
 		var entries: Dictionary = table.get(id, {id: 1.0})
@@ -368,6 +434,33 @@ func _build_trigger_phrases() -> void:
 	_trig_phrases.sort_custom(_longest_first)
 
 
+func _build_order_phrases() -> void:
+	_orders_on = bool(_cfg.get("orders", true))
+	var names: Dictionary = _cfg.get("order_names", {})
+	for who in names:
+		var entries: Dictionary = names[who]
+		for phrase in entries:
+			_name_phrases.append({"who": str(who), "toks": PackedStringArray(str(phrase).split(" ")), "q": float(entries[phrase])})
+	# The floor's own employees' names (VoiceCaster.set_order_names: "marguerite", "okafor"), each its own key.
+	for extra in (_cfg.get("order_names_extra", []) as Array):
+		var w := str(extra).to_lower().strip_edges()
+		if w != "" and not w.contains(" ") and not names.has(w) and not _order_tokens_has_name(w):
+			_name_phrases.append({"who": w, "toks": PackedStringArray([w]), "q": 1.0})
+	_name_phrases.sort_custom(_longest_first)
+	var words: Dictionary = _cfg.get("order_words", {})
+	for order in words:
+		for w in (words[order] as Dictionary):
+			_order_tokens[str(w)] = [str(order), float(words[order][w])]
+
+
+## True when `w` already is a heard form of some name.
+func _order_tokens_has_name(w: String) -> bool:
+	for ph in _name_phrases:
+		if (ph["toks"] as PackedStringArray).size() == 1 and (ph["toks"] as PackedStringArray)[0] == w:
+			return true
+	return false
+
+
 func trigger_word() -> String:
 	return _trigger
 
@@ -382,11 +475,28 @@ func vocabulary() -> PackedStringArray:
 	for id in _spell_ids:
 		if not out.has(id):
 			out.append(id)
+	if _orders_on:
+		for w in (_cfg.get("order_hotwords", []) as Array):
+			if not out.has(str(w)):
+				out.append(str(w))
 	return out
 
 
 func config() -> Dictionary:
 	return _cfg
+
+
+## True when `tok` (lower case) is a name or an order word of the order grammar (VoiceCaster's fragment rejoin must not
+## glue "REBAR" + "GO" into one word).
+func is_order_word(tok: String) -> bool:
+	if not _orders_on:
+		return false
+	if _order_tokens.has(tok):
+		return true
+	for ph in _name_phrases:
+		if (ph["toks"] as PackedStringArray)[0] == tok:
+			return true
+	return false
 
 
 ## Forget everything (between levels, tests).
@@ -395,6 +505,8 @@ func reset() -> void:
 	_pending = {}
 	_last_fire = {}
 	_last_final_t = -1e9
+	_pending_name = {}
+	_last_order = {}
 
 
 ## True while a trigger has been heard and the spell word is still awaited.
@@ -433,6 +545,7 @@ func feed(text: String, final: bool, t: float) -> Array:
 		_try_bare_cast(tokens, final, t, events)
 
 	if final:
+		_try_orders(tokens, t, events)
 		_finish_utterance(events)
 		_last_final_t = t
 	return events
@@ -442,6 +555,8 @@ func feed(text: String, final: bool, t: float) -> Array:
 func tick(t: float) -> Array:
 	var events: Array = []
 	_expire(t, events)
+	if not _pending_name.is_empty() and t - float(_pending_name["t"]) > float(_cfg["order_window"]):
+		_pending_name = {}
 	if t - _utt_last_t > float(_cfg["utterance_gap"]) and not _toks.is_empty():
 		_end_utterance()
 	return events
@@ -528,8 +643,30 @@ func _prepare_tokens(text: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	for tok in tokenize(text):
 		for p in _split_compound(tok):
-			out.append(p)
+			for q in _split_order(p):
+				out.append(q)
 	return out
+
+
+## A run-together name and order word into the two: "REBARGO", "GASKETATTACK", and the measured fusions of a name with "go"
+## ("CRUGO", "CREWO", "DENISCO", "WICKOW": order_fused_go).
+func _split_order(tok: String) -> PackedStringArray:
+	if not _orders_on or tok.length() < 5 or _order_tokens.has(tok) or is_order_word(tok):
+		return PackedStringArray([tok])
+	var tails: Array = []
+	for w: String in _order_tokens:
+		tails.append([w, w])
+	for w in (_cfg.get("order_fused_go", []) as Array):
+		tails.append([str(w), "go"])
+	for tail: Array in tails:
+		var w: String = tail[0]
+		if tok.length() >= w.length() + 3 and tok.ends_with(w):
+			var head := tok.substr(0, tok.length() - w.length())
+			for ph in _name_phrases:
+				var pt: PackedStringArray = ph["toks"]
+				if pt.size() == 1 and pt[0] == head:
+					return PackedStringArray([head, str(tail[1])])
+	return PackedStringArray([tok])
 
 
 func _is_single_trigger(tok: String) -> bool:
@@ -563,6 +700,11 @@ func _update_times(tokens: PackedStringArray, t: float) -> void:
 			times.append(_tok_t[i])
 		else:
 			times.append(t)
+	# The orders time a word from when its slot first appeared, whatever it said then ("AT" -> "ATTA" -> "ATTACK" is one word
+	# being heard, not a pause).
+	while _tok_first.size() < tokens.size():
+		_tok_first.append(t)
+	_tok_first.resize(tokens.size())
 	_toks = tokens
 	_tok_t = times
 
@@ -889,6 +1031,88 @@ func _try_bare_cast(tokens: PackedStringArray, final: bool, t: float, events: Ar
 		return
 
 
+# --- voice orders: "<name> <go | attack | follow>" ---------------------------------
+
+## The name phrase starting at tokens[i]: {who, n, q} or {}.
+func _name_at(tokens: PackedStringArray, i: int) -> Dictionary:
+	for ph in _name_phrases:
+		var pt: PackedStringArray = ph["toks"]
+		if i + pt.size() > tokens.size():
+			continue
+		var ok := true
+		for k in pt.size():
+			if tokens[i + k] != pt[k]:
+				ok = false
+				break
+		if ok:
+			return {"who": ph["who"], "n": pt.size(), "q": ph["q"]}
+	return {}
+
+
+## The order word at tokens[i]: {order, q} or {}.
+func _order_at(tokens: PackedStringArray, i: int) -> Dictionary:
+	if i >= tokens.size() or not _order_tokens.has(tokens[i]):
+		return {}
+	var o: Array = _order_tokens[tokens[i]]
+	return {"order": o[0], "q": o[1]}
+
+
+## A whole utterance (a final): every name followed AT ONCE by an order word (nothing between them, at most order_window
+## of recognition time apart) is an order. Strict wants the name to open the utterance (preamble aside); loose and chaos
+## take it anywhere. A name that ends the utterance waits (order_window) for an order word to open the next one: with the
+## gate's flush, "Rebar, go" with a comma's pause is two utterances.
+func _try_orders(tokens: PackedStringArray, t: float, events: Array) -> void:
+	if not _orders_on:
+		_pending_name = {}
+		return
+	var window: float = _cfg["order_window"]
+	var i := 0
+	if tokens.is_empty():
+		return   # (an empty final keeps a name that is waiting for its order word)
+	if not _pending_name.is_empty():
+		var o0 := _order_at(tokens, 0)
+		var gap0 := _tok_first[0] - float(_pending_name["t"])   # (from the end of the name's utterance to this one's start)
+		if not o0.is_empty() and gap0 <= window:
+			_fire_order(str(_pending_name["who"]), str(o0["order"]), "%s %s" % [_pending_name["token"], tokens[0]], gap0,
+				bool(_pending_name["at_start"]), t, events)
+			i = 1
+	_pending_name = {}
+	while i < tokens.size():
+		var nm := _name_at(tokens, i)
+		if nm.is_empty():
+			i += 1
+			continue
+		var e: int = i + int(nm["n"])
+		var at_start := bool(_lead_of(tokens, i)["at_start"])
+		if _strictness == "strict" and not at_start:
+			i = e
+			continue
+		var token := " ".join(tokens.slice(i, e))
+		if e >= tokens.size():
+			_pending_name = {"who": nm["who"], "t": t, "at_start": at_start, "token": token}
+			break
+		var o := _order_at(tokens, e)
+		var gap := _tok_first[e] - _tok_first[e - 1]
+		if not o.is_empty() and float(o["q"]) < 1.0 and e < tokens.size() - 1:
+			o = {}   # (a heard-as form, "followed", only as the last word: "Steve followed us here" is chatter)
+		if o.is_empty() or gap > window:
+			i = e
+			continue
+		_fire_order(str(nm["who"]), str(o["order"]), "%s %s" % [token, tokens[e]], gap, at_start, t, events)
+		i = e + 1
+
+
+func _fire_order(who: String, order: String, heard: String, gap: float, at_start: bool, t: float, events: Array) -> void:
+	var key := "%s|%s" % [who, order]
+	if t - float(_last_order.get(key, -1e9)) < float(_cfg["order_lockout"]):
+		events.append({"kind": "ignored", "spell": "%s %s" % [who, order], "heard": heard, "reason": "repeat", "order": true})
+		return
+	_last_order[key] = t
+	# (`accidental` is the same heuristic label as a cast's: the name buried mid-sentence. Stats and the log only.)
+	events.append({"kind": "order", "who": who, "order": order, "heard": heard, "gap": maxf(gap, 0.0),
+		"at_start": at_start, "accidental": not at_start, "t": t})
+
+
 # --- utterance and trigger lifetime --------------------------------------------
 
 func _finish_utterance(events: Array) -> void:
@@ -912,6 +1136,7 @@ func _end_utterance() -> void:
 	_serial += 1
 	_toks = PackedStringArray()
 	_tok_t = []
+	_tok_first = []
 	_consumed = -1
 	_spent = {}
 	_utt_last_t = -1e9

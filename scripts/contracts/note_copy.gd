@@ -196,6 +196,25 @@ const DISPATCH := {
 	],
 }
 
+## The headset line when the origin gate closes (Game).
+const ORIGIN_SHUT := "The origin gate is shut. The site calms down. The invoice does not."
+
+## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
+## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No
+## pay in the line (user, 2026-10-19: "trim all the mentions of {pay}"): every line can be voiced ahead of time
+## (DispatchVoice enumerates them). %s is the employee's display_name, %d how many rode out together.
+const RESCUE_ONE: Array[String] = [
+	"Copy, %s is out.",
+	"%s just walked past my desk.",
+	"Got %s. All fingers accounted for.",
+	"%s is topside and asking for a lawyer.",
+]
+const RESCUE_MANY: Array[String] = [
+	"Copy, %d staff out.",
+	"%d of them just came through.",
+	"Headcount up by %d.",
+]
+
 ## Which hint kind a slot belongs to (so a hint slip never repeats what the story note gave).
 const SLOT_KIND := {
 	"staff": "staff", "STAFF": "staff", "staff_room": "staff", "STAFF_ROOM": "staff", "staff_count": "staff",

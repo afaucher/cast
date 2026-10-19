@@ -16,6 +16,21 @@ extends Node
 ## snapped to real floor so a slot never lands in a wall. Heroes keep PERSONAL_SPACE from each other, and
 ## an ally standing in the leader's path steps out of the lane (or falls behind it in a one-wide hall)
 ## instead of blocking. None of this applies while there is something to fight.
+##
+## RESTRAINT (combat-variety-research.md A1, combat-proposals.md 1.0 / 1.4; the default, with no order): the ally follows
+## and supports, it never leads. It only joins a fight already started (a monster ALERT, or chasing / attacking anyone but
+## another monster; a hellgate once the crew has dented it), REACT_MIN..MAX seconds after it first sees that monster in
+## the fight (rolled per monster from a generator seeded by the floor), goes first for what is attacking its leader, then
+## what is attacking a teammate (itself included), then the nearest, and needs line of sight unless the monster is hitting
+## it. Rebar's bowl peels a monster off a teammate (within PEEL_RANGE of the hero it attacks); it never opens a fight.
+## `restraint` false is the old eager AI (the nearest monster near the leader, at once), kept so tests can measure both.
+##
+## ORDERS (voice, VoiceOrders; combat-proposals.md 1.0): one at a time, `give_order(kind, by, point)` on the host:
+##   "go"      walk to `point` (a walkable spot near where the speaker aimed), then hold there until a new order: fight
+##             what is in the fight within HOLD_RANGE of the spot (on the way there, only what attacks the ally itself)
+##   "attack"  fight freely: anything within ATTACK_RANGE of the ally, no reaction delay, the bowl opens fights again,
+##             until nothing near it has fought for ATTACK_QUIET; then it follows the speaker (no order)
+##   "follow"  clears the order; the speaker becomes the leader (until then it is seat 1's hero)
 
 const HEX_STEP := Hex.INNER * 2.0   ## world distance between two adjacent hex centers
 const FORMATION_HEX_MIN := 2.5      ## formation distance range, in hexes from the leader
@@ -40,9 +55,30 @@ const BOWL_LANE := 1.0         ## skip a throw that would pass this close to ano
 const PROP_MARGIN := 0.3       ## a prop this much beyond a swing's reach / a lane's width still counts as in the way
 const ARC_SLACK_DEG := 8.0     ## a swing turned this far short of its half-arc still has the target in it
 const SIDESTEP_TIME := 0.45    ## a blocked attack steps around the target for this long before it tries again
+# Restraint (see the header).
+const REACT_MIN := 0.6         ## seconds from first seeing a monster in the fight to engaging it ...
+const REACT_MAX := 1.0         ## ... rolled per monster
+const PEEL_RANGE := 3.0        ## the bowl only goes at a monster this close to the teammate it is attacking
+# Orders (see the header).
+const HOLD_RANGE := 6.0        ## "go", arrived: fight what is in the fight this close to the spot ...
+const HOLD_LEASH := 8.0        ## ... and never farther than this from it
+const GO_ARRIVED := 0.7        ## "go": this close to the spot counts as there
+const ATTACK_RANGE := 9.0      ## "attack": anything within this of the ally ...
+const ATTACK_LEASH := 14.0     ## ... while it is no farther than this from the speaker
+const ATTACK_END_RANGE := 10.0 ## "attack" ends once no monster within this is in the fight ...
+const ATTACK_QUIET := 1.0      ## ... for this long
+## What the ally says when it takes an order, by kit (VoiceOrders shows it over its head on every screen).
+const BARKS := {
+	"rebar": {"go": "Moving.", "attack": "Finally.", "follow": "Right behind you."},
+	"gasket": {"go": "On my way!", "attack": "Hammer time!", "follow": "With you!"},
+	"wick": {"go": "Going!", "attack": "Loosing!", "follow": "Behind you!"},
+	"": {"go": "On it.", "attack": "On it.", "follow": "On you."},
+}
 
 ## True: AI allies keep the client's property out of their swings, spins, bowls and shots (tests measure it off too).
 static var prop_care := true
+## True: the restraint baseline (see the header). False: the old eager AI, for measuring the difference.
+static var restraint := true
 
 @export var prefers_ranged := false
 @export var formation_angle := 2.4   ## radians; where around the leader this ally likes to stand (PI = straight behind)
@@ -63,13 +99,24 @@ var _sidestep_until := -1.0       ## stepping around the target to a clean angle
 var _sidestep_dir := Vector3.ZERO
 ## Measurements (tests): attacks held for a prop in the way.
 var held_for_props := 0
+## The order it is under: "" (none), "go" or "attack" ("follow" clears it). See the header.
+var order := ""
+var order_point := Vector3.INF    ## "go": the spot
+var order_by: Hero = null         ## who gave the order
+var _arrived := false             ## "go": reached the spot once (from then on it holds there)
+var _quiet_since := -1.0          ## "attack": nothing near has been fighting since then (-1: something is)
+var _foe: Actor = null            ## the monster it is fighting (kept while it stays a fair pick)
+var _react_at: Dictionary = {}    ## monster instance id -> when this ally may engage it (the reaction delay)
+var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
 	hero = get_parent() as Hero
+	_rng.seed = GameWorld.rng.seed ^ hash(hero.display_name if hero != null else name)
 
 
-## Who may write each var (see Net). The host runs every AllyBrain; all of it is its working state.
+## Who may write each var (see Net). The host runs every AllyBrain; all of it is its working state (an order reaches the
+## host as a request, NetOrders; what the other screens see of it is the bark event and the hero's own stream).
 func net_fields() -> Dictionary:
 	return {
 		"prefers_ranged": Net.SPAWN, "formation_angle": Net.SPAWN, "formation_dist": Net.SPAWN,
@@ -79,6 +126,9 @@ func net_fields() -> Dictionary:
 		"_leader_walking_until": Net.PRIVATE,
 		"_path": Net.PRIVATE, "_path_goal": Net.PRIVATE, "_path_idx": Net.PRIVATE, "_repath_at": Net.PRIVATE,
 		"_sidestep_until": Net.PRIVATE, "_sidestep_dir": Net.PRIVATE, "held_for_props": Net.PRIVATE,
+		"order": Net.PRIVATE, "order_point": Net.PRIVATE, "order_by": Net.PRIVATE, "_arrived": Net.PRIVATE,
+		"_quiet_since": Net.PRIVATE, "_foe": Net.PRIVATE, "_react_at": Net.PRIVATE,
+		"_rng": Net.PRIVATE,      # the reaction delays: a generator seeded from the floor, rolled on the host only
 	}
 
 
@@ -86,11 +136,117 @@ func _physics_process(delta: float) -> void:
 	_track_leader()
 	if hero == null or hero.dead or hero.is_helpless():
 		return
-	var foe := _pick_target()
-	if foe:
-		_fight(foe, delta)
+	match order:
+		"go":
+			_tick_go(delta)
+		"attack":
+			_tick_attack(delta)
+		_:
+			var foe := _pick_target()
+			if foe:
+				_fight(foe, delta)
+			else:
+				_follow(delta)
+
+
+# --- Orders ---------------------------------------------------------------------------------------
+
+## Take a voice order (VoiceOrders, on the host): "go" (to `point`), "attack" or "follow". `by` is the speaker's hero.
+## Returns what the ally says, or "" when it can't take it (down).
+func give_order(kind: String, by: Hero, point: Vector3 = Vector3.INF) -> String:
+	if hero == null or hero.dead:
+		return ""
+	_foe = null
+	_arrived = false
+	_quiet_since = -1.0
+	_path.clear()
+	_repath_at = 0.0
+	match kind:
+		"follow":
+			order = ""
+			if by != null:
+				leader = by
+		"go":
+			if point == Vector3.INF:
+				return ""
+			order = "go"
+			order_point = _snap_point(point)
+			hero.face_point(order_point)
+		"attack":
+			order = "attack"
+			if by != null:
+				leader = by   # (it follows the speaker when the fight is over)
+		_:
+			return ""
+	order_by = by
+	var lines: Dictionary = BARKS.get(hero.kit_id, BARKS[""])
+	return str(lines.get(kind, ""))
+
+
+## "go": walk to the spot, then hold it. On the way only what attacks the ally itself is fought; once there, whatever is
+## in the fight near the spot.
+func _tick_go(delta: float) -> void:
+	var d := GameWorld.flat_distance(hero.global_position, order_point)
+	if not _arrived and d <= GO_ARRIVED:
+		_arrived = true
+	var foe: Actor = null
+	if _arrived:
+		if d <= HOLD_LEASH:
+			foe = _pick_restrained(order_point, HOLD_RANGE)
 	else:
-		_follow(delta)
+		foe = _pick_restrained(order_point, 0.0)   # (range 0: self-defence only)
+	if foe != null:
+		_fight(foe, delta)
+	elif d > SLOT_REACHED:
+		_move_toward(order_point, delta)
+
+
+## "attack": fight anything near, no restraint; when nothing near has been fighting for ATTACK_QUIET, follow the speaker.
+func _tick_attack(delta: float) -> void:
+	var foe: Actor = null
+	if leader == null or leader.dead or GameWorld.flat_distance(hero.global_position, leader.global_position) <= ATTACK_LEASH:
+		foe = _pick_free(hero.global_position, ATTACK_RANGE)
+	if foe != null:
+		_quiet_since = -1.0
+		_fight(foe, delta)
+		return
+	var fighting := false
+	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
+		if _in_fight(m) and GameWorld.flat_distance(m.global_position, hero.global_position) <= ATTACK_END_RANGE:
+			fighting = true
+			break
+	if fighting:
+		_quiet_since = -1.0
+	elif _quiet_since < 0.0:
+		_quiet_since = GameWorld.time
+	elif GameWorld.time - _quiet_since >= ATTACK_QUIET:
+		order = ""   # the fight is over: back to following the speaker (the leader since the order)
+		_quiet_since = -1.0
+	_follow(delta)
+
+
+## The walkable floor cell nearest `p` (within 3 rings, any level), else `p`.
+func _snap_point(p: Vector3) -> Vector3:
+	var map: HexMap = GameWorld.map
+	if map == null:
+		return p
+	var c0 := Hex.from_world(p)
+	if map.is_walkable_cell(c0):
+		var lv0 := map.ground_level(p)
+		return Vector3(p.x, p.y if is_nan(lv0) else lv0, p.z)
+	var best := Vector2i(1 << 20, 1 << 20)
+	var best_d := INF
+	for c in Hex.range_cells(c0, 3):
+		if not map.is_walkable_cell(c):
+			continue
+		var d := GameWorld.flat_distance(Hex.to_world(c), p)
+		if d < best_d:
+			best_d = d
+			best = c
+	if best_d == INF:
+		return p
+	var lv := map.ground_level(Hex.to_world(best))
+	return Hex.to_world(best, 0.0 if is_nan(lv) else lv)
 
 
 ## Seed the formation's heading before the leader has walked anywhere: the slots trail opposite `dir`. The elevator's
@@ -105,21 +261,130 @@ func _anchor() -> Vector3:
 	return leader.global_position if leader and not leader.dead else hero.global_position
 
 
-## Nearest monster to this ally among those close to the leader, unless we are too far out.
+## No order: under the restraint baseline, the best monster already in the fight near the leader (see the header); without
+## it (tests), the old eager pick. Nothing while we are too far out.
 func _pick_target() -> Actor:
 	if leader and not leader.dead and GameWorld.flat_distance(hero.global_position, leader.global_position) > LEASH:
 		return null
-	var anchor := _anchor()
+	if not restraint:
+		return _pick_eager(_anchor(), ENGAGE_RANGE)
+	return _pick_restrained(_anchor(), ENGAGE_RANGE)
+
+
+## The old pick (restraint off): the monster nearest this ally among those within `reach` of `anchor`.
+func _pick_eager(anchor: Vector3, reach: float) -> Actor:
 	var best: Actor = null
 	var best_d := INF
 	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
-		if GameWorld.flat_distance(m.global_position, anchor) > ENGAGE_RANGE:
+		if GameWorld.flat_distance(m.global_position, anchor) > reach:
 			continue
 		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
 		if d < best_d:
 			best_d = d
 			best = m
 	return best
+
+
+## "attack": the nearest monster within `reach` of `anchor` that is in the fight or in sight (it opens fights), no delay.
+func _pick_free(anchor: Vector3, reach: float) -> Actor:
+	if _foe != null and is_instance_valid(_foe) and not _foe.dead \
+			and GameWorld.flat_distance(_foe.global_position, anchor) <= reach:
+		return _foe
+	var best: Actor = null
+	var best_d := INF
+	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
+		if GameWorld.flat_distance(m.global_position, anchor) > reach:
+			continue
+		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
+		if d < best_d and (_in_fight(m) or _has_los(m)):
+			best_d = d
+			best = m
+	_foe = best
+	return best
+
+
+## The restraint pick (see the header): among the monsters in the fight within `reach` of `anchor` (and any monster attacking
+## this ally, wherever it is), those this ally has had time to react to, with line of sight unless it is hitting the ally:
+## what attacks the leader, then what attacks a teammate, then the rest, nearest first. The current foe is kept while it
+## is still as good a pick as the best.
+func _pick_restrained(anchor: Vector3, reach: float) -> Actor:
+	var now := GameWorld.time
+	var best: Actor = null
+	var best_rank := 99
+	var best_d := INF
+	var keep_rank := 99
+	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
+		if not _in_fight(m):
+			continue
+		var on_me := _target_of(m) == hero
+		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
+		if not on_me and GameWorld.flat_distance(m.global_position, anchor) > reach:
+			continue
+		if on_me and d > ENGAGE_RANGE:
+			continue
+		if not on_me and not _has_los(m):
+			continue
+		var id := m.get_instance_id()
+		if not _react_at.has(id):
+			_react_at[id] = now + _rng.randf_range(REACT_MIN, REACT_MAX)
+		if now < float(_react_at[id]):
+			continue
+		var rank := _rank(m)
+		if m == _foe:
+			keep_rank = rank
+		if rank < best_rank or (rank == best_rank and d < best_d):
+			best_rank = rank
+			best_d = d
+			best = m
+	if _foe != null and is_instance_valid(_foe) and not _foe.dead and keep_rank <= best_rank:
+		best = _foe
+	_foe = best
+	if _react_at.size() > 64:
+		_forget_gone()
+	return best
+
+
+## Already in the fight (the restraint baseline never opens one): a monster on ALERT (its pack heard a fight), or chasing /
+## attacking anything but another monster (a restless brute's brawl is not the crew's fight); a hellgate (or any other
+## monster-side actor) once the crew has dented it.
+func _in_fight(m: Actor) -> bool:
+	if m == null or m.dead:
+		return false
+	var mm := m as Monster
+	if mm == null:
+		return m.hp < m.max_hp - 0.01
+	if mm.state == Monster.State.ALERT:
+		return true
+	if mm.state == Monster.State.CHASE or mm.state == Monster.State.ATTACK:
+		return mm.target == null or not is_instance_valid(mm.target) or mm.target.team != GameWorld.TEAM_MONSTERS
+	return false
+
+
+## Who a monster is going for (null for none, or for a hellgate).
+func _target_of(m: Actor) -> Actor:
+	var mm := m as Monster
+	if mm == null or mm.target == null or not is_instance_valid(mm.target):
+		return null
+	return mm.target
+
+
+## 0: it attacks the leader; 1: a teammate (this ally included); 2: anything else.
+func _rank(m: Actor) -> int:
+	var t := _target_of(m)
+	if t == null:
+		return 2
+	if t == leader:
+		return 0
+	return 1 if t.team == hero.team else 2
+
+
+func _forget_gone() -> void:
+	var live := {}
+	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
+		live[m.get_instance_id()] = true
+	for id: int in _react_at.keys():
+		if not live.has(id):
+			_react_at.erase(id)
 
 
 func _fight(foe: Actor, delta: float) -> void:
@@ -415,6 +680,8 @@ func _try_secondary(foe: Actor) -> bool:
 				return false   # a prop within the spin: the hammer will do
 			return hero.shoot(hero.facing)
 	elif hero.secondary_kind == "bowl":
+		if restraint and order != "attack" and not _peels(foe):
+			return false   # (the bowl peels a monster off a teammate; it never opens a fight)
 		var to := foe.global_position - hero.global_position
 		to.y = 0.0
 		var d := to.length()
@@ -423,6 +690,13 @@ func _try_secondary(foe: Actor) -> bool:
 			hero.face_point(foe.global_position)
 			return hero.shoot(to / d)
 	return false
+
+
+## A bowl at `foe` would peel it off a teammate: it is attacking another hero and is within PEEL_RANGE of them.
+func _peels(foe: Actor) -> bool:
+	var t := _target_of(foe)
+	return t != null and t != hero and t.team == hero.team and not t.dead \
+			and GameWorld.flat_distance(foe.global_position, t.global_position) <= PEEL_RANGE
 
 
 ## True when no other living hero stands within BOWL_LANE of the boulder's path.

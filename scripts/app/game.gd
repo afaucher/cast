@@ -835,6 +835,12 @@ func _populate_site() -> void:
 			g.connect("closed", _on_gate_closed)
 	for e in _site.employees:
 		e.damaged.connect(func(_amount: float, source: Node) -> void: _emp_cause[e.get_instance_id()] = Ledger.culprit_name(source))
+	# Voice orders: this floor's employees answer to their own names too ("Marguerite go"), not only the decided list.
+	var names: Array[String] = []
+	for e in _site.employees:
+		names.append(VoiceOrders.call_name(e.display_name))
+	if voice != null:
+		voice.set_order_names(names)
 	_log("site: %d gates%s, %d employees, %d props, %d monsters (%d pests: %s)" % [small, " + origin" if origin else "", _site.employees.size(),
 		_site.props.size(), _site.monsters.size(), _site.pest_spawned, _run.pest], Color(0.8, 0.8, 1.0))
 	_log("themes: %s  decor %d" % [str(_site.plan.room_themes), _site.plan.decor.size()], Color(0.8, 0.8, 1.0))
@@ -931,6 +937,7 @@ func _setup_voice() -> void:
 	add_child(voice)
 	voice.spell_spoken.connect(_on_spell_spoken)
 	voice.spell_fizzled.connect(_on_spell_fizzled)
+	voice.order_spoken.connect(_on_order_spoken)
 	Sfx.listen_to_voice(voice)   # "cast heard", the fizzle and its cut on new speech: this machine only (your mic)
 	if voice.has_signal("heard"):
 		voice.connect("heard", _on_heard)
@@ -1032,6 +1039,15 @@ func _cast(id: String, power: float, heard: String, accidental: bool = false) ->
 		_log("%s%s recharging %.1fs" % [tag, id.to_upper(), cd], Color(1.0, 0.8, 0.4))
 	else:
 		_log("%s refused" % id.to_upper(), Color(1.0, 0.5, 0.5))
+
+
+## A voice (or typed) order: "Rebar go", "hench attack", "everyone follow" (VoiceOrders; online a request to the host). It
+## aims where this player aims. A downed speaker can still give orders.
+func _on_order_spoken(who: String, kind: String, heard: String) -> void:
+	if _ended or player == null or controller == null:
+		return
+	VoiceOrders.give(who, kind, player, controller.aim_point())
+	_log("ORDER %s %s  (\"%s\")" % [who.to_upper(), kind.to_upper(), heard], Color(0.6, 0.85, 1.0))
 
 
 func _on_spell_fizzled(heard: String, reason: String) -> void:
@@ -1876,14 +1892,14 @@ func _on_gate_closed(gate: Actor) -> void:
 		# A client: the host closed it (world.die). Its bookkeeping and pay arrive from the host (obj.contract, obj.ledger).
 		if is_origin:
 			hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
-			_show_banner("The origin gate is shut. The site calms down. The invoice does not.", 6.0)
+			_show_banner(NoteCopy.ORIGIN_SHUT, 6.0)
 		_log("%s closed" % ("ORIGIN gate" if is_origin else "hellgate"), Color(0.6, 1.0, 0.7))
 		return
 	var pay := _session.gate_closed(is_origin)
 	_publish_contract()
 	if is_origin:
 		hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
-		_show_banner("The origin gate is shut. The site calms down. The invoice does not.", 6.0)
+		_show_banner(NoteCopy.ORIGIN_SHUT, 6.0)
 	_log("%s closed  +%s" % ["ORIGIN gate" if is_origin else "hellgate", ContractRun.money(pay)], Color(0.6, 1.0, 0.7))
 	_objective_t = 0.0   # re-check cleanliness now
 
@@ -2221,31 +2237,16 @@ func _extract_followers(riders: Array[Actor], line: String) -> void:
 	_update_tracker()
 
 
-## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
-## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No
-## pay in the line (user, 2026-10-19: "trim all the mentions of {pay}"): every line can be voiced ahead of time.
-const RESCUE_ONE: Array[String] = [
-	"Copy, %s is out.",
-	"%s just walked past my desk.",
-	"Got %s. All fingers accounted for.",
-	"%s is topside and asking for a lawyer.",
-]
-const RESCUE_MANY: Array[String] = [
-	"Copy, %d staff out.",
-	"%d of them just came through.",
-	"Headcount up by %d.",
-]
-
-
+## Dispatch calls in on the headset to confirm a rescue (the lines are NoteCopy.RESCUE_ONE / RESCUE_MANY).
 func _dispatch_rescue(riders: Array[Actor], pay: String) -> void:
 	if _banner == null:
 		hud.show_message("%s out  +%s" % [riders[0].display_name if riders.size() == 1 else str(riders.size()), pay], Color(0.6, 1.0, 0.7))
 		return
 	var line: String
 	if riders.size() == 1:
-		line = RESCUE_ONE[GameWorld.fx_rng.randi() % RESCUE_ONE.size()] % riders[0].display_name
+		line = NoteCopy.RESCUE_ONE[GameWorld.fx_rng.randi() % NoteCopy.RESCUE_ONE.size()] % riders[0].display_name
 	else:
-		line = RESCUE_MANY[GameWorld.fx_rng.randi() % RESCUE_MANY.size()] % riders.size()
+		line = NoteCopy.RESCUE_MANY[GameWorld.fx_rng.randi() % NoteCopy.RESCUE_MANY.size()] % riders.size()
 	_banner.show_line(line, 4.0)
 
 

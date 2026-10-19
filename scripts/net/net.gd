@@ -288,6 +288,13 @@ static func request(node: Node, what: String, data: Dictionary = {}) -> bool:
 	return s != null and s.objects != null and s.objects.request(node, what, data)
 
 
+## A voice order heard on this machine (VoiceOrders.give): on a crewed, running floor it goes to the host (NetOrders), which
+## applies it and shows it on every screen; true when it went. False offline / alone: apply it here.
+static func send_order(who: String, kind: String, speaker: Hero, point: Vector3) -> bool:
+	var s := session()
+	return s != null and s.orders != null and s.orders.send(who, kind, speaker, point)
+
+
 ## True on a client while a shared floor runs: things it would create or change that the host owns are requests.
 static func world_live() -> bool:
 	var s := session()
