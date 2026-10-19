@@ -7,7 +7,9 @@ extends Control
 ##
 ##   banner.show_line("The gates on this floor are feeding the imps problem. Close them and it stops coming.", 7.0)
 ##
-## Pure presentation, LOCAL to each machine.
+## Pure presentation, LOCAL to each machine. The line is also SPOKEN when its clip was rendered (DispatchVoice,
+## assets/audio/dispatch/<key>.ogg; tools/render_dispatch.ps1): a new line cuts the previous clip, a line without a clip
+## (or sounds off, as headless) is silent. Each machine plays its own, so nothing here crosses the network.
 
 const WIDTH := 760.0
 const TOP := 112.0
@@ -15,10 +17,16 @@ const PAD := 18.0
 const GLYPH_W := 64.0
 const FADE := 0.8
 const FONT_SIZE := 27
+## The clip plays on the UI bus (Master's only slider is the player's; the clips are already mixed for the radio).
+const VOICE_BUS := &"UI"
+const VOICE_DB := -2.0
 
 var line := ""
 var hold := 0.0             ## seconds left at full strength
 var alpha := 0.0
+var voiced := 0             ## clips started on this machine (tests, debug)
+
+var _voice: AudioStreamPlayer = null
 
 
 func _init() -> void:
@@ -30,7 +38,7 @@ func _init() -> void:
 
 ## Who may write each var (see Net). All presentation, kept per machine.
 func net_fields() -> Dictionary:
-	return {"line": Net.LOCAL, "hold": Net.LOCAL, "alpha": Net.LOCAL}
+	return {"line": Net.LOCAL, "hold": Net.LOCAL, "alpha": Net.LOCAL, "voiced": Net.LOCAL, "_voice": Net.LOCAL}
 
 
 func show_line(text: String, seconds: float) -> void:
@@ -39,6 +47,32 @@ func show_line(text: String, seconds: float) -> void:
 	alpha = 1.0
 	_relayout()
 	queue_redraw()
+	_speak(text)
+
+
+## A clip is playing now.
+func is_speaking() -> bool:
+	return _voice != null and _voice.playing
+
+
+## Say `text` in dispatch's voice: the previous clip is cut first, then its clip plays if there is one.
+func _speak(text: String) -> void:
+	if _voice != null:
+		_voice.stop()
+	if not Sfx.enabled or not is_inside_tree():
+		return
+	var clip := DispatchVoice.stream_of(text)
+	if clip == null:
+		return
+	if _voice == null:
+		_voice = AudioStreamPlayer.new()
+		_voice.name = "Voice"
+		_voice.bus = VOICE_BUS
+		_voice.volume_db = VOICE_DB
+		add_child(_voice)
+	_voice.stream = clip
+	_voice.play()
+	voiced += 1
 
 
 func _process(delta: float) -> void:
