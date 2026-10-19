@@ -60,6 +60,9 @@ static func models() -> Array[Dictionary]:
 	out.append({"name": "hero/rebar", "make": func() -> Node3D: return RebarModel.new(), "ground": true})
 	for kind: String in MonsterModels.KINDS + MonsterModels.DESIGN_KINDS:
 		out.append({"name": "monster/" + kind, "make": MonsterModels.make.bind(kind), "ground": true})
+	out.append({"name": "chicken", "make": func() -> Node3D: return ChickenModel.new(), "ground": true})
+	for id: String in SpellBook.SPELLS:
+		out.append({"name": "component/" + id, "make": ComponentProps.make.bind(id, false), "ground": true})
 	for kind: String in POOL_KINDS:
 		out.append({"name": "pool/" + kind, "make": PoolProps.build.bind(kind, {}), "ground": false})
 	for fmt: String in NoteCopy.FORMATS:
