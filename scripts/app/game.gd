@@ -835,7 +835,7 @@ func _populate_site() -> void:
 			g.connect("closed", _on_gate_closed)
 	for e in _site.employees:
 		e.damaged.connect(func(_amount: float, source: Node) -> void: _emp_cause[e.get_instance_id()] = Ledger.culprit_name(source))
-	# Voice orders: this floor's employees answer to their own names too ("Marguerite go"), not only the decided list.
+	# Voice orders: this floor's employees answer to their own names too ("Beatrice go"), not only the decided list.
 	var names: Array[String] = []
 	for e in _site.employees:
 		names.append(VoiceOrders.call_name(e.display_name))
@@ -2567,7 +2567,7 @@ func _invoice_demo() -> void:
 	Ledger.damage("Zen fountain", 900, rebar)
 	Ledger.damage("Crystal lamp", 600, wick)
 	Ledger.damage("Crystal lamp", 600, gasket)
-	s.employee_lost("Colin (valet)", "Wick")
+	s.employee_lost("Pearl (valet)", "Wick")
 	s.enter_floor(3, 0, true, run.floor_employees[2], 18)
 	s.gate_closed(true)
 	s.check_clean(0)

@@ -82,7 +82,7 @@ static func client_short(full: String, archetype: String) -> String:
 	return full
 
 
-## "Marguerite (sommelier)" -> "Marguerite".
+## "Beatrice (sommelier)" -> "Beatrice".
 static func staff_name(full: String) -> String:
 	var i := full.find(" (")
 	return full.substr(0, i) if i > 0 else full

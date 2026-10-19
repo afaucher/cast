@@ -198,7 +198,7 @@ func _check_extraction() -> void:
 	eq(paid, 300, "extraction pays $100 per follower")
 	eq(Ledger.earned(), 300, "and the Ledger agrees")
 	eq(s.employees_alive(), 1, "extracted employees are no longer 'alive on site'")
-	s.employee_lost("Colin (valet)", "Rebar")
+	s.employee_lost("Pearl (valet)", "Rebar")
 	eq(s.employees_alive(), 0, "a lost employee is not alive")
 	eq(s.lost.size(), 1, "the loss is recorded with its cause")
 	s.finish(ContractSession.END_CASHED_OUT)

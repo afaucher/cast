@@ -40,17 +40,17 @@ func setup() -> void:
 	new_world(flat_map(16))
 	casts.clear()
 	var hero := _player(Vector2i(0, 0))
-	var emp := Employee.spawn(Vector2i(1, 0), {"style": "staff", "name": "Marguerite"})
+	var emp := Employee.spawn(Vector2i(1, 0), {"style": "staff", "name": "Beatrice"})
 	await frames(60)
 	check(not emp.is_following() and emp.state == Employee.State.COWER, "walking up to an employee does not recruit them")
 	check(not emp.is_dismissed(), "(they were never dismissed)")
-	eq(_verb(hero), "Bring Marguerite", "the use prompt offers to bring a cowering employee")
+	eq(_verb(hero), "Bring Beatrice", "the use prompt offers to bring a cowering employee")
 	check(_pc(hero).press_use(), "E near a cowering employee is used")
 	check(emp.is_following() and emp.leader() == hero, "E recruits them: the hero is the leader")
 	await frames(2)
 	eq(emp.bubble_text(), "oh, thank you!", "first contact bark")
 	eq(casts.size(), 0, "no cast")
-	eq(_verb(hero), "Tell Marguerite to wait", "the use prompt offers to dismiss your follower")
+	eq(_verb(hero), "Tell Beatrice to wait", "the use prompt offers to dismiss your follower")
 	var spot := emp.global_position
 	check(_pc(hero).press_use(), "E near your follower is used")
 	eq(emp.state, Employee.State.WAIT, "the employee waits")
@@ -69,7 +69,7 @@ func setup() -> void:
 	eq(emp.state, Employee.State.WAIT, "still waiting with the hero standing right there")
 	check(emp.leader() == null and emp.is_dismissed(), "no leader, still dismissed")
 	check(emp.global_position.distance_to(spot) < 0.05, "it stays put")
-	eq(_verb(hero), "Bring Marguerite", "the use prompt offers to bring a waiting one")
+	eq(_verb(hero), "Bring Beatrice", "the use prompt offers to bring a waiting one")
 
 	# --- C: E recalls ---------------------------------------------------------------------------
 	hero.global_position = spot + Vector3(1.9, 0.0, 0.0)          # inside RECALL_RANGE (2.2)
@@ -163,8 +163,8 @@ func setup() -> void:
 	new_world(flat_map(18))
 	casts.clear()
 	hero = _player(Vector2i(0, 0))
-	emp = Employee.spawn(Vector2i(1, 0), {"style": "staff", "name": "Hodges"})
-	check(emp.request_follow(hero), "recruit Hodges")
+	emp = Employee.spawn(Vector2i(1, 0), {"style": "staff", "name": "Stan"})
+	check(emp.request_follow(hero), "recruit Stan")
 	_pc(hero).press_use()
 	var home := emp.global_position
 	hero.global_position = home + Vector3(-9.0, 0.0, 0.0)      # the crew leaves

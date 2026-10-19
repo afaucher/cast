@@ -38,15 +38,21 @@ A1, A3, B6, D11 and the environment notes in 5.3). **[proposal]** marks every nu
   |---|---|---|
   | Everyone (crew + employees) | **Everyone** | everybody, all hands |
   | Crew (the heroes only) | **Crew** | team, squad |
-  | Mrs. Pym | **Pym** | Mrs. Pym, Missus Pym |
+  | Mr. Bloom (accounts) | **Bloom** | Mister Bloom, Mr. Bloom |
   | Every henchman on the floor | **Hench** | henchmen, henchman |
-  | Hench #4 | **Hench Four** | Number Four |
+  | Henchman 4 (Nigel) | **Hench Four** | Number Four |
   | Rebar / Wick / Gasket | **Rebar / Wick / Gasket** | (Gasket stays the main name despite the "cast"/"GAS" risk; watch it in the logs) |
 
 - **Players are addressed by their hero's name only** (no player names or callsigns).
 - **"Everyone" can take "go"** as well as "follow" (employees included).
-- The other employee names (Reginald, Beatrice, Alphonse, Hodges, Dorothea, Gary, Steve, Todd, Kevin, Dennis) are one word
-  already and are their own official names. "Hench" addresses every henchman; "Hench Four" only #4.
+- The other employee names are one word already and are their own official names. "Hench" addresses every henchman;
+  "Hench Four" only Henchman 4.
+- **One employee name set (user, 2026-10-19, screened against the recognizer: `tests/probe_voice_names.gd`):** staff
+  Beatrice (sommelier), Mabel (wellness), Elsie (chef), Lionel (security), Pearl (valet), Penny (concierge), Molly (IT
+  support), Mr. Bloom (accounts), Iris (intern), Stan (maintenance); henchmen Gary (Henchman 1), Steve (2), Simon (3),
+  Nigel (4), Brad (5), Todd (6), Gordon (7), Kevin (8), Craig (9), Keith (10). It replaces the three pools there were
+  (`SiteBuilder`'s, `Employee`'s fallback and this section's Mrs. Pym / Hench #4): `SiteBuilder.STAFF_NAMES` /
+  `HENCHMAN_NAMES` is the only source.
 
 **Why.** The research found the AI ally leads: it picks the nearest monster near the leader with no wait and no line of
 sight, so Rebar opens every fight (`combat-variety-research.md` 1.3). Two fixes combine: a **restraint baseline** (the
@@ -182,8 +188,10 @@ Built to 1.0. Where 1.1-1.7 differ from 1.0, 1.0 won (there is no "hold": "go" w
 - The same order to the same name within `order_lockout` (1.5 s) is one order (double fires).
 - Only the exact order words: "goes", "going", "following" are chatter. "followed" counts (the model writes a final
   "follow" that way). Possessives are not names ("Gasket's down", "everyone's dead").
-- Names and aliases: 1.0's table, plus the model's measured spellings (DENIS, TOD, GARRY/GERRY, CRUE, WE BAR, HODGE'S,
-  KAVIN/CABIN, HENCH FOR, HENCEFORE, MISSUS PIMP, HEDGE / HEDGEMAN for hench) and fused forms (CRUGO, DENISCO,
+- Names and aliases: 1.0's table, plus the model's measured spellings (TOD, GARRY/GERRY, CRUE, WE BAR, KAVIN/CABIN,
+  HENNY, IRAS, LION'LL / LION ALL, STAND, BLUE, BREAD, CREEK, GORDING, HENCH FOR, HENCEFORE, HEDGE / HEDGEMAN for hench),
+  a final order word as the model writes it (GOAT, GIRL, GOE, GOT for go; FALLOW, FOLLOWED for follow: last word only)
+  and fused forms (CRUGO, HENNYGO, BLOOMGOT,
   WICKOW, HENCHFOREGO: a name run into its "go").
 - Typed console lines go through the same parser (the console already fed `VoiceCaster.inject_text`).
 - Every order is a row in `user://voice_log.csv` (label `order` or `order:accidental`, `who order`, the gap).
@@ -191,8 +199,8 @@ Built to 1.0. Where 1.1-1.7 differ from 1.0, 1.0 won (there is no "hold": "go" w
 **Who answers** (`scripts/heroes/voice_orders.gd`, `VoiceOrders`):
 - Everyone: the heroes but the speaker, and every employee within earshot (`EARSHOT` 16 of the speaker). Crew: the heroes
   but the speaker. A hero's name: every hero of that character (two players may both be Wick). Hench: every henchman;
-  Hench Four: "Hench #4" or the floor's "(Henchman 4)". Any other name: the employee whose name starts with it, titles
-  skipped ("Mrs. Pym", "Gary (Henchman 1)"). The speaker is never ordered. A name nobody answers to does nothing.
+  Hench Four: "(Henchman 4)". Any other name: the employee whose name starts with it, titles skipped ("Mr. Bloom",
+  "Gary (Henchman 1)"). The speaker is never ordered. A name nobody answers to does nothing.
 - An AI hero takes it (`AllyBrain.give_order`); a downed one does not (no bark). A hero a person plays gets a marker on
   their own screen for go and attack ("host: go here"), nothing for follow. Employees: `Employee.order`.
 - The crew hears from anywhere (the headset); employees only within earshot. **[decision to confirm]**: without it,
@@ -253,18 +261,21 @@ leader, dismissed, wait spot); barks and markers are cosmetic, so a late joiner 
 host-arbitrated request with a cosmetic event. Solo and a host alone apply it at once. Tested by `test_net_orders`
 (two processes, off and coast).
 
-**Recognition, measured** (`tests/test_voice_orders.gd`, 148 Windows-TTS clips, David + Zira, through the real model):
+**Recognition, measured** (`tests/test_voice_orders.gd`, Windows-TTS clips, David + Zira, through the real model; first
+with the decided names, 148 clips, then again with the one employee name set, 201 clips, 2026-10-19):
 
 | | Loose | Strict |
 |---|---|---|
-| Orders heard right (every name x order, aliases, pace) | 100 / 106 (94%) | 56 / 58 (97%) |
-| Chatter that gave an order (38 clips: "Rebar just goes in", "Rebar goes in first", "Gasket's down", "everyone's dead", "let's go", "follow me guys", "Steve followed us here" ...) | 0 | 0 |
+| Orders heard right (every name x order, aliases, pace) | 94% (100/106) -> **98% (131/133)** | 97% (56/58) -> **100% (85/85)** |
+| Chatter that gave an order (64 clips now: "Rebar just goes in", "Rebar goes in first", "Gasket's down", "everyone's dead", "let's go", "follow me guys", "Steve followed us here", "Gary got shot", "stand back", the four dispatch rescue lines with the new names ...) | 0 | 0 |
+| Order or chatter clips that armed a "cast" trigger | 0 | 0 |
 | Order clips that cast a spell (the Gasket / "cast" collision) | 0 | 0 |
 | Spell and chatter clips of `test_voice_audio` that gave an order (the other way round, 435 clip runs) | 0 | 0 |
 | "Rebar go, cast corn" / "cast heal, Gasket follow" (both the order and the cast) | 2 / 2 | 1 / 1 |
 
-The misses: "Pym follow" fused into PIMPHALLOW, "Missus Pym go" heard as MISSUS PHILL / PINKOT, "Alphonse go" as ALP
-VONSKOE, Zira's "Wick go" as WICKELL, Rebar at the fastest pace as REMARGO. "Where did Wick go" and "let Gasket go first"
+The misses with the new names: Zira's "Wick go" as WICKELL and Rebar at the fastest pace as REMARGO (the first round's
+others were the names now gone: PIMPHALLOW, MISSUS PHILL, ALP VONSKOE). Per name, every one of the twenty employees is
+heard right in loose and strict (`names_results_pass2.txt`: 7-8 of 8 each, Mr. Bloom 13 of 14, with the aliases above). "Where did Wick go" and "let Gasket go first"
 are orders in loose by design (measured, reported, not judged). Spells: the recognizer's vocabulary is unchanged (no order
 hotwords), and `test_voice_audio` / `test_voice_triggers` / `test_voice_noise` give the same totals before and after (0
 false fires, 0 confusions, every focus spell 100%, 2 stress misses, median latency 166-168 ms, the trigger table

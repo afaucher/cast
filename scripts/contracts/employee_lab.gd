@@ -86,9 +86,9 @@ func _build_row() -> void:
 	var slots := 9
 	var x0 := -SPACING * (slots - 1) * 0.5
 	var i := 0
-	var cow_s := _employee("staff", "Reginald", right * (x0 + SPACING * 0.0))
+	var cow_s := _employee("staff", "Beatrice", right * (x0 + SPACING * 0.0))
 	var cow_h := _employee("henchman", "Gary", right * (x0 + SPACING * 1.0))
-	var pan_s := _employee("staff", "Beatrice", right * (x0 + SPACING * 2.6))
+	var pan_s := _employee("staff", "Mabel", right * (x0 + SPACING * 2.6))
 	var pan_h := _employee("henchman", "Steve", right * (x0 + SPACING * 3.6) + toward_cam * 0.6)
 	grunt = MonsterFactory.spawn("grunt", Hex.from_world(right * (x0 + SPACING * 5.0) - toward_cam * 1.8))
 	grunt.global_position = right * (x0 + SPACING * 5.0) - toward_cam * 1.8
@@ -97,7 +97,7 @@ func _build_row() -> void:
 	wick = HeroFactory.spawn_hero(Hex.from_world(right * (x0 + SPACING * 6.6)), "Wick", Color(0.3, 0.55, 0.95), "sword", wick_model, "wick")
 	wick.global_position = right * (x0 + SPACING * 6.6)
 	wick.set_physics_process(false)
-	var fol_s := _employee("staff", "Hodges", right * (x0 + SPACING * 7.6) + toward_cam * 0.9)
+	var fol_s := _employee("staff", "Stan", right * (x0 + SPACING * 7.6) + toward_cam * 0.9)
 	var fol_h := _employee("henchman", "Kevin", right * (x0 + SPACING * 8.4) + toward_cam * 0.1)
 	for n: Node3D in [cow_s, cow_h, pan_s, pan_h, grunt, wick, fol_s, fol_h]:
 		row.append(n)
@@ -131,7 +131,7 @@ func _build_row() -> void:
 		_refresh(fol_h)
 	# the close-up dummies sit off to the side, hidden until needed
 	for st in EmployeeModel.STYLES:
-		var d := _employee(st, "Reginald" if st == "staff" else "Gary", Vector3(0, 0, 40))
+		var d := _employee(st, "Beatrice" if st == "staff" else "Gary", Vector3(0, 0, 40))
 		dummies[st] = d
 		d.visible = false
 		d.set_physics_process(false)

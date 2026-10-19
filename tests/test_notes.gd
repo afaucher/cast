@@ -128,19 +128,19 @@ func _check_drop_and_fill() -> void:
 	# prepper floor 2: every line needs staff, a prop or a gate
 	eq(NoteCopy.pick(NoteCopy.STORY["prepper"][2], none, rng), {}, "a floor with no staff, props or gates drops every slotted line")
 	var with_staff := none.duplicate()
-	with_staff.merge({"staff": "Colin", "STAFF": "COLIN", "staff_room": "gym", "STAFF_ROOM": "GYM", "staff_count": "2"})
+	with_staff.merge({"staff": "Pearl", "STAFF": "PEARL", "staff_room": "gym", "STAFF_ROOM": "GYM", "staff_count": "2"})
 	for i in 20:
 		var ln := NoteCopy.pick(NoteCopy.STORY["prepper"][2], with_staff, rng)
 		check(not ln.is_empty() and NoteCopy.can_fill(str(ln["t"]), with_staff), "only lines whose facts exist survive")
 	var t := NoteCopy.fill("Hiding in the {staff_room}. — {staff}", with_staff)
-	eq(t, "Hiding in the gym. — Colin", "fill replaces every slot")
+	eq(t, "Hiding in the gym. — Pearl", "fill replaces every slot")
 	eq(NoteCopy.kinds_of("{staff} in the {staff_room}, near the {PROP}"), ["staff", "prop"] as Array[String], "a line's hint kinds")
-	eq(NoteSlip.split_signature("We are on four. — Colin"), PackedStringArray(["We are on four.", "— Colin"]), "the signature splits off")
+	eq(NoteSlip.split_signature("We are on four. — Pearl"), PackedStringArray(["We are on four.", "— Pearl"]), "the signature splits off")
 	var sp := NoteSlip.split_sign("DAYS SINCE LAST ACCIDENT: 0. (The 0 is printed on.) (In pen: \"hi\")")
 	eq(sp[0], "DAYS SINCE LAST ACCIDENT: 0.", "a sign's ALL-CAPS rule")
 	check(sp[2].begins_with("In pen"), "a sign's pen addition")
 	eq(NoteFacts.client_short("Admiral Grimsby of Sector 7", "supervillain"), "Admiral Grimsby", "the client's suffix is dropped")
-	eq(NoteFacts.staff_name("Marguerite (sommelier)"), "Marguerite", "the staff's role is dropped")
+	eq(NoteFacts.staff_name("Beatrice (sommelier)"), "Beatrice", "the staff's role is dropped")
 
 
 ## Every client, every floor, a few seeds: two notes, true facts.

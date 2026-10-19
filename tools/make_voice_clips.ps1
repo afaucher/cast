@@ -41,7 +41,9 @@ param(
     [string]$OutDir = (Join-Path $PSScriptRoot "..\tests\voice_clips"),
     [string[]]$Voices = @("Microsoft David Desktop", "Microsoft Zira Desktop"),
     [string[]]$Triggers = @("cast", "magic", "pickle", "conjure", "invoke", "summon", "presto", "abracadabra"),
-    [switch]$OrdersOnly
+    [switch]$OrdersOnly,
+    # Render only the employee-name screening clips (names.csv in names/; tests/probe_voice_names.gd), then stop.
+    [switch]$NamesProbe
 )
 
 $ErrorActionPreference = "Stop"
@@ -81,6 +83,64 @@ function Render([string]$text, [string]$file, [string]$voice, [int]$rate) {
 }
 
 function Slug([string]$t) { ($t.ToLower() -replace "<b(\d+)>", 'b$1' -replace "[^a-z0-9]+", "_").Trim("_") }
+
+# --- employee-name screening (names.csv; tests/probe_voice_names.gd) -----------------------------------------
+# A proposed single set of employee names (staff, henchmen, spares) against today's floor names (SiteBuilder), through the
+# order grammar: "<name> go | attack | follow" must be heard, and chatter / dispatch lines that say the name must order
+# nobody and cast nothing.
+#   file,set,key,kind,order,voice,rate,text    set = staff | hench | spare | base_staff | base_hench (comma-joined when
+#   a name is in two), key = the name's order key, kind = order | formal | pace | chatter | group, order = "go" ... or "-"
+if ($NamesProbe) {
+    $ndir = Join-Path $OutDir "names"
+    New-Item -ItemType Directory -Force -Path $ndir | Out-Null
+    $nrows = New-Object System.Collections.Generic.List[string]
+    $nrows.Add("file,set,key,kind,order,voice,rate,text")
+    function Add-Name([string]$set, [string]$key, [string]$kind, [string]$order, [string]$voice, [int]$rate, [string]$text) {
+        $vs = if ($voice -eq $v1) { "a" } else { "b" }
+        $file = "{0}_{1}_{2}{3}.wav" -f $kind, (Slug $text), $vs, $rate
+        Render $text (Join-Path $ndir $file) $voice $rate
+        $nrows.Add(("{0},{1},{2},{3},{4},{5},{6},""{7}""" -f $file, $set, $key, $kind, $order, $voice, $rate, $text))
+    }
+    # name (as written on the floor), its key, the set(s); a formal form ("Mister Bloom") gets its own order clips.
+    $people = @(
+        @("Beatrice", "staff"), @("Mabel", "staff"), @("Nadia", "staff"), @("Lionel", "staff"), @("Sully", "staff"),
+        @("Penny", "staff"), @("Ozzie", "staff"), @("Mr. Bloom", "staff"), @("Iris", "staff"), @("Stan", "staff"),
+        @("Barry", "hench"), @("Lenny", "hench"), @("Mick", "hench"), @("Nigel", "hench;base_hench"), @("Mo", "hench"),
+        @("Steve", "hench;base_hench"), @("Sid", "hench"), @("Lou", "hench"), @("Pete", "hench"), @("Ned", "hench"),
+        @("Molly", "spare"), @("Elsie", "spare"), @("Simon", "spare"), @("Norma", "spare"), @("Pearl", "spare"), @("Leon", "spare"),
+        @("Otto", "spare"), @("Zelda", "spare"), @("Myles", "spare"), @("Bev", "spare"), @("Luther", "spare"), @("Ian", "spare"),
+        @("Marguerite", "base_staff"), @("Dev", "base_staff"), @("Bernadette", "base_staff"), @("Colin", "base_staff"),
+        @("Priya", "base_staff"), @("Hector", "base_staff"), @("Imogen", "base_staff"), @("Walt", "base_staff"), @("Tessa", "base_staff"),
+        @("Mr. Okafor", "base_staff"), @("Gary", "base_hench"), @("Dwayne", "base_hench"), @("Kevin", "base_hench"),
+        @("Brad", "base_hench"), @("Todd", "base_hench"), @("Gordon", "base_hench"), @("Craig", "base_hench"), @("Keith", "base_hench")
+    )
+    foreach ($p in $people) {
+        $full = $p[0]
+        $set = $p[1]
+        $call = $full -replace "^Mr\. ", ""
+        $key = $call.ToLower()
+        foreach ($o in @("go", "attack", "follow")) {
+            foreach ($v in @($v1, $v2)) { Add-Name $set $key "order" $o $v 0 "$call $o" }
+            if ($full -ne $call) {
+                foreach ($v in @($v1, $v2)) { Add-Name $set $key "formal" $o $v 0 "Mister $call $o" }
+            }
+        }
+        foreach ($r in @(-3, 3)) { Add-Name $set $key "pace" "go" $v1 $r "$call go" }
+        $spoken = $full -replace "^Mr\. ", "Mister "
+        foreach ($t in @($spoken, "$spoken is down there", "where's $spoken", "Copy, $spoken is out.", "$spoken just walked past my desk.",
+                "Got $spoken. All fingers accounted for.", "$spoken is topside and asking for a lawyer.")) {
+            foreach ($v in @($v1, $v2)) { Add-Name $set $key "chatter" "-" $v 0 $t }
+        }
+    }
+    foreach ($g in @(@("Hench", "hench"), @("Hench Four", "hench four"))) {
+        foreach ($o in @("go", "attack", "follow")) {
+            foreach ($v in @($v1, $v2)) { Add-Name "group" $g[1] "group" $o $v 0 "$($g[0]) $o" }
+        }
+    }
+    Set-Content -Path (Join-Path $OutDir "names.csv") -Value $nrows -Encoding utf8
+    Write-Output "wrote $($nrows.Count - 1) name-screening clips + names.csv to $OutDir"
+    exit 0
+}
 
 $n = 0
 $trows = New-Object System.Collections.Generic.List[string]
@@ -326,9 +386,13 @@ function Add-Order([string]$kind, [string]$text, [string]$strict, [string]$loose
     $orows.Add(("{0},{1},{2},{3},{4},{5},{6},""{7}""" -f $name, $kind, $strict, $loose, $spell, $voice, $rate, $text))
 }
 # Every official name with every order (voice a), the crew's names and the groups in voice b too.
-$names = [ordered]@{ "Everyone" = "everyone"; "Crew" = "crew"; "Pym" = "pym"; "Hench" = "hench"; "Hench Four" = "hench four";
-    "Rebar" = "rebar"; "Wick" = "wick"; "Gasket" = "gasket"; "Reginald" = "reginald"; "Beatrice" = "beatrice"; "Alphonse" = "alphonse";
-    "Hodges" = "hodges"; "Dorothea" = "dorothea"; "Gary" = "gary"; "Steve" = "steve"; "Todd" = "todd"; "Kevin" = "kevin"; "Dennis" = "dennis" }
+# The employees are the one name set (SiteBuilder.STAFF_NAMES / HENCHMAN_NAMES, 2026-10-19), all twenty.
+$names = [ordered]@{ "Everyone" = "everyone"; "Crew" = "crew"; "Hench" = "hench"; "Hench Four" = "hench four";
+    "Rebar" = "rebar"; "Wick" = "wick"; "Gasket" = "gasket";
+    "Beatrice" = "beatrice"; "Mabel" = "mabel"; "Elsie" = "elsie"; "Lionel" = "lionel"; "Pearl" = "pearl"; "Penny" = "penny";
+    "Molly" = "molly"; "Mister Bloom" = "bloom"; "Iris" = "iris"; "Stan" = "stan";
+    "Gary" = "gary"; "Steve" = "steve"; "Simon" = "simon"; "Nigel" = "nigel"; "Brad" = "brad"; "Todd" = "todd"; "Gordon" = "gordon";
+    "Kevin" = "kevin"; "Craig" = "craig"; "Keith" = "keith" }
 foreach ($said in $names.Keys) {
     foreach ($o in @("go", "attack", "follow")) {
         $want = "$($names[$said]) $o"
@@ -347,7 +411,7 @@ foreach ($v in @($v1, $v2)) {
 # Aliases.
 foreach ($v in @($v1, $v2)) {
     foreach ($a in @(@("Everybody go", "everyone go"), @("All hands follow", "everyone follow"), @("Team attack", "crew attack"),
-            @("Squad go", "crew go"), @("Mrs. Pym follow", "pym follow"), @("Missus Pym go", "pym go"), @("Henchmen attack", "hench attack"),
+            @("Squad go", "crew go"), @("Bloom follow", "bloom follow"), @("Mr. Bloom go", "bloom go"), @("Henchmen attack", "hench attack"),
             @("Henchman follow", "hench follow"), @("Number four go", "hench four go"))) {
         Add-Order "alias" $a[0] $a[1] $a[1] "none" $v 0
     }
@@ -371,6 +435,13 @@ foreach ($v in @($v1, $v2)) {
     Add-Order "neg" "Steve followed us here" "none" "none" "none" $v 0
     Add-Order "neg" "we hid in the cabin" "none" "none" "none" $v 0
     Add-Order "neg" "let Gasket go first" "none" "any" "none" $v 0
+    # The employees in chatter and in dispatch's rescue lines (the new name set): nothing may be ordered or cast.
+    foreach ($t in @("Mabel", "Lionel is down there", "where's Stan", "Copy, Pearl is out.", "Iris just walked past my desk.",
+            "Got Mister Bloom. All fingers accounted for.", "Simon is topside and asking for a lawyer.", "Copy, Gordon is out.",
+            "Penny just walked past my desk.", "Got Elsie. All fingers accounted for.", "Craig is topside and asking for a lawyer.",
+            "Gary got shot", "stand back")) {
+        Add-Order "neg" $t "none" "none" "none" $v 0
+    }
     Add-Order "neg" "Gasket heal me" "none" "none" "any" $v 0
 }
 # An order and a cast in one breath (loose: both).
