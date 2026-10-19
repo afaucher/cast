@@ -59,7 +59,7 @@ static func save_settings(settings: Dictionary, path: String = DEFAULT_PATH) -> 
 
 ## Check a candidate trigger word.
 ## Returns {ok: bool, word: String, error: String, warnings: PackedStringArray}.
-static func validate_trigger(word: String, spell_ids: Array = ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]) -> Dictionary:
+static func validate_trigger(word: String, spell_ids: Array = ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]) -> Dictionary:
 	var w := word.strip_edges().to_lower()
 	var res := {"ok": false, "word": w, "error": "", "warnings": PackedStringArray()}
 	if w == "":

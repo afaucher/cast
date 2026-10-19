@@ -3,7 +3,7 @@ extends TestCase
 ## strictness modes, trigger words, the accidental label, settings and the
 ## VoiceCaster typed path. No audio and no model needed.
 
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
+const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
 const TMP_SETTINGS := "user://test_voice_settings.cfg"
 const TMP_LOG := "user://test_voice_log.csv"
 
@@ -51,6 +51,7 @@ func setup() -> void:
 	_test_tentacles()
 	_test_teeth()
 	_test_vines_damp_coffee()
+	_test_chicken()
 	_test_panel_cards()
 	_test_misc()
 	_test_settings()
@@ -347,7 +348,7 @@ func _test_triggers() -> void:
 
 func _test_explain() -> void:
 	var ex := _inc().explain("CAST HEEL")
-	eq(ex.size(), 10, "trigger + nine spells")
+	eq(ex.size(), 11, "trigger + ten spells")
 	eq(ex[0]["word"], "cast", "first is the trigger")
 	eq(ex[0]["kind"], "exact", "cast exact")
 	eq(ex[1]["kind"], "homophone", "heel is a homophone of heal")
@@ -424,7 +425,7 @@ func _test_tentacles() -> void:
 	eq(_inc().explain("CAST TENTACLE")[5]["kind"], "homophone", "tentacle is a homophone card")
 	eq(_inc().explain("CAST HEADACLES")[5]["kind"], "sound_alike", "headacles is a sound-alike card")
 	# The caster's own default list has all nine.
-	eq(VoiceCaster.DEFAULT_SPELLS.size(), 9, "nine default spells")
+	eq(VoiceCaster.DEFAULT_SPELLS.size(), 10, "ten default spells")
 	check(VoiceCaster.DEFAULT_SPELLS.has("tentacles"), "VoiceCaster default spells include tentacles")
 	check(not VoiceSettings.validate_trigger("tentacles")["ok"], "tentacles cannot be the trigger word")
 
@@ -554,7 +555,36 @@ func _test_vines_damp_coffee() -> void:
 			eq(c["spell"], text.substr(5), "only itself: " + text)
 
 
-## Ten cards (trigger + nine spells) in a 3-column grid: four rows, and a long
+## Chicken: "cast chicken" and the plural cast with the trigger at full power; the look-alikes ("kitchen", "chick",
+## "check in", "thicken") never do, a bare "chicken" (and "don't chicken out") casts in chaos only, and it is not a mention
+## word. Measured through the real model: tests/test_voice_audio.gd (the CHICKEN note in Incantation's header).
+func _test_chicken() -> void:
+	for text in ["cast chicken", "cast chickens", "okay cast chicken", "please cast chicken", "cast chicken now", "castchicken"]:
+		var c := _say(text)
+		eq(c.size(), 1, "chicken form: " + text)
+		if c.size() == 1:
+			eq(c[0]["spell"], "chicken", text)
+			check(float(c[0]["power"]) >= 0.85, "%s is not weak: %s" % [text, c[0]["power"]])
+			check(not bool(c[0]["accidental"]), "%s is deliberate" % text)
+	near(float(_say("cast chicken")[0]["power"]), 1.0, 0.001, "cast chicken is full power")
+	for text in ["chicken", "chickens", "don't chicken out", "watch out for the chicken", "kitchen", "chick", "check in", "thicken"]:
+		eq(_say(text).size(), 0, "no trigger, no cast (loose): " + text)
+		eq(_say(text, {"strictness": "strict"}).size(), 0, "no trigger, no cast (strict): " + text)
+	for text in ["cast kitchen", "cast chick", "cast check in", "cast thicken"]:
+		eq(_say(text).size(), 0, "look-alike does not cast: " + text)
+	var chaos := _say("don't chicken out", {"strictness": "chaos"})
+	eq(chaos.size(), 1, "chaos: the real word anywhere")
+	if chaos.size() == 1:
+		eq(chaos[0]["spell"], "chicken", "chaos picks chicken")
+		check(bool(chaos[0]["accidental"]), "and flags it accidental")
+	check(_inc().vocabulary().has("chicken"), "vocab has chicken")
+	check(not VoiceSettings.validate_trigger("chicken")["ok"], "chicken cannot be the trigger word")
+	check(not (_inc().config()["mention_spells"] as Array).has("chicken"), "chicken is not a mention spell")
+	for c in _say("cast chicken"):
+		eq(c["spell"], "chicken", "only itself")
+
+
+## Eleven cards (trigger + ten spells) in a 3-column grid: four rows, and a long
 ## "sound-alike 'headacles'" caption must not push the grid past the 400 px panel.
 func _test_panel_cards() -> void:
 	var caster := VoiceCaster.new()
@@ -568,7 +598,7 @@ func _test_panel_cards() -> void:
 	panel.toggle_with_f1 = false
 	add_child(panel)
 	panel.attach(caster)
-	eq(panel._cards.size(), 10, "panel has trigger + nine spell cards")
+	eq(panel._cards.size(), 11, "panel has trigger + ten spell cards")
 	eq(panel._card_grid.columns, 3, "three columns")
 	eq(int(ceil(float(panel._cards.size()) / float(panel._card_grid.columns))), 4, "four rows")
 	var names: Array = []

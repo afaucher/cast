@@ -22,14 +22,15 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 player joining a job in progress (one component, two variants). The player requisitions 2 licenses for this job (later,
 per-mission spending lives here; no prices or stock yet). Every spell from `SpellBook.ids()` is a **line item**
 (`RequisitionLine`: a printed box, the license with its colour tag, its component and cooldown), with nothing hard-coded
-per spell, so a new spell appears without a picker change. The list is at least 5 and at most 9 lines tall and
+per spell, so a new spell appears without a picker change. The list is at least 5 and at most 10 lines tall (10 since
+Chicken, the tenth spell, so all ten show) and
 **scrolls** past that (focus keeps the line in view). Beside it lies FORM 15-A, a separate **spec sheet** (`SpecSheet`)
 for the focused line: what to say ("cast heal", with the player's trigger word), component, cooldown and what it does.
-Both pages fit 1600 x 900 canvas units (1280 x 720) and the Steam Deck's 1600 x 1000, from nine spells to a hundred.
+Both pages fit 1600 x 900 canvas units (1280 x 720) and the Steam Deck's 1600 x 1000, from ten spells to a hundred.
 Up / Down and the D-pad move line to line, Enter or a click ticks (the red tick is the record), and with two ticked
 Enter or a click on "Requested by" stamps the player's name and submits (`picked`). Esc voids. Test hook: set
 `spell_ids` / `spell_meta` (`SpellPicker.fake_ids(24)`) before adding it to the tree; `tests/test_license_checkout.gd`
-covers 9, 24 and 100 spells and both variants.
+covers 10, 24 and 100 spells and both variants.
 
 ## Slots [decided, implemented]
 - Each hero has **4 spell slots** (`SpellComponents.SLOT_COUNT`). The start-of-game picker still
@@ -79,6 +80,7 @@ covers 9, 24 and 100 spells and both variants.
 | Vines | Seed pod | split green pod with pale seeds, a curled tendril and a thorn |
 | Damp | Soggy sponge | yellow porous sponge with a dripping blue bead |
 | Coffee | Coffee beans | three roasted beans with their grooves |
+| Chicken | Chicken feather | a long white tail feather with a rust-red tip |
 
 ### Drops (data table `SpellComponents.DROPS` / `ANY_KIND`, *tunable*)
 Every monster rolls each entry of its kind's list, then each entry of `ANY_KIND`, independently when
@@ -93,6 +95,7 @@ it dies.
 | grunt (skeleton) | Soggy sponge | damp | 6% |
 | archer | Seed pod | vines | 8% |
 | brute | Coffee beans | coffee | 10% |
+| swarmer (imp) | Chicken feather | chicken | 4% **per imp** |
 | any monster | Corn kernel | corn | 2%, in addition (was 5%) |
 
 Drops are rare on purpose: not every creature drops every spell, and the floor should not fill up with
@@ -115,7 +118,7 @@ pickups. Two more tunables in `SpellComponents` keep it that way:
 Vines, damp and coffee (2026-10-17) take their drops from the monsters for now. Their designed environment sources do
 not exist yet: seed pods from spa planters, a sponge or leaky pipe as an environment pickup, and coffee beans from the
 break room or as a reward for protecting employees. A broken mail package can also hold any castable spell's component
-(`MailPackage.roll_component` uses `SpellBook.ids()`, so all nine are possible).
+(`MailPackage.roll_component` uses `SpellBook.ids()`, so all ten are possible). Chicken feathers (2026-10-18) come from imps.
 
 ## Pickups, and the swap rule [decided, implemented]
 `ComponentPickup` is a world prop: it bobs and turns, has a soft glow and a faint floor ring, and shows a
@@ -157,7 +160,8 @@ small floating label ("Ember horn x3") when a player is within 4 units.
    a deliberate stop-and-press, and the old spell's charges are never lost, so a lock added only friction.
 
 ## Still open
-- How many distinct spells for the vertical slice? There are nine now (vines, damp and coffee are the seventh to ninth);
+- How many distinct spells for the vertical slice? There are ten now (vines, damp and coffee are the seventh to ninth,
+  chicken the tenth);
   the license requisition (FORM 15) is a scrolling catalog that is meant to grow past 20.
 - Exploration secrets and vantage points holding rarer components (`exploration.md`).
 - Handing a component to a teammate; allies casting and collecting.

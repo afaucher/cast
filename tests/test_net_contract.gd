@@ -352,6 +352,7 @@ var REPLICATED := {
 	"res://scripts/world/themes/breakable_crate.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/world/themes/breakable_crate.gd"], 0],
 	"res://scripts/contracts/mail_package.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/mail_package.gd"], 0],
 	"res://scripts/spells/component_pickup.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/spells/component_pickup.gd"], 0],
+	"res://scripts/spells/chicken.gd": [NetWorldCodec.CHICKEN_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/spells/chicken.gd"], 5],
 }
 
 

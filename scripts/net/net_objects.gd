@@ -173,6 +173,8 @@ func request_hit(target: Actor, amount: float, source: Node) -> bool:
 	stats["hits_out"] = int(stats["hits_out"]) + 1
 	if target is Monster:
 		(target as Monster).net_flash()   # (the hit shows now; the HP drop arrives with the host's stream)
+	elif target is Chicken:
+		(target as Chicken).net_flash()
 	return true
 
 

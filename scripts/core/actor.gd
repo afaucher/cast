@@ -15,6 +15,8 @@ signal shoved(dir: Vector3, distance: float)
 ## Something happened during forced movement: kind is "slam", "land" or "void"; amount is the
 ## damage dealt (may be 0); pos is where. Fx listens to this for dust and numbers.
 signal shove_impact(kind: String, pos: Vector3, amount: float)
+## A peck landed (the Chicken spell's zero hit, `peck`): `source` is the chicken.
+signal pecked(source: Node)
 
 @export var team: int = 0
 @export var max_hp: float = 100.0
@@ -253,6 +255,23 @@ func apply_damage(amount: float, source: Node = null) -> float:
 	if hp <= 0.0:
 		die()
 	return dealt
+
+
+## A hit for nothing: the Chicken spell's peck (Combat.peck). No damage, no stagger, no shove, so no Ledger line, no break,
+## no panic and no damage number from here (apply_damage ignores an amount <= 0 on purpose, and every `damaged` listener
+## assumes real damage, so a zero hit has this verb of its own). The chicken shows the "0" and the feathers itself, on every
+## screen. A monster turns on whoever pecked it (Monster._on_pecked); everything else shrugs. Applied by the machine that
+## resolves the hit (Combat.peck); a copy ignores it (nobody but its owner reacts to a peck, and a hero does not react).
+func peck(source: Node = null) -> void:
+	if dead or Net.is_copy(self):
+		return
+	pecked.emit(source)
+	_on_pecked(source)
+
+
+## Override: what a peck does to this actor (Monster: it chases the chicken). Default: nothing.
+func _on_pecked(_source: Node) -> void:
+	pass
 
 
 ## Returns the HP actually restored.

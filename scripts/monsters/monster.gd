@@ -73,6 +73,9 @@ const LOOK_SPREAD_DEG := 70.0
 const NOISE_MEMORY := 30.0        ## look-arounds may turn toward a sound heard this recently
 const LIFE_RANGE := 28.0          ## idle life only within this of a hero (CPU, and bandwidth: still monsters are free)
 const STUCK_GIVE_UP := 3          ## an ALERT walk that got stuck this many times searches where it is
+## A pecked monster chases the chicken (the Chicken spell) this long, over its hero target; every peck restarts it. It goes
+## back to the crew when the time is up or the chicken dies.
+const TAUNT_TIME := 4.0
 
 # --- Tunables (kinds set these in _init) --------------------------------------------
 var kind := "monster"
@@ -128,6 +131,8 @@ var _room := ""                   ## its home room's tag ("" = none: no idle lif
 var _life_ok := false             ## a hero within LIFE_RANGE at the last scan
 var _suspect_at := -1.0           ## combat log: when the current "?" began
 var _first_hit_at := -1.0         ## combat log: when the crew first hit it
+var _taunt_by: Actor = null       ## the chicken that pecked it (Chicken spell), chased over any hero until _taunt_until
+var _taunt_until := -INF
 
 # Navigation
 var _path: Array[Vector2i] = []
@@ -219,6 +224,7 @@ func net_fields() -> Dictionary:
 		"_seen_t": Net.PRIVATE, "_point": Net.PRIVATE, "_noise_at": Net.PRIVATE, "_noise_pos": Net.PRIVATE,
 		"_shout_at": Net.PRIVATE, "_speed_k": Net.PRIVATE, "_stuck_n": Net.PRIVATE, "_room": Net.PRIVATE,
 		"_life_ok": Net.PRIVATE, "_suspect_at": Net.PRIVATE, "_first_hit_at": Net.PRIVATE,
+		"_taunt_by": Net.PRIVATE, "_taunt_until": Net.PRIVATE,   # (who it chases rides `target`, in world.windup)
 		"_path": Net.PRIVATE, "_path_i": Net.PRIVATE, "_path_goal": Net.PRIVATE,
 		"_path_age": Net.PRIVATE, "_repath_t": Net.PRIVATE, "_prog_t": Net.PRIVATE,
 		"_prog_pos": Net.PRIVATE, "_nudge_t": Net.PRIVATE, "_nudge_dir": Net.PRIVATE,
@@ -631,9 +637,10 @@ func _tick_attack(delta: float) -> void:
 	_telegraph = clampf(1.0 - _windup_left / _windup_total, 0.0, 1.0)
 	_prog_t = 0.0
 	if _windup_left <= 0.0:
+		var neutral_hp := target.hp if target.team == GameWorld.TEAM_NEUTRAL else -1.0
 		_end_windup()
 		_strike()
-		_strike_employee()
+		_strike_neutral(neutral_hp)
 		strikes += 1
 		_next_attack_time = GameWorld.time + scaled_cooldown(attack_cooldown)
 		_strike_t = 1.0
@@ -742,6 +749,21 @@ func _alert_pack(t: Actor) -> void:
 
 ## Keeps `target` valid: retargets, leashes, gives up. Returns false if the state changed.
 func _validate_target(delta: float) -> bool:
+	if _taunted():
+		if target != _taunt_by:
+			target = _taunt_by
+			_clear_path()
+		if GameWorld.flat_distance(global_position, home) > leash_range:
+			_taunt_by = null
+			_begin_return()
+			return false
+		return true   # (no retarget roll while a chicken has it: not a closer hero, not an employee)
+	if _taunt_by != null:
+		# The chicken is dead or the time is up: back to the crew (or home, with nobody near).
+		var was := _taunt_by
+		_taunt_by = null
+		if target == was:
+			target = _nearest_hero(aggro_range * 1.5, false)
 	if not _target_alive():
 		var t := _nearest_hero(aggro_range * 1.5, false)
 		if t == null:
@@ -775,6 +797,39 @@ func _begin_return() -> void:
 	_path.clear()
 	_path_goal = Vector2i(1 << 30, 1 << 30)
 	_repath_t = 0.0
+
+
+# --- Chickens (the Chicken spell) --------------------------------------------------------------------
+# Chickens are neutral actors in group "chickens" (duck-typed here like the employees: no Chicken reference in this file).
+
+## A chicken pecked us (Actor.peck, on the machine that runs this monster): chase it, over any hero, for TAUNT_TIME (each
+## peck restarts it). Only the pecked monster turns: no shout, no pack alert. A peck from a second chicken while the first
+## is still alive only keeps the chase going.
+func _on_pecked(source: Node) -> void:
+	var c := source as Actor
+	if dead or c == null or not is_instance_valid(c) or c.dead or state == State.DEAD:
+		return
+	_taunt_until = GameWorld.time + TAUNT_TIME
+	if _taunted() and _taunt_by != c:
+		return
+	_taunt_by = c
+	if is_passive():
+		_end_suspicion(true)
+		if state == State.RETURN:
+			home = global_position   # (as a hit: it fights from here)
+		_enter_chase(c)
+	elif target != c:
+		target = c   # (a wind-up under way turns toward it and lands where it faces)
+		_clear_path()
+
+
+## True while a living chicken has it (the Chicken spell).
+func is_taunted() -> bool:
+	return _taunted()
+
+
+func _taunted() -> bool:
+	return _taunt_by != null and is_instance_valid(_taunt_by) and not _taunt_by.dead and GameWorld.time < _taunt_until
 
 
 # --- Employees (contracts) ----------------------------------------------------------------------
@@ -814,9 +869,17 @@ func _consider_employee() -> bool:
 
 
 ## The strike hits heroes only (other_team), so when the target is an employee deliver the blow to it
-## directly: melee kinds need it inside reach, ranged kinds (attack_start_range > 4) need a clear shot.
-func _strike_employee() -> void:
-	if not _target_alive() or target.team != GameWorld.TEAM_NEUTRAL or not target.is_in_group("employees"):
+## directly: melee kinds need it inside reach, ranged kinds (attack_start_range > 4) need a clear shot. A chicken target
+## (the Chicken spell) is in every melee swing's reach already (GameWorld.hittable_in_radius) and in an arrow's path: it is
+## given the blow here only when the kind's own strike did not reach it (`before_hp`, its HP before the strike: the brute's
+## slam is for heroes only), and only by a melee kind (an arrow is on its way).
+func _strike_neutral(before_hp: float) -> void:
+	if not _target_alive() or target.team != GameWorld.TEAM_NEUTRAL:
+		return
+	if target.is_in_group("chickens"):
+		if attack_start_range > 4.0 or target.hp < before_hp - 0.001:
+			return
+	elif not target.is_in_group("employees"):
 		return
 	if absf(target.global_position.y - global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
 		return

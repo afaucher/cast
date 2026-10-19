@@ -49,7 +49,7 @@ signal trigger_heard(word: String)
 signal speech_started
 signal strictness_changed(mode: String)
 
-const DEFAULT_SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
+const DEFAULT_SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
 ## Keyword choices for the UI. Each was measured with TTS clips through the real
 ## model (tests/test_voice_triggers.gd prints the table). TRIGGER_NOTES flags
 ## options that misbehave; they stay selectable but the UI warns.

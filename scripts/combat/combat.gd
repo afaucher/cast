@@ -132,6 +132,16 @@ static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, s
 	return hit
 
 
+## A peck (the Chicken spell): a hit for nothing on `target`, applied where the hit resolves (Net.resolves_hit: the chicken's
+## machine, the host, for everything but a hero, whose own machine decides; a peck does nothing to a hero, so nothing needs
+## to travel), through the target's peck verb (Actor.peck). True if this machine applied it.
+static func peck(pecker: Actor, target: Actor) -> bool:
+	if target == null or not is_instance_valid(target) or target.dead or not Net.resolves_hit(target, pecker):
+		return false
+	target.peck(pecker)
+	return true
+
+
 ## Chest-height point of an actor, for launching projectiles / LOS checks.
 static func chest(a: Actor) -> Vector3:
 	return a.global_position + Vector3.UP * 0.9

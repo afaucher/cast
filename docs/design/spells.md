@@ -15,6 +15,7 @@ and the aim snaps onto a teammate near the cursor. **[decided]** marks the user'
 | Vines | cast vines | Thorny vines root everyone in the area for ~2 s: no walking, no shoving, attacks still work | **everyone** | in game |
 | Damp | cast damp | A wide soggy area: fires go out, nobody can ignite for 15 s, puddles make shoves slide further | **everyone** | in game |
 | Coffee | cast coffee | +60% move and attack speed for 6 s, twitchy, then a 2 s crash (−30%) | **everyone** in a small radius | in game |
+| Chicken | cast chicken | Four chickens scatter from the aim point for 12 s and peck everything for zero; a pecked monster chases its chicken | **everyone** (pecks for 0); monsters turn on them | in game |
 
 ## Teeth [decided: core idea]
 **"Cast teeth":** too many teeth sprout out of **anyone** in the area at the aim point, monsters and
@@ -157,6 +158,57 @@ caster if inside, monsters, employees) for about two seconds. Code: `scripts/spe
   a reward for protecting employees are the planned environment sources.
 - **Voice:** one speaker's "cast coffee" is often written "COUGHING": that and "cough" are aliased, below the bare
   floor (see `incantation.gd`).
+
+## Chicken [in game, 2026-10-18]
+**"Cast chicken"** (decided by the user, 2026-10-18): "chickens run around and do zero damage attacks to everything,
+distracting them." Code: `scripts/spells/chicken.gd` (the bird and its AI), `scripts/art/lowpoly/chicken_model.gd` (the
+model), `scripts/fx/chicken_fx.gd` (the feathers), `SpellBook._cast_chicken`. Tests: `tests/test_chicken.gd`,
+`tests/test_net_chicken.gd`. Look-dev: `scenes/new_spells_lab.tscn --spell chicken` (`--closeup`, `--pickup`).
+
+- **The flock [decided]:** one cast makes **4 chickens** that burst out of a feather cloud at the aim point, each its own
+  way (0.6 s at 1.5x speed). Each lasts **12 s**, then puffs up for 0.35 s and **poofs into feathers**, if nothing killed it
+  first. Power does not change the flock. Cooldown **14 s** (armor and coffee's tier: it is crowd control).
+- **Running about:** speed 3.6 (a grunt walks 3.2, an imp 5.5). A chicken wanders erratically (a new heading every 0.25 to
+  0.7 s, now and then a short stop) and drifts back toward where it was cast if it strays more than 5.5. Every 0.3 s it
+  looks for something to peck: the **nearest monster within 4.5** first, else the **nearest anything within 2.5** (heroes,
+  employees, priced props, mail, crates, gates; never another chicken). It runs at it wobbling, pulls its head back for
+  0.22 s and pecks, then hops off (0.15 to 0.45 s, so a slow monster sometimes gets its swing in) and comes back for more,
+  about one peck a second (0.9 s, x0.85 to 1.2; coffee speeds it up).
+- **Pecks do zero [decided]:** a peck is a hit for nothing. It goes through its own verb, `Actor.peck(source)`, applied
+  where hits resolve (`Combat.peck`, `Net.resolves_hit`). `apply_damage` ignores amounts of 0 on purpose and every
+  `damaged` listener assumes real damage (a prop's bill and dent, a mail box breaking, an employee's panic, a monster's
+  shout), so a zero hit through it would either do nothing or set all of those off; the smallest honest alternative is a
+  verb of its own that touches none of them. Every screen shows a **"0"** (in the hit colour of the victim's side), a
+  flash and a puff of feathers at the beak. No Ledger line, no break, no panic, no stagger, no shove.
+- **A pecked monster turns on its chicken [decided]:** `Monster._on_pecked` makes the chicken its target over any hero for
+  **4 s** (`Monster.TAUNT_TIME`), each peck restarting it, or until the chicken dies. Only the pecked monster turns: no shout,
+  no pack alert. A second chicken's peck only keeps the chase going. When it is over the monster goes back to the nearest
+  hero (or home). Its leash still holds.
+- **Fragile [decided: one or two hits from anything]:** 20 HP, and every hit takes at least 10 (`Chicken.HIT_FLOOR`), so
+  one or two hits kill it in a feather explosion ("BAWK!"). That covers a monster's swing (any monster's swing catches a
+  chicken in its arc; a brute's slam, which is for heroes, still lands on the chicken it chases), an arrow, a fireball (its
+  blast hits neutrals), corn, teeth, a fire (a burning chicken lasts two ticks), a wall slam, and **the crew's own swings,
+  bolts and arrows** (`Chicken.WEAPONS_HIT`, true: swatting your own chicken while hitting the monster it pulled is
+  player-caused chaos; set it false to have only the monsters' attacks hit chickens). Tentacles and the bowl shove
+  chickens about (light: shove x1.6) without hurting them. A grunt that a chicken pecks turns on it within about 1.5 s
+  and kills it about 3.5 s later (`tests/test_chicken.gd`).
+- **Look:** a plump white hen, as big as an imp (a real one would be half that and unreadable at the game's zoom), with a
+  big red comb and wattle, an orange beak and legs and a cocked tail. White and round with a red top, so a flock never
+  reads as the purple, spiky imps. It trots with a bob, jerks its head from pose to pose, winds its head back and plunges
+  it to peck, and beats its wings when it flaps off. Feathers are tumbling flat blades (white, cream, a few rust).
+- **Component:** **Chicken feather** (a long white tail feather with a rust-red tip). Drops from **imps (4% each)**; imps
+  come in packs. A mail package can hold one too.
+- **Networking (the "owned actor" shape, host-owned like a monster):** the cast is an event that lands on every machine
+  (`NetCasts.LEAD`); every screen shows the feather cloud, and **only the host spawns the flock** and runs it (rolls on
+  `GameWorld.rng`). `NetWorld` announces each chicken as a runtime spawn (`world.spawn`, kind "chicken"), streams it as a
+  monster-format entry (`NetWorldCodec.CHICKEN_FIELDS`: state, the peck's wind-up, the peck count) and its death as
+  `world.die`. A client shows puppets that play the same pecks (the "0" on whatever its screen shows the chicken pecking),
+  flaps and poof. A client's hit on a chicken is a request the host applies. Pecks change nothing a client owns (a hero
+  shrugs), so nothing about them travels. A late joiner gets the chickens as runtime spawns plus the keyframe.
+- **Voice:** "chicken" (and "chickens") is in the vocabulary; see the CHICKEN note in `scripts/voice/incantation.gd` for
+  what the recognizer writes.
+- **Sound (not built: the Sfx system is coming separately):** a cluck in `ChickenFx.cast_cloud`, a peck tick in
+  `ChickenFx.peck`, a squawk in `ChickenFx.feather_explosion` and a soft pop in `ChickenFx.poof`.
 
 ### Speed modifiers (`Actor.set_modifier`)
 One verb, four stats, built for coffee and ready for goo slows:
