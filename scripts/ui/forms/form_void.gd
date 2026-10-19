@@ -91,6 +91,7 @@ func _ready() -> void:
 	for s in stamps:
 		tw.tween_property(s, "scale", Vector2.ONE, slam).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		tw.tween_property(s, "modulate:a", 1.0, slam * 0.5)
+	tw.chain().tween_callback(Sfx.play.bind("stamp"))   # the thunk as it lands (once, however many parts)
 	tw.chain().tween_interval(maxf(hold_s - slam, 0.0))
 	tw.chain().tween_callback(_fire)
 
@@ -123,6 +124,7 @@ func _fire() -> void:
 	if _fired:
 		return
 	_fired = true
+	Sfx.play("paper")   # the voided form goes (back)
 	if action.is_valid():
 		action.call()
 	if is_instance_valid(self) and is_inside_tree():

@@ -1,6 +1,7 @@
 class_name SettingsScreen
 extends Control
-## The menu's Settings screen (FORM 3, goldenrod, scripts/ui/forms/): master volume, fullscreen / windowed, window resolution, whether the voice
+## The menu's Settings screen (FORM 3, goldenrod, scripts/ui/forms/): the volumes (master, Effects, Paperwork, Spell
+## feedback: one audio bus each, GameSettings.BUS_VOLUMES), fullscreen / windowed, window resolution, whether the voice
 ## debug panel is open when a contract starts, and (4. Diagnostics, M7) "Simulate a long link": off / coast / rough, the
 ## lag the host's crew plays under (playtests of the netcode; the host's choice is broadcast to the crew). Every change is
 ## applied at once and saved through GameSettings (user://settings.cfg, section "game"). Emits `back` once the form is
@@ -9,6 +10,9 @@ extends Control
 signal back
 
 const LINK_TEXT := {"off": "Off", "coast": "Coast to coast", "rough": "Rough evening"}
+## The volume rows, in order: setting -> printed caption.
+const VOLUME_ROWS := {"master_volume": "Master volume", "sfx_volume": "Effects", "ui_volume": "Paperwork",
+	"voice_feedback_volume": "Spell feedback"}
 
 ## "" = GameSettings.path. Tests point this at a temp file.
 var settings_path := ""
@@ -16,8 +20,11 @@ var settings_path := ""
 var apply_live := true
 
 var settings: Dictionary = {}
-var volume_slider: BoxScale
+var volume_slider: BoxScale          ## the master volume (volume_sliders["master_volume"])
 var volume_value: Label
+## Every volume row's scale and its typed value, by setting (VOLUME_ROWS).
+var volume_sliders: Dictionary = {}
+var volume_values: Dictionary = {}
 var fullscreen_check: FormCheck
 var resolution_menu: OptionButton
 var panel_check: FormCheck
@@ -33,6 +40,7 @@ var _syncing := false
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	Sfx.play("paper")   # the form slides in
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	settings = GameSettings.load_settings(settings_path)
 	_build()
@@ -51,9 +59,16 @@ func void_back() -> bool:
 # --- API (the controls call these too) -----------------------------------------------------------
 
 func set_master_volume(v: float) -> void:
-	_commit("master_volume", clampf(v, 0.0, 1.0))
+	set_volume("master_volume", v)
+
+
+## One of the volumes (a GameSettings.BUS_VOLUMES key), 0..1: saved, and its bus set at once.
+func set_volume(key: String, v: float) -> void:
+	if not GameSettings.BUS_VOLUMES.has(key):
+		return
+	_commit(key, clampf(v, 0.0, 1.0))
 	if apply_live:
-		GameSettings.apply_volume(float(settings["master_volume"]))
+		GameSettings.apply_bus_volume(GameSettings.BUS_VOLUMES[key], float(settings[key]))
 	_sync()
 
 
@@ -102,8 +117,8 @@ func _build() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 58)
-	margin.add_theme_constant_override("margin_top", 30)
-	margin.add_theme_constant_override("margin_bottom", 30)
+	margin.add_theme_constant_override("margin_top", 18)
+	margin.add_theme_constant_override("margin_bottom", 60)   # (the key hints)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(margin)
 	var col := VBoxContainer.new()
@@ -120,19 +135,24 @@ func _build() -> void:
 	# 1. Audio
 	var audio := FormSection.new("1. Audio")
 	body.add_child(audio)
-	volume_slider = BoxScale.new()
-	volume_slider.min_value = 0.0
-	volume_slider.max_value = 100.0
-	volume_slider.step = 1.0
-	volume_slider.value_changed.connect(func(value: float) -> void:
-		if not _syncing:
-			set_master_volume(value / 100.0))
-	volume_value = FormTheme.typed("", 24)
-	volume_value.custom_minimum_size = Vector2(84, 0)
-	volume_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	var vol_row := FormField.new("Master volume", volume_slider)
-	vol_row.add(volume_value, false, false)
-	audio.box.add_child(vol_row)
+	for key: String in VOLUME_ROWS:
+		var bar := BoxScale.new()
+		bar.min_value = 0.0
+		bar.max_value = 100.0
+		bar.step = 1.0
+		bar.value_changed.connect(func(value: float) -> void:
+			if not _syncing:
+				set_volume(key, value / 100.0))
+		var value_label := FormTheme.typed("", 24)
+		value_label.custom_minimum_size = Vector2(84, 0)
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var vol_row := FormField.new(str(VOLUME_ROWS[key]), bar, 250.0, 46.0)   # (compact: four of them)
+		vol_row.add(value_label, false, false)
+		audio.box.add_child(vol_row)
+		volume_sliders[key] = bar
+		volume_values[key] = value_label
+	volume_slider = volume_sliders["master_volume"]
+	volume_value = volume_values["master_volume"]
 
 	# 2. Display
 	var display := FormSection.new("2. Display")
@@ -142,20 +162,21 @@ func _build() -> void:
 		if not _syncing:
 			set_fullscreen(on))
 	fullscreen_state = FormTheme.label("", 20, FormTheme.INK, true)
+	fullscreen_state.custom_minimum_size = Vector2(118, 0)
 	var display_row := FormField.new("Display", fullscreen_check)
 	display_row.add(fullscreen_state, false, false)
-	display.box.add_child(display_row)
 
+	# The window size shares the display row (the form has four volume rows above it).
 	resolution_menu = OptionButton.new()
 	for res in GameSettings.RESOLUTIONS:
 		resolution_menu.add_item("%d x %d" % [res.x, res.y])
-	resolution_menu.custom_minimum_size = Vector2(280, 48)
+	resolution_menu.custom_minimum_size = Vector2(230, 48)
 	resolution_menu.item_selected.connect(func(i: int) -> void:
 		if not _syncing:
 			set_resolution(GameSettings.RESOLUTIONS[i]))
-	var res_row := FormField.new("Window size", resolution_menu)
-	res_row.add(FormTheme.label("(WINDOWED ONLY)", 18, FormTheme.INK), false, false)
-	display.box.add_child(res_row)
+	display_row.add(FormTheme.label("WINDOW", 18, FormTheme.INK), false, false)
+	display_row.add(resolution_menu)
+	display.box.add_child(display_row)
 
 	# 3. Dispatch rig
 	var rig := FormSection.new("3. Dispatch rig")
@@ -208,13 +229,17 @@ func _build() -> void:
 	keys.offset_bottom = -20.0
 	add_child(keys)
 
-	FormTheme.chain([volume_slider, fullscreen_check, resolution_menu, panel_check, link_menu, back_button])
+	var order: Array = volume_sliders.values()
+	order.append_array([fullscreen_check, resolution_menu, panel_check, link_menu, back_button])
+	FormTheme.chain(order)
 
 
 func _sync() -> void:
 	_syncing = true
-	volume_slider.value = roundf(float(settings["master_volume"]) * 100.0)
-	volume_value.text = "%d%%" % roundi(volume_slider.value)
+	for key: String in volume_sliders:
+		var bar: BoxScale = volume_sliders[key]
+		bar.value = roundf(float(settings[key]) * 100.0)
+		(volume_values[key] as Label).text = "%d%%" % roundi(bar.value)
 	fullscreen_check.button_pressed = bool(settings["fullscreen"])
 	resolution_menu.select(maxi(0, GameSettings.RESOLUTIONS.find(GameSettings.parse_resolution(str(settings["resolution"])))))
 	resolution_menu.disabled = bool(settings["fullscreen"])

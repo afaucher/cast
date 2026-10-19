@@ -4,6 +4,9 @@ extends RefCounted
 ## Applied once at boot (Boot) and live from the Settings screen; the game reads voice_panel_visible.
 ##
 ##   master_volume        0..1, the Master audio bus (default 1.0)
+##   sfx_volume           0..1, the SFX bus: world sounds and stings ("Effects", default 1.0)
+##   ui_volume            0..1, the UI bus: the forms' stamps ("Paperwork", default 1.0)
+##   voice_feedback_volume  0..1, the VoiceFeedback bus: "cast heard" and your fizzle ("Spell feedback", default 1.0: on)
 ##   fullscreen           true = borderless fullscreen, false = a window (default false)
 ##   resolution           "1280x720" | "1600x900" (default) | "1920x1080": the window size when windowed
 ##   voice_panel_visible  the voice debug panel (F1) is open when a contract starts (default true)
@@ -18,6 +21,8 @@ const DEFAULT_PATH := "user://settings.cfg"
 const SECTION := "game"
 const RESOLUTIONS: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 const DEFAULT_RESOLUTION := Vector2i(1600, 900)
+## Each volume setting and the bus it drives (default_bus_layout.tres). The Music bus has no setting yet.
+const BUS_VOLUMES := {"master_volume": "Master", "sfx_volume": "SFX", "ui_volume": "UI", "voice_feedback_volume": "VoiceFeedback"}
 ## Link simulator presets (NetLink.PRESETS / NetSteamLink): what Settings > Diagnostics offers.
 const LINK_PRESETS: Array[String] = ["off", "coast", "rough"]
 
@@ -26,7 +31,7 @@ static var path: String = DEFAULT_PATH
 
 
 static func defaults() -> Dictionary:
-	return {"master_volume": 1.0, "fullscreen": false, "resolution": resolution_text(DEFAULT_RESOLUTION), "voice_panel_visible": true,
+	return {"master_volume": 1.0, "sfx_volume": 1.0, "ui_volume": 1.0, "voice_feedback_volume": 1.0, "fullscreen": false, "resolution": resolution_text(DEFAULT_RESOLUTION), "voice_panel_visible": true,
 		"link_sim": "off"}
 
 
@@ -51,7 +56,8 @@ static func load_settings(settings_path: String = "") -> Dictionary:
 		return out
 	for key: String in out:
 		out[key] = cfg.get_value(SECTION, key, out[key])
-	out["master_volume"] = clampf(float(out["master_volume"]), 0.0, 1.0)
+	for key: String in BUS_VOLUMES:
+		out[key] = clampf(float(out[key]), 0.0, 1.0)
 	out["fullscreen"] = bool(out["fullscreen"])
 	out["voice_panel_visible"] = bool(out["voice_panel_visible"])
 	out["resolution"] = resolution_text(parse_resolution(str(out["resolution"])))
@@ -71,18 +77,27 @@ static func save_settings(settings: Dictionary, settings_path: String = "") -> b
 	return cfg.save(file) == OK
 
 
-## Put the saved settings into effect (the audio bus and, if include_window, the window).
+## Put the saved settings into effect (every audio bus by name and, if include_window, the window).
 static func apply(settings: Dictionary = {}, include_window: bool = true) -> void:
 	var s := settings if not settings.is_empty() else load_settings()
-	apply_volume(float(s.get("master_volume", 1.0)))
+	for key: String in BUS_VOLUMES:
+		apply_bus_volume(BUS_VOLUMES[key], float(s.get(key, 1.0)))
 	if include_window:
 		apply_window(bool(s.get("fullscreen", false)), parse_resolution(str(s.get("resolution", ""))))
 
 
 static func apply_volume(volume: float) -> void:
+	apply_bus_volume("Master", volume)
+
+
+## Set the bus called `bus` to `volume` (0..1; 0 mutes it). A bus that does not exist is skipped.
+static func apply_bus_volume(bus: String, volume: float) -> void:
+	var i := AudioServer.get_bus_index(bus)
+	if i < 0:
+		return
 	var v := clampf(volume, 0.0, 1.0)
-	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001)))
-	AudioServer.set_bus_mute(0, v <= 0.001)
+	AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v, 0.0001)))
+	AudioServer.set_bus_mute(i, v <= 0.001)
 
 
 static func apply_window(fullscreen: bool, res: Vector2i) -> void:

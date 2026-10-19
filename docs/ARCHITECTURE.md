@@ -58,7 +58,8 @@ Dev: `--menu-screen voice|settings`, `--menu-shot <png> [--menu-after s]`, `--me
 `--settings-file <path>` (so screenshots never touch the player's settings).
 
 Settings live in `user://settings.cfg`: `[voice]` (`trigger_word`, `strictness`, `min_voice_db`: `VoiceSettings`) and
-`[game]` (`master_volume` 0..1, `fullscreen`, `resolution` "WxH", `voice_panel_visible`: `GameSettings`). The game reads
+`[game]` (`master_volume`, `sfx_volume`, `ui_volume`, `voice_feedback_volume` 0..1, one audio bus each:
+`GameSettings.BUS_VOLUMES`; `fullscreen`, `resolution` "WxH", `voice_panel_visible`: `GameSettings`). The game reads
 both: `VoiceCaster.start()` applies `[voice]`, `game.gd` reads `voice_panel_visible` when it builds the debug panel.
 
 In game (`game.gd`): **Esc** during a contract (no picker, elevator menu, invoice or "crew incapacitated" under way)
@@ -257,9 +258,19 @@ func start(spell_ids: PackedStringArray) -> bool   # opens mic + loads model; fa
 func is_ready() -> bool
 func get_level() -> float                          # 0..1 mic level for a meter
 func inject_text(text: String) -> void             # debug: act as if `text` was heard (typed console / tests)
+signal trigger_heard(word: String)                 # the trigger word armed a cast (Incantation.trigger_armed): the "cast heard" cue
+signal speech_started                              # the gate's voice onset (raw input, ~50 ms in): cuts the fizzle
+func is_speaking() -> bool                         # inside a voice span right now (no hangover)
 ```
 Spell ids are lowercase: `heal`, `fireball`, `armor`, `corn`, `tentacles`. The voice layer listens for **all**
 spells. The game decides whether the local hero knows the spell (and fizzles it if not).
+
+### Sound (`scripts/fx/sfx.gd`, autoload **Sfx**; `docs/design/audio-plan.md`, "As built")
+Cosmetic: `Sfx.play(cue)`, `Sfx.play_at(cue, pos)`, `Sfx.stop_cue(cue)`, `Sfx.listen_to_voice(caster)`. The cue table
+(`Sfx.CUES`) names each cue's file under `assets/audio/sfx/` (rendered by `tools/render_sfx.ps1`, not in git; a missing
+file is a silent cue with one warning), its bus (`default_bus_layout.tres`: Master > SFX > World / Stings, UI,
+VoiceFeedback, Music), voice limit and gap. Callers only listen (Game, forms, `Fx`); every machine plays its own sounds
+from the events it already has, and no RPC carries a sound. Off headless (tests: `Sfx.enable_for_tests()`).
 
 ### Spells (`scripts/spells/spell_book.gd`, `class_name SpellBook`)
 ```gdscript

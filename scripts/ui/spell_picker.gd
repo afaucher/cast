@@ -109,6 +109,7 @@ func signer_name() -> String:
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	Sfx.play("paper")   # the form slides in
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	theme = FormTheme.theme()
 	_ids = spell_ids.duplicate() if not spell_ids.is_empty() else SpellBook.ids()
@@ -401,6 +402,8 @@ func _make_line(id: String) -> RequisitionLine:
 
 
 func _show_spec(id: String) -> void:
+	if _shown != "" and id != _shown:
+		Sfx.play("paper")   # the spec sheet turns to another spell's page (min_gap keeps fast scrolling quiet)
 	_shown = id
 	if _spec == null:
 		return

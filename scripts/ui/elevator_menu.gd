@@ -31,6 +31,7 @@ func _init(new_info: Dictionary = {}) -> void:
 
 func _ready() -> void:
 	_born_ms = Time.get_ticks_msec()
+	Sfx.play("paper")   # the form slides in
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	theme = FormTheme.theme()

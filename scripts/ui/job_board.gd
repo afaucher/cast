@@ -77,6 +77,7 @@ func _init(new_offers: Array[ContractRun] = []) -> void:
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	Sfx.play("paper")   # the form slides in
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	theme = FormTheme.theme()
 	# With no 3D backdrop: a plain dark shade, so the cards never float over nothing. With the garage behind

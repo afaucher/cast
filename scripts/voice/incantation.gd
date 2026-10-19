@@ -13,6 +13,8 @@ extends RefCounted
 ##    "accidental": bool, "gap": s, "cast_q", "spell_q", "penalty", "t"}
 ##   {"kind": "fizzle", "heard": "cast hello", "reason": "garbled"}
 ##   {"kind": "ignored", "spell": id, "heard": "...", "reason": "repeat"}
+## And one signal, `trigger_armed(token)`: a trigger word was heard and a cast now waits for its spell word (once per
+## trigger, even when the spell word arrives in the same hypothesis; VoiceCaster.trigger_heard, the "cast heard" cue).
 ##
 ## ---------------------------------------------------------------------------
 ## DESIGN (measured with Windows TTS clips through the real zipformer-hot model;
@@ -278,6 +280,8 @@ const TUNING := {
 
 const STRICTNESS := ["strict", "loose", "chaos"]
 
+signal trigger_armed(token: String)
+
 var _cfg: Dictionary
 var _spell_ids: PackedStringArray
 var _phrases: Array = []        # spell phrases [{spell, toks, q}], longest then best first
@@ -298,6 +302,7 @@ var _spent: Dictionary = {}     # trigger token idx -> true once resolved this u
 # The trigger waiting for its spell word; outlives utterances. Empty = none.
 # keys: utt, idx, n, t, q, lead_pen, at_start, after (Array), after_prev
 var _pending: Dictionary = {}
+var _armed_key := ""            # "<utterance serial>:<token idx>" of the last trigger_armed (a revised partial re-arms nothing)
 var _last_fire: Dictionary = {}
 var _last_final_t := -1e9
 
@@ -643,6 +648,10 @@ func _register_trigger(tokens: PackedStringArray) -> void:
 			"pause_before": _pause_before(i), "utt_words": tokens.size(),
 			"token": " ".join(tokens.slice(i, i + int(m["n"]))),
 		}
+		var key := "%d:%d" % [_serial, i]
+		if key != _armed_key:
+			_armed_key = key
+			trigger_armed.emit(str(_pending["token"]))
 		return
 
 

@@ -24,6 +24,7 @@ driver/enable_input=true
 GameWorld="*res://scripts/core/game_world.gd"
 Ledger="*res://scripts/contracts/contract_ledger.gd"
 Session="*res://scripts/net/net_session.gd"
+Sfx="*res://scripts/fx/sfx.gd"
 
 [display]
 

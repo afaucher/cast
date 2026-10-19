@@ -155,6 +155,12 @@ func reset() -> void:
 	_seen_pos = 0
 
 
+## The raw (undelayed) input is inside a voice span right now: from the voice onset (voice_start_sample) until
+## flush_quiet_sec of quiet ends it. Unlike is_open it has no hangover.
+func in_voice() -> bool:
+	return _span
+
+
 ## Human-readable state for the debug panel.
 func describe() -> String:
 	if not enabled:

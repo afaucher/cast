@@ -806,6 +806,7 @@ func _setup_voice() -> void:
 	add_child(voice)
 	voice.spell_spoken.connect(_on_spell_spoken)
 	voice.spell_fizzled.connect(_on_spell_fizzled)
+	Sfx.listen_to_voice(voice)   # "cast heard", the fizzle and its cut on new speech: this machine only (your mic)
 	if voice.has_signal("heard"):
 		voice.connect("heard", _on_heard)
 	if voice.has_signal("trigger_word_changed"):
@@ -1110,6 +1111,8 @@ func _arrive_by_elevator() -> void:
 	_lift = ElevatorArrival.spawn(_site.plan.elevator, _floor_n(), arriving, _heroes(), play)
 	if _lift == null:
 		return
+	var lift := _lift
+	lift.doors_opened.connect(func() -> void: Sfx.play_at("elevator_ding", lift.global_position + Vector3.UP * 2.0))
 	if _lift.is_running():
 		rig.snap()
 		controller.enabled = false

@@ -161,6 +161,10 @@ further) and **coffee** (+60% move and attack speed for six seconds, twitchy, th
   `.gitignore`). The GodotSteam binaries (`addons/godotsteam/win64/*`) come from
   `..\bridge-to-friendship\addons\godotsteam\win64`. Steam (running) supplies the player's name on the HUD;
   `steam_appid.txt` is 480 (Valve's Spacewar test app) until Cast has its own app id. The Godot 4.7 export templates go in `build\deps`.
+- **Sounds, not committed either:** the CC0 recordings in `assets/audio/third_party/` (where each came from:
+  `SOURCES.md` there) and the game's cues rendered from them, `assets/audio/sfx/*.wav`. Copy `assets/audio/third_party/`
+  from a checkout that has it, then run `.\tools\render_sfx.ps1` (renders the cues and imports them). Without them the
+  game and the tests still run; the missing sounds stay silent. Credits: `assets/audio/sfx/CREDITS.md`.
 - **Dev flags** (after `--`) skip the menu, for example `--seed 7 --contract 0 --spells heal,corn
   --no-mic`, `--floor 3`, or `--shot <png> --shot-after 4` for screenshots. They're listed at the
   top of `scripts/app/game.gd`. `--menu` brings the menu back.
