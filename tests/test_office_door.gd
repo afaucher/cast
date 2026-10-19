@@ -4,7 +4,8 @@
 ## hall, room D. Walking opens a door, E shuts it, a shut door blocks sight (monsters' and the fog's) and halves a sound's
 ## reach, a hero opening one is heard in the room behind (a monster opening one is not), monsters open it on their way
 ## through, a chasing brute smashes it (billed once); wide halls never get a door; the plan is seeded and keeps its share;
-## all three looks block and open; the door stands on the jambs' chord. Doors are host / solo only this round (OfficeDoor.NETWORKED is false): no net test yet.
+## all three looks block and open; the door stands on the jambs' chord; a shut door is solid; allies and henchmen under
+## voice orders open doors on their way. Online: tests/test_net_doors.gd.
 
 const RowMap := preload("res://tests/test_room_fog.gd")
 
@@ -39,6 +40,7 @@ func setup() -> void:
 	await _monster_opens()
 	await _solid()
 	await _brute_smashes()
+	await _orders_through_doors()
 	await _styles()
 	finish()
 
@@ -268,6 +270,55 @@ func _open_is_heard() -> void:
 	check(ok, "(the grunt opened the door)")
 	check(listener.state == Monster.State.IDLE, "a monster opening a door makes no noise for the crew")
 	_clear([opener, listener, target])
+	await frames(2)
+
+
+# 7b. Voice orders through shut doors: an ally sent ("go") past one, an ally in "attack" going for a monster in the fight
+#     behind one, and a henchman in FIGHT going for a monster behind one all open it on the way and get there.
+func _orders_through_doors() -> void:
+	var dc := _door("room:2", Vector2i(61, 0))     # C's door onto the far hall
+	var dd := _door("room:3", Vector2i(61, 0))     # D's door onto it
+	for d: OfficeDoor in [dc, dd]:
+		if not d.shut:
+			d.host_decide(true, null)
+	check(dc.shut and dd.shut, "(doors C-H2 and D-H2 shut)")
+	# "go": from room C to a spot in the hall past the shut door.
+	var leader := _hero(Hex.from_world(dc.center() - dc.axis * 4.0))
+	var ally := _hero(Hex.from_world(dc.center() - dc.axis * 3.0 + Vector3(0.0, 0.0, 1.0)))
+	var brain := HeroFactory.make_ally(ally, leader, false, 2.4, 2.6)
+	await frames(2)
+	var spot := dc.center() + dc.axis * 4.0
+	brain.give_order("go", leader, spot)
+	var went := await _wait(func() -> bool: return GameWorld.flat_distance(ally.global_position, brain.order_point) <= AllyBrain.GO_ARRIVED + 0.1, 60 * 8)
+	check(went, "an ally sent past a shut door gets there (%.2f away)" % GameWorld.flat_distance(ally.global_position, brain.order_point))
+	check(not dc.shut, "... opening it on the way")
+	# "attack": the door shut again behind the ally; a monster fights the leader in room C.
+	await _wait(func() -> bool: return dc.host_decide(true, null) or dc.shut, 60 * 2)
+	check(dc.shut, "(door C-H2 shut again, the ally in the hall)")
+	var g := _grunt_at(dc.center() - dc.axis * 4.5 + Vector3(0.0, 0.0, -1.0))
+	g.max_hp = 400.0
+	g.hp = 400.0
+	await frames(2)
+	g.aggro(leader)
+	brain.give_order("attack", leader)
+	var hit := await _wait(func() -> bool: return g.hp < g.max_hp, 60 * 8)
+	check(hit, "an ally in attack goes through the shut door for the monster in the fight behind it")
+	check(not dc.shut, "... opening it")
+	_clear([leader, ally, g])
+	await frames(2)
+	# FIGHT: a henchman in the hall, a monster (idle) in room D behind its shut door.
+	var boss := _hero(Hex.from_world(dd.center() + dd.axis * 6.0))
+	var hench := Employee.spawn(Hex.from_world(dd.center() + dd.axis * 2.5), {"style": "henchman"})
+	var m := _grunt_at(dd.center() - dd.axis * 3.0)
+	m.aggro_range = 0.0
+	m.max_hp = 400.0
+	m.hp = 400.0
+	await frames(2)
+	eq(hench.order("attack", boss), "took", "the henchman takes the attack order")
+	var punched := await _wait(func() -> bool: return m.hp < m.max_hp, 60 * 8)
+	check(punched, "a henchman in FIGHT goes through the shut door for the monster behind it")
+	check(not dd.shut, "... opening it")
+	_clear([boss, hench, m])
 	await frames(2)
 
 
