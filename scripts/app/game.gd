@@ -2105,11 +2105,37 @@ func _extract_followers(riders: Array[Actor], line: String) -> void:
 	var pay := ContractRun.money(riders.size() * ContractRun.EMPLOYEE_EXTRACTED)
 	if riders.size() == 1:
 		_log("%s extracted  +%s" % [riders[0].display_name, pay], Color(0.6, 1.0, 0.7))
-		hud.show_message("%s is out  +%s" % [riders[0].display_name, pay], Color(0.6, 1.0, 0.7))
 	else:
 		_log("%d employees extracted  +%s" % [riders.size(), pay], Color(0.6, 1.0, 0.7))
-		hud.show_message("%d employees out  +%s" % [riders.size(), pay], Color(0.6, 1.0, 0.7))
+	_dispatch_rescue(riders, pay)
 	_update_tracker()
+
+
+## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
+## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice.
+const RESCUE_ONE: Array[String] = [
+	"Copy, %s is out. %s on the invoice.",
+	"%s just walked past my desk. Billing %s.",
+	"Got %s. All fingers accounted for. %s.",
+	"%s is topside and asking for a lawyer. %s.",
+]
+const RESCUE_MANY: Array[String] = [
+	"Copy, %d staff out. %s on the invoice.",
+	"%d of them just came through. Billing %s.",
+	"Headcount up by %d. %s on the invoice.",
+]
+
+
+func _dispatch_rescue(riders: Array[Actor], pay: String) -> void:
+	if _banner == null:
+		hud.show_message("%s out  +%s" % [riders[0].display_name if riders.size() == 1 else str(riders.size()), pay], Color(0.6, 1.0, 0.7))
+		return
+	var line: String
+	if riders.size() == 1:
+		line = RESCUE_ONE[GameWorld.fx_rng.randi() % RESCUE_ONE.size()] % [riders[0].display_name, pay]
+	else:
+		line = RESCUE_MANY[GameWorld.fx_rng.randi() % RESCUE_MANY.size()] % [riders.size(), pay]
+	_banner.show_line(line, 4.0)
 
 
 ## The drop-off: an employee who is FOLLOWING the crew and gets within DROPOFF_DIST of the van's door or the elevator
