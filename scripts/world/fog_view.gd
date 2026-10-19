@@ -20,6 +20,9 @@ extends Node3D
 ## around it), its floor level, its nearest doorway) and DYN (one row of per-space display levels, animated, one row of
 ## per-doorway smoke thinning and middle point). Only DYN changes, and only while a level is fading (FADE_TIME).
 ##
+## DECISION (user, 2026-10-19): the game draws look A only (game.gd _setup_fog, every machine, fed with every seat's hero,
+## puppets too); B and C stay in the fog lab. Seen rooms show their furniture live (no last-known ghosts of monsters).
+##
 ## COST. GPU: one full-screen pass (screen copy + 5 depth reads + 4 cell / 6 level reads a pixel). CPU: a RoomFog.update
 ## every UPDATE_EVERY (about 0.15 ms with three heroes on a generated floor), a 2-row texture upload while fading, and a
 ## visibility pass over the tracked contents when the states change. `stats` holds the measured numbers.
@@ -72,6 +75,7 @@ var _quad: MeshInstance3D
 var _t := 0.0
 var _fading := false
 var _contents_dirty := true
+var _hidden: Dictionary = {}       ## instance id -> true: nodes the fog hid (and so may show again)
 
 static var _shader: Shader
 
@@ -83,7 +87,7 @@ func net_fields() -> Dictionary:
 		"stats": Net.LOCAL, "_static": Net.LOCAL, "_doors": Net.LOCAL, "_shown": Net.LOCAL, "_want": Net.LOCAL,
 		"_thin": Net.LOCAL, "_dyn_img": Net.LOCAL, "_dyn_tex": Net.LOCAL, "_cells_tex": Net.LOCAL, "_cells_img": Net.LOCAL, "_cells_rect": Net.LOCAL,
 		"_mat": Net.LOCAL,
-		"_quad": Net.LOCAL, "_t": Net.LOCAL, "_fading": Net.LOCAL, "_contents_dirty": Net.LOCAL,
+		"_quad": Net.LOCAL, "_t": Net.LOCAL, "_fading": Net.LOCAL, "_contents_dirty": Net.LOCAL, "_hidden": Net.LOCAL,
 	}
 
 
@@ -255,18 +259,31 @@ func _apply_contents() -> void:
 	var t0 := Time.get_ticks_usec()
 	for n in get_tree().get_nodes_in_group("monsters") + _group_nodes():
 		if n is Node3D and is_instance_valid(n):
-			(n as Node3D).visible = not enabled or fog.shows_contents((n as Node3D).global_position)
+			_show(n as Node3D, not enabled or fog.shows_contents((n as Node3D).global_position))
 	if _contents_dirty:
 		_contents_dirty = false
 		for n in _static:
 			if is_instance_valid(n):
-				n.visible = not enabled or fog.shows_static(n.global_position)
+				_show(n, not enabled or fog.shows_static(n.global_position))
 		for d in _doors:
 			if is_instance_valid(d):
 				var dw: Dictionary = fog.doorways[d.doorway_id]
 				var best := maxi(fog.state_of(int(dw["ri"])), fog.state_of(int(dw["hi"])))
-				d.visible = not enabled or best >= RoomFog.NEXT
+				_show(d, not enabled or best >= RoomFog.NEXT)
 	stats["contents_us"] = float(Time.get_ticks_usec() - t0)
+
+
+## Hide a node the crew can't see; show again only what the fog hid (a node that hides itself, like a sinking hellgate
+## beast or a van not popped in yet, stays as its own code has it).
+func _show(n: Node3D, shown: bool) -> void:
+	var id := n.get_instance_id()
+	if not shown:
+		if n.visible:
+			n.visible = false
+			_hidden[id] = true
+	elif _hidden.has(id):
+		_hidden.erase(id)
+		n.visible = true
 
 
 func _group_nodes() -> Array:

@@ -11,7 +11,9 @@ extends RefCounted
 ## Of the doorways allowed, DOOR_SHARE (rounded up) get one: the best scored, ties broken by a roll on a generator seeded
 ## from the floor seed. If doors join the real floors this list belongs in the SitePlan (and so in the floor checksum).
 
-const DOOR_SHARE := 0.5          ## the share of the allowed doorways that get a door
+## The share of the allowed doorways that get a door. User, 2026-10-19: doors on EVERY narrow doorway (1.0); wide hallways
+## stay open, and the exclusions stay (no dead ends, not in the start or elevator room). Planned in SitePlan.doors.
+const DOOR_SHARE := 1.0
 const SCORE_ORIGIN := 3.0
 const SCORE_GATE := 2.0
 const SCORE_PACK := 1.0

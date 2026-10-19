@@ -83,12 +83,18 @@ var blocked: Dictionary = {}
 ## corridor between two rooms: {route: Array[Vector2i] (waypoint cells, doorway to doorway), looks: [Vector2, Vector2]
 ## (X/Z: into the room at each end), rooms: [tag a, tag b], start: int (the waypoint he starts at)}.
 var scouts: Array[Dictionary] = []
+## Office doors (OfficeDoor, docs/design/exploration.md "Decisions: map information, fog and doors"): one per doorway DoorPlan
+## chose (every narrow one but dead ends and the start / elevator rooms), in doorway order: the doorway's record from
+## Doorways.find (id, room, hall, axis, cell, band, the door line a / b and its middle `center`), plus `style`. Their
+## doorways also have the tread-plate threshold floor (DoorFloors, in the cells' materials), so both are in the checksum.
+var doors: Array[Dictionary] = []
 
 
 ## Who may write each var (see Net). SiteBuilder.plan() builds all of it from (run, floor) on
 ## every machine, so it is fixed once planned.
 func net_fields() -> Dictionary:
 	return {
+		"doors": Net.SPAWN,
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "hazards": Net.SPAWN,

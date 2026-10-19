@@ -1,6 +1,6 @@
 ﻿class_name DoorFloors
 extends RefCounted
-## The floor at a doorway, three ways (the fog lab's options; not used by the game yet). Floors are per hex cell
+## The floor at a doorway, three ways (the fog lab's options; the game uses "c" at doors, below). Floors are per hex cell
 ## (Cell.mat_id, FloorMaterials): today every cell takes its tag's floor, so the room / corridor seam runs along the hex
 ## edges between the room's door cells and the hall's mouth cells, zigzagging across the door line (Doorways' jamb chord).
 ##   "a"  today: nothing changes.
@@ -14,7 +14,8 @@ extends RefCounted
 
 ## DECISIONS (user, 2026-10-19, "Gunmetal and tread plate."): a doorway WITH A DOOR gets option "c", the diamond tread-plate
 ## threshold (DOOR_OPTION, THRESHOLD); an open archway keeps today's floors ("a", ARCHWAY_OPTION) until the user says
-## otherwise. Not wired into real floors yet (FloorMaterials.assign would call for_doorway() for each doorway).
+## otherwise. In the game: SiteBuilder.plan calls for_doorway() for every door it plans, right after FloorMaterials.assign,
+## so the thresholds are in the cells' materials (the floor checksum).
 const DOOR_OPTION := "c"
 const ARCHWAY_OPTION := "a"
 const THRESHOLD := FloorMaterials.F_DIAMOND
@@ -24,12 +25,14 @@ const STEP := 0.08               ## the chord is sampled this finely to find the
 
 
 ## The decided floor for a doorway: the tread-plate threshold when it has a door, today's floors when it is an archway.
-static func for_doorway(map: HexMap, fog: RoomFog, dw: Dictionary, has_door: bool) -> int:
-	return apply(map, fog, dw, DOOR_OPTION if has_door else ARCHWAY_OPTION, THRESHOLD)
+## `spaces` is Doorways.spaces(map).
+static func for_doorway(map: HexMap, spaces: Dictionary, dw: Dictionary, has_door: bool) -> int:
+	return apply(map, spaces, dw, DOOR_OPTION if has_door else ARCHWAY_OPTION, THRESHOLD)
 
 
-## Re-floor around doorway `dw` (Doorways.find, with a door line). Returns how many cells changed.
-static func apply(map: HexMap, fog: RoomFog, dw: Dictionary, option: String, threshold: int = FloorMaterials.F_DIAMOND) -> int:
+## Re-floor around doorway `dw` (Doorways.find, with a door line). `spaces` is Doorways.spaces(map). Returns how many cells
+## changed.
+static func apply(map: HexMap, spaces: Dictionary, dw: Dictionary, option: String, threshold: int = FloorMaterials.F_DIAMOND) -> int:
 	if option == "a" or not dw.has("a"):
 		return 0
 	var a: Vector2 = dw["a"]
@@ -40,8 +43,9 @@ static func apply(map: HexMap, fog: RoomFog, dw: Dictionary, option: String, thr
 	var axis: Vector3 = dw["axis"]
 	if n.dot(Vector2(axis.x, axis.z)) < 0.0:
 		n = -n   # (toward the hall)
-	var room := fog.index_of(str(dw["room"]))
-	var hall := fog.index_of(str(dw["hall"]))
+	var room := str(dw["room"])
+	var hall := str(dw["hall"])
+	var cell_space: Dictionary = spaces["cell_space"]
 	var room_floor := FloorMaterials.floor_of(map.get_cell((dw["door_cells"] as Array)[0]).mat_id)
 	var hall_floor := FloorMaterials.floor_of(map.get_cell((dw["mouth_cells"] as Array)[0]).mat_id)
 	var cross := {}
@@ -66,7 +70,7 @@ static func apply(map: HexMap, fog: RoomFog, dw: Dictionary, option: String, thr
 		var cell: HexMap.Cell = map.get_cell(c)
 		if cell == null or cell.type == HexMap.Tile.WALL:
 			continue
-		var sp := fog.space_of_cell(c)
+		var sp := str(cell_space.get(c, ""))
 		if sp != room and sp != hall:
 			continue
 		var w := Hex.to_world(c)

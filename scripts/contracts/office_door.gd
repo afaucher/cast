@@ -1,41 +1,44 @@
-﻿class_name OfficeDoor
+class_name OfficeDoor
 extends Node3D
 ## OFFICE DOOR (docs/design/exploration.md, "Decisions: map information, fog and doors", 2026-10-19): a door in
 ## the ROOM WALL at a NARROW doorway, on Doorways' door line (the chord between the two jambs where the corridor's walls
-## end at the room), filling it jamb to jamb at the wall's height. Which doorways get one is DoorPlan's. Its look is one of
-## OfficeDoorModel's STYLES ("single" swing door with a wired-glass light and a lever handle, "double" doors with push
-## bars and a lit sign, a frosted glass "slider" suite front with a logo band).
+## end at the room), filling it jamb to jamb at the wall's height. Which doorways get one is DoorPlan's (SitePlan.doors);
+## SiteBuilder.spawn builds them. Its look is one of OfficeDoorModel's STYLES ("single" swing door with a wired-glass light
+## and a lever handle, "double" doors with push bars and a lit sign, a frosted glass "slider" suite front with a logo band).
 ##
 ## DECISIONS (user, 2026-10-19): "The double door is the feel I like." and "Gunmetal and tread plate.": the double door
 ## with a gunmetal frame is the default (DEFAULT_STYLE, OfficeDoorModel.FRAME), and a door's doorway gets the diamond
-## tread-plate threshold on the cells its door line crosses (DoorFloors.DOOR_OPTION "c"). Doors only for now: an open
-## archway keeps today's floors (option "a") until the user says otherwise. Not wired into real floors yet.
+## tread-plate threshold on the cells its door line crosses (DoorFloors.DOOR_OPTION "c"; an open archway keeps its floors,
+## "a"). After playing the fog lab: doors on EVERY narrow doorway (DoorPlan.DOOR_SHARE 1.0), they START SHUT, and a shut
+## door is SOLID (bodies, shoves, arrows and projectiles stop at it, as well as sight and sound).
 ##
-##   WALK INTO IT  a hero (or anyone who is not a monster) walking into a shut door opens it at once. A MONSTER walking
+##   WALK INTO IT  a hero (or anyone who is not a monster) walking into a shut door (at WALK_MIN or faster: an idle sway
+##                 is not a walk), or pressed against it still walking into it, opens it at once. A MONSTER walking
 ##                 into it stops for MONSTER_DELAY (rooted, the door shudders) and then opens it: pathing needs nothing
 ##                 new, the door is never a wall for find_path.
 ##   E             shuts an open door (or opens a shut one): use(). Not while a body stands in it.
 ##   NOISE         a HERO opening it is heard (MonsterSenses.noise, OPEN_NOISE, a "door" row in the combat log): monsters
 ##                 in the room behind turn toward it. A monster opening one makes no noise for the crew; a brute's
 ##                 smash is loud (SMASH_NOISE). The host makes it (it decides the door and runs the monsters).
-##   SHUT          blocks SIGHT (HexMap blockers: line_of_sight, so monster sight and room fog) and MUFFLES noise (half a
-##                 sound's reach through it: MonsterSenses.noise asks HexMap.crosses_blocker). It does not stop bodies,
-##                 shoves or arrows: a body walking in opens it.
-##   SMASH         a BRUTE that is chasing (CHASE / ATTACK / ALERT) walks into a shut door and slams it: its real slam (the
-##                 red ring, SMASH_WINDUP, Combat.slam on whoever stands near) and the door bursts into hex rubble, a loud
-##                 noise, and one Ledger damage line ("Office door", PRICE, the brute: "demons" on the invoice). Billed
-##                 once: `broken` is final.
+##   SHUT          SOLID (a HexMap blocker: bodies stop against it like a wall face, a shove slams into it, an arrow or a
+##                 projectile stops at it), blocks SIGHT (line_of_sight: monster sight and room fog) and MUFFLES noise
+##                 (half a sound's reach through it: MonsterSenses.noise asks HexMap.crosses_blocker).
+##   SMASH         a BRUTE that is chasing (CHASE / ATTACK / ALERT) walks into a shut door and slams it (Brute.smash_door:
+##                 its real slam's wind-up, then the slam) and the door bursts: the leaves torn off, a loud noise, and one
+##                 Ledger damage line ("Office door", PRICE, the brute: "demons" on the invoice). Billed once: `broken` is
+##                 final.
 ##
-## NETWORKING: a host-arbitrated object (networking.md's fourth shape), like a priced prop. The HOST decides `shut` and
-## `broken` (OWNER); every machine shows them and keeps its own blocker from them. Built HOST / SOLO ONLY this round
-## (NETWORKED false): on a client a walk-in or E would be a request (Net.request(door, "door", {shut})) that NetObjects
-## does not handle yet; until it does, the door ignores a client's push (what is left: OfficeDoor.NETWORKED, NetEvents).
+## NETWORKING: a host-arbitrated object (networking.md's fourth shape), like a priced prop. The HOST decides `shut`, `swing`
+## and `broken` (OWNER) and every machine keeps its own blocker (collision and sight) from them. A client's E, or its own hero
+## walking into a shut door, is a request (Net.request(door, "door", {shut}) -> NetObjects "obj.req"); the host decides and
+## tells everyone (`obj.door {id, s, w}`); a smash goes out as `obj.break {id, by}` (the bill as `obj.ledger`). A late joiner
+## gets every door's state in the join snapshot (NetObjects.late_join_state "doors"). Net ids: after the actors (NetFloor).
 
 signal state_changed(door: OfficeDoor)
 signal smashed(door: OfficeDoor, by: Node)
 
 const GROUP := "office_doors"
-const NETWORKED := false        ## doors are host / solo only this round (see the header)
+const NETWORKED := true         ## a client's push is a request the host decides (NetObjects)
 const LABEL := "Office door"
 const PRICE := 900              ## the Ledger line when a brute smashes one
 const DEFAULT_STYLE := "double"   ## the user's pick (2026-10-19)
@@ -46,16 +49,16 @@ const USE_RANGE := 2.2          ## E reaches a door this close (and the hero is 
 const MONSTER_DELAY := 0.5      ## a monster stops this long to open a shut door
 const OPEN_NOISE := 7.0         ## a hero opening a door is heard this far (a fireball is 10)
 const SMASH_NOISE := 12.0       ## a brute smashing one
-const SMASH_WINDUP := 0.9       ## the brute's slam wind-up (Brute.WINDUP)
-const SMASH_ROOT := SMASH_WINDUP + 0.35
 const SCAN_MARGIN := 2.6        ## actors this far past the door's half width are not looked at
+const ASK_AGAIN := 0.5          ## a client asks again this long after an unanswered push
+const WALK_MIN := 0.5           ## units/s: a body coming at the door slower (an idle sway, a cowering employee) is not walking into it
 
 # Spawn data: from the doorway (Doorways), the same on every machine.
 var doorway_id := -1
 var style := DEFAULT_STYLE
 var cell := Vector2i.ZERO       ## the doorway cell (the corridor's first full cell past the door)
 var axis := Vector3.FORWARD     ## unit X/Z from the room into the hall
-var a := Vector2.ZERO           ## world X/Z: the jambs; the door (and its sight blocker) stands on a -> b
+var a := Vector2.ZERO           ## world X/Z: the jambs; the door (and its blocker) stands on a -> b
 var b := Vector2.ZERO
 var height := 1.5               ## the wall height above the floor
 var half := 0.16                ## how deep the door is either side of its line
@@ -67,18 +70,16 @@ var swing := 1                  ## +1: the leaves swing toward the hall side, -1
 # The host's working state (PRIVATE).
 var _hold: Dictionary = {}      ## monster instance id -> GameWorld.time it started opening the door
 var _last: Dictionary = {}      ## actor instance id -> last flat position in the door's frame (Vector2): who walks toward it
-var _smasher: Actor = null
-var _smash_t := -1.0
-# Presentation (LOCAL).
+# Presentation and this machine's asking (LOCAL).
 var open_k := 0.0               ## 0 shut .. 1 open
 var hold_k := -1.0              ## >= 0: the look stays at this open_k (the lab's "opening" shot)
 var model: OfficeDoorModel = null
 var frame_color := Color(0, 0, 0, 0)   ## the architrave's paint (alpha 0: OfficeDoorModel's default)
 var _rattle := 0.0
+var _asked_at := -INF           ## a client: when it last asked the host to open this door
 
 static var _actors_frame := -1
 static var _actors_cache: Array[Actor] = []
-static var _warned := false
 
 
 ## Who may write each var (see Net).
@@ -87,12 +88,13 @@ func net_fields() -> Dictionary:
 		"doorway_id": Net.SPAWN, "style": Net.SPAWN, "cell": Net.SPAWN, "axis": Net.SPAWN, "a": Net.SPAWN, "b": Net.SPAWN,
 		"height": Net.SPAWN, "half": Net.SPAWN, "width": Net.SPAWN,
 		"shut": Net.OWNER, "broken": Net.OWNER, "swing": Net.OWNER,
-		"_hold": Net.PRIVATE, "_last": Net.PRIVATE, "_smasher": Net.PRIVATE, "_smash_t": Net.PRIVATE,
+		"_hold": Net.PRIVATE, "_last": Net.PRIVATE,
 		"open_k": Net.LOCAL, "hold_k": Net.LOCAL, "model": Net.LOCAL, "frame_color": Net.LOCAL, "_rattle": Net.LOCAL,
+		"_asked_at": Net.LOCAL,
 	}
 
 
-## A door on doorway `dw` (Doorways.find; needs dw["door_ok"]). Null when it has no door place.
+## A door on doorway `dw` (Doorways.find or a SitePlan.doors record; needs "door_ok"). Null when it has no door place.
 static func spawn(dw: Dictionary, door_style: String = DEFAULT_STYLE, start_shut: bool = true, frame: Color = Color(0, 0, 0, 0)) -> OfficeDoor:
 	if not bool(dw.get("door_ok", false)) or GameWorld.root == null:
 		return null
@@ -211,7 +213,7 @@ func blocked() -> bool:
 	return false
 
 
-## E on this door by `hero`: shut it if open, open it if shut. False when nothing happened (blocked, broken, a client).
+## E on this door by `hero`: shut it if open, open it if shut. False when nothing happened (blocked, broken).
 func use(hero: Actor) -> bool:
 	if broken:
 		return false
@@ -223,33 +225,43 @@ func use(hero: Actor) -> bool:
 	return request(true, hero)
 
 
-## Ask for a state: the host (or solo) decides; a client asks the host (not built yet: NETWORKED).
+## Ask for a state: the host (or solo) decides at once; a client asks the host (obj.req "door"). True when decided or sent.
 func request(want_shut: bool, by: Node) -> bool:
 	if Net.owns(self):
-		_decide(want_shut, by)
-		return true
-	if NETWORKED:
-		return Net.request(self, "door", {"shut": want_shut})
-	if not _warned:
-		_warned = true
-		push_warning("OfficeDoor: doors are host / solo only for now; a client's push is ignored (%s)" % str(by))
-	return false
+		return host_decide(want_shut, by)
+	_asked_at = GameWorld.time
+	return Net.request(self, "door", {"shut": want_shut})
 
 
-## The host's decision (and what every machine shows once it is told). Opening, the leaves swing away from whoever opened
-## it; a hero opening it makes a noise.
-func _decide(want_shut: bool, by: Node) -> void:
+## The host decides (its own push, or a client's request: NetObjects). Shutting is refused while a body stands in it.
+func host_decide(want_shut: bool, by: Node) -> bool:
 	if broken or want_shut == shut:
-		return
+		return false
+	if want_shut and blocked():
+		return false
 	shut = want_shut
 	if not want_shut:
 		var side := local_flat((by as Node3D).global_position).y if by is Node3D else -1.0
 		swing = -1 if side > 0.0 else 1
 	_hold.clear()
 	_apply_blocker()
-	if not want_shut and Net.owns(self) and not (by is Monster):
+	if not want_shut and not (by is Monster):
 		MonsterSenses.noise(global_position + Vector3.UP * 0.2, OPEN_NOISE, "door")
 	state_changed.emit(self)
+	return true
+
+
+## A client: the host's decision (obj.door), or a late joiner's snapshot.
+func net_show(is_shut: bool, swing_dir: int) -> void:
+	if broken:
+		return
+	var changed := is_shut != shut or swing_dir != swing
+	shut = is_shut
+	swing = 1 if swing_dir >= 0 else -1
+	_asked_at = -INF
+	_apply_blocker()
+	if changed:
+		state_changed.emit(self)
 
 
 func _apply_blocker() -> void:
@@ -262,15 +274,13 @@ func _apply_blocker() -> void:
 	else:
 		map.clear_blocker(_key())
 
-# --- The host: who walks into it -------------------------------------------------------------------------------------
+# --- Who walks into it -----------------------------------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
 	_animate(delta)
-	if broken or not Net.owns(self):
+	if broken:
 		return
-	if _smash_t >= 0.0:
-		_smash_tick(delta)
-		return
+	var host := Net.owns(self)
 	var seen := {}
 	for act in _nearby():
 		var id := act.get_instance_id()
@@ -283,25 +293,39 @@ func _physics_process(delta: float) -> void:
 		var gap := absf(p.y) - half - act.radius
 		var toward := (absf(prev.y) - absf(p.y))   # how far it moved toward the door this frame
 		var held := _hold.has(id)
-		if gap > TOUCH or (toward <= 0.0005 and not held):
+		if act.is_helpless():
+			_last[id] = Vector2(p.x, INF)   # (shoved or staggered: the next frames' movement is not a walk)
+			continue
+		# Pressed against it and still walking into it (it walked up while the door was being shut): a push too. Facing it
+		# is not enough: a body shoved against it, or standing there aiming, is not walking.
+		var t := (b - a).normalized()
+		var pressing := gap <= 0.06 and GameWorld.time - act._walk_at < 0.1 and act.facing.dot(Vector3(-t.y, 0.0, t.x)) * signf(p.y) < -0.7
+		if gap > TOUCH or (toward < WALK_MIN * delta and not held and not pressing) or toward > 0.6:
+			continue   # (a body shoved into a shut door slams into it: it does not push it open; a jump is a teleport, not a walk)
+		if not host:
+			# A client: only its own hero's push counts here, and it is a request (the host decides).
+			if act is Hero and Net.owns(act) and GameWorld.time - _asked_at >= ASK_AGAIN:
+				request(false, act)
 			continue
 		if act is Monster:
 			_monster_at(act as Monster)
-		else:
-			_decide(false, act)
+		elif Net.owns(act):
+			host_decide(false, act)
 			return
 	for id: int in _last.keys():
 		if not seen.has(id):
 			_last.erase(id)
 
 
-## A monster walked into the shut door: a chasing brute smashes it, anyone else stops and opens it (quietly).
+## A monster walked into the shut door: a chasing brute smashes it (Brute.smash_door), anyone else stops and opens it
+## (quietly).
 func _monster_at(m: Monster) -> void:
 	if not Net.resolves(m):
 		return
 	var id := m.get_instance_id()
-	if m.kind == "brute" and m.state in [Monster.State.CHASE, Monster.State.ATTACK, Monster.State.ALERT]:
-		_begin_smash(m)
+	if m.kind == "brute" and m.state in [Monster.State.CHASE, Monster.State.ATTACK, Monster.State.ALERT] and m.has_method("smash_door"):
+		if m.call("smash_door", self):
+			_rattle = 1.0
 		return
 	if not _hold.has(id):
 		_hold[id] = GameWorld.time
@@ -309,7 +333,7 @@ func _monster_at(m: Monster) -> void:
 		_rattle = MONSTER_DELAY
 		return
 	if GameWorld.time - float(_hold[id]) >= MONSTER_DELAY - 0.02:
-		_decide(false, m)
+		host_decide(false, m)
 
 
 ## Live actors near the door (one list per physics frame for every door).
@@ -328,51 +352,8 @@ func _nearby() -> Array[Actor]:
 	return out
 
 
-# --- The brute's smash -----------------------------------------------------------------------------------------------
-
-func _begin_smash(m: Monster) -> void:
-	_smasher = m
-	_smash_t = 0.0
-	m.set_modifier("door_smash", 1.0, SMASH_ROOT, Actor.STAT_ROOT)
-	m.face_point(global_position)
-	m.set("_telegraph", 0.0)
-	if m.has_method("_on_windup_begin"):
-		m.call("_on_windup_begin")
-
-
-func _smash_tick(delta: float) -> void:
-	var m := _smasher
-	if m == null or not is_instance_valid(m) or m.dead or m.is_shoved():
-		if m != null and is_instance_valid(m):
-			m.set("_telegraph", 0.0)
-			if m.has_method("_on_windup_end"):
-				m.call("_on_windup_end")
-		_smasher = null
-		_smash_t = -1.0
-		return
-	_smash_t += delta
-	m.face_point(global_position)
-	m.set("_telegraph", clampf(_smash_t / SMASH_WINDUP, 0.0, 1.0))
-	_rattle = 0.1
-	if _smash_t < SMASH_WINDUP:
-		return
-	# The slam lands: the real slam (Combat.slam round the brute: whoever holds the door gets it) and the door bursts.
-	m.set("_telegraph", 0.0)
-	if m.has_method("_on_windup_end"):
-		m.call("_on_windup_end")
-	if m.has_method("_strike"):
-		m.call("_strike")
-	m.set("strikes", int(m.get("strikes")) + 1)
-	m.set("_strike_t", 1.0)
-	var mm: Variant = m.get("model")
-	if mm != null and (mm as Object).has_method("attack_swing"):
-		(mm as Object).call("attack_swing")
-	_smasher = null
-	_smash_t = -1.0
-	smash(m)
-
-
-## The door bursts (the host decides; every machine plays it). Billed once, to `by`'s side (a monster: "demons").
+## The door bursts (the host decides; every machine plays it: a client from obj.break). Billed once, to `by`'s side (a
+## monster: "demons"), by the host.
 func smash(by: Node) -> void:
 	if broken:
 		return

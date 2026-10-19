@@ -19,8 +19,11 @@ extends RefCounted
 ##      and shut doors as blockers). One more doorway on (two hops: a room seen down a short straight corridor) on the
 ##      same terms, measured from the hero;
 ##   3. VANTAGE: a hero standing VANTAGE_LEVELS (2) or more above its ROOM's floor (a crate tier, a ledge) sees into every
-##      space next to that room, doors or not (a crown looks over the partitions).
+##      space next to that room through an open doorway or an archway, however far (never past a shut door).
 ## SEEN is sticky: once in view, always at least seen. NEXT follows from what is known; nothing un-sees.
+##
+## DECISIONS (user, 2026-10-19, after playing the fog lab): look A, the black void, is the game's only look ("that is
+## perfect"; B and C stay in the lab); a seen room shows its props as they are now (live); no vantage through a shut door.
 ##
 ##   var fog := RoomFog.build(map)
 ##   fog.set_shut(doorway_id, true)            # a door shut (OfficeDoor tells it)
@@ -219,7 +222,8 @@ func _see_from(pos: Vector3) -> void:
 		var lv := map.ground_level(pos)
 		if not is_nan(lv) and lv >= float(base_level[s] + VANTAGE_LEVELS) - 0.01:
 			for l: Array in links[s]:
-				view[int(l[0])] = 1
+				if not shut.has(int(l[1])):   # (user, 2026-10-19: height does not see past a shut door)
+					view[int(l[0])] = 1
 
 
 ## Counts per state (the lab's readout, tests).

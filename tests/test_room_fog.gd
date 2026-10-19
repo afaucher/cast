@@ -1,4 +1,4 @@
-﻿extends TestCase
+extends TestCase
 ## Room fog (RoomFog, Doorways; docs/design/exploration.md "Decisions: map information, fog and doors", 2026-10-19): the space states and how they change.
 ## A hand-built floor in a row, west to east: room A, a SHORT hall (5 cells), room B, a LONG hall (19 cells), room C, a long
 ## hall, room D. Walls are midpoint walls (cut_walls), as on a generated floor.
@@ -122,17 +122,24 @@ func setup() -> void:
 	check(fog3.shows_contents(at(A) + Vector3(2.0, 0.0, 0.0)), "a monster in the room in view shows")
 	check(not fog3.shows_contents(Hex.to_world(Vector2i(0, -6))), "a point in the wall is in no space")
 
-	# 6. Vantage: two levels up in a room sees into the spaces next to it, shut doors or not.
+	# 6. Vantage: two levels up in a room sees into the spaces next to it through an open doorway, however far; never past a
+	#    shut door (user, 2026-10-19).
 	var map2 := row_map()
-	for t in [Vector2i(-2, 0), Vector2i(-2, 1), Vector2i(-3, 1)]:
+	for t in [Vector2i(-4, 0), Vector2i(-4, 1), Vector2i(-3, 0)]:
 		map2.get_cell(t).level = 2
 	var fog4 := RoomFog.build(map2)
-	for dw in fog4.doorways:
-		fog4.set_shut(int(dw["id"]), true)
-	fog4.update([at(Vector2i(-2, 0))])
-	eq(fog4.state_of(fog4.space_of_cell(Vector2i(8, 0))), RoomFog.IN_VIEW, "a vantage two levels up sees into the next space")
-	fog4.update([at(Vector2i(0, -2))])
-	eq(fog4.state_of(fog4.space_of_cell(Vector2i(8, 0))), RoomFog.SEEN, "down on the floor again, behind a shut door: seen")
+	var tier := at(Vector2i(-4, 0))
+	var hv0 := fog4.space_of_cell(Vector2i(8, 0))
+	var a_hv0 := fog4.doorways_between(fog4.space_of_cell(A), hv0)[0]
+	check(GameWorld.flat_distance(tier, fog4.doorways[a_hv0]["mid"]) > RoomFog.DOOR_SIGHT, "(the tier is out of plain doorway sight)")
+	fog4.update([at(Vector2i(-4, 2))])
+	eq(fog4.state_of(hv0), RoomFog.NEXT, "on the floor at the same distance: the hall is only next")
+	fog4.update([tier])
+	eq(fog4.state_of(hv0), RoomFog.IN_VIEW, "a vantage two levels up sees into the next space through the open doorway")
+	var fog5 := RoomFog.build(map2)
+	fog5.set_shut(a_hv0, true)
+	fog5.update([tier])
+	eq(fog5.state_of(hv0), RoomFog.NEXT, "... but not past a shut door")
 
 	# 7. Determinism: the same map builds the same spaces and doorways.
 	var again := RoomFog.build(row_map())

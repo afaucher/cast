@@ -106,6 +106,7 @@ var _src_ref: WeakRef = null
 var _stagger_until := -1.0
 var _daze_guard_until := -1.0     ## GameWorld.time until which a new daze is refused (the daze plus DAZE_GUARD)
 var _safe_cell := Vector2i(1 << 20, 1 << 20)   ## last cell this actor stood on, for pit rescues
+var _walk_at := -INF              ## GameWorld.time this actor last tried to walk (move() with a direction): pushing a door
 
 
 func _ready() -> void:
@@ -130,7 +131,7 @@ func net_fields() -> Dictionary:
 		"_fall_from_y": Net.PRIVATE, "_void_fall": Net.PRIVATE, "_void_t": Net.PRIVATE,
 		"_pull": Net.PRIVATE, "_pull_t": Net.PRIVATE, "_pull_from": Net.PRIVATE,
 		"_pull_to": Net.PRIVATE, "_src_team": Net.PRIVATE, "_src_ref": Net.PRIVATE,
-		"_stagger_until": Net.PRIVATE, "_safe_cell": Net.PRIVATE,
+		"_stagger_until": Net.PRIVATE, "_safe_cell": Net.PRIVATE, "_walk_at": Net.PRIVATE,
 		# The daze itself is a modifier (_modifiers, announced like any status); the immunity after it is the owner's
 		# bookkeeping: only the owner applies a daze (Combat asks who resolves the target).
 		"_daze_guard_until": Net.PRIVATE,
@@ -356,6 +357,7 @@ func move(dir: Vector3, delta: float) -> bool:
 	if dir.length() > 1.0:
 		dir = dir.normalized()
 	facing = dir.normalized()
+	_walk_at = GameWorld.time
 	if is_rooted():
 		climbing = false
 		return false   # vines: can turn and attack, cannot walk

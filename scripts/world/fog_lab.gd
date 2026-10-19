@@ -81,16 +81,15 @@ func _build() -> void:
 	for e in site.employees:
 		e.set_physics_process(false)
 	fog = RoomFog.build(map)
-	door_ids = DoorPlan.choose(fog.doorways, plan, run.floor_seed(1))
-	if _arg(OS.get_cmdline_user_args(), "--doors") == "narrow":
-		door_ids.clear()
-		for dw in fog.doorways:
-			if bool(dw["door_ok"]):
-				door_ids.append(int(dw["id"]))
+	# the floor's own doors (SiteBuilder: planned in SitePlan.doors, spawned shut)
+	for dr in plan.doors:
+		door_ids.append(int(dr["id"]))
+	doors.assign(site.doors)
 	print("fog lab: seed %d, %d doorways, %d narrow, doors on %s (DoorPlan.DOOR_SHARE %.2f), style %s" % [seed_value,
 		fog.doorways.size(), fog.doorways.filter(func(dw: Dictionary) -> bool: return bool(dw["narrow"])).size(), str(door_ids),
 		DoorPlan.DOOR_SHARE, door_style])
-	_spawn_doors()
+	if door_style != OfficeDoor.DEFAULT_STYLE:
+		_spawn_doors()
 	var start: Vector2i = map.cells_with_tag("start")[0]
 	wick = _hero(start, "wick", "Wick", Color(0.3, 0.55, 0.95))
 	crew = [wick, _hero(start, "rebar", "Rebar", Color(0.85, 0.5, 0.25)), _hero(start, "gasket", "Gasket", Color(0.7, 0.4, 0.85))]
@@ -391,10 +390,6 @@ func _shots() -> void:
 		await _bend_shot(_facing_doorway(true))
 		finish_shots()
 		return
-		_spawn_doors()
-		fog.seen.fill(0)
-		_place_crew_at(Hex.to_world(map.cells_with_tag("start")[0]))
-		await _settle()
 	# 2. A wide hall's open archway: from hall:4 the room past it (room:5) is in view, contents and all.
 	var dw_a := doorway("room:0", "hall:4")
 	var dw_b := doorway("room:5", "hall:4")
@@ -546,7 +541,7 @@ func _v4(dw: Dictionary) -> void:
 	for opt in ["a", "b", "c"]:
 		for c: Vector2i in keep:
 			map.cells[c].mat_id = keep[c]
-		var n := DoorFloors.apply(map, fog, dw, opt, THRESHOLD_FLOOR)
+		var n := DoorFloors.apply(map, Doorways.spaces(map), dw, opt, THRESHOLD_FLOOR)
 		print("v4 floor %s: %d cells changed" % [opt, n])
 		terrain.build(map)
 		var d := door_at(id, "double", FRAMES[0][1])

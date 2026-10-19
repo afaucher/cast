@@ -39,6 +39,7 @@ const JAMB_SEARCH := 4.5        ## how far back toward the room a corridor wall 
 const JAMB_SPAN_MAX := 5.2      ## a door chord longer than this (a very oblique mouth) is no door place
 const MARCH := 0.04             ## the step of the march out to each wall face
 const MARCH_MAX := 3.4
+const MARCH_COARSE := 5         ## the march's stride, in MARCH steps (0.2): finer steps only inside the stride that hits
 
 
 ## Spaces of `map`: {cell_space: {Vector2i: tag}, cells: {tag: Array[Vector2i] (sorted)}, kind: {tag: "room"|"hall"},
@@ -405,16 +406,32 @@ static func _clip_to_floor(map: HexMap, p: Vector3, q: Vector3, inside: Vector3)
 	return [Vector2(s.x, s.z), Vector2(e.x, e.z)]
 
 ## Distance from p along dir to the first wall face (-1 when none within MARCH_MAX or the floor ends first).
+## Strides of MARCH_COARSE steps first, then the fine MARCH steps in the stride that met a wall (or the whole way again
+## when a stride met the floor's end). The same answer as stepping finely all the way unless a wall sliver thinner than a
+## stride sits between floor on both sides (the doorway tests and 14k probes of generated floors found none); about a
+## third of the probes.
 static func _march(map: HexMap, p: Vector3, dir: Vector3) -> float:
-	var d := MARCH
-	while d <= MARCH_MAX:
-		var q := p + dir * d
-		if map.wall_at(q):
-			# back off to the face (half a step: the face is within one step behind)
-			return d - MARCH * 0.5
-		if is_nan(map.ground_level(q)):
-			return -1.0
-		d += MARCH
+	var k := 1
+	var last := 0          # the steps a float march of MARCH up to MARCH_MAX takes (84: 85 * 0.04 rounds past 3.4)
+	var acc := MARCH
+	while acc <= MARCH_MAX:
+		last += 1
+		acc += MARCH
+	while k <= last:
+		var kc := mini(k + MARCH_COARSE - 1, last)
+		var q := p + dir * (MARCH * kc)
+		var hit := map.wall_at(q)
+		if kc == last or hit or is_nan(map.ground_level(q)):
+			# the floor ends here: a wall corner grazed on the way (thinner than a stride) would have been the answer, so
+			# the whole march is redone fine; a wall: only this stride
+			for kf in range(k if hit else 1, kc + 1):
+				var qf := p + dir * (MARCH * kf)
+				if map.wall_at(qf):
+					# back off to the face (half a step: the face is within one step behind)
+					return MARCH * kf - MARCH * 0.5
+				if is_nan(map.ground_level(qf)):
+					return -1.0
+		k = kc + 1
 	return -1.0
 
 

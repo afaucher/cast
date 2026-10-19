@@ -79,12 +79,12 @@ const WORLD_CARRIES := {
 	"res://scripts/spells/component_pickup.gd": {
 		"charges": "obj.pickup / obj.pick (NetObjects)", "_used": "obj.gone (NetObjects)",
 	},
-	# Office doors (exploration.md "Decisions: map information, fog and doors", 2026-10-19): NOT SENT YET, doors are host / solo only (OfficeDoor.NETWORKED).
-	# Planned: a client's walk-in or E is obj.req {what "door", id, shut}; the host decides and sends obj.door {id, s, w, x}.
+	# Office doors (exploration.md "Decisions: map information, fog and doors", 2026-10-19): host-arbitrated. A client's walk-in
+	# or E is obj.req {what "door", id, shut}; the host decides (OfficeDoor.host_decide) and sends obj.door {id, s, w}.
 	"res://scripts/contracts/office_door.gd": {
-		"shut": "planned: obj.door {id, s, w} from the host (doors are host / solo only so far)",
-		"swing": "planned: obj.door {id, s, w} from the host: which way the leaves swing (doors are host / solo only so far)",
-		"broken": "planned: obj.door {id, x} from the host, with its Ledger line as obj.ledger (doors are host / solo only so far)",
+		"shut": "obj.door {id, s, w} from the host (NetObjects)",
+		"swing": "obj.door {id, s, w} from the host (NetObjects): which way the leaves swing",
+		"broken": "obj.break {id, by} from the host (NetObjects), its Ledger line as obj.ledger",
 	},
 	"res://scripts/spells/chicken.gd": {
 		"dead": "world.die (NetWorld): a feather explosion, or the poof when it was puffing up (its state rode the stream)",
@@ -135,5 +135,5 @@ const LATE_JOIN := {
 	"res://scripts/contracts/mail_package.gd": "gone ids (opened: removed; its prize is a pickup, replayed)",
 	"res://scripts/spells/chicken.gd": "runtime spawns: replay of world.spawn (kind chicken); then the keyframe (a monster-format entry); statuses: replay",
 	"res://scripts/spells/component_pickup.gd": "replay of obj.pickup for every pickup on the floor (charges and age); a used seed-built one: gone ids",
-	"res://scripts/contracts/office_door.gd": "planned: replay of obj.door for every door not in its start state (shut / open / broken); not built (doors are host / solo only)",
+	"res://scripts/contracts/office_door.gd": "replay of obj.door / obj.break for every door (NetObjects.late_join_state `doors`: id, shut, swing, broken)",
 }

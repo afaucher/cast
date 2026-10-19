@@ -149,3 +149,10 @@ Spells stay mainly about combat. These are small extras that cost little:
   the room's floor on one side and the corridor's on the other. Open archways keep their floors as they are, for now.
 - **Fog look (2026-10-19, played in the fog lab):** look **A, black void**: unknown spaces are the background, next
   spaces a dark silhouette with traced edges, seen spaces desaturated and darkened. The user: "that is perfect."
+- **In the game (2026-10-19):** look A is the game's only look (blueprint and smoke stay in the lab), drawn on every
+  machine from every crew hero's sight, puppets included. **Every narrow doorway gets a door** (no dead ends, not the
+  start or elevator room); wide hallways stay open. Doors **start shut** and a shut door is **solid**: bodies, shoves,
+  arrows and projectiles stop at it, as do sight and sound. Heroes and employees open one by walking into it; a monster
+  stops for half a second first; a chasing brute smashes it (billed once). Seen rooms show their furniture live. A
+  vantage two levels up sees into the next space through an open doorway, never through a shut door. Online the host
+  decides every door (a client's walk-in or E is a request), and a late joiner gets every door's state.

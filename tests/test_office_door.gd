@@ -37,6 +37,7 @@ func setup() -> void:
 	await _noise_muffled()
 	await _open_is_heard()
 	await _monster_opens()
+	await _solid()
 	await _brute_smashes()
 	await _styles()
 	finish()
@@ -331,6 +332,48 @@ func _brute_smashes() -> void:
 
 
 # 8. The three looks: each blocks sight shut, clears it open, and breaks.
+## A shut door is solid (user, 2026-10-19): a projectile and an arrow stop at it, a shove slams a body into it (and does not
+## push it open), a body cannot be walked through it except by opening it.
+func _solid() -> void:
+	var d := _door("room:0", Vector2i(8, 0))
+	if d.open_k > 0.0 or not d.shut:
+		d.request(true, null)
+		await frames(40)
+	check(d.shut, "(door A shut)")
+	var shooter := _hero(Vector2i(3, 0))
+	shooter.global_position = d.center() - d.axis * 3.0
+	await frames(2)
+	var seen := {"pos": Vector3.INF, "arrow": Vector3.INF}
+	var pr := Projectile.fire(shooter, Combat.chest(shooter), d.axis, 5.0, 14.0, 10.0)
+	pr.impacted.connect(func(p: Vector3, _h: Actor) -> void: seen["pos"] = p)
+	await _wait(func() -> bool: return seen["pos"] != Vector3.INF, 120)
+	var at: Vector3 = seen["pos"]
+	check(at != Vector3.INF and absf(d.local_flat(at).y) < 0.35, "a projectile stops at the shut door (%.2f from its line)" % (d.local_flat(at).y if at != Vector3.INF else 99.0))
+	shooter.face_point(d.center())
+	var arrow := ArrowShot.shoot(shooter, d.axis, 5.0, 18.0, 12.0, 1, false, Color.WHITE)
+	arrow.impacted.connect(func(p: Vector3, _h: Actor) -> void: seen["arrow"] = p)
+	await _wait(func() -> bool: return seen["arrow"] != Vector3.INF, 120)
+	var aa: Vector3 = seen["arrow"]
+	check(aa != Vector3.INF and absf(d.local_flat(aa).y) < 0.35, "an arrow stops at the shut door")
+	shooter.global_position = d.center() - d.axis * 1.3
+	await frames(2)
+	shooter.shove(d.axis, 3.5, null)
+	await frames(45)
+	check(d.local_flat(shooter.global_position).y < -0.1, "a shove into the shut door stops the body against it (%.2f)" % d.local_flat(shooter.global_position).y)
+	check(d.shut, "... and does not push it open")
+	d.request(false, null)
+	await frames(2)
+	var pr2 := Projectile.fire(shooter, Combat.chest(shooter), d.axis, 5.0, 14.0, 10.0)
+	seen["pos"] = Vector3.INF
+	pr2.impacted.connect(func(p: Vector3, _h: Actor) -> void: seen["pos"] = p)
+	await _wait(func() -> bool: return seen["pos"] != Vector3.INF, 120)
+	var at2: Vector3 = seen["pos"]
+	check(at2 == Vector3.INF or d.local_flat(at2).y > 1.0, "open, a projectile flies through")
+	d.request(true, null)
+	_clear([shooter])
+	await frames(40)
+
+
 func _styles() -> void:
 	for pair: Array in [["double", 4], ["slider", 5]]:
 		var i: int = pair[1]
