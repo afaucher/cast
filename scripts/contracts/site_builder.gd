@@ -884,6 +884,7 @@ class Site:
 	var notes: Array[ClueNote] = []
 	var packages: Array[Actor] = []     ## every MailPackage box (a stack of 3 is three entries)
 	var scouts: Array[Monster] = []     ## goblin scouts (not in `monsters`: no pack's, never a pest kind of their own)
+	var beasts: Array[Node3D] = []      ## the monster under each gate's room (HellgateBeast: cosmetic, built on every machine)
 	var pest := ""                      ## the contract's pest ("everything" = every monster counts)
 	var pest_spawned := 0               ## pest-kind monsters placed by the packs (gate spawns come later)
 
@@ -902,6 +903,11 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 		site.gates.append(gate)
 		if bool(g["origin"]):
 			site.origin_gate = gate
+		# the monster under the level round the gate's room (cosmetic: every machine builds it from the seed; it sinks away
+		# when its gate closes)
+		var beast := HellgateBeast.for_gate(gate, map, p, run.floor_seed(p.floor_number))
+		if beast != null:
+			site.beasts.append(beast)
 	for e in p.employees:
 		var emp := ContractParts.spawn_employee(e["cell"], {"style": str(e["style"]), "name": str(e["name"])})
 		if emp != null:

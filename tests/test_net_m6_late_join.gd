@@ -131,6 +131,8 @@ func run_host() -> void:
 	eq(str(r["license_on_form"]), "TENTACLES · TEETH", "c2's \"Clocking in...\" came back with its license typed in")
 	check(float(r["dt"]) >= 0.0 and float(r["dt"]) < 1.0, "it took the seat %.0f ms after reporting ready (limit 1 s)" % (float(r["dt"]) * 1000.0))
 	check(bool(r["saw_slip"]), "c2 showed \"Clocking in...\" while it built")
+	check(str(r["beasts"]).contains(":gone") and not str(r["beasts"]).contains(":sinking"),
+			"c2's closed gate's beast was gone on arrival, never sinking (%s)" % str(r["beasts"]))
 	check((r["notice"] as Array).has("You take over Gasket's seat."), "c2's HUD says it took over Gasket's seat")
 	check(bool(r["armor_on_host"]), "c2 shows the host's armor (a status from before it came)")
 	check((r["pickups"] as Array).has(int(played["pickup"])), "c2 has the pickup on the floor (id %d)" % int(played["pickup"]))
@@ -148,6 +150,7 @@ func run_host() -> void:
 		eq(str(s["slots"]), str(JOINER_SPELLS), "... holding c2's license")
 		eq(str(s["charges"]), str(adm["charges"]), "... at c2's charges")
 		check((s["notice"] as Array).has("c2 takes over Gasket's seat."), "c1's HUD says c2 takes over Gasket's seat")
+		eq(str(s["beasts"]), beasts_text(), "c1 (a client) shows the monster under each gate room as the host does (%s)" % beasts_text())
 
 	# A quiet moment later: the same living actors and the same Ledger on both.
 	await sleep(1.0)
@@ -157,6 +160,9 @@ func run_host() -> void:
 		eq(str(q["alive"]), living_text(), "c2's living host-owned actors are the host's")
 		eq(str(q["ledger"]), ledger_text(), "c2's Ledger is the host's line for line")
 		eq(int(q["payout"]), Ledger.payout(), "... the same payout (%d)" % Ledger.payout())
+		# The monster under each gate's room is cosmetic: every machine builds it from the floor; the closed gate's is gone.
+		check(beasts_text().contains(":out") and beasts_text().contains(":gone"), "the host has its beasts: the closed gate's gone, the others out (%s)" % beasts_text())
+		eq(str(q["beasts"]), beasts_text(), "c2 shows the host's beasts")
 		var worst := 0.0
 		var pos: Dictionary = q["monsters"]
 		for k: Variant in pos:
@@ -294,8 +300,9 @@ func run_client() -> void:
 				var p := int(cmd["peer"])
 				await until(func() -> bool: return Session.seats.owner_of(3) == p and hero_at(3).kit_id == "wick", 10.0)
 				var h := hero_at(3)
+				await until(func() -> bool: return not beasts_text().contains(":sinking"), HellgateBeast.SINK_TIME + 1.0)
 				report("seen", {"kit": h.kit_id, "label": Net.label_of(h), "hp": h.hp, "max": h.max_hp, "notice": (game.get("_seat_notices") as Array).duplicate(),
-					"slots": str(Array(h.spell_slots)), "charges": str(h._charges)})
+					"slots": str(Array(h.spell_slots)), "charges": str(h._charges), "beasts": beasts_text()})
 			"ai_back":
 				await until(func() -> bool: return hero_at(3).kit_id == "gasket", 5.0)
 				report("ai_back", hero_at(3).kit_id)
@@ -361,7 +368,8 @@ func _late_joiner() -> void:
 		"kit": h.kit_id, "slots": arrival.get("slots", ""), "charges": arrival.get("charges", ""), "license_on_form": license_on_form,
 		"dt": Session.join.taken_at - Session.join.ready_at, "saw_slip": saw_slip[0], "notice": (game.get("_seat_notices") as Array).duplicate(),
 		"armor_on_host": hero_at(1).has_modifier("armor"), "pickups": Session.objects.pickup_ids(), "dent": dent,
-		"keyframe": int(Session.join.applied.get("keyframe", 0)), "spawns": int(Session.join.applied.get("spawns", 0))})
+		"keyframe": int(Session.join.applied.get("keyframe", 0)), "spawns": int(Session.join.applied.get("spawns", 0)),
+		"beasts": beasts_text()})
 	_ward()
 	var running := true
 	while running:
@@ -373,7 +381,8 @@ func _late_joiner() -> void:
 					var m := NetRegistry.node(id) as Monster
 					if m != null and not m.dead:
 						mons[id] = Vector2(m.global_position.x, m.global_position.z)
-				report("check", {"alive": living_text(), "ledger": ledger_text(), "payout": Ledger.payout(), "monsters": mons})
+				report("check", {"alive": living_text(), "ledger": ledger_text(), "payout": Ledger.payout(), "monsters": mons,
+					"beasts": beasts_text()})
 			"walk":
 				var pc := game.get("controller") as PlayerController
 				var to: Vector3 = cmd["to"]
@@ -390,3 +399,13 @@ func _late_joiner() -> void:
 				running = false
 			_:
 				running = false
+
+
+## Every hellgate beast on this machine: "q,r:state" by gate cell, sorted (HellgateBeast.state(): out / sinking / gone).
+func beasts_text() -> String:
+	var rows: Array[String] = []
+	for b in get_tree().get_nodes_in_group(HellgateBeast.GROUP):
+		var hb := b as HellgateBeast
+		rows.append("%d,%d:%s" % [hb.gate_cell.x, hb.gate_cell.y, hb.state()])
+	rows.sort()
+	return " ".join(rows)
