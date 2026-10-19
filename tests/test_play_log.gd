@@ -13,8 +13,10 @@ func setup() -> void:
 	GameWorld.time = 100.0
 	s.enter_floor(1, 2, false, 3, 10)
 	GameWorld.time = 160.0
+	s.descend()   # (as Game does: the floor number moves on before the next floor loads)
+	GameWorld.time = 0.0   # a new floor restarts the game clock
 	s.enter_floor(2, 2, false, 3, 10)
-	GameWorld.time = 205.5
+	GameWorld.time = 45.5
 	s.finish(ContractSession.END_CASHED_OUT)
 	s.finish(ContractSession.END_CASHED_OUT)   # idempotent: no second end row
 	PlayLog.enabled = false

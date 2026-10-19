@@ -57,6 +57,13 @@ static func begin(contract: ContractRun, start_floor: int = 1) -> ContractSessio
 	return s
 
 
+## The crew takes the elevator down: the floor it leaves is logged now (PlayLog; the next floor resets the game clock),
+## then the floor number moves on. Game calls this, not `floor_number += 1`.
+func descend() -> void:
+	_log_floor_done("elevator")
+	floor_number += 1
+
+
 ## The crew arrives on floor `f` with what the site builder placed there.
 func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spawned: int) -> void:
 	_log_floor_done("elevator")

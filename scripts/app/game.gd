@@ -2212,7 +2212,7 @@ func _descend_shared() -> void:
 	_update_hero_sync()
 	_freeze(true)
 	_session.save_carry(_heroes())
-	_session.floor_number += 1
+	_session.descend()
 	if Net.is_host():
 		_flow.host_next_floor()
 	_fade(0.0, 1.0, 0.45, func() -> void:
@@ -2231,7 +2231,7 @@ func _use_elevator(descend: bool) -> void:
 	_close_elevator(false)
 	_freeze(true)
 	_session.save_carry(_heroes())
-	_session.floor_number += 1
+	_session.descend()
 	_fade(0.0, 1.0, 0.45, func() -> void:
 		_fade_in = true
 		get_tree().reload_current_scene())
