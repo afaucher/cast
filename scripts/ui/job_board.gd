@@ -60,6 +60,8 @@ var _hi := 0
 var sign_hold := SIGN_HOLD
 var _signing := false
 var _sign_lines: Array[SignLine] = []
+## Each card's Take row; the highlighted card's gets the yellow band, as the focused row does on every form.
+var _take_rows: Array[Control] = []
 var _fallback: ColorRect = null
 var _lift_tweens: Dictionary = {}
 ## The crew strip under the cards (hidden when there's nothing to say).
@@ -288,6 +290,8 @@ func _apply_highlight(animate: bool) -> void:
 	for i in _cards.size():
 		var on := i == _hi
 		_cards[i].outline_color = FormTheme.OUTLINE_YELLOW if on else Color(0, 0, 0, 0)
+		if i < _take_rows.size():
+			_take_rows[i].queue_redraw()   # (the Take row's band follows the highlight)
 		var to := 1.0 if on else 0.0
 		if _lift_tweens.has(i) and (_lift_tweens[i] as Tween).is_valid():
 			(_lift_tweens[i] as Tween).kill()
@@ -465,7 +469,12 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	line.style = SIGN_STYLE
 	sign.add_child(line)
 	_sign_lines.append(line)
-	v.add_child(FormTheme.margin(sign, 16, 4, 16, 12))
+	var take_row := FormTheme.margin(sign, 16, 4, 16, 12)
+	take_row.draw.connect(func() -> void:
+		if index == _hi and not read_only:
+			FormTheme.draw_band(take_row, Rect2(6, 2, take_row.size.x - 12, take_row.size.y - 8)))
+	_take_rows.append(take_row)
+	v.add_child(take_row)
 	return card
 
 

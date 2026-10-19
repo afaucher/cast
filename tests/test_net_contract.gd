@@ -16,7 +16,7 @@ extends TestCase
 ## 5. The packet budget (M3): the host's packet (heroes plus the world section NetWorld fills) fits NetWorldCodec.PACKET_BUDGET
 ##    (about 1.2 KB, one datagram); test_net_world_codec fills it with the worst floor it can find.
 ## 6. Area verbs (M4, layer 4): a loop over the actors in an area (GameWorld.actors_in_radius / hittable_in_radius /
-##    team_actors / actors, the "actors" group) that calls a verb on them (apply_damage, shove, set_modifier, heal) must ask
+##    team_actors / actors, the "actors" group) that calls a verb on them (apply_damage, shove, set_modifier, heal, daze) must ask
 ##    who resolves each one (Combat.resolves / Net.resolves / Net.resolves_hit / Net.owns) in that loop: effects run on
 ##    every machine, and a verb applied by every machine lands once per machine. Run against loops that must fail too.
 ## 7. Late-join coverage (M6): every replicated class (REPLICATED, and every class NetEvents.WORLD_CARRIES names) declares in
@@ -286,7 +286,7 @@ static func _area_loop_gaps(lines: PackedStringArray) -> Array:
 			continue
 		var indent := m.get_string(1).length()
 		var v := m.get_string(2)
-		var verb_re := RegEx.create_from_string("\\b%s\\.(apply_damage|shove|set_modifier|heal)\\(" % v)
+		var verb_re := RegEx.create_from_string("\\b%s\\.(apply_damage|shove|set_modifier|heal|daze)\\(" % v)
 		var verb := false
 		var asks := false
 		var j := i + 1
@@ -319,6 +319,8 @@ func _check_area_samples() -> void:
 	eq(_area_loop_gaps(bad).size(), 1, "the area-loop rule flags a verb loop that does not ask")
 	var bad2 := PackedStringArray(["\tfor h: Actor in GameWorld.team_actors(0):", "\t\tif h.hp > 1.0:", "\t\t\th.shove(Vector3.RIGHT, 2.0)"])
 	eq(_area_loop_gaps(bad2).size(), 1, "... a shove nested deeper in the loop")
+	var bad3 := PackedStringArray(["\tfor h in GameWorld.actors_in_radius(p, 2.0):", "\t\th.daze(0.6, self)"])
+	eq(_area_loop_gaps(bad3).size(), 1, "... a daze (the brute slam's verb)")
 	var good := PackedStringArray(["\tfor a in GameWorld.actors_in_radius(p, 2.0):", "\t\tif not Combat.resolves(a, self):", "\t\t\tcontinue", "\t\ta.apply_damage(5.0, self)"])
 	eq(_area_loop_gaps(good).size(), 0, "a loop that asks Combat.resolves passes")
 	var other := PackedStringArray(["\tfor a in GameWorld.actors_in_radius(p, 2.0):", "\t\tFx.attach_hit_feedback(a)", "\tb.apply_damage(1.0)"])

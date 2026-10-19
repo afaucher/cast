@@ -28,23 +28,23 @@ The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc 
    open when a contract starts. Everything is saved.
 3. **Start a job** opens the job board.
 
-### Online play (in progress)
-Online co-op is being built in milestones (`docs/design/networking-build-plan.md`). **Today (M3) a crew shares one
-run and its world**: the host rolls the job board and its three offers appear on every player's board (read-only for
-the others, "the host picks the job"); the host takes a job; everyone signs **their own** license checkout (that is
-the "ready" step, and the others see "waiting for <name>"); every machine builds the same floor from the contract
-seed behind a load barrier, checks that it is the same floor (a floor that differs is refused with "Desync:
-different floor"), and the van arrival plays on every screen from the same moment. Then **every player moves their own
-hero, with no lag on their own screen, and sees the others walk, turn and animate** (about a tenth of a second behind),
-each with the player's name over their head. If a player drops, the AI takes their seat back as the character that seat
-started as (Rebar or Gasket), right where they stood. **The host's world is live on every screen**: monsters chase, wind up,
-swing and die, hellgates wake, flare, spawn and close, employees cower, follow and wait, props, crates and mail break (once, and
-billed once), and pickups go to exactly one player; the Ledger, the objectives and the invoice are the host's on every screen.
-The elevator and the van work online: **the first player to choose decides for the crew** (down takes everyone to the next
-floor; clocking out ends the job for everyone with the same invoice). Casts, hits and damage across machines come in M4: until
-then only the host's side of a fight counts (a client's swings and spells don't hurt the host's monsters, and the monsters'
-blows don't hurt a client's hero). While a crew is on a floor, Esc opens the menu without pausing; Main menu leaves (a client
-leaves the crew; the host asks first, because it ends the job for everyone).
+### Online play
+Online co-op is built (milestones M0-M7, `docs/design/networking-build-plan.md`); the two-PC Steam sign-off is
+`docs/design/steam-playtest-checklist.md`. **A crew shares one run**: the host rolls the job board (read-only for the
+others) and takes a job, and everyone signs **their own** license. That is the "ready" step: the others see "waiting
+for <name>", and the heroes stay out of the room until the whole crew has signed. Every machine builds the same floor
+from the contract seed behind a load barrier (a floor that differs is refused with "Desync: different floor"), and the
+van or elevator arrival plays on every screen from the same moment.
+
+- **Movement:** every player moves their own hero with no lag on their own screen and sees the others about a tenth of
+  a second behind, with their names overhead. A dropped player's seat goes back to the AI.
+- **The world is the host's:** monsters, hellgates, employees, props, crates, mail and pickups. The Ledger, the
+  objectives and the invoice are the host's on every screen.
+- **Combat crosses machines:** a cast is an event that lands 0.2 s later on every machine, and each machine decides the
+  hits on what it owns (your own hero decides the blows you take).
+- **Exits:** the first player to choose at the elevator or the van decides for the crew. Esc opens the menu without
+  pausing; anyone's "Abandon contract" or "Next contract" takes the whole crew back to the board.
+- **Join on the job:** a player can join a crew mid-floor and takes an AI teammate's seat; leaving gives it back.
 
 Up to 3 players (one per crew slot); a 4th is told "Crew is full", a different build is refused, a crew already on a
 job is closed ("That crew is already on a job"), and when the host leaves everyone else is told "The host clocked
@@ -55,6 +55,8 @@ out". Invites from the Steam overlay join directly. A host with nobody else in t
 ```powershell
 .\run.ps1 -Crew 2                 # a host window (job board) and a joiner window (the same board, read-only)
 .\run.ps1 -Crew 3 -Link coast     # three players, each window simulating a coast-to-coast link
+.\run.ps1 -Crew 2 -Link coast -Bot 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # the lag test: you play window 1, window 2 walks by itself
+.\run.ps1 -Crew 2 -Link rough -Bot 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # the same on a bad evening (80 ms each way, ±30 ms, 4% loss)
 .\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # the host takes offer 2 once both are in; both sign heal+corn
 .\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn -ShotDir C:\shots   # ... and each window saves <Name>.png and quits
 .\run.ps1 -Crew 2 -Bot 2 --seed 7 --net-wait 2 --contract 1 --spells heal,corn   # window 2's hero walks a loop by itself (--net-bot); walk window 1 with WASD and watch it move there
@@ -78,7 +80,12 @@ that license without the checkout, in every window. `--net-bot` makes this windo
 quits (`--shot-after S` to change it); `run.ps1 -ShotDir <dir>` gives each window its own file.
 
 **Network telemetry** is passive: one CSV row a second per machine in `%APPDATA%\Godot\app_userdata\Cast\net\`
-(the host's file also holds every client's rows). Read a gap as "missing", never as zero.
+(the host's file also holds every client's rows; `net_casts_*` has every cast and how late it landed on each machine,
+`net_hits_*` the hits per player per minute). Read a gap as "missing", never as zero.
+
+**Play logs** (passive, every real play, never tests), in `%APPDATA%\Godot\app_userdata\Cast\`: `play_log.csv`
+(each contract, each floor's time and how it ended, the money), `combat_log.csv` (first hits, kills, fights, noise,
+the goblin's alarms, archer practice, brute fights) and `voice_log.csv` (every utterance).
 
 ### A contract
 1. **Job board:** dispatch offers three jobs from different clients (prepper billionaire,
@@ -106,7 +113,19 @@ HP carries between floors; everything resets between contracts.
 |---|---|---|---|
 | **Wick** (you, 85 HP) | bow bash | arrows: tap, or hold to draw a piercing shot | climbs fast |
 | **Gasket** (ally, 120 HP) | pipe-wrench hammer | 360° spin with heavy knockback | stout, hard to shove |
-| **Rebar** (ally, 160 HP) | slam fist | bowls a boulder that shoves everyone in its path | can't climb +2, can't be shoved |
+| **Rebar** (ally, 160 HP) | slam fist (light damage, big knockback: a tank, not the killer) | bowls a boulder that shoves everyone in its path | can't climb +2, can't be shoved |
+
+The AI teammates follow you and fight beside you. Heroes' swings, bolts and arrows chip the client's props and can break
+them (a dented prop is free; a break bills its full price to whoever landed it).
+
+### Monsters
+- **Skeletons** walk up and swing; **imps** come in fast clumps; **archers** keep their distance and shoot; **brutes**
+  wind up a ground slam you can see coming. Hellgates spawn more until you close them.
+- **Awareness:** monsters see further in front than behind, hear spells and fights, and a hit wakes the ones nearby.
+  The longer a floor takes (from 2 minutes, fully by 6), the more restless they get: skeletons patrol, imps roam,
+  idle archers take practice shots at the client's cheaper props, and brutes start shoving matches.
+- **The goblin scout** patrols the halls. If he sees you he lights a rack of fireworks that brings every monster nearby
+  (and wakes a hellgate that's ready to spawn). Kill him before the fuse, or soak the rack with damp.
 
 ### Controls
 | Input | Action |

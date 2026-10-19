@@ -51,7 +51,7 @@ therefore also under `--proto-heroes`. Anything not in the table below is unchan
 | | **Rebar** | **Gasket** | **Wick** |
 |---|---|---|---|
 | Max HP | 160 | 120 | 85 |
-| Primary (LMB / ally melee) | Slam fist: 26 dmg / 0.8 s / reach 1.8 / 120° / shove 1.0 | Hammer: 28 dmg / 0.65 s / reach 1.5 / 90° / shove 0.9 | Bow bash: 12 dmg / 0.4 s / reach 1.3 / 90° / shove 0.7 |
+| Primary (LMB / ally melee) | Slam fist: 15 dmg / 0.8 s / reach 1.8 / 120° / shove 1.6 (was 26 / 1.0 until 2026-10-19) | Hammer: 28 dmg / 0.65 s / reach 1.5 / 90° / shove 0.9 | Bow bash: 12 dmg / 0.4 s / reach 1.3 / 90° / shove 0.7 |
 | Secondary (RMB / ally ranged) | Bowl (6 dmg to monsters, shoves 3.5, 2.0 s, range 9) | Spin (16 dmg to monsters, reach 1.9, shoves 2.2, 1.4 s) | Arrow, below |
 | `shove_mult` | 0 (immovable) | 0.6 | 1.3 |
 | Climb +2 | Cannot (`can_climb` false; allies path without climbs) | ×0.25 | ×0.6 |
@@ -77,6 +77,39 @@ hair-trigger.
 (`tests/test_voice_audio.gd`). The recognizer hears "gasket" as GASKET (never "cast"), "rebar" as
 REBAR or RIBAR, and "wick" as WICK, WIG or WHITCOMBE, so "Wick" will be the flakiest callsign.
 
+**Character select (as built, 2026-10-19; the user's decisions).** The player picks their hero on the main menu itself.
+- **Click a hero in the garage to pick them.** No confirm step. The picked hero walks to the front spot, turned to the camera,
+  and strikes its cast pose; the other two step back (`MenuBackdrop.set_featured_hero(id, true)`). Hovering a hero gives it a
+  warm outline and a faint lift (`set_hover`), and the pointer becomes a hand. The hit test is the camera's ray against each
+  model's own mesh bounds (`MenuBackdrop.hero_at`; the nearest hit wins), with no physics.
+- **Keyboard and controller:** the personnel file's NAME line is the last stop of the menu's focus chain (after Quit); Left /
+  Right step through the three, Enter steps on. The key strip under the forms says "Left Right HERO" while it has focus; the
+  paper says nothing about keys.
+- **FORM 31, Personnel file** (`PersonnelFile`, `scripts/ui/personnel_file.gd`, green carbon) lies under the work order's
+  clipboard on the left third. Printed captions, typed values: NAME, ROLE (one deadpan line per hero, the only text kept in
+  the card: "Tank. Immovable. Not a closer."), HP, PRIMARY (name and damage), SPEED (the primary's cooldown), SECONDARY
+  (name, damage, cooldown), CLIMBING, WEIGHT. Every number is read from `HeroKit` (and, for bowl and spin, `Hero`'s
+  constants). Box bars (ten printed boxes, typed X's) put the three on one scale per stat: the best of the three fills all
+  ten (HP, primary damage, swings per second, +2 climb pace, and weight, where immovable fills all ten). The card is retyped
+  (with the paper sound) whenever the pick changes.
+- **Saved:** `GameSettings` key "character" in user://settings.cfg; `Boot` loads it into `Session.character_id` at start
+  and the menu reads it again from its own settings file. `--backdrop-hero <id>` (menu) and `--hero <id>` (game) pick for
+  one run without saving. Picking is locked while a crew is opening or open (the roster already carries the pick).
+- **Solo:** seat 1 is the pick; the AI seats are the other two (`CrewSeats.fill`): an AI seat keeps its own hero (seat 2
+  Rebar, seat 3 Gasket) when nobody plays it, else takes the first free one of Rebar, Gasket, Wick. Wick: AI Rebar (2) and
+  Gasket (3), as before. Rebar: AI Wick (2) and Gasket (3). Gasket: AI Rebar (2) and Wick (3). The formation spots stay per
+  seat (`game.gd` `AI_SEATS`); an AI Wick keeps its distance and shoots (`AllyBrain.prefers_ranged`, from the arrow kit).
+- **Online:** the roster carries each player's pick (`hello` -> roster "character"). Two players may pick the same hero
+  (allowed). The AI seats play the heroes nobody human picked, the same `CrewSeats.fill` over the roster on every machine (so
+  the floor checksum agrees); a duplicate only if all three are taken, which three seats never need. A player who leaves
+  gives the seat back to the AI as a hero nobody else plays (`CrewSeats.ai_for`, `SeatHandover.ai_character`), which is the
+  hero the next floor gives that seat too. A late joiner still takes an AI already playing its pick first
+  (`SeatHandover.pick_seat`).
+- **What assumed Wick:** seat 1's character in solo (`game.gd` `_crew_seats`), the fixed AI table (`AI_SEATS` held each seat's
+  character), the "original character" a dropped seat went back to, the AI brains (always melee), the `--kit-demo` and
+  `--give-allies` dev flags (seat order), and comments about the van and elevator spots (they are by seat, whoever plays it).
+  The HP carry between floors was already keyed by seat. `PlayLog` gained a `hero` column. Tests: `tests/test_character_select.gd`.
+
 ### Rebar: the rock
 *A gentle, slow-talking boulder, formerly the bunker's foundation stone. Loves the team and
 never notices what it's standing on.*
@@ -86,7 +119,7 @@ never notices what it's standing on.*
     hat.
   - It's **pale sandstone**, never slate, which would vanish into the dark hex columns.
   - No glowing eyes: glowing eyes mean "enemy".
-- **Melee, Slam fist:** 26 dmg / 0.8 s / 1.8 reach / 120°.
+- **Melee, Slam fist:** 15 dmg / 0.8 s / 1.8 reach / 120° / shove 1.6 (trimmed from 26 on 2026-10-19: a tank, not the killer).
 - **Secondary, Bowl:** Rebar tears a boulder off its shoulder and bowls it at the aim
   point.
   - 6 dmg, or **0 to teammates**. Cooldown 2.0 s, range 9 (about 5 hexes), speed 8,
@@ -98,6 +131,32 @@ never notices what it's standing on.*
 - **Quirk, Heavy:** steps up +1 only, so **no +2 climbs** (like the brute): `Hero.can_climb` is
   false and the ally brain paths without climbs. It can't be shoved (`shove_mult` 0).
   - *P2 "Leg-up":* an ally next to a still Rebar can use it as a step onto +3 ledges.
+- **Weakness, the brute's daze** (as built 2026-10-19, see "The daze" below): being immovable doesn't help. A direct
+  slam stops Rebar swinging for 0.6 s, so face-tanking a brute costs him his punches. Standing at arm's length (his fist
+  reaches 1.8, the daze line is 1.6) keeps him swinging.
+
+#### The daze (as built, 2026-10-19)
+The brute's slam **dazes** a hero it hits squarely. It's the first status that takes control away from a hero, and so
+far only the brute deals it.
+
+| | |
+|---|---|
+| Trigger | The brute's slam, a **direct hit**: the hero's centre within **1.6** of the brute (`Brute.DAZE_RADIUS`, of the 2.0 ring). The band from 1.6 to 2.0 only hurts. The slam's damage still falls off linearly from 25 at the centre to 12.5 at the rim (there was never a flat full-damage zone), so a dazing hit deals about 15-25 |
+| Telegraph | A fainter amber inner ring at 1.6 inside the brute's red wind-up ring: inside it you get dazed. The brute stops at 1.5 from its target, so its target is inside unless it steps back during the 0.9 s wind-up |
+| Length | **0.6 s** (`Brute.DAZE_TIME`) |
+| While dazed | No walking, no melee, no secondary (bolt, bowl, spin, arrow), no new bow draw. A draw in progress is cancelled. A swing or spin is instant, so there's nothing in flight to cancel; the weapon's swing animation is cut |
+| Immovable doesn't help | The daze ignores `shove_mult`: Rebar stays put but stops punching |
+| Voice | **Casts are never blocked.** A spell spoken during the daze goes off at once, exactly as it would otherwise (nothing is held or dropped) |
+| No stun-lock | After a daze ends, **1.5 s** of immunity (`Actor.DAZE_GUARD`): two brutes can't chain it. A slam in that window still hurts and shoves |
+| Monsters | Never dazed. The slam only hits heroes, and a brute's restless-fight slams (on a rival brute or a skeleton) shove without dazing, so those fights stay posturing |
+| Readable | Three yellow stars spin over the hero's head, the model reels from side to side, and "*bonk*" pops up with a few sparks as it lands (`DazeFx`). Your own hero also gets a small camera bump and **DAZED** beside your name on the HUD |
+| AI allies | `AllyBrain` waits it out (a dazed hero is `is_helpless()`), then fights on |
+
+Networking: the daze is a status on the hero, so the hero's owner applies it. The brute's wind-up is an event, each machine
+resolves the strike on its own hero (`Monster.net_strike` -> `Combat.slam` -> `Actor.daze`), and the daze is a modifier
+(`Actor.STAT_DAZE`, id `daze`) that the owner announces like armor or a root (`NetStatus` "mods"). The other screens show
+the stars from it, with no grace period added, so the stars leave every screen together. The 1.5 s immunity is the owner's
+private bookkeeping. `test_daze` and `test_net_daze` cover it.
 
 **Shoving teammates: yes.** It's the roster's main source of player-caused chaos *and* a
 skill tool. Bowling a friend out of the brute's slam ring is a rescue. It passes the

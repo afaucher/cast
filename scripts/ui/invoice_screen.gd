@@ -16,6 +16,7 @@ const INK_DIM := Color(0.114, 0.102, 0.149, 0.62)
 const RED := FormTheme.RED
 const GREEN := FormTheme.GREEN_INK
 const BG := Color(0.065, 0.055, 0.07)
+const BG_OVER_GARAGE := Color(0.03, 0.025, 0.035, 0.35)   ## the garage behind: a light dim only (like the job board)
 const PAPER_W := 1000.0
 const SIDE_W := 340.0
 
@@ -31,6 +32,9 @@ var next_button: FormRow = null
 ## A short printed line under the Next contract row ("" for none). Online (M5) anyone's Next takes the whole crew back to
 ## the board, and this says so. Set it before the screen enters the tree.
 var next_note := ""
+## True when the garage (MenuBackdrop) is rendered behind the invoice: the opaque dark background becomes a light dim.
+## Set it before the screen enters the tree.
+var backdrop_behind := false
 var _born_ms := 0
 var _accent := Color(0.2, 0.3, 0.5)
 var _scroll: ScrollContainer = null
@@ -48,7 +52,7 @@ func _ready() -> void:
 	theme = FormTheme.theme()
 	_accent = ClientArchetype.accent_of(str(inv.get("archetype", "prepper")))
 	var bg := ColorRect.new()
-	bg.color = BG
+	bg.color = BG_OVER_GARAGE if backdrop_behind else BG
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)

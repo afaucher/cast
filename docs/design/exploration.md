@@ -129,3 +129,15 @@ Spells stay mainly about combat. These are small extras that cost little:
   can never get stuck.
 - Keep at least one walkable route into each region with no climbing, so the brute
   always has a long way round and climbing stays an escape, not a hiding place.
+
+## Decisions: map information, fog and doors (user, 2026-10-19)
+- **What the player knows:** no site plan, no extra UI. The **next room** (any room next to one the crew can see or has
+  seen) has its layout drawn even before anyone sees into it; rooms beyond that are dark. Contents (monsters, props,
+  loot, employees, hazards, secrets) show only when a hero can see them.
+- **Room fog, not per-cell line of sight.** A room is in view when a hero is in it, or sees into it through an open
+  doorway or from height. A room seen before keeps its layout and last-seen props, dimmed.
+- **Monsters out of sight are hidden** (no last-known ghosts).
+- **No minimap.**
+- **Doors, first pass: office doors only.** Walk into one to open it, E to shut it; a shut door blocks sight and
+  muffles noise, and a brute smashes through (billed). Fire/blast doors and locked doors are later.
+- The vantage-point and shared-reveal ideas above still apply (a reveal by one player is everyone's).

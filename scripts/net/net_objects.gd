@@ -632,7 +632,7 @@ func _apply_modifier(data: Dictionary) -> void:
 ## Host: the first player to ask gets the pickup (up to what they can take); everyone after is told no.
 func _host_grant(from: int, id: int, what: String, want: int, at: Vector3) -> void:
 	var e: Array = _pickups.get(id, [])
-	var p: ComponentPickup = e[0] if not e.is_empty() else null
+	var p: ComponentPickup = e[0] if not e.is_empty() and is_instance_valid(e[0]) else null   # (a pickup freed since: denied below)
 	var reach := (SpellComponents.COLLECT_RADIUS if what == "collect" else SpellComponents.SWAP_RADIUS) + REACH_SLACK
 	if p == null or not is_instance_valid(p) or p._used or p.charges <= 0 or at == Vector3.INF \
 			or GameWorld.flat_distance(at, p.global_position) > reach:

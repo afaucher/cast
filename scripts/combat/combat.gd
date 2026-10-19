@@ -124,9 +124,10 @@ static func explode(pos: Vector3, radius: float, damage: float, team: int, sourc
 
 
 ## A ground slam (the brute): everyone of `team` within `radius` of `pos` and at most `max_dy` above or below it,
-## judged by their centre, takes `damage` falling off to `edge_mult` at the rim and is shoved `shove` away. Returns
-## the actors hit.
-static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, shove: float, max_dy: float, team: int, source: Node) -> Array[Actor]:
+## judged by their centre, takes `damage` falling off to `edge_mult` at the rim and is shoved `shove` away. A direct hit
+## (centre within `daze_radius`, the inner zone) is also dazed for `daze_time` (Actor.daze: the owner applies it, here,
+## since the hit resolves on the victim's machine; shove_mult does not matter). Returns the actors hit.
+static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, shove: float, max_dy: float, team: int, source: Node, daze_radius: float = 0.0, daze_time: float = 0.0) -> Array[Actor]:
 	var hit: Array[Actor] = []
 	for a in GameWorld.actors_in_radius(pos, radius, team):
 		if absf(a.global_position.y - pos.y) > max_dy:
@@ -138,6 +139,8 @@ static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, s
 			continue
 		a.apply_damage(damage * lerpf(1.0, edge_mult, clampf(d / radius, 0.0, 1.0)), source)
 		a.shove(a.global_position - pos, shove, source)
+		if daze_time > 0.0 and d <= daze_radius and not a.dead:
+			a.daze(daze_time, source)
 		hit.append(a)
 	if team != -1:
 		# The ground shock sets off an explosive prop in the ring (docs/design/hazards.md): a full hit, wherever it stands in
