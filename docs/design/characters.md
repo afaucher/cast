@@ -51,7 +51,7 @@ therefore also under `--proto-heroes`. Anything not in the table below is unchan
 | | **Rebar** | **Gasket** | **Wick** |
 |---|---|---|---|
 | Max HP | 160 | 120 | 85 |
-| Primary (LMB / ally melee) | Slam fist: 26 dmg / 0.8 s / reach 1.8 / 120° / shove 1.0 | Hammer: 28 dmg / 0.65 s / reach 1.5 / 90° / shove 0.9 | Bow bash: 12 dmg / 0.4 s / reach 1.3 / 90° / shove 0.7 |
+| Primary (LMB / ally melee) | Slam fist: 15 dmg / 0.8 s / reach 1.8 / 120° / shove 1.6 (was 26 / 1.0 until 2026-10-19) | Hammer: 28 dmg / 0.65 s / reach 1.5 / 90° / shove 0.9 | Bow bash: 12 dmg / 0.4 s / reach 1.3 / 90° / shove 0.7 |
 | Secondary (RMB / ally ranged) | Bowl (6 dmg to monsters, shoves 3.5, 2.0 s, range 9) | Spin (16 dmg to monsters, reach 1.9, shoves 2.2, 1.4 s) | Arrow, below |
 | `shove_mult` | 0 (immovable) | 0.6 | 1.3 |
 | Climb +2 | Cannot (`can_climb` false; allies path without climbs) | ×0.25 | ×0.6 |
@@ -86,7 +86,7 @@ never notices what it's standing on.*
     hat.
   - It's **pale sandstone**, never slate, which would vanish into the dark hex columns.
   - No glowing eyes: glowing eyes mean "enemy".
-- **Melee, Slam fist:** 26 dmg / 0.8 s / 1.8 reach / 120°.
+- **Melee, Slam fist:** 15 dmg / 0.8 s / 1.8 reach / 120° / shove 1.6 (trimmed from 26 on 2026-10-19: a tank, not the killer).
 - **Secondary, Bowl:** Rebar tears a boulder off its shoulder and bowls it at the aim
   point.
   - 6 dmg, or **0 to teammates**. Cooldown 2.0 s, range 9 (about 5 hexes), speed 8,
