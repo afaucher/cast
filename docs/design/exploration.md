@@ -147,3 +147,5 @@ Spells stay mainly about combat. These are small extras that cost little:
   Only narrow corridors get doors; wide hallways always meet their room open; opening a door is a noise.
 - **Doorway floor (2026-10-19):** the cells the door line passes through get a **diamond tread-plate threshold**, with
   the room's floor on one side and the corridor's on the other. Open archways keep their floors as they are, for now.
+- **Fog look (2026-10-19, played in the fog lab):** look **A, black void**: unknown spaces are the background, next
+  spaces a dark silhouette with traced edges, seen spaces desaturated and darkened. The user: "that is perfect."
