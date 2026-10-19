@@ -32,6 +32,21 @@ const HEIGHTS := {
 	"projector": 1.35, "zen_fountain": 1.15, "server_rack": 1.95, "crystal_lamp": 1.45,
 	"doomsday_console": 1.75, "torture_rack": 0.95, "specimen_vat": 2.0, "villain_throne": 2.35,
 	"shark_tank": 1.6, "henchman_locker": 1.75, "evil_portrait": 2.0, "brazier": 1.15, "treadmill": 1.5,
+	# explosive props (ExplosiveProp, docs/design/hazards.md)
+	"oil_drum": 1.05, "gas_cylinders": 1.45, "propane_tank": 1.2, "battery_pack": 1.52,
+}
+
+const HAZARD_YELLOW := Color(1.0, 0.8, 0.12)
+const DRUM_RED := Color(0.7, 0.15, 0.1)
+const DRUM_RED_DK := Color(0.45, 0.08, 0.06)
+const TANK_WHITE := Color(0.88, 0.88, 0.84)
+const CYL_GREEN := Color(0.16, 0.42, 0.24)
+const CYL_MAROON := Color(0.46, 0.1, 0.14)
+const CYL_BLUE := Color(0.2, 0.32, 0.5)
+## Where a lit explosive's fuse sparks (model space, front = +Z): the bung, the middle valve, the dome, the + terminal.
+const FUSE_POINTS := {
+	"oil_drum": Vector3(0.16, 1.06, 0.12), "gas_cylinders": Vector3(0.0, 1.42, 0.0),
+	"propane_tank": Vector3(0.0, 1.19, 0.0), "battery_pack": Vector3(0.28, 1.51, 0.18),
 }
 
 static var _seed := 1
@@ -75,6 +90,10 @@ static func build(kind: String) -> Node3D:
 		"henchman_locker": _henchman_locker(s)
 		"evil_portrait": _evil_portrait(s)
 		"brazier": _brazier(s)
+		"oil_drum": _oil_drum(s)
+		"gas_cylinders": _gas_cylinders(s)
+		"propane_tank": _propane_tank(s)
+		"battery_pack": _battery_pack(s)
 		_:
 			box(s, Vector3(0.8, 0.8, 0.8), Vector3(0, 0.4, 0), GOLD)
 	var mi := MeshInstance3D.new()
@@ -108,6 +127,10 @@ static func palette(kind: String) -> Array[Color]:
 		"henchman_locker": out = [Color(0.38, 0.42, 0.5), IRON, Color(0.85, 0.2, 0.15)]
 		"evil_portrait": out = [GOLD, GOLD_DK, Color(0.45, 0.07, 0.1), OBSIDIAN]
 		"brazier": out = [IRON, IRON_LT, Color(1.0, 0.55, 0.12)]
+		"oil_drum": out = [DRUM_RED, DRUM_RED_DK, IRON, HAZARD_YELLOW]
+		"gas_cylinders": out = [CYL_GREEN, CYL_MAROON, CYL_BLUE, IRON_LT]
+		"propane_tank": out = [TANK_WHITE, IRON, Color(0.85, 0.2, 0.15), HAZARD_YELLOW]
+		"battery_pack": out = [OBSIDIAN, IRON, Color(1.0, 0.55, 0.12), Color(0.3, 1.0, 0.5)]
 		_: out = [GOLD, IRON]
 	return out
 
@@ -589,3 +612,104 @@ static func _brazier(s: LowPoly.Soup) -> void:
 	rod(s, Vector3(-0.15, 0.84, 0.05), Vector3(-0.22, 1.18, 0.1), 0.17, 0.0, 5, glow(Color(1.0, 0.75, 0.2)))
 	rod(s, Vector3(0.17, 0.84, -0.04), Vector3(0.26, 1.1, -0.05), 0.15, 0.0, 5, glow(Color(1.0, 0.35, 0.08)))
 	rod(s, Vector3(0.0, 0.86, 0.0), Vector3(0.0, 1.12, 0.0), 0.14, 0.0, 5, glow(Color(1.0, 0.92, 0.5)))
+
+
+# ------------------------------------------------------------------ explosive props (placed by room theme, any site)
+
+## The point a lit fuse sparks from (model space).
+static func fuse_point(kind: String) -> Vector3:
+	return FUSE_POINTS.get(kind, Vector3(0, height(kind), 0))
+
+
+## The flame hazard diamond on a front face (facing +Z) at `pos`: a white diamond, a glowing orange one on it, a flame.
+static func _flame_sign(s: LowPoly.Soup, pos: Vector3, size: float) -> void:
+	box(s, Vector3(size, size, 0.02), pos, Color(0.95, 0.92, 0.85), Vector3(0, 0, 45))
+	box(s, Vector3(size * 0.74, size * 0.74, 0.02), pos + Vector3(0, 0, 0.012), glow(Color(1.0, 0.32, 0.08)), Vector3(0, 0, 45))
+	box(s, Vector3(size * 0.2, size * 0.34, 0.02), pos + Vector3(0, -0.01, 0.024), glow(Color(1.0, 0.85, 0.3)))
+
+
+static func _oil_drum(s: LowPoly.Soup) -> void:
+	# a 55-gallon drum: red body, two rolling hoops, a dark chime at the foot and an iron rim round the lid
+	cyl(s, 0.36, 0.36, 0.92, 10, Vector3(0, 0.5, 0), DRUM_RED)
+	cyl(s, 0.37, 0.37, 0.06, 10, Vector3(0, 0.03, 0), DRUM_RED_DK)
+	cyl(s, 0.375, 0.375, 0.05, 10, Vector3(0, 0.36, 0), DRUM_RED_DK)
+	cyl(s, 0.375, 0.375, 0.05, 10, Vector3(0, 0.68, 0), DRUM_RED_DK)
+	cyl(s, 0.37, 0.37, 0.07, 10, Vector3(0, 0.975, 0), IRON)
+	cyl(s, 0.33, 0.33, 0.03, 10, Vector3(0, 0.985, 0), Color(0.3, 0.3, 0.34))   # the lid, sunk inside the rim
+	# a yellow-and-black hazard band round the shoulder and the flame diamond on the front
+	for i in 6:
+		var a := deg_to_rad(-50.0 + 20.0 * float(i))
+		box(s, Vector3(0.11, 0.1, 0.02), Vector3(sin(a) * 0.365, 0.86, cos(a) * 0.365), HAZARD_YELLOW if i % 2 == 0 else OBSIDIAN, Vector3(0, rad_to_deg(a), 0))
+	_flame_sign(s, Vector3(0, 0.53, 0.37), 0.22)
+	# the bung caps on the lid and an oily drip down the side
+	cyl(s, 0.06, 0.06, 0.05, 6, Vector3(0.16, 1.02, 0.12), GOLD_DK)
+	cyl(s, 0.04, 0.04, 0.04, 6, Vector3(-0.18, 1.015, -0.1), GOLD_DK)
+	box(s, Vector3(0.05, 0.3, 0.02), Vector3(0.24, 0.8, 0.28), Color(0.08, 0.06, 0.05), Vector3(0, 40, 0))
+
+
+static func _gas_cylinders(s: LowPoly.Soup) -> void:
+	# a wall bracket (two posts, a crossbar) on a steel foot plate, and a chain across the three bottles
+	for sx in [-0.5, 0.5]:
+		box(s, Vector3(0.07, 1.3, 0.07), Vector3(sx, 0.7, -0.2), IRON)
+	box(s, Vector3(1.08, 0.06, 0.06), Vector3(0, 1.12, -0.2), IRON)
+	box(s, Vector3(1.1, 0.06, 0.36), Vector3(0, 0.03, -0.02), IRON_LT)
+	var cols: Array[Color] = [CYL_GREEN, CYL_MAROON, CYL_BLUE]
+	for i in 3:
+		var x := -0.32 + 0.32 * float(i)
+		var c: Color = cols[i]
+		var h := 1.1 if i == 1 else 1.04
+		cyl(s, 0.14, 0.14, h, 8, Vector3(x, 0.05 + h * 0.5, 0.0), c)
+		# the shoulder, the valve stem, its handwheel
+		cyl(s, 0.14, 0.07, 0.12, 8, Vector3(x, 0.1 + h, 0.0), c.lightened(0.15))
+		cyl(s, 0.035, 0.035, 0.14, 5, Vector3(x, 0.22 + h, 0.0), GOLD_DK)
+		cyl(s, 0.07, 0.07, 0.025, 6, Vector3(x, 0.29 + h, 0.0), IRON_LT)
+		# a white band, and the flame diamond lower down
+		cyl(s, 0.145, 0.145, 0.08, 8, Vector3(x, 0.05 + h * 0.74, 0.0), Color(0.92, 0.9, 0.86))
+		_flame_sign(s, Vector3(x, 0.05 + h * 0.42, 0.15), 0.13)
+	box(s, Vector3(1.0, 0.035, 0.035), Vector3(0, 0.95, 0.16), IRON_LT)
+	for sx in [-0.49, 0.49]:
+		box(s, Vector3(0.035, 0.035, 0.36), Vector3(sx, 0.95, -0.02), IRON_LT)
+
+
+static func _propane_tank(s: LowPoly.Soup) -> void:
+	# a horizontal white tank on two saddles: the body, its rounded ends, a red stripe and the valve dome
+	for sx in [-0.38, 0.38]:
+		box(s, Vector3(0.12, 0.34, 0.6), Vector3(sx, 0.2, 0), IRON)
+		box(s, Vector3(0.16, 0.06, 0.66), Vector3(sx, 0.03, 0), IRON_LT)
+	cyl(s, 0.38, 0.38, 0.92, 10, Vector3(0, 0.66, 0), TANK_WHITE, Vector3(0, 0, 90))
+	ball(s, Vector3(0.2, 0.37, 0.37), Vector3(0.46, 0.66, 0), TANK_WHITE, 1, 0.0)
+	ball(s, Vector3(0.2, 0.37, 0.37), Vector3(-0.46, 0.66, 0), TANK_WHITE, 1, 0.0)
+	cyl(s, 0.39, 0.39, 0.1, 10, Vector3(-0.2, 0.66, 0), Color(0.85, 0.2, 0.15), Vector3(0, 0, 90))
+	cyl(s, 0.39, 0.39, 0.04, 10, Vector3(0.3, 0.66, 0), HAZARD_YELLOW, Vector3(0, 0, 90))
+	# the valve dome, its stem and the hinged cover standing open behind it
+	cyl(s, 0.2, 0.17, 0.14, 8, Vector3(0, 1.04, 0), IRON_LT)
+	cyl(s, 0.05, 0.05, 0.08, 6, Vector3(0, 1.14, 0), GOLD_DK)
+	box(s, Vector3(0.36, 0.03, 0.2), Vector3(0, 1.17, -0.2), IRON, Vector3(35, 0, 0))
+	_flame_sign(s, Vector3(0.12, 0.64, 0.395), 0.2)
+	# a gauge on the front end
+	cyl(s, 0.07, 0.07, 0.04, 8, Vector3(0.645, 0.8, 0.12), Color(0.95, 0.95, 0.9), Vector3(0, 0, 90))
+	box(s, Vector3(0.012, 0.06, 0.02), Vector3(0.668, 0.82, 0.12), glow(Color(1.0, 0.25, 0.15)))
+
+
+static func _battery_pack(s: LowPoly.Soup) -> void:
+	# a black UPS cabinet: plinth, body, lid, vent slats on the sides
+	box(s, Vector3(0.96, 0.08, 0.66), Vector3(0, 0.04, 0), IRON)
+	box(s, Vector3(0.9, 1.3, 0.6), Vector3(0, 0.72, 0), OBSIDIAN)
+	box(s, Vector3(0.94, 0.06, 0.64), Vector3(0, 1.395, 0), IRON)
+	for i in 5:
+		box(s, Vector3(0.02, 0.04, 0.4), Vector3(0.455, 0.5 + 0.12 * float(i), 0), IRON_LT)
+		box(s, Vector3(0.02, 0.04, 0.4), Vector3(-0.455, 0.5 + 0.12 * float(i), 0), IRON_LT)
+	# the battery modules behind a front window: four rows of cells with orange tags, then the green charge strip
+	box(s, Vector3(0.72, 0.84, 0.02), Vector3(0, 0.66, 0.305), Color(0.18, 0.2, 0.24))
+	for r in 4:
+		for c in 3:
+			box(s, Vector3(0.2, 0.16, 0.03), Vector3(-0.23 + 0.23 * float(c), 0.36 + 0.2 * float(r), 0.325), Color(0.32, 0.34, 0.4))
+			box(s, Vector3(0.06, 0.04, 0.02), Vector3(-0.23 + 0.23 * float(c), 0.41 + 0.2 * float(r), 0.345), Color(1.0, 0.55, 0.12))
+	for i in 5:
+		box(s, Vector3(0.08, 0.05, 0.02), Vector3(-0.31 + 0.1 * float(i), 1.2, 0.312), glow(Color(0.3, 1.0, 0.5)) if i < 3 else Color(0.08, 0.2, 0.1))
+	# the warning triangle and two fat terminals on top, red and black, with their cables
+	box(s, Vector3(0.16, 0.14, 0.02), Vector3(0.3, 1.2, 0.312), glow(HAZARD_YELLOW))
+	cyl(s, 0.05, 0.05, 0.08, 6, Vector3(0.28, 1.46, 0.18), Color(0.85, 0.15, 0.12))
+	cyl(s, 0.05, 0.05, 0.08, 6, Vector3(-0.28, 1.46, 0.18), Color(0.1, 0.1, 0.12))
+	rod(s, Vector3(0.28, 1.5, 0.18), Vector3(0.2, 1.47, -0.3), 0.025, 0.025, 4, Color(0.85, 0.15, 0.12))
+	rod(s, Vector3(-0.28, 1.5, 0.18), Vector3(-0.2, 1.47, -0.3), 0.025, 0.025, 4, Color(0.1, 0.1, 0.12))

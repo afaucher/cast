@@ -2,7 +2,8 @@ extends Monster
 ## Brute: slow, tanky, cannot climb (a +2 ledge is a safe spot). Its ground
 ## slam shows a red ring of the true radius that fills up during the 0.9 s
 ## windup; when it lands, `slammed(pos)` fires (for screen shake) and every hero
-## inside the ring at a similar height takes damage (linear falloff to 50%).
+## inside the ring at a similar height takes damage (linear falloff to 50%). A hero inside the fainter inner ring
+## (DAZE_RADIUS) is also dazed for DAZE_TIME: it can't walk or attack, but its spells still go off. Fight slams (below) never daze.
 ## Step 2: rare restless fights with a rival brute or a bullied skeleton (see "Restless fights" below).
 
 signal slammed(pos: Vector3)
@@ -13,6 +14,12 @@ const SLAM_DAMAGE := 25.0
 const SLAM_RADIUS := 2.0
 const SLAM_EDGE_MULT := 0.5
 const SLAM_SHOVE := 1.0         ## outward push on everything the slam hits
+## A direct hit (a hero's centre within DAZE_RADIUS, the inner ring the telegraph draws) dazes it for DAZE_TIME: no
+## walking, no attacks, casts still go off (Actor.daze; then Actor.DAZE_GUARD of immunity). The edge band only hurts.
+## 1.6 takes in where the brute's target stands when it slams (stop_distance 1.5), so a hero has to step back to arm's
+## length (Rebar's fist still reaches 1.8) during the wind-up to keep swinging.
+const DAZE_RADIUS := 1.6
+const DAZE_TIME := 0.6
 const WINDUP := 0.9
 const COOLDOWN := 2.4
 const AGGRO := 9.0
@@ -107,7 +114,8 @@ func _can_strike_target() -> bool:
 func _strike() -> void:
 	var pos := global_position
 	# Judged by each hero's center, so the ring is honest; online each hero's own machine decides it (Combat.slam).
-	Combat.slam(pos, SLAM_RADIUS, SLAM_DAMAGE, SLAM_EDGE_MULT, SLAM_SHOVE, MAX_SLAM_DY, GameWorld.other_team(team), self)
+	# A hero inside DAZE_RADIUS is also dazed, on its own machine (Actor.daze through Combat.slam).
+	Combat.slam(pos, SLAM_RADIUS, SLAM_DAMAGE, SLAM_EDGE_MULT, SLAM_SHOVE, MAX_SLAM_DY, GameWorld.other_team(team), self, DAZE_RADIUS, DAZE_TIME)
 	slammed.emit(pos)
 	_spawn_shockwave(pos)
 
@@ -139,6 +147,20 @@ func _on_windup_begin() -> void:
 	rim_mi.scale = Vector3(1.0, 0.3, 1.0)
 	rim_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ring.add_child(rim_mi)
+	# The daze line: a fainter inner rim at DAZE_RADIUS. Inside it a direct hit dazes; between it and the rim only hurts.
+	var daze_mat := _ring_mat.duplicate() as StandardMaterial3D
+	daze_mat.albedo_color = Color(1.0, 0.75, 0.2, 0.6)
+	var inner := TorusMesh.new()
+	inner.inner_radius = DAZE_RADIUS - 0.05
+	inner.outer_radius = DAZE_RADIUS
+	inner.rings = 32
+	inner.ring_segments = 4
+	var inner_mi := MeshInstance3D.new()
+	inner_mi.mesh = inner
+	inner_mi.material_override = daze_mat
+	inner_mi.scale = Vector3(1.0, 0.3, 1.0)
+	inner_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ring.add_child(inner_mi)
 	var fill_mat := StandardMaterial3D.new()
 	fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

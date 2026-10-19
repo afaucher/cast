@@ -37,7 +37,7 @@ window mode and size) and then changes scene to `Boot.route(args)`:
 | `--run-test <name>` | the test (headless harness, nothing else runs) |
 | `--scene <res path>` | that scene |
 | `--menu` | `scenes/main_menu.tscn`, even with other flags (they still reach the game) |
-| no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after`, `--backdrop-mood` | the main menu |
+| no flags, or only `--no-mic`, `--settings-file`, `--menu-shot`, `--menu-screen`, `--menu-say`, `--menu-after`, `--menu-void`, `--menu-hover`, `--menu-focus-file`, `--backdrop-mood`, `--backdrop-hero` | the main menu |
 | `--net-join <ip[:port]>`, `--net-port`, `--net-link`, `--net-name` (online dev flags, see Networking) | the main menu (a joiner goes on to the host's job board; with other game flags it goes straight to the game scene and waits for the connection there) |
 | any other `--flag` (`--seed`, `--spells`, `--contract`, `--floor`, `--shot`, every `game.gd` flag, `--net-host`, `--net-steam-probe`, flags added later) | `scenes/game.tscn`, as before |
 
@@ -45,7 +45,13 @@ window mode and size) and then changes scene to `Boot.route(args)`:
 garage, a slowly drifting camera over the three `*Model` heroes idling around the real `VanModel` on its chalk circle,
 torches, a `HellgateModel` glowing through a breach; mood dawn / night / after, see `MenuBackdrop.pick_mood` and
 `LastContract`; no GameWorld, no actors) behind the rows 01 Start a job, 02 Join a crew, 03 Voice setup, 04 Settings,
-05 Quit, a status line and (while joined) the crew list. Start a job hosts a Steam lobby when Steam is up, else plays
+05 Quit, a status line and (while joined) the crew list, and under the clipboard FORM 31, the personnel file
+(`PersonnelFile`, `scripts/ui/personnel_file.gd`) of the hero the player picked. **Character select (2026-10-19):** a click
+on a hero in the garage picks it (`MenuBackdrop.hero_at`: the camera ray against each model's mesh bounds; `set_hover`
+outlines the hero under the pointer), as does the card's NAME line (Left / Right / Enter, last in the focus chain). The pick
+is `Session.character_id` (the hello and the roster carry it), saved as `GameSettings` "character" and loaded by `Boot` at
+start (`--hero` / `--backdrop-hero` override it for one run). Seats: `CrewSeats` (`scripts/heroes/crew_seats.gd`, below).
+Start a job hosts a Steam lobby when Steam is up, else plays
 solo; Join a crew joins the first lobby hiring (see Networking). The job board uses
 the same garage: `game.gd`'s `_show_board` adds its own `MenuBackdrop` (the menu scene is already gone after Start's
 scene change, so it is a fresh one that picks the same mood and hero) and sets `board.backdrop_behind`, which swaps
@@ -91,7 +97,7 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_join.gd` (`NetJoin`, child `Session/Join`, `Session.join`) | joining mid-contract (M6): a joiner waits (`join.wait`) until the crew is on a running floor, builds that floor as it was at its barrier (`join.go`), reports its checksum (`join.built`) and gets the late-join snapshot (`join.snapshot`: the seat table, gone ids, a world keyframe, runtime spawns, pickups, dents, statuses, the Ledger, its own seat's state) |
 | `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (runtime spawns and pickups get host ids from 10000); the tables of OWNER fields an event carries instead of a snapshot (`CARRIES` for heroes, `WORLD_CARRIES` for the host-owned classes) |
 | `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events. The Chicken spell's chickens are host-owned runtime spawns too (`world.spawn` kind "chicken"), streamed as monster-format entries (`CHICKEN_FIELDS`) |
-| `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice |
+| `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice; an explosive prop's fuse (`obj.fuse {id, s, e, by}` on the shared clock, `obj.out`: every machine runs the blast itself at `e`) |
 | `net_casts.gd` (`NetCasts`, child `Session/Casts`, `Session.casts`) | casts and hero attacks as events (M4): a cast is resolved on the caster's machine and lands `LEAD` (0.2 s) later on every machine (`SpellBook.apply`); a hero's swing, shot, bowl or spin (`act`) is replayed on its puppet everywhere at the moment the puppet shows |
 | `net_status.gd` (`NetStatus`, child `Session/Status`, `Session.status`) | statuses (M4): the target's owner applies a modifier, a fire or a soak and announces it (`st`); the other screens show it (`Actor.net_set_modifiers`, `Burning.show_remote`, `Coffee.show_remote`, `Wet.douse`) |
 | `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
@@ -106,8 +112,10 @@ behind a barrier (`game.gd` `_start` then `_enter_barrier`: ids, copies, world f
 `crew.ready`); the host compares the checksums (a client that built another floor is sent out with "Desync: different
 floor") and sends `crew.go {start_at, floor_start}`; at `start_at` on the shared clock every machine unfreezes and the
 van arrival plays (`CrewFlow.floor_started`), and each client's `GameWorld.time` is slewed to `host_time() - floor_start`.
-Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero; an EMPTY seat is an
-AI ally (seat 2 Rebar, seat 3 Gasket: `AI_SEATS`, the seat's original character) that only the host runs; on a client every
+Heroes are built per seat (`game.gd` `_spawn_crew`, `heroes_by_seat`): you control your seat's hero (solo: seat 1, the hero
+picked on the menu); an EMPTY seat is an AI ally that only the host runs, playing a hero NOBODY human picked (`CrewSeats.fill`:
+seat 2 keeps Rebar and seat 3 Gasket when free, else the first free of Rebar, Gasket, Wick; `AI_SEATS` is only the formation),
+and a seat its player leaves goes back to the AI as `CrewSeats.ai_for` (`SeatHandover.ai_character`); on a client every
 host-owned actor is a copy (`Net.make_copy`: no physics process, no damage, no shove, no E).
 While crewed there is no local pause (M5); the exits are first-to-choose (M3, below). `NetFloor`, `CrewFlow`, `CrewConfirm` (the host's leave question)
 and `NetGameTest` are the pieces to read first.
@@ -237,7 +245,10 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
   rules, slide, climb slow-down, separation and ground snap. Also `apply_damage(amount, source)`,
   `heal(amount)`, `set_modifier(id, mult, duration)` (damage-taken multiplier; the same id
   refreshes), `peck(source)` (the Chicken spell's hit for nothing: no damage, a monster turns on the pecker; through
-  `Combat.peck`), `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`, `pecked`.
+  `Combat.peck`), `daze(seconds, source)` (the brute's direct slam through `Combat.slam`: a `STAT_DAZE` modifier, so
+  `is_dazed()` / `is_helpless()` are true, `move()` refuses and the hero can't attack, but casts go off; then
+  `DAZE_GUARD` 1.5 s of immunity; the owner applies it, a copy refuses; `docs/design/characters.md`, "The daze"),
+  `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`, `pecked`.
   Override `_on_death()` for death visuals (the default is `queue_free`). Actors join the group `"actors"`.
   `net_fields()` says who may write each var (`Net.SPAWN/OWNER/PRIVATE/LOCAL`, `scripts/net/net.gd`);
   subclasses merge theirs into `super()`, and `test_net_contract` fails on any undeclared var.
@@ -245,7 +256,14 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
 - **`Projectile`** (`scripts/combat/projectile.gd`): `Projectile.fire(shooter, from, dir, dmg, speed, range)`.
   Set `color`, `size` or `on_hit` before the first frame for custom behavior.
 - **`Combat`** (`scripts/combat/combat.gd`): `melee_arc(attacker, dir, reach, arc_deg, dmg)`,
-  `explode(pos, radius, dmg, team, source, edge_mult)`, `chest(actor)`.
+  `explode(pos, radius, dmg, team, source, edge_mult, shove = 0, decider = null)` (`shove`: pushed out, falling off like
+  the damage; `decider`: whose machine decides the non-hero hits when that is not `source`'s, an explosive prop's blast),
+  `slam(...)` (also lights an explosive prop in its ring), `chest(actor)`.
+- **Explosive props** (`ExplosiveProp extends PricedProp`, `scripts/contracts/explosive_prop.gd`;
+  `docs/design/hazards.md`): fire, a hard hit, any arrow or a hard shove lights a short fuse (`FuseFx`: hiss, sparks,
+  glow, shake, the blast ring); at its end a `Combat.explode` blast on everyone (team -1) with a shove, chained to the
+  explosives in reach, billed once to whoever set it off. A soaked one is a dud and a soak puts a fuse out. Placed by
+  the room themes (`RoomThemeDefs` "hazards", `SiteBuilder._plan_hazards`, `SitePlan.hazards`, `Site.hazards`).
 - **Input** (`scripts/app/input_setup.gd`): `move_up/down/left/right` (WASD),
   `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1..4` (keys 1-4: ready/hold a spell slot),
   `use` (E: the van's clock-out slip, the elevator or an employee, in that order; never casts), `swap_pickup` (F: swap a dropped component into
@@ -287,7 +305,7 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool
 `Actor.shove(dir, distance, source = null)` starts a short (0.2-0.35 s, ease-out) kinematic slide of
 `distance * shove_mult` along `dir` on X/Z (`shove_mult` 0 = immovable: Rebar; brute 0.4, swarmer 1.5).
 It is driven by the tree's `physics_frame` signal only while active. While `is_shoved()` the actor ignores
-`move()`; `is_helpless()` (shoved or staggered) is what the player controller, `AllyBrain`, `Monster` and the
+`move()`; `is_helpless()` (shoved, staggered or dazed) is what the player controller, `AllyBrain`, `Monster` and the
 training dummy check before steering or attacking (voice casts still work). Terrain rules differ from walking:
 - a wall, or a rise of 2+ levels, stops the slide: "slam", 8 damage + 0.4 s stagger (shoves under 1.0 just stop);
 - drops of up to 3 levels are free; a higher ledge is fine too: the actor falls under gravity and takes 6 damage
@@ -351,7 +369,8 @@ midpoint walls), extra loops, the climb shortcut and the one short chokepoint th
 within `FEATURE_CENTER_CLEAR` (2) of a room's center or `FEATURE_DOOR_CLEAR` (3) of a door. Generation takes
 about 130 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder` then puts at most 6 priced props on a floor
 (next to walls, 4+ apart, flush and square against the flat face: `ThemeCtx.wall_pose_at` marches to the face and
-refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`), scales the monster pack budgets by 0.7 and caps a room at one monster per
+refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`) and at most 3
+explosive props (`SiteBuilder._plan_hazards`, own dice, the same wall poses), scales the monster pack budgets by 0.7 and caps a room at one monster per
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.
 

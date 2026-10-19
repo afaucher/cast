@@ -34,6 +34,12 @@ extends Node
 ##              one aimed at a player's hero on to that player's machine (`obj.shove` / `obj.mod`), which runs the verb on
 ##              its own hero (a rooted hero drops the shove there). A client also watches its own shoved hero against the
 ##              host's props, crates and mail (their copies run no physics) and reports the impact (Net.hit_object).
+##   EXPLOSIVES an explosive prop (ExplosiveProp, docs/design/hazards.md) is a prop like any other (hits are requests, the
+##              break and its bill are the host's), and the host decides its fuse: `obj.fuse {id, s, e, by}` (start and
+##              end on the shared clock, who set it off) when it lights, `obj.out {id}` when a soak puts it out in time.
+##              Every machine runs the blast itself at `e` (a scheduled effect: each applies what it resolves, so a
+##              client's hero is hit by its own machine once); the break follows as obj.break. A late joiner gets a
+##              burning fuse in the snapshot (`fuses`, replayed as obj.fuse) and a blown prop as a gone id.
 ##
 ## Trusting a client's word for where its hero stands is deliberate: friends only, no cheating concern
 ## (networking.md), and the host's picture of that hero is about 100 ms old.
@@ -83,7 +89,7 @@ func _reset_stats() -> void:
 	employee_log = []
 	stats = {"hits_out": 0, "hits_in": 0, "breaks": 0, "grants": 0, "denies": 0, "requests": 0, "pickups": 0,
 		"ledger_out": 0, "ledger_in": 0, "loadouts": 0, "shoves_out": 0, "shoves_in": 0, "mods_out": 0, "mods_in": 0,
-		"hit_damage_in": 0.0, "hit_reqs": 0}
+		"hit_damage_in": 0.0, "hit_reqs": 0, "fuses": 0, "outs": 0}
 
 
 # --- Setup -----------------------------------------------------------------------------------------------
@@ -103,6 +109,9 @@ func begin(local: Hero) -> void:
 			if n is PricedProp:
 				_link((n as PricedProp).damaged, _on_prop_hurt.bind(id))
 				_link((n as PricedProp).broken, _on_broken.bind(id))
+				if n is ExplosiveProp:
+					_link((n as ExplosiveProp).lit, _on_fuse.bind(id))
+					_link((n as ExplosiveProp).doused, _on_douse.bind(id))
 			elif n is BreakableCrate:
 				_link((n as BreakableCrate).broken, _on_broken.bind(id))
 			elif n is MailPackage:
@@ -304,6 +313,37 @@ func _on_broken(_obj: Node, _culprit: Node, id: int) -> void:
 	stats["breaks"] = int(stats["breaks"]) + 1
 
 
+## Host: an explosive prop's fuse was lit (ExplosiveProp.lit). Its start and end go out on the shared clock; every machine
+## runs the blast itself at the end (a scheduled effect), and the break and its bill follow as obj.break.
+func _on_fuse(_prop: ExplosiveProp, culprit: Node, start: float, end: float, id: int) -> void:
+	_send(0, "obj.fuse", {"id": id, "s": _host_stamp(start), "e": _host_stamp(end), "by": _id(culprit)})
+	stats["fuses"] = int(stats["fuses"]) + 1
+
+
+## Host: a soak put a fuse out in time (ExplosiveProp.doused, at least DOUSE_LOCK before its end).
+func _on_douse(_prop: ExplosiveProp, id: int) -> void:
+	_send(0, "obj.out", {"id": id})
+	stats["outs"] = int(stats["outs"]) + 1
+
+
+## A GameWorld.time on this machine as a time on the shared clock (host_time).
+func _host_stamp(t: float) -> float:
+	return _now() + (t - GameWorld.time)
+
+
+## A time on the shared clock as this machine's GameWorld.time.
+func _local_stamp(t: float) -> float:
+	return GameWorld.time + (t - _now())
+
+
+func _client_fuse(data: Dictionary) -> void:
+	var p := NetRegistry.node(int(data.get("id", 0))) as ExplosiveProp
+	if p == null or p.dead:
+		return
+	p.net_fuse(_local_stamp(float(data.get("s", _now()))), _local_stamp(float(data.get("e", _now()))), NetRegistry.node(int(data.get("by", 0))))
+	stats["fuses"] = int(stats["fuses"]) + 1
+
+
 func _on_mail_broken(pkg: MailPackage, _culprit: Node, contents: String, id: int) -> void:
 	_send(0, "obj.break", {"id": id, "c": contents, "cr": pkg.crypto_amount, "cid": pkg.component_id})
 	stats["breaks"] = int(stats["breaks"]) + 1
@@ -323,11 +363,15 @@ func late_join_state() -> Dictionary:
 			continue
 		picks.append([id, p.spell_id, p.charges, p.global_position, p.lifetime, p._age])
 	var dents: Array = []
+	var fuses: Array = []
 	for id in NetRegistry.ids():
 		var prop := NetRegistry.node(id) as PricedProp
 		if prop != null and not prop.dead and prop.hp < prop.max_hp - 0.001:
 			dents.append([id, prop.hp])
-	return {"pickups": picks, "dents": dents}
+		var e := prop as ExplosiveProp
+		if e != null and not e.dead and e.is_lit():
+			fuses.append([id, _host_stamp(e.fuse_start), _host_stamp(e.fuse_end), _id(e.igniter())])
+	return {"pickups": picks, "dents": dents, "fuses": fuses}
 
 
 ## The late joiner: the host's pickups and dents (late_join_state()). A seed-built pickup it already has takes the host's
@@ -349,6 +393,10 @@ func apply_late_join(d: Dictionary) -> void:
 		var prop := NetRegistry.node(int(row[0])) as PricedProp if row != null and row.size() >= 2 else null
 		if prop != null and not prop.dead:
 			prop.hp = float(row[1])
+	for e: Variant in d.get("fuses", []) as Array:   # (an explosive prop's fuse burning right now: an obj.fuse replay)
+		var row := e as Array
+		if row != null and row.size() >= 4:
+			_client_fuse({"id": row[0], "s": row[1], "e": row[2], "by": row[3]})
 
 
 # --- Every frame ---------------------------------------------------------------------------------------------
@@ -440,6 +488,13 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 	match kind:
 		"obj.break":
 			_client_break(data)
+		"obj.fuse":
+			_client_fuse(data)
+		"obj.out":
+			var e := NetRegistry.node(int(data.get("id", 0))) as ExplosiveProp
+			if e != null and not e.dead:
+				e.net_douse()
+				stats["outs"] = int(stats["outs"]) + 1
 		"obj.hurt":
 			var p := NetRegistry.node(int(data.get("id", 0))) as PricedProp
 			if p != null and not p.dead:
@@ -577,7 +632,7 @@ func _apply_modifier(data: Dictionary) -> void:
 ## Host: the first player to ask gets the pickup (up to what they can take); everyone after is told no.
 func _host_grant(from: int, id: int, what: String, want: int, at: Vector3) -> void:
 	var e: Array = _pickups.get(id, [])
-	var p: ComponentPickup = e[0] if not e.is_empty() else null
+	var p: ComponentPickup = e[0] if not e.is_empty() and is_instance_valid(e[0]) else null   # (a pickup freed since: denied below)
 	var reach := (SpellComponents.COLLECT_RADIUS if what == "collect" else SpellComponents.SWAP_RADIUS) + REACH_SLACK
 	if p == null or not is_instance_valid(p) or p._used or p.charges <= 0 or at == Vector3.INF \
 			or GameWorld.flat_distance(at, p.global_position) > reach:

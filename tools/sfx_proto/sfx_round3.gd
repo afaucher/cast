@@ -38,6 +38,8 @@ const SOURCES := {
 	"elevator_ding_v4": [K_IMPACT + "impactBell_heavy_000.ogg"],
 	"elevator_ding_v4b": ["synth"],
 	"paper_flip": [K_RPG + "bookFlip3.ogg"],
+	"fuse_hiss_v5": ["synth"],
+	"fuse_hiss_v6": ["synth"],
 }
 
 
@@ -261,3 +263,33 @@ func _elevator_ding_v4b() -> PackedFloat32Array:
 		_add_tone(o, float(note[0]), 1.6, func(_k: float) -> float: return f * 4.0, 0.12,
 				func(k: float) -> float: return minf(k * 1.6 / 0.004, 1.0) * exp(-k * 1.6 / 0.12))
 	return _normalize(o, -8.0)
+
+
+# ---------------------------------------------------------------- explosive props (2026-10-19)
+
+## An explosive prop's lit fuse (ExplosiveProp, docs/design/hazards.md), 1.3 s. Mic-safe by shape (audio-plan.md §4: short
+## or loudest at the start, and its energy kept above 4.5 kHz, like `fuse_hiss`, which the round 1 probe heard only as
+## "SH"): a bright "pssht" as it lights, then a sputtering high hiss that falls away by 70%, with a sparse soft crackle.
+func _fuse_hiss_v5() -> PackedFloat32Array:
+	var o := _buf(1.3)
+	_add_noise(o, 0.0, 0.16, func(k: float) -> float: return 7000.0 - 2000.0 * k, 1.2, 2, 1.0,
+			func(k: float) -> float: return minf(k * 40.0, 1.0) * pow(1.0 - k, 1.5))
+	_add_noise(o, 0.04, 1.26, func(k: float) -> float: return 6500.0 + 900.0 * sin(TAU * 11.0 * k), 2.0, 2, 0.5,
+			func(k: float) -> float: return minf(k * 30.0, 1.0) * (1.0 - 0.7 * k) * (0.75 + 0.25 * sin(TAU * 23.0 * k)))
+	_add_soft_crackle(o, 0.05, 1.2, 22.0, 0.2, 7000.0)
+	_fade_out(o, 0.05)
+	return _normalize(o, -10.0)
+
+
+## v6, after the probe (C: "cast heal" said over v5 was heard as "CAST VEAL": its hiss, still at 80% when the spell word
+## starts, masked the "h"): the same "pssht", then the hiss drops to a quiet, narrow sizzle at 7 kHz (a fifth of the
+## attack) that dies over the fuse, with a sparse crackle. The fuse's warning on screen does the rest.
+func _fuse_hiss_v6() -> PackedFloat32Array:
+	var o := _buf(1.3)
+	_add_noise(o, 0.0, 0.14, func(k: float) -> float: return 7200.0 - 1800.0 * k, 1.2, 2, 1.0,
+			func(k: float) -> float: return minf(k * 40.0, 1.0) * pow(1.0 - k, 1.5))
+	_add_noise(o, 0.06, 1.24, func(k: float) -> float: return 7000.0 + 500.0 * sin(TAU * 11.0 * k), 4.0, 1, 0.22,
+			func(k: float) -> float: return minf(k * 30.0, 1.0) * exp(-2.2 * k) * (0.7 + 0.3 * sin(TAU * 23.0 * k)))
+	_add_soft_crackle(o, 0.1, 1.15, 14.0, 0.08, 6000.0)
+	_fade_out(o, 0.05)
+	return _normalize(o, -10.0)

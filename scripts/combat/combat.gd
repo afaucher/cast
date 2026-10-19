@@ -102,22 +102,32 @@ static func heal_radius(pos: Vector3, radius: float, amount: float, team: int) -
 
 ## Damage everyone of `team` (-1 = everyone) within radius of pos, with
 ## linear falloff to `edge_mult` at the rim. Returns the actors hit.
-static func explode(pos: Vector3, radius: float, damage: float, team: int, source: Node = null, edge_mult: float = 0.5) -> Array[Actor]:
+## `shove` > 0 also pushes each one that far straight out from `pos` (falling off like the damage). `decider` (an explosive
+## prop's blast: the prop) is whose machine decides the hits on everything but a hero, when that is not `source`'s: the
+## blast is the host's prop, so the host applies it to monsters, props and employees even when a client's hero set it off
+## (the bill and the kill credit still go to `source`). Null: `source` decides, as for every other explosion.
+static func explode(pos: Vector3, radius: float, damage: float, team: int, source: Node = null, edge_mult: float = 0.5, shove: float = 0.0, decider: Node = null) -> Array[Actor]:
 	var hit: Array[Actor] = []
+	var judge: Node = decider if decider != null else source
 	for a in GameWorld.actors_in_radius(pos, radius, team):
-		if not Net.resolves_hit(a, source):
+		if a == decider or not Net.resolves_hit(a, judge):
 			continue
 		var d := GameWorld.flat_distance(a.global_position, pos)
 		var k := lerpf(1.0, edge_mult, clampf(d / maxf(radius, 0.001), 0.0, 1.0))
 		a.apply_damage(damage * k, source)
+		if shove > 0.0 and not a.dead:
+			var away := a.global_position - pos
+			away.y = 0.0
+			a.shove(away if away.length() > 0.05 else a.facing, shove * k, source)
 		hit.append(a)
 	return hit
 
 
 ## A ground slam (the brute): everyone of `team` within `radius` of `pos` and at most `max_dy` above or below it,
-## judged by their centre, takes `damage` falling off to `edge_mult` at the rim and is shoved `shove` away. Returns
-## the actors hit.
-static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, shove: float, max_dy: float, team: int, source: Node) -> Array[Actor]:
+## judged by their centre, takes `damage` falling off to `edge_mult` at the rim and is shoved `shove` away. A direct hit
+## (centre within `daze_radius`, the inner zone) is also dazed for `daze_time` (Actor.daze: the owner applies it, here,
+## since the hit resolves on the victim's machine; shove_mult does not matter). Returns the actors hit.
+static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, shove: float, max_dy: float, team: int, source: Node, daze_radius: float = 0.0, daze_time: float = 0.0) -> Array[Actor]:
 	var hit: Array[Actor] = []
 	for a in GameWorld.actors_in_radius(pos, radius, team):
 		if absf(a.global_position.y - pos.y) > max_dy:
@@ -129,7 +139,16 @@ static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, s
 			continue
 		a.apply_damage(damage * lerpf(1.0, edge_mult, clampf(d / radius, 0.0, 1.0)), source)
 		a.shove(a.global_position - pos, shove, source)
+		if daze_time > 0.0 and d <= daze_radius and not a.dead:
+			a.daze(daze_time, source)
 		hit.append(a)
+	if team != -1:
+		# The ground shock sets off an explosive prop in the ring (docs/design/hazards.md): a full hit, wherever it stands in
+		# it. A monster's slam leaves the other priced props alone, as its swings do.
+		for p in GameWorld.props_in_radius(pos, radius):
+			if not (p is ExplosiveProp) or absf(p.global_position.y - pos.y) > max_dy or not Net.resolves_hit(p, source):
+				continue
+			p.apply_damage(damage, source)
 	return hit
 
 

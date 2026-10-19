@@ -123,7 +123,7 @@ func _real_spells() -> void:
 	check(p._lines[0].has_focus(), "the first line has focus")
 	eq(p.shown(), "heal", "its spec is shown")
 	eq(p._spec.value("copy"), "HEAL", "the spec sheet names the license (typed, in its copy box)")
-	eq(p._spec.value("say"), "cast heal", "how to say it, with the player's trigger word")
+	eq(p._spec.value("say"), "\"cast heal\"", "how to say it, with the player's trigger word")
 	eq(p._spec.value("cooldown"), "8 s", "the cooldown")
 	eq(p._spec.value("component"), "Grave moss", "the component")
 	eq(p._spec.value("desc"), SpellBook.desc_of("heal"), "and the description")
@@ -134,7 +134,7 @@ func _real_spells() -> void:
 	eq(p._spec.value("copy"), "DAMP", "focusing a line swaps the spec sheet")
 	check(p._spec.value("desc").contains("soggy"), "damp's description")
 	p.set_trigger_word("pickle")
-	eq(p._spec.value("say"), "pickle damp", "the trigger word reaches the spec sheet")
+	eq(p._spec.value("say"), "\"pickle damp\"", "the trigger word reaches the spec sheet")
 	p.set_trigger_word("cast")
 
 	# Navigation: Up / Down (and Tab) run down the lines, then the signature and the back row, and round.
@@ -236,7 +236,7 @@ func _long_list() -> void:
 	var top := line.get_global_rect().position.y - p._scroll.get_global_rect().position.y
 	check(top >= -1.0 and top + line.size.y <= p._scroll.size.y + 1.0, "and it is inside the window (%.0f)" % top)
 	eq(p._spec.value("copy"), "ZENITH", "its spec is shown")
-	eq(p._spec.value("say"), "cast zenith", "with its incantation from the data")
+	eq(p._spec.value("say"), "\"cast zenith\"", "with its incantation from the data")
 	check(_focus_step(p._lines[23], SIDE_BOTTOM) == p._sign, "the last line leads to the signature")
 	var walked := 0
 	var at: Control = p._lines[0]

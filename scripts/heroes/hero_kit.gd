@@ -8,7 +8,7 @@ extends RefCounted
 ## Primaries:
 ##   Wick  "Bow bash"   12 dmg / 0.4 s / reach 1.3 / 90 deg / shove 0.7
 ##   Gasket   "Hammer"     28 dmg / 0.65 s / reach 1.5 / 90 deg / shove 0.9
-##   Rebar  "Slam fist"  26 dmg / 0.8 s / reach 1.8 / 120 deg / shove 1.0
+##   Rebar  "Slam fist"  15 dmg / 0.8 s / reach 1.8 / 120 deg / shove 1.6 (a tank, not the killer: user, 2026-10-19)
 ## Walk speeds are not part of the kit yet (everyone walks at Hero's 4.5).
 ## Secondaries: Wick "arrow" (tap or draw), Gasket "spin", Rebar "bowl" (the spin / bowl stats live on
 ## Hero as constants and are unchanged).
@@ -51,11 +51,11 @@ const DATA := {
 		"display_name": "Rebar",
 		"max_hp": 160.0,
 		"primary_name": "Slam fist",
-		"melee_damage": 26.0,
+		"melee_damage": 15.0,     # was 26: he carried every fight (docs/design/combat-variety-research.md)
 		"melee_cooldown": 0.8,
 		"melee_reach": 1.8,
 		"melee_arc": 120.0,
-		"melee_shove": 1.0,
+		"melee_shove": 1.6,       # was 1.0: knocks monsters back (a wall-slam past 1.0)
 		"secondary_kind": "bowl",
 		"shove_mult": 0.0,        # heavy: immovable
 		"can_climb": false,       # steps up +1 only

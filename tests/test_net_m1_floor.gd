@@ -139,11 +139,21 @@ func run_client() -> void:
 	var label: Label = game.get("_wait_label")
 	var waited := label != null and label.visible and label.text.begins_with("License signed. Waiting for") and label.text.contains("host")
 	check(waited, "after signing: waiting for the others (%s)" % (label.text if label != null else "no label"))
+	var shown := 0
+	for h: Hero in game.call("_heroes"):
+		if h.visible:
+			shown += 1
+	eq(shown, 0, "while the others sign, no hero stands in the room yet (the arrival brings them in)")
 	report("waited", waited)
 
 	if not check(await wait_floor(), "the floor starts"):
 		return
 	var r := await measure()
+	var out := 0
+	for h: Hero in game.call("_heroes"):
+		if h.visible:
+			out += 1
+	check(out >= 2, "after the arrival the crew is in the room (%d visible)" % out)
 	report("floor", r)
 
 

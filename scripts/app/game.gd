@@ -23,6 +23,7 @@ extends Node3D
 ##                       crew is out of the van, plus --autocast-after S (default 0.5)
 ##   --aim-offset x,z    dev: --autocast aims at the player's position plus this offset (world units) instead of at the monsters
 ##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
+##   --hero wick|gasket|rebar  play this hero (Session.character_id) instead of the one picked on the main menu
 ##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer) near the player;
 ##                       --autocast then aims at them
 ##   --idle-monsters     dev: --spawn-near monsters ignore heroes until hurt
@@ -32,11 +33,12 @@ extends Node3D
 ##   --zoom S            dev: camera size (default 24; 6 is a close-up of the crew)
 ##   --focus rebar|gasket|dev|elevator  dev: the camera follows that ally (or the --spawn-near monsters, or looks at the
 ##                       elevator's landing) instead of the player
-##   --give-allies a,b   dev: slot spell a for Rebar and b for Gasket (they only hold the component; allies do not cast)
+##   --give-allies a,b   dev: slot spell a for the seat-2 ally and b for seat 3 (Rebar and Gasket when you play Wick; they only
+##                       hold the component; allies do not cast)
 ##   --drop-near a,b     dev: put component pickups for spells a, b on the floor just ahead of the player
 ##   --slay-near         dev: 1.5 s in, kill the --spawn-near monsters (to watch their drops)
-##   --kit-demo draw|hammer|fist  dev: at 0.8 s Wick starts drawing his bow on the --spawn-near monsters (a drawn shot
-##                       fires 1.3 s later), or Gasket (hammer) / Rebar (fist) steps up to them and swings once
+##   --kit-demo draw|hammer|fist  dev: at 0.8 s the player (Wick) starts drawing his bow on the --spawn-near monsters (a drawn
+##                       shot fires 1.3 s later), or the AI Gasket (hammer) / Rebar (fist) steps up to them and swings once
 ##   --to-gate           dev: put the crew 5 cells from the first hellgate of the floor (the camera follows)
 ##   --to-theme <id>     dev: put the crew in the middle of the first room with that theme (wine_cellar, home_cinema, spa, gym,
 ##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, science, service_entrance); the
@@ -125,16 +127,18 @@ const OBJECTIVE_INTERVAL := 0.25
 const FOLLOW_EXTRACT_CELLS := 3   ## followers within this many cells of the elevator ride along
 const INCAP_DELAY := 2.2
 const JOIN_LICENSE_BEAT := 0.6    ## a joiner sees its "Clocking in..." form this long before the license checkout opens over it
-## The three crew seats. Seat 1 is the host's hero (the AI allies follow it); an empty seat is an AI ally: seat 2
-## Rebar, seat 3 Gasket. A human takes the seat with the character id the roster carries (Wick for everyone today).
+## The three crew seats. Seat 1 is the host's hero (the AI allies follow it); solo it is the hero picked on the main menu
+## (Session.character_id). A human takes the seat with the character id the roster carries; an empty seat is an AI ally
+## playing a hero nobody human picked (CrewSeats: seat 2 Rebar and seat 3 Gasket unless someone plays them).
 const CREW_LOOKS := {
 	"wick": {"name": "Wick", "color": PLAYER_COLOR},
 	"rebar": {"name": "Rebar", "color": Color(0.85, 0.5, 0.25)},
 	"gasket": {"name": "Gasket", "color": Color(0.7, 0.4, 0.85)},
 }
+## Where each AI seat follows seat 1 (AllyBrain formation_angle / hexes). Its hero comes from CrewSeats.
 const AI_SEATS := {
-	2: {"character": "rebar", "angle": 2.4, "hexes": 2.6},
-	3: {"character": "gasket", "angle": 3.9, "hexes": 3.3},
+	2: {"angle": 2.4, "hexes": 2.6},
+	3: {"angle": 3.9, "hexes": 3.3},
 }
 
 ## Survive scene reloads (next floor, next contract, F5).
@@ -190,6 +194,7 @@ var _closed_gates: Dictionary = {}  ## instance id -> true, so a gate pays once
 var _emp_cause: Dictionary = {}     ## employee instance id -> last culprit name
 var _player_down_noted := false
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
+var _dev_hazards: Array[PricedProp] = []  ## --hazard-near (ExplosiveProp)
 var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 var _arrival: VanArrival = null     ## the work van and its arrival sequence (null when the start room had no room for it)
 
@@ -227,6 +232,8 @@ var _seat_notices: Array[String] = []   ## every "takes over" line this screen s
 func _ready() -> void:
 	InputSetup.ensure_actions()
 	_parse_args()
+	if opts.has("hero") and HeroKit.has_kit(str(opts["hero"])):
+		Session.character_id = str(opts["hero"]).to_lower()   # (dev: before a crew opens, so the roster carries it too)
 	if opts.has("invoice_demo"):
 		_invoice_demo()
 		return
@@ -341,6 +348,7 @@ func _parse_args() -> void:
 			"--autocast-after": opts["autocast_after"] = float(nxt)
 			"--aim-offset": opts["aim_offset"] = nxt
 			"--proto-heroes": opts["proto_heroes"] = true
+			"--hero": opts["hero"] = nxt
 			"--spawn-near": opts["spawn_near"] = nxt
 			"--stage-ledge": opts["stage_ledge"] = true
 			"--idle-monsters": opts["idle_monsters"] = true
@@ -350,6 +358,10 @@ func _parse_args() -> void:
 			"--zoom": opts["zoom"] = float(nxt)
 			"--focus": opts["focus"] = nxt
 			"--drop-near": opts["drop_near"] = nxt
+			"--hazard-near": opts["hazard_near"] = nxt
+			"--hazard-demo": opts["hazard_demo"] = nxt
+			"--demo-after": opts["demo_after"] = float(nxt)
+			"--to-hazard": opts["to_hazard"] = nxt
 			"--slay-near": opts["slay_near"] = true
 			"--kit-demo": opts["kit_demo"] = nxt
 			"--to-gate": opts["to_gate"] = true
@@ -632,9 +644,9 @@ func _build_world() -> void:
 	if not exits.is_empty():
 		_exit_cell = exits[0]
 
-	# The crew: three seats. Solo, the player is Wick and Rebar and Gasket are AI allies on free neighbours. In a
-	# shared run each human takes their seat (a client's own hero is the one it controls), and the AI allies
-	# (host only) fill the empty seats and follow the host's hero.
+	# The crew: three seats. Solo, the player is the hero picked on the main menu and the other two are AI allies on free
+	# neighbours. In a shared run each human takes their seat (a client's own hero is the one it controls), and the AI
+	# allies (host only) fill the empty seats with the heroes nobody picked (CrewSeats) and follow the host's hero.
 	# Faceted low-poly models by default; --proto-heroes brings back the capsule bodies.
 	var faceted: bool = not bool(opts.get("proto_heroes", false))
 	# The crew starts a job at the van (floor 1's start cell); taking the elevator down puts it at the elevator on the
@@ -675,8 +687,9 @@ func _build_world() -> void:
 	hud.console_submitted.connect(_on_console)
 
 
-## Who sits where: [{seat, character, local, peer, name}] for seats 1-3, in seat order. Solo: Wick (you) and the
-## AI allies Rebar and Gasket. A shared run: every human at their roster seat with their character id, the rest AI.
+## Who sits where: [{seat, character, local, peer, name}] for seats 1-3, in seat order. Solo: the picked hero (you,
+## Session.local_character()) and the other two as AI allies. A shared run: every human at their roster seat with their
+## character id, the rest AI playing the heroes nobody human picked (CrewSeats.fill).
 func _crew_seats() -> Array[Dictionary]:
 	if _joining and not _join_seats.is_empty():
 		return _joined_seats()
@@ -686,18 +699,37 @@ func _crew_seats() -> Array[Dictionary]:
 			if CrewFlow.is_joining(e):
 				continue   # (M6: still joining: its seat is the AI's on this floor until it takes it)
 			by_seat[int(e["seat"])] = e
+	var humans := {}
+	for seat: int in by_seat:
+		humans[seat] = _known_character(str((by_seat[seat] as Dictionary)["character"]))
+	if not by_seat.has(1):
+		humans[1] = _known_character(Session.local_character())   # solo: seat 1 is you
+	var heroes := CrewSeats.fill(humans, NetSession.MAX_CREW)
 	var out: Array[Dictionary] = []
 	for seat in range(1, NetSession.MAX_CREW + 1):
 		if by_seat.has(seat):
 			var e: Dictionary = by_seat[seat]
-			var character := str(e["character"])
-			out.append({"seat": seat, "character": character if CREW_LOOKS.has(character) else NetSession.DEFAULT_CHARACTER,
-				"local": int(e["peer"]) == Session.local_id(), "peer": int(e["peer"]), "name": str(e["name"])})
+			out.append({"seat": seat, "character": str(heroes[seat]), "local": int(e["peer"]) == Session.local_id(), "peer": int(e["peer"]),
+				"name": str(e["name"])})
 		elif seat == 1:
-			out.append({"seat": 1, "character": NetSession.DEFAULT_CHARACTER, "local": true, "peer": 0, "name": ""})
+			out.append({"seat": 1, "character": str(heroes[1]), "local": true, "peer": 0, "name": ""})
 		else:
-			out.append({"seat": seat, "character": str((AI_SEATS[seat] as Dictionary)["character"]), "local": false, "peer": 0, "name": ""})
+			out.append({"seat": seat, "character": str(heroes[seat]), "local": false, "peer": 0, "name": ""})
 	return out
+
+
+## A character id the crew has a look for, else the default (an unknown id from a newer build plays Wick).
+static func _known_character(character: String) -> String:
+	return character if CREW_LOOKS.has(character) else NetSession.DEFAULT_CHARACTER
+
+
+## The hero an AI plays when it takes `seat` now, beside the heroes in the other seats of `seat_info` (CrewSeats.ai_for).
+static func _ai_character(seat: int, seat_info: Array[Dictionary]) -> String:
+	var others: Array = []
+	for s: Dictionary in seat_info:
+		if int(s["seat"]) != seat:
+			others.append(str(s["character"]))
+	return CrewSeats.ai_for(seat, others)
 
 
 func _model_for(character: String) -> Node3D:
@@ -742,8 +774,14 @@ func _spawn_crew(start: Vector2i, spots: Array[Vector2i], faceted: bool) -> void
 				hero.set_player_name(str(s["name"]))   # a person plays it: a puppet here, their name over its head
 	for h in ai_heroes:
 		if Net.is_host():
-			var ai: Dictionary = AI_SEATS[_seat_of(h)]
-			HeroFactory.make_ally(h, leader, false, float(ai["angle"]), float(ai["hexes"]))
+			_make_ai(h, _seat_of(h), leader)
+
+
+## An AllyBrain on `hero` in `seat`'s formation spot behind `leader`. An archer (an "arrow" kit: Wick) keeps its distance
+## and shoots; the others close in.
+func _make_ai(hero: Hero, seat: int, leader: Hero) -> void:
+	var ai: Dictionary = AI_SEATS.get(seat, AI_SEATS[2])
+	HeroFactory.make_ally(hero, leader, hero.secondary_kind == "arrow", float(ai["angle"]), float(ai["hexes"]))
 
 
 ## The name a hero goes by on the books: its player's roster name while crewed (two players may both be Wick), else the
@@ -966,6 +1004,11 @@ func _show_picker() -> void:
 func _sign_license() -> void:
 	_board_seed = -1
 	controller.enabled = false
+	# The floor is already built behind the license form. While the rest of the crew signs, the heroes stay out of sight
+	# so the room is empty until the van (or the elevator) brings them in, as it does solo (user, 2026-10-19: the first
+	# to sign "gets spawned to the world before the others"). _start shows them again just before the arrival.
+	for h in _heroes():
+		h.visible = false
 	_flow.sign(_spells)
 	_update_waiting()
 
@@ -982,6 +1025,8 @@ func _on_flow_load() -> void:
 
 
 func _start() -> void:
+	for h in _heroes():
+		h.visible = true   # (hidden while the crew signed, _sign_license; the arrival and the carry decide from here)
 	player.spell_slots = _spells.duplicate()
 	_assign_crew_spells()
 	_apply_dev_loadout()
@@ -1001,12 +1046,15 @@ func _start() -> void:
 		if opts.has("grime_demo"):
 			GrimeDemo.run(self, player)
 	_spawn_near()
+	_hazard_near()
 	_build_contract_ui()
 	_dev_teleports()
 	if not _shared:
 		_announce_floor()
 	_log("floor %d/%d  seed %d  %s  spells %s" % [_floor_n(), ContractRun.FLOOR_COUNT, _run.floor_seed(_floor_n()), _run.company, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
 	_drop_near()
+	if opts.has("hazard_demo"):
+		_hazard_demo(str(opts["hazard_demo"]))
 	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
 		var marker := Node3D.new()
 		GameWorld.root.add_child(marker)
@@ -1073,7 +1121,8 @@ func _start() -> void:
 func _arrive_by_van() -> void:
 	if _floor_n() != VAN_FLOOR or _site == null or _site.plan.van.is_empty():
 		return
-	# The van's crew spots: seat 1 (Wick), seat 3 (Gasket), seat 2 (Rebar) on every machine alike.
+	# The van's crew spots (VanPlan: opposite the door, toward the cab, toward the tail): seat 1, seat 3, seat 2, on every
+	# machine alike, whoever plays them.
 	var crew: Array[Hero] = []
 	for seat: int in [1, 3, 2]:
 		if heroes_by_seat.has(seat):
@@ -1100,7 +1149,7 @@ func _arrive_by_elevator() -> void:
 		return
 	var arriving: Array[Hero] = []
 	if _floor_n() > VAN_FLOOR:
-		# the car's spots: seat 1 (Wick) in the middle, seat 3 (Gasket) left, seat 2 (Rebar) right, on every machine alike
+		# the car's spots: seat 1 in the middle, seat 3 left, seat 2 right, on every machine alike (whoever plays them)
 		for seat: int in [1, 3, 2]:
 			if heroes_by_seat.has(seat) and not _session.carried_down(heroes_by_seat[seat]):
 				arriving.append(heroes_by_seat[seat])   # (a downed hero stayed behind on the floor above)
@@ -1282,21 +1331,22 @@ func _begin_hero_sync() -> void:
 		owners[int(s["seat"])] = int(s["peer"])
 	var originals := {}
 	for seat: int in AI_SEATS:
-		originals[seat] = str((AI_SEATS[seat] as Dictionary)["character"])
+		originals[seat] = _ai_character(seat, _seat_info)   # (the hero the AI plays there if the seat's player leaves)
 	Session.seats.begin(owners, originals)
 	Session.snap.begin(heroes_by_seat, 0 if _joining else _seat_of(player))
 
 
 ## The heroes were built when the job was picked, from the roster of that moment. A player who left during the license
-## checkout is not on the roster any more: their seat is the AI's, as its original character, like a player who drops
-## later. Every machine reads the same roster here (the host's roster update travels ahead of `crew.load` on the same
-## ordered channel), so all of them convert the same seats and the floor checksum still agrees.
+## checkout is not on the roster any more: their seat is the AI's, as a hero nobody else plays (CrewSeats.ai_for), like a
+## player who drops later. Every machine reads the same roster here (the host's roster update travels ahead of `crew.load`
+## on the same ordered channel), so all of them convert the same seats and the floor checksum still agrees.
 func _drop_departed_seats() -> void:
 	for s: Dictionary in _seat_info:
 		var seat := int(s["seat"])
 		if int(s["peer"]) != 0 and not Session.roster.has(int(s["peer"])) and AI_SEATS.has(seat):
 			s["peer"] = 0
-			_on_seat_to_ai(seat, str((AI_SEATS[seat] as Dictionary)["character"]))
+			s["character"] = _ai_character(seat, _seat_info)
+			_on_seat_to_ai(seat, str(s["character"]))
 
 
 ## Streaming and showing run once the floor has started AND this machine's own van arrival is over (the arrival
@@ -1324,8 +1374,10 @@ func _on_seat_to_ai(seat: int, character: String) -> void:
 	var look: Dictionary = CREW_LOOKS[character]
 	hero.become(character, str(look["name"]), look["color"], _model_for(character) if not bool(opts.get("proto_heroes", false)) else null)
 	if Net.is_host() and AI_SEATS.has(seat) and heroes_by_seat.has(1):
-		var ai: Dictionary = AI_SEATS[seat]
-		HeroFactory.make_ally(hero, heroes_by_seat[1], false, float(ai["angle"]), float(ai["hexes"]))
+		_make_ai(hero, seat, heroes_by_seat[1])
+	for s: Dictionary in _seat_info:
+		if int(s["seat"]) == seat:
+			s["character"] = character
 	if hud != null and player != null:
 		hud.bind(player, allies)   # the ally rows read the new name
 
@@ -2061,11 +2113,38 @@ func _extract_followers(riders: Array[Actor], line: String) -> void:
 	var pay := ContractRun.money(riders.size() * ContractRun.EMPLOYEE_EXTRACTED)
 	if riders.size() == 1:
 		_log("%s extracted  +%s" % [riders[0].display_name, pay], Color(0.6, 1.0, 0.7))
-		hud.show_message("%s is out  +%s" % [riders[0].display_name, pay], Color(0.6, 1.0, 0.7))
 	else:
 		_log("%d employees extracted  +%s" % [riders.size(), pay], Color(0.6, 1.0, 0.7))
-		hud.show_message("%d employees out  +%s" % [riders.size(), pay], Color(0.6, 1.0, 0.7))
+	_dispatch_rescue(riders, pay)
 	_update_tracker()
+
+
+## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
+## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No
+## pay in the line (user, 2026-10-19: "trim all the mentions of {pay}"): every line can be voiced ahead of time.
+const RESCUE_ONE: Array[String] = [
+	"Copy, %s is out.",
+	"%s just walked past my desk.",
+	"Got %s. All fingers accounted for.",
+	"%s is topside and asking for a lawyer.",
+]
+const RESCUE_MANY: Array[String] = [
+	"Copy, %d staff out.",
+	"%d of them just came through.",
+	"Headcount up by %d.",
+]
+
+
+func _dispatch_rescue(riders: Array[Actor], pay: String) -> void:
+	if _banner == null:
+		hud.show_message("%s out  +%s" % [riders[0].display_name if riders.size() == 1 else str(riders.size()), pay], Color(0.6, 1.0, 0.7))
+		return
+	var line: String
+	if riders.size() == 1:
+		line = RESCUE_ONE[GameWorld.fx_rng.randi() % RESCUE_ONE.size()] % riders[0].display_name
+	else:
+		line = RESCUE_MANY[GameWorld.fx_rng.randi() % RESCUE_MANY.size()] % riders.size()
+	_banner.show_line(line, 4.0)
 
 
 ## The drop-off: an employee who is FOLLOWING the crew and gets within DROPOFF_DIST of the van's door or the elevator
@@ -2311,12 +2390,33 @@ func _show_invoice(inv: Dictionary) -> void:
 	if debug_panel != null:
 		debug_panel.visible = false
 	_invoice = InvoiceScreen.new(inv)
+	_invoice.backdrop_behind = _garage_behind()
 	if _crewed():
 		_invoice.next_note = "Takes the whole crew back to the board."   # (M5: anyone's Next does)
 	_screens().add_child(_invoice)
 	_invoice.next_contract.connect(_on_next_contract)
 	if opts.has("shot") and _session != null:
 		_take_shot_later(str(opts["shot"]), 1.5)
+
+
+## The garage behind the invoice (user, 2026-10-19), as behind the job board: the floor's 3D (the world, its look and
+## lights, the camera) is hidden and the same MenuBackdrop comes in. It picks its own mood, so a bad job shows the morning
+## after (LastContract is recorded before the invoice). The floor is frozen and over, so nothing needs it on screen.
+func _garage_behind() -> bool:
+	if _backdrop != null:
+		return true
+	for c in get_children():
+		if c is WorldEnvironment:
+			remove_child(c)   # (one WorldEnvironment at a time: the garage brings its own)
+			c.queue_free()
+		elif c is Node3D:
+			(c as Node3D).visible = false
+	if hud != null:
+		hud.visible = false
+	_backdrop = MenuBackdrop.new()
+	_backdrop.name = "Backdrop"
+	add_child(_backdrop)
+	return true
 
 
 ## "Next contract" on the invoice: back to the job board for a new contract. In a crew ANY player's Next takes everyone
@@ -2765,6 +2865,8 @@ func _take_shot_later(path: String, after: float) -> void:
 
 ## Dev flags --to-gate / --to-exit: move the crew (screenshots).
 func _dev_teleports() -> void:
+	if opts.has("to_hazard") and _to_hazard(str(opts["to_hazard"])):
+		return
 	if opts.has("to_pool") and _to_pool(str(opts["to_pool"])):
 		return
 	if opts.has("to_theme") and _site != null:
@@ -2992,6 +3094,112 @@ func _drop_near() -> void:
 		_log("drop-near: %s %s" % [id, "ok" if p != null else "no floor"], Color(0.8, 0.8, 1.0))
 
 
+## Dev flag --hazard-near kind[,kind...]: explosive props (ExplosiveProp) in a cluster on open floor 3-6 cells from seat 1's
+## hero, each 2.4-3.1 units from the one before (inside its blast: they chain). Built in _start, before the barrier numbers
+## the floor, so every machine of a crew builds the same ones (tests, screenshots).
+func _hazard_near() -> void:
+	if not opts.has("hazard_near"):
+		return
+	var near_hero: Hero = heroes_by_seat.get(1, player) if _shared else player
+	var here := near_hero.current_cell()
+	var level: int = map.get_cell(here).level
+	var cands: Array[Vector2i] = []
+	for c in Hex.range_cells(here, 6):
+		if Hex.distance(c, here) >= 3 and map.is_walkable_cell(c) and map.get_cell(c).level == level:
+			cands.append(c)
+	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var da := Hex.distance(a, here)
+		var db := Hex.distance(b, here)
+		return da < db or (da == db and (a.x < b.x or (a.x == b.x and a.y < b.y))))
+	var placed: Array[Vector3] = []
+	for k in str(opts["hazard_near"]).split(","):
+		var kind := k.strip_edges()
+		for c in cands:
+			var w := Hex.to_world(c)
+			var ok := true
+			var near_last := placed.is_empty()
+			for q in placed:
+				var d := GameWorld.flat_distance(q, w)
+				ok = ok and d >= 2.4
+			if not placed.is_empty():
+				var d_last := GameWorld.flat_distance(placed.back(), w)
+				near_last = d_last >= 2.4 and d_last <= 3.1
+			if not ok or not near_last:
+				continue
+			var e := PricedProp.spawn(c, kind, {})
+			if e != null:
+				placed.append(w)
+				_dev_hazards.append(e)
+			break
+	_log("hazard-near: %d explosive props" % placed.size(), Color(0.8, 0.8, 1.0))
+
+
+## Dev flag --to-hazard kind[:n] ("any": any kind): the crew stands a few steps beside the floor's first (n-th) explosive
+## prop of that kind, and --focus dev puts the camera on it (screenshots).
+func _to_hazard(want: String) -> bool:
+	if _site == null:
+		return false
+	var skip := int(want.get_slice(":", 1)) if want.contains(":") else 0   # kind:n = the n-th of that kind
+	want = want.get_slice(":", 0)
+	for h in _site.hazards:
+		var e := h as ExplosiveProp
+		if e == null or (want != "any" and e.kind != want):
+			continue
+		if skip > 0:
+			skip -= 1
+			continue
+		# off to one side of it (in front, the crew would stand between the camera and the prop)
+		var f := e.facing_vector()
+		var best := Hex.from_world(e.global_position)
+		var best_d := INF
+		for side: float in [1.0, -1.0]:
+			var target := e.global_position + Vector3(f.x, 0.0, f.y) * 1.2 + Vector3(-f.y, 0.0, f.x) * 3.6 * side
+			for c in Hex.range_cells(Hex.from_world(target), 2):
+				var d := Hex.to_world(c).distance_to(target) + (0.0 if side > 0.0 else 0.5)
+				if map.is_walkable_cell(c) and not _site.plan.blocked.has(c) and d < best_d:
+					best_d = d
+					best = c
+		_teleport_crew(best)
+		_dev_hazards.append(e)
+		_log("to-hazard: %s in %s" % [e.display_name, _site.plan.theme_of(str(_site.plan.hazards[_site.hazards.find(h)]["room"]))], Color(0.8, 0.8, 1.0))
+		return true
+	return false
+
+
+## Dev flag --hazard-demo fuse|chain|invoice (with --hazard-near or --to-hazard; screenshots): after --demo-after seconds (1.0)
+## the player sets off the first one. "chain" and "invoice" stand two frozen grunts beside each explosive first;
+## "invoice" cashes out 2.5 s after the last blast, so the invoice shows the bill.
+func _hazard_demo(stage: String) -> void:
+	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
+	var list: Array[ExplosiveProp] = []
+	for h in _dev_hazards:
+		if is_instance_valid(h) and h is ExplosiveProp and not h.dead:
+			list.append(h as ExplosiveProp)
+	if list.is_empty() or player == null:
+		return
+	if stage != "fuse":
+		var k := 0
+		for e in list:
+			for a: float in [0.6, 2.4]:
+				var ang := a + float(k) * 1.1
+				var at := e.global_position + Vector3(cos(ang), 0.0, sin(ang)) * 1.7
+				if not map.is_walkable_cell(Hex.from_world(at)):
+					continue
+				var m := MonsterFactory.spawn("grunt", Hex.from_world(at))
+				if m != null:
+					m.global_position = Vector3(at.x, m.global_position.y, at.z)
+					m.snap_to_ground()
+					m.set_physics_process(false)
+			k += 1
+	list[0].ignite(player)
+	if stage != "invoice":
+		return
+	while list.any(func(e: ExplosiveProp) -> bool: return is_instance_valid(e) and not e.dead):
+		await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(2.5).timeout
+	_end_contract(ContractSession.END_CASHED_OUT)
+
+
 ## Dev flag --kit-demo: show one hero's primary / secondary on the --spawn-near monsters (screenshots).
 func _kit_demo(kind: String) -> void:
 	for ally in allies:   # only the demo hero acts
@@ -3009,7 +3217,10 @@ func _kit_demo(kind: String) -> void:
 		await get_tree().create_timer(1.3).timeout
 		player.release_draw(centre - player.global_position)
 		return
-	var hero: Hero = allies[1] if kind == "hammer" else allies[0]
+	var hero: Hero = allies[0]
+	for h: Hero in allies:   # (by kit, not seat: the AI seats depend on the pick)
+		if h.kit_id == (HeroKit.GASKET if kind == "hammer" else HeroKit.REBAR):
+			hero = h
 	var away := (centre - player.global_position)
 	away.y = 0.0
 	away = away.normalized()
@@ -3093,6 +3304,10 @@ func _dev_centroid() -> Vector3:
 	for m in _dev_monsters:
 		if is_instance_valid(m) and not m.dead:
 			sum += m.global_position
+			count += 1
+	for h in _dev_hazards:   # (--hazard-near / --to-hazard: the explosives)
+		if is_instance_valid(h) and not h.dead:
+			sum += h.global_position
 			count += 1
 	return sum / count if count > 0 else Vector3.INF
 

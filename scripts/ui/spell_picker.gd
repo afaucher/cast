@@ -408,7 +408,7 @@ func _show_spec(id: String) -> void:
 	if _spec == null:
 		return
 	_spec.set_value("copy", _name_of(id).to_upper())
-	_spec.set_value("say", say_of(id))
+	_spec.set_value("say", "\"%s\"" % say_of(id))   # quoted: the words to say (user, 2026-10-19)
 	_spec.set_value("component", _component_of(id))
 	_spec.set_value("cooldown", "%d s" % int(_cooldown_of(id)))
 	_spec.set_value("desc", _desc_of(id))

@@ -129,3 +129,23 @@ Spells stay mainly about combat. These are small extras that cost little:
   can never get stuck.
 - Keep at least one walkable route into each region with no climbing, so the brute
   always has a long way round and climbing stays an escape, not a hiding place.
+
+## Decisions: map information, fog and doors (user, 2026-10-19)
+- **What the player knows:** no site plan, no extra UI. The **next room** (any room next to one the crew can see or has
+  seen) has its layout drawn even before anyone sees into it; rooms beyond that are dark. Contents (monsters, props,
+  loot, employees, hazards, secrets) show only when a hero can see them.
+- **Room fog, not per-cell line of sight.** A room is in view when a hero is in it, or sees into it through an open
+  doorway or from height. A room seen before keeps its layout and last-seen props, dimmed.
+- **Monsters out of sight are hidden** (no last-known ghosts).
+- **No minimap.**
+- **Doors, first pass: office doors only.** Walk into one to open it, E to shut it; a shut door blocks sight and
+  muffles noise, and a brute smashes through (billed). Fire/blast doors and locked doors are later.
+- The vantage-point and shared-reveal ideas above still apply (a reveal by one player is everyone's).
+- **Door look (2026-10-19, after three lab rounds):** doors belong to the room wall, not the hex terrain: the door
+  stands on the chord between the corridor's two jambs, at the wall's height. Built from hex parts they "looked even
+  more off". The **double door** (cream leaves, push bars, lit green sign) with a **gunmetal** frame is the default.
+  Only narrow corridors get doors; wide hallways always meet their room open; opening a door is a noise.
+- **Doorway floor (2026-10-19):** the cells the door line passes through get a **diamond tread-plate threshold**, with
+  the room's floor on one side and the corridor's on the other. Open archways keep their floors as they are, for now.
+- **Fog look (2026-10-19, played in the fog lab):** look **A, black void**: unknown spaces are the background, next
+  spaces a dark silhouette with traced edges, seen spaces desaturated and darkened. The user: "that is perfect."

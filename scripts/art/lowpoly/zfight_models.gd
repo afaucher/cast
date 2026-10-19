@@ -7,8 +7,8 @@ extends RefCounted
 ## on the hex floor (its origin is the floor top), so it is also checked against an upward plane at y = 0.
 ## STACKS: models placed together the way the game places them (mail package stacks, the van on its chalk circle,
 ## the summoning circle on its rug). Only fights BETWEEN the placed models are new there (each one alone is a MODEL).
-## Whole scenes (a generated floor with its decor vignettes, priced props, notes and package stacks against the real
-## hex terrain and walls; the menu garage) are scan_site() and scan_menu().
+## Whole scenes (a generated floor with its decor vignettes, priced props, notes, package stacks and the monster under each
+## gate room (HellgateBeast) against the real hex terrain and walls; the menu garage) are scan_site() and scan_menu().
 ##
 ##   for e in ZFightModels.models(): ...
 ##   var found := await ZFightModels.scan(self)     # every model and stack: Array of findings (ZFightCheck) + "scene"
@@ -234,7 +234,7 @@ static func scan_site(parent: Node, archetype: String, seed_value: int, floor_n:
 	view.build(map)
 	await parent.get_tree().process_frame
 	var ts := ZFightCheck.TriSet.new()
-	var groups: Array = [site.decor, site.props, site.packages, site.notes]
+	var groups: Array = [site.decor, site.props, site.hazards, site.packages, site.notes, site.beasts]   # (beasts: the monster under each gate room)
 	for g: Array in groups:
 		for n in g:
 			if n is Node3D and is_instance_valid(n):

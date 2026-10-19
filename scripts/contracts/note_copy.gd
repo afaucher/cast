@@ -192,7 +192,7 @@ const DISPATCH := {
 	3: [
 		"The {origin}'s on this floor. Close the big gate and the whole site goes quiet.",
 		"This is where it started, in the {origin}. Close the gate there and every other gate stops with it.",
-		"The big gate is in the {origin}. Closing it stops the site; only the elevator clocks you out.",
+		"The big gate is in the {origin}. Closing it stops the site.",
 	],
 }
 

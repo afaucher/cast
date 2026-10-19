@@ -85,7 +85,7 @@ func _test_primaries() -> void:
 	var expect := {
 		"wick": {"dmg": 12.0, "cd": 0.4, "reach": 1.3, "arc": 90.0, "shove": 0.7},
 		"gasket": {"dmg": 28.0, "cd": 0.65, "reach": 1.5, "arc": 90.0, "shove": 0.9},
-		"rebar": {"dmg": 26.0, "cd": 0.8, "reach": 1.8, "arc": 120.0, "shove": 1.0},
+		"rebar": {"dmg": 15.0, "cd": 0.8, "reach": 1.8, "arc": 120.0, "shove": 1.6},
 	}
 	for id: String in expect:
 		var e: Dictionary = expect[id]
@@ -122,8 +122,9 @@ func _test_primaries() -> void:
 		var frames_cd := int(float(e["cd"]) * 60.0)
 		await frames(maxi(0, frames_cd - 40) + 2)
 		check(hero.melee(Vector3.RIGHT), "%s swings again once the cooldown is up" % id)
-	# The three feel different: Gasket hits hardest, Rebar reaches farthest, Wick is quickest.
-	check(28.0 > 26.0 and 26.0 > 12.0, "damage order Gasket > Rebar > Wick")
+	# The three feel different: Gasket hits hardest, Rebar reaches farthest and shoves hardest, Wick is quickest.
+	check(HeroKit.DATA["gasket"]["melee_damage"] > HeroKit.DATA["rebar"]["melee_damage"] and HeroKit.DATA["rebar"]["melee_damage"] > HeroKit.DATA["wick"]["melee_damage"], "damage order Gasket > Rebar > Wick")
+	check(HeroKit.DATA["rebar"]["melee_shove"] > HeroKit.DATA["gasket"]["melee_shove"], "Rebar shoves hardest")
 	check(HeroKit.DATA["wick"]["melee_cooldown"] < HeroKit.DATA["gasket"]["melee_cooldown"], "Wick swings faster than Gasket")
 	check(HeroKit.DATA["gasket"]["melee_cooldown"] < HeroKit.DATA["rebar"]["melee_cooldown"], "Gasket swings faster than Rebar")
 
@@ -393,7 +394,7 @@ func _test_proto_and_models() -> void:
 	var rebar := _kit_hero("rebar", Vector2i(2, 0), null)
 	var d2 := _dummy(rebar.global_position + Vector3(1.6, 0, 0))
 	check(rebar.melee(Vector3.RIGHT), "proto Rebar punches")
-	near(d2.hp, d2.max_hp - 26.0, 0.001, "for 26")
+	near(d2.hp, d2.max_hp - 15.0, 0.001, "for 15")
 
 
 # --- HUD bars use the hero's own max HP ------------------------------------------------------
@@ -422,7 +423,7 @@ func _test_hud_bars() -> void:
 # --- AllyBrain melee uses the hero's own primary ---------------------------------------------
 
 func _test_ally_primaries() -> void:
-	var cases := {"gasket": 28.0, "rebar": 26.0}
+	var cases := {"gasket": 28.0, "rebar": 15.0}
 	for id: String in cases:
 		_fresh()
 		var leader := Hero.new()
