@@ -23,6 +23,7 @@ func setup() -> void:
 	await _check_van_exit()
 	await _check_use_prompt()
 	await _check_elevator_floors()
+	await _check_downed_stays_behind()
 	await _check_incapacitated()
 	finish()
 
@@ -364,6 +365,46 @@ func _check_use_prompt() -> void:
 	g2.queue_free()
 	await frames(3)
 	GAME.reset_flow()
+
+
+## A hero who is down when the crew rides the elevator stays behind (user, 2026-10-18): on the next floor it is still down
+## but neither rides the car nor shows, and a downed player watches a living ally. The revival is still billed at the end.
+func _check_downed_stays_behind() -> void:
+	for who in ["ally", "player"]:
+		var g := _make_game({"contract": 1, "seed": 5})
+		add_child(g)
+		await frames(10)
+		var seats: Dictionary = g.get("heroes_by_seat")
+		var down: Hero = g.get("player") if who == "player" else seats[2]
+		down.apply_damage(999999.0)
+		await frames(2)
+		check(down.dead, "%s: down on floor 1" % who)
+		# what _use_elevator(true) does before the scene reloads
+		var s: ContractSession = g.get("_session")
+		s.save_carry(g.call("_heroes"))
+		s.floor_number += 1
+		g.queue_free()
+		await frames(2)
+		var g2: Node3D = load("res://scripts/app/game.gd").new()   # (the reload: same flow, no reset)
+		g2.set("opts", {"no_mic": true, "spells": "heal,corn"})
+		add_child(g2)
+		await frames(10)
+		eq(g2.get("_session").floor_number, 2, "%s: on floor 2" % who)
+		var seats2: Dictionary = g2.get("heroes_by_seat")
+		var player2: Hero = g2.get("player")
+		var down2: Hero = player2 if who == "player" else seats2[2]
+		check(down2.dead and not down2.visible, "%s: still down, and the body stayed upstairs (hidden)" % who)
+		var lift: ElevatorArrival = g2.get("_lift")
+		check(lift != null and lift.crew.size() == 2 and not lift.crew.has(down2), "%s: only the living two rode the elevator" % who)
+		for h: Hero in g2.call("_heroes"):
+			if h != down2:
+				check(h.visible and not h.dead, "%s: %s arrived" % [who, h.display_name])
+		if who == "player":
+			var rig: Node = g2.get("rig")
+			check(rig.target != null and rig.target != player2 and not (rig.target as Hero).dead, "a downed player watches a living ally")
+		g2.queue_free()
+		await frames(2)
+		GAME.reset_flow()
 
 
 ## The elevator on floors 2 and 3: floor 2 offers going down and exit, floor 3 offers exit only. Neither floor has a van or an

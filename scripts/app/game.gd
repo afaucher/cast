@@ -1101,8 +1101,10 @@ func _arrive_by_elevator() -> void:
 	if _floor_n() > VAN_FLOOR:
 		# the car's spots: seat 1 (Wick) in the middle, seat 3 (Gasket) left, seat 2 (Rebar) right, on every machine alike
 		for seat: int in [1, 3, 2]:
-			if heroes_by_seat.has(seat):
-				arriving.append(heroes_by_seat[seat])
+			if heroes_by_seat.has(seat) and not _session.carried_down(heroes_by_seat[seat]):
+				arriving.append(heroes_by_seat[seat])   # (a downed hero stayed behind on the floor above)
+		if _session.carried_down(player):
+			_follow_living_ally()   # a downed player watches the crew step out
 	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_lift = ElevatorArrival.spawn(_site.plan.elevator, _floor_n(), arriving, _heroes(), play)
@@ -1630,10 +1632,14 @@ func _hide_wait() -> void:
 		_wait_label.visible = false
 
 
-## Heroes arrive as the previous floor left them (HP, downed). A downed player hands the camera to a living ally.
+## Heroes arrive as the previous floor left them (HP, downed). A downed hero's body stayed on the floor above, so it is
+## hidden here (on every machine: the hiding is local, `carried_down` is each machine's own carry), and a downed player
+## hands the camera to a living ally. There is still no mid-contract revival; corporate bills the revival at the end.
 func _apply_carry() -> void:
 	for h in _heroes():
 		_session.apply_carry(h)
+		if _session.carried_down(h):
+			h.visible = false
 	if player.dead:
 		controller.enabled = false
 		_follow_living_ally()

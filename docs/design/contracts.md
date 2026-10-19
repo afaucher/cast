@@ -93,7 +93,9 @@ The comedy and the "well-oiled team" score live here, and payout could later buy
 9. **Crew revival fee [decided, user, 2026-10-17]:** corporate revives every crew member who is **down when the contract
    ends**, and bills the client **$10,000 each**. It covers every hero, the player's own included (online every hero is
    a player), and it is charged only at the end: cashing out at the elevator or the van with an ally down bills that
-   ally, and an incapacitated ending (all three down) bills 3 x $10,000. There is no mid-contract revival.
+   ally, and an incapacitated ending (all three down) bills 3 x $10,000. There is no mid-contract revival. A hero down when the crew takes the elevator
+   stays behind with its body (user, 2026-10-18): it does not ride down or show on the next floor, and its player watches a
+   living ally (`ContractSession.carried_down`, `Game._apply_carry`).
    - **Not capped, not floored.** It does not share the property-damage cap and it is not clamped at $0, so the
      **net payout can go negative**. This deliberately changes the old "pay never goes below $0" rule, for revival fees
      only. If you die, you pay.

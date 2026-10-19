@@ -105,6 +105,14 @@ func apply_carry(hero: Hero) -> bool:
 	return false
 
 
+## True when `hero` was down as the crew left the previous floor: its body stays behind there (user, 2026-10-18: "in
+## co-op they would want to watch, but not have their corpse follow us"), so on this floor it neither rides the
+## elevator nor shows. Every machine saves its own carry, so each knows (a puppet's `dead` is replicated).
+func carried_down(hero: Hero) -> bool:
+	var c: Variant = carry.get(carry_key(hero))
+	return c is Dictionary and bool((c as Dictionary).get("dead", false))
+
+
 # --- Objectives ----------------------------------------------------------------------------
 
 ## A hellgate was closed. Pays the small-gate rate, or the origin rate for the origin gate.
