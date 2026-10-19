@@ -19,9 +19,10 @@ extends RefCounted
 ## THE DOOR PLACE (on the hex grid, never at an angle; only a NARROW doorway has one, the user's rule: a wide hallway
 ## always meets its room open): the DOORWAY CELL `cell` (the corridor's one full cell there, on its centre lane, its centre
 ## `center`), the BAND (that cell and the two cut cells beside it on the room side, cell + DIRS[axis +/- 2]: a chevron
-## that closes the corridor wall to wall), `edges` (the hex edges between the band and the room, clipped to the floor: the
-## edge door's line) and `a` / `b` (wall face to wall face through the doorway cell's centre, across the axis: the column
-## and iris doors' sight line). `door_ok` says it has all of that on one level floor.
+## that closes the corridor wall to wall), `edges` (the hex edges between the band and the room, clipped to the floor), and
+## the DOOR LINE: `a` / `b`, the two JAMBS where the corridor's wall faces end at the room (wall corners), `center` their
+## middle on the floor. The door stands on that chord, in the room's wall line (`flush`: the room wall runs straight past
+## both jambs; false at a bend, where the chord cuts straight across the corner). `door_ok` says it has all of that.
 ##
 ##   var sp := Doorways.spaces(map)          # {cell_space, cells, kind, order}
 ##   var dws := Doorways.find(map, sp)       # [{id, room, hall, door_cells, mouth_cells, mid, axis, width, narrow, dead_end,
@@ -34,6 +35,8 @@ const SPAN_TO := 3.9            ## the last one
 const SPAN_MAX := 4.9           ## a corridor is at most this wide (a tree-link corridor is 4.5 between its walls)
 const SPAN_MIN := 2.0
 const NARROW_MAX := 3.6         ## a corridor this wide or less is NARROW (one full lane, 3.0): only those take a door
+const JAMB_SEARCH := 4.5        ## how far back toward the room a corridor wall is followed to its end (the jamb)
+const JAMB_SPAN_MAX := 5.2      ## a door chord longer than this (a very oblique mouth) is no door place
 const MARCH := 0.04             ## the step of the march out to each wall face
 const MARCH_MAX := 3.4
 
@@ -300,8 +303,6 @@ static func _door_place(map: HexMap, dw: Dictionary, sp: Dictionary, p: Vector3,
 	var d2 := _march(map, center, -perp)
 	if d1 < 0.0 or d2 < 0.0 or not _level_between(map, center + perp * d1, center - perp * d2):
 		return
-	var a := center + perp * d1
-	var b := center - perp * d2
 	# the hex edges between the band and the room side, clipped to the floor
 	var inband := {}
 	for c in band:
@@ -319,12 +320,68 @@ static func _door_place(map: HexMap, dw: Dictionary, sp: Dictionary, p: Vector3,
 			if not seg.is_empty():
 				edges.append(seg)
 	dw["cell"] = best
-	dw["center"] = center
 	dw["band"] = band
 	dw["edges"] = edges
-	dw["a"] = Vector2(a.x, a.z)
-	dw["b"] = Vector2(b.x, b.z)
+	# The jambs: where the corridor's two wall faces end at the room (each a wall corner, so a hex centre). The door spans
+	# the chord between them, in the room's wall line: flush with it where the room wall runs straight past the opening,
+	# a straight chord across the corner where the opening sits at a bend (`flush` false).
+	var jl := _jamb(map, center, perp, d1, axis)
+	var jr := _jamb(map, center, -perp, d2, axis)
+	if jl == Vector3.INF and jr == Vector3.INF:
+		return
+	# One corridor wall runs straight on as the room's wall: that jamb is the foot on it, square across from the other.
+	if jl == Vector3.INF:
+		jl = center - axis * (jr - center).dot(-axis) + perp * d1
+	elif jr == Vector3.INF:
+		jr = center - axis * (jl - center).dot(-axis) - perp * d2
+	var chord := jr - jl
+	if chord.length() > JAMB_SPAN_MAX or not _level_between(map, jl.lerp(jr, 0.04), jl.lerp(jr, 0.96)):
+		return
+	var dc := (jl + jr) * 0.5
+	dc.y = map.ground_height(dc)
+	dw["center"] = dc
+	dw["a"] = Vector2(jl.x, jl.z)
+	dw["b"] = Vector2(jr.x, jr.z)
+	dw["flush"] = _flush(map, jl, jr, axis)
 	dw["door_ok"] = not edges.is_empty()
+
+
+## Walk back from the doorway cell toward the room along one corridor wall (at `dist` along `side`) to where the wall
+## face ends: the jamb, snapped to the wall corner (a hex centre). Vector3.INF when the wall runs on past JAMB_SEARCH.
+static func _jamb(map: HexMap, center: Vector3, side: Vector3, dist: float, axis: Vector3) -> Vector3:
+	var s := 0.0
+	while s <= JAMB_SEARCH:
+		var outside := center - axis * s + side * (dist + 0.1)
+		if not map.wall_at(outside):
+			var p := center - axis * maxf(0.0, s - MARCH * 0.5) + side * dist
+			var hc := Hex.to_world(Hex.from_world(p))
+			if Vector2(hc.x - p.x, hc.z - p.z).length() < 0.35:
+				p = Vector3(hc.x, p.y, hc.z)
+			return p
+		s += MARCH
+	return Vector3.INF
+
+
+## Do the room's wall faces either side of the opening run along the chord (one straight wall), or turn (a bend)?
+static func _flush(map: HexMap, jl: Vector3, jr: Vector3, axis: Vector3) -> bool:
+	var t := Vector2(jr.x - jl.x, jr.z - jl.z).normalized()
+	var found := 0
+	for j: Vector3 in [jl, jr]:
+		var segs := map.segments_near(j, 0.9)
+		var i := 0
+		while i < segs.size():
+			var sa: Vector2 = segs[i]
+			var sb: Vector2 = segs[i + 1]
+			var n: Vector2 = segs[i + 2]
+			i += 3
+			var dir := (sb - sa).normalized()
+			if n.dot(Vector2(-axis.x, -axis.z)) < 0.2:
+				continue   # (a corridor face, or the back of something)
+			if minf(sa.distance_to(Vector2(j.x, j.z)), sb.distance_to(Vector2(j.x, j.z))) > 0.05:
+				continue
+			if absf(dir.dot(t)) > 0.995:
+				found += 1
+	return found >= 2
 
 
 ## The part of the segment p -> q on the floor side (judged a touch toward `inside`): [Vector2, Vector2], or [] if none.

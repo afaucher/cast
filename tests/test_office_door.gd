@@ -1,10 +1,10 @@
 ﻿extends TestCase
-## Office doors (OfficeDoor, DoorPlan, HexDoorModel; docs/design/exploration.md "Decisions: map information, fog and doors", 2026-10-19) on the row floor
+## Office doors (OfficeDoor, DoorPlan, OfficeDoorModel; docs/design/exploration.md "Decisions: map information, fog and doors", 2026-10-19) on the row floor
 ## of test_room_fog with NARROW halls (one full lane, 3.0 wide): room A, a short hall, room B, a long hall, room C, a long
 ## hall, room D. Walking opens a door, E shuts it, a shut door blocks sight (monsters' and the fog's) and halves a sound's
 ## reach, a hero opening one is heard in the room behind (a monster opening one is not), monsters open it on their way
 ## through, a chasing brute smashes it (billed once); wide halls never get a door; the plan is seeded and keeps its share;
-## all three looks block and open. Doors are host / solo only this round (OfficeDoor.NETWORKED is false): no net test yet.
+## all three looks block and open; the door stands on the jambs' chord. Doors are host / solo only this round (OfficeDoor.NETWORKED is false): no net test yet.
 
 const RowMap := preload("res://tests/test_room_fog.gd")
 
@@ -24,7 +24,7 @@ func setup() -> void:
 	Ledger.begin_contract(50000)
 	dws = Doorways.find(map)
 	for dw in dws:
-		doors.append(OfficeDoor.spawn(dw, "column", true))
+		doors.append(OfficeDoor.spawn(dw, "single", true))
 	await frames(2)
 	for d in doors:
 		check(d != null and d.shut and not d.broken, "every doorway of the narrow row floor takes a door, shut")
@@ -156,7 +156,7 @@ func _walk_opens() -> void:
 	check(float(seen["gap"]) <= OfficeDoor.TOUCH + 0.1, "... when the hero reached it (%.2f from the door)" % float(seen["gap"]))
 	check(not map.blockers.has("door:%d" % d.doorway_id), "an open door blocks no sight")
 	await frames(30)
-	check(d.open_k > 0.99, "it finished opening (sunk into the floor)")
+	check(d.open_k > 0.99, "it finished opening (the leaf swung)")
 	check(d.model.open_k > 0.99, "the model shows it open")
 	_clear([h])
 	await frames(2)
@@ -182,7 +182,7 @@ func _e_shuts() -> void:
 	check(map.blockers.has("door:%d" % d.doorway_id), "a shut door is a sight blocker")
 	eq(d.use_verb(), "Open door", "... and the prompt now opens it")
 	await frames(40)
-	check(d.open_k < 0.01, "it rose shut")
+	check(d.open_k < 0.01, "it swung shut")
 	check(d.use(h), "E opens a shut door")
 	check(not d.shut, "open again")
 	check(d.use(h), "and E shuts it once more")
@@ -332,7 +332,7 @@ func _brute_smashes() -> void:
 
 # 8. The three looks: each blocks sight shut, clears it open, and breaks.
 func _styles() -> void:
-	for pair: Array in [["edge", 4], ["iris", 5]]:
+	for pair: Array in [["double", 4], ["slider", 5]]:
 		var i: int = pair[1]
 		doors[i].queue_free()
 		await frames(1)
@@ -351,9 +351,7 @@ func _styles() -> void:
 		check(d.model.open_k < 0.01, "%s: shut again" % pair[0])
 		d.smash(null)
 		check(d.model.broken and map.line_of_sight(room_side, hall_side), "%s: smashed, it blocks nothing" % pair[0])
-	var iris := doors[5]
-	check(map.solids.size() >= 2, "the iris's fixed jambs stop bodies (solids)")
-	check(iris.style == "iris", "(iris)")
+	eq(doors[5].style, "slider", "(the slider)")
 
 
 var _probes: Array[Hero] = []

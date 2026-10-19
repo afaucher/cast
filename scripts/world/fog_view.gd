@@ -154,11 +154,11 @@ func _door_cells(d: OfficeDoor) -> void:
 	var dw: Dictionary = fog.doorways[d.doorway_id]
 	var room := int(dw["ri"])
 	var hall := int(dw["hi"])
-	var c0 := Hex.to_world(d.cell)
-	for c in Hex.range_cells(d.cell, 3):
+	var c0 := d.center()
+	for c in Hex.range_cells(d.cell, 4):
 		if fog.space_of_cell(c) != hall:
 			continue
-		if (Hex.to_world(c) - c0).dot(d.axis) > 1.8:   # (the band and the row past it: no fog seam across the door)
+		if (Hex.to_world(c) - c0).dot(d.axis) > 1.0:   # (up to a cell past the door line: no fog seam across the door)
 			continue
 		var x := c.x - _cells_rect.x
 		var y := c.y - _cells_rect.y

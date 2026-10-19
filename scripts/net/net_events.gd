@@ -72,9 +72,10 @@ const WORLD_CARRIES := {
 		"charges": "obj.pickup / obj.pick (NetObjects)", "_used": "obj.gone (NetObjects)",
 	},
 	# Office doors (exploration.md "Decisions: map information, fog and doors", 2026-10-19): NOT SENT YET, doors are host / solo only (OfficeDoor.NETWORKED).
-	# Planned: a client's walk-in or E is obj.req {what "door", id, shut}; the host decides and sends obj.door {id, s, x}.
+	# Planned: a client's walk-in or E is obj.req {what "door", id, shut}; the host decides and sends obj.door {id, s, w, x}.
 	"res://scripts/contracts/office_door.gd": {
-		"shut": "planned: obj.door {id, s} from the host (doors are host / solo only so far)",
+		"shut": "planned: obj.door {id, s, w} from the host (doors are host / solo only so far)",
+		"swing": "planned: obj.door {id, s, w} from the host: which way the leaves swing (doors are host / solo only so far)",
 		"broken": "planned: obj.door {id, x} from the host, with its Ledger line as obj.ledger (doors are host / solo only so far)",
 	},
 	"res://scripts/spells/chicken.gd": {

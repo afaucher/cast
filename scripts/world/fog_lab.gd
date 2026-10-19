@@ -7,7 +7,7 @@
 ##   godot --path . -- --scene res://scenes/fog_lab.tscn [--seed 7] [--look a|b|c]
 ##   godot --path . --resolution 1920x1080 -- --scene res://scenes/fog_lab.tscn --shot <dir>    (the screenshots, then quits)
 ##
-## Keys: 1 / 2 / 3 the looks (A black void, B blueprint, C smoke), 4 / 5 / 6 the doors (column, edge, iris), 0 fog off / on, WASD walk Wick (the crew follows), E the
+## Keys: 1 / 2 / 3 the looks (A black void, B blueprint, C smoke), 4 / 5 / 6 the doors (single, double, slider), 0 fog off / on, WASD walk Wick (the crew follows), E the
 ## door in reach (shut / open), B a brute behind the nearest shut door comes for Wick and smashes it, R forget what was
 ## seen, L space labels. The monsters stand frozen (the lab is about what shows, not the fight); the brute is live.
 
@@ -240,7 +240,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_0:
 			fog_view.enabled = not fog_view.enabled
 		KEY_4, KEY_5, KEY_6:
-			door_style = HexDoorModel.STYLES[k.physical_keycode - KEY_4]
+			door_style = OfficeDoorModel.STYLES[k.physical_keycode - KEY_4]
 			_spawn_doors()
 		KEY_E:
 			var d := OfficeDoor.interact_target(wick)
@@ -375,9 +375,16 @@ func _shots() -> void:
 			if bool(dw["door_ok"]):
 				dw_show = dw
 				break
-	# 1. The door variants side by side (column | edge | iris), shut, opening, open, smashed, from the room side.
-	if only == "" or only == "variants":
-		await _door_variants(dw_show)
+	# 1. The door variants side by side (single | double | slider), shut, opening, open, smashed, from the room side, at
+	#    the doorway that faces the camera best (a door seen edge-on shows only its frame's top).
+	if only == "variants":   # (run it on a floor whose doorways face the camera: --seed 2)
+		await _door_variants(_facing_doorway(false))
+		finish_shots()
+		return
+	if only == "bend":
+		await _bend_shot(_facing_doorway(true))
+		finish_shots()
+		return
 		_spawn_doors()
 		fog.seen.fill(0)
 		_place_crew_at(Hex.to_world(map.cells_with_tag("start")[0]))
@@ -385,6 +392,9 @@ func _shots() -> void:
 	# 2. A wide hall's open archway: from hall:4 the room past it (room:5) is in view, contents and all.
 	var dw_a := doorway("room:0", "hall:4")
 	var dw_b := doorway("room:5", "hall:4")
+	if dw_a.is_empty() or dw_b.is_empty() or seed_value != 7:
+		finish_shots()   # (the staged walk below is seed 7's floor)
+		return
 	await walk_to(cell_off(dw_a, 2.5))
 	await walk_to(cell_off(dw_b, 3.2))
 	await _settle()
@@ -446,8 +456,52 @@ func _shots() -> void:
 	finish_shots()
 
 
+## The narrow doorway whose door faces the camera best from its room side (`bend`: the longest chord among those facing it
+## well: a doorway at a bend in the room wall).
+func _facing_doorway(bend: bool) -> Dictionary:
+	var cam := Vector2(1, 1).normalized()   # (CameraRig.YAW_DEG 45: the camera sits toward +X +Z)
+	var best := {}
+	var best_s := -INF
+	for dw in fog.doorways:
+		if not bool(dw["door_ok"]):
+			continue
+		var t := ((dw["b"] as Vector2) - (dw["a"] as Vector2)).normalized()
+		var n := Vector2(-t.y, t.x)
+		if n.dot(Vector2((dw["axis"] as Vector3).x, (dw["axis"] as Vector3).z)) > 0.0:
+			n = -n   # (into the room)
+		var score := n.dot(cam)
+		if bend:
+			score = (dw["a"] as Vector2).distance_to(dw["b"]) if score > 0.5 else -INF
+		if score > best_s:
+			best_s = score
+			best = dw
+	print("fog lab: showcase doorway %s (%s|%s), chord %.2f" % [best.get("id"), best.get("room"), best.get("hall"),
+		(best["a"] as Vector2).distance_to(best["b"]) if not best.is_empty() else 0.0])
+	return best
+
+
+## A door across a bend in the room wall (the chord between the jambs cuts across the corner): shut and open, close and at
+## the game camera, fog look A.
+func _bend_shot(dw: Dictionary) -> void:
+	await walk_to(cell_off(dw, -3.4, 0.0))
+	_crew_behind(-(dw["axis"] as Vector3))
+	var d := door_at(int(dw["id"]), door_style)
+	await _settle()
+	rig.target = d
+	for st in ["shut", "open"]:
+		if st == "open":
+			d.request(false, wick)
+			await _until(func() -> bool: return false, 30)
+		for view in ["game", "close"]:
+			var size := CameraRig.SIZE_DEFAULT if view == "game" else 9.0
+			rig.camera.size = size
+			rig._zoom_target = size
+			rig.snap()
+			await _snap("doors_v3_bend_%s_%s" % [st, view])
+
+
 ## The three door looks at one doorway, four states each; one strip per state, column | edge | iris, at the game camera
-## (doors_v2_<state>.png) and close up (doors_v2_close_<state>.png). The crew stands back in the room.
+## (doors_v3_<state>.png) and close up (doors_v3_close_<state>.png). The crew stands back in the room.
 func _door_variants(dw: Dictionary) -> void:
 	await walk_to(cell_off(dw, -3.4, 0.0))
 	_staging = true                               # (the followers stand where they are put)
@@ -472,7 +526,7 @@ func _door_variants(dw: Dictionary) -> void:
 	tag.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.04))
 	tag.add_theme_constant_override("outline_size", 7)
 	caption.get_parent().add_child(tag)
-	var styles := HexDoorModel.STYLES
+	var styles := OfficeDoorModel.STYLES
 	for style in styles:
 		for n in GameWorld.root.get_children():
 			if n is PropDebris:
@@ -501,6 +555,11 @@ func _door_variants(dw: Dictionary) -> void:
 				await _until(func() -> bool: return false, 2)
 				var vs := get_viewport().get_visible_rect().size
 				var sp := rig.camera.unproject_position(d.center() + Vector3.UP * CameraRig.FOCUS_HEIGHT)
+				if st == "shut" and view == "game":
+					tag.visible = false
+					var whole := await _grab()
+					whole.save_png(shot_dir.path_join("doors_v3_floor_%s.png" % style))   # (the whole frame: on a real floor, fog look A)
+					tag.visible = true
 				var img := await _grab()
 				var k := float(img.get_width()) / vs.x      # (the window's content scale: the image is in its pixels)
 				var x0 := clampi(int(sp.x * k) - 320, 0, img.get_width() - 640)
@@ -523,7 +582,7 @@ func _door_variants(dw: Dictionary) -> void:
 			var part: Image = shots[key][i]
 			part.convert(Image.FORMAT_RGBA8)
 			strip.blit_rect(part, Rect2i(0, 0, 640, 760), Vector2i(640 * i, 0))
-		var file := "doors_v2_%s.png" % key.trim_prefix("game_") if key.begins_with("game_") else "doors_v2_%s.png" % key
+		var file := "doors_v3_%s.png" % key.trim_prefix("game_") if key.begins_with("game_") else "doors_v3_%s.png" % key
 		var out := shot_dir.path_join(file)
 		print("shot ", out, " ", strip.save_png(out))
 

@@ -1,4 +1,4 @@
-class_name ZFightModels
+﻿class_name ZFightModels
 extends RefCounted
 ## Every model builder and every composition ZFightCheck scans (tests/test_zfight.gd; tools/zfight_scan.tscn writes the
 ## full ranked report). Dev / test only; nothing in the game calls it.
@@ -52,9 +52,10 @@ static func models() -> Array[Dictionary]:
 			out.append({"name": "lobby/%s/%s" % [look, kind], "make": ElevatorLobbyProps.build.bind(kind, look, {}), "ground": true})
 	out.append({"name": "hellgate", "make": HellgateModel.make.bind(false), "ground": true})
 	out.append({"name": "hellgate/origin", "make": HellgateModel.make.bind(true), "ground": true})
-	for style: String in HexDoorModel.STYLES:
-		for st: Array in [["shut", 0.0, false], ["half", 0.5, false], ["open", 1.0, false], ["smashed", 0.0, true]]:
-			out.append({"name": "door/%s/%s" % [style, st[0]], "make": HexDoorModel.sample.bind(style, float(st[1]), bool(st[2])), "ground": true})
+	for style: String in OfficeDoorModel.STYLES:
+		for w in [3.0, 4.58]:   # (square across a narrow corridor, and the longest common chord across a bend)
+			for st: Array in [["shut", 0.0, false], ["half", 0.5, false], ["open", 1.0, false], ["smashed", 0.0, true]]:
+				out.append({"name": "door/%s/%s/w%.1f" % [style, st[0], w], "make": _door.bind(style, w, float(st[1]), bool(st[2])), "ground": true})
 	for style: String in EmployeeModel.STYLES:
 		for v in [0, 1, 2]:
 			out.append({"name": "employee/%s#%d" % [style, v], "make": func() -> Node3D: return EmployeeModel.new(style, v), "ground": true})
@@ -91,6 +92,16 @@ static func stacks() -> Array[Dictionary]:
 
 
 # --------------------------------------------------------------------------- builders
+
+static func _door(style: String, w: float, k: float, smashed: bool) -> Node3D:
+	var d := OfficeDoorModel.make(style, w, 1.5)
+	d.set_open(k, 1.0)
+	if smashed:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 5
+		d.show_broken(1.0, rng)
+	return d
+
 
 static func _bit(kind: String) -> Node3D:
 	var n := PackageModels.bit(kind, 3)

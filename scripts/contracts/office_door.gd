@@ -1,10 +1,10 @@
 ﻿class_name OfficeDoor
 extends Node3D
-## OFFICE DOOR (docs/design/exploration.md, "Decisions: map information, fog and doors", 2026-10-19): a
-## door on the hex grid of a NARROW doorway (Doorways' door place: the doorway cell, the band of it and the two cut cells
-## beside it, the hex edges between the band and the room). Which doorways get one is DoorPlan's. Its look is one of
-## HexDoorModel's STYLES ("column" sinks into the floor, "edge" is a wall piece on the hex edges that slides down, "iris"
-## is six triangular leaves that draw back to the rim).
+## OFFICE DOOR (docs/design/exploration.md, "Decisions: map information, fog and doors", 2026-10-19): a door in
+## the ROOM WALL at a NARROW doorway, on Doorways' door line (the chord between the two jambs where the corridor's walls
+## end at the room), filling it jamb to jamb at the wall's height. Which doorways get one is DoorPlan's. Its look is one of
+## OfficeDoorModel's STYLES ("single" swing door with a wired-glass light and a lever handle, "double" doors with push
+## bars and a lit sign, a frosted glass "slider" suite front with a logo band).
 ##
 ##   WALK INTO IT  a hero (or anyone who is not a monster) walking into a shut door opens it at once. A MONSTER walking
 ##                 into it stops for MONSTER_DELAY (rooted, the door shudders) and then opens it: pathing needs nothing
@@ -33,7 +33,7 @@ const GROUP := "office_doors"
 const NETWORKED := false        ## doors are host / solo only this round (see the header)
 const LABEL := "Office door"
 const PRICE := 900              ## the Ledger line when a brute smashes one
-const DEFAULT_STYLE := "column"
+const DEFAULT_STYLE := "single"
 const OPEN_TIME := 0.32
 const SHUT_TIME := 0.45
 const TOUCH := 0.5              ## a body this close to the door (past its radius) and walking toward it opens it
@@ -48,17 +48,17 @@ const SCAN_MARGIN := 2.6        ## actors this far past the door's half width ar
 # Spawn data: from the doorway (Doorways), the same on every machine.
 var doorway_id := -1
 var style := DEFAULT_STYLE
-var cell := Vector2i.ZERO       ## the doorway cell
+var cell := Vector2i.ZERO       ## the doorway cell (the corridor's first full cell past the door)
 var axis := Vector3.FORWARD     ## unit X/Z from the room into the hall
-var a := Vector2.ZERO           ## world X/Z: wall face to wall face through the doorway cell's centre (the sight line)
+var a := Vector2.ZERO           ## world X/Z: the jambs; the door (and its sight blocker) stands on a -> b
 var b := Vector2.ZERO
-var edges: Array = []           ## the band's room-side hex edges [[Vector2, Vector2], ...] (the edge door's sight line)
-var plane := 0.0                ## where the door stands along the axis from the cell's centre (- = the room side) ...
-var half := 0.866               ## ... and how deep it is either side of that
+var height := 1.5               ## the wall height above the floor
+var half := 0.16                ## how deep the door is either side of its line
 var width := 3.0
 # The host decides these (OWNER).
 var shut := true
 var broken := false
+var swing := 1                  ## +1: the leaves swing toward the hall side, -1 toward the room (away from the opener)
 # The host's working state (PRIVATE).
 var _hold: Dictionary = {}      ## monster instance id -> GameWorld.time it started opening the door
 var _last: Dictionary = {}      ## actor instance id -> last flat position in the door's frame (Vector2): who walks toward it
@@ -67,7 +67,7 @@ var _smash_t := -1.0
 # Presentation (LOCAL).
 var open_k := 0.0               ## 0 shut .. 1 open
 var hold_k := -1.0              ## >= 0: the look stays at this open_k (the lab's "opening" shot)
-var model: HexDoorModel = null
+var model: OfficeDoorModel = null
 var _rattle := 0.0
 
 static var _actors_frame := -1
@@ -79,8 +79,8 @@ static var _warned := false
 func net_fields() -> Dictionary:
 	return {
 		"doorway_id": Net.SPAWN, "style": Net.SPAWN, "cell": Net.SPAWN, "axis": Net.SPAWN, "a": Net.SPAWN, "b": Net.SPAWN,
-		"edges": Net.SPAWN, "plane": Net.SPAWN, "half": Net.SPAWN, "width": Net.SPAWN,
-		"shut": Net.OWNER, "broken": Net.OWNER,
+		"height": Net.SPAWN, "half": Net.SPAWN, "width": Net.SPAWN,
+		"shut": Net.OWNER, "broken": Net.OWNER, "swing": Net.OWNER,
 		"_hold": Net.PRIVATE, "_last": Net.PRIVATE, "_smasher": Net.PRIVATE, "_smash_t": Net.PRIVATE,
 		"open_k": Net.LOCAL, "hold_k": Net.LOCAL, "model": Net.LOCAL, "_rattle": Net.LOCAL,
 	}
@@ -97,22 +97,32 @@ static func spawn(dw: Dictionary, door_style: String = DEFAULT_STYLE, start_shut
 	d.axis = dw["axis"]
 	d.a = dw["a"]
 	d.b = dw["b"]
-	d.edges = dw["edges"]
+	# (+Z of the door's frame must point into the hall: a -> b runs so that (a -> b) x UP does)
+	var t := (d.b - d.a).normalized()
+	if Vector2(-t.y, t.x).dot(Vector2(d.axis.x, d.axis.z)) < 0.0:
+		var tmp := d.a
+		d.a = d.b
+		d.b = tmp
 	d.width = (d.b - d.a).length()
+	d.height = _wall_height(dw)
 	d.shut = start_shut
 	d.open_k = 0.0 if start_shut else 1.0
 	d.name = "OfficeDoor%d" % d.doorway_id
-	if door_style == "edge":
-		var s := 0.0
-		for e: Array in d.edges:
-			var m: Vector2 = ((e[0] as Vector2) + (e[1] as Vector2)) * 0.5
-			var c := Hex.to_world(d.cell)
-			s += (Vector2(m.x - c.x, m.y - c.z)).dot(Vector2(d.axis.x, d.axis.z))
-		d.plane = s / maxf(1.0, float(d.edges.size()))
-		d.half = 0.12
 	GameWorld.spawn(d, dw["center"])
-	d._model_for(dw)
 	return d
+
+
+## The wall height beside the door (the band's cut cells' wall top over the floor), 1.5 by default.
+static func _wall_height(dw: Dictionary) -> float:
+	var map := GameWorld.map
+	var best := 0.0
+	if map != null:
+		var lv := map.get_cell(dw["cell"]).level
+		for c: Vector2i in dw.get("band", []):
+			var hc: HexMap.Cell = map.get_cell(c)
+			if hc != null and hc.wall_mask != 0:
+				best = maxf(best, float(hc.wall_top - lv) * Hex.LEVEL_HEIGHT)
+	return best if best > 0.5 else 1.5
 
 
 ## Every door on the floor.
@@ -147,42 +157,29 @@ static func interact_target(hero: Actor) -> OfficeDoor:
 
 func _ready() -> void:
 	add_to_group(GROUP)
-	_apply_blocker()
-	if style == "iris":
-		_add_jamb_solids()
-
-
-func _model_for(dw: Dictionary) -> void:
-	model = HexDoorModel.new()
+	var t := (b - a).normalized()
+	var tx := Vector3(t.x, 0.0, t.y)
+	global_transform = Transform3D(Basis(tx, Vector3.UP, tx.cross(Vector3.UP)), global_position)
+	model = OfficeDoorModel.make(style, width, height)
 	add_child(model)
-	model.setup(GameWorld.map, dw, style)
-	model.set_open(open_k)
+	model.set_open(open_k, float(swing))
 	_apply_blocker()
 
 
 func _exit_tree() -> void:
 	if GameWorld.map != null:
-		for k in _blocker_keys():
-			GameWorld.map.clear_blocker(k)
+		GameWorld.map.clear_blocker(_key())
 
 
-func _blocker_keys() -> Array[String]:
-	var out: Array[String] = []
-	if style == "edge":
-		for i in edges.size():
-			out.append("door:%d:%d" % [doorway_id, i])
-	else:
-		out.append("door:%d" % doorway_id)
-	return out
+func _key() -> String:
+	return "door:%d" % doorway_id
 
 
-## A world point in the door's flat frame: x across the corridor (0 = the doorway cell's centre line), y along the axis
-## from the door (+ = the hall side).
+## A world point in the door's flat frame: x along the door line (0 = its middle), y across it (+ = the hall side).
 func local_flat(p: Vector3) -> Vector2:
-	var c := Hex.to_world(cell)
-	var q := Vector2(p.x - c.x, p.z - c.z)
-	var ax := Vector2(axis.x, axis.z)
-	return Vector2(q.dot(Vector2(-ax.y, ax.x)), q.dot(ax) - plane)
+	var q := Vector2(p.x - (a.x + b.x) * 0.5, p.z - (a.y + b.y) * 0.5)
+	var t := (b - a).normalized()
+	return Vector2(q.dot(t), q.dot(Vector2(-t.y, t.x)))
 
 
 func center() -> Vector3:
@@ -191,7 +188,7 @@ func center() -> Vector3:
 
 ## Where the use prompt floats.
 func prompt_point() -> Vector3:
-	return global_position + Vector3.UP * (model.height + 0.45 if model != null else 1.9) + axis * plane
+	return global_position + Vector3.UP * (height + 0.5)
 
 
 func use_verb() -> String:
@@ -232,11 +229,15 @@ func request(want_shut: bool, by: Node) -> bool:
 	return false
 
 
-## The host's decision (and what every machine shows once it is told). A hero opening it makes a noise.
+## The host's decision (and what every machine shows once it is told). Opening, the leaves swing away from whoever opened
+## it; a hero opening it makes a noise.
 func _decide(want_shut: bool, by: Node) -> void:
 	if broken or want_shut == shut:
 		return
 	shut = want_shut
+	if not want_shut:
+		var side := local_flat((by as Node3D).global_position).y if by is Node3D else -1.0
+		swing = -1 if side > 0.0 else 1
 	_hold.clear()
 	_apply_blocker()
 	if not want_shut and Net.owns(self) and not (by is Monster):
@@ -248,47 +249,11 @@ func _apply_blocker() -> void:
 	var map := GameWorld.map
 	if map == null:
 		return
-	var on := shut and not broken
-	var top := global_position.y + (model.height if model != null else 1.5)
-	if style == "edge":
-		for i in edges.size():
-			var key := "door:%d:%d" % [doorway_id, i]
-			if on:
-				map.set_blocker(key, edges[i][0], edges[i][1], top)
-			else:
-				map.clear_blocker(key)
-		return
-	var key2 := "door:%d" % doorway_id
-	if on:
+	if shut and not broken:
 		var t := (b - a).normalized() * 0.08   # a touch into each wall face, so a line grazing the jamb is caught
-		map.set_blocker(key2, a - t, b + t, top)
+		map.set_blocker(_key(), a - t, b + t, global_position.y + height)
 	else:
-		map.clear_blocker(key2)
-
-
-## The iris's fixed jambs (the cut cells beside the doorway cell) stop bodies: a solid per open kite.
-func _add_jamb_solids() -> void:
-	var map := GameWorld.map
-	if map == null:
-		return
-	var ax_i := 0
-	for i in 6:
-		if Hex.dir_vector(i).dot(axis) > 0.99:
-			ax_i = i
-	for k in [ax_i + 2, ax_i + 4]:
-		var c: Vector2i = cell + Hex.DIRS[posmod(k, 6)]
-		var hc: HexMap.Cell = map.get_cell(c)
-		if hc == null:
-			continue
-		var w := Hex.to_world(c)
-		for kite in 6:
-			if (hc.wall_mask >> kite) & 1 == 1:
-				continue
-			var poly := PackedVector2Array()
-			for o in [Vector3.ZERO, Hex.edge_mid(kite), Hex.kite_corner(kite), Hex.edge_mid((kite + 1) % 6)]:
-				poly.append(Vector2(w.x + o.x, w.z + o.z))
-			map.add_solid(poly)
-
+		map.clear_blocker(_key())
 
 # --- The host: who walks into it -------------------------------------------------------------------------------------
 
@@ -411,15 +376,15 @@ func smash(by: Node) -> void:
 	if Net.owns(self):
 		Ledger.damage(LABEL, PRICE, by)
 		MonsterSenses.noise(global_position + Vector3.UP * 0.2, SMASH_NOISE, "door_smash", [by] if by != null else [])
-	var away := axis
+	var away := 1.0
 	if by is Node3D:
 		var side := local_flat((by as Node3D).global_position).y
-		away = -axis * signf(side) if side != 0.0 else axis
+		away = -signf(side) if side != 0.0 else 1.0
 	if model != null:
 		model.show_broken(away, GameWorld.fx_rng)
 	if GameWorld.root != null and GameWorld.root.is_inside_tree():
-		PropDebris.burst(global_position + Vector3.UP * 0.6 + away * 0.3,
-				[Color(0.62, 0.63, 0.67), Color(0.4, 0.41, 0.45), HexMapView.SEAM_COLOR], 18, 1.1)
+		var n := global_transform.basis.z
+		PropDebris.burst(global_position + Vector3.UP * 0.6 + n * away * 0.3, model.palette() if model != null else [Color.WHITE], 20, 1.1)
 	smashed.emit(self, by)
 	state_changed.emit(self)
 
@@ -436,7 +401,7 @@ func _animate(delta: float) -> void:
 		var rate := 1.0 / (SHUT_TIME if shut else OPEN_TIME)
 		open_k = move_toward(open_k, want, rate * delta)
 	_rattle = maxf(0.0, _rattle - delta)
-	model.set_open(open_k)
+	model.set_open(open_k, float(swing))
 	if _rattle > 0.0 and open_k < 0.05:
 		model.position = Vector3(sin(Time.get_ticks_msec() * 0.07), 0.0, cos(Time.get_ticks_msec() * 0.09)) * 0.03 * minf(1.0, _rattle * 4.0)
 	else:
