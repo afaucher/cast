@@ -307,8 +307,9 @@ elevator's landing: `ElevatorGeo` (`scripts/world/elevator_geo.gd`) places the c
 free-standing) and writes `HexMap.elevator`, its solids (`HexMap.solids`: convex polygons the collision queries treat
 like wall faces) and its `HexMap.no_stand` cells; `ElevatorArrival` (`scripts/contracts/elevator_arrival.gd`) builds the
 model and the crew's arrival. See `docs/design/elevator-options.md`, "Built".
-Pools: `PoolGeo` (`scripts/world/pool_geo.gd`) carves an in-ground pool into the indoor pool and mad-science rooms
-(`SiteBuilder.plan`, after the themes are dealt): basin cells one level down and ring cells cut along midpoint lines
+Pools: `PoolGeo` (`scripts/world/pool_geo.gd`) carves an in-ground pool into the indoor pool and science rooms and a
+moat ring (water between a convex outline and a convex island, its `hole`) into the shark moat rooms (`SiteBuilder.plan`,
+after the themes are dealt): basin cells one level down and ring cells cut along midpoint lines
 (`Cell.pool_mask` / `pool_level`, `HexMap.pools`, `HexMap.water_at`). `HexMapView` draws them in its inset mode and
 `PoolView` (`scripts/world/pool_view.gd`) adds the water, coping and dressing; `Wading` (`scripts/world/wading.gd`) slows
 and soaks whoever stands in the water. See `docs/design/pool-options.md`, "Built".

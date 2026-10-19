@@ -1,7 +1,7 @@
 extends MonsterTestBase
 ## In-ground pools (docs/design/pool-options.md, "Built"; PoolGeo, HexMap pool cells, HexMapView's inset drawing, PoolView,
 ## Wading):
-##  - generated floors: the indoor pool and mad-science rooms get a pool (most of them), deterministic per seed and in the
+##  - generated floors: the indoor pool, science and shark moat rooms get a pool (most of them), deterministic per seed and in the
 ##    floor checksum; every pool is convex on the midpoint grid (its pool kites are exactly the triangles inside its outline,
 ##    every corner 120 degrees on a hex centre); the water keeps clear of the doors and corridors, the start, the exit and
 ##    the elevator, the van, the gates and the employees, with dry deck all round; props, decor, notes, mail and monsters
@@ -13,12 +13,20 @@ extends MonsterTestBase
 ##  - networking: only the actor's owner soaks it (a copy is left to the owner's NetStatus announcement);
 ##  - AI: an ally follows its leader through the pool, a monster chases across it, an employee follows through it;
 ##  - view: HexMapView builds the pool floor, the liner and PoolView's water and coping.
+##  - MOAT (the shark moat: a ring of water round an island; a convex "shark pool" in the moat's look where no ring
+##    fits): its water cells form one closed ring round a dry island,
+##    one body of water with no rim, liner or step across it (every rim line lies on the outline or the island's rim),
+##    both rims convex with 120-degree corners on hex centres, the channel one row wide; walkable in and out over every
+##    outer and island edge (A* and a walking body reach the island and leave it); the wading and wet rules apply in the
+##    channel; its two fins patrol the channel, in the water all the way round.
 
 const RUN_SEEDS: Array[int] = [1, 2, 3, 4, 5, 7, 42]
 const DT := 1.0 / 60.0
 
 var _pools := 0
 var _pool_rooms := 0
+var _moats := 0
+var _shark_pools := 0
 
 
 func setup() -> void:
@@ -34,7 +42,9 @@ func setup() -> void:
 	await _check_ai()
 	await _check_site_spawn()
 	_check_view()
-	print("pools: %d pools in %d pool rooms over the generated floors" % [_pools, _pool_rooms])
+	await _check_moat()
+	print("pools: %d pools (%d moat rings, %d shark pools) in %d pool rooms over the generated floors" % [_pools, _moats, _shark_pools, _pool_rooms])
+	check(_moats >= 5, "the generated floors have moats to check (%d)" % _moats)
 	finish()
 
 
@@ -121,18 +131,33 @@ func _check_pool(map: HexMap, plan: SitePlan, rec: Dictionary, tag: String) -> v
 	near(float(rec["surface_y"]) - float(rec["floor_level"]) * Hex.LEVEL_HEIGHT, HexMap.WATER_DEPTH, 0.001, "%s: wading depth" % label)
 	var outline: Array = rec["outline"]
 	var poly := PackedVector2Array(outline)
-	# convex, every corner a 120-degree turn on a hex centre, every edge along a midpoint line (0 / 60 / 120 degrees)
-	check(PoolGeo.area(poly) > 0.0, "%s: the outline winds counter-clockwise" % label)
-	for i in outline.size():
-		var a: Vector2 = outline[(i - 1 + outline.size()) % outline.size()]
-		var b: Vector2 = outline[i]
-		var c: Vector2 = outline[(i + 1) % outline.size()]
-		var turn := rad_to_deg((b - a).angle_to(c - b))
-		near(turn, 60.0, 0.5, "%s: corner %d turns 60 degrees (a 120-degree corner)" % [label, i])
-		var hc := Hex.to_world(Hex.from_world(Vector3(b.x, 0.0, b.y)))
-		check(Vector2(hc.x, hc.z).distance_to(b) < 0.001, "%s: corner %d is on a hex centre" % [label, i])
-		var ang := fposmod(rad_to_deg((c - b).angle()), 60.0)
-		check(ang < 0.5 or ang > 59.5, "%s: edge %d runs along a midpoint line" % [label, i])
+	var hole_a: Array = rec.get("hole", [])
+	var hole := PackedVector2Array(hole_a)
+	if not hole.is_empty():
+		eq(str(rec["look"]), PoolGeo.LOOK_MOAT, "%s: only a moat has an island" % label)
+	# convex, every corner a 120-degree turn on a hex centre, every edge along a midpoint line (0 / 60 / 120 degrees);
+	# a moat's island the same
+	var rims: Array = [outline, hole_a] if not hole.is_empty() else [outline]
+	for ri in rims.size():
+		var rim: Array = rims[ri]
+		var rl := label + (" island" if ri == 1 else "")
+		check(PoolGeo.area(PackedVector2Array(rim)) > 0.0, "%s: the outline winds counter-clockwise" % rl)
+		for i in rim.size():
+			var a: Vector2 = rim[(i - 1 + rim.size()) % rim.size()]
+			var b: Vector2 = rim[i]
+			var c: Vector2 = rim[(i + 1) % rim.size()]
+			var turn := rad_to_deg((b - a).angle_to(c - b))
+			near(turn, 60.0, 0.5, "%s: corner %d turns 60 degrees (a 120-degree corner)" % [rl, i])
+			var hc := Hex.to_world(Hex.from_world(Vector3(b.x, 0.0, b.y)))
+			check(Vector2(hc.x, hc.z).distance_to(b) < 0.001, "%s: corner %d is on a hex centre" % [rl, i])
+			var ang := fposmod(rad_to_deg((c - b).angle()), 60.0)
+			check(ang < 0.5 or ang > 59.5, "%s: edge %d runs along a midpoint line" % [rl, i])
+	if not hole.is_empty():
+		var normals := PoolGeo.edge_normals(outline)
+		for i in hole.size():
+			check(Geometry2D.is_point_in_polygon(hole[i], poly), "%s: island corner %d lies inside the outline" % [label, i])
+			for e: int in [(i - 1 + outline.size()) % outline.size(), i]:
+				near(((outline[e] as Vector2) - hole[i]).dot(normals[e]), PoolGeo.ROW, 0.001, "%s: the channel is one row wide at island corner %d" % [label, i])
 	# the pool kites are exactly the triangles inside the outline; basin cells wholly inside, at the pool floor
 	for bc: Vector2i in (rec["basin"] as Array):
 		var cell: HexMap.Cell = map.cells[bc]
@@ -143,8 +168,8 @@ func _check_pool(map: HexMap, plan: SitePlan, rec: Dictionary, tag: String) -> v
 				"%s: ring cell %s is cut between deck and pool" % [label, rc])
 		for k in 6:
 			var tri := (_xz(Hex.to_world(rc)) + _xz(Hex.to_world(rc + Hex.DIRS[k])) + _xz(Hex.to_world(rc + Hex.DIRS[(k + 1) % 6]))) / 3.0
-			var inside := Geometry2D.is_point_in_polygon(tri, poly)
-			eq(inside, (cell.pool_mask >> k) & 1 == 1, "%s: kite %d of %s is pool exactly inside the outline" % [label, k, rc])
+			var inside := Geometry2D.is_point_in_polygon(tri, poly) and (hole.is_empty() or not Geometry2D.is_point_in_polygon(tri, hole))
+			eq(inside, (cell.pool_mask >> k) & 1 == 1, "%s: kite %d of %s is pool exactly inside the outline (and outside an island)" % [label, k, rc])
 			# the same triangle has the same state in all its cells
 			var nb: Vector2i = rc + Hex.DIRS[k]
 			var nbc: HexMap.Cell = map.cells.get(nb)
@@ -185,8 +210,23 @@ func _check_pool(map: HexMap, plan: SitePlan, rec: Dictionary, tag: String) -> v
 			check(map.no_stand.has(lc), "%s: a gantry leg's cell is no_stand" % label)
 			check(map.blocks_point(Hex.to_world(lc)), "%s: a gantry leg blocks bodies" % label)
 			check(not map.is_pool_cell(lc), "%s: a gantry leg stands on the deck" % label)
-	else:
+	elif str(rec["look"]) == PoolGeo.LOOK_POOL:
 		check(gantry.is_empty() and not (rec["ladder"] as Dictionary).is_empty(), "%s: an indoor pool has a ladder, no gantry" % label)
+	else:
+		check(gantry.is_empty() and (rec["ladder"] as Dictionary).is_empty(), "%s: a moat has no ladder and no gantry" % label)
+		if not hole.is_empty():
+			_moats += 1
+			_check_ring(map, rec, label)
+		else:
+			# no ring fitted: a shark pool, its fins circling inside the rim
+			_shark_pools += 1
+			var loop := PoolGeo.channel(rec)
+			var dry_pts := 0
+			for k in loop.size():
+				var p: Vector2 = loop[k].lerp(loop[(k + 1) % loop.size()], 0.5)
+				if not map.water_at(Vector3(loop[k].x, 0.0, loop[k].y)) or not map.water_at(Vector3(p.x, 0.0, p.y)):
+					dry_pts += 1
+			check(loop.size() >= 3 and dry_pts == 0, "%s: a shark pool's fins circle in the water" % label)
 
 
 static func _xz(v: Vector3) -> Vector2:
@@ -496,7 +536,7 @@ func _check_site_spawn() -> void:
 ## HexMapView draws the pool: tiled pool floor and liner surfaces, PoolView's water and coping per pool, a gantry over a
 ## specimen pool, a ladder by an indoor pool.
 func _check_view() -> void:
-	for theme in ["pool", "mad_science"]:
+	for theme in ["pool", "science", "moat"]:
 		var w := _pool_world(theme)
 		var m: HexMap = w[0]
 		var view := HexMapView.new()
@@ -505,7 +545,9 @@ func _check_view() -> void:
 		if view.pool_view != null:
 			eq(view.pool_view.waters.size(), m.pools.size(), "%s: a water surface per pool" % theme)
 			eq(view.pool_view.copings.size(), m.pools.size(), "%s: a coping per pool" % theme)
-			check(view.pool_view.get_node_or_null("Gantry" if theme == "mad_science" else "Ladder") != null, "%s: its dressing" % theme)
+			var dressing := {"pool": "Ladder", "science": "Gantry", "moat": "Fin0"}
+			check(view.pool_view.get_node_or_null(String(dressing[theme])) != null, "%s: its dressing" % theme)
+			eq(view.pool_view.fins.size(), 2 if theme == "moat" else 0, "%s: shark fins in a moat only" % theme)
 			var wm := view.pool_view.waters[0].material_override as ShaderMaterial
 			var alpha := float(wm.get_shader_parameter("alpha"))
 			check(alpha >= 0.55 and alpha <= 0.7, "%s: the water is translucent (alpha %.2f)" % [theme, alpha])
@@ -516,3 +558,189 @@ func _check_view() -> void:
 				pool_surf = true
 		check(pool_surf, "%s: the terrain mesh has the tiled pool floor and liner" % theme)
 		view.free()
+
+
+# --- the moat ---------------------------------------------------------------------------------------------------------
+
+## The ring of a moat record: its water cells are one connected ring, closed round a dry island (the island's dry cells
+## reach the room's floor only across water), one body of water: the channel's middle line is water all the way round
+## at one surface, and every rim line (a spoke where a cell's kites change between deck and pool) lies on the outline or
+## on the island's rim, so there is no rim, liner or step anywhere across the water.
+func _check_ring(map: HexMap, rec: Dictionary, label: String) -> void:
+	var wet := {}
+	for c: Vector2i in (rec["basin"] as Array) + (rec["ring"] as Array):
+		wet[c] = true
+	# connected
+	var start: Vector2i = wet.keys()[0]
+	var seen := {start: true}
+	var todo: Array[Vector2i] = [start]
+	while not todo.is_empty():
+		var c: Vector2i = todo.pop_back()
+		for d in Hex.DIRS:
+			if wet.has(c + d) and not seen.has(c + d):
+				seen[c + d] = true
+				todo.append(c + d)
+	eq(seen.size(), wet.size(), "%s: the water cells are one connected ring" % label)
+	# closed: the dry cells inside never reach the dry cells outside
+	var hole := PackedVector2Array(rec["hole"] as Array)
+	var outline := PackedVector2Array(rec["outline"] as Array)
+	var island: Array[Vector2i] = []
+	for c: Vector2i in map.cells:
+		if not wet.has(c) and Geometry2D.is_point_in_polygon(_xz(Hex.to_world(c)), hole):
+			island.append(c)
+	if check(not island.is_empty(), "%s: a dry island in the middle" % label):
+		var reach := {island[0]: true}
+		var q: Array[Vector2i] = [island[0]]
+		var escaped := false
+		while not q.is_empty() and not escaped:
+			var c: Vector2i = q.pop_back()
+			for d in Hex.DIRS:
+				var nb: Vector2i = c + d
+				if wet.has(nb) or reach.has(nb) or not map.cells.has(nb):
+					continue
+				if not Geometry2D.is_point_in_polygon(_xz(Hex.to_world(nb)), outline):
+					escaped = true
+				reach[nb] = true
+				q.append(nb)
+		check(not escaped, "%s: the ring is closed (the island meets the room's floor only across water)" % label)
+	# one body of water: the channel's middle is wet all the way round, at one surface
+	var path := PoolGeo.channel(rec)
+	var total := 0.0
+	for i in path.size():
+		total += path[i].distance_to(path[(i + 1) % path.size()])
+	var dry_pts := 0
+	for k in 200:
+		var p: Vector2 = DecorAnim.path_pose(path, total, total * float(k) / 200.0)[0]
+		var p3 := Vector3(p.x, 0.0, p.y)
+		if not map.water_at(p3) or absf(map.water_surface(p3) - float(rec["surface_y"])) > 0.001:
+			dry_pts += 1
+	eq(dry_pts, 0, "%s: the channel is water all the way round, at one surface" % label)
+	# no rim across the water: every deck / pool change lies on the outline or on the island's rim
+	var off := 0
+	for c: Vector2i in wet:
+		var m: int = map.cells[c].pool_mask
+		for d in 6:
+			if ((m >> d) & 1) == ((m >> posmod(d - 1, 6)) & 1):
+				continue
+			var mid := _xz(Hex.to_world(c) + Hex.edge_mid(d) * 0.5)
+			if _dist_to_rim(mid, rec["outline"]) > 0.001 and _dist_to_rim(mid, rec["hole"]) > 0.001:
+				off += 1
+	eq(off, 0, "%s: no rim, liner or step inside the water (every rim line is on the outline or the island's rim)" % label)
+
+
+static func _dist_to_rim(p: Vector2, rim: Array) -> float:
+	var best := INF
+	for i in rim.size():
+		var a: Vector2 = rim[i]
+		var b: Vector2 = rim[(i + 1) % rim.size()]
+		best = minf(best, p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)))
+	return best
+
+
+## A synthetic moat room: the ring, a step in and out over every outer and island edge, A* to the island and back, a
+## body wading across the channel onto the island and back off it (slowed and soaked on the way), the fins.
+func _check_moat() -> void:
+	for radius in [7, 9]:
+		var w := _pool_world("moat", radius)
+		var m: HexMap = w[0]
+		var rec := _pool(m)
+		if not check(not rec.is_empty() and str(rec["look"]) == PoolGeo.LOOK_MOAT, "moat room %d: the moat is carved" % radius):
+			continue
+		_check_ring(m, rec, "moat room %d" % radius)
+		eq((rec["hole"] as Array).size(), 6, "moat room %d: a hexagonal island" % radius)
+	var w2 := _pool_world("moat", 9)
+	var map: HexMap = w2[0]
+	var mo := _pool(map)
+	if mo.is_empty():
+		return
+	var outline: Array = mo["outline"]
+	var hole: Array = mo["hole"]
+	var ctr: Vector2 = mo["center"]
+	var island := Hex.from_world(Vector3(ctr.x, 0.0, ctr.y))
+	check(not map.water_at(Vector3(ctr.x, 0.0, ctr.y)) and map.is_walkable_cell(island), "the island's middle is dry floor")
+	# every edge, outside and round the island: a step down into the water and up out of it
+	var steps_ok := 0
+	var steps := 0
+	for ri in 2:
+		var rim: Array = outline if ri == 0 else hole
+		var normals := PoolGeo.edge_normals(rim)
+		var water_side := -1.0 if ri == 0 else 1.0   # (round the island the water is outside its rim)
+		for i in rim.size():
+			var mid: Vector2 = ((rim[i] as Vector2) + (rim[(i + 1) % rim.size()] as Vector2)) * 0.5
+			var nrm: Vector2 = normals[i] * water_side
+			var dry := Vector3(mid.x - nrm.x * 0.3, 0.0, mid.y - nrm.y * 0.3)
+			var wet_p := Vector3(mid.x + nrm.x * 0.4, 0.0, mid.y + nrm.y * 0.4)
+			steps += 1
+			if not map.water_at(dry) and map.water_at(wet_p) and map.movement_check(dry, wet_p) == HexMap.Move.OK \
+					and map.movement_check(wet_p, dry) == HexMap.Move.OK and not map.blocks_point(dry, 0.4) and not map.blocks_point(wet_p, 0.4):
+				steps_ok += 1
+	eq(steps_ok, steps, "every moat edge (outside and round the island) is a step into the water and out (%d of %d)" % [steps_ok, steps])
+	# A* (no climbing) from every side of the room to the island and back
+	var onormals := PoolGeo.edge_normals(outline)
+	for i in outline.size():
+		var nrm: Vector2 = onormals[i]
+		var mid: Vector2 = ((outline[i] as Vector2) + (outline[(i + 1) % outline.size()] as Vector2)) * 0.5 + nrm * 2.2
+		var out := Hex.from_world(Vector3(mid.x, 0.0, mid.y))
+		check(not map.find_path(out, island, false).is_empty(), "A* reaches the island from edge %d" % i)
+		check(not map.find_path(island, out, false).is_empty(), "A* leaves the island over edge %d" % i)
+	# a body walks from the room's floor across the channel onto the island, and back off it
+	new_world(map)
+	var a := Actor.new()
+	a.team = GameWorld.TEAM_HEROES
+	a.move_speed = 4.0
+	var m0: Vector2 = ((outline[0] as Vector2) + (outline[1] as Vector2)) * 0.5
+	var outside := Vector3(m0.x + onormals[0].x * 1.4, 0.0, m0.y + onormals[0].y * 1.4)
+	GameWorld.spawn(a, outside)
+	await frames(2)
+	a.snap_to_ground()
+	var to_island := (Vector3(ctr.x, 0.0, ctr.y) - outside).normalized()
+	var waded := false
+	var slowed := false
+	var soaked := false
+	var reached := false
+	for _f in 400:
+		a.move(to_island, DT)
+		Wading.tick()
+		if map.water_at(a.global_position):
+			waded = true
+			slowed = slowed or is_equal_approx(a.effective_speed(), 4.0 * Wading.SPEED_MULT)
+			soaked = soaked or Wet.is_wet(a)
+		if GameWorld.flat_distance(a.global_position, Vector3(ctr.x, 0.0, ctr.y)) < 0.4:
+			reached = true
+			break
+	check(waded and reached, "a body wades across the moat onto the island (waded %s, reached %s)" % [waded, reached])
+	check(slowed, "wading in the moat is 0.75x")
+	check(soaked, "wading in the moat soaks")
+	near(a.global_position.y, float(mo["deck_level"]) * Hex.LEVEL_HEIGHT, 0.05, "up on the island's deck")
+	var back := false
+	for _f in 400:
+		a.move(-to_island, DT)
+		Wading.tick()
+		if GameWorld.flat_distance(a.global_position, outside) < 0.4:
+			back = true
+			break
+	check(back, "and wades back off the island to the room's floor")
+	check(Wet.is_wet(a) and Wet.remaining(a) > SpellBook.DAMP_SOAK - 3.0, "still wet after stepping out of the moat")
+	near(a.effective_speed(), 4.0, 0.001, "full speed on the room's floor")
+	a.queue_free()
+	await frames(1)
+	# the fins patrol the channel, in the water all the way
+	var view := HexMapView.new()
+	view.build(map)
+	if check(view.pool_view != null and view.pool_view.fins.size() == 2, "the moat has two fins"):
+		var fa: DecorAnim = null
+		for ch in view.pool_view.fins[0].get_children():
+			if ch is DecorAnim:
+				fa = ch
+		if check(fa != null and fa.fin_path.size() == 6, "a fin follows the channel's middle line"):
+			var total := 0.0
+			for i in fa.fin_path.size():
+				total += fa.fin_path[i].distance_to(fa.fin_path[(i + 1) % fa.fin_path.size()])
+			var out_pts := 0
+			for k in 120:
+				var p: Vector2 = DecorAnim.path_pose(fa.fin_path, total, total * float(k) / 120.0)[0]
+				if not map.water_at(Vector3(p.x, 0.0, p.y)):
+					out_pts += 1
+			eq(out_pts, 0, "the fin's patrol stays in the water")
+			near(fa.fin_y, float(mo["surface_y"]), 0.001, "the fin rides the water surface")
+	view.free()

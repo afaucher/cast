@@ -18,7 +18,7 @@ const SERVICE := "service_entrance"     ## the start room's theme
 
 const POOLS := {
 	"bunker": ["wine_cellar", "home_cinema", "spa", "gym", "server_room", "panic_room", "pool"],
-	"lair": ["torture_chamber", "throne_room", "lab", "barracks", "moat", "mad_science"],
+	"lair": ["torture_chamber", "throne_room", "lab", "barracks", "moat", "science"],
 }
 
 ## Story origin ("where it started", ClientArchetype events) -> the theme of the floor-3 origin room.
@@ -53,7 +53,7 @@ const ORIGIN_KEYWORDS := {
 	"server": "server_room", "data": "server_room", "panic": "panic_room", "vault": "panic_room",
 	"torture": "torture_chamber", "dungeon": "torture_chamber", "throne": "throne_room", "stage": "throne_room",
 	"vat": "lab", "lab": "lab", "barrack": "barracks", "moat": "moat", "shark": "moat",
-	"science": "mad_science", "specimen": "mad_science",
+	"science": "science", "specimen": "science",
 }
 
 ## id -> {name, site, min_cells (the smallest room it is dealt), priced (PricedProp kinds it prefers),
@@ -171,19 +171,22 @@ const THEMES := {
 		"light": {"color": Color(0.95, 0.85, 0.4), "energy": 5.6, "range": 8.5, "flicker": 0.0},
 	},
 	"moat": {
-		"name": "Shark moat", "site": "lair", "min_cells": 80, "avoid_exit": true,
+		## a ring of wading water round an island (PoolGeo, LOOK_MOAT: real terrain, carved by SiteBuilder before the decor)
+		## with two shark fins patrolling it, its bridge pulled back onto the deck and a fin hazard sign
+		"name": "Shark moat", "site": "lair", "min_cells": 80, "avoid_exit": true, "needs_center": true,
 		"priced": ["shark_tank"],
 		"recipe": [
 			{"op": "moat"},
 		],
 		"light": {"color": Color(0.2, 0.85, 0.8), "energy": 6.8, "range": 9.0, "flicker": 0.2},
 	},
-	"mad_science": {
-		## a green specimen pool (PoolGeo, the gantry with its dangling cage over it), specimen tanks, a lab bench, a console,
-		## pipes and shelves
-		"name": "Mad science lab", "site": "lair", "min_cells": 80, "needs_center": true,
+	"science": {
+		## a green specimen pool (PoolGeo, the gantry with its dangling cage over it), the SCIENCE sign, specimen tanks, a lab
+		## bench, a console, pipes and shelves
+		"name": "Science", "site": "lair", "min_cells": 80, "needs_center": true,
 		"priced": ["specimen_vat", "doomsday_console"],
 		"recipe": [
+			{"op": "sign", "text": "SCIENCE", "color": Color(0.72, 1.0, 0.22)},
 			{"op": "specimen_pool"},
 			{"op": "tanks"},
 			{"op": "pipes"},
@@ -228,7 +231,7 @@ const DECOR := {
 	"lab_console": {"place": "wall", "orient": "away_from_wall", "w": 1.55, "d": 1.0, "h": 1.9, "blocks": true, "weight": 1.0},
 	"pipe_run": {"place": "wall", "orient": "away_from_wall", "w": 3.4, "d": 0.45, "h": 1.0, "blocks": false, "weight": 0.5},
 	"hazard_sign": {"place": "group", "orient": "face_target", "w": 0.9, "d": 0.3, "h": 1.85, "blocks": false, "weight": 0.3},
-	"moat_water": {"place": "center", "orient": "face_entrance", "w": 5.0, "d": 5.0, "h": 0.1, "blocks": false, "weight": 1.2},
+	"moat_bridge": {"place": "group", "orient": "face_target", "w": 1.4, "d": 2.3, "h": 0.2, "blocks": false, "weight": 0.5},
 	"shark_fin": {"place": "ring", "orient": "free", "w": 0.4, "d": 0.8, "h": 0.6, "blocks": false, "weight": 0.2},
 	"red_carpet": {"place": "floor", "orient": "away_from_wall", "w": 1.5, "d": 5.0, "h": 0.05, "blocks": false, "weight": 0.5},
 	"tasting_table": {"place": "center", "orient": "face_entrance", "w": 1.5, "d": 1.5, "h": 1.0, "blocks": true, "weight": 1.0},

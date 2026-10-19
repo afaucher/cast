@@ -8,6 +8,9 @@ extends RefCounted
 ## in front of something that faces it; a vignette that does not fit is rolled back whole.
 
 const SEAT_JITTER := 8.0          ## degrees; the rule allows 10, the test 15
+## The moat's pulled-back bridge starts this far from the rim: past the rim cells (their deck reaches Hex.SIZE out), so
+## it lies on plain floor.
+const MOAT_BRIDGE_GAP := Hex.SIZE + 0.05
 
 
 ## Run one recipe op in a room. True when it placed something.
@@ -473,7 +476,7 @@ static func pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 	return placed >= 2
 
 
-## The mad-science lab's specimen pool (PoolGeo: green water under a gantry with a dangling cage) gets a hazard sign on
+## The science room's specimen pool (PoolGeo: green water under a gantry with a dangling cage) gets a hazard sign on
 ## the deck beside it, facing the door. False when the room got no pool.
 static func specimen_pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 	var rec := PoolGeo.pool_of_room(ctx.map, room.tag)
@@ -508,56 +511,48 @@ static func tanks(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 	return n >= 1
 
 
-## A moat ring around the focal point (the hellgate when there is one) with a plank bridge at the door side
-## and two fins patrolling it.
+## The shark moat (PoolGeo carved it into the terrain before the decor: a ring of wading water round an island, its two
+## fins drawn by PoolView): the bridge is pulled back onto the deck on the door side (wading depth: anyone walks in and
+## out anywhere, so it is decoration, lying flat where nobody wades through it), its iron lip toward the water, and the
+## fin hazard sign stands beside it facing the door. False when the room got no moat (no room for one).
 static func moat(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
-	var origin := not room.gate.is_empty() and bool(room.gate["origin"])
-	var cands: Array[Dictionary] = []      # {pos, radius, gate}
-	if not room.gate.is_empty():
-		cands.append({"pos": ThemeGeo.world(room.gate["cell"]), "radius": 4.3 if origin else 3.0, "gate": true})
-	for c in cells_near(ctx, room, room.center_w, 7.0, 16):
-		cands.append({"pos": ThemeGeo.world(c), "radius": 2.8, "gate": false})
-	for c in cells_near(ctx, room, room.center_w, 7.0, 16):
-		cands.append({"pos": ThemeGeo.world(c), "radius": 2.2, "gate": false})
-	var ok := false
-	for cd in cands:
-		var pos: Vector2 = cd["pos"]
-		var radius: float = cd["radius"]
-		var around_gate: bool = cd["gate"]
-		ctx.allow_gate = around_gate
-		# the whole ring (and its rims) must lie on free floor
-		var clear := true
-		for i in 28:
-			var a := TAU * float(i) / 28.0
-			for rr: float in [radius - 0.55, radius, radius + 0.55]:
-				if not ctx.cell_free(room, ThemeGeo.cell_of(pos + Vector2(cos(a), sin(a)) * rr)):
-					clear = false
-					break
-			if not clear:
-				break
-		if not clear:
-			continue
-		var to_door := room.entrance_w - pos
-		var gap_yaw := ThemeGeo.yaw_of(to_door.normalized() if to_door.length() > 0.5 else Vector2(0, 1))
+	var rec := PoolGeo.pool_of_room(ctx.map, room.tag)
+	if rec.is_empty():
+		return false
+	var outline: Array = rec["outline"]
+	var normals := PoolGeo.edge_normals(outline)
+	var c: Vector2 = rec["center"]
+	var to_door := room.entrance_w - c
+	var door_dir := to_door.normalized() if to_door.length() > 0.5 else Vector2(0, 1)
+	var order: Array[int] = []
+	for i in outline.size():
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool: return normals[a].dot(door_dir) > normals[b].dot(door_dir))
+	var d := float(RoomThemeDefs.decor("moat_bridge")["d"])
+	for i in order:
+		var mid: Vector2 = ((outline[i] as Vector2) + (outline[(i + 1) % outline.size()] as Vector2)) * 0.5
+		var n: Vector2 = normals[i]
 		var mk := ctx.mark(room)
 		var group := ctx.new_group()
-		var water := ctx.place(room, "moat_water", pos, gap_yaw, {"group": group, "role": "moat", "w": 0.8, "d": 0.8, "lane": false, "center_ok": true,
-				"ignore": ["gate", "lane"], "force": true, "params": {"radius": radius, "width": 0.95, "gap": 48.0}})
-		if water.is_empty():
+		var bridge := {}
+		for gap: float in [MOAT_BRIDGE_GAP, MOAT_BRIDGE_GAP + 0.3]:
+			var pos := mid + n * (gap + d * 0.5)
+			bridge = ctx.place(room, "moat_bridge", pos, ThemeGeo.yaw_of(-n) + jit(ctx, 3.0), {"group": group, "role": "bridge", "target": mid, "lane": false})
+			if not bridge.is_empty():
+				break
+		if bridge.is_empty():
+			ctx.rollback(room, mk)
 			continue
-		# the ring as bodies, so nothing else is dropped into the water
-		for i in 10:
-			var a2 := TAU * float(i) / 10.0
-			var mid := pos + Vector2(cos(a2), sin(a2)) * radius
-			ctx.add_body(room, mid, rad_to_deg(PI * 0.5 - a2), 1.4, radius * TAU / 10.0, group, "moat")
-		for i in 2:
-			var fa := 0.7 + PI * float(i)
-			ctx.place(room, "shark_fin", pos + Vector2(cos(fa), sin(fa)) * radius, 0.0, {"group": group, "role": "fin", "lane": false, "force": true, "ignore": ["moat", "gate", "lane"],
-					"params": {"center": pos, "radius": radius, "gap_yaw": gap_yaw, "phase": float(i) * 2.2, "speed": 0.6 + 0.15 * float(i)}})
-		ok = true
+		# the fin hazard sign beside the bridge, facing the door
+		var side := Vector2(-n.y, n.x)
+		for along: float in [1.35, -1.35, 1.9, -1.9]:
+			var sp := mid + n * (MOAT_BRIDGE_GAP + 0.3) + side * along
+			var to_d := room.entrance_w - sp
+			var syaw := ThemeGeo.yaw_of(to_d.normalized() if to_d.length() > 0.5 else n) + jit(ctx, 4.0)
+			if not ctx.place(room, "hazard_sign", sp, syaw, {"group": group, "role": "sign", "target": sp + ThemeGeo.facing(syaw) * 3.0, "lane": false}).is_empty():
+				break
 		break
-	ctx.allow_gate = false
-	return ok
+	return true   # the moat itself is the room's centrepiece; the bridge and the sign are garnish
 
 
 ## A red carpet runner leading from the throne toward the door (from the middle of the room toward the door

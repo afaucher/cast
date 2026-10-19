@@ -7,8 +7,9 @@ is the options study it was chosen from (its renders come from the lab scene).
 
 **Decision:** build **B, the in-ground midpoint inset** (the look of the lab's inset and of its specimen pool), **wading
 depth only**, mostly as decoration for now, in the **indoor pool** theme (replacing the flat `pool_basin` decal) and a
-new **mad science** room theme. Raised glass tanks (C), breakable glass and swimming are not built. The shark moat stays
-as it is (its ring is not convex, so it cannot be an inset); turning it into water is later.
+new **science** room theme (first built as "mad science lab", renamed by the user the same day). Raised glass tanks (C),
+breakable glass and swimming are not built. The **shark moat became real water** the same day (user: "The moat should
+become real water"): see "Moat" below.
 
 **Terrain** (`scripts/core/hex_map.gd`, `scripts/world/pool_geo.gd` `PoolGeo`):
 - A pool is a convex cluster of **basin** cells sunk **one level** below the room (`Cell.level` = the pool floor,
@@ -76,25 +77,62 @@ as it is (its ring is not convex, so it cannot be an inset); turning it into wat
 **Themes** (`RoomThemeDefs`, `ThemeVignettes`):
 - **Indoor pool** (bunker): the in-ground pool with loungers along its long sides facing the water, the POOL sign and the
   marble statue. The `pool_basin` decal is gone.
-- **Mad science lab** (`mad_science`, lair, a room theme): the green specimen pool under the yellow gantry and its cage,
+- **Science** (`science`, lair, a room theme; user: "The room should be called science"): a **SCIENCE** neon sign (acid
+  green, like POOL / FILM; "LAB" stays the lab theme's), the green specimen pool under the yellow gantry and its cage,
   a hazard sign by the pool, two **specimen tanks** (standing vats, decor), a **pipe run**, a **lab bench**, a doomsday
   **console** and a specimen shelf in bigger rooms; priced specimen vat / doomsday console; lab tile floor, green light.
   The lab's models are reused (`pool_props.gd`: ladder, gantry, ripple, bench, pipes, hazard sign; `PropModels`: vat,
   console).
 
-**Dev flag:** `--to-pool [pool|specimen]` puts the crew at the floor's first pool (the player wading in it, the next seat
-at the rim, the third wading by the far rim; the allies hold their spots), `--focus pool_corner` looks at its corner
-farthest from the camera (liner, coping and deck all show there). Seeds for `--spells heal,corn --to-pool` (no `--contract`): `--seed 4` (indoor pool, floor 1),
-`--seed 1` (mad science, floor 1).
+**Dev flag:** `--to-pool [pool|specimen|moat]` puts the crew at the floor's first pool (the player wading in it, the next
+seat at the rim, the third wading by the far rim; at a moat all three wade in the channel nearest the camera; the allies
+hold their spots), `--focus pool_corner` looks at its corner farthest from the camera (liner, coping and deck all show
+there), `--focus island_corner` at a moat island's corner nearest the camera. Seeds for `--spells heal,corn --to-pool` (no
+`--contract`): `--seed 4` (indoor pool, floor 1), `--seed 1` (science, floor 1), `--seed 8` / `--seed 11` (moat rings,
+floor 1).
 
 **Tests:** `tests/test_pools.gd` (generated floors: determinism and checksum, convex outlines on the midpoint grid,
 clearances, dry props / decor / notes / mail / monsters, gantry legs; walking in and out over every edge; the slowdown;
 wet while wading and 15 s after; a fire put out; owner-only soaking; an ally, a grunt and an employee crossing the pool),
-`tests/test_net_pools.gd`, and additions to `test_wall_mesh.gd` and `test_room_themes.gd`.
+`tests/test_net_pools.gd` (its seed's first pool is now a moat ring, so it runs in a moat's channel), and additions to
+`test_wall_mesh.gd` and `test_room_themes.gd`.
+
+### Moat [built, 2026-10-18]
+**Approach: one annulus, not convex pieces.** The ring could have been six convex trapezoids joined along radial seams,
+but every seam would need its coping, liner and foam suppressed and the copings re-mitred where the pieces meet. Instead
+`PoolGeo` builds one body of water between a convex **outline** and a convex **island** (`hole` in the record):
+- The outline is a lattice hexagon (`MOAT_SIDES`: regular sides 2-6 and elongated ones such as 3,2,2,3,2,2, all six
+  rotations), every corner 120 degrees on a hex centre. The island is the same hexagon offset **one row** (`ROW`, 1.5)
+  inward, whose corners land on hex centres again (a 120-degree corner moves one lattice step along its bisector), so the
+  channel is one row wide and both rims run on midpoint lines.
+- A kite is pool exactly when its triangle lies inside the outline and outside the island (`PoolGeo.kite_mask`). The
+  water's corners are 120 degrees outside and 240 round the island, never 60, so there are no slivers (the reason
+  arbitrary non-convex shapes are refused) and `HexMapView` needed nothing new but a third look (stone blocks in a running
+  bond, `POOL_LOOK_INDEX`): its per-cell inset drawing already handles 4-kite pool runs (the island's corners).
+- `PoolView`: the water is the band between the two polygons, the coping runs round the outside as before and round the
+  island turned inside out (over the water outside the island's rim, `COPING_W` onto the island, nosing facing out), both
+  mitred on the bisectors (`coping_edges`), and the foam follows both rims. Murky teal water, stone coping.
+- **Fins:** two `shark_fin` models (with a `DecorAnim` path mode) swim the channel's middle line (`PoolGeo.channel`) half
+  a lap apart at the water surface; decoration until the shark is built.
+- **Bridge:** a bridge over wading water would be walked through, not over, so it is decoration: `moat_bridge`, a plank
+  gangway pulled back onto the deck on the door side, pointing at the water, with the fin hazard sign beside it. The old
+  `moat_water` decal (and its ring of placement bodies) is gone.
+- **Placement:** the same rules as a pool (water cells clear of doors / corridors, start, exit, elevator, van, gates and
+  employees; dry deck round the outside and round the island's rim; at most 30 % of the room; near its centre; its own
+  generator, spawn data, in the floor checksum). The island's middle may hold anything (a crate there leaves it reachable
+  from all round). The moat theme is now `needs_center` (not dealt to a gate room when another room will do), since a ring
+  can only circle a hellgate's clear zone in a very big room.
+- **Fallback:** a ring needs a clear area about 7-11 cells across; where none fits (crates, platforms or doors in the way)
+  the room gets a **shark pool**, a convex pool of the indoor pool's shapes in the moat's look with its fins circling half
+  a row inside the rim. Over the `test_pools` floors: 24 rings and 9 shark pools in 44 moat rooms; the other 11
+  (mostly rooms with a hellgate in the middle) get no water, like a crowded indoor pool room.
+- Tests: `test_pools.gd` (the ring is one connected, closed ring round a dry island; one body of water: the channel is
+  wet all the way round at one surface and every rim line lies on the outline or the island; a step in and out over every
+  outer and island edge; A* and a walking body reach the island and leave it, slowed and soaked; the fins stay in the
+  water), `test_wall_mesh.gd` (the island's coping: winding, no overlap, band area, bisector seams; the water covers
+  exactly the ring), `test_room_themes.gd` (the bridge, the sign, no decal; a path fin follows its loop).
 
 **Open:**
-- The shark moat as real water (a ring is not convex: two or more convex pools, or an inset drawn from a non-convex
-  outline).
 - Deep water and swimming (option B's deep end), tanks (C), the flooded floor (D).
 - Whether the indoor pool should keep its decorative ladder.
 - Water-only monsters: the shark below.
@@ -103,7 +141,8 @@ wet while wading and 15 s after; a fire put out; owner-only soaking; an ally, a 
 
 An environmental hazard that lives in a pool. The pools are wading depth, so it is a **land shark in a paddling pool**:
 a fin cruising the water, its back breaking the surface.
-- **Where:** one shark in some indoor pools (bunker) and some specimen pools (mad science, "the specimen"), never in a
+- **Where:** one shark in some indoor pools (bunker), some specimen pools (science, "the specimen") and the moats (the
+  fins are already there), never in a
   pool smaller than 5 basin cells. 30 % of pool rooms from floor 2 on, rolled by the host with `GameWorld.rng`.
 - **Shape:** a **host-owned actor** like a monster (`net_fields()`, its state streamed by `NetWorld`, hits through
   `Combat`, shoves and damage through the verbs), confined to its pool: its moves are clipped to the water

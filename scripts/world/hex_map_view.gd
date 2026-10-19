@@ -23,7 +23,8 @@ extends Node3D
 ## like a cut cell turned downward: its deck kites are a floor tile running flush into the rim line, its pool kites are
 ## the tiled pool floor at pool_level (no bevel, no seam glow), and on each rim line (center -> edge midpoint) a tiled
 ## LINER face runs from the deck down to the pool floor, facing the water. Basin cells are pool floor only. Water,
-## coping, foam line, ladder and gantry are PoolView's (a child node).
+## coping, foam line, ladder, gantry and a moat's fins are PoolView's (a child node). A moat (a ring of water round an
+## island) needs nothing more: its cells are ring cells like any pool's, the island's corners being 4-kite pool runs.
 
 const FLOOR_DEPTH := -2          ## level where columns end (and where pit bottoms are)
 const LH := Hex.LEVEL_HEIGHT
@@ -433,13 +434,17 @@ void fragment() {
 
 ## The pool's tiled floor and liner (the lab's look): square tiles with light grout in world units (floors in XZ, the
 ## liner along its face from its normal). UV2.y picks the look: 0 the indoor pool (aqua tile, white grout), 1 the
-## specimen pool (dark green tile, glowing green grout). Vertex COLOR shades the liner a touch darker than the floor.
+## specimen pool (dark green tile, glowing green grout), 2 the shark moat (mossy stone blocks in a running bond, dark
+## joints). Vertex COLOR shades the liner a touch darker than the floor.
+const POOL_LOOK_INDEX := {PoolGeo.LOOK_POOL: 0, PoolGeo.LOOK_SPECIMEN: 1, PoolGeo.LOOK_MOAT: 2}
 const POOL_SHADER := """
 shader_type spatial;
 uniform vec4 pool_base : source_color = vec4(0.55, 0.85, 0.9, 1.0);
 uniform vec4 pool_grout : source_color = vec4(0.92, 0.98, 1.0, 1.0);
 uniform vec4 spec_base : source_color = vec4(0.32, 0.42, 0.38, 1.0);
 uniform vec4 spec_grout : source_color = vec4(0.5, 1.0, 0.45, 1.0);
+uniform vec4 moat_base : source_color = vec4(0.4, 0.42, 0.37, 1.0);
+uniform vec4 moat_grout : source_color = vec4(0.13, 0.15, 0.13, 1.0);
 varying vec3 wp;
 varying vec3 wn;
 void vertex() {
@@ -447,7 +452,7 @@ void vertex() {
 	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 void fragment() {
-	bool spec = UV2.y > 0.5;
+	bool spec = UV2.y > 0.5 && UV2.y < 1.5;
 	vec2 uv;
 	if (abs(wn.y) > 0.5) {
 		uv = wp.xz;
@@ -455,16 +460,32 @@ void fragment() {
 		vec2 tg = normalize(vec2(-wn.z, wn.x));
 		uv = vec2(dot(wp.xz, tg), wp.y);
 	}
-	float tile = spec ? 0.36 : 0.42;
-	vec2 g = fract(uv / tile);
-	float e = min(min(g.x, 1.0 - g.x), min(g.y, 1.0 - g.y));
-	float line = 1.0 - smoothstep(0.03, 0.08, e);
-	vec3 base = spec ? spec_base.rgb : pool_base.rgb;
-	vec3 grout = spec ? spec_grout.rgb : pool_grout.rgb;
-	ALBEDO = mix(base * COLOR.rgb, grout, line);
-	EMISSION = grout * line * (spec ? 0.6 : 0.0);
-	ROUGHNESS = 0.4;
-	SPECULAR = 0.5;
+	if (UV2.y > 1.5) {
+		// the moat: stone blocks 0.62 x 0.31 in a running bond, each a little lighter or darker
+		vec2 bs = vec2(0.62, 0.31);
+		vec2 q = uv / bs;
+		q.x += 0.5 * floor(q.y);
+		vec2 cell = floor(q);
+		vec2 f = fract(q);
+		float ed = min(min(f.x, 1.0 - f.x) * bs.x, min(f.y, 1.0 - f.y) * bs.y);
+		float joint = 1.0 - smoothstep(0.012, 0.03, ed);
+		float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+		vec3 stone = moat_base.rgb * (0.82 + 0.3 * h) * COLOR.rgb;
+		ALBEDO = mix(stone, moat_grout.rgb, joint);
+		ROUGHNESS = 0.85;
+		SPECULAR = 0.3;
+	} else {
+		float tile = spec ? 0.36 : 0.42;
+		vec2 g = fract(uv / tile);
+		float e = min(min(g.x, 1.0 - g.x), min(g.y, 1.0 - g.y));
+		float line = 1.0 - smoothstep(0.03, 0.08, e);
+		vec3 base = spec ? spec_base.rgb : pool_base.rgb;
+		vec3 grout = spec ? spec_grout.rgb : pool_grout.rgb;
+		ALBEDO = mix(base * COLOR.rgb, grout, line);
+		EMISSION = grout * line * (spec ? 0.6 : 0.0);
+		ROUGHNESS = 0.4;
+		SPECULAR = 0.5;
+	}
 }
 """
 
@@ -1297,7 +1318,7 @@ func _add_pool_cell(c: Vector2i, cell: HexMap.Cell) -> void:
 		_add_floor_part(c, cell, deck)
 	var center := Hex.to_world(c)
 	var b: Batch = _batches[Surf.POOL]
-	b.mat = 1.0 if _pool_look(c) == PoolGeo.LOOK_SPECIMEN else 0.0
+	b.mat = float(POOL_LOOK_INDEX.get(_pool_look(c), 0))
 	var y_pool := cell.pool_level * LH
 	for run: Array in _runs(pool):
 		var pts: Array = []

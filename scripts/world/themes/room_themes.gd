@@ -2,7 +2,7 @@ class_name RoomThemes
 extends RefCounted
 ## Room themes for a generated floor (docs/design/environment.md): every room gets a theme from the site's
 ## pool (bunker: wine cellar, home cinema, spa, gym, server room, panic room, indoor pool; lair: torture
-## chamber, throne room, lab, barracks, shark moat); the start room is the SERVICE ENTRANCE; on the origin
+## chamber, throne room, lab, barracks, shark moat, science); the start room is the SERVICE ENTRANCE; on the origin
 ## floor the ORIGIN room gets the theme the story names (RoomThemeDefs.ORIGIN_THEMES). The theme picks the
 ## room's priced props (placed wall-backed / in corners, facing into the room) and its decor (vignettes
 ## placed as one unit, see ThemeVignettes), and one accent light.

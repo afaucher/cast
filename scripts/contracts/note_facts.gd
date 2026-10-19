@@ -16,7 +16,7 @@ const ROOM_WORDS := {
 	"wine_cellar": "wine cellar", "home_cinema": "home cinema", "spa": "spa", "gym": "gym",
 	"server_room": "server room", "panic_room": "panic room", "pool": "pool room",
 	"torture_chamber": "torture chamber", "throne_room": "throne room", "lab": "lab", "barracks": "barracks",
-	"moat": "shark moat", "mad_science": "specimen lab", "service_entrance": "service entrance",
+	"moat": "shark moat", "science": "science room", "service_entrance": "service entrance",
 }
 
 

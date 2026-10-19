@@ -10,8 +10,14 @@ extends Node3D
 ## on the corner bisectors, so neighbouring strips share their end edge exactly. The liner faces meet on the hex centre
 ## under it, and the deck tiles run flush to the rim line, so the coping sits on one clean line all round. (The lab built
 ## the coping from overlong boxes, which crossed and stuck out at the corners.)
+##
+## A MOAT (PoolGeo, a record with a `hole`: the island) is one ring of water: the surface is the band between the outline
+## and the island, the coping runs round the outside (on the room's deck) and round the island (on the island's deck,
+## overhanging the water outward), both mitred the same way, and the foam lines follow both rims. Two shark FINS patrol
+## the channel's middle line (decoration: DecorModels "shark_fin" with a DecorAnim path; the shark is not built yet).
 
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
+const FIN_SPEED := 1.1          ## a moat fin's speed along the channel (world units / s)
 
 const COPING_W := 0.34          ## the coping's width on the deck, from the rim line
 const COPING_OVER := 0.05       ## ... and how far it overhangs the water
@@ -26,6 +32,10 @@ const LOOKS := {
 	PoolGeo.LOOK_SPECIMEN: {
 		"shallow": Color(0.45, 1.0, 0.35), "deep": Color(0.05, 0.3, 0.12), "glow": Color(0.5, 1.0, 0.35), "alpha": 0.68,
 		"glow_gain": 0.8, "coping": Color(0.55, 0.58, 0.6), "coping_edge": Color(0.98, 0.78, 0.12), "foam": Color(0.75, 1.0, 0.6),
+	},
+	PoolGeo.LOOK_MOAT: {
+		"shallow": Color(0.22, 0.62, 0.6), "deep": Color(0.03, 0.17, 0.2), "glow": Color(0.3, 0.85, 0.8), "alpha": 0.66,
+		"glow_gain": 0.35, "coping": Color(0.56, 0.55, 0.52), "coping_edge": Color(0.4, 0.39, 0.37), "foam": Color(0.7, 0.9, 0.85),
 	},
 }
 
@@ -60,6 +70,7 @@ static var _water_shader: Shader
 
 var waters: Array[MeshInstance3D] = []
 var copings: Array[MeshInstance3D] = []
+var fins: Array[Node3D] = []
 
 
 ## Build the dressing of every pool of `map`.
@@ -69,6 +80,7 @@ func build(map: HexMap) -> void:
 		ch.queue_free()
 	waters.clear()
 	copings.clear()
+	fins.clear()
 	for rec in map.pools:
 		_build_pool(rec)
 
@@ -76,18 +88,19 @@ func build(map: HexMap) -> void:
 func _build_pool(rec: Dictionary) -> void:
 	var look: Dictionary = LOOKS.get(str(rec["look"]), LOOKS[PoolGeo.LOOK_POOL])
 	var outline: Array = rec["outline"]
+	var hole: Array = rec.get("hole", [])
 	var deck_y := float(rec["deck_level"]) * Hex.LEVEL_HEIGHT
 	var water_y := float(rec["surface_y"])
 	var water := MeshInstance3D.new()
 	water.name = "Water"
-	water.mesh = water_mesh(outline, water_y)
+	water.mesh = water_mesh(outline, water_y, hole)
 	water.material_override = _water_material(look)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(water)
 	waters.append(water)
 	var coping := MeshInstance3D.new()
 	coping.name = "Coping"
-	coping.mesh = coping_mesh(outline, deck_y, look["coping"], look["coping_edge"], str(rec["look"]) == PoolGeo.LOOK_SPECIMEN)
+	coping.mesh = coping_mesh(outline, deck_y, look["coping"], look["coping_edge"], str(rec["look"]) == PoolGeo.LOOK_SPECIMEN, hole)
 	var cm := StandardMaterial3D.new()
 	cm.vertex_color_use_as_albedo = true
 	cm.vertex_color_is_srgb = true
@@ -97,7 +110,7 @@ func _build_pool(rec: Dictionary) -> void:
 	copings.append(coping)
 	var foam := MeshInstance3D.new()
 	foam.name = "Foam"
-	foam.mesh = strip_mesh(PoolGeo.offset(outline, -FOAM_IN), PoolGeo.offset(outline, -0.01), water_y + 0.006, look["foam"])
+	foam.mesh = foam_mesh(outline, water_y + 0.006, look["foam"], hole)
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.vertex_color_use_as_albedo = true
@@ -123,7 +136,15 @@ func _build_pool(rec: Dictionary) -> void:
 		var gp: Vector2 = gantry["pos"]
 		gm.position = Vector3(gp.x, deck_y, gp.y)
 		gm.rotation_degrees.y = float(gantry["yaw"])
-
+	var path := PoolGeo.channel(rec)
+	if path.size() >= 3:
+		# two fins patrolling the moat, half a lap apart (decoration until the shark is built)
+		for i in 2:
+			var fin := DecorModels.build("shark_fin", {"path": path, "phase": 0.5 * float(i), "speed": FIN_SPEED, "y": water_y})
+			fin.name = "Fin%d" % i
+			fin.position = Vector3(path[0].x, water_y, path[0].y)
+			add_child(fin)
+			fins.append(fin)
 
 func _water_material(look: Dictionary) -> ShaderMaterial:
 	if _water_shader == null:
@@ -142,35 +163,70 @@ func _water_material(look: Dictionary) -> ShaderMaterial:
 
 # --- meshes (static: tests read them back) -----------------------------------------------------------------------
 
-## The water surface: the convex outline at height y, a fan from its first corner, facing up.
-static func water_mesh(outline: Array, y: float) -> ArrayMesh:
+## The water surface at height y, facing up: the convex outline as a fan from its first corner, or for a moat (`hole`,
+## the island, corner i one row in from outline corner i) the band between the two, one trapezoid per edge.
+static func water_mesh(outline: Array, y: float, hole: Array = []) -> ArrayMesh:
 	var v := PackedVector3Array()
 	var n := PackedVector3Array()
-	for i in range(1, outline.size() - 1):
-		_tri_up(v, n, _p3(outline[0], y), _p3(outline[i], y), _p3(outline[i + 1], y))
+	if hole.is_empty():
+		for i in range(1, outline.size() - 1):
+			_tri_up(v, n, _p3(outline[0], y), _p3(outline[i], y), _p3(outline[i + 1], y))
+		return _mesh(v, n, PackedColorArray())
+	var m := outline.size()
+	for i in m:
+		var j := (i + 1) % m
+		_tri_up(v, n, _p3(outline[i], y), _p3(outline[j], y), _p3(hole[j], y))
+		_tri_up(v, n, _p3(outline[i], y), _p3(hole[j], y), _p3(hole[i], y))
 	return _mesh(v, n, PackedColorArray())
 
 
 ## The coping: a flat top from just over the water (COPING_OVER in from the rim) to COPING_W out on the deck, its front
 ## edge (the nosing) dropping COPING_NOSE toward the water and its back edge down to the deck. Both edges are mitred
 ## offsets of the outline, so every corner is one clean seam on the bisector. A specimen pool's coping is steel with a
-## hazard-yellow front edge.
-static func coping_mesh(outline: Array, deck_y: float, col: Color, edge: Color, hazard_edge: bool) -> ArrayMesh:
-	var inner := PoolGeo.offset(outline, -COPING_OVER)
-	var outer := PoolGeo.offset(outline, COPING_W)
-	var top := deck_y + COPING_H
+## hazard-yellow front edge. A moat's island (`hole`) gets the same coping turned inside out: over the water OUTSIDE the
+## island's rim, COPING_W in onto the island, its nosing facing out.
+static func coping_mesh(outline: Array, deck_y: float, col: Color, edge: Color, hazard_edge: bool, hole: Array = []) -> ArrayMesh:
 	var v := PackedVector3Array()
 	var nn := PackedVector3Array()
 	var cc := PackedColorArray()
-	var m := outline.size()
+	_coping_ring(v, nn, cc, outline, deck_y, col, edge, hazard_edge, false)
+	if not hole.is_empty():
+		_coping_ring(v, nn, cc, hole, deck_y, col, edge, hazard_edge, true)
+	return _mesh(v, nn, cc)
+
+
+## The two mitred edges of a coping ring round `rim` (counter-clockwise): [wet edge (over the water), dry edge (on the
+## deck)]. Round a pool the water is inside the rim; round an island it is outside.
+static func coping_edges(rim: Array, island: bool) -> Array[PackedVector2Array]:
+	var s := -1.0 if island else 1.0
+	return [PoolGeo.offset(rim, -COPING_OVER * s), PoolGeo.offset(rim, COPING_W * s)]
+
+
+static func _coping_ring(v: PackedVector3Array, nn: PackedVector3Array, cc: PackedColorArray, rim: Array, deck_y: float,
+		col: Color, edge: Color, hazard_edge: bool, island: bool) -> void:
+	var edges := coping_edges(rim, island)
+	var wet := edges[0]
+	var dry := edges[1]
+	var top := deck_y + COPING_H
+	var m := rim.size()
 	for i in m:
 		var j := (i + 1) % m
 		# the top: a trapezoid between the two mitred offsets
-		_quad_up(v, nn, cc, _p3(inner[i], top), _p3(inner[j], top), _p3(outer[j], top), _p3(outer[i], top), col)
+		_quad_up(v, nn, cc, _p3(wet[i], top), _p3(wet[j], top), _p3(dry[j], top), _p3(dry[i], top), col)
 		# the nosing, facing the water
-		_quad_side(v, nn, cc, inner[i], inner[j], top, top - COPING_NOSE, true, edge if hazard_edge else col.darkened(0.08))
+		_quad_side(v, nn, cc, wet[i], wet[j], top, top - COPING_NOSE, not island, edge if hazard_edge else col.darkened(0.08))
 		# the back edge, facing the deck
-		_quad_side(v, nn, cc, outer[i], outer[j], top, deck_y, false, edge.darkened(0.1) if not hazard_edge else col.darkened(0.15))
+		_quad_side(v, nn, cc, dry[i], dry[j], top, deck_y, island, edge.darkened(0.1) if not hazard_edge else col.darkened(0.15))
+
+
+## The foam line just inside the rim (and, round a moat's island, just outside the island's rim), at height y.
+static func foam_mesh(outline: Array, y: float, col: Color, hole: Array = []) -> ArrayMesh:
+	var v := PackedVector3Array()
+	var nn := PackedVector3Array()
+	var cc := PackedColorArray()
+	_strip(v, nn, cc, PoolGeo.offset(outline, -FOAM_IN), PoolGeo.offset(outline, -0.01), y, col)
+	if not hole.is_empty():
+		_strip(v, nn, cc, PoolGeo.offset(hole, 0.01), PoolGeo.offset(hole, FOAM_IN), y, col)
 	return _mesh(v, nn, cc)
 
 
@@ -179,11 +235,16 @@ static func strip_mesh(inner: PackedVector2Array, outer: PackedVector2Array, y: 
 	var v := PackedVector3Array()
 	var nn := PackedVector3Array()
 	var cc := PackedColorArray()
+	_strip(v, nn, cc, inner, outer, y, col)
+	return _mesh(v, nn, cc)
+
+
+static func _strip(v: PackedVector3Array, nn: PackedVector3Array, cc: PackedColorArray, inner: PackedVector2Array,
+		outer: PackedVector2Array, y: float, col: Color) -> void:
 	var m := inner.size()
 	for i in m:
 		var j := (i + 1) % m
 		_quad_up(v, nn, cc, _p3(inner[i], y), _p3(inner[j], y), _p3(outer[j], y), _p3(outer[i], y), col)
-	return _mesh(v, nn, cc)
 
 
 static func _p3(p: Vector2, y: float) -> Vector3:

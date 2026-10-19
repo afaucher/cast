@@ -14,6 +14,15 @@ extends RefCounted
 ## convex hull of its ring centres), so nothing pokes out of the outline and the coping, liner and water are one convex
 ## polygon each.
 ##
+## MOATS (the shark moat theme, LOOK_MOAT) are a RING: the water between a convex outline and a convex ISLAND (`hole`)
+## one ROW inside it. The outline is a lattice hexagon (MOAT_SIDES: side lengths along DIRS[0..5], every corner 120
+## degrees on a hex centre) and the island is the same hexagon offset one row in, whose corners land on hex centres too
+## (a 120-degree corner moves one lattice step along its bisector), so both rims run on midpoint lines. A kite is pool
+## exactly when its triangle lies inside the outline and outside the island: one body of water, one liner, one coping
+## round the outside and one round the island, no seams. Every corner of the water is 120 degrees (outside) or 240
+## (round the island), never 60, so no wall-like sliver is ever needed. A one-row moat has no basin cells: all its cells
+## are ring cells (deck and pool kites).
+##
 ## Placement (carve(), from SiteBuilder.plan right after the room themes are dealt, before the theme planner sees the
 ## room): each room whose theme has a pool (THEME_LOOK) gets a shape of a size rolled among the look's biggest few (the
 ## next smaller one when none fits, bigger ones last), placed nearest the room's centre:
@@ -28,13 +37,15 @@ extends RefCounted
 ## Deterministic per floor seed, no shared random stream (its own generator): spawn data, in the floor checksum.
 ##
 ## The record (HexMap.pools): {room, look, deck_level, floor_level, surface_y, basin, ring, outline (convex, Vector2 X/Z,
-## counter-clockwise seen from above), center, axis (the long axis), half_len, half_wid, ladder {pos, yaw} | {},
+## counter-clockwise seen from above), hole (a moat's island: convex, the same winding, its corner i one row in from
+## outline corner i; [] for a pool), center, axis (the long axis), half_len, half_wid, ladder {pos, yaw} | {},
 ## gantry {pos, yaw, span, legs} | {}}. A specimen pool's gantry stands on two deck cells across its middle: its legs are
 ## HexMap.solids and those cells are no_stand (not path nodes), like the elevator's posts.
 
 const LOOK_POOL := "pool"          ## the indoor pool: blue water, white tile, stone coping, a chrome ladder
-const LOOK_SPECIMEN := "specimen"  ## mad science: green water, dark tile with glowing grout, steel coping, the gantry
-const THEME_LOOK := {"pool": LOOK_POOL, "mad_science": LOOK_SPECIMEN}
+const LOOK_SPECIMEN := "specimen"  ## science: green water, dark tile with glowing grout, steel coping, the gantry
+const LOOK_MOAT := "moat"          ## the shark moat: a ring of murky water round an island, stone blocks and coping, fins
+const THEME_LOOK := {"pool": LOOK_POOL, "science": LOOK_SPECIMEN, "moat": LOOK_MOAT}
 const DROP := 1                    ## pool floor levels below the deck: one step, so you wade in and out anywhere
 const MAX_SHARE := 0.3
 const EMPLOYEE_CLEAR := 2
@@ -44,7 +55,19 @@ const MAX_CENTER_DIST := 7.0       ## world units from the room's centre to the 
 const GANTRY_SPAN := 6.0           ## leg to leg (the cells two rows over on each side of the middle basin cell)
 const GANTRY_HEIGHT := 3.3
 const LEG_FOOT := Vector2(0.42, 1.75)   ## a gantry leg's footprint: across the beam x along the pool's axis
-const VARIETY := {"pool": 3, "specimen": 2}   ## the first size tried is one of the look's this-many biggest
+## A moat room where no ring fits (a ring needs a clear area 7-11 cells across: crates, platforms, doors or a hellgate get
+## in the way in about two rooms in five) gets a SHARK POOL instead: a convex pool (the indoor pool's shapes) in the
+## moat's look, its fins circling half a row inside the rim.
+const MOAT_POOL := "moat_pool"
+## The first size tried is one of the look's this-many biggest.
+const VARIETY := {"pool": 3, "specimen": 2, "moat": 2, "moat_pool": 3}
+const ROW := 1.5 * Hex.SIZE        ## between two neighbouring parallel midpoint lines: a moat is one row wide
+## Moat outlines: lattice hexagons by their side lengths (walked along DIRS[i + rot]), biggest first. The island is the
+## same hexagon one ROW in (every side one shorter).
+const MOAT_SIDES: Array = [
+	[6, 6, 6, 6, 6, 6], [6, 5, 5, 6, 5, 5], [5, 5, 5, 5, 5, 5], [5, 4, 4, 5, 4, 4], [4, 4, 4, 4, 4, 4],
+	[4, 3, 3, 4, 3, 3], [3, 3, 3, 3, 3, 3], [3, 2, 3, 2, 3, 2], [3, 2, 2, 3, 2, 2], [2, 2, 2, 2, 2, 2],
+]
 
 ## Basin shapes (axial offsets, rows along DIRS[0]), biggest first.
 const SHAPE_ROW4: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]
@@ -84,9 +107,13 @@ static func _cell_less(a: Vector2i, b: Vector2i) -> bool:
 
 
 ## Every oriented, convex variant of the look's shapes (relative to an anchor at the origin cell), biggest first:
-## {size, basin, ring: {cell: mask}, walk, outline (world offsets), axis (dir index), center (world offset), gantry legs}.
+## {size, cells (water cells), basin, ring: {cell: mask}, walk, outline (world offsets), hole (a moat's island, else
+## empty), axis (dir index), center (world offset), gantry legs}.
 static func variants(look: String) -> Array:
 	if _variants.has(look):
+		return _variants[look]
+	if look == LOOK_MOAT:
+		_variants[look] = _moat_variants()
 		return _variants[look]
 	var out: Array = []
 	var seen := {}
@@ -164,7 +191,8 @@ static func _build_variant(basin: Array[Vector2i], axis: int, look: String) -> D
 	for p in hull:
 		half_len = maxf(half_len, absf((p - center).dot(ax)))
 		half_wid = maxf(half_wid, absf((p - center).dot(perp)))
-	var v := {"size": basin.size(), "basin": basin, "ring": ring, "walk": walk, "outline": hull, "axis": axis,
+	var v := {"size": basin.size(), "cells": basin.size() + ring.size(), "basin": basin, "ring": ring, "walk": walk,
+		"outline": hull, "hole": PackedVector2Array(), "axis": axis,
 		"center": center, "half_len": half_len, "half_wid": half_wid, "legs": [] as Array[Vector2i], "mid": basin[0]}
 	if look == LOOK_SPECIMEN:
 		# the gantry stands across the middle basin cell, its legs on the deck cells two rows over
@@ -176,6 +204,135 @@ static func _build_variant(basin: Array[Vector2i], axis: int, look: String) -> D
 		v["legs"] = [l1, l2] as Array[Vector2i]
 		v["mid"] = mid
 	return v
+
+
+## The moat rings: every rotation of every MOAT_SIDES hexagon, anchored on its first corner (a water cell), biggest first.
+static func _moat_variants() -> Array:
+	var out: Array = []
+	var seen := {}
+	for sides: Array in MOAT_SIDES:
+		var longest := 0
+		for i in 6:
+			if int(sides[i]) > int(sides[longest]):
+				longest = i
+		for rot in 6:
+			var corners: Array[Vector2i] = []
+			var at := Vector2i.ZERO
+			for i in 6:
+				corners.append(at)
+				at += Hex.DIRS[(i + rot) % 6] * int(sides[i])
+			if at != Vector2i.ZERO:
+				continue   # (not a closed hexagon)
+			var v := _build_ring(corners, (longest + rot) % 3)
+			if v.is_empty():
+				continue
+			var cells: Array[Vector2i] = []
+			cells.append_array(v["basin"])
+			for r: Vector2i in (v["ring"] as Dictionary):
+				cells.append(r)
+			cells.sort_custom(_cell_less)
+			var key := str(_normalized(cells))
+			if seen.has(key):
+				continue
+			seen[key] = true
+			out.append(v)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["size"]) > int(b["size"]))
+	return out
+
+
+## One moat ring from its outer corners (cells), or {} when the island's corners miss the hex centres.
+static func _build_ring(corners: Array[Vector2i], axis: int) -> Dictionary:
+	var pts := PackedVector2Array()
+	for c in corners:
+		pts.append(_v2(Hex.to_world(c)))
+	var outline := _clean_hull(Geometry2D.convex_hull(pts))
+	if outline.size() != 6:
+		return {}
+	var hole := offset(Array(outline), -ROW)
+	for i in hole.size():
+		var hc := _v2(Hex.to_world(Hex.from_world(Vector3(hole[i].x, 0.0, hole[i].y))))
+		if hc.distance_to(hole[i]) > 0.01:
+			return {}
+		hole[i] = hc
+	if area(hole) <= 0.0:
+		return {}
+	var center := Vector2.ZERO
+	for p in outline:
+		center += p
+	center /= float(outline.size())
+	var reach := 0.0
+	for p in outline:
+		reach = maxf(reach, p.distance_to(center))
+	var c0 := Hex.from_world(Vector3(center.x, 0.0, center.y))
+	var basin: Array[Vector2i] = []
+	var ring := {}
+	for c in Hex.range_cells(c0, int(ceilf(reach / Hex.SQRT3)) + 2):
+		var m := kite_mask(c, outline, hole)
+		if m == HexMap.ALL_KITES:
+			basin.append(c)
+		elif m != 0:
+			ring[c] = m
+	basin.sort_custom(_cell_less)
+	var wet := {}
+	for b in basin:
+		wet[b] = true
+	for r: Vector2i in ring:
+		wet[r] = true
+	# the walk: the dry cells touching the water, outside and round the island's rim (the island's middle may hold
+	# anything: a crate or a pillar there leaves the island reachable from all round)
+	var walk: Array[Vector2i] = []
+	var walk_set := {}
+	for r: Vector2i in wet:
+		for d in Hex.DIRS:
+			var w: Vector2i = r + d
+			if wet.has(w) or walk_set.has(w):
+				continue
+			walk_set[w] = true
+			walk.append(w)
+	walk.sort_custom(_cell_less)
+	var ax := _v2(Hex.dir_vector(axis))
+	var perp := Vector2(-ax.y, ax.x)
+	var half_len := 0.0
+	var half_wid := 0.0
+	for p in outline:
+		half_len = maxf(half_len, absf((p - center).dot(ax)))
+		half_wid = maxf(half_wid, absf((p - center).dot(perp)))
+	return {"size": wet.size(), "cells": wet.size(), "basin": basin, "ring": ring, "walk": walk, "outline": outline,
+		"hole": hole, "axis": axis, "center": center, "half_len": half_len, "half_wid": half_wid,
+		"legs": [] as Array[Vector2i], "mid": c0}
+
+
+## The pool kites of cell `c` for the water inside `outline` and outside `hole` (convex polygons in X/Z; `hole` may be
+## empty): bit k is set when the triangle of kite k (the cell's centre and its neighbours k and k + 1) lies in the water.
+static func kite_mask(c: Vector2i, outline: PackedVector2Array, hole: PackedVector2Array) -> int:
+	var m := 0
+	for k in 6:
+		var tri := (_v2(Hex.to_world(c)) + _v2(Hex.to_world(c + Hex.DIRS[k])) + _v2(Hex.to_world(c + Hex.DIRS[(k + 1) % 6]))) / 3.0
+		if Geometry2D.is_point_in_polygon(tri, outline) and (hole.is_empty() or not Geometry2D.is_point_in_polygon(tri, hole)):
+			m |= 1 << k
+	return m
+
+
+## A point surely in the water of a pool record: its centre, or for a moat the middle of the channel along edge 0.
+static func wet_point(rec: Dictionary) -> Vector2:
+	var hole: Array = rec.get("hole", [])
+	if hole.is_empty():
+		return rec["center"]
+	var ol: Array = rec["outline"]
+	return ((ol[0] as Vector2) + (ol[1] as Vector2) + (hole[0] as Vector2) + (hole[1] as Vector2)) * 0.25
+
+
+## The fins' loop: the middle line of a moat's channel (corner i halfway between outline corner i and island corner i),
+## or half a row inside a shark pool's rim; empty for any other pool.
+static func channel(rec: Dictionary) -> PackedVector2Array:
+	var hole: Array = rec.get("hole", [])
+	var ol: Array = rec["outline"]
+	if hole.is_empty():
+		return offset(ol, -ROW * 0.5) if str(rec.get("look", "")) == LOOK_MOAT else PackedVector2Array()
+	var out := PackedVector2Array()
+	for i in hole.size():
+		out.append(((ol[i] as Vector2) + (hole[i] as Vector2)) * 0.5)
+	return out
 
 
 ## Convex hull as Geometry2D gives it, minus the repeated last point and collinear points, counter-clockwise in X/Z
@@ -226,6 +383,8 @@ static func carve(map: HexMap, plan: SitePlan, avoid: Dictionary, near_corr: Dic
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed_value * 31 + int(tag.trim_prefix("room:")) * 7919 + 17
 		var pick := _choose(map, plan, tag, look, avoid, near_corr, gate_zone, rng)
+		if pick.is_empty() and look == LOOK_MOAT:
+			pick = _choose(map, plan, tag, MOAT_POOL, avoid, near_corr, gate_zone, rng)   # no ring fits: a shark pool
 		if not pick.is_empty():
 			_apply(map, tag, look, int(plan.base_levels[tag]), pick["variant"], pick["anchor"])
 
@@ -274,7 +433,7 @@ static func _choose(map: HexMap, plan: SitePlan, tag: String, look: String, avoi
 		var best := {}
 		var best_score := INF
 		for v: Dictionary in variants(look):
-			if int(v["size"]) != size or float(size + (v["ring"] as Dictionary).size()) > budget:
+			if int(v["size"]) != size or float(v["cells"]) > budget:
 				continue
 			var vc: Vector2 = v["center"]
 			for anchor: Vector2i in cells:
@@ -333,12 +492,15 @@ static func _apply(map: HexMap, tag: String, look: String, deck: int, v: Diction
 	var outline: Array = []
 	for p in (v["outline"] as PackedVector2Array):
 		outline.append(aw + p)
+	var hole: Array = []
+	for p in (v["hole"] as PackedVector2Array):
+		hole.append(aw + p)
 	var axis_v := _v2(Hex.dir_vector(int(v["axis"])))
 	var center: Vector2 = aw + (v["center"] as Vector2)
 	var rec := {
 		"room": tag, "look": look, "deck_level": deck, "floor_level": low,
 		"surface_y": float(low) * Hex.LEVEL_HEIGHT + HexMap.WATER_DEPTH,
-		"basin": basin, "ring": ring, "outline": outline, "center": center, "axis": axis_v,
+		"basin": basin, "ring": ring, "outline": outline, "hole": hole, "center": center, "axis": axis_v,
 		"half_len": float(v["half_len"]), "half_wid": float(v["half_wid"]), "ladder": {}, "gantry": {},
 	}
 	if look == LOOK_POOL:

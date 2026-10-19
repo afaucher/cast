@@ -1,6 +1,6 @@
 extends RefCounted
 ## Pool models (docs/design/pool-options.md): look-dev for the pool lab, and the game's pool dressing: PoolView builds the
-## ladder and the gantry, Wading the ripple round a wader, DecorModels the mad-science lab bench, pipe run and hazard sign.
+## ladder and the gantry, Wading the ripple round a wader, DecorModels the science room's lab bench, pipe run and hazard sign.
 ## Cosmetic only. Same kit as DecorModels / PropModels (LowPoly soup, MonsterMaterial: ink outline, amber rim,
 ## vertex alpha 0.5 = emissive face), origin at the base centre, FRONT = +Z. No class_name (users preload it).
 ##

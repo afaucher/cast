@@ -39,13 +39,15 @@ extends Node3D
 ##                       fires 1.3 s later), or Gasket (hammer) / Rebar (fist) steps up to them and swings once
 ##   --to-gate           dev: put the crew 5 cells from the first hellgate of the floor (the camera follows)
 ##   --to-theme <id>     dev: put the crew in the middle of the first room with that theme (wine_cellar, home_cinema, spa, gym,
-##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, service_entrance); the
-##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing
+##                       server_room, panic_room, pool, torture_chamber, throne_room, lab, barracks, moat, science, service_entrance); the
+##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing; --focus sign puts the
+##                       crew a few steps in front of the room's neon sign
 ##   --to-corridor       dev: put the crew in the middle of the floor's corridors (to see the site's corridor material)
-##   --to-pool [pool|specimen]  dev: put the crew at the floor's first in-ground pool (of that look): the player wading in
-##                       it, the next seat on the deck at the rim, the third wading by the rim (screenshots; the log lists the
-##                       floor's pools; the AI allies hold their spots). --focus pool_corner looks at the pool's corner farthest
-##                       from the camera instead
+##   --to-pool [pool|specimen|moat]  dev: put the crew at the floor's first in-ground pool (of that look): the player wading
+##                       in it, the next seat on the deck at the rim, the third wading by the rim; at a moat all three wade in
+##                       the channel (screenshots; the log lists the floor's pools; the AI allies hold their spots).
+##                       --focus pool_corner looks at the pool's corner farthest from the camera instead, --focus island_corner
+##                       at a moat island's corner nearest the camera
 ##   --to-package        dev: put the crew two cells from the first mail package stack of the floor (zoom in with --zoom 10)
 ##   --to-employee       dev: put the crew 1.5 cells from the first employee (it latches on; E prompts "tell X to wait")
 ##   --press-e S         dev: press E (the controller's context key) S seconds in
@@ -2772,6 +2774,14 @@ func _dev_teleports() -> void:
 				focus = Hex.from_world(Vector3(mid.x, 0.0, mid.y))
 				if map.get_cell(focus) == null or map.get_cell(focus).type != HexMap.Tile.FLOOR:
 					focus = _site.plan.centers[themed[0]]
+			if opts.get("focus", "") == "sign":
+				# a few steps in front of the room's neon sign (screenshots of the sign)
+				for dc in _site.plan.decor:
+					if str(dc["room"]) == themed[0] and str(dc["kind"]) == "neon_sign":
+						var front: Vector2 = (dc["pos"] as Vector2) + ThemeGeo.facing(float(dc["yaw"])) * 5.5
+						var fc := Hex.from_world(Vector3(front.x, 0.0, front.y))
+						if map.is_walkable_cell(fc):
+							focus = fc
 			_teleport_crew(focus)
 			return
 	if opts.has("to_corridor"):
@@ -2847,7 +2857,8 @@ func _break_crates_dev() -> void:
 
 
 ## --to-pool: the crew at the floor's first pool (of `look`, any when ""): seat 1 wading in the middle, seat 2 on the deck at
-## the camera-near rim, seat 3 wading by the far rim. False when the floor has no such pool.
+## the camera-near rim, seat 3 wading by the far rim; at a moat all three wade along the channel nearest the camera.
+## False when the floor has no such pool.
 func _to_pool(look: String) -> bool:
 	for rec in map.pools:
 		_log("pool: %s in %s (%s), %d basin cells" % [rec["look"], rec["room"], _site.plan.theme_of(str(rec["room"])) if _site != null else "", (rec["basin"] as Array).size()], Color(0.6, 0.9, 1.0))
@@ -2861,6 +2872,25 @@ func _to_pool(look: String) -> bool:
 			n = -n   # toward the camera
 		var hw := float(rec["half_wid"])
 		var spots: Array[Vector2] = [c + ax * 0.6, c + n * (hw + 0.75) - ax * 0.4, c - n * (hw - 0.75) - ax * 1.2]
+		var path := PoolGeo.channel(rec)
+		if path.size() >= 3:
+			# a moat: the whole crew wading along the channel on the side nearest the camera
+			var total := 0.0
+			for i in path.size():
+				total += path[i].distance_to(path[(i + 1) % path.size()])
+			var best_s := 0.0
+			var best := -INF
+			for k in 64:
+				var s := total * float(k) / 64.0
+				var q: Vector2 = DecorAnim.path_pose(path, total, s)[0]
+				if q.dot(ThemeGeo.CAMERA_DIR) > best:
+					best = q.dot(ThemeGeo.CAMERA_DIR)
+					best_s = s
+			spots.clear()
+			if opts.get("focus", "") == "island_corner":
+				best_s += total * 0.5   # (on the far side, out of the way of the island corner the camera looks at)
+			for off: float in [0.0, -1.7, 1.7]:
+				spots.append(DecorAnim.path_pose(path, total, best_s + off)[0])
 		var list: Array[Hero] = []
 		for seat in range(1, NetSession.MAX_CREW + 1):
 			if heroes_by_seat.has(seat):
@@ -2869,7 +2899,7 @@ func _to_pool(look: String) -> bool:
 			var p: Vector2 = spots[mini(i, spots.size() - 1)]
 			list[i].global_position = Vector3(p.x, 0.0, p.y)
 			list[i].snap_to_ground()
-			list[i].facing = Vector3(-n.x, 0.0, -n.y) if i == 1 else Vector3(n.x, 0.0, n.y)
+			list[i].facing = Vector3(-n.x, 0.0, -n.y) if i == 1 and path.size() < 3 else Vector3(n.x, 0.0, n.y)
 			var brain := list[i].get_node_or_null("AllyBrain")
 			if brain != null:
 				brain.set_physics_process(false)   # (the allies hold their spots for the screenshot)
@@ -2878,6 +2908,22 @@ func _to_pool(look: String) -> bool:
 			var best: Vector2 = (rec["outline"] as Array)[0]
 			for q: Vector2 in (rec["outline"] as Array):
 				if q.dot(ThemeGeo.CAMERA_DIR) < best.dot(ThemeGeo.CAMERA_DIR):
+					best = q
+			var mk := Node3D.new()
+			GameWorld.root.add_child(mk)
+			mk.global_position = Vector3(best.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, best.y)
+			rig.target = mk
+		elif path.size() >= 3 and not opts.has("focus"):
+			# a moat: look at the whole ring, not just the player
+			var mc := Node3D.new()
+			GameWorld.root.add_child(mc)
+			mc.global_position = Vector3(c.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, c.y)
+			rig.target = mc
+		elif opts.get("focus", "") == "island_corner" and not (rec.get("hole", []) as Array).is_empty():
+			# a moat's island corner nearest the camera: the island's liner, its coping and the water round it show there
+			var best: Vector2 = (rec["hole"] as Array)[0]
+			for q: Vector2 in (rec["hole"] as Array):
+				if q.dot(ThemeGeo.CAMERA_DIR) > best.dot(ThemeGeo.CAMERA_DIR):
 					best = q
 			var mk := Node3D.new()
 			GameWorld.root.add_child(mk)

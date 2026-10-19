@@ -10,12 +10,12 @@ extends TestCase
 ##  - each theme's vignette places (in a synthetic room), placement is fast, the spawned nodes match the plan.
 
 const SEEDS: Array[int] = [1, 2, 3, 7, 42]
-const GATE_KINDS: Array[String] = ["summoning_circle", "candle", "moat_water", "shark_fin"]   ## drawn around a hellgate on purpose
+const GATE_KINDS: Array[String] = ["summoning_circle", "candle"]   ## drawn around a hellgate on purpose
 const MAX_YAW_JITTER := 10.0
 const SIGNATURE := {
 	"wine_cellar": "tasting", "home_cinema": "cinema", "spa": "circle", "gym": "bench_rack", "server_room": "racks",
 	"panic_room": "desk", "pool": "pool", "torture_chamber": "cage", "throne_room": "carpet", "lab": "shelf",
-	"barracks": "bunks", "moat": "moat", "mad_science": "specimen_pool",
+	"barracks": "bunks", "moat": "moat", "science": "specimen_pool",
 }
 
 var _plans := 0
@@ -64,7 +64,22 @@ func _check_tables() -> void:
 	var bunker := RoomThemeDefs.pool("bunker")
 	var lair := RoomThemeDefs.pool("lair")
 	eq(bunker.size(), 7, "bunker pool: wine cellar, home cinema, spa, gym, server room, panic room, pool")
-	eq(lair.size(), 6, "lair pool: torture chamber, throne room, lab, barracks, moat, mad science")
+	eq(lair.size(), 6, "lair pool: torture chamber, throne room, lab, barracks, moat, science")
+	# the science room is called Science, with a SCIENCE neon sign; every sign's letters have glyphs
+	check(lair.has("science") and not lair.has("mad_science"), "the lair's science theme is `science`")
+	eq(RoomThemeDefs.theme_name("science"), "Science", "the science room is called Science")
+	var sci_sign := ""
+	for op: Dictionary in (RoomThemeDefs.theme("science")["recipe"] as Array):
+		if String(op["op"]) == "sign":
+			sci_sign = String(op["text"])
+	eq(sci_sign, "SCIENCE", "the science room has a SCIENCE neon sign")
+	eq(RoomThemeDefs.origin_theme("lair", "mad science wing"), "science", "an origin naming science maps to the science room")
+	for id: String in RoomThemeDefs.THEMES:
+		for op: Dictionary in (RoomThemeDefs.theme(id)["recipe"] as Array):
+			if String(op["op"]) == "sign":
+				for ch in String(op["text"]):
+					check(DecorModels.GLYPHS.has(ch), "%s: the sign's letter %s has a glyph" % [id, ch])
+	check(not RoomThemeDefs.is_decor("moat_water"), "the flat moat decal is gone (the moat is terrain)")
 	for id: String in bunker + lair + [RoomThemeDefs.SERVICE]:
 		var def := RoomThemeDefs.theme(id)
 		check(not def.is_empty(), "theme %s is defined" % id)
@@ -637,15 +652,40 @@ func _check_vignette_structure() -> void:
 		check(lf.dot(to_pool.normalized()) > 0.3, "a lounger faces the pool")
 		check(not (pl[0] as HexMap).is_pool_cell(Hex.from_world(Vector3((dc["pos"] as Vector2).x, 0.0, (dc["pos"] as Vector2).y))), "a lounger stands on the deck")
 	check(loungers >= 2, "loungers line the pool (%d)" % loungers)
-	# the mad-science lab: the specimen pool under its gantry, tanks, a bench, pipes
-	var ms := _synth("mad_science")
+	# the science room: the specimen pool under its gantry, the SCIENCE sign, tanks, a bench, pipes
+	var ms := _synth("science")
 	RoomThemes.plan_decor(ms[2])
 	var spec := PoolGeo.pool_of_room(ms[0], "room:1")
-	check(not spec.is_empty() and spec["look"] == PoolGeo.LOOK_SPECIMEN and not (spec["gantry"] as Dictionary).is_empty(), "the mad-science lab has a specimen pool under a gantry")
+	check(not spec.is_empty() and spec["look"] == PoolGeo.LOOK_SPECIMEN and not (spec["gantry"] as Dictionary).is_empty(), "the science room has a specimen pool under a gantry")
 	var ms_kinds := {}
+	var sci_text := ""
 	for dc in (ms[1] as SitePlan).decor:
 		ms_kinds[dc["kind"]] = true
-	check(ms_kinds.has("specimen_tank") and ms_kinds.has("lab_bench") and ms_kinds.has("pipe_run"), "the mad-science lab has tanks, a bench and pipes (%s)" % str(ms_kinds.keys()))
+		if dc["kind"] == "neon_sign" and dc["room"] == "room:1":
+			sci_text = String((dc["params"] as Dictionary)["text"])
+	check(ms_kinds.has("specimen_tank") and ms_kinds.has("lab_bench") and ms_kinds.has("pipe_run"), "the science room has tanks, a bench and pipes (%s)" % str(ms_kinds.keys()))
+	eq(sci_text, "SCIENCE", "the science room hangs its SCIENCE sign")
+	# the shark moat: a ring of real water round an island (PoolGeo), its bridge pulled back onto the deck facing the
+	# water, a fin hazard sign; no flat decal and no fins in the plan (PoolView draws them on the water)
+	var mt := _synth("moat")
+	RoomThemes.plan_decor(mt[2])
+	var moat_rec := PoolGeo.pool_of_room(mt[0], "room:1")
+	check(not moat_rec.is_empty() and moat_rec["look"] == PoolGeo.LOOK_MOAT and not (moat_rec["hole"] as Array).is_empty(), "the moat room has a ring of water round an island")
+	var bridge := {}
+	var moat_kinds := {}
+	for dc in (mt[1] as SitePlan).decor:
+		if dc["room"] != "room:1":
+			continue
+		moat_kinds[dc["kind"]] = true
+		if dc["kind"] == "moat_bridge":
+			bridge = dc
+	check(not moat_kinds.has("moat_water") and not moat_kinds.has("shark_fin"), "no moat decal and no planned fins (%s)" % str(moat_kinds.keys()))
+	check(moat_kinds.has("hazard_sign"), "a fin hazard sign by the moat")
+	if check(not bridge.is_empty() and not moat_rec.is_empty(), "the moat's bridge lies pulled back on the deck"):
+		var bp: Vector2 = bridge["pos"]
+		check(not (mt[0] as HexMap).is_pool_cell(Hex.from_world(Vector3(bp.x, 0.0, bp.y))), "the bridge lies on dry floor")
+		var to_water: Vector2 = (bridge["target"] as Vector2) - bp
+		check(ThemeGeo.facing(float(bridge["yaw"])).dot(to_water.normalized()) > 0.95, "the bridge points at the water")
 	# the priced projector faces the screen's wall: place a cinema with a projector
 	var pr_run := ContractRun.make("prepper", 11, 0.5)
 	var seen_proj := 0
@@ -767,14 +807,31 @@ func _check_models_and_anim() -> void:
 	holder.add_child(screen_model)
 	var fin := DecorModels.build("shark_fin", {"center": Vector2(5, 5), "radius": 3.0, "gap_yaw": 0.0, "phase": 0.0, "speed": 0.6})
 	holder.add_child(fin)
+	# a moat's fin follows its channel (a closed loop) at the water surface
+	var loop := PackedVector2Array([Vector2(0, 0), Vector2(4, 0), Vector2(4, 4), Vector2(0, 4)])
+	var path_fin := DecorModels.build("shark_fin", {"path": loop, "phase": 0.25, "speed": 1.1, "y": 0.3})
+	holder.add_child(path_fin)
+	var fin_start := Vector3.INF
 	var sc := screen_model.get_node_or_null("Screen") as MeshInstance3D
 	check(sc != null, "the cinema screen has a picture")
 	var tex0: Texture2D = ((sc.material_override as StandardMaterial3D).albedo_texture) if sc != null else null
 	var changed := false
+	var on_loop := true
 	for i in 40:
 		await get_tree().process_frame
 		if sc != null and (sc.material_override as StandardMaterial3D).albedo_texture != tex0:
 			changed = true
+		if i < 3:
+			continue   # (its DecorAnim takes over from the next frame)
+		var fp := path_fin.global_position
+		if fin_start == Vector3.INF:
+			fin_start = fp
+		var d := INF
+		for k in loop.size():
+			d = minf(d, Vector2(fp.x, fp.z).distance_to(Geometry2D.get_closest_point_to_segment(Vector2(fp.x, fp.z), loop[k], loop[(k + 1) % loop.size()])))
+		on_loop = on_loop and d < 0.01 and absf(fp.y - 0.3) < 0.001
 	check(changed, "the screen flickers between frames")
+	check(on_loop, "a moat fin stays on its channel loop, at the water surface")
+	check(path_fin.global_position.distance_to(fin_start) > 0.05, "and swims along it")
 	check(DecorScreen.frames().size() == DecorScreen.SNOW_FRAMES + 1, "the screen has snow frames and the demon frame")
 	holder.queue_free()

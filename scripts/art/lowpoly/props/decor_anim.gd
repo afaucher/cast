@@ -17,6 +17,10 @@ var fin_radius := 3.0
 var fin_gap_yaw := 0.0
 var fin_phase := 0.0
 var fin_speed := 0.6
+var fin_path := PackedVector2Array()   ## a closed loop (a moat's channel, PoolView): the fin follows it at fin_speed u/s,
+                                       ## starting fin_phase (0..1) of the way round; otherwise it swings round a circle
+var fin_y := NAN                       ## the fin's base height (the water surface); NAN = where it was placed
+var _path_len := 0.0
 
 const LIT := 1.9
 const OFF := 0.12
@@ -42,8 +46,12 @@ func _ready() -> void:
 	_next_demon = _t + _rng.randf_range(2.0, 6.0)
 	if mode == "fin":
 		var model := get_parent() as Node3D
-		_y0 = model.global_position.y
+		_y0 = model.global_position.y if is_nan(fin_y) else fin_y
 		model.top_level = true
+		if fin_path.size() >= 3:
+			_t = 0.0   # (the fins of one moat keep their spacing)
+			for i in fin_path.size():
+				_path_len += fin_path[i].distance_to(fin_path[(i + 1) % fin_path.size()])
 	set_process(mode != "")
 
 
@@ -99,6 +107,11 @@ func _screen(delta: float) -> void:
 
 func _fin() -> void:
 	var model := get_parent() as Node3D
+	if _path_len > 0.0:
+		var pv := path_pose(fin_path, _path_len, fin_phase * _path_len + fin_speed * _t)
+		model.global_position = Vector3(pv[0].x, _y0, pv[0].y)
+		model.rotation = Vector3(0.0, atan2(pv[1].x, pv[1].y), 0.0)
+		return
 	var dir_g := Vector2(sin(deg_to_rad(fin_gap_yaw)), cos(deg_to_rad(fin_gap_yaw)))
 	var lat_g := Vector2(cos(deg_to_rad(fin_gap_yaw)), -sin(deg_to_rad(fin_gap_yaw)))
 	var amp := PI - 0.5
@@ -108,3 +121,24 @@ func _fin() -> void:
 	var v := (lat_g * cos(phi) - dir_g * sin(phi)) * signf(cos(arg))
 	model.global_position = Vector3(p.x, _y0, p.y)
 	model.rotation = Vector3(0.0, atan2(v.x, v.y), 0.0)
+
+
+## A point `s` world units round the closed loop `path` (its length `total`) and the heading there: [point, unit
+## direction]. The heading is the chord across +-0.45 of the point, so the fin turns smoothly round the corners.
+static func path_pose(path: PackedVector2Array, total: float, s: float) -> Array[Vector2]:
+	var p := _path_at(path, total, s)
+	var dir := _path_at(path, total, s + 0.45) - _path_at(path, total, s - 0.45)
+	return [p, dir.normalized() if dir.length() > 0.0001 else Vector2(0, 1)]
+
+
+static func _path_at(path: PackedVector2Array, total: float, s: float) -> Vector2:
+	var left := fposmod(s, total)
+	var n := path.size()
+	for i in n:
+		var a := path[i]
+		var b := path[(i + 1) % n]
+		var l := a.distance_to(b)
+		if left <= l or i == n - 1:
+			return a.lerp(b, clampf(left / maxf(l, 0.0001), 0.0, 1.0))
+		left -= l
+	return path[0]

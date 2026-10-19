@@ -30,9 +30,9 @@ or cult boss's lair, overrun by the very demons they were dabbling with.
 | **Torture chamber** | racks, cages, hanging chains, iron maiden, a brazier | cages bent open, chains snapped, scorch marks | cages as cover; chains/braziers as shove hazards |
 | **Throne room / lair hub** | evil throne, red carpet, a monologue podium, a doomsday-device console | the throne toppled, the console sparking, an imp sitting on the throne | the console is the room objective (shut down or loot) |
 | **Lab / vat room** | glowing vats, specimen jars, a lever wall | vats cracked and leaking ichor, jars smashed | leaking vats = goo hazard; pulling levers opens areas |
-| **Shark/lava moat** | a moat with a retractable bridge (a classic) | the bridge half-broken | the moat is a pit: shove villains' demons in |
+| **Shark/lava moat** [built: real water] | a ring of knee-deep water round an island (`pool-options.md` "Moat"), two shark fins patrolling it, the bridge pulled back onto the deck, a fin hazard sign | the bridge abandoned: everyone just wades | wading is slow and soaks you like any pool; the shark itself later |
 | **Henchmen barracks** | bunk rows, matching jumpsuits, a "days since accident: 0" sign | bunks overturned, jumpsuits shredded | henchmen survivors could be the "employees" to protect |
-| **Mad science lab** [built] | a green specimen pool under a yellow gantry with a dangling cage, specimen tanks, pipes, a lab bench, a console | the cage's occupant got out | the pool soaks and slows like any pool; the specimen / shark later |
+| **Science** [built] (id `science`, renamed from "mad science lab" 2026-10-18) | a SCIENCE neon sign, a green specimen pool under a yellow gantry with a dangling cage, specimen tanks, pipes, a lab bench, a console | the cage's occupant got out | the pool soaks and slows like any pool; the specimen / shark later |
 
 Contract sites can be either type: a **luxury bunker** (billionaire client) or a **villain lair**
 (the villain is the client, which is funnier: "I need my lair back by Thursday").
@@ -159,7 +159,7 @@ midpoint walls. Corridors take a neutral material per site, so the rooms stand o
 | Henchmen barracks | concrete slabs | 0.9 | stone blocks |
 | Torture chamber | flagstone | 0.8 | stone blocks |
 | Shark moat | flagstone | 0.8 | stone blocks |
-| Mad science lab | pale green lab tile | 1.0 | stone blocks |
+| Science | pale green lab tile | 1.0 | stone blocks |
 | **Bunker corridors** | plain dark concrete | 1.0 | poured concrete (formwork lines, tie holes) |
 | **Lair corridors** | dark rough flagstone | 1.0 | rough stone blocks (courses) |
 
@@ -193,13 +193,15 @@ wooden crates, stairs stay warm planks, cliff sides keep their slate bands (heig
 - **Dev flags:** `--to-theme <id> --zoom 11` (any theme), `--to-corridor` (the middle of the floor's corridors).
 
 ## Pools [built, 2026-10-18]
-The indoor pool and the mad science lab have a real **in-ground pool**, terrain rather than a decal: option B of
+The indoor pool, the science room and the shark moat have real **in-ground water**, terrain rather than a decal: option B of
 `pool-options.md` (see its "Built" section), wading depth only. Its rim follows the midpoint lines like a wall cut
 downward (`PoolGeo`, `HexMap` pool cells), one level down: you step in and out anywhere, wade at 0.75x and stay wet (no
 fire) while in it and 15 s after. `HexMapView` draws it in an inset mode (tiled pool floor, a liner on the rim lines) and
 `PoolView` adds the water, a mitred coping, the foam line, the indoor pool's ladder and the specimen pool's gantry. The
 pool is placed clear of the doors, the start, the exit and elevator, the gates and the employees, with dry deck all
-round; `tests/test_pools.gd` and `tests/test_wall_mesh.gd` hold it to that. The shark moat is still the ring decal.
+round; `tests/test_pools.gd` and `tests/test_wall_mesh.gd` hold it to that. The **shark moat** (2026-10-18) is a ring of
+the same water round a dry island (stone-block liner, murky teal water, a coping round both rims, two fins circling);
+where no ring fits it gets a convex shark pool in the same look ("Moat" in `pool-options.md`).
 
 ## Mail packages (interactive set dressing) [built, 2026-10-17]
 **The premise:** the client never even opened their mail, so the crew can steal it. Taped-up brown

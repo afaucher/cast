@@ -10,7 +10,8 @@ extends RefCounted
 ##   DecorModels.build("neon_sign", {"text": "EVIL", "color": Color(1, .2, .15), "dead": [3]})
 ##
 ## Animated pieces (neon sign letters, the cinema screen, the patrolling shark fin) carry a DecorAnim child.
-## Flat floor decals (chalk circle, moat, carpet, mats) have no ink outline. (The pool is terrain now: PoolGeo / PoolView.)
+## Flat floor decals (chalk circle, carpet, mats) have no ink outline. (Pools and the moat are terrain now: PoolGeo / PoolView;
+## the moat's fins follow its channel, see DecorAnim.)
 
 const GLYPHS := {
 	"A": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
@@ -25,18 +26,18 @@ const GLYPHS := {
 	"N": ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"],
 	"O": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
 	"P": ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
+	"S": [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
 	"V": ["#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."],
 	"W": ["#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"],
 	"Y": ["#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#.."],
 }
 const PIXEL := 0.085                ## neon sign: world size of one glyph pixel
 const LETTER_GAP := 0.12
-const FLAT_KINDS: Array[String] = ["summoning_circle", "moat_water", "red_carpet", "yoga_mat"]
-## The pool lab's models (scripts/art/lowpoly/props/pool_props.gd) dress the mad-science lab: lab bench, pipe run, hazard sign.
+const FLAT_KINDS: Array[String] = ["summoning_circle", "red_carpet", "yoga_mat"]
+## The pool lab's models (scripts/art/lowpoly/props/pool_props.gd) dress the science room: lab bench, pipe run, hazard sign.
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
 
 const CHALK := Color(0.93, 0.9, 0.82)
-const WATER := Color(0.2, 0.8, 0.92)
 const MAT_COLORS: Array[Color] = [Color(0.2, 0.75, 0.7), Color(0.62, 0.42, 0.92), Color(0.95, 0.5, 0.7), Color(0.95, 0.75, 0.25)]
 const BLANKET := Color(0.85, 0.36, 0.14)
 const STEEL_BLUE := Color(0.18, 0.24, 0.34)
@@ -84,7 +85,7 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 		"lab_console": PropModels._doomsday_console(s)
 		"pipe_run": PoolProps._pipe_run(s, float(params.get("length", 3.2)))
 		"hazard_sign": PoolProps._hazard_sign(s, PoolProps.HAZARD)
-		"moat_water": _moat_water(s, float(params.get("radius", 3.0)), float(params.get("width", 0.95)), float(params.get("gap", 48.0)))
+		"moat_bridge": _moat_bridge(s)
 		"shark_fin": _shark_fin(s)
 		"red_carpet": _red_carpet(s, float(params.get("length", 5.0)))
 		"tasting_table": _tasting_table(s)
@@ -123,6 +124,8 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 			fa.fin_gap_yaw = float(params.get("gap_yaw", 0.0))
 			fa.fin_phase = float(params.get("phase", 0.0))
 			fa.fin_speed = float(params.get("speed", 0.6))
+			fa.fin_path = params.get("path", PackedVector2Array())
+			fa.fin_y = float(params.get("y", NAN))
 			root.add_child(fa)
 		"wet_floor_sign":
 			root.add_child(_wet_label())
@@ -415,27 +418,19 @@ static func _pool_lounger(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.5, 0.1, 0.34), Vector3(0, 0.66, -0.56), Color(1.0, 0.55, 0.45), Vector3(30, 0, 0))
 
 
-static func _moat_water(s: LowPoly.Soup, radius: float, width: float, gap_deg: float) -> void:
-	# the ring is built around local +Z (the door side); the gap there carries a plank bridge
-	var segs := 40
-	var gap := deg_to_rad(gap_deg) * 0.5
-	var seg_len := TAU * radius / float(segs) * 1.08
-	for i in segs:
-		var phi := TAU * (float(i) + 0.5) / float(segs) - PI      # 0 = +Z
-		if absf(wrapf(phi, -PI, PI)) < gap:
-			continue
-		var pos := Vector2(sin(phi) * radius, cos(phi) * radius)
-		var col := WATER if i % 2 == 0 else WATER.lightened(0.15)
-		_b(s, Vector3(seg_len, 0.1, width), Vector3(pos.x, 0.05, pos.y), _g(col), Vector3(0, rad_to_deg(phi), 0))
-		for edge: float in [-1.0, 1.0]:
-			var rr := radius + edge * (width * 0.5 + 0.06)
-			_b(s, Vector3(seg_len, 0.15, 0.13), Vector3(sin(phi) * rr, 0.075, cos(phi) * rr), Color(0.4, 0.38, 0.42), Vector3(0, rad_to_deg(phi), 0))
-	# the bridge: planks laid across the ring where the gap is
-	for i in 5:
-		var x := (float(i) - 2.0) * 0.3
-		_b(s, Vector3(0.26, 0.12, width + 0.8), Vector3(x, 0.14, radius), PropModels.WOOD if i % 2 == 0 else PropModels.WOOD_DK)
-	for sx: float in [-0.78, 0.78]:
-		_b(s, Vector3(0.07, 0.07, width + 0.7), Vector3(sx, 0.22, radius), PropModels.IRON)
+## The moat's bridge, pulled back onto the deck (the moat is wading depth: nobody needs it to cross): a plank gangway
+## along +Z, its iron lip at the +Z end toward the water, the handrails folded down on it, a chain to haul it out.
+static func _moat_bridge(s: LowPoly.Soup) -> void:
+	for sx: float in [-0.56, 0.56]:
+		_b(s, Vector3(0.12, 0.1, 2.2), Vector3(sx, 0.05, 0), PropModels.WOOD_DK)
+	for i in 7:
+		var z := -0.93 + 0.31 * float(i)
+		_b(s, Vector3(1.26, 0.06, 0.27), Vector3(0, 0.13, z), PropModels.WOOD if i % 2 == 0 else PropModels.WOOD_DK, Vector3(0, (float(i % 3) - 1.0) * 2.0, 0))
+	_b(s, Vector3(1.3, 0.05, 0.12), Vector3(0, 0.12, 1.12), PropModels.IRON)
+	for sx: float in [-0.48, 0.48]:
+		_b(s, Vector3(0.06, 0.06, 1.9), Vector3(sx, 0.19, -0.05), PropModels.IRON)
+	for i in 4:
+		_b(s, Vector3(0.1, 0.05, 0.14), Vector3(-0.1 + 0.07 * float(i % 2), 0.18, -1.0 - 0.13 * float(i)), PropModels.IRON.lightened(0.15), Vector3(0, 30.0 * float(i % 2), 0))
 
 
 static func _shark_fin(s: LowPoly.Soup) -> void:

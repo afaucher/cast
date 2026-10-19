@@ -7,11 +7,11 @@ extends RefCounted
 ## ROOM THEMES (scripts/world/themes/, docs/design/environment.md). Every room has a theme:
 ##   room_themes: Dictionary   room tag ("room:3") -> theme id (String), for EVERY room of the floor.
 ##     Ids: bunker  wine_cellar, home_cinema, spa, gym, server_room, panic_room, pool
-##          lair    torture_chamber, throne_room, lab, barracks, moat, mad_science
+##          lair    torture_chamber, throne_room, lab, barracks, moat, science
 ##          both    service_entrance (the start room: hazard tape, a WET FLOOR sign)
 ##     On the origin floor (3) the origin room's theme is the one the story names (RoomThemeDefs.ORIGIN_THEMES:
 ##     "yoga studio" -> spa, "vat room" -> lab, ...). Read it with theme_of(tag) / rooms_with_theme(id); names
-##     via RoomThemeDefs.theme_name(id). The pool and mad_science rooms hold an in-ground pool (terrain: HexMap.pools,
+##     via RoomThemeDefs.theme_name(id). The pool, science and moat rooms hold an in-ground pool (terrain: HexMap.pools,
 ##     PoolGeo). The grime layer reads this to pick theme-specific marks (wine splats
 ##     in the cellar, scorch in the torture chamber, ...). The ids are stable; new themes only get added.
 ##   decor / lights / entrances / decor_report: the placed set dressing, the per-room accent lights, each

@@ -14,7 +14,10 @@ extends TestCase
 ##    exactly (winding, kites, no overlap, area); on carved pools the pool floor covers exactly the pool kites, every liner
 ##    face stands on a rim line (center -> edge midpoint) from the deck down to the pool floor, facing the water, at the
 ##    one texture density; the coping (PoolView) is a mitred ring: its top winds up, nothing overlaps, it covers exactly
-##    the band between its two offsets, and every corner seam lies on the bisector, COPING_W out from both edges.
+##    the band between its two offsets, and every corner seam lies on the bisector, COPING_W out from both edges. A moat
+##    (a ring of water round an island) passes the same checks with its second coping round the island (turned inside
+##    out: over the water outside the island's rim, COPING_W in onto the island), and its water surface covers exactly
+##    the band between the outline and the island.
 
 const LH := Hex.LEVEL_HEIGHT
 const FLOOR_LV := 2
@@ -27,6 +30,7 @@ var _midpoint_faces := 0
 var _caps := 0
 var _liners := 0
 var _corners := 0
+var _island_corners := 0
 
 
 func setup() -> void:
@@ -42,7 +46,7 @@ func setup() -> void:
 		_check_pool_caps(pview.mesh_instance.mesh, mask)
 		_check_sides(pview.mesh_instance.mesh, "pool mask %d" % mask)
 		pview.free()
-	for theme in ["pool", "mad_science"]:
+	for theme in ["pool", "science", "moat"]:
 		for r in [7, 9]:
 			_check_pool_mesh(theme, r)
 	for s in SEEDS:
@@ -52,6 +56,7 @@ func setup() -> void:
 		view.free()
 	print("wall mesh: %d caps over 63 masks, %d vertical faces (%d on midpoint wall lines) at one texture density; %d liner faces, %d coping corners" % [_caps, _faces, _midpoint_faces, _liners, _corners])
 	check(_liners > 20 and _corners > 10, "the pools have liner faces and coping corners to measure")
+	check(_island_corners >= 12, "the moats have island coping corners to measure (%d)" % _island_corners)
 	check(_midpoint_faces > 100, "the generated floors have midpoint wall faces to measure (%d)" % _midpoint_faces)
 	finish()
 
@@ -269,14 +274,19 @@ func _check_pool_mesh(theme: String, radius: int) -> void:
 			if not on_line or not spans or not faces_water:
 				bad += 1
 	eq(bad, 0, "%s: every liner face stands on a rim line, deck to pool floor, facing the water" % tag)
-	# the coping: a mitred ring
+	# the coping: a mitred ring (and a moat's second one round its island)
 	var outline: Array = rec["outline"]
-	var cm := PoolView.coping_mesh(outline, deck_y, Color.WHITE, Color.YELLOW, theme == "mad_science")
+	var hole: Array = rec.get("hole", [])
+	if theme == "moat":
+		check(not hole.is_empty(), "%s: a ring round an island" % tag)
+	var cm := PoolView.coping_mesh(outline, deck_y, Color.WHITE, Color.YELLOW, theme == "science", hole)
 	var cg := _flat_groups(cm)
 	var top: Array = cg.get(snappedf(deck_y + PoolView.COPING_H, 0.001), [])
-	var inner := PoolGeo.offset(outline, -PoolView.COPING_OVER)
-	var outer := PoolGeo.offset(outline, PoolView.COPING_W)
-	var want := absf(PoolGeo.area(outer)) - absf(PoolGeo.area(inner))
+	var rims: Array = [outline] if hole.is_empty() else [outline, hole]
+	var want := 0.0
+	for ri in rims.size():
+		var ce := PoolView.coping_edges(rims[ri], ri == 1)
+		want += absf(absf(PoolGeo.area(ce[1])) - absf(PoolGeo.area(ce[0])))
 	var ctotal := 0.0
 	var cwrong := 0
 	for tri: Array in top:
@@ -292,17 +302,43 @@ func _check_pool_mesh(theme: String, radius: int) -> void:
 			for poly: PackedVector2Array in Geometry2D.intersect_polygons(_pv(top[i]), _pv(top[j])):
 				overlap += absf(_poly_area(poly))
 	check(overlap < 1e-4, "%s: no two coping pieces overlap (%.5f)" % [tag, overlap])
-	var normals := PoolGeo.edge_normals(outline)
-	var k := outline.size()
-	for i in k:
-		_corners += 1
-		var o: Vector2 = outline[i]
-		for e: int in [(i - 1 + k) % k, i]:
-			var a: Vector2 = outline[e]
-			near((outer[i] - a).dot(normals[e]), PoolView.COPING_W, 1e-4, "%s: corner %d sits COPING_W out from edge %d" % [tag, i, e])
-			near((inner[i] - a).dot(normals[e]), -PoolView.COPING_OVER, 1e-4, "%s: corner %d overhangs edge %d by COPING_OVER" % [tag, i, e])
-		var bis := (normals[(i - 1 + k) % k] + normals[i]).normalized()
-		near((outer[i] - o).normalized().dot(bis), 1.0, 1e-4, "%s: corner %d's seam lies on the bisector" % [tag, i])
+	for ri in rims.size():
+		var rim: Array = rims[ri]
+		var s := -1.0 if ri == 1 else 1.0   # (round the island the coping is turned inside out)
+		var ce := PoolView.coping_edges(rim, ri == 1)
+		var inner: PackedVector2Array = ce[0]
+		var outer: PackedVector2Array = ce[1]
+		var rl := tag + (" island" if ri == 1 else "")
+		var normals := PoolGeo.edge_normals(rim)
+		var k := rim.size()
+		for i in k:
+			_corners += 1
+			var o: Vector2 = rim[i]
+			for e: int in [(i - 1 + k) % k, i]:
+				var a: Vector2 = rim[e]
+				near((outer[i] - a).dot(normals[e]) * s, PoolView.COPING_W, 1e-4, "%s: corner %d sits COPING_W onto the deck from edge %d" % [rl, i, e])
+				near((inner[i] - a).dot(normals[e]) * s, -PoolView.COPING_OVER, 1e-4, "%s: corner %d overhangs edge %d by COPING_OVER" % [rl, i, e])
+			var bis := (normals[(i - 1 + k) % k] + normals[i]).normalized()
+			near((outer[i] - o).normalized().dot(bis) * s, 1.0, 1e-4, "%s: corner %d's seam lies on the bisector" % [rl, i])
+	if not hole.is_empty():
+		_island_corners += hole.size()
+		# the coping round the island stays on the island's deck and over the water, clear of the outer coping
+		var wet_edge: PackedVector2Array = PoolView.coping_edges(hole, true)[0]
+		var outer_wet: PackedVector2Array = PoolView.coping_edges(outline, false)[0]
+		for wp in wet_edge:
+			check(Geometry2D.is_point_in_polygon(wp, outer_wet), "%s: the island's coping stays inside the outer coping" % tag)
+		# the water: exactly the band between the outline and the island, facing up
+		var wm := PoolView.water_mesh(outline, float(rec["surface_y"]), hole)
+		var wg: Array = _flat_groups(wm).get(snappedf(float(rec["surface_y"]), 0.001), [])
+		var wtotal := 0.0
+		var wwrong := 0
+		for tri: Array in wg:
+			var a2 := _signed_area(tri)
+			wtotal += absf(a2)
+			if (1 if a2 > 0.0 else -1) != ref_sign:
+				wwrong += 1
+		near(wtotal, PoolGeo.area(PackedVector2Array(outline)) - PoolGeo.area(PackedVector2Array(hole)), 1e-3, "%s: the water covers exactly the ring" % tag)
+		eq(wwrong, 0, "%s: the water faces up" % tag)
 	view.free()
 
 

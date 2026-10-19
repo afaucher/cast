@@ -109,7 +109,7 @@ func run_client() -> void:
 
 
 func _wet_spot() -> Vector3:
-	var c: Vector2 = _pool["center"]
+	var c: Vector2 = PoolGeo.wet_point(_pool)   # (the middle of a pool, the channel of a moat)
 	return Vector3(c.x, 0.0, c.y)
 
 

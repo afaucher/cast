@@ -85,7 +85,7 @@ const THEME_FLOOR := {
 	"barracks": F_CONCRETE,
 	"torture_chamber": F_FLAGSTONE,
 	"moat": F_FLAGSTONE,
-	"mad_science": F_LAB_TILE,
+	"science": F_LAB_TILE,
 }
 
 ## The luxury themes dress their own walls; every other room has its site's wall.
