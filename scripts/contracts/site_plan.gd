@@ -37,6 +37,9 @@ var employees: Array[Dictionary] = []
 ## Priced props: {cell: Vector2i, kind: String, room: String, pos: Vector2, yaw: float, place: String,
 ## orient: String, foot: Vector2}. `cell` is the wall-adjacent cell the prop stands in.
 var props: Array[Dictionary] = []
+## Explosive props (ExplosiveProp, docs/design/hazards.md), placed by the room themes after the priced props, the same
+## fields as a priced prop: {cell, kind, room, pos, yaw, place, orient, foot}. Not counted in `props` (MAX_PROPS).
+var hazards: Array[Dictionary] = []
 ## Room tag -> theme id (see the header). Includes the start room ("service_entrance").
 var room_themes: Dictionary = {}
 ## Decor (not priced, purely decorative): {kind, pos: Vector2, yaw, cell, room, place, orient, group (-1 = alone),
@@ -88,7 +91,8 @@ func net_fields() -> Dictionary:
 	return {
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
-		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "packages": Net.SPAWN,
+		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "hazards": Net.SPAWN,
+		"packages": Net.SPAWN,
 		"room_themes": Net.SPAWN, "decor": Net.SPAWN, "lights": Net.SPAWN, "entrances": Net.SPAWN,
 		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "dispatch": Net.SPAWN, "ranked_rooms": Net.SPAWN,
 		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN, "van": Net.SPAWN, "elevator": Net.SPAWN, "scouts": Net.SPAWN,

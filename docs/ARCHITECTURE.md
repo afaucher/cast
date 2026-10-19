@@ -97,7 +97,7 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_join.gd` (`NetJoin`, child `Session/Join`, `Session.join`) | joining mid-contract (M6): a joiner waits (`join.wait`) until the crew is on a running floor, builds that floor as it was at its barrier (`join.go`), reports its checksum (`join.built`) and gets the late-join snapshot (`join.snapshot`: the seat table, gone ids, a world keyframe, runtime spawns, pickups, dents, statuses, the Ledger, its own seat's state) |
 | `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (runtime spawns and pickups get host ids from 10000); the tables of OWNER fields an event carries instead of a snapshot (`CARRIES` for heroes, `WORLD_CARRIES` for the host-owned classes) |
 | `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events. The Chicken spell's chickens are host-owned runtime spawns too (`world.spawn` kind "chicken"), streamed as monster-format entries (`CHICKEN_FIELDS`) |
-| `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice |
+| `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice; an explosive prop's fuse (`obj.fuse {id, s, e, by}` on the shared clock, `obj.out`: every machine runs the blast itself at `e`) |
 | `net_casts.gd` (`NetCasts`, child `Session/Casts`, `Session.casts`) | casts and hero attacks as events (M4): a cast is resolved on the caster's machine and lands `LEAD` (0.2 s) later on every machine (`SpellBook.apply`); a hero's swing, shot, bowl or spin (`act`) is replayed on its puppet everywhere at the moment the puppet shows |
 | `net_status.gd` (`NetStatus`, child `Session/Status`, `Session.status`) | statuses (M4): the target's owner applies a modifier, a fire or a soak and announces it (`st`); the other screens show it (`Actor.net_set_modifiers`, `Burning.show_remote`, `Coffee.show_remote`, `Wet.douse`) |
 | `net_orders.gd` (`NetOrders`, child `Session/Orders`, `Session.orders`) | voice orders (combat-proposals.md 1.8): the speaker's machine sends `ord.req`, the host applies it once (`VoiceOrders.apply`: the AI seats and the employees) and sends `ord.ok` to everyone (the AI heroes' barks, the players it names for a marker) |
@@ -257,7 +257,14 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
 - **`Projectile`** (`scripts/combat/projectile.gd`): `Projectile.fire(shooter, from, dir, dmg, speed, range)`.
   Set `color`, `size` or `on_hit` before the first frame for custom behavior.
 - **`Combat`** (`scripts/combat/combat.gd`): `melee_arc(attacker, dir, reach, arc_deg, dmg)`,
-  `explode(pos, radius, dmg, team, source, edge_mult)`, `chest(actor)`.
+  `explode(pos, radius, dmg, team, source, edge_mult, shove = 0, decider = null)` (`shove`: pushed out, falling off like
+  the damage; `decider`: whose machine decides the non-hero hits when that is not `source`'s, an explosive prop's blast),
+  `slam(...)` (also lights an explosive prop in its ring), `chest(actor)`.
+- **Explosive props** (`ExplosiveProp extends PricedProp`, `scripts/contracts/explosive_prop.gd`;
+  `docs/design/hazards.md`): fire, a hard hit, any arrow or a hard shove lights a short fuse (`FuseFx`: hiss, sparks,
+  glow, shake, the blast ring); at its end a `Combat.explode` blast on everyone (team -1) with a shove, chained to the
+  explosives in reach, billed once to whoever set it off. A soaked one is a dud and a soak puts a fuse out. Placed by
+  the room themes (`RoomThemeDefs` "hazards", `SiteBuilder._plan_hazards`, `SitePlan.hazards`, `Site.hazards`).
 - **Input** (`scripts/app/input_setup.gd`): `move_up/down/left/right` (WASD),
   `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1..4` (keys 1-4: ready/hold a spell slot),
   `use` (E: the van's clock-out slip, the elevator or an employee, in that order; never casts), `swap_pickup` (F: swap a dropped component into
@@ -368,7 +375,8 @@ midpoint walls), extra loops, the climb shortcut and the one short chokepoint th
 within `FEATURE_CENTER_CLEAR` (2) of a room's center or `FEATURE_DOOR_CLEAR` (3) of a door. Generation takes
 about 130 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder` then puts at most 6 priced props on a floor
 (next to walls, 4+ apart, flush and square against the flat face: `ThemeCtx.wall_pose_at` marches to the face and
-refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`), scales the monster pack budgets by 0.7 and caps a room at one monster per
+refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`) and at most 3
+explosive props (`SiteBuilder._plan_hazards`, own dice, the same wall poses), scales the monster pack budgets by 0.7 and caps a room at one monster per
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.
 

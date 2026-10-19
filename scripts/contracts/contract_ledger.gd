@@ -126,6 +126,8 @@ func damage_by_who() -> Dictionary:
 
 
 static func culprit_name(n: Node) -> String:
+	if n != null and is_instance_valid(n) and n.has_method("blamed"):
+		n = n.call("blamed")   # (an explosive prop's blast: whoever set it off)
 	if n == null or not is_instance_valid(n):
 		return "unknown"
 	var a := n as Actor

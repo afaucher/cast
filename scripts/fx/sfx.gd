@@ -38,6 +38,10 @@ const CUES := {
 	## Paper moving on the forms: a form sliding in or changing page, and going back (VOID). Not on focus moves.
 	"paper": {"file": "paper.wav", "bus": "UI", "volume_db": -4.0, "pitch_jitter": 0.05,
 		"max_voices": 2, "min_gap": 0.18, "positional": false},
+	## An explosive prop's fuse is lit (FuseFx), on every machine (the host's obj.fuse); its blast is the "fireball" cue.
+	## Front-loaded and above 4.5 kHz (audio-plan.md §4); a doused fuse cuts it.
+	"fuse": {"file": "fuse.wav", "bus": "World", "volume_db": -3.0, "pitch_jitter": 0.06,
+		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
 	## The elevator doors open (ElevatorArrival.doors_opened).
 	"elevator_ding": {"file": "elevator_ding.wav", "bus": "World", "volume_db": -2.0, "pitch_jitter": 0.0,
 		"max_voices": 1, "min_gap": 1.5, "positional": true, "unit_size": 16.0, "max_distance": 80.0},

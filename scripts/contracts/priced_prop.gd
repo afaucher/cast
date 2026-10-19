@@ -21,6 +21,9 @@ extends Actor
 ##     AI allies too, which avoid swinging at a target with a prop in the arc), credited to the hero (user, 2026-10-18:
 ##     "let player attacks break them"). Employees are still never hit by the crew's weapons
 ##
+## Explosive props (oil drum, gas cylinders, propane tank, battery pack) are rows of the same TABLE with site "hazard":
+## spawn() makes them an ExplosiveProp (a fuse, then a blast: docs/design/hazards.md), and no site's catalog has them.
+##
 ## Usage:
 ##   var p := PricedProp.spawn(cell, "gold_toilet", {})
 ##   PricedProp.catalog("bunker")       # -> ["wine_rack", "wine_barrel", ...]
@@ -64,7 +67,15 @@ const TABLE := {
 	"henchman_locker": {"name": "Henchman locker", "price": 300, "hp": 70.0, "radius": 0.62, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.3, 0.6)},
 	"evil_portrait": {"name": "Evil portrait", "price": 2000, "hp": 30.0, "radius": 0.55, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.1, 1.0)},
 	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
+	# Explosive props (ExplosiveProp: a fuse, then a blast; docs/design/hazards.md). Site "hazard": never in a site's
+	# catalog; the room themes place them (RoomThemeDefs "hazards", SiteBuilder._plan_hazards). The blast numbers are
+	# ExplosiveProp.BLAST.
+	"oil_drum": {"name": "Oil drum", "price": 800, "hp": 40.0, "radius": 0.45, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 0.85)},
+	"gas_cylinders": {"name": "Gas cylinders", "price": 1800, "hp": 35.0, "radius": 0.5, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.15, 0.5)},
+	"propane_tank": {"name": "Propane tank", "price": 1200, "hp": 45.0, "radius": 0.6, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.8)},
+	"battery_pack": {"name": "Server battery pack", "price": 6500, "hp": 60.0, "radius": 0.52, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 0.7)},
 }
+const HAZARD_SITE := "hazard"
 
 var kind := ""
 var price := 0
@@ -95,6 +106,16 @@ static func catalog(site_type: String) -> Array[String]:
 
 static func is_kind(k: String) -> bool:
 	return TABLE.has(k)
+
+
+## An explosive prop (ExplosiveProp): placed by the room themes, never in a site's catalog.
+static func is_hazard(k: String) -> bool:
+	return TABLE.has(k) and String((TABLE[k] as Dictionary)["site"]) == HAZARD_SITE
+
+
+## Every explosive kind, in table order.
+static func hazard_kinds() -> Array[String]:
+	return catalog(HAZARD_SITE)
 
 
 ## {place, orient, foot, radius} of a kind (see TABLE): where it goes and which way it faces.
@@ -132,7 +153,7 @@ static func spawn(cell: Vector2i, kind_id: String, opts: Dictionary = {}) -> Pri
 	if not TABLE.has(kind_id) or GameWorld.root == null:
 		push_warning("PricedProp.spawn: unknown kind '%s' or no world" % kind_id)
 		return null
-	var p := PricedProp.new()
+	var p: PricedProp = ExplosiveProp.new() if is_hazard(kind_id) else PricedProp.new()
 	p.setup(kind_id, opts)
 	var at := Hex.to_world(cell)
 	if opts.has("pos"):

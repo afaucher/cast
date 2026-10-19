@@ -182,7 +182,7 @@ func _check_floor_and_elevator() -> void:
 			await frames(3)
 			eq(session.extracted_total, 1, "the follower near the elevator was extracted (once)")
 			var banner: DispatchBanner = g.get("_banner")
-			check(banner != null and banner.line.contains("$100"), "dispatch calls in the rescue on the headset (%s)" % (banner.line if banner != null else "no banner"))
+			check(banner != null and not banner.line.is_empty() and not banner.line.contains("$"), "dispatch calls in the rescue on the headset (%s)" % (banner.line if banner != null else "no banner"))
 			check(Ledger.earned() >= run.gate_pay + ContractRun.EMPLOYEE_EXTRACTED, "extraction paid $100")
 			var inv: InvoiceScreen = g.get("_invoice")
 			check(inv != null, "cashing out shows the invoice")

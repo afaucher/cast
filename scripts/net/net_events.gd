@@ -58,6 +58,14 @@ const WORLD_CARRIES := {
 		"hp": "obj.hurt (NetObjects): a dent", "dead": "obj.break (NetObjects)", "broke": "obj.break (NetObjects)",
 		"pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": "never set on a prop", "facing": _FIXED, "climbing": _FIXED,
 	},
+	"res://scripts/contracts/explosive_prop.gd": {
+		"hp": "obj.hurt (NetObjects): a dent", "dead": "obj.break (NetObjects)", "broke": "obj.break (NetObjects)",
+		"pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": "never set on a prop", "facing": _FIXED, "climbing": _FIXED,
+		"fuse_start": "obj.fuse {s} (NetObjects): the host lit it; obj.out puts it out",
+		"fuse_end": "obj.fuse {e} (NetObjects): every machine runs the blast at this moment on its own clock",
+		"_igniter": "obj.fuse {by} (NetObjects): who set it off (the host bills them)",
+		"blown": "the scheduled blast at obj.fuse's end, on every machine; then obj.break",
+	},
 	"res://scripts/world/themes/breakable_crate.gd": {
 		"hp": "obj.break (NetObjects): one hit breaks it", "dead": "obj.break (NetObjects)", "broke": "obj.break (NetObjects)",
 		"pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": "never set on a crate", "facing": _FIXED, "climbing": _FIXED,
@@ -84,7 +92,8 @@ const WORLD_CARRIES := {
 ##   world.* (reliable)    host -> clients (NetWorld): spawn (monsters and chickens), die, say, extract, phase, shove
 ##   obj.* (reliable)      NetObjects: req / loadout (client -> host; M4: req hit on any host-owned actor, shove, mod);
 ##                         break, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
-##                         shove / mod passed on to the owner of a player's hero (host -> clients)
+##                         shove / mod passed on to the owner of a player's hero (host -> clients); fuse / out (an
+##                         explosive prop's fuse lit, with its start, end and igniter / put out by a soak)
 ##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
 ##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
@@ -118,6 +127,7 @@ const LATE_JOIN := {
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",
+	"res://scripts/contracts/explosive_prop.gd": "gone ids (blown or broken: shown broken); a dent: replay of obj.hurt; a fuse burning now: replay of obj.fuse (its start, end and igniter), so the joiner runs the blast at the same moment",
 	"res://scripts/world/themes/breakable_crate.gd": "gone ids (broken)",
 	"res://scripts/contracts/mail_package.gd": "gone ids (opened: removed; its prize is a pickup, replayed)",
 	"res://scripts/spells/chicken.gd": "runtime spawns: replay of world.spawn (kind chicken); then the keyframe (a monster-format entry); statuses: replay",

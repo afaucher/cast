@@ -335,6 +335,8 @@ func _pick_practice_target(r: float) -> Variant:
 func _practice_ok(prop: Variant, r: float) -> bool:
 	if prop == null or not is_instance_valid(prop) or prop.dead or state != State.IDLE or is_frozen():
 		return false
+	if prop.is_in_group(ExplosiveProp.HAZARD_GROUP):
+		return false   # monsters never seek out an explosive prop (docs/design/hazards.md): an arrow would light it
 	var from := Combat.chest(self)
 	var to: Vector3 = prop.global_position
 	if GameWorld.flat_distance(global_position, to) > PRACTICE_RANGE or absf(to.y - global_position.y) > PRACTICE_MAX_DY:
