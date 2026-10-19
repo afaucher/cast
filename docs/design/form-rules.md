@@ -54,7 +54,9 @@ A real form has three layers, made by three different hands. Keep them apart.
 15. **No key bindings on the paper.** No "[1]", "[E]" or "press Enter" printed or typed on a form. Keys live in the
    paper keycaps (`KeyHints`) outside the sheet. Selecting by mouse, arrows and Enter works everywhere anyway.
 16. **Short lines.** A printed line fits on one line at 1280x720. If it wraps, cut words; don't shrink the type or let
-   it wrap. Typed running text (a story, a warning) may wrap inside its box; a typed single-line field clips.
+   it wrap. Typed running text (a story, a warning) may wrap inside its box; a typed single-line field clips. A typed objective or client line
+   is running text too: it wraps onto a second line (the row grows, the second line indents like the first), never clips
+   (`tests/test_objective_wrap.gd`).
 17. **No in-jokes as filler.** A joke that doesn't belong to the form's purpose goes (the "Lost: shark" ad). The humour
    lives in the content (the client's warning, the story), in the company's voice.
 

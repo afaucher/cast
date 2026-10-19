@@ -1966,7 +1966,7 @@ func _update_tracker() -> void:
 			rows.append({"text": "ORIGIN gate", "detail": "closed" if bool(st["origin_closed"]) else "OPEN", "state": "done" if bool(st["origin_closed"]) else "todo"})
 		var left := _pest_alive()
 		var clean := bool(st["pest_paid"])
-		rows.append({"text": "Exterminate %s" % ClientArchetype.pest_name(_run.pest), "detail": "clean" if clean else "%d left" % left, "state": "done" if clean else "todo"})
+		rows.append({"text": _run.pest_label(), "detail": "clean" if clean else "%d left" % left, "state": "done" if clean else "todo"})
 		var alive_here := 0
 		var following := 0
 		for e in _site.employees:
