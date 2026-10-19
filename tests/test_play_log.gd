@@ -42,4 +42,23 @@ func setup() -> void:
 	eq(end[cols.find("hero")], Session.local_character(), "the hero this player picked (%s)" % Session.local_character())
 	check(end[cols.find("payout")] != "", "the end row has the payout")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+	# A file under an older header (a column added since) is moved aside, not appended to.
+	var old := FileAccess.open(path, FileAccess.WRITE)
+	old.store_line("time,run,event")
+	old.store_line("2026-01-01T00:00:00,x,contract")
+	old.close()
+	PlayLog.path = path
+	PlayLog.enabled = true
+	ContractSession.begin(ContractRun.make("prepper", 8, 0.5))
+	PlayLog.enabled = false
+	PlayLog.path = PlayLog.PATH
+	eq(FileAccess.get_file_as_string(path).split("\n")[0].strip_edges(), PlayLog.HEADER, "a fresh file with the new header")
+	var moved := 0
+	for f in DirAccess.get_files_at("user://"):
+		if f.begins_with("test_play_log.") and f.ends_with(".csv") and f != "test_play_log.csv":
+			moved += 1
+			DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + f))
+	eq(moved, 1, "the old file was kept aside")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	finish()

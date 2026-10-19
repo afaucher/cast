@@ -41,6 +41,7 @@ static func _row(run_id: String, event: String, contract: ContractRun, f: int, s
 		fl.get("extracted", ""), fl.get("lost", ""), fl.get("gates_closed", ""), fl.get("gates_total", ""),
 		_role(), Session.roster.size() if Session.online() else 1, Session.local_character(),
 	]
+	_rotate_if_old()
 	var fresh := not FileAccess.file_exists(path)
 	var file := FileAccess.open(path, FileAccess.READ_WRITE if not fresh else FileAccess.WRITE)
 	if file == null:
@@ -50,6 +51,22 @@ static func _row(run_id: String, event: String, contract: ContractRun, f: int, s
 		file.store_line(HEADER)
 	file.store_line(",".join(cells.map(func(c: Variant) -> String: return str(c))))
 	file.close()
+
+
+## A file written under an older header (a column was added since) is moved aside to play_log.<stamp>.csv, so every
+## file's rows line up with its own header.
+static func _rotate_if_old() -> void:
+	if not FileAccess.file_exists(path):
+		return
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return
+	var first := f.get_line().strip_edges()
+	f.close()
+	if first == HEADER:
+		return
+	var stamp := Time.get_datetime_string_from_system().replace(":", "").replace("-", "")
+	DirAccess.rename_absolute(ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(path.get_basename() + "." + stamp + ".csv"))
 
 
 static func _role() -> String:
