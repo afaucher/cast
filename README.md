@@ -108,6 +108,11 @@ the goblin's alarms, archer practice, brute fights) and `voice_log.csv` (every u
 
 HP carries between floors; everything resets between contracts.
 
+**Fog and doors:** you see the room you stand in and what you can see into through an open doorway; the rooms next to
+those show their layout, everything else is black, and rooms you have seen stay dimmed. Narrow doorways have office doors,
+shut at the start: walk into one to open it (it makes a noise), E to shut it. Shut, it stops bodies, shots, sight and
+sound; monsters open them too, and brutes smash them (billed).
+
 ### The crew
 | Hero | Primary (LMB) | Secondary (RMB) | Quirk |
 |---|---|---|---|
@@ -135,7 +140,7 @@ them (a dented prop is free; a break bills its full price to whoever landed it).
 | LMB / RMB | Primary / secondary attack |
 | **Say "cast heal"** etc. | Cast any spell in your four slots. Fumbles weaken it or fizzle it |
 | 1 – 4 | Hold that slot's spell: it recharges 15% faster, and its component shows in your hand |
-| E | Use, first match wins: at the van's side door (floor 1), open the clock-out slip; at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; next to a note (a sign, memo, sticky note, voicemail...), read it, and E again closes it; next to a component on the floor while your slots are full, swap it into your held slot; otherwise nothing. E never casts |
+| E | Use, first match wins: at the van's side door (floor 1), open the clock-out slip; at the freight elevator, open the elevator menu; next to an employee (within about 2), bring a waiting one along or tell your follower to wait; next to a note (a sign, memo, sticky note, voicemail...), read it, and E again closes it; at an office door, shut it (or open it); next to a component on the floor while your slots are full, swap it into your held slot; otherwise nothing. E never casts |
 | Enter | Type an incantation instead of speaking |
 | F1 | Voice debug panel: what the mic hears and what the game did |
 | F5 | Abandon the contract and return to the job board |

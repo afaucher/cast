@@ -66,6 +66,10 @@ extends Node3D
 ##   --invite-demo <name>  dev: 1.5 s into the floor, act as if <name> invited this player from the Steam overlay: the
 ##                       "Leave this job and join?" question (screenshots; M7)
 ##   --no-grime          dev: no grime / damage decal layer (scripts/world/grime)
+##   --no-fog            dev: no room fog (RoomFog / FogView): the whole floor shows, nothing is hidden
+##   --tour S            dev: 1 s in, walk the player toward the elevator for S seconds (the crew follows; doors open as
+##                       they are walked into): mid-floor screenshots with --shot-after
+##   --to-door N         dev: the crew starts in the hall two cells from door N's mouth; --tour then walks through it
 ##   --grime-demo        dev: 1 s in, cast fireball / corn / tentacles 6 cells from the crew and drop teeth / scuff marks (screenshots)
 ##   --no-van-intro      dev: skip the van's arrival animation (the van is still parked and the crew stands beside it) and, below
 ##                       floor 1, the elevator's (the crew stands outside its open doors). Tests (--run-test) and --shot screenshots
@@ -175,6 +179,8 @@ var _note_slip: NoteSlip           ## the note being read, lower left (E opens i
 var _open_note: ClueNote = null    ## the note whose slip is open
 var _plan: SitePlan                ## this floor's site plan (made in _build_world, spawned by _populate_site)
 var _site: SiteBuilder.Site
+var fog: RoomFog = null              ## room fog (presentation, this machine's): what the crew knows of the floor
+var fog_view: FogView = null         ## ... and how it is drawn (look A), what it hides
 var _menu: ElevatorMenu = null
 var _van_menu: VanExitMenu = null    ## the clock-out slip at the van (floor 1 only)
 var _invoice: InvoiceScreen = null
@@ -368,6 +374,7 @@ func _parse_args() -> void:
 			"--to-theme": opts["to_theme"] = nxt
 			"--to-exit": opts["to_exit"] = true
 			"--to-corridor": opts["to_corridor"] = true
+			"--to-door": opts["to_door"] = int(nxt)
 			"--to-pool":
 				opts["to_pool"] = args[i + 1] if i + 1 < args.size() and not args[i + 1].begins_with("--") else ""
 			"--to-package": opts["to_package"] = true
@@ -385,6 +392,8 @@ func _parse_args() -> void:
 			"--invite-demo":
 				opts["invite_demo"] = args[i + 1] if i + 1 < args.size() and not args[i + 1].begins_with("--") else "Rosa"
 			"--no-grime": opts["no_grime"] = true
+			"--no-fog": opts["no_fog"] = true
+			"--tour": opts["tour"] = float(nxt)
 			"--grime-demo": opts["grime_demo"] = true
 			"--no-van-intro": opts["no_van_intro"] = true
 			"--van-intro": opts["van_intro"] = true
@@ -839,6 +848,84 @@ func _populate_site() -> void:
 	for nt in _site.plan.notes:
 		note_list.append("%s %s in %s" % [nt["kind"], nt["format"], nt["room"]])
 	_log("notes: %s" % ", ".join(note_list), Color(0.8, 0.8, 1.0))
+	_log("doors: %d (%s)" % [_site.doors.size(), ", ".join(_site.doors.map(func(d: OfficeDoor) -> String: return "%d" % d.doorway_id))], Color(0.8, 0.8, 1.0))
+
+
+## --tour S: walk the player along a path toward the elevator for S seconds (the controller's move_override), then stop.
+func _dev_tour() -> void:
+	if player == null or controller == null or map == null:
+		return
+	var goal_cell := _exit_cell if map.has_cell(_exit_cell) else player.current_cell()
+	if opts.has("to_door") and _site != null and not _site.plan.doors.is_empty():
+		goal_cell = _door_cells_dev(_site.plan.doors[clampi(int(opts["to_door"]), 0, _site.plan.doors.size() - 1)])[1]
+	var path := map.find_path(player.current_cell(), goal_cell, true)
+	print("[game] tour: %d cells toward %s" % [path.size(), goal_cell])
+	var vp := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(vp, true)
+	var state := {"i": 1, "end": GameWorld.time + float(opts["tour"]), "n": 0, "cpu": 0.0, "gpu": 0.0, "fog": 0.0}
+	var step := func() -> void:
+		if not is_instance_valid(player) or controller == null:
+			return
+		var i: int = state["i"]
+		if GameWorld.time > float(state["end"]) or i >= path.size():
+			if controller.move_override != Vector3.INF:
+				# frame cost over the walk (the fog's CPU share: FogView's last update + contents pass, sampled per tick)
+				var n := maxf(1.0, float(state["n"]))
+				print("[game] tour: stopped at cell %d of %d, %s; frames: process+render %.2f ms (vsync-bound), gpu %.2f ms, fog cpu %.3f ms (%s)" % [i, path.size(),
+						player.current_cell(), float(state["cpu"]) / n, float(state["gpu"]) / n, float(state["fog"]) / n,
+						"fog off" if fog_view == null else "fog on"])
+			controller.move_override = Vector3.INF
+			return
+		state["n"] = int(state["n"]) + 1
+		state["cpu"] = float(state["cpu"]) + RenderingServer.viewport_get_measured_render_time_cpu(vp) + Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+		state["gpu"] = float(state["gpu"]) + RenderingServer.viewport_get_measured_render_time_gpu(vp)
+		if fog_view != null:
+			state["fog"] = float(state["fog"]) + (float(fog_view.stats.get("contents_us", 0.0)) + float(fog_view.stats.get("update_us", 0.0)) / (FogView.UPDATE_EVERY * 60.0)) / 1000.0
+		var d := Hex.to_world(path[i]) - player.global_position
+		d.y = 0.0
+		if d.length() < 0.45:
+			state["i"] = i + 1
+		# The path knows walls, not the van or a crate: no headway for 0.3 s and it sidesteps for 0.5 s.
+		var t := GameWorld.time
+		if d.length() < float(state.get("best", INF)) - 0.05:
+			state["best"] = d.length()
+			state["since"] = t
+		elif t - float(state.get("since", t)) > 0.3:
+			state["side"] = t + 0.5
+			state["since"] = t + 0.5
+			state["best"] = INF
+		var dir := d.normalized() if d.length() > 0.01 else Vector3.ZERO
+		if t < float(state.get("side", -1.0)):
+			dir = (dir + Vector3(-dir.z, 0.0, dir.x) * 1.5).normalized()
+		if int(state["i"]) != i:
+			state["best"] = INF
+		controller.move_override = dir
+	get_tree().physics_frame.connect(step)
+
+
+## Room fog (RoomFog + FogView; docs/design/exploration.md "Decisions: map information, fog and doors"): every machine draws
+## its own from what it already has, every seat's hero (puppets too: one hero's sight is the crew's) and every door's state.
+## Look A, the black void, is the game's only look (user, 2026-10-19: "that is perfect"). --no-fog turns it off (dev).
+func _setup_fog() -> void:
+	if opts.has("no_fog") or map == null or rig == null:
+		return
+	fog = RoomFog.build(map)
+	fog_view = FogView.new()
+	fog_view.name = "FogView"
+	add_child(fog_view)
+	fog_view.setup(map, fog, rig.camera)
+	fog_view.look = FogView.LOOK_VOID
+	var crew: Array = []
+	for seat: int in heroes_by_seat:
+		crew.append(heroes_by_seat[seat])
+	fog_view.heroes = crew
+	var still: Array = []
+	for n in _site.props + _site.hazards + _site.decor + _site.notes + _site.packages + _site.gates + _dev_hazards:
+		if n is Node3D and n.name != "ThemeLights":
+			still.append(n)
+	fog_view.track_static(still)
+	fog_view.watch_doors(_site.doors)
+	fog_view.refresh_now(true)
 
 
 # --- Voice --------------------------------------------------------------------
@@ -1069,6 +1156,9 @@ func _start() -> void:
 		_announce_floor()
 	_log("floor %d/%d  seed %d  %s  spells %s" % [_floor_n(), ContractRun.FLOOR_COUNT, _run.floor_seed(_floor_n()), _run.company, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
 	_drop_near()
+	_setup_fog()
+	if opts.has("tour"):
+		get_tree().create_timer(1.0).timeout.connect(_dev_tour)
 	if opts.has("hazard_demo"):
 		_hazard_demo(str(opts["hazard_demo"]))
 	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
@@ -1143,7 +1233,7 @@ func _arrive_by_van() -> void:
 	for seat: int in [1, 3, 2]:
 		if heroes_by_seat.has(seat):
 			crew.append(heroes_by_seat[seat])
-	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
+	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_arrival = VanArrival.spawn(_site.plan.van, crew, play)
 	if _arrival == null:
@@ -1171,7 +1261,7 @@ func _arrive_by_elevator() -> void:
 				arriving.append(heroes_by_seat[seat])   # (a downed hero stayed behind on the floor above)
 		if _session.carried_down(player):
 			_follow_living_ally()   # a downed player watches the crew step out
-	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor")
+	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_lift = ElevatorArrival.spawn(_site.plan.elevator, _floor_n(), arriving, _heroes(), play)
 	if _lift == null:
@@ -1964,10 +2054,11 @@ func _player_at_van() -> bool:
 	return player != null and not player.dead and _near_van(player.global_position, VAN_USE_DIST)
 
 
-## What E would act on right now. UseTarget.kind: "van" (clock out), "elevator", "employee" (bring / tell to wait) or
-## "note" (read it, or close the slip when it is the note already open).
+## What E would act on right now. UseTarget.kind: "van" (clock out), "elevator", "employee" (bring / tell to wait),
+## "note" (read it, or close the slip when it is the note already open), "door" (shut an office door, open a shut one) or
+## "pickup" (swap it in).
 ## `verb` is the short caption for the use prompt and `pos` the world point it floats at. This is the ONE place that
-## decides the priority (the van exit, then the elevator, then the employee next to the hero, then a note), shared by the E press
+## decides the priority (the van exit, then the elevator, then the employee next to the hero, then a note, a door, a pickup), shared by the E press
 ## (_use_key, press_use) and the prompt (_update_use_prompts), so the prompt can never promise something else.
 ## null when E would do nothing: no contract, a slip open, the contract ending, or nothing in reach.
 class UseTarget extends RefCounted:
@@ -1976,6 +2067,7 @@ class UseTarget extends RefCounted:
 	var pos := Vector3.ZERO
 	var employee: Employee = null
 	var note: ClueNote = null
+	var door: OfficeDoor = null
 
 
 func use_target() -> UseTarget:
@@ -2004,6 +2096,13 @@ func use_target() -> UseTarget:
 			return t
 		var n := _note_target()
 		if n == null:
+			var door := OfficeDoor.interact_target(player)   # an office door: E shuts an open one (opens a shut one)
+			if door != null:
+				t.kind = "door"
+				t.verb = door.use_verb()
+				t.pos = door.prompt_point()
+				t.door = door
+				return t
 			var pickup := player.swap_target()   # E swaps a dropped component into the held slot (was F; user, 2026-10-18)
 			if pickup == null:
 				return null
@@ -2051,6 +2150,9 @@ func _use_key() -> bool:
 			return true
 		"pickup":
 			return player.swap_in_pickup()
+		"door":
+			t.door.use(player)   # (a client's is a request: the host decides; OfficeDoor)
+			return true
 	return Employee.interact(player)
 
 
@@ -2864,6 +2966,20 @@ func _take_shot_later(path: String, after: float) -> void:
 	get_tree().quit()
 
 
+## --to-door N: [a hall cell two back from the door's mouth, a room cell four past the door] (a straight line through it).
+func _door_cells_dev(rec: Dictionary) -> Array[Vector2i]:
+	var door_c: Vector2i = (rec["door_cells"] as Array)[0]
+	var mouth_c: Vector2i = (rec["mouth_cells"] as Array)[0]
+	var step := door_c - mouth_c
+	var stand := mouth_c - step * 2
+	if not map.is_walkable_cell(stand):
+		stand = mouth_c
+	var inside := door_c + step * 4
+	if not map.is_walkable_cell(inside):
+		inside = door_c + step
+	return [stand, inside]
+
+
 ## Dev flags --to-gate / --to-exit: move the crew (screenshots).
 func _dev_teleports() -> void:
 	if opts.has("to_hazard") and _to_hazard(str(opts["to_hazard"])):
@@ -2905,6 +3021,11 @@ func _dev_teleports() -> void:
 			corr.sort()
 			_teleport_crew(corr[int(corr.size() * 0.5)])
 			return
+	if opts.has("to_door") and _site != null and not _site.plan.doors.is_empty():
+		# in the hall, two cells back from door N's mouth (--tour then walks through it into the room)
+		var stand2 := _door_cells_dev(_site.plan.doors[clampi(int(opts["to_door"]), 0, _site.plan.doors.size() - 1)])[0]
+		_teleport_crew(stand2)
+		return
 	if opts.has("to_note") and _site != null and not _site.plan.notes.is_empty():
 		# beside note N (the story note is 0, the hint slip 1), off to its side so nobody hides it from the camera
 		var nt: Dictionary = _site.plan.notes[clampi(int(opts["to_note"]), 0, _site.plan.notes.size() - 1)]

@@ -27,6 +27,8 @@ var _ops_n: Dictionary = {}
 var _theme_ms := 0.0
 var _plan_ms := 0.0
 var _worst_plan_ms := 0.0
+var _door_ms := 0.0
+var _worst_door_ms := 0.0
 
 
 func setup() -> void:
@@ -44,6 +46,8 @@ func setup() -> void:
 				_theme_ms += float(SiteBuilder.last_theme_usec) / 1000.0
 				_plan_ms += float(SiteBuilder.last_plan_usec) / 1000.0
 				_worst_plan_ms = maxf(_worst_plan_ms, float(SiteBuilder.last_plan_usec) / 1000.0)
+				_door_ms += float(SiteBuilder.last_door_usec) / 1000.0
+				_worst_door_ms = maxf(_worst_door_ms, float(SiteBuilder.last_door_usec) / 1000.0)
 				_check_floor(map, run, f, plan, catalog)
 	_check_determinism()
 	_check_fallback_map()
@@ -53,8 +57,8 @@ func setup() -> void:
 	_check_op_rates()
 	await _check_spawn()
 	await _check_models_and_anim()
-	print("themes: %d floors; worst wall dot %.2f, worst seat angle %.1f deg, worst corner angle %.1f deg; plan %.1f ms (themes %.1f ms) avg, %.1f ms worst" % [
-			_plans, _worst_wall_dot, _worst_seat_angle, _worst_corner_angle, _plan_ms / float(_plans), _theme_ms / float(_plans), _worst_plan_ms])
+	print("themes: %d floors; worst wall dot %.2f, worst seat angle %.1f deg, worst corner angle %.1f deg; plan %.1f ms (themes %.1f ms) avg, %.1f ms worst; doors %.1f ms avg, %.1f ms worst (not in plan)" % [
+			_plans, _worst_wall_dot, _worst_seat_angle, _worst_corner_angle, _plan_ms / float(_plans), _theme_ms / float(_plans), _worst_plan_ms, _door_ms / float(_plans), _worst_door_ms])
 	finish()
 
 

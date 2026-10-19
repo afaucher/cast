@@ -28,6 +28,7 @@ const NOISE_DEATH := 6.0
 const NOISE_MELEE := 4.0
 const NOISE_ARROW := 3.0
 const THROUGH_WALL := 0.6         ## with no line of sight a sound carries this share of its radius
+const DOOR_MUFFLE := 0.5          ## through a shut office door a sound carries half its radius (then THROUGH_WALL as usual)
 const EAR_HEIGHT := 1.2           ## sounds are traced from this height above where they happen
 
 const SPAWN_SPREAD_DEG := 35.0
@@ -80,7 +81,11 @@ static func noise(pos: Vector3, radius: float, kind: String = "", quiet: Array =
 		var d := GameWorld.flat_distance(n.global_position, pos)
 		if d > radius:
 			continue
-		if d > radius * THROUGH_WALL and map != null and not map.line_of_sight(ear, Combat.chest(n)):
+		# A shut door between them (OfficeDoor: a HexMap sight blocker) halves the reach; the walls are judged without it.
+		var reach := radius * DOOR_MUFFLE if map != null and map.crosses_blocker(pos, n.global_position) else radius
+		if d > reach:
+			continue
+		if d > reach * THROUGH_WALL and map != null and not map.line_of_sight(ear, Combat.chest(n), 0.25, false):
 			continue
 		var at := pos
 		if stand_off > 0.0:

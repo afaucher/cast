@@ -30,6 +30,7 @@ const NET_SCRIPTS := [
 	"res://scripts/contracts/contract_session.gd",
 	"res://scripts/contracts/contract_run.gd",
 	"res://scripts/contracts/site_plan.gd",
+	"res://scripts/contracts/office_door.gd",
 	"res://scripts/combat/projectile.gd",
 	"res://scripts/heroes/arrow_shot.gd",
 	"res://scripts/heroes/bowl_boulder.gd",
@@ -357,6 +358,7 @@ var REPLICATED := {
 	"res://scripts/contracts/mail_package.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/mail_package.gd"], 0],
 	"res://scripts/spells/component_pickup.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/spells/component_pickup.gd"], 0],
 	"res://scripts/spells/chicken.gd": [NetWorldCodec.CHICKEN_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/spells/chicken.gd"], 5],
+	"res://scripts/contracts/office_door.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/office_door.gd"], 0],
 }
 
 

@@ -40,6 +40,11 @@ extends Node
 ##              Every machine runs the blast itself at `e` (a scheduled effect: each applies what it resolves, so a
 ##              client's hero is hit by its own machine once); the break follows as obj.break. A late joiner gets a
 ##              burning fuse in the snapshot (`fuses`, replayed as obj.fuse) and a blown prop as a gone id.
+##   DOORS      an office door (OfficeDoor) is the host's: a client's E on it, or its own hero walking into a shut one, is
+##              `obj.req {what "door", id, shut}`; the host decides (OfficeDoor.host_decide: a shut is refused while a body
+##              stands in it) and tells everyone `obj.door {id, s, w}` (shut, which way the leaves swing). A brute's smash
+##              is `obj.break {id, by}` (the bill goes out as obj.ledger). A late joiner gets every door in the snapshot
+##              (`doors`: [id, shut, swing, broken]).
 ##
 ## Trusting a client's word for where its hero stands is deliberate: friends only, no cheating concern
 ## (networking.md), and the host's picture of that hero is about 100 ms old.
@@ -89,7 +94,7 @@ func _reset_stats() -> void:
 	employee_log = []
 	stats = {"hits_out": 0, "hits_in": 0, "breaks": 0, "grants": 0, "denies": 0, "requests": 0, "pickups": 0,
 		"ledger_out": 0, "ledger_in": 0, "loadouts": 0, "shoves_out": 0, "shoves_in": 0, "mods_out": 0, "mods_in": 0,
-		"hit_damage_in": 0.0, "hit_reqs": 0, "fuses": 0, "outs": 0}
+		"hit_damage_in": 0.0, "hit_reqs": 0, "fuses": 0, "outs": 0, "doors_out": 0, "doors_in": 0, "door_reqs": 0}
 
 
 # --- Setup -----------------------------------------------------------------------------------------------
@@ -116,6 +121,9 @@ func begin(local: Hero) -> void:
 				_link((n as BreakableCrate).broken, _on_broken.bind(id))
 			elif n is MailPackage:
 				_link((n as MailPackage).broken, _on_mail_broken.bind(id))
+			elif n is OfficeDoor:
+				_link((n as OfficeDoor).state_changed, _on_door.bind(id))
+				_link((n as OfficeDoor).smashed, _on_door_smashed.bind(id))
 		elif n is PricedProp or n is MailPackage:
 			_ticked.append(n)
 			_contacts.append(n)
@@ -371,7 +379,13 @@ func late_join_state() -> Dictionary:
 		var e := prop as ExplosiveProp
 		if e != null and not e.dead and e.is_lit():
 			fuses.append([id, _host_stamp(e.fuse_start), _host_stamp(e.fuse_end), _id(e.igniter())])
-	return {"pickups": picks, "dents": dents, "fuses": fuses}
+	# every office door's state: [id, shut, swing, broken] (an obj.door / obj.break replay)
+	var doors: Array = []
+	for id in NetRegistry.ids():
+		var d := NetRegistry.node(id) as OfficeDoor
+		if d != null:
+			doors.append([id, d.shut, d.swing, d.broken])
+	return {"pickups": picks, "dents": dents, "fuses": fuses, "doors": doors}
 
 
 ## The late joiner: the host's pickups and dents (late_join_state()). A seed-built pickup it already has takes the host's
@@ -397,6 +411,31 @@ func apply_late_join(d: Dictionary) -> void:
 		var row := e as Array
 		if row != null and row.size() >= 4:
 			_client_fuse({"id": row[0], "s": row[1], "e": row[2], "by": row[3]})
+	for e: Variant in d.get("doors", []) as Array:   # (every office door: an obj.door / obj.break replay)
+		var row := e as Array
+		var door := NetRegistry.node(int(row[0])) as OfficeDoor if row != null and row.size() >= 4 else null
+		if door == null:
+			continue
+		if bool(row[3]):
+			door.smash(null)
+		else:
+			door.net_show(bool(row[1]), int(row[2]))
+		door.open_k = 0.0 if door.shut else 1.0   # (no swing on arrival: it is already where the host has it)
+	stats["doors_in"] = int(stats["doors_in"]) + (d.get("doors", []) as Array).size()
+
+
+## Host: a door opened or shut (OfficeDoor.state_changed): everyone is told (a smash is obj.break).
+func _on_door(door: OfficeDoor, id: int) -> void:
+	if door.broken:
+		return
+	_send(0, "obj.door", {"id": id, "s": door.shut, "w": door.swing})
+	stats["doors_out"] = int(stats["doors_out"]) + 1
+
+
+## Host: a brute smashed a door (OfficeDoor.smashed; the bill is in the Ledger, which goes out as obj.ledger).
+func _on_door_smashed(_door: OfficeDoor, by: Node, id: int) -> void:
+	_send(0, "obj.break", {"id": id, "by": _id(by)})
+	stats["breaks"] = int(stats["breaks"]) + 1
 
 
 # --- Every frame ---------------------------------------------------------------------------------------------
@@ -488,6 +527,11 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 	match kind:
 		"obj.break":
 			_client_break(data)
+		"obj.door":
+			var door := NetRegistry.node(int(data.get("id", 0))) as OfficeDoor
+			if door != null:
+				door.net_show(bool(data.get("s", true)), int(data.get("w", 1)))
+				stats["doors_in"] = int(stats["doors_in"]) + 1
 		"obj.fuse":
 			_client_fuse(data)
 		"obj.out":
@@ -557,6 +601,13 @@ func _host_request(from: int, data: Dictionary) -> void:
 		"collect", "swap":
 			if active:
 				_host_grant(from, int(data.get("id", 0)), what, int(data.get("want", 0)), at)
+		"door":
+			# A client's E on a door, or its hero walking into a shut one: the host decides (OfficeDoor.host_decide), once;
+			# everyone hears of it as obj.door. The asker's hero is who opened it (the leaves swing away from it).
+			stats["door_reqs"] = int(stats["door_reqs"]) + 1
+			var door := NetRegistry.node(int(data.get("id", 0))) as OfficeDoor
+			if active and door != null:
+				door.host_decide(bool(data.get("shut", false)), hero)
 		"follow", "wait":
 			if not active or hero == null:
 				return
@@ -679,6 +730,11 @@ func _apply_loadout(data: Dictionary) -> void:
 
 
 func _client_break(data: Dictionary) -> void:
+	var door := NetRegistry.node(int(data.get("id", 0))) as OfficeDoor
+	if door != null:
+		door.smash(NetRegistry.node(int(data.get("by", 0))))   # (the visuals: the bill is the host's, in obj.ledger)
+		stats["breaks"] = int(stats["breaks"]) + 1
+		return
 	var n := NetRegistry.node(int(data.get("id", 0))) as Actor
 	if n == null or n.dead:
 		return
