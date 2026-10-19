@@ -1,16 +1,18 @@
 extends Node3D
-## Hellgate beast options lab (look-dev, nothing here is in the game): a REAL generated floor (DungeonGen.for_run,
-## SiteBuilder plan + spawn, HexMapView, DungeonLook, the grime layer) with the crew standing in a hellgate's room and
-## the monster under the level (HellgateBeast) built around that room in one of its styles. Monsters are removed so
-## the room reads. Scene: scenes/hellgate_beast_lab.tscn.
+## Hellgate beast lab: a REAL generated floor (DungeonGen.for_run, SiteBuilder plan + spawn, HexMapView, DungeonLook, the
+## grime layer) with the crew standing in a hellgate's room and the monster under the level (HellgateBeast) built around
+## that room. SiteBuilder.spawn already gives every gate its abyss beast (the game's); the lab prints what that cost and,
+## unless --wired, swaps the gate's beast for its own style switcher. Monsters are removed so the room reads.
+## Scene: scenes/hellgate_beast_lab.tscn.
 ##
 ##   godot --path . --resolution 1920x1080 -- --scene res://scenes/hellgate_beast_lab.tscn [--style abyss]
 ##         [--seed 7] [--arch guru] [--floor 1] [--gate 0] [--shot <dir/prefix>] [--styles a,b] [--views game,wide]
-##         [--motion abyss,roots] [--t 1.7] [--zfight]
+##         [--motion abyss] [--t 1.7] [--zfight] [--wired] [--diff 0.6]
 ##
-## --style    abyss | cracks | peek | roots | none (interactive start style)
+## --style    abyss | peek | none (interactive start style; abyss is the game's look, peek a lab-only option)
+## --wired    keep the beasts SiteBuilder.spawn built (the game's path: watching their gates) instead of the lab's own
 ## --floor 3  the origin floor: the room of the ORIGIN gate (the bigger version of each style)
-## --shot     renders and writes <prefix>_<style>_<view>.png for every style in --styles (default all four) and every
+## --shot     renders and writes <prefix>_<style>_<view>.png for every style in --styles (default both) and every
 ##            view in --views (default game, wide), then <prefix>_<style>_motion_a/b.png for each style in --motion, and quits.
 ##              game    the game camera (ortho yaw 45, pitch -56, size 24 = the default zoom) on the crew
 ##              wide    size 36 (the farthest the player can zoom out) on the room's centre
@@ -19,8 +21,10 @@ extends Node3D
 ##              low     a low three-quarter view (yaw 25, pitch -24, size 30) on the room: the cliffs and the tentacles
 ##                      climbing them from under the level
 ## --t        the animation time the shots are frozen at (gate and beast together; default 1.7)
+## --perf     with --wired: the GPU / CPU render time (ms, 240 frames) at the default zoom on each gate of the floor, with
+##            the floor's beasts and then without them
 ## --zfight   run ZFightCheck on every style (its own pieces, and against the real terrain) and print the findings
-## Interactive (no --shot): 1-4 pick a style, 0 none, C closes / reopens the gate (the beast sinks), Q / E zoom, WASD pan.
+## Interactive (no --shot): 1-2 pick a style, 0 none, C closes / reopens the gate (the beast sinks), Q / E zoom, WASD pan.
 
 const GAME_YAW := 45.0
 const GAME_PITCH := -56.0
@@ -34,6 +38,7 @@ var gate_index := 0
 var style := "abyss"
 var shot_prefix := ""
 var t_shot := 1.7
+var wired := false
 
 var run: ContractRun
 var map: HexMap
@@ -63,6 +68,7 @@ func _ready() -> void:
 	style = _arg(a, "--style", "abyss")
 	shot_prefix = _arg(a, "--shot")
 	t_shot = float(_arg(a, "--t", "1.7"))
+	wired = a.has("--wired")
 	_build_floor()
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -76,6 +82,8 @@ func _ready() -> void:
 	_aim(GAME_SIZE, crew_center)
 	if a.has("--zfight"):
 		_run_zfight()
+	elif a.has("--perf"):
+		_run_perf()
 	elif shot_prefix != "":
 		_run_shots(a)
 
@@ -88,7 +96,7 @@ static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> St
 
 
 func _build_floor() -> void:
-	run = ContractRun.make(archetype, seed_value, 0.6)
+	run = ContractRun.make(archetype, seed_value, float(_arg(OS.get_cmdline_user_args(), "--diff", "0.6")))
 	map = DungeonGen.for_run(run, floor_n)
 	plan = SiteBuilder.plan(map, run, floor_n, ContractParts.prop_catalog(run.site_type))
 	var world := Node3D.new()
@@ -100,7 +108,16 @@ func _build_floor() -> void:
 	add_child(view)
 	view.build(map)
 	DungeonLook.apply(self, map)
+	HellgateBeast.reset_build_clock()
 	site = SiteBuilder.spawn(map, run, plan)
+	var floor_tris := 0
+	var beasts := get_tree().get_nodes_in_group(HellgateBeast.GROUP)
+	for b: HellgateBeast in beasts:
+		floor_tris += int(b.stats.get("tris", 0))
+	print("floor beasts: %d for %d gates, %d tris, built in %.1f ms" % [beasts.size(), site.gates.size(), floor_tris, HellgateBeast.build_usec / 1000.0])
+	if not wired:
+		for b in beasts:
+			b.free()
 	GrimeLayer.attach(self, map, plan, run.floor_seed(floor_n))
 	# no monsters: the room should read; nothing walks
 	for m in site.monsters:
@@ -172,6 +189,8 @@ func _place_crew() -> void:
 
 
 func _set_style(s: String) -> void:
+	if wired:
+		return
 	if beast != null:
 		beast.free()
 		beast = null
@@ -202,11 +221,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_1:
 				_set_style("abyss")
 			KEY_2:
-				_set_style("cracks")
-			KEY_3:
 				_set_style("peek")
-			KEY_4:
-				_set_style("roots")
 			KEY_0:
 				_set_style("none")
 			KEY_C:
@@ -248,8 +263,8 @@ func _snap(path: String) -> void:
 
 func _freeze(t: float) -> void:
 	gate.model.freeze_at(t)
-	if beast != null:
-		beast.freeze_at(t)
+	for b: HellgateBeast in get_tree().get_nodes_in_group(HellgateBeast.GROUP):
+		b.freeze_at(t)
 
 
 func _run_shots(a: PackedStringArray) -> void:
@@ -284,6 +299,43 @@ func _run_shots(a: PackedStringArray) -> void:
 		await _snap("%s_%s_motion_a.png" % [shot_prefix, s])
 		_freeze(t_shot + 1.6)
 		await _snap("%s_%s_motion_b.png" % [shot_prefix, s])
+	get_tree().quit()
+
+
+# ------------------------------------------------------------------ render cost
+
+func _measure(frames: int) -> Vector2:
+	var vp := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(vp, true)
+	for i in 30:
+		await get_tree().process_frame
+	var gpu := 0.0
+	var cpu := 0.0
+	for i in frames:
+		await get_tree().process_frame
+		gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp)
+		cpu += RenderingServer.viewport_get_measured_render_time_cpu(vp)
+	return Vector2(gpu, cpu) / float(frames)
+
+
+func _run_perf() -> void:
+	shot_prefix = "perf"     # (the interactive camera stands still)
+	var with := Vector2.ZERO
+	var without := Vector2.ZERO
+	var spots: Array[Vector3] = []
+	for g in site.gates:
+		spots.append(g.global_position + Vector3(0, 0.8, 0))
+	for p in spots:
+		_aim(GAME_SIZE, p)
+		with += await _measure(240)
+	for b in get_tree().get_nodes_in_group(HellgateBeast.GROUP):
+		b.free()
+	for p in spots:
+		_aim(GAME_SIZE, p)
+		without += await _measure(240)
+	with /= float(spots.size())
+	without /= float(spots.size())
+	print("perf: %d gates  with beasts gpu %.3f ms cpu %.3f ms  |  without gpu %.3f ms cpu %.3f ms" % [spots.size(), with.x, with.y, without.x, without.y])
 	get_tree().quit()
 
 
