@@ -112,7 +112,7 @@ func run_client() -> void:
 		var cmd := await wait_command(60.0)
 		match str(cmd.get("cmd", "")):
 			"say":
-				var shown := Session.orders.stats["shown"]
+				var shown := int(Session.orders.stats["shown"])
 				var at: Vector3 = cmd.get("at", Vector3.INF)
 				var controller := game.get("controller") as PlayerController
 				controller.aim_override = at if at != Vector3.INF else my_hero().global_position + my_hero().facing * 3.0

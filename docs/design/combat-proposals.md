@@ -230,7 +230,20 @@ hitting it, and bowls only to peel a monster off a teammate (within 3 of them). 
 Measured (`tests/test_ally_restraint.gd`: six real floors, a stand-in player that opens fights on what it sees, 110 s a
 floor, the old eager AI vs the restraint baseline, nobody can go down):
 
-RESTRAINT_TABLE
+| Six floors | Eager AI (before) | Restraint (after) |
+|---|---|---|
+| First hits: player / AI (player's share) | 81 / 64 (56%) | 118 / 65 (64%) |
+| Fights opened (first hit on a monster in no fight): player / AI | 0 / 3 | 5 / 1 (the AI's one: collateral of a swing beside its target) |
+| Kills: player / AI (player's share) | 55 / 90 (38%) | 86 / 93 (48%) |
+| Crew kills, per minute | 145, 13.2 | 179, 16.3 |
+| Median life after the crew's first hit | 0.33 s | 0.25 s |
+
+The player's share of first hits and kills goes up and the crew kills faster (the AI no longer drags the player into the
+next room's fight). Caveat: the stand-in player is a bot that opens on whatever it sees within 8, and monsters usually
+see the crew first (the awareness rules), so most first hits land on monsters already chasing; the AI's remaining first
+hits are on pack-mates of a fight the player started (support, by the rule). The playtest's 130 of 238 Rebar first hits
+came from Rebar walking into rooms ahead of the player, which the restraint baseline stops outright (test_ally_orders: no
+swing, no bowl, no step toward an idle monster). Re-measure on the next playtest's `combat_log.csv`.
 
 **Networking** (`scripts/net/net_orders.gd`, child "Orders" of the Session autoload): the order is heard on the speaker's
 machine, which resolves the aim point; on a crewed floor it is a request (`ord.req`) the host applies once (it runs the AI
