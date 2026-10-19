@@ -40,7 +40,7 @@ func add_field(key: String, caption: String, boxed: bool = false, lines: int = 0
 	if lines > 0:
 		val.custom_minimum_size = Vector2(width - PAD_H * 2.0, FormTheme.typed_font().get_height(TYPE_SIZE) * lines)
 	if boxed:
-		v.add_child(FormTheme.boxed(val, 12.0, 6.0))
+		v.add_child(FormTheme.boxed(val, 12.0, 6.0, Color(0, 0, 0, 0)))   # the paper shows through (user, 2026-10-19)
 	else:
 		v.add_child(val)
 	_values[key] = val

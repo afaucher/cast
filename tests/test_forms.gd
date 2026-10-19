@@ -180,7 +180,7 @@ func _check_picker() -> void:
 	check(p._sign.has_focus(), "the second pick moves focus to the signature line, so Enter signs")
 	check((p._by_id[ids[0]] as RequisitionLine).ticked(), "a picked line has the red tick")
 	p.set_trigger_word("pickle")
-	check(p._spec.value("say").begins_with("pickle "), "the trigger word reaches the spec sheet")
+	check(p._spec.value("say").begins_with("\"pickle "), "the trigger word reaches the spec sheet")
 	var got := []
 	p.picked.connect(func(s: Array[String]) -> void: got.append(s))
 	p.sign_hold = 0.0
