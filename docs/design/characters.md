@@ -98,6 +98,32 @@ never notices what it's standing on.*
 - **Quirk, Heavy:** steps up +1 only, so **no +2 climbs** (like the brute): `Hero.can_climb` is
   false and the ally brain paths without climbs. It can't be shoved (`shove_mult` 0).
   - *P2 "Leg-up":* an ally next to a still Rebar can use it as a step onto +3 ledges.
+- **Weakness, the brute's daze** (as built 2026-10-19, see "The daze" below): being immovable doesn't help. A direct
+  slam stops Rebar swinging for 0.6 s, so face-tanking a brute costs him his punches. Standing at arm's length (his fist
+  reaches 1.8, the daze line is 1.6) keeps him swinging.
+
+#### The daze (as built, 2026-10-19)
+The brute's slam **dazes** a hero it hits squarely. It's the first status that takes control away from a hero, and so
+far only the brute deals it.
+
+| | |
+|---|---|
+| Trigger | The brute's slam, a **direct hit**: the hero's centre within **1.6** of the brute (`Brute.DAZE_RADIUS`, of the 2.0 ring). The band from 1.6 to 2.0 only hurts. The slam's damage still falls off linearly from 25 at the centre to 12.5 at the rim (there was never a flat full-damage zone), so a dazing hit deals about 15-25 |
+| Telegraph | A fainter amber inner ring at 1.6 inside the brute's red wind-up ring: inside it you get dazed. The brute stops at 1.5 from its target, so its target is inside unless it steps back during the 0.9 s wind-up |
+| Length | **0.6 s** (`Brute.DAZE_TIME`) |
+| While dazed | No walking, no melee, no secondary (bolt, bowl, spin, arrow), no new bow draw. A draw in progress is cancelled. A swing or spin is instant, so there's nothing in flight to cancel; the weapon's swing animation is cut |
+| Immovable doesn't help | The daze ignores `shove_mult`: Rebar stays put but stops punching |
+| Voice | **Casts are never blocked.** A spell spoken during the daze goes off at once, exactly as it would otherwise (nothing is held or dropped) |
+| No stun-lock | After a daze ends, **1.5 s** of immunity (`Actor.DAZE_GUARD`): two brutes can't chain it. A slam in that window still hurts and shoves |
+| Monsters | Never dazed. The slam only hits heroes, and a brute's restless-fight slams (on a rival brute or a skeleton) shove without dazing, so those fights stay posturing |
+| Readable | Three yellow stars spin over the hero's head, the model reels from side to side, and "*bonk*" pops up with a few sparks as it lands (`DazeFx`). Your own hero also gets a small camera bump and **DAZED** beside your name on the HUD |
+| AI allies | `AllyBrain` waits it out (a dazed hero is `is_helpless()`), then fights on |
+
+Networking: the daze is a status on the hero, so the hero's owner applies it. The brute's wind-up is an event, each machine
+resolves the strike on its own hero (`Monster.net_strike` -> `Combat.slam` -> `Actor.daze`), and the daze is a modifier
+(`Actor.STAT_DAZE`, id `daze`) that the owner announces like armor or a root (`NetStatus` "mods"). The other screens show
+the stars from it, with no grace period added, so the stars leave every screen together. The 1.5 s immunity is the owner's
+private bookkeeping. `test_daze` and `test_net_daze` cover it.
 
 **Shoving teammates: yes.** It's the roster's main source of player-caused chaos *and* a
 skill tool. Bowling a friend out of the brute's slam ring is a rescue. It passes the

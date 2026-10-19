@@ -116,6 +116,9 @@ var _visual_yaw := 0.0
 var _draw_start := -1.0              ## GameWorld.time the bow draw began, or -1 when not drawing
 var _charge_ring: MeshInstance3D = null
 var _charge_mat: StandardMaterial3D = null
+var _ui_top := 1.95                  ## height of the figure's top (the bar, name, shield and daze stars float above it)
+var _daze_stars: Node3D = null       ## the stars over the head while dazed (DazeFx)
+var _daze_shown := false             ## this screen is showing the daze (stars, sway): follows is_dazed()
 
 ## Opt-in replacement for the capsule/hat/weapon body (e.g. a RebarModel). Set it before the
 ## hero enters the tree (HeroFactory.spawn_hero(..., model)). The model faces local -Z; if it has
@@ -168,6 +171,8 @@ func net_fields() -> Dictionary:
 		"_body_mat": Net.LOCAL, "_bar": Net.LOCAL, "_name_label": Net.LOCAL, "_shield_icon": Net.LOCAL,
 		"_shield_bubble": Net.LOCAL, "_swing_tween": Net.LOCAL, "_visual_yaw": Net.LOCAL,
 		"_charge_ring": Net.LOCAL, "_charge_mat": Net.LOCAL,
+		# The daze look: every screen shows it from the daze modifier (_modifiers, announced by the owner).
+		"_ui_top": Net.LOCAL, "_daze_stars": Net.LOCAL, "_daze_shown": Net.LOCAL,
 	})
 	return f
 
@@ -503,6 +508,16 @@ func release_draw(dir: Vector3) -> bool:
 	return fire_arrow(dir, full)
 
 
+## A daze took (Actor.daze, on this hero's own machine): the draw is lost and a swing or spin in progress is cut off
+## (their hits already landed: both are instant). Casts are not touched: a spell spoken while dazed still goes off.
+func _on_dazed(_seconds: float) -> void:
+	cancel_draw()
+	if _swing_tween and _swing_tween.is_valid():
+		_swing_tween.kill()
+	if _weapon != null:
+		_weapon.rotation = Vector3(0, deg_to_rad(SWING_REST_YAW), 0)
+
+
 ## Lower the bow without shooting.
 func cancel_draw() -> void:
 	if _draw_start < 0.0:
@@ -680,10 +695,12 @@ func become(kit: String, new_name: String, color: Color, model: Node3D, full: bo
 	cancel_draw()
 	if _swing_tween and _swing_tween.is_valid():
 		_swing_tween.kill()
-	for n: Node in [_visual, _bar, _name_label, _shield_icon, _shield_bubble, _charge_ring]:
+	for n: Node in [_visual, _bar, _name_label, _shield_icon, _shield_bubble, _charge_ring, _daze_stars]:
 		if n != null and is_instance_valid(n):
 			remove_child(n)
 			n.queue_free()
+	_daze_stars = null
+	_daze_shown = false
 	_visual = null
 	_bar = null
 	_name_label = null
@@ -740,6 +757,7 @@ func _build_visuals() -> void:
 			top = float(visual_override.get("ui_height"))
 	else:
 		_build_default_body(skin, dark)
+	_ui_top = top
 	var ui_scale := top / 1.95
 
 	_bar = HpBar.new()
@@ -852,6 +870,41 @@ func _process(delta: float) -> void:
 		if _shield_bubble.visible:
 			var pulse := 1.0 + 0.04 * sin(GameWorld.time * 6.0)
 			_shield_bubble.scale = Vector3.ONE * pulse
+	_update_daze_visuals(delta)
+
+
+## The daze on this screen (the owner's daze, or the one its owner announced): stars over the head, the model reeling
+## from side to side, the "*bonk*" callout as it lands (and a camera bump for your own hero).
+func _update_daze_visuals(delta: float) -> void:
+	var on := not dead and is_dazed()
+	if on != _daze_shown:
+		_daze_shown = on
+		if on:
+			if _daze_stars == null or not is_instance_valid(_daze_stars):
+				_daze_stars = DazeFx.stars(_ui_top)
+				add_child(_daze_stars)
+			DazeFx.callout(self, _ui_top)
+			if is_player:
+				Fx.shake(0.15)
+		if _daze_stars != null and is_instance_valid(_daze_stars):
+			_daze_stars.visible = on
+	if on:
+		var t := GameWorld.time
+		DazeFx.spin(_daze_stars, t)
+		_visual.rotation.z = 0.2 * sin(t * 11.0)
+		_visual.rotation.x = 0.08 * sin(t * 7.0 + 1.3)
+	else:
+		# Settle back upright (a downed hero's own tween owns rotation.x: only the sideways sway is undone then).
+		var k := clampf(12.0 * delta, 0.0, 1.0)
+		if _visual.rotation.z != 0.0:
+			_visual.rotation.z = 0.0 if absf(_visual.rotation.z) < 0.002 else lerpf(_visual.rotation.z, 0.0, k)
+		if not dead and _visual.rotation.x != 0.0:
+			_visual.rotation.x = 0.0 if absf(_visual.rotation.x) < 0.002 else lerpf(_visual.rotation.x, 0.0, k)
+
+
+## True while this screen shows the daze (stars and sway; tests).
+func is_showing_daze() -> bool:
+	return _daze_shown and _daze_stars != null and is_instance_valid(_daze_stars) and _daze_stars.visible
 
 
 func _set_armor_visuals(on: bool) -> void:

@@ -20,6 +20,7 @@ const BAR_COLOR_PLAYER := Color(0.3, 0.85, 0.5)
 const BAR_COLOR_ALLY := Color(0.4, 0.7, 0.95)
 const COLOR_DANGER := Color(1.0, 0.45, 0.4)
 const COLOR_NEUTRAL := Color(0.8, 0.8, 0.85)
+const COLOR_DAZED := Color(1.0, 0.82, 0.3)
 
 var player: Hero = null
 var allies: Array[Hero] = []
@@ -29,6 +30,7 @@ var trigger_word := "cast"   ## spoken keyword shown on the cards ("say: PICKLE 
 var _root: Control
 var _player_bar: HudBar
 var _player_name: Label
+var _daze_tag: Label              ## "DAZED" beside your name while your hero is dazed (the brute's slam)
 var _party: VBoxContainer         ## top-left column: the player's own bar first (bigger), the allies' bars under it
 var _ally_box: VBoxContainer
 var _ally_bars: Array[HudBar] = []
@@ -102,6 +104,10 @@ func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 func _process(delta: float) -> void:
 	if player != null and is_instance_valid(player):
 		_player_bar.set_value(player.hp / player.max_hp, "%d / %d" % [int(ceilf(player.hp)), int(player.max_hp)])
+		var dazed := not player.dead and player.is_dazed()
+		_daze_tag.visible = dazed
+		if dazed:
+			_daze_tag.modulate.a = 0.75 + 0.25 * sin(GameWorld.time * 18.0)   # a quick throb while it lasts
 	for i in _ally_bars.size():
 		if i < allies.size() and is_instance_valid(allies[i]):
 			var a := allies[i]
@@ -267,10 +273,20 @@ func _build_player_panel() -> void:
 	box.add_theme_constant_override("separation", 2)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_party.add_child(box)
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 12)
+	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(name_row)
 	_player_name = Label.new()
 	_player_name.text = "Hero"
 	_style_label(_player_name, 20)
-	box.add_child(_player_name)
+	name_row.add_child(_player_name)
+	_daze_tag = Label.new()
+	_daze_tag.text = "DAZED"
+	_daze_tag.modulate = COLOR_DAZED
+	_style_label(_daze_tag, 20)
+	_daze_tag.visible = false
+	name_row.add_child(_daze_tag)
 	_player_bar = HudBar.new()
 	_player_bar.custom_minimum_size = Vector2(320, 26)
 	_player_bar.fill = BAR_COLOR_PLAYER
