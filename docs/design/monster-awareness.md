@@ -474,6 +474,9 @@ It ran against the working tree of 2026-10-18 (including the in-progress pool an
 - **Fireworks wake a hellgate that is ready to spawn.**
 - **Open, not defined yet:** what a fully restless floor does (hunters).
 - **Deferred:** speech as noise. Idea to keep: yelling a spell could have its own alert component.
+- **Ramp shortened (after the first logged round, 2026-10-18):** floors took 2:31, 5:22 and 2:28, so R peaked at 0.09,
+  0.56 and 0.08. The ramp is now **0 until 2 min, full at 6 min** (`MonsterSenses.RESTLESS_FULL` 360). This replaces the
+  8-minute figure used above.
 
 ## Step 1 as built (2026-10-18)
 

@@ -29,9 +29,9 @@ const SPAWN_SPREAD_DEG := 35.0
 const DOOR_MIN_DIST := 2.5        ## standing right at the door: face the room centre instead
 const WALL_AHEAD := 3.5           ## 2 hexes
 
-## Restlessness ramp (user, 2026-10-18: a floor takes about 8 minutes).
+## Restlessness ramp: 0 until 2 min, full at 6 min (user, 2026-10-18).
 const RESTLESS_START := 120.0
-const RESTLESS_FULL := 480.0
+const RESTLESS_FULL := 360.0
 
 const PATROL_MIN_HEX := 3         ## patrol points stand at least this many hexes apart
 const PATROL_PATH_NODES := 150
@@ -93,7 +93,8 @@ static func floor_seconds() -> float:
 	return GameWorld.time - float(GameWorld.get_meta("awareness_t0", GameWorld.time))
 
 
-## R(t) = clamp((t - 120 s) / (480 s - 120 s), 0, 1) on the floor clock.
+## R(t) = clamp((t - 120 s) / (360 s - 120 s), 0, 1) on the floor clock (full at 6 min; user, 2026-10-18, after a
+## playtest where floors took 2.5-5.5 min).
 static func restlessness() -> float:
 	if restless_override >= 0.0:
 		return clampf(restless_override, 0.0, 1.0)
