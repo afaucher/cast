@@ -17,8 +17,33 @@ A1, A3, B6, D11 and the environment notes in 5.3). **[proposal]** marks every nu
 
 ## 1. Voice orders to AI teammates
 
-**The user's direction (2026-10-19): "keep it simple".** The three words below are my proposal; the user hasn't confirmed
-them yet (question 1).
+**The user's direction (2026-10-19): "keep it simple".**
+
+### 1.0 Decided (user, 2026-10-19). This replaces the three-order proposal in 1.1 where they differ.
+- **Every named character has one order, or none (its default behaviour).** That includes employees, not only AI heroes.
+- **Two orders:**
+  - **"<name> go"** sets a waypoint where the speaker aims. The character walks there, then **holds** there until a new
+    order: an AI hero fights what comes, an employee stays put. Aimed at a monster, an AI hero attacks it. A new "go"
+    replaces the old one.
+  - **"<name> follow"** clears the order: the character follows **the speaker** (allies today always follow seat 1's
+    hero). There is no way to tell one character to follow another.
+- **On a human-played hero** an order is only a world marker on that player's screen ("Fox: go here"); it controls
+  nothing and clears when they reach it. "Follow" sends them nothing.
+- **Names (official first, then aliases):**
+
+  | Who | Official | Also heard as |
+  |---|---|---|
+  | Everyone (crew + employees) | **Everyone** | everybody, all hands |
+  | Crew (the heroes only) | **Crew** | team, squad |
+  | Mrs. Pym | **Pym** | Mrs. Pym, Missus Pym |
+  | Every henchman on the floor | **Hench** | henchmen, henchman |
+  | Hench #4 | **Hench Four** | Number Four |
+  | Rebar / Wick / Gasket | **Rebar / Wick / Gasket** | (Gasket stays the main name despite the "cast"/"GAS" risk; watch it in the logs) |
+
+- **Players are addressed by their hero's name only** (no player names or callsigns).
+- **"Everyone" can take "go"** as well as "follow" (employees included).
+- The other employee names (Reginald, Beatrice, Alphonse, Hodges, Dorothea, Gary, Steve, Todd, Kevin, Dennis) are one word
+  already and are their own official names. "Hench" addresses every henchman; "Hench Four" only #4.
 
 **Why.** The research found the AI ally leads: it picks the nearest monster near the leader with no wait and no line of
 sight, so Rebar opens every fight (`combat-variety-research.md` 1.3). Two fixes combine: a **restraint baseline** (the
