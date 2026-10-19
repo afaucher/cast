@@ -446,6 +446,17 @@ Options considered (none chosen):
 3. The output-aware gate or AEC (point 6): the real fix for every leak, including Steam voice chat.
 4. Probe as a gate: a test that fails when a newly voiced line casts, like rule 7 for cues.
 
+**2026-10-19, the new employee names (still parked; nothing else here changed).** The employees now come from one name
+set (`SiteBuilder.STAFF_NAMES` / `HENCHMAN_NAMES`: Beatrice, Mabel, Elsie, Lionel, Pearl, Penny, Molly, Mr. Bloom, Iris,
+Stan; Gary, Steve, Simon, Nigel, Brad, Todd, Gordon, Kevin, Craig, Keith), chosen against the recognizer for the voice
+orders (`combat-proposals.md` 1.0 / 1.8). Bernadette, one of the two measured leaks above, is gone. The dispatch voice was
+re-rendered (`tools/render_dispatch.ps1`, Kokoro af_bella, the same radio chain): 180 lines now (80 rescue lines, 20 names x
+4), of which 52 rescue clips are new (13 new names x 4; the other 7 henchmen's lines are word for word the same). The leak
+probe (`tools/dispatch_leak_probe.tscn`, the same worst case: full level, no room, loose and chaos) on the 52 new clips:
+**no cast, no trigger, no fizzle in either mode** (104 runs). The recognizer heard them as written ("GOT LION ALL" for
+Lionel, "GOD BEATRICE"); none is a voice order either (the name follows "got", never precedes an order word). The keynote
+stage and podcast room leaks are untouched (those lines did not change).
+
 ## 5. Recommendation
 
 **Mix:** procedural for the voice feedback and simple UI/tonal cues (cast heard, fizzle, out of component, accidental,

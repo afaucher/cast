@@ -11,8 +11,8 @@ extends RefCounted
 ##   everyone    the heroes (but the speaker) and every employee in earshot
 ##   crew        the heroes (but the speaker)
 ##   rebar / wick / gasket   the hero(es) of that character (two players may both be Wick: both are named)
-##   hench       every henchman in earshot; "hench four" only Hench #4 (or the floor's "Henchman 4")
-##   pym, reginald, ...      the employee whose name starts with it ("Mrs. Pym", "Gary (Henchman 1)")
+##   hench       every henchman in earshot; "hench four" only "(Henchman 4)"
+##   beatrice, bloom, ...    the employee whose name starts with it, titles skipped ("Mr. Bloom", "Gary (Henchman 1)")
 ## A name nobody on the floor answers to does nothing, quietly.
 ##
 ## WHO DOES WHAT: an AI hero (an AllyBrain) takes the order (AllyBrain.give_order); a hero a person plays is shown a marker
@@ -23,7 +23,7 @@ extends RefCounted
 const ORDERS := ["go", "attack", "follow"]
 ## Employees hear an order from this far (world units); the crew hears it anywhere.
 const EARSHOT := 16.0
-## Titles skipped when an employee's name is matched ("Mrs. Pym" answers to "pym").
+## Titles skipped when an employee's name is matched ("Mr. Bloom" answers to "bloom").
 const TITLES := ["mr", "mrs", "ms", "miss", "missus", "dr", "sir"]
 
 
@@ -68,12 +68,12 @@ static func employee_answers(e: Employee, who: String) -> bool:
 		"hench":
 			return e.style == "henchman"
 		"hench four":
-			return e.display_name.contains("#4") or e.display_name.contains("Henchman 4)")
+			return e.display_name.contains("(Henchman 4)")
 	return call_name(e.display_name) == who
 
 
-## The name an employee is called by: the first word of its name that is not a title, lower case ("Mrs. Pym" -> "pym",
-## "Gary (Henchman 1)" -> "gary", "Hench #4" -> "hench").
+## The name an employee is called by: the first word of its name that is not a title, lower case ("Mr. Bloom" -> "bloom",
+## "Gary (Henchman 1)" -> "gary").
 static func call_name(display_name: String) -> String:
 	var clean := ""
 	for ch in display_name.to_lower():

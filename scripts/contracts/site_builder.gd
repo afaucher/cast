@@ -76,13 +76,17 @@ const ROOM_BUDGET_PER_ROOM := 1
 const ROOM_BUDGET_PER_FLOOR := 3
 const PEST_WEIGHT_MULT := 3.5
 
+## THE employee names (the one source: Employee.spawn's fallback, the voice orders and the dispatch lines use these too).
+## Screened against the speech model for the voice orders (user, 2026-10-19; tests/probe_voice_names.gd): every name is heard
+## right for "<name> go / attack / follow", none is an order or a cast in chatter. Nigel is Henchman 4, so "Hench Four"
+## (VoiceOrders: "(Henchman 4)") lands on a name the model always hears.
 const STAFF_NAMES: Array[String] = [
-	"Marguerite (sommelier)", "Dev (IT support)", "Bernadette (wellness)", "Colin (valet)", "Priya (chef)",
-	"Hector (security)", "Imogen (concierge)", "Walt (maintenance)", "Tessa (intern)", "Mr. Okafor (accounts)",
+	"Beatrice (sommelier)", "Mabel (wellness)", "Elsie (chef)", "Lionel (security)", "Pearl (valet)",
+	"Penny (concierge)", "Molly (IT support)", "Mr. Bloom (accounts)", "Iris (intern)", "Stan (maintenance)",
 ]
 const HENCHMAN_NAMES: Array[String] = [
-	"Gary (Henchman 1)", "Steve (Henchman 2)", "Dwayne (Henchman 3)", "Kevin (Henchman 4)", "Brad (Henchman 5)",
-	"Todd (Henchman 6)", "Gordon (Henchman 7)", "Nigel (Henchman 8)", "Craig (Henchman 9)", "Keith (Henchman 10)",
+	"Gary (Henchman 1)", "Steve (Henchman 2)", "Simon (Henchman 3)", "Nigel (Henchman 4)", "Brad (Henchman 5)",
+	"Todd (Henchman 6)", "Gordon (Henchman 7)", "Kevin (Henchman 8)", "Craig (Henchman 9)", "Keith (Henchman 10)",
 ]
 
 

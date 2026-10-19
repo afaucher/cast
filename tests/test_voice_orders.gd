@@ -22,14 +22,15 @@ const TAIL := 0.9
 const SPEED := 4.0
 const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
 ## The words handed to the recognizer as hotwords in the measurement run (CAST_ORDERS_HOTWORDS=1).
-const HOT := ["everyone", "crew", "pym", "hench", "rebar", "wick", "gasket", "reginald", "beatrice", "alphonse", "hodges",
-	"dorothea", "gary", "steve", "todd", "kevin", "dennis", "go", "attack", "follow"]
+const HOT := ["everyone", "crew", "hench", "rebar", "wick", "gasket", "beatrice", "mabel", "elsie", "lionel", "pearl", "penny",
+	"molly", "bloom", "iris", "stan", "gary", "steve", "simon", "nigel", "brad", "todd", "gordon", "kevin", "craig", "keith", "go", "attack", "follow"]
 ## The share of order clips (pos, alias, pace; loose) that must be heard right.
 const RECALL_MIN := 0.9
 
 var caster: VoiceCaster
 var _orders: Array = []
 var _casts: Array = []
+var _triggers := 0
 var _hyps: Array = []
 
 
@@ -67,6 +68,7 @@ func setup() -> void:
 	print("order hotwords: %s" % ("names + order words (measurement)" if hot else "none (the default)"))
 	caster.order_spoken.connect(func(who: String, o: String, _h: String) -> void: _orders.append("%s %s" % [who, o]))
 	caster.spell_spoken.connect(func(id: String, _p: float, _h: String) -> void: _casts.append(id))
+	caster.trigger_heard.connect(func(_w: String) -> void: _triggers += 1)
 	caster.heard.connect(func(text: String, is_final: bool) -> void: _hyps.append(("[%s]" if is_final else "%s") % text))
 	print("\n=== loose (default) ===")
 	var loose := _run_all(clips, "loose")
@@ -76,12 +78,13 @@ func setup() -> void:
 	caster.set_strictness("loose", false)
 	print("\n=== summary (%s) ===" % ("hotwords" if hot else "no order hotwords"))
 	for res: Dictionary in [loose, strict]:
-		print("%-7s orders heard right %d / %d (%.0f%%): pos %s, alias %s, pace %s; false orders %d; wrong orders %d; casts on order clips %d; mixed ok %d / %d" % [
+		print("%-7s orders heard right %d / %d (%.0f%%): pos %s, alias %s, pace %s; false orders %d; wrong orders %d; casts on order clips %d; armed cast triggers on order and chatter clips %d; mixed ok %d / %d" % [
 			res["mode"], res["right"], res["want"], 100.0 * res["right"] / maxf(res["want"], 1.0), _frac(res["by_kind"], "pos"),
-			_frac(res["by_kind"], "alias"), _frac(res["by_kind"], "pace"), res["false"], res["wrong"], res["stray_casts"],
+			_frac(res["by_kind"], "alias"), _frac(res["by_kind"], "pace"), res["false"], res["wrong"], res["stray_casts"], res["triggers"],
 			res["mixed_ok"], res["mixed"]])
 		check(int(res["false"]) == 0, "[%s] no chatter clip gives an order (%d did)" % [res["mode"], res["false"]])
 		check(int(res["stray_casts"]) == 0, "[%s] no order clip casts a spell (%d did)" % [res["mode"], res["stray_casts"]])
+		check(int(res["triggers"]) == 0, "[%s] no order or chatter clip arms a cast (%d did)" % [res["mode"], res["triggers"]])
 	var recall := float(loose["right"]) / maxf(float(loose["want"]), 1.0)
 	check(recall >= RECALL_MIN, "loose: %.0f%% of the order clips heard right (at least %.0f%%)" % [recall * 100.0, RECALL_MIN * 100.0])
 	check(int(loose["wrong"]) == 0, "loose: no clip gives the wrong order (%d did)" % loose["wrong"])
@@ -94,7 +97,7 @@ static func _frac(by_kind: Dictionary, kind: String) -> String:
 
 
 func _run_all(clips: Array, mode: String) -> Dictionary:
-	var res := {"mode": mode, "want": 0, "right": 0, "false": 0, "wrong": 0, "stray_casts": 0, "mixed": 0, "mixed_ok": 0, "by_kind": {}}
+	var res := {"mode": mode, "want": 0, "right": 0, "false": 0, "wrong": 0, "stray_casts": 0, "triggers": 0, "mixed": 0, "mixed_ok": 0, "by_kind": {}}
 	print("%-40s %-6s %-20s %-26s %-10s %s" % ["clip", "kind", "expect", "heard order", "casts", "recognizer"])
 	for c: Dictionary in clips:
 		var want: String = c[mode]
@@ -123,6 +126,9 @@ func _run_all(clips: Array, mode: String) -> Dictionary:
 		if spell == "none" and not casts.is_empty():
 			status += " +CAST"
 			res["stray_casts"] = int(res["stray_casts"]) + 1
+		if c["kind"] != "mixed" and int(r["triggers"]) > 0:
+			status += " +TRIGGER"
+			res["triggers"] = int(res["triggers"]) + 1
 		if c["kind"] == "mixed":
 			res["mixed"] = int(res["mixed"]) + 1
 			if casts.has(spell) and (want == "any" or got.has(want)):
@@ -146,6 +152,7 @@ func _play(c: Dictionary) -> Dictionary:
 	caster.poll()
 	_orders.clear()
 	_casts.clear()
+	_triggers = 0
 	_hyps.clear()
 	var stream := PackedFloat32Array()
 	stream.resize(int(LEAD * RATE))
@@ -166,7 +173,7 @@ func _play(c: Dictionary) -> Dictionary:
 	for i in 20:
 		OS.delay_msec(20)
 		caster.poll()
-	return {"orders": _orders.duplicate(), "casts": _casts.duplicate(), "hyps": _hyps.duplicate()}
+	return {"orders": _orders.duplicate(), "casts": _casts.duplicate(), "hyps": _hyps.duplicate(), "triggers": _triggers}
 
 
 func _ensure_clips(dir: String) -> bool:

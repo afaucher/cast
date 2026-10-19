@@ -151,7 +151,7 @@ extends RefCounted
 ## "REBAR GO" may still become "REBAR GOES IN". A name that ends an utterance waits `order_window` (from that final) for an
 ## order word to open the next one. Strict: the name opens the utterance (preamble aside); loose / chaos: anywhere; a bare
 ## order word never orders anyone. The same order to the same name within `order_lockout` is one order ("ignored").
-## Names (`order_names`) are the decided ones plus measured spellings; a name fused with its "go" ("CRUGO", "DENISCO",
+## Names (`order_names`) are the decided ones plus measured spellings; a name fused with its "go" ("CRUGO", "HENNYGO",
 ## "WICKOW") is split (`order_fused_go`). Possessives are not names. Spells and orders never share a word, so they never
 ## interfere; "GASKET" is never heard as the trigger. Measured with tests/test_voice_orders.gd (148 TTS clips, David + Zira):
 ## 94% of the order clips heard right in loose (97% strict), 0 false orders from 38 chatter clips, 0 casts from order clips,
@@ -315,34 +315,40 @@ const TUNING := {
 	# The same order to the same name again sooner than this is one order (the recognizer's double fires).
 	"order_lockout": 1.5,
 	# Order -> {heard word: quality}. Only the exact words: "goes" / "going" are chatter ("Rebar goes in first").
-	# "followed": the model writes a final "follow" so (both voices, measured).
+	# The forms below 1.0 are how the model writes a FINAL order word (measured, both voices: "BEATRICE GIRL", "HECTOR GOAT",
+	# "ELSIE GOE", "PEARL FALLOW", "STEVE FOLLOWED"); they count only as the utterance's last word ("Steve followed us here"
+	# is chatter).
 	"order_words": {
-		"go": {"go": 1.0},
+		"go": {"go": 1.0, "goe": 0.9, "goat": 0.9, "girl": 0.9, "got": 0.9},
 		"attack": {"attack": 1.0},
-		"follow": {"follow": 1.0, "followed": 0.9},
+		"follow": {"follow": 1.0, "followed": 0.9, "fallow": 0.9},
 	},
 	# Name key (VoiceOrders resolves it to characters) -> {heard phrase: quality}. The key is the official name; the
-	# aliases are the decided ones (combat-proposals.md 1.0) plus the model's measured spellings of each name (VOICE ORDERS).
+	# aliases are the decided ones (combat-proposals.md 1.0) plus the model's measured spellings of each name (VOICE ORDERS;
+	# the employees' from tests/probe_voice_names.gd, the one name set: SiteBuilder.STAFF_NAMES / HENCHMAN_NAMES).
 	"order_names": {
 		"everyone": {"everyone": 1.0, "everybody": 1.0, "every one": 1.0, "every body": 1.0, "all hands": 1.0},
 		"crew": {"crew": 1.0, "team": 1.0, "squad": 1.0, "crue": 0.9, "cru": 0.9},
-		"pym": {"pym": 1.0, "pim": 1.0, "mrs pym": 1.0, "mrs pim": 1.0, "missus pym": 1.0, "missus pim": 1.0,
-			"misses pym": 1.0, "misses pim": 1.0, "missus pimp": 0.9, "mrs pimp": 0.9, "missus pin": 0.9},
 		"hench": {"hench": 1.0, "henchmen": 1.0, "henchman": 1.0, "hedge": 0.8, "hedgeman": 0.9, "hedgemen": 0.9},
 		"hench four": {"hench four": 1.0, "hench 4": 1.0, "number four": 1.0, "number 4": 1.0, "hench for": 0.9,
 			"henchfore": 0.9, "hencefore": 0.9, "hedgefore": 0.9},
 		"rebar": {"rebar": 1.0, "ribar": 0.9, "we bar": 0.9, "ribard": 0.9},
 		"wick": {"wick": 1.0, "whit": 0.8, "whig": 0.8, "wig": 0.8},
 		"gasket": {"gasket": 1.0},
-		"reginald": {"reginald": 1.0}, "beatrice": {"beatrice": 1.0},
-		"alphonse": {"alphonse": 1.0, "alphons": 0.9, "alphon's": 0.9, "alp vons": 0.9, "alp von's": 0.9},
-		"hodges": {"hodges": 1.0, "hodge's": 0.9, "hodge": 0.9}, "dorothea": {"dorothea": 1.0},
-		"gary": {"gary": 1.0, "garry": 1.0, "gerry": 0.9}, "steve": {"steve": 1.0},
-		"todd": {"todd": 1.0, "tod": 1.0}, "kevin": {"kevin": 1.0, "kavin": 0.9, "cabin": 0.8},
-		"dennis": {"dennis": 1.0, "denis": 1.0},
+		# Staff.
+		"beatrice": {"beatrice": 1.0}, "mabel": {"mabel": 1.0}, "elsie": {"elsie": 1.0},
+		"lionel": {"lionel": 1.0, "lion'll": 0.9, "lion all": 0.9, "lion ll": 0.9, "lion or": 0.8},
+		"pearl": {"pearl": 1.0}, "penny": {"penny": 1.0, "henny": 0.9}, "molly": {"molly": 1.0},
+		"bloom": {"bloom": 1.0, "mister bloom": 1.0, "mr bloom": 1.0, "blue": 0.8}, "iris": {"iris": 1.0, "iras": 0.9},
+		"stan": {"stan": 1.0, "stand": 0.8},
+		# Henchmen.
+		"gary": {"gary": 1.0, "garry": 1.0, "gerry": 0.9}, "steve": {"steve": 1.0}, "simon": {"simon": 1.0},
+		"nigel": {"nigel": 1.0}, "brad": {"brad": 1.0, "bread": 0.9}, "todd": {"todd": 1.0, "tod": 1.0},
+		"gordon": {"gordon": 1.0, "gording": 0.9}, "kevin": {"kevin": 1.0, "kavin": 0.9, "cabin": 0.8, "caving": 0.8},
+		"craig": {"craig": 1.0, "creek": 0.8, "cre": 0.8}, "keith": {"keith": 1.0},
 	},
-	# A name run together with its order word ("CRUGO", "DENISCO", "WICKOW") ends in one of these: read as "go".
-	"order_fused_go": ["go", "ko", "co", "ow", "o"],
+	# A name run together with its order word ("CRUGO", "WICKOW", "HENNYGO", "BLOOMGOT") ends in one of these: read as "go".
+	"order_fused_go": ["go", "ko", "co", "ow", "o", "got", "goe", "ga", "gio", "giot"],
 	# Extra words handed to the recognizer as hotwords for the orders (besides the trigger and the spells). Empty: the
 	# names and order words are left to the plain model (see VOICE ORDERS for why).
 	"order_hotwords": [],
@@ -441,7 +447,7 @@ func _build_order_phrases() -> void:
 		var entries: Dictionary = names[who]
 		for phrase in entries:
 			_name_phrases.append({"who": str(who), "toks": PackedStringArray(str(phrase).split(" ")), "q": float(entries[phrase])})
-	# The floor's own employees' names (VoiceCaster.set_order_names: "marguerite", "okafor"), each its own key.
+	# The floor's own employees' names (VoiceCaster.set_order_names: "beatrice", "bloom"), each its own key.
 	for extra in (_cfg.get("order_names_extra", []) as Array):
 		var w := str(extra).to_lower().strip_edges()
 		if w != "" and not w.contains(" ") and not names.has(w) and not _order_tokens_has_name(w):
@@ -649,7 +655,7 @@ func _prepare_tokens(text: String) -> PackedStringArray:
 
 
 ## A run-together name and order word into the two: "REBARGO", "GASKETATTACK", and the measured fusions of a name with "go"
-## ("CRUGO", "CREWO", "DENISCO", "WICKOW": order_fused_go).
+## ("CRUGO", "CREWO", "HENNYGO", "WICKOW", "BLOOMGOT": order_fused_go).
 func _split_order(tok: String) -> PackedStringArray:
 	if not _orders_on or tok.length() < 5 or _order_tokens.has(tok) or is_order_word(tok):
 		return PackedStringArray([tok])

@@ -102,7 +102,7 @@ func _open(which: String, a: PackedStringArray) -> void:
 		"elevator", "elevator_last":
 			var last := which == "elevator_last"
 			var e := ElevatorMenu.new({"floor": 3 if last else 1, "floor_count": 3, "payout": 8400, "damages": 1200, "followers": 2,
-				"lines": ["Wine cellar sealed.", "Colin (valet) did not make it.", "Floor not clean: 24 %s left." % ClientArchetype.pest_name(_pest(a))]})
+				"lines": ["Wine cellar sealed.", "Pearl (valet) did not make it.", "Floor not clean: 24 %s left." % ClientArchetype.pest_name(_pest(a))]})
 			add_child(e)
 			opened = e
 		"van":
@@ -339,7 +339,7 @@ func _demo_invoice(a: PackedStringArray) -> Dictionary:
 	s.check_clean(0)
 	Ledger.damage("Zen fountain", 900, rebar)
 	Ledger.damage("Crystal lamp", 600, wick)
-	s.employee_lost("Colin (valet)", "Wick")
+	s.employee_lost("Pearl (valet)", "Wick")
 	s.enter_floor(3, 0, true, run.floor_employees[2], 18)
 	s.gate_closed(true)
 	s.check_clean(0)

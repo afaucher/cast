@@ -70,8 +70,6 @@ const STUCK_TIME := 0.5
 const EXTRACT_TIME := 1.1
 const DEATH_TIME := 0.8
 
-const STAFF_NAMES: Array[String] = ["Reginald", "Beatrice", "Alphonse", "Mrs. Pym", "Hodges", "Dorothea"]
-const HENCH_NAMES: Array[String] = ["Gary", "Steve", "Todd", "Kevin", "Dennis", "Hench #4"]
 const COWER_LINES := {
 	"staff": ["help!", "oh dear...", "eek!", "sir?!"],
 	"henchman": ["boss?!", "help!", "I quit!", "no dental!"],
@@ -138,7 +136,7 @@ var _bubble_shown := ""
 
 
 ## Spawn an employee standing on `cell`. opts: style ("staff" or "henchman"), name (display name; a
-## style-appropriate one is picked from the cell when empty).
+## style-appropriate one is picked from the cell when empty, out of the one name set: SiteBuilder.STAFF_NAMES / HENCHMAN_NAMES).
 static func spawn(cell: Vector2i, opts: Dictionary = {}) -> Employee:
 	if GameWorld.root == null:
 		push_warning("Employee.spawn: no world")
@@ -150,7 +148,7 @@ static func spawn(cell: Vector2i, opts: Dictionary = {}) -> Employee:
 	e.variant = absi(cell.x * 7 + cell.y * 13 + (3 if e.style == "henchman" else 0))
 	var nm := str(opts.get("name", ""))
 	if nm == "":
-		var pool: Array[String] = HENCH_NAMES if e.style == "henchman" else STAFF_NAMES
+		var pool: Array[String] = SiteBuilder.HENCHMAN_NAMES if e.style == "henchman" else SiteBuilder.STAFF_NAMES
 		nm = pool[e.variant % pool.size()]
 	e.display_name = nm
 	e.name = "Employee_" + nm.replace(" ", "_").replace("#", "")
@@ -343,7 +341,7 @@ static func interact_target(hero: Actor) -> Employee:
 	return best
 
 
-## The verb for what E does to the employee `e` right now: "Tell Marguerite to wait" / "Bring Marguerite".
+## The verb for what E does to the employee `e` right now: "Tell Beatrice to wait" / "Bring Beatrice".
 func interact_verb(hero: Actor) -> String:
 	return ("Tell %s to wait" if can_wait(hero) else "Bring %s") % display_name
 

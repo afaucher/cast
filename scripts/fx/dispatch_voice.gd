@@ -4,9 +4,9 @@ extends RefCounted
 ## where <key> is a stable hash of the EXACT banner text (key_of). Cosmetic and local (AGENTS.md rule 6): each machine
 ## plays its own clip for the line it shows, nothing is sent, and a missing clip just means a silent banner.
 ##
-##   DispatchVoice.key_of("Copy, Colin (valet) is out.")   # "3f9a..." (12 hex chars)
+##   DispatchVoice.key_of("Copy, Pearl (valet) is out.")   # "3f9a..." (12 hex chars)
 ##   DispatchVoice.all_lines()                              # [{"key", "text", "spoken", "kind"}], from the real constants
-##   DispatchVoice.spoken("Got Mrs. Pym. All fingers accounted for.")   # "Got Missus Pym! All fingers... accounted for!"
+##   DispatchVoice.spoken("Got Mr. Bloom. All fingers accounted for.")   # "Got Mister Bloom! All fingers... accounted for!"
 ##
 ## The clips are rendered offline by tools/render_dispatch.ps1 (tools/render_dispatch.py: Kokoro TTS, then the walkie
 ## radio chain) from tools/dispatch_lines.gd's list, which is all_lines() written as JSON. The clips are not in git.
@@ -94,11 +94,10 @@ static func all_lines() -> Array[Dictionary]:
 	return out
 
 
-## Every display_name a rescued employee can have: SiteBuilder's pools (what the game plans) and Employee's own
-## fallback pools (a bare Employee.spawn).
+## Every display_name a rescued employee can have: SiteBuilder's pools, the one name set (a bare Employee.spawn draws from them too).
 static func rescuable_names() -> Array[String]:
 	var names: Array[String] = []
-	for pool: Array[String] in [SiteBuilder.STAFF_NAMES, SiteBuilder.HENCHMAN_NAMES, Employee.STAFF_NAMES, Employee.HENCH_NAMES]:
+	for pool: Array[String] in [SiteBuilder.STAFF_NAMES, SiteBuilder.HENCHMAN_NAMES]:
 		for n in pool:
 			if not names.has(n):
 				names.append(n)

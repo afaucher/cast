@@ -21,8 +21,8 @@ end; the north-star "consistently pretty good" team should clear most objectives
   real cost is the end-of-job report ("Employees lost: 3. Cause: corn.").
   - **Escort [built]:** employees follow a hero to the exit, and joining takes **E**
     (`Employee.JOIN_NEEDS_E`, on): walking past does nothing. E next to a cowering or waiting employee
-    (nearest within 2.2) brings them along ("E: bring Marguerite" shows on the HUD); E next to your own
-    follower tells them to wait ("E: tell Marguerite to wait"). A waiting employee crouches where they were
+    (nearest within 2.2) brings them along ("E: bring Beatrice" shows on the HUD); E next to your own
+    follower tells them to wait ("E: tell Beatrice to wait"). A waiting employee crouches where they were
     told, still panics at monsters and then walks back, and never rejoins by proximity, so they do not
     chase you into a fight. A waiting employee pays nothing unless extracted; extraction only takes followers
     (see the drop-off and the exits below), so one left behind is not extracted. E (Use) priority: the van exit

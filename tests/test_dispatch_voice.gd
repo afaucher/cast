@@ -68,7 +68,8 @@ func _check_lines() -> void:
 	for nm in DispatchVoice.rescuable_names():
 		for t: String in NoteCopy.RESCUE_ONE:
 			check(texts.has(t % nm), "rescue line listed for %s: %s" % [nm, t])
-	check(DispatchVoice.rescuable_names().has("Mr. Okafor (accounts)") and DispatchVoice.rescuable_names().has("Hench #4"), "both employee name pools are covered")
+	check(DispatchVoice.rescuable_names().has("Mr. Bloom (accounts)") and DispatchVoice.rescuable_names().has("Nigel (Henchman 4)"), "the staff and the henchmen are covered")
+	eq(DispatchVoice.rescuable_names().size(), SiteBuilder.STAFF_NAMES.size() + SiteBuilder.HENCHMAN_NAMES.size(), "one name set: SiteBuilder's twenty")
 	for n in DispatchVoice.RESCUE_COUNTS:
 		for t: String in NoteCopy.RESCUE_MANY:
 			check(texts.has(t % n), "rescue line listed for %d riders: %s" % [n, t])
@@ -77,7 +78,7 @@ func _check_lines() -> void:
 
 
 func _check_keys() -> void:
-	var t := "Copy, Colin (valet) is out."
+	var t := "Copy, Pearl (valet) is out."
 	eq(DispatchVoice.key_of(t), t.sha256_text().substr(0, 12), "the key is the first 12 hex chars of the text's sha256")
 	eq(DispatchVoice.key_of(t), DispatchVoice.key_of(t), "and stable")
 	check(DispatchVoice.key_of(t) != DispatchVoice.key_of(t + " "), "any change to the text changes the key")
@@ -92,12 +93,12 @@ func _words(s: String) -> PackedStringArray:
 
 
 func _check_spoken() -> void:
-	eq(DispatchVoice.spoken("Got Mrs. Pym. All fingers accounted for."), "Got Missus Pym! All fingers... accounted for!", "Mrs. is Missus, the confirmation is lively")
-	eq(DispatchVoice.spoken("Copy, Reginald is out."), "Copy! Reginald is out!", "a confirmation")
-	eq(DispatchVoice.spoken("Copy, Colin (valet) is out."), "Copy! Colin is out!", "first name only, the role dropped")
-	eq(DispatchVoice.spoken("Kevin (Henchman 4) just walked past my desk."), "Kevin just walked past my desk!", "the henchman number is part of the role")
-	eq(DispatchVoice.spoken("Mr. Okafor (accounts) is topside and asking for a lawyer."), "Mister Okafor is topside... and asking for a lawyer!", "Mr. is Mister")
-	eq(DispatchVoice.spoken("Copy, Hench #4 is out."), "Copy! Hench number four is out!", "numbers are words")
+	eq(DispatchVoice.spoken("Got Mrs. Bloom. All fingers accounted for."), "Got Missus Bloom! All fingers... accounted for!", "Mrs. is Missus, the confirmation is lively")
+	eq(DispatchVoice.spoken("Copy, Mabel is out."), "Copy! Mabel is out!", "a confirmation")
+	eq(DispatchVoice.spoken("Copy, Pearl (valet) is out."), "Copy! Pearl is out!", "first name only, the role dropped")
+	eq(DispatchVoice.spoken("Nigel (Henchman 4) just walked past my desk."), "Nigel just walked past my desk!", "the henchman number is part of the role")
+	eq(DispatchVoice.spoken("Mr. Bloom (accounts) is topside and asking for a lawyer."), "Mister Bloom is topside... and asking for a lawyer!", "Mr. is Mister")
+	eq(DispatchVoice.spoken("Copy, Unit #4 is out."), "Copy! Unit number four is out!", "numbers are words")
 	eq(DispatchVoice.spoken("Headcount up by 3."), "Headcount up by three!", "a count as a word")
 	eq(DispatchVoice.spoken("Copy, 2 staff out."), "Copy! Two staff out!", "a count first in the line")
 	eq(DispatchVoice.number_words(21), "twenty-one", "numbers up to 99 and beyond")
@@ -120,7 +121,7 @@ func _check_banner() -> void:
 	DispatchVoice.dir = FAKE_DIR
 	var banner := DispatchBanner.new()
 	add_child(banner)
-	var a := "Copy, Reginald is out."
+	var a := "Copy, Mabel is out."
 	var b := "Headcount up by 3."
 	var c := "No clip was ever rendered for this line."
 	# no clip: silent, no player built, no error

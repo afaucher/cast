@@ -19,13 +19,13 @@ func _init() -> void:
 func setup() -> void:
 	# --- A: spawns neutral, fragile, cowering ------------------------------------------------
 	new_world(flat_map(14))
-	var emp := Employee.spawn(Vector2i(0, 0), {"style": "staff", "name": "Reginald"})
+	var emp := Employee.spawn(Vector2i(0, 0), {"style": "staff", "name": "Beatrice"})
 	var hench := Employee.spawn(Vector2i(0, 4), {"style": "henchman", "name": "Gary"})
 	eq(emp.team, GameWorld.TEAM_NEUTRAL, "staff is neutral")
 	eq(hench.team, GameWorld.TEAM_NEUTRAL, "henchman is neutral")
 	near(emp.max_hp, 30.0, 0.001, "about 30 hp")
 	near(emp.hp, 30.0, 0.001, "starts at full hp")
-	eq(emp.display_name, "Reginald", "name from opts")
+	eq(emp.display_name, "Beatrice", "name from opts")
 	eq(hench.style, "henchman", "style from opts")
 	check(emp.move_speed < 4.5, "slow-ish (slower than a hero)")
 	check(emp.is_in_group("employees") and emp.is_in_group("actors"), "in the employees and actors groups")

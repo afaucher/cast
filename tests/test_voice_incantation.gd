@@ -597,24 +597,27 @@ func _orders_of(text: String, overrides: Dictionary = {}) -> Array:
 ## Voice orders (Incantation's VOICE ORDERS): the name is the trigger, the order word follows at once.
 func _test_orders() -> void:
 	# Every official name with every order.
-	for said: String in ["everyone", "crew", "pym", "hench", "hench four", "rebar", "wick", "gasket", "reginald", "beatrice",
-			"alphonse", "hodges", "dorothea", "gary", "steve", "todd", "kevin", "dennis"]:
+	for said: String in ["everyone", "crew", "hench", "hench four", "rebar", "wick", "gasket", "beatrice", "mabel", "elsie",
+			"lionel", "pearl", "penny", "molly", "bloom", "iris", "stan", "gary", "steve", "simon", "nigel", "brad", "todd", "gordon",
+			"kevin", "craig", "keith"]:
 		for o: String in ["go", "attack", "follow"]:
 			eq(_orders_of("%s %s" % [said, o]), ["%s %s" % [said, o]], "order: %s %s" % [said, o])
 	# Aliases, punctuation and case as the recognizer writes them.
 	var aliases := {"EVERYBODY GO": "everyone go", "all hands follow": "everyone follow", "Team attack": "crew attack",
-		"SQUAD GO": "crew go", "Mrs. Pym follow": "pym follow", "MISSUS PYM GO": "pym go", "henchmen attack": "hench attack",
+		"SQUAD GO": "crew go", "Mr. Bloom follow": "bloom follow", "MISTER BLOOM GO": "bloom go", "henchmen attack": "hench attack",
 		"henchman follow": "hench follow", "number four go": "hench four go", "Hench #4 go": "hench four go", "RIBAR FOLLOW": "rebar follow",
 		"Rebar, go!": "rebar go", "okay rebar go": "rebar go", "rebar go now": "rebar go", "rebar follow me": "rebar follow"}
 	for text: String in aliases:
 		eq(_orders_of(text), [aliases[text]], "alias: " + text)
 	# A run-together name and order word is split, and the model's measured spellings of the names count.
-	var heard := {"REBARGO": "rebar go", "CRUGO": "crew go", "CREWO": "crew go", "SQUADO": "crew go", "DENISCO": "dennis go",
+	var heard := {"REBARGO": "rebar go", "CRUGO": "crew go", "CREWO": "crew go", "SQUADO": "crew go", "HENNYGO": "penny go",
 		"WICKOW": "wick go", "TODGO": "todd go", "GERRYGO": "gary go", "HENCHFOREGO": "hench four go", "GASKETATTACK": "gasket attack",
-		"STEVE FOLLOWED": "steve follow", "GARRY ATTACK": "gary attack", "TOD FOLLOW": "todd follow", "DENIS ATTACK": "dennis attack",
-		"HENCH FOR ATTACK": "hench four attack", "HENCEFORE FOLLOW": "hench four follow", "MISSUS PIMP FOLLOW": "pym follow",
-		"WE BAR ATTACK": "rebar attack", "CRUE ATTACK": "crew attack", "HEDGE GO": "hench go", "HODGE'S ATTACK": "hodges attack",
-		"ALPHON'S ATTACK": "alphonse attack", "KAVIN FOLLOW": "kevin follow", "CABIN GO": "kevin go"}
+		"STEVE FOLLOWED": "steve follow", "GARRY ATTACK": "gary attack", "TOD FOLLOW": "todd follow", "LION'LL FOLLOW": "lionel follow",
+		"HENCH FOR ATTACK": "hench four attack", "HENCEFORE FOLLOW": "hench four follow", "STAND ATTACK": "stan attack",
+		"WE BAR ATTACK": "rebar attack", "CRUE ATTACK": "crew attack", "HEDGE GO": "hench go", "IRAS ATTACK": "iris attack",
+		"BLOOMGOT": "bloom go", "KAVIN FOLLOW": "kevin follow", "CABIN GO": "kevin go",
+		"BEATRICE GIRL": "beatrice go", "KEITH GIRL": "keith go", "ELSIE GOE": "elsie go", "PEARL FALLOW": "pearl follow",
+		"BREAD FOLLOW": "brad follow", "CREEK ATTACK": "craig attack", "GORDING GO": "gordon go", "LION ALL ATTACK": "lionel attack"}
 	for text: String in heard:
 		eq(_orders_of(text), [heard[text]], "heard as: " + text)
 	for text: String in ["CASTLE", "TOMATO", "GO TO", "A CABIN IN THE WOODS", "TRIM THE HEDGE", "HODGEPODGE"]:
@@ -623,7 +626,7 @@ func _test_orders() -> void:
 	for text: String in ["Rebar just goes in", "Rebar goes in first", "Gasket's down", "everyone's dead", "let's go", "follow me guys",
 			"hold on", "crew's dead", "Gasket's holding the door", "go go go", "attack", "nice one Gasket", "the henchmen are attacking",
 			"Gary's following us", "we should go", "rebar going", "gasket heal me", "cast heal", "go rebar", "attack wick",
-			"Steve followed us here"]:
+			"Steve followed us here", "Gary got shot", "Keith girl is here", "Stan got it", "stand back"]:
 		eq(_orders_of(text), [], "no order: " + text)
 	# A bare order word never orders anyone, in any mode.
 	for mode: String in ["strict", "loose", "chaos"]:

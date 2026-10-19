@@ -386,9 +386,13 @@ function Add-Order([string]$kind, [string]$text, [string]$strict, [string]$loose
     $orows.Add(("{0},{1},{2},{3},{4},{5},{6},""{7}""" -f $name, $kind, $strict, $loose, $spell, $voice, $rate, $text))
 }
 # Every official name with every order (voice a), the crew's names and the groups in voice b too.
-$names = [ordered]@{ "Everyone" = "everyone"; "Crew" = "crew"; "Pym" = "pym"; "Hench" = "hench"; "Hench Four" = "hench four";
-    "Rebar" = "rebar"; "Wick" = "wick"; "Gasket" = "gasket"; "Reginald" = "reginald"; "Beatrice" = "beatrice"; "Alphonse" = "alphonse";
-    "Hodges" = "hodges"; "Dorothea" = "dorothea"; "Gary" = "gary"; "Steve" = "steve"; "Todd" = "todd"; "Kevin" = "kevin"; "Dennis" = "dennis" }
+# The employees are the one name set (SiteBuilder.STAFF_NAMES / HENCHMAN_NAMES, 2026-10-19), all twenty.
+$names = [ordered]@{ "Everyone" = "everyone"; "Crew" = "crew"; "Hench" = "hench"; "Hench Four" = "hench four";
+    "Rebar" = "rebar"; "Wick" = "wick"; "Gasket" = "gasket";
+    "Beatrice" = "beatrice"; "Mabel" = "mabel"; "Elsie" = "elsie"; "Lionel" = "lionel"; "Pearl" = "pearl"; "Penny" = "penny";
+    "Molly" = "molly"; "Mister Bloom" = "bloom"; "Iris" = "iris"; "Stan" = "stan";
+    "Gary" = "gary"; "Steve" = "steve"; "Simon" = "simon"; "Nigel" = "nigel"; "Brad" = "brad"; "Todd" = "todd"; "Gordon" = "gordon";
+    "Kevin" = "kevin"; "Craig" = "craig"; "Keith" = "keith" }
 foreach ($said in $names.Keys) {
     foreach ($o in @("go", "attack", "follow")) {
         $want = "$($names[$said]) $o"
@@ -407,7 +411,7 @@ foreach ($v in @($v1, $v2)) {
 # Aliases.
 foreach ($v in @($v1, $v2)) {
     foreach ($a in @(@("Everybody go", "everyone go"), @("All hands follow", "everyone follow"), @("Team attack", "crew attack"),
-            @("Squad go", "crew go"), @("Mrs. Pym follow", "pym follow"), @("Missus Pym go", "pym go"), @("Henchmen attack", "hench attack"),
+            @("Squad go", "crew go"), @("Bloom follow", "bloom follow"), @("Mr. Bloom go", "bloom go"), @("Henchmen attack", "hench attack"),
             @("Henchman follow", "hench follow"), @("Number four go", "hench four go"))) {
         Add-Order "alias" $a[0] $a[1] $a[1] "none" $v 0
     }
@@ -431,6 +435,13 @@ foreach ($v in @($v1, $v2)) {
     Add-Order "neg" "Steve followed us here" "none" "none" "none" $v 0
     Add-Order "neg" "we hid in the cabin" "none" "none" "none" $v 0
     Add-Order "neg" "let Gasket go first" "none" "any" "none" $v 0
+    # The employees in chatter and in dispatch's rescue lines (the new name set): nothing may be ordered or cast.
+    foreach ($t in @("Mabel", "Lionel is down there", "where's Stan", "Copy, Pearl is out.", "Iris just walked past my desk.",
+            "Got Mister Bloom. All fingers accounted for.", "Simon is topside and asking for a lawyer.", "Copy, Gordon is out.",
+            "Penny just walked past my desk.", "Got Elsie. All fingers accounted for.", "Craig is topside and asking for a lawyer.",
+            "Gary got shot", "stand back")) {
+        Add-Order "neg" $t "none" "none" "none" $v 0
+    }
     Add-Order "neg" "Gasket heal me" "none" "none" "any" $v 0
 }
 # An order and a cast in one breath (loose: both).

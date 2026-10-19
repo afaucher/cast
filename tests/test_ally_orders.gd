@@ -4,7 +4,7 @@ extends TestCase
 ##              delay (REACT_MIN..MAX), goes first for what attacks its leader, needs line of sight, and bowls only to peel
 ##   orders     go (walks there, holds, a new go replaces it), attack (fights an idle monster on its own, then follows the
 ##              speaker when the fight is over), follow (the speaker becomes the leader, the order clears)
-##   names      VoiceOrders: crew / everyone / hench / hench four / pym / a hero's name / an absent name; employees' go,
+##   names      VoiceOrders: crew / everyone / hench / hench four / bloom / a hero's name / an absent name; employees' go,
 ##              follow, a henchman's attack (a FIGHT, then following), staff refusing, earshot, a human-played hero's marker
 ##   voice      the typed console reaches VoiceCaster.order_spoken (the game's path)
 
@@ -288,26 +288,26 @@ func _test_names() -> void:
 	var gasket := _hero("gasket", Vector3(2, 0, 1))
 	_ally(rebar, speaker)
 	_ally(gasket, speaker)
-	var pym := Employee.spawn(Vector2i(3, -3), {"style": "staff", "name": "Mrs. Pym"})
+	var bloom := Employee.spawn(Vector2i(3, -3), {"style": "staff", "name": "Mr. Bloom"})
 	var gary := Employee.spawn(Vector2i(-3, -2), {"style": "henchman", "name": "Gary (Henchman 1)"})
-	var four := Employee.spawn(Vector2i(-4, 2), {"style": "henchman", "name": "Hench #4"})
+	var four := Employee.spawn(Vector2i(-4, 2), {"style": "henchman", "name": "Nigel (Henchman 4)"})
 	var far_steve := Employee.spawn(Vector2i(13, 0), {"style": "henchman", "name": "Steve"})
 	far_steve.global_position = Vector3(30, 0, 0)   # (out of earshot)
 	await frames(2)
 	eq(_ids(VoiceOrders.targets("crew", speaker)), _ids([rebar, gasket]), "crew: the heroes but the speaker")
-	eq(_ids(VoiceOrders.targets("everyone", speaker)), _ids([rebar, gasket, pym, gary, four]), "everyone: heroes and employees in earshot")
+	eq(_ids(VoiceOrders.targets("everyone", speaker)), _ids([rebar, gasket, bloom, gary, four]), "everyone: heroes and employees in earshot")
 	eq(_ids(VoiceOrders.targets("hench", speaker)), _ids([gary, four]), "hench: every henchman in earshot")
-	eq(_ids(VoiceOrders.targets("hench four", speaker)), _ids([four]), "hench four: only Hench #4")
-	eq(_ids(VoiceOrders.targets("pym", speaker)), _ids([pym]), "pym: Mrs. Pym")
+	eq(_ids(VoiceOrders.targets("hench four", speaker)), _ids([four]), "hench four: only Henchman 4")
+	eq(_ids(VoiceOrders.targets("bloom", speaker)), _ids([bloom]), "bloom: Mr. Bloom")
 	eq(_ids(VoiceOrders.targets("gary", speaker)), _ids([gary]), "gary: Gary (Henchman 1)")
 	eq(_ids(VoiceOrders.targets("rebar", speaker)), _ids([rebar]), "rebar: Rebar")
 	eq(VoiceOrders.targets("wick", speaker).size(), 0, "the speaker's own name: nobody (he is not told)")
 	eq(VoiceOrders.targets("steve", speaker).size(), 0, "an employee out of earshot does not hear it")
-	eq(VoiceOrders.targets("dennis", speaker).size(), 0, "a name not on the floor: nobody")
-	var r := VoiceOrders.apply("dennis", "go", speaker, Vector3(3, 0, 3))
+	eq(VoiceOrders.targets("dwayne", speaker).size(), 0, "a name not on the floor: nobody")
+	var r := VoiceOrders.apply("dwayne", "go", speaker, Vector3(3, 0, 3))
 	check(int(r["took"]) == 0 and (r["barks"] as Array).is_empty(), "an absent name does nothing, quietly")
-	eq(VoiceOrders.call_name("Mr. Okafor (accounts)"), "okafor", "call names skip titles")
-	eq(VoiceOrders.call_name("Marguerite (sommelier)"), "marguerite", "a floor's staff name is its first word")
+	eq(VoiceOrders.call_name("Mr. Bloom (accounts)"), "bloom", "call names skip titles")
+	eq(VoiceOrders.call_name("Beatrice (sommelier)"), "beatrice", "a floor's staff name is its first word")
 	# A hero a person plays (here: one with a player name, as online) gets a marker, never an order.
 	var human := _hero("wick", Vector3(0, 0, -3))
 	human.set_meta(Net.NAME_META, "Fox")
@@ -350,24 +350,24 @@ func _ids(a: Array) -> Array:
 func _test_employees() -> void:
 	_world(14)
 	var speaker := _hero("wick", Vector3(0, 0, 0))
-	var pym := Employee.spawn(Vector2i(2, 2), {"style": "staff", "name": "Mrs. Pym"})
+	var bloom := Employee.spawn(Vector2i(2, 2), {"style": "staff", "name": "Mr. Bloom"})
 	var gary := Employee.spawn(Vector2i(-2, 2), {"style": "henchman", "name": "Gary"})
 	await frames(2)
 	# go: walks to the spot and waits there.
 	var spot := Hex.to_world(Vector2i(6, -3))
-	eq(pym.order("go", speaker, spot), "took", "Pym takes go")
+	eq(bloom.order("go", speaker, spot), "took", "Bloom takes go")
 	await frames(60 * 4)
-	eq(pym.state, Employee.State.WAIT, "Pym waits")
-	check(GameWorld.flat_distance(pym.global_position, spot) < 0.6, "at the spot (%.2f away)" % GameWorld.flat_distance(pym.global_position, spot))
+	eq(bloom.state, Employee.State.WAIT, "Bloom waits")
+	check(GameWorld.flat_distance(bloom.global_position, spot) < 0.6, "at the spot (%.2f away)" % GameWorld.flat_distance(bloom.global_position, spot))
 	# follow: follows the speaker.
-	eq(pym.order("follow", speaker, Vector3.INF), "took", "Pym takes follow")
-	check(pym.is_following() and pym.leader() == speaker, "Pym follows the speaker")
+	eq(bloom.order("follow", speaker, Vector3.INF), "took", "Bloom takes follow")
+	check(bloom.is_following() and bloom.leader() == speaker, "Bloom follows the speaker")
 	# attack: staff refuse, henchmen fight.
-	var was := pym.state
-	eq(pym.order("attack", speaker, Vector3.INF), "refused", "staff refuse attack")
-	eq(pym.state, was, "and keep doing what they did")
+	var was := bloom.state
+	eq(bloom.order("attack", speaker, Vector3.INF), "refused", "staff refuse attack")
+	eq(bloom.state, was, "and keep doing what they did")
 	await frames(2)
-	check(Employee.REFUSE_LINES.has(pym.bubble_text()), "with a refusal (%s)" % pym.bubble_text())
+	check(Employee.REFUSE_LINES.has(bloom.bubble_text()), "with a refusal (%s)" % bloom.bubble_text())
 	var m := _grunt(Vector3(-4.5, 0, 3.0), true)
 	m.max_hp = 9.0
 	m.hp = 9.0
@@ -401,7 +401,7 @@ func _test_typed() -> void:
 	vc.order_spoken.connect(func(who: String, o: String, _h: String) -> void: got.append("%s %s" % [who, o]))
 	vc.inject_text("Rebar go")
 	vc.inject_text("hench attack")
-	vc.inject_text("Mrs. Pym follow")
-	eq(got, ["rebar go", "hench attack", "pym follow"], "typed orders reach order_spoken")
+	vc.inject_text("Mister Bloom follow")
+	eq(got, ["rebar go", "hench attack", "bloom follow"], "typed orders reach order_spoken")
 	check(bool(vc.last_order().get("typed", false)), "marked typed")
 	vc.queue_free()

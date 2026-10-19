@@ -218,7 +218,7 @@ func set_trigger_word(word: String, persist: bool = true) -> Dictionary:
 	return v
 
 
-## Voice orders: the floor's own employees' names (one word each: "marguerite", "okafor"), so they answer to them too.
+## Voice orders: the floor's own employees' names (one word each: "beatrice", "bloom"), so they answer to them too.
 ## Rebuilds the grammar like a trigger change (no model reload).
 func set_order_names(names: Array[String]) -> void:
 	var list: Array = []

@@ -467,11 +467,15 @@ The design and the decisions are `combat-proposals.md` §1 (1.0 decided, 1.8 as 
   trigger and the ten spells), so spell recognition cannot change. Measured (148 TTS clips, both voices): with the names
   and order words as hotwords the order clips were heard right 96% (loose), without them but with the measured
   spellings as aliases 94%: two points, not worth touching the spells' vocabulary. Without aliases and without hotwords
-  it was 64% (the model writes DENIS, TOD, GARRY, CRUE, WE BAR, CABIN for Kevin ...); with hotwords and no aliases, 79%.
+  it was 64% (the model writes TOD, GARRY, CRUE, WE BAR, CABIN for Kevin ...); with hotwords and no aliases, 79%.
 - **Typed:** the console's typed lines take orders like spoken ones.
 
-- **Measured** (`tests/test_voice_orders.gd`, 148 TTS clips): 94% of the order clips heard right in loose, 97% in strict;
-  0 chatter clips gave an order; 0 order clips cast a spell; 0 spell or chatter clips of `test_voice_audio` gave an order.
-  The spells' own numbers are unchanged. Details: `combat-proposals.md` 1.8.
-- **The floor's own employees** answer to their own first names too ("Marguerite go"): the game hands them to
+- **Measured** (`tests/test_voice_orders.gd`, 201 TTS clips with the one employee name set, 2026-10-19): 98% of the order
+  clips heard right in loose, 100% in strict (94% / 97% with the earlier names); 0 chatter clips gave an order, cast or
+  armed the trigger; 0 order clips cast a spell; 0 spell or chatter clips of `test_voice_audio` gave an order. The spells'
+  own numbers are unchanged. Details: `combat-proposals.md` 1.8.
+- **The employee names are one set** (`SiteBuilder.STAFF_NAMES` / `HENCHMAN_NAMES`), every one screened through the order
+  grammar first (`tests/probe_voice_names.gd`, results in `tests/voice_clips/names_results_pass*.txt`). A final order word
+  as the model writes it (GOAT, GIRL, GOE, GOT; FALLOW, FOLLOWED) counts only as the utterance's last word.
+- **The floor's own employees** answer to their own first names too ("Beatrice go"): the game hands them to
   `VoiceCaster.set_order_names` at each floor start (unmeasured words, but the adjacency rule still holds).
