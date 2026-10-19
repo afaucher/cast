@@ -64,6 +64,10 @@ func _physics_process(delta: float) -> void:
 		if not is_nan(g) and g > to.y:
 			_impact(null, map.solid_contact(global_position, to))   # at the wall face / cliff, not a step short
 			return
+		var door := map.blocker_contact(global_position, to) if map else Vector3.INF
+		if door != Vector3.INF:
+			_impact(null, door)   # a shut door stops the arrow like a wall (it sticks in the door)
+			return
 		global_position = to
 		if _travelled >= max_range:
 			_impact(null, to)

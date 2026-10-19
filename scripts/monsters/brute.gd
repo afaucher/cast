@@ -63,6 +63,7 @@ func net_fields() -> Dictionary:
 		"_ring": Net.LOCAL, "_ring_fill": Net.LOCAL, "_ring_mat": Net.LOCAL,
 	})
 	f.merge(_fight_fields())   # restless fights: host AI working state
+	f.merge({"_door": Net.PRIVATE, "_door_t": Net.PRIVATE})   # smashing a door: host AI working state
 	return f
 
 
@@ -647,4 +648,62 @@ func _physics_process(delta: float) -> void:
 	# Out of IDLE some other way (a pack call put it straight into CHASE): the fight is over for both.
 	if is_fighting() and state != State.IDLE and not dead:
 		_break_up("pack", target)
+	if _door != null:
+		_door_tick(delta)
 	super._physics_process(delta)
+
+
+# --- Smashing a shut office door (OfficeDoor; docs/design/exploration.md "Decisions: map information, fog and doors") ----
+# A brute that is chasing walks into a shut door and slams it instead of opening it: rooted, its real slam wind-up (the red
+# ring, WINDUP), then the slam (Combat.slam round it: whoever holds the door gets it) and the door bursts (OfficeDoor.smash:
+# the host bills it once). Host AI: the wind-up rides the telegraph byte and the slam the strike count, as any slam.
+
+var _door: Node = null            ## the door it is smashing (OfficeDoor, duck-typed)
+var _door_t := 0.0                ## seconds into the smash's wind-up
+
+
+## Start smashing `door` (OfficeDoor calls this when a chasing brute walks into it). False when already busy.
+func smash_door(door: Node) -> bool:
+	if _door != null or dead or is_helpless() or state == State.ATTACK:
+		return false
+	_door = door
+	_door_t = 0.0
+	set_modifier("door_smash", 1.0, WINDUP + 0.35, Actor.STAT_ROOT)
+	face_point((door as Node3D).global_position)
+	_telegraph = 0.0
+	_on_windup_begin()
+	return true
+
+
+func is_smashing_door() -> bool:
+	return _door != null
+
+
+func _door_tick(delta: float) -> void:
+	if not is_instance_valid(_door) or dead or is_shoved() or bool(_door.get("broken")):
+		_door = null
+		_telegraph = 0.0
+		_on_windup_end()
+		return
+	_door_t += delta
+	face_point((_door as Node3D).global_position)
+	_telegraph = clampf(_door_t / WINDUP, 0.0, 1.0)
+	if _door_t < WINDUP:
+		return
+	var d := _door
+	_door = null
+	_telegraph = 0.0
+	_on_windup_end()
+	_strike()
+	strikes += 1
+	_strike_t = 1.0
+	if model != null:
+		model.attack_swing()
+	d.call("smash", self)
+
+
+## No attack of its own while it is smashing a door (the hero behind it is out of reach until the door goes).
+func _try_start_attack(dist: float) -> bool:
+	if _door != null:
+		return false
+	return super._try_start_attack(dist)

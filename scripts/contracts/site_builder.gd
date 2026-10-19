@@ -147,7 +147,25 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	# The look of the floor: every cell's floor / wall material from its room's theme (FloorMaterials). Not planning, so
 	# it is timed on its own (FloorMaterials.last_usec) and not counted in last_plan_usec.
 	FloorMaterials.assign(map, p, run.site_type)
+	# The office doors and their thresholds (after the materials: a threshold writes its cells' floor). Timed on its own.
+	var t_doors := Time.get_ticks_usec()
+	_plan_doors(map, run, floor_n, p)
+	last_door_usec = Time.get_ticks_usec() - t_doors
 	return p
+
+
+## Which doorways get an office door (DoorPlan: every narrow doorway but dead ends and the start / elevator rooms) and the
+## diamond tread-plate threshold on the cells their door line crosses (DoorFloors; open archways keep their floors).
+static func _plan_doors(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> void:
+	var sp := Doorways.spaces(map)
+	var dws := Doorways.find(map, sp)
+	for id in DoorPlan.choose(dws, p, run.floor_seed(floor_n)):
+		var dw: Dictionary = dws[id]
+		var rec := {"style": OfficeDoor.DEFAULT_STYLE}
+		for k in ["id", "room", "hall", "axis", "cell", "band", "a", "b", "center", "door_cells", "mouth_cells", "door_ok"]:
+			rec[k] = dw[k]
+		p.doors.append(rec)
+		DoorFloors.for_doorway(map, sp, dw, true)
 
 
 ## The crew's work van, parked beside the start cell (VanPlan) on the FIRST floor only: the van stays where it parked, so
@@ -355,6 +373,7 @@ const NOTE_YAW_SPREAD := 60.0           ## a note turns at most this far from th
 ## perf probe for tests/test_room_themes.gd.
 static var last_theme_usec := 0
 static var last_plan_usec := 0
+static var last_door_usec := 0   ## the doors' planning and thresholds (not in last_plan_usec, like FloorMaterials.last_usec)
 ## Microseconds the last plan() spent placing explosive props (_plan_hazards; part of last_theme_usec).
 static var last_hazard_usec := 0
 
@@ -993,6 +1012,7 @@ class Site:
 	var packages: Array[Actor] = []     ## every MailPackage box (a stack of 3 is three entries)
 	var scouts: Array[Monster] = []     ## goblin scouts (not in `monsters`: no pack's, never a pest kind of their own)
 	var beasts: Array[Node3D] = []      ## the monster under each gate's room (HellgateBeast: cosmetic, built on every machine)
+	var doors: Array[OfficeDoor] = []   ## the office doors (host-arbitrated objects), in plan order
 	var pest := ""                      ## the contract's pest ("everything" = every monster counts)
 	var pest_spawned := 0               ## pest-kind monsters placed by the packs (gate spawns come later)
 
@@ -1041,6 +1061,12 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 		site.packages.append_array(_spawn_package(pk))
 	_spawn_packs(map, run, p, site, rng)
 	_spawn_scouts(map, p, site)
+	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
+	# them after the actors).
+	for dr in p.doors:
+		var door := OfficeDoor.spawn(dr, str(dr.get("style", OfficeDoor.DEFAULT_STYLE)), true)
+		if door != null:
+			site.doors.append(door)
 	return site
 
 

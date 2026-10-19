@@ -37,12 +37,31 @@ static func assign_ids(root: Node, heroes: Dictionary) -> int:
 		NetRegistry.register(next, a)
 		next += 1
 	var actors := next - ID_BASE
+	# The office doors (host-arbitrated objects, not actors), in build order, after the actors: no actor's id moves.
+	for d in doors_under(root):
+		NetRegistry.register(next, d)
+		next += 1
 	# M3: component pickups already on the floor (a dev --drop-near) are host-owned things too, built the same everywhere.
 	for p in pickups_under(root):
 		NetRegistry.register(next, p)
 		next += 1
 	NetRegistry.seed_top = next
 	return actors
+
+
+## Every OfficeDoor under `root`, depth first in tree order.
+static func doors_under(root: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	if root != null:
+		_collect_doors(root, out)
+	return out
+
+
+static func _collect_doors(n: Node, out: Array[Node]) -> void:
+	for c in n.get_children():
+		if c is OfficeDoor:
+			out.append(c)
+		_collect_doors(c, out)
 
 
 ## Every ComponentPickup under `root`, depth first in tree order.
@@ -93,6 +112,11 @@ static func freeze_copies(root: Node, keep: Array) -> int:
 			if root.is_ancestor_of(p):
 				Net.make_copy(p)
 				n += 1
+	# Office doors: copies too (the host decides them), but their physics keeps running: it animates the leaves and sees
+	# this machine's own hero walk into a shut door (a request to the host).
+	for d in doors_under(root):
+		d.set_meta(Net.COPY_META, true)
+		n += 1
 	return n
 
 

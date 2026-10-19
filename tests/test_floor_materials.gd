@@ -91,6 +91,15 @@ func _check_floor(map: HexMap, run: ContractRun, f: int, plan: SitePlan) -> void
 	var bad_corr := 0
 	var bad_wall := 0
 	var corridors := 0
+	# A planned door re-floors the cells around its doorway (DoorFloors option "c"): the tread-plate threshold on the door
+	# line, the room's floor on the room side, the corridor's on the hall side, whichever tag the cell has.
+	var at_door := {}
+	for rec: Dictionary in plan.doors:
+		var mid: Vector3 = rec["center"]
+		for c2 in Hex.range_cells(rec["cell"], DoorFloors.REACH) + Hex.range_cells(Hex.from_world(mid), DoorFloors.REACH):
+			at_door[c2] = rec
+	var thresholds := 0
+	var bad_door := 0
 	for c: Vector2i in map.cells:
 		var cell: HexMap.Cell = map.cells[c]
 		_cells += 1
@@ -104,6 +113,16 @@ func _check_floor(map: HexMap, run: ContractRun, f: int, plan: SitePlan) -> void
 			unset += 1    # mat_id is written for every walkable (and every cut) cell
 			continue
 		_seen[fid] = true
+		if at_door.has(c):
+			var rec: Dictionary = at_door[c]
+			var own := corr_floor if cell.tag == "corridor" else FloorMaterials.floor_for_theme(String(plan.room_themes.get(cell.tag, "")))
+			if fid == DoorFloors.THRESHOLD:
+				thresholds += 1
+			elif fid != own and fid != corr_floor and fid != FloorMaterials.floor_for_theme(String(plan.room_themes.get(str(rec["room"]), ""))):
+				bad_door += 1
+			if cell.tag == "corridor":
+				corridors += 1
+			continue
 		if cell.tag == "corridor":
 			corridors += 1
 			if fid != corr_floor or wid != site_wall:
@@ -116,6 +135,8 @@ func _check_floor(map: HexMap, run: ContractRun, f: int, plan: SitePlan) -> void
 	check(bad_room == 0, "%s: %d room cells do not carry their theme's material" % [tag, bad_room])
 	check(bad_corr == 0, "%s: %d corridor cells are not the site's corridor material" % [tag, bad_corr])
 	check(bad_wall == 0, "%s: %d wall cells are not the site's wall" % [tag, bad_wall])
+	check(bad_door == 0, "%s: %d cells at a door are neither the threshold nor a floor of its room or hall" % [tag, bad_door])
+	check(plan.doors.is_empty() or thresholds >= plan.doors.size(), "%s: every door has its tread-plate threshold (%d cells, %d doors)" % [tag, thresholds, plan.doors.size()])
 	check(corridors > 0, "%s: the floor has corridors to check" % tag)
 	# the start and exit cells take their room's material; stairs and every walkable cell have one
 	for key: String in ["start", "exit"]:
