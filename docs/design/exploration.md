@@ -141,3 +141,9 @@ Spells stay mainly about combat. These are small extras that cost little:
 - **Doors, first pass: office doors only.** Walk into one to open it, E to shut it; a shut door blocks sight and
   muffles noise, and a brute smashes through (billed). Fire/blast doors and locked doors are later.
 - The vantage-point and shared-reveal ideas above still apply (a reveal by one player is everyone's).
+- **Door look (2026-10-19, after three lab rounds):** doors belong to the room wall, not the hex terrain: the door
+  stands on the chord between the corridor's two jambs, at the wall's height. Built from hex parts they "looked even
+  more off". The **double door** (cream leaves, push bars, lit green sign) with a **gunmetal** frame is the default.
+  Only narrow corridors get doors; wide hallways always meet their room open; opening a door is a noise.
+- **Doorway floor (2026-10-19):** the cells the door line passes through get a **diamond tread-plate threshold**, with
+  the room's floor on one side and the corridor's on the other. Open archways keep their floors as they are, for now.
