@@ -210,6 +210,7 @@ func _ally_waits() -> void:
 	foe.hp = 5000.0
 	foe.shove_mult = 0.0   # (Rebar's punches would knock it out of reach)
 	var rebar := _hero("rebar", Vector3(0, 0, 0))
+	AllyBrain.restraint = false   # (the eager AI: the frozen brute is fair game; the restraint baseline is test_ally_orders)
 	HeroFactory.make_ally(rebar, leader, false, 2.4)
 	var swings := [0]
 	rebar.melee_swung.connect(func() -> void: swings[0] += 1)
@@ -238,6 +239,7 @@ func _ally_waits() -> void:
 			ok = true
 			break
 	check(ok, "it fights again once the daze wears off")
+	AllyBrain.restraint = true
 
 
 # --- Fight slams never daze; a copy shows the owner's daze ---------------------------------------------------------
