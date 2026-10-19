@@ -369,7 +369,7 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	name_l.custom_minimum_size = Vector2(CARD_W - 36, 0)
 	client.add_child(name_l)
 	var who := _typed("%s  ·  %s" % [run.archetype_title(), run.company])
-	who.clip_text = true
+	who.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # a long company wraps onto a second line, never clips
 	who.custom_minimum_size = Vector2(CARD_W - 36, 0)
 	client.add_child(who)
 	v.add_child(_boxed_cell(client))
