@@ -267,8 +267,11 @@ voice, i.e. while "cast" or the spell word's onset is still being said):**
 - **C, said over a teammate's loud revised cue:** 23/27 cast. Misses: `accidental_sting_v2` 2 (rejected),
   `elevator_ding_v2` 1, `fizzle_pfft_v2b` 1 ("CASCORD"); the fireballs and stamps never broke a cast.
 
-**Round 3 picks (user, 2026-10-18):** `fizzle_pfft_v4`, `stamp_thunk_v4`, `elevator_ding_v4b`. Still to pick: the
-cast-heard charge-up (v4a-d) and the fireball (v4/v4b). The fizzle broke "cast corn" when it overlapped the spell word
+**Round 3 picks (user, 2026-10-18):** `cast_armed_v4a` (the reversed shing), `fizzle_pfft_v4`, `spell_fireball_v4b`,
+`stamp_thunk_v4`, `elevator_ding_v4b`. v4a missed the most in probe B, so two fixes were probed (`mic_leak_probe.gd --
+cast_armed_v4a cast_armed_v4a2 cast_armed_v4a3`, 40 runs each): v4a **5 misses**, `v4a2` (cut to its last 0.25 s)
+**1**, `v4a3` (full length, 8 dB quieter) **4**. Length, not level, is what matters: the swell has to be over before
+the spell word's onset. Recommended: v4a2 (user to confirm by ear). The fizzle broke "cast corn" when it overlapped the spell word
 in test C, so in the game it must not play over a new utterance (it is cut when the listener hears speech start).
 
 **Round 3 (`mic_leak_probe.gd -- v4`):**

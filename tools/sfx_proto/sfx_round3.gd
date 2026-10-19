@@ -23,6 +23,8 @@ const CUES3 := ["cast_armed_v4a", "cast_armed_v4b", "cast_armed_v4c", "cast_arme
 ## cue -> the recordings it is made from ("synth" = generated here).
 const SOURCES := {
 	"cast_armed_v4a": [K_RPG + "knifeSlice2.ogg"],
+	"cast_armed_v4a2": [K_RPG + "knifeSlice2.ogg"],
+	"cast_armed_v4a3": [K_RPG + "knifeSlice2.ogg"],
 	"cast_armed_v4b": ["synth", K_UI + "tick_002.ogg"],
 	"cast_armed_v4c": [K_UI + "scratch_001.ogg", K_UI + "tick_002.ogg", FIRE_SPELL],
 	"cast_armed_v4d": [FIRE_SPELL, K_UI + "bong_001.ogg"],
@@ -53,6 +55,25 @@ func _cast_armed_v4a() -> PackedFloat32Array:
 	s = Rec.cut(s, maxf(s.size() / float(RATE) - 0.45, 0.0))     # the last 0.45 s of the reversed sound: the swell
 	s = Rec.fade(s, 0.12, 0.012, 2.0)
 	return _mic_safe(s, -8.0)
+
+
+## (a2) The user's pick (v4a) made mic-safe by length: the same swell cut to its last 0.25 s, so it is over before the
+## spell word gets going (round 3: a loud high swell over the word's onset masks "h"/"k").
+func _cast_armed_v4a2() -> PackedFloat32Array:
+	var s := Rec.trim(Rec.load_mono(K_RPG + "knifeSlice2.ogg"), -50.0)
+	s = Rec.reverse(s)
+	s = Rec.cut(s, maxf(s.size() / float(RATE) - 0.25, 0.0))
+	s = Rec.fade(s, 0.06, 0.012, 2.0)
+	return _mic_safe(s, -8.0)
+
+
+## (a3) v4a made mic-safe by level: the full 0.45 s swell, 8 dB quieter.
+func _cast_armed_v4a3() -> PackedFloat32Array:
+	var s := Rec.trim(Rec.load_mono(K_RPG + "knifeSlice2.ogg"), -50.0)
+	s = Rec.reverse(s)
+	s = Rec.cut(s, maxf(s.size() / float(RATE) - 0.45, 0.0))
+	s = Rec.fade(s, 0.12, 0.012, 2.0)
+	return _mic_safe(s, -16.0)
 
 
 ## (b) A warm power-up that rises and locks on, 0.45 s: a hum (a saw 55 -> 110 Hz, low-passed at 260 Hz) whose
