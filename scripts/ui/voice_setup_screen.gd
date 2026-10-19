@@ -58,6 +58,7 @@ var _note_word := ""             ## the cast word the trigger note was written f
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	Sfx.play("paper")   # the form slides in
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_caster()
 	_build()

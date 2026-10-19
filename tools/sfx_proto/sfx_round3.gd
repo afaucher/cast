@@ -37,6 +37,7 @@ const SOURCES := {
 	"stamp_thunk_v4b": [STAMP_1, K_IMPACT + "impactPlank_medium_000.ogg"],
 	"elevator_ding_v4": [K_IMPACT + "impactBell_heavy_000.ogg"],
 	"elevator_ding_v4b": ["synth"],
+	"paper_flip": [K_RPG + "bookFlip3.ogg"],
 }
 
 
@@ -224,6 +225,15 @@ func _stamp_thunk_v4() -> PackedFloat32Array:
 ## v4b: take 1 (362622), crisper (more top), a little shorter.
 func _stamp_thunk_v4b() -> PackedFloat32Array:
 	return _stamp_from(STAMP_1, 0.2)
+
+
+# ---------------------------------------------------------------- paper (the user's pick, 2026-10-18)
+
+## The forms' paper sound: Kenney RPG bookFlip3 as recorded, its silence trimmed and its tail faded, levelled to -3 dB
+## peak. No speech-band notch: forms are not open while casting.
+func _paper_flip() -> PackedFloat32Array:
+	var s := Rec.trim(Rec.load_mono(K_RPG + "bookFlip3.ogg"), -50.0, 0.003)
+	return Rec.normalize(Rec.fade(s, 0.002, 0.04), -3.0)
 
 
 # ---------------------------------------------------------------- 5. elevator: a lobby chime, two soft tones falling

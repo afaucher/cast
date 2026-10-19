@@ -10,6 +10,8 @@ const STAMP_ANGLE_DEG := -3.0
 
 var signature := "":
 	set(v):
+		if v != "" and v != signature and style == "stamp" and is_inside_tree():
+			Sfx.play("stamp")   # the name stamp lands (not when a form is built already signed)
 		signature = v
 		queue_redraw()
 var style := "pen":

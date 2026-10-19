@@ -58,7 +58,7 @@ Dev: `--menu-screen voice|settings`, `--menu-shot <png> [--menu-after s]`, `--me
 `--settings-file <path>` (so screenshots never touch the player's settings).
 
 Settings live in `user://settings.cfg`: `[voice]` (`trigger_word`, `strictness`, `min_voice_db`: `VoiceSettings`) and
-`[game]` (`master_volume` 0..1, `fullscreen`, `resolution` "WxH", `voice_panel_visible`: `GameSettings`). The game reads
+`[game]` (`master_volume` 0..1, the Master bus, the only player volume: `GameSettings.BUS_VOLUMES`; `fullscreen`, `resolution` "WxH", `voice_panel_visible`: `GameSettings`). The game reads
 both: `VoiceCaster.start()` applies `[voice]`, `game.gd` reads `voice_panel_visible` when it builds the debug panel.
 
 In game (`game.gd`): **Esc** during a contract (no picker, elevator menu, invoice or "crew incapacitated" under way)
@@ -90,7 +90,7 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `seat_handover.gd` (`SeatHandover`, child `Session/Seats`, `Session.seats`) | who owns each seat's hero and its ownership epoch (in every hero snapshot); a dropped player's seat goes back to the AI as the seat's original character (`to_ai`); M6: which AI seat a joiner takes (`choose_seat`) and the handover to it (`take`, `to_player`) |
 | `net_join.gd` (`NetJoin`, child `Session/Join`, `Session.join`) | joining mid-contract (M6): a joiner waits (`join.wait`) until the crew is on a running floor, builds that floor as it was at its barrier (`join.go`), reports its checksum (`join.built`) and gets the late-join snapshot (`join.snapshot`: the seat table, gone ids, a world keyframe, runtime spawns, pickups, dents, statuses, the Ledger, its own seat's state) |
 | `net_registry.gd` (`NetRegistry`), `net_events.gd` (`NetEvents`) | the id -> node registry (runtime spawns and pickups get host ids from 10000); the tables of OWNER fields an event carries instead of a snapshot (`CARRIES` for heroes, `WORLD_CARRIES` for the host-owned classes) |
-| `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events |
+| `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events. The Chicken spell's chickens are host-owned runtime spawns too (`world.spawn` kind "chicken"), streamed as monster-format entries (`CHICKEN_FIELDS`) |
 | `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice |
 | `net_casts.gd` (`NetCasts`, child `Session/Casts`, `Session.casts`) | casts and hero attacks as events (M4): a cast is resolved on the caster's machine and lands `LEAD` (0.2 s) later on every machine (`SpellBook.apply`); a hero's swing, shot, bowl or spin (`act`) is replayed on its puppet everywhere at the moment the puppet shows |
 | `net_status.gd` (`NetStatus`, child `Session/Status`, `Session.status`) | statuses (M4): the target's owner applies a modifier, a fire or a soak and announces it (`st`); the other screens show it (`Actor.net_set_modifiers`, `Burning.show_remote`, `Coffee.show_remote`, `Wet.douse`) |
@@ -225,16 +225,19 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
   `spawn(node, at)`, `actors()`, `team_actors(team)`, `actors_in_radius(pos, r, team)`,
   `nearest_actor(pos, team, max_range)`, `flat_distance`, `TEAM_HEROES = 0`, `TEAM_MONSTERS = 1`.
   `hittable_in_radius(pos, r, team)` is `actors_in_radius` plus every actor in the group `"breakables"` (mail
-  packages): `Combat.melee_arc`, `Projectile` and `ArrowShot` use it, so swings and shots also break the mail
-  but never hit employees. With `props` (`Projectile.hits_props`: the archer's arrow, Wick's arrows, the hero bolt) it
-  adds the priced props (`props_in_radius`, group `"priced_props"`): all arrows hit props (user, 2026-10-18); swings and
-  a fireball's flight do not.
+  packages) and the chickens (group `"chickens"`, the Chicken spell; the crew's swings and shots only while
+  `Chicken.WEAPONS_HIT`): `Combat.melee_arc`, `Projectile` and `ArrowShot` use it, so swings and shots also break the
+  mail and swat chickens, but never hit employees. With `props` (`Projectile.hits_props`: the archer's arrow, Wick's
+  arrows, the hero bolt; and `Combat.melee_arc` for a hero's swing) it adds the priced props (`props_in_radius`, group
+  `"priced_props"`): the crew's weapons and every arrow hit props (user, 2026-10-18); a monster's swing and a fireball's
+  flight do not.
   A test or scene calls `GameWorld.begin(map, root_node3d)` first.
 - **`Actor`** (`scripts/core/actor.gd`, extends Node3D): `team`, `max_hp`, `hp`,
   `move_speed`, `radius`, `dead`, `facing`, `climbing`. `move(dir, delta)` does the terrain
   rules, slide, climb slow-down, separation and ground snap. Also `apply_damage(amount, source)`,
   `heal(amount)`, `set_modifier(id, mult, duration)` (damage-taken multiplier; the same id
-  refreshes), `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`.
+  refreshes), `peck(source)` (the Chicken spell's hit for nothing: no damage, a monster turns on the pecker; through
+  `Combat.peck`), `has_modifier`, `face_point`, `current_cell`. Signals: `damaged`, `healed`, `died`, `pecked`.
   Override `_on_death()` for death visuals (the default is `queue_free`). Actors join the group `"actors"`.
   `net_fields()` says who may write each var (`Net.SPAWN/OWNER/PRIVATE/LOCAL`, `scripts/net/net.gd`);
   subclasses merge theirs into `super()`, and `test_net_contract` fails on any undeclared var.
@@ -259,9 +262,20 @@ func start(spell_ids: PackedStringArray) -> bool   # opens mic + loads model; fa
 func is_ready() -> bool
 func get_level() -> float                          # 0..1 mic level for a meter
 func inject_text(text: String) -> void             # debug: act as if `text` was heard (typed console / tests)
+signal trigger_heard(word: String)                 # the trigger word armed a cast (Incantation.trigger_armed): the "cast heard" cue
+signal speech_started                              # the gate's voice onset (raw input, ~50 ms in): cuts the fizzle
+func is_speaking() -> bool                         # inside a voice span right now (no hangover)
 ```
-Spell ids are lowercase: `heal`, `fireball`, `armor`, `corn`, `tentacles`. The voice layer listens for **all**
+Spell ids are lowercase: `heal`, `fireball`, `armor`, `corn`, `tentacles`, `teeth`, `vines`, `damp`, `coffee`, `chicken`.
+The voice layer listens for **all**
 spells. The game decides whether the local hero knows the spell (and fizzles it if not).
+
+### Sound (`scripts/fx/sfx.gd`, autoload **Sfx**; `docs/design/audio-plan.md`, "As built")
+Cosmetic: `Sfx.play(cue)`, `Sfx.play_at(cue, pos)`, `Sfx.stop_cue(cue)`, `Sfx.listen_to_voice(caster)`. The cue table
+(`Sfx.CUES`) names each cue's file under `assets/audio/sfx/` (rendered by `tools/render_sfx.ps1`, not in git; a missing
+file is a silent cue with one warning), its bus (`default_bus_layout.tres`: Master > SFX > World / Stings, UI,
+VoiceFeedback, Music), voice limit and gap. Callers only listen (Game, forms, `Fx`); every machine plays its own sounds
+from the events it already has, and no RPC carries a sound. Off headless (tests: `Sfx.enable_for_tests()`).
 
 ### Spells (`scripts/spells/spell_book.gd`, `class_name SpellBook`)
 ```gdscript

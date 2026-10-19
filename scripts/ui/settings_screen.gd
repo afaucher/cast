@@ -33,6 +33,7 @@ var _syncing := false
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	Sfx.play("paper")   # the form slides in
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	settings = GameSettings.load_settings(settings_path)
 	_build()

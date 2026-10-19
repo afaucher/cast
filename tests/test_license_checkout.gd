@@ -6,7 +6,7 @@ extends TestCase
 ## (nothing hard-coded per spell; the red tick is the only record of a pick), the printed limit once, no instructional or
 ## state copy, Up / Down navigation, scrolling past MAX_LINES, signing "Requested by" with the red name stamp before
 ## `picked`, and a layout that fits 1600 x 900 canvas units (1280 x 720) and 1600 x 1000 (the Steam Deck's 1280 x 800)
-## with the real nine spells, 24 and 100 made-up ones.
+## with the real ten spells, 24 and 100 made-up ones.
 
 const CANVAS_W := 1600.0
 const CANVAS_H := 900.0
@@ -72,9 +72,9 @@ func _real_spells() -> void:
 	var p := _open()
 	await frames(4)
 	var ids := SpellBook.ids()
-	eq(ids.size(), 9, "the real catalog has nine spells")
+	eq(ids.size(), 10, "the real catalog has ten spells")
 	eq(p.offered(), ids, "the picker offers exactly SpellBook.ids(), in order")
-	eq(p._lines.size(), 9, "one line item per spell")
+	eq(p._lines.size(), 10, "one line item per spell")
 	for i in ids.size():
 		var line: RequisitionLine = p._lines[i]
 		eq(line.spell_id, ids[i], "line %d is %s" % [i + 1, ids[i]])
@@ -141,9 +141,9 @@ func _real_spells() -> void:
 	var l0: RequisitionLine = p._lines[0]
 	check(_focus_step(l0, SIDE_BOTTOM) == p._lines[1] and _focus_step(p._lines[4], SIDE_TOP) == p._lines[3], "down and up a line")
 	check(_focus_step(l0, SIDE_LEFT) in [l0, null] and _focus_step(l0, SIDE_RIGHT) in [l0, null], "left and right stay")
-	check(_focus_step(p._lines[8], SIDE_BOTTOM) == p._sign, "down from the last line goes to the signature")
+	check(_focus_step(p._lines[9], SIDE_BOTTOM) == p._sign, "down from the last line goes to the signature")
 	check(_focus_step(p._sign, SIDE_BOTTOM) == p._back and _focus_step(p._back, SIDE_BOTTOM) == l0, "then the back row, then round to the top")
-	check(_focus_step(l0, SIDE_TOP) == p._back and _focus_step(p._sign, SIDE_TOP) == p._lines[8], "and back up the other way")
+	check(_focus_step(l0, SIDE_TOP) == p._back and _focus_step(p._sign, SIDE_TOP) == p._lines[9], "and back up the other way")
 	check(l0.find_next_valid_focus() == p._lines[1], "Tab goes line to line")
 
 	# Ticking: pressing a line (Enter / A / click) ticks it, three drop the oldest, two make the signature live.

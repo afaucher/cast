@@ -20,7 +20,7 @@ extends Node3D
 ##   e.finished.connect(func() -> void: controller.enabled = true)
 
 signal finished                      ## the crew is out and standing at its spots
-signal doors_opened                  ## audio hook: the ding
+signal doors_opened                  ## audio hook: the ding (the arrival's doors, and the shut doors opening for a hero)
 
 const T_OPEN0 := 0.35
 const T_OPEN1 := 1.0
@@ -181,6 +181,8 @@ func _call_doors(delta: float) -> void:
 	var target := 1.0 if (want or _close_t > 0.0) else 0.0
 	if is_equal_approx(_door, target):
 		return
+	if _door <= 0.0 and target > 0.0:
+		doors_opened.emit()
 	_door = move_toward(_door, target, delta / DOOR_TIME)
 	model.set_door_open(_door)
 

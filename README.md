@@ -123,12 +123,13 @@ HP carries between floors; everything resets between contracts.
 | Esc | Pause (Resume, Abandon contract, Main menu) |
 
 ### Spells
-Nine spells: **heal**, **fireball**, **armor**, **corn** (a corn bomb from the sky that hits
+Ten spells: **heal**, **fireball**, **armor**, **corn** (a corn bomb from the sky that hits
 everyone), **tentacles** (neon tentacles burst from the floor and shove everything outward),
 **teeth** (too many teeth sprout out of everyone in the area, then pop; a heal pulls them),
 **vines** (thorny vines root everyone in the area for about two seconds: no walking, no being shoved, attacks still
 work), **damp** (a wide soggy area: fires go out, nobody can ignite for a while, and puddles make shoves slide
-further) and **coffee** (+60% move and attack speed for six seconds, twitchy, then a crash; monsters get it too).
+further), **coffee** (+60% move and attack speed for six seconds, twitchy, then a crash; monsters get it too) and
+**chicken** (four chickens run about pecking everything for zero; a pecked monster forgets you and chases its chicken).
 
 - **Aiming:** everything lands where you aim, so to heal a friend you point at them.
 - **Fire:** a fireball can set anyone near the blast on fire (monsters, teammates, employees) for 5 to 10 seconds of mild damage. It never spreads, and healing doesn't put it out.
@@ -161,11 +162,15 @@ further) and **coffee** (+60% move and attack speed for six seconds, twitchy, th
   `.gitignore`). The GodotSteam binaries (`addons/godotsteam/win64/*`) come from
   `..\bridge-to-friendship\addons\godotsteam\win64`. Steam (running) supplies the player's name on the HUD;
   `steam_appid.txt` is 480 (Valve's Spacewar test app) until Cast has its own app id. The Godot 4.7 export templates go in `build\deps`.
+- **Sounds, not committed either:** the CC0 recordings in `assets/audio/third_party/` (where each came from:
+  `SOURCES.md` there) and the game's cues rendered from them, `assets/audio/sfx/*.wav`. Copy `assets/audio/third_party/`
+  from a checkout that has it, then run `.\tools\render_sfx.ps1` (renders the cues and imports them). Without them the
+  game and the tests still run; the missing sounds stay silent. Credits: `assets/audio/sfx/CREDITS.md`.
 - **Dev flags** (after `--`) skip the menu, for example `--seed 7 --contract 0 --spells heal,corn
   --no-mic`, `--floor 3`, or `--shot <png> --shot-after 4` for screenshots. They're listed at the
   top of `scripts/app/game.gd`. `--menu` brings the menu back.
 - **Labs** (`--scene res://scenes/<name>.tscn`): `terrain_preview`, `voice_lab`, `wick_lab`,
-  `gasket_lab`, `rebar_lab`, `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `van_lab` (the crew's work van arriving over its summoning circle), `teeth_lab`, `new_spells_lab` (vines, damp and coffee: `--spell vines|damp|coffee`),
+  `gasket_lab`, `rebar_lab`, `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `van_lab` (the crew's work van arriving over its summoning circle), `teeth_lab`, `new_spells_lab` (vines, damp, coffee and chicken: `--spell vines|damp|coffee|chicken`, and for chicken `--closeup` or `--pickup`),
   `backdrop_lab` (the garage behind the main menu and the job board, plus the storefront prototype: `--option garage|storefront`, `--mood dawn|night|after`, `--hero wick|gasket|rebar`, `--board` lays the real job board over the garage).
 - **Tests:** the runner fails a test on any `SCRIPT ERROR`. Logs go to `test_logs/`. Net tests (`tests/test_net_*.gd`
   with `const PEERS := N`) run as N headless processes over ENet localhost, after the parallel batch, under each

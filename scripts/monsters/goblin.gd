@@ -615,6 +615,14 @@ func _enter_chase(t: Actor) -> void:
 	aggro(t)
 
 
+## A chicken pecked him (the Chicken spell): he startles and looks at it, but a chicken is not the crew (no "!", no
+## fireworks, and he never chases it).
+func _on_pecked(source: Node) -> void:
+	var c := source as Node3D
+	if c != null and is_instance_valid(c):
+		hear(c.global_position)
+
+
 ## A shout or a sound: he stops and looks that way (a doorway look). Never ALERT: the scout's job is the fireworks.
 func alert(pos: Vector3) -> bool:
 	return hear(pos)

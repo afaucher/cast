@@ -28,7 +28,7 @@ signal cancelled
 const PICK_COUNT := 2
 const LINE_H := 48.0
 const MIN_LINES := 5                ## the list is at least this tall (so a short list does not collapse the sheet)
-const MAX_LINES := 9                ## ... and at most this tall; more spells scroll
+const MAX_LINES := 10               ## ... and at most this tall (the ten spells of 2026-10-18 all show); more scroll
 const SHEET_W := 1040.0
 const SPEC_W := 430.0
 const PAGE_GAP := 26.0
@@ -109,6 +109,7 @@ func signer_name() -> String:
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	Sfx.play("paper")   # the form slides in
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	theme = FormTheme.theme()
 	_ids = spell_ids.duplicate() if not spell_ids.is_empty() else SpellBook.ids()
@@ -401,6 +402,8 @@ func _make_line(id: String) -> RequisitionLine:
 
 
 func _show_spec(id: String) -> void:
+	if _shown != "" and id != _shown:
+		Sfx.play("paper")   # the spec sheet turns to another spell's page (min_gap keeps fast scrolling quiet)
 	_shown = id
 	if _spec == null:
 		return

@@ -505,11 +505,12 @@ func _apply(d: Dictionary) -> void:
 	for e: Variant in d.get("spawns", []) as Array:
 		listed[int((e as Array)[0])] = true
 	for id in NetRegistry.ids():
-		var m := NetRegistry.node(id) as Monster
-		if id >= NetRegistry.RUNTIME_BASE and m != null and not listed.has(id):
+		var m := NetRegistry.node(id) as Actor
+		if id >= NetRegistry.RUNTIME_BASE and (m is Monster or m is Chicken) and not listed.has(id):
 			m.dead = true
 			m.remove_from_group("actors")
 			m.remove_from_group("monsters")
+			m.remove_from_group(Chicken.GROUP)
 			m.queue_free()
 			NetRegistry.unregister(id)
 	_session.world.apply_spawns(d.get("spawns", []) as Array)

@@ -1,8 +1,103 @@
 # Audio plan
 
-Status: **proposal**, 2026-10-18. Nothing here is built in the game yet. The prototype synth and the mic-leak probe in
-`tools/sfx_proto/` exist and ran (results below). **No sound files have been downloaded**: every third-party sound below
-is a candidate the user has to approve first (the download list is at the end).
+Status: **partly built**, 2026-10-18. The sound system and the user's five round 3 picks are in the game: see
+"As built" just below. The rest of this document is the proposal it came from. The prototype synth and the mic-leak
+probe in `tools/sfx_proto/` exist and ran (results below). The approved CC0 downloads are in `assets/audio/third_party/`
+(untracked; `SOURCES.md` there).
+
+## As built (2026-10-18)
+
+The first real audio: the bus layout, the `Sfx` autoload, three new volume rows on FORM 3 and six cues (the five round 3
+picks, then `paper`, picked the same day). Section 5's
+steps 1, 2, 4, 5 and 6 are done for these cues. Step 3 (baking `SfxSynth` at boot) went another way: the cues are
+rendered offline to WAVs (below), because three of them are cut from recordings anyway.
+
+| Cue | Recipe (`sfx_round3.gd`) | Hooked at | Bus | Heard |
+|---|---|---|---|---|
+| `cast_heard` | `cast_armed_v4a2` | `VoiceCaster.trigger_heard` (new), re-emitted from `Incantation.trigger_armed` (new) where `_register_trigger` starts a pending cast; `Sfx.listen_to_voice`, called from `game.gd` `_setup_voice` | VoiceFeedback | your machine only, flat |
+| `fizzle` | `fizzle_pfft_v4` | `VoiceCaster.spell_fizzled`, same helper. Cut by `VoiceCaster.speech_started` (new) | VoiceFeedback | your machine only, flat |
+| `fireball` | `spell_fireball_v4b` | `Fx.explosion` (the fireball's burst; it runs inside the projectile's `on_hit` on every machine the cast lands on) | World | everyone, 3D at the burst |
+| `stamp` | `stamp_thunk_v4` | `SignLine.signature` (stamp style, a new name, in the tree: the job board's Take line and every `SignRow`, such as the license checkout's "Requested by") and `FormVoid` (once per void, as the stamp lands at `SLAM_S`) | UI | whoever sees the form, flat |
+| `paper` | `paper_flip` (Kenney RPG `bookFlip3`, as recorded: no speech-band notch, forms are not open while casting) | A form sliding in: the `_ready` of `SettingsScreen` and `VoiceSetupScreen` (the main menu's pages, also from the pause menu), `JobBoard`, `SpellPicker` (the requisition), `InvoiceScreen`, `PauseMenu`, `ElevatorMenu` and `VanExitMenu`; the requisition's spec sheet turning to another spell's page (`SpellPicker._show_spec`, not its first page); going back (`FormVoid._fire`, as the voided form goes, 0.3 s after the stamp). min_gap 0.18 s, so fast scrolling or two forms at once play it once. Not on focus moves or typed values | UI | whoever sees the form, flat |
+| `elevator_ding` | `elevator_ding_v4b` | `ElevatorArrival.doors_opened`, connected in `game.gd` `_arrive_by_elevator`, played 2 units above the elevator. The signal also fires now when the shut doors open for a hero walking up (floor 1, or any floor after the arrival), not only in the arrival on floors 2 and 3 | World | everyone near, 3D |
+
+**Files and assets.**
+- `tools/sfx_proto/render_game_sfx.gd` maps each game cue (six, with `paper_flip` added to `sfx_round3.gd`) to its recipe (`GAME_CUES`) and writes `assets/audio/sfx/<cue>.wav`;
+  `tools/render_sfx.ps1` runs it and reimports. A recipe whose recordings are missing is skipped with an error.
+- The WAVs (and their `.import` files) are gitignored like `models/`, until the open question about committing CC0
+  audio is decided. README and `AGENTS.md` (the worktree note) say to copy `assets/audio/third_party/` and run the render.
+  `build.ps1` warns when `assets/audio/sfx/` has no WAVs (the build is then silent).
+- `assets/audio/sfx/CREDITS.md` (committed) lists each cue's sources, author, licence and URL.
+- `export_presets.cfg` excludes `assets/audio/third_party/*`: the raw packs never ship, only the five cues.
+
+**Bus layout** (`default_bus_layout.tres`): Master (HardLimiter, ceiling -0.5 dB); SFX (Compressor: -12 dB threshold,
+3:1, 5 ms attack, 150 ms release) with World and Stings under it; UI; VoiceFeedback; Music (empty, reserved). Stings
+has no cue yet. No ducking while speaking yet (rule 4 below): it needs a gain stage separate from the SFX volume
+setting, so it was left for later.
+
+**`Sfx`** (`scripts/fx/sfx.gd`, autoload; no `class_name`, no gameplay state, so it needs no `net_fields`):
+- `CUES` holds file, bus, `volume_db`, `pitch_jitter`, `max_voices`, `min_gap`, `positional`, `unit_size` and `max_distance`.
+- `play(cue)`, `play_at(cue, pos)`, `stop_cue(cue, fade = 25 ms)`, `is_playing(cue)`, `listen_to_voice(caster)`.
+  `attach` (loops) is not built: no cue loops yet.
+- Pools of up to 8 `AudioStreamPlayer`s and 16 `AudioStreamPlayer3D`s, built on first use. Past a cue's
+  `max_voices` it steals that cue's oldest voice; with the pool full, the oldest of all.
+- A play sooner than `min_gap` after the cue's last one is dropped (wall clock). Pitch jitter rolls `GameWorld.fx_rng`.
+- **Headless it is off**: nothing is loaded or built and every call returns at once (tests, net test processes).
+  `enable_for_tests()` turns it on.
+- A missing WAV makes its cue silent with one warning, never an error, so a fresh clone runs and tests pass.
+- The listener: the iso camera sits 60 units from the hero, which would flatten every distance. So once a 3D cue
+  plays, `Sfx` keeps an `AudioListener3D` where the camera's view ray meets the followed point's height (the
+  `CameraRig` origin), with the camera's rotation. Left and right then match the screen.
+- Process mode ALWAYS, so the forms' stamps play over the pause menu.
+
+**The fizzle cut (mic safety, §4).** `VoiceCaster.speech_started` fires when `SpeechGate` marks a new voice onset
+(`voice_start_sample`: 50 ms of loud raw input, before the gate's 80 ms look-ahead delay and before the recognizer hears
+anything). With the gate off it fires from the recognizer's own voice tracker (`voice_activity`'s source). `Sfx` fades
+every fizzle voice out over 25 ms, which is fast and avoids a click. Also, a fizzle that arrives while the player is
+still speaking (`VoiceCaster.is_speaking()`: the gate's raw voice span, `SpeechGate.in_voice()`, with no hangover) is
+never started. One side effect: on speakers, a fizzle loud enough to open the gate cuts itself. That errs toward mic safety.
+
+**The hook (step 4).** `Incantation.trigger_armed(token)` is emitted when `_register_trigger` sets a pending trigger,
+once per trigger (keyed by utterance and token index). The recognizer revising its partial ("CAST" -> "CAST HE" ->
+"CAST HEAL") arms nothing new. A second "cast" in the same breath arms again. Strict mode arms only a trigger at the
+start of a phrase, as it casts. It also fires when the trigger and the spell word arrive in one hypothesis (both
+sounds play then) and for typed lines (`inject_text`). In loose mode a mid-sentence "cast" arms and chimes (the
+"uh-oh" warning of §1 #1).
+
+**Fireball: the burst, not the cast.** The recording is a roar with an impact thump on the attack, so it reads as
+the explosion. A whoosh at the caster is a separate later cue (#2's cast layer).
+
+**Settings (FORM 3).** Only the master volume (user, 2026-10-18: "No individual sound controls. Let's just tune them
+ourselves"). The other buses' levels are ours to tune, in the Sfx cue table and `default_bus_layout.tres`.
+`GameSettings.BUS_VOLUMES` maps just `master_volume` to Master; `apply_bus_volume` stays for any bus.
+
+**Tests.** `tests/test_sfx.gd` checks:
+- the buses, their sends and effects, and every cue on an existing bus with a render recipe that exists;
+- silent and empty headless; missing files;
+- 3D placement, min_gap, the voice limit stealing the oldest, and jitter on `fx_rng` with `GameWorld.rng` untouched;
+- `Incantation.trigger_armed` once per trigger; `trigger_heard` and the `cast_heard` play;
+- the fizzle stopping at the next voice onset, and not starting over speech. Pushed through the real gate, with the
+  speech model when present;
+- the three volumes round-tripping and applying, and the form's rows saving and reloading.
+
+The cues were also checked in a real run (floor 2: the arrival's ding; a typed "cast fireball": cast heard + fireball
+at the burst; "cast hello": the fizzle; a signed `SignRow` and a voided form: two stamps; and `--to-exit` on floor 1:
+the ding as the doors open for the crew). `paper` was heard opening Settings from the menu, on the job board and on
+the pause form.
+
+**Export size** (same tree, exported with and without the filter, 2026-10-18): `Cast.pck` went from 82.0 MB to
+78.1 MB, and the zip from 111.1 MB to 108.8 MB, because the raw packs (about 300 imported files) are no longer
+packed. The six cues add about 0.15 MB (imported as QOA). `build.ps1`'s zip check passes.
+
+**Choices the user may want to change:**
+- Volumes: `cast_heard` -3 dB, `fizzle` -2, `fireball` 0, `stamp` -2, `paper` -4, `elevator_ding` -2.
+- `paper` also plays for the pause, elevator and van exit forms (they are forms sliding in too), and on every spec
+  sheet page turn in the requisition (that page changes as you move between spells; min_gap keeps it to one per 0.18 s).
+- 3D range: fireball unit 14 / max 70, ding unit 16 / max 80, inverse-distance, panning 0.7.
+- The fizzle is cut and not started over speech. The mic-leak probe has not been re-run on the rendered files, but they
+  are the probed recipes.
+- The voice setup screen ("Try it") plays no cues.
+- Out of component (`spell_empty`) has no sound.
 
 The user's ask (2026-10-18): basic audio. Find out whether good open-license sounds exist or whether we can make them
 procedurally, track every source for attribution, and pick the top 10 sounds that make the game more fun and read

@@ -33,6 +33,11 @@ extends Node
 ## every monster it wakes): nothing more travels for it. A late joiner gets every scout's phase in its snapshot
 ## (scout_states / apply_scouts); a volley already in the air is skipped.
 ##
+## CHICKENS (the Chicken spell): the host spawns a flock when a chicken cast lands and runs it; each chicken is a runtime
+## spawn like a gate's monster (`world.spawn`, kind "chicken", gate 0), rides the stream as a MONSTER-format entry
+## (NetWorldCodec.read_chicken / write_chicken: the codec's layout is unchanged, this file knows which ids are chickens) and
+## dies with `world.die`. A client shows it as a puppet (Chicken.net_show / net_tick).
+##
 ## The game calls begin() at the floor's barrier (after NetFloor.assign_ids and freeze_copies) and set_active() with
 ## the hero sync (NetSnapshot.set_active). Nothing here knows about game.gd.
 
@@ -44,6 +49,7 @@ signal died(id: int)
 const MONSTER := 0
 const EMPLOYEE := 1
 const GATE := 2
+const CHICKEN := 3
 
 const REDUNDANCY := 3       ## a changed entry is sent this many ticks in a row
 const REFRESH := 30         ## every entry at least once per this many ticks (1 s at 30 Hz): a still floor costs about 16 B per actor per second
@@ -178,6 +184,8 @@ static func _kind_of(n: Node) -> int:
 		return EMPLOYEE
 	if n is Hellgate:
 		return GATE
+	if n is Chicken:
+		return CHICKEN
 	return -1
 
 
@@ -333,8 +341,8 @@ func section(now: float, budget: int = WORLD_BUDGET) -> PackedByteArray:
 	for tr in chosen:
 		tr.last_sent = _tick
 		match tr.kind:
-			MONSTER:
-				mon_parts.append(tr.last_bytes)
+			MONSTER, CHICKEN:
+				mon_parts.append(tr.last_bytes)   # (a chicken rides as a monster entry)
 			EMPLOYEE:
 				emp_parts.append(tr.last_bytes)
 			_:
@@ -371,6 +379,9 @@ func _entry(tr: Track, now: float) -> PackedByteArray:
 	if tr.kind == MONSTER:
 		NetWorldCodec.read_monster(tr.node as Monster, st)
 		return NetWorldCodec.monster_bytes(st)
+	if tr.kind == CHICKEN:
+		NetWorldCodec.read_chicken(tr.node as Chicken, st)
+		return NetWorldCodec.monster_bytes(st)
 	NetWorldCodec.read_employee(tr.node as Employee, st)
 	return NetWorldCodec.employee_bytes(st)
 
@@ -391,6 +402,10 @@ func keyframe(now: float) -> PackedByteArray:
 			MONSTER:
 				var st := _state_now(tr, now)
 				NetWorldCodec.read_monster(tr.node as Monster, st)
+				mons.append(NetWorldCodec.monster_bytes(st))
+			CHICKEN:
+				var st := _state_now(tr, now)
+				NetWorldCodec.read_chicken(tr.node as Chicken, st)
 				mons.append(NetWorldCodec.monster_bytes(st))
 			EMPLOYEE:
 				var st := _state_now(tr, now)
@@ -414,19 +429,30 @@ func _state_now(tr: Track, now: float) -> NetHeroState:
 	return st
 
 
-## Host: every runtime monster alive (a gate's burst, a dev spawn), as a world.spawn replay: [[id, kind, x, y, z, gate id]].
+## Host: every runtime monster alive (a gate's burst, a dev spawn) and every chicken, as a world.spawn replay:
+## [[id, kind, x, y, z, gate id]].
 func runtime_spawns() -> Array:
 	var out: Array = []
 	for id: int in _tracks:
 		var tr: Track = _tracks[id]
-		if id < NetRegistry.RUNTIME_BASE or tr.kind != MONSTER or not is_instance_valid(tr.node) or tr.node.dead:
+		if id < NetRegistry.RUNTIME_BASE or (tr.kind != MONSTER and tr.kind != CHICKEN) or not is_instance_valid(tr.node) or tr.node.dead:
 			continue
-		var m := tr.node as Monster
-		var gate_node: Variant = m.get_meta("from_gate") if m.has_meta("from_gate") else null
-		var gate := NetFloor.id_of(gate_node as Node) if gate_node != null and is_instance_valid(gate_node) else 0
-		var p := m.global_position
-		out.append([id, m.kind, p.x, p.y, p.z, gate])
+		var row := _spawn_row(id, tr.node)
+		row.append(_gate_of(tr.node))
+		out.append(row)
 	return out
+
+
+## [id, kind, x, y, z] of a runtime spawn (a monster's kind, or "chicken").
+static func _spawn_row(id: int, a: Actor) -> Array:
+	var p := a.global_position
+	return [id, (a as Monster).kind if a is Monster else "chicken", p.x, p.y, p.z]
+
+
+## The net id of the gate a runtime monster came out of (0: none, and for a chicken).
+static func _gate_of(a: Actor) -> int:
+	var gate_node: Variant = a.get_meta("from_gate") if a.has_meta("from_gate") else null
+	return NetFloor.id_of(gate_node as Node) if gate_node != null and is_instance_valid(gate_node) else 0
 
 
 ## The late joiner: build the host's runtime monsters (no burst to watch: they came out a while ago).
@@ -476,11 +502,11 @@ func apply_keyframe(bytes: PackedByteArray, stamp: float) -> int:
 # --- Host: events ---------------------------------------------------------------------------------------------
 
 func _on_actor_spawned(a: Actor) -> void:
-	if not (a is Monster) or NetFloor.id_of(a) != 0:   # (from the barrier on, even before the stream starts)
+	if not (a is Monster or a is Chicken) or NetFloor.id_of(a) != 0:   # (from the barrier on, even before the stream starts)
 		return
 	var id := NetRegistry.next_runtime_id()
 	NetRegistry.register(id, a)
-	_track(id, a, MONSTER)
+	_track(id, a, _kind_of(a))
 	_pending_spawns.append(id)
 	call_deferred("_flush_spawns")
 
@@ -491,15 +517,13 @@ func _flush_spawns() -> void:
 		return
 	var by_gate: Dictionary = {}
 	for id in _pending_spawns:
-		var m := NetRegistry.node(id) as Monster
-		if m == null:
+		var m := NetRegistry.node(id) as Actor
+		if m == null or not (m is Monster or m is Chicken):
 			continue
-		var gate_node: Variant = m.get_meta("from_gate") if m.has_meta("from_gate") else null
-		var gate := NetFloor.id_of(gate_node as Node) if gate_node != null and is_instance_valid(gate_node) else 0
+		var gate := _gate_of(m)
 		if not by_gate.has(gate):
 			by_gate[gate] = []
-		var p := m.global_position
-		(by_gate[gate] as Array).append([id, m.kind, p.x, p.y, p.z])
+		(by_gate[gate] as Array).append(_spawn_row(id, m))
 	_pending_spawns.clear()
 	for gate: int in by_gate:
 		_send("world.spawn", {"g": gate, "m": by_gate[gate]})
@@ -687,6 +711,13 @@ func _receive_spawn(gate_id: int, list: Array, quiet: bool = false) -> void:
 		if NetRegistry.has_id(id):
 			continue
 		var pos := Vector3(float(row[2]), float(row[3]), float(row[4]))
+		if str(row[1]) == "chicken":
+			var c := Chicken.make_shown(pos)
+			NetRegistry.register(id, c)
+			_show(id, c, CHICKEN)
+			c.reset_physics_interpolation()
+			ids.append(id)
+			continue
 		var m := MonsterFactory.spawn(str(row[1]), Hex.from_world(pos))
 		if m == null:
 			continue
@@ -774,6 +805,8 @@ func _show_world(t_r: float, delta: float) -> void:
 				sh.shown = st
 				if sh.kind == MONSTER:
 					NetWorldCodec.write_monster(sh.node as Monster, st)
+				elif sh.kind == CHICKEN:
+					NetWorldCodec.write_chicken(sh.node as Chicken, st)
 				else:
 					NetWorldCodec.write_employee(sh.node as Employee, st)
 				if sh.interp.take_teleport() or not sh.applied:

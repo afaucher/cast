@@ -33,7 +33,7 @@ const DROPS := {
 	"grunt": [{"spells": ["teeth"], "chance": 0.12}, {"spells": ["damp"], "chance": 0.06}],
 	"archer": [{"spells": ["heal"], "chance": 0.15}, {"spells": ["vines"], "chance": 0.08}],
 	"brute": [{"spells": ["fireball", "armor"], "chance": 0.35}, {"spells": ["coffee"], "chance": 0.10}],
-	"swarmer": [{"spells": ["tentacles"], "chance": 0.03}],   ## per imp
+	"swarmer": [{"spells": ["tentacles"], "chance": 0.03}, {"spells": ["chicken"], "chance": 0.04}],   ## per imp (imps come in packs)
 }
 const ANY_KIND: Array = [{"spells": ["corn"], "chance": 0.02}]   ## in addition, from every monster
 

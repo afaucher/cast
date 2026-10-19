@@ -9,6 +9,8 @@ extends Node
 ##
 ## Contract (docs/ARCHITECTURE.md): spell_spoken / spell_fizzled / voice_activity,
 ## start(spell_ids) -> bool, is_ready(), get_level(), inject_text(text).
+## Sound hooks (docs/design/audio-plan.md): trigger_heard (the "cast heard" cue), speech_started and is_speaking() (the
+## fizzle is cut by new speech).
 ## Added: heard (raw recognizer text, for subtitles), cast_detail (everything
 ## about a cast incl. `accidental`), set_trigger_word(), set_strictness(),
 ## last_cast_accidental(), push_samples()/flush()/poll() for tests.
@@ -38,9 +40,16 @@ signal ignored(spell_id: String, heard_text: String, reason: String)
 ## known. outcome: {kind: "cast"|"fizzle"|"none", casts: [], fizzles: [], ignored: []}.
 signal utterance_finished(text: String, outcome: Dictionary, typed: bool)
 signal trigger_word_changed(word: String)
+## The trigger word was heard and a cast is armed, waiting for its spell word (Incantation.trigger_armed): once per
+## trigger, typed lines included. `word` is the token as heard ("CAST", "CASTS").
+signal trigger_heard(word: String)
+## New speech began: the gate's voice onset on the raw input (SpeechGate.voice_start_sample, ~50 ms into the voice,
+## before the recognizer hears it), or with the gate off the recognizer's own voice tracker. Sounds that must not play
+## over the player's next words stop here.
+signal speech_started
 signal strictness_changed(mode: String)
 
-const DEFAULT_SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"]
+const DEFAULT_SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
 ## Keyword choices for the UI. Each was measured with TTS clips through the real
 ## model (tests/test_voice_triggers.gd prints the table). TRIGGER_NOTES flags
 ## options that misbehave; they stay selectable but the UI warns.
@@ -291,6 +300,11 @@ func is_voice_active() -> bool:
 	return _voice_active
 
 
+## The player is speaking right now (the gate's raw voice span, no hangover; with the gate off, the recognizer's tracker).
+func is_speaking() -> bool:
+	return gate.in_voice() if gate.enabled else _voice_active
+
+
 func get_stats() -> Dictionary:
 	return _listener.get_stats() if _listener != null else {}
 
@@ -354,6 +368,7 @@ func _ensure_incantation() -> void:
 
 func _rebuild() -> void:
 	_inc = Incantation.new(_spells if not _spells.is_empty() else PackedStringArray(DEFAULT_SPELLS), tuning)
+	_inc.trigger_armed.connect(func(token: String) -> void: trigger_heard.emit(token))
 	_utt_events.clear()
 	_last_text = ""
 	if _listener != null:
@@ -505,6 +520,7 @@ func _note_voice_end(rate: int) -> void:
 		_span_starts.append(_clock_t - float(gate.samples_in - gate.voice_start_sample) / float(maxi(rate, 1)))
 		if _span_starts.size() > 16:
 			_span_starts.pop_front()
+		speech_started.emit()
 	if gate.voice_end_sample < 0 or gate.voice_end_sample == _seen_voice_end:
 		return
 	_seen_voice_end = gate.voice_end_sample
@@ -520,6 +536,7 @@ func _update_voice_activity() -> void:
 			_span_starts.append(clock())   # (no gate: the recognizer's own voice tracker marks the onset)
 			if _span_starts.size() > 16:
 				_span_starts.pop_front()
+			speech_started.emit()
 		_last_voice_clock = clock()   # no gate: fall back to the recognizer's own voice tracker
 	if active != _voice_active:
 		_voice_active = active

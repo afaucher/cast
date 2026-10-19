@@ -37,7 +37,7 @@ func setup() -> void:
 	caster.persist_settings = false
 	caster.voice_log.enabled = false
 	add_child(caster)
-	if not caster.start(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee"])):
+	if not caster.start(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"])):
 		print("SKIP test_voice_noise: model failed to load (%s)" % caster.status)
 		finish()
 		return

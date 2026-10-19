@@ -169,10 +169,12 @@ static func _free_later(n: Node, seconds: float) -> void:
 		n.get_tree().create_timer(seconds).timeout.connect(n.queue_free)
 
 
-## Fireball-style explosion: core flash, light, embers, smoke, ground ring.
-static func explosion(pos: Vector3, radius: float, color: Color = Color(1.0, 0.55, 0.15)) -> void:
+## Fireball-style explosion: core flash, light, embers, smoke, ground ring, and its sound (`cue`, 3D at the burst; the
+## fireball is the only explosion so far). It runs on every machine the cast lands on, so everyone hears it.
+static func explosion(pos: Vector3, radius: float, color: Color = Color(1.0, 0.55, 0.15), cue: String = "fireball") -> void:
 	if not _world_ready():
 		return
+	Sfx.play_at(cue, pos)
 	flash_sphere(pos, radius * 0.7, Color(color.r, color.g, color.b, 0.85), 0.28)
 	flash_sphere(pos, radius * 0.4, Color(1.0, 0.95, 0.7, 0.95), 0.18)
 	ring(Vector3(pos.x, pos.y, pos.z), radius, Color(color.r, color.g, color.b, 0.8), 0.45, 0.0, false, 0.2)

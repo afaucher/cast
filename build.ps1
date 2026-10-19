@@ -36,6 +36,10 @@ if (-not (Test-Path $templates)) {
     Write-Host "Copy ..\bridge-to-friendship\build\deps\godot-data\Godot\export_templates\4.7.stable there." -ForegroundColor Yellow
     exit 1
 }
+# The sound cues are rendered, not committed (tools\render_sfx.ps1); without them the build runs but is silent.
+if (@(Get-ChildItem "$PSScriptRoot\assets\audio\sfx\*.wav" -ErrorAction SilentlyContinue).Count -eq 0) {
+    Write-Host "WARNING: no sound cues in assets\audio\sfx (run .\tools\render_sfx.ps1): this build is silent." -ForegroundColor Yellow
+}
 $buildDir = Join-Path $PSScriptRoot "build"
 $outDir = Join-Path $buildDir "windows"
 Stop-Process -Name $GameName -ErrorAction SilentlyContinue

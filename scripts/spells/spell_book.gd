@@ -56,6 +56,13 @@ const SPELLS := {
 		"desc": "Everyone in a small radius gets +60% move and attack speed for six seconds, twitchy, then a crash. Monsters too.", "word": "coffee",
 		"component": "Coffee beans", "available": true,
 	},
+	# Four chickens scatter from the aim point and peck everything for nothing; a pecked monster chases its chicken
+	# (scripts/spells/chicken.gd; decided by the user 2026-10-18, docs/design/spells.md).
+	"chicken": {
+		"name": "Chicken", "cooldown": 14.0, "color": Color(0.94, 0.33, 0.27),
+		"desc": "Four chickens burst out where you aim and peck EVERYONE for zero. A pecked monster forgets you and chases its chicken, which does not last long.", "word": "chicken",
+		"component": "Chicken feather", "available": true,
+	},
 }
 
 # --- Targeting: every spell lands where the player aims, like the ranged bolt.
@@ -264,6 +271,8 @@ static func apply(caster: Actor, spec: Dictionary, start: float) -> Node:
 			return _cast_damp(caster, power, target, start)
 		"coffee":
 			Coffee.cast(caster, power, target)
+		"chicken":
+			_cast_chicken(target)
 	return null
 
 
@@ -537,3 +546,14 @@ static func coffee_radius(power: float) -> float:
 ## Seconds of haste before the crash.
 static func coffee_duration(power: float) -> float:
 	return COFFEE_TIME_BASE + COFFEE_TIME_POWER * clampf(power, MIN_POWER, 1.0)
+
+
+# --- Chicken -------------------------------------------------------------------------------
+
+## The flock lands (every machine, at the cast's moment): a feather cloud at the aim point on every screen, and the chickens
+## from the HOST only (Net.is_host: solo too). They are host-owned actors like monsters: a client gets them from the world
+## stream (NetWorld `world.spawn`), so a client's own cast never spawns any here. Power does not change the flock.
+static func _cast_chicken(target: Vector3) -> void:
+	ChickenFx.cast_cloud(target)
+	if Net.is_host():
+		Chicken.flock(target)

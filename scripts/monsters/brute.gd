@@ -591,6 +591,14 @@ func _on_damaged(amount: float, source: Node) -> void:
 	super._on_damaged(amount, source)
 
 
+## A chicken pecked a fighter (the Chicken spell): the fight is over (both go for the crew, worked up) and the pecked one
+## chases the chicken as any pecked monster does.
+func _on_pecked(source: Node) -> void:
+	if is_fighting() and source is Node3D and is_instance_valid(source):
+		_break_up("pecked", null, (source as Node3D).global_position)
+	super._on_pecked(source)
+
+
 func aggro(t: Actor) -> void:
 	if is_fighting():
 		_break_up("sighting", t)
