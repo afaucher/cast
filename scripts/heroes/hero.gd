@@ -643,7 +643,8 @@ func _bolt_effect(dir: Vector3) -> void:
 			Fx.attach_hit_feedback(hit)
 		var sparks: Array[Color] = [hero_color.lightened(0.6), Color.WHITE]
 		Fx.burst(pos, sparks, 6, 2.0, 0.06, 0.25, 4.0)
-	Fx.make_projectile(self, Combat.chest(self) + dir * 0.5, dir, RANGED_DAMAGE, BOLT_SPEED, BOLT_RANGE, hero_color.lightened(0.5), BOLT_SIZE, on_hit)
+	var bolt := Fx.make_projectile(self, Combat.chest(self) + dir * 0.5, dir, RANGED_DAMAGE, BOLT_SPEED, BOLT_RANGE, hero_color.lightened(0.5), BOLT_SIZE, on_hit)
+	bolt.hits_props = true   # a bolt chips (and can break) the priced prop it runs into, like an arrow
 	_shoot_pose()
 
 

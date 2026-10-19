@@ -17,6 +17,16 @@ extends RefCounted
 ##   kill       a monster died: kind, state at death, secs = since its first hit (-1 if never hit by the crew)
 ##   noise      a spell's sound: kind = corn / fireball / teeth / tentacles, count = monsters that heard it
 ##   visitor    a restless skeleton extended its patrol into the next room
+## Step 2 (monster-awareness.md, "Step 2 as built"):
+##   scout      the goblin scout: state = sighted (dist = to the hero he saw) / stopped (detail: how: killed, soaked;
+##              silent before his fuse caught) / launch (count = monsters the alarm woke, value = hellgates woken,
+##              detail = scouts sent running; secs = since the sighting) / dud (soaked with the fuse lit) / yell
+##              (count = monsters his shout woke)
+##   practice   an archer's target-practice arrow landed: state = what it hit (prop, hero, other, nothing), dist = archer
+##              to prop, value = the HP the prop lost, detail = the prop
+##   brawl      a restless brute fight began: state = start, detail = the rival's kind
+##   brawl_end  it ended: state = why (done, far, lost: on its own; sighting, hit, noise, shout, pack, rival_<state>: the
+##              crew broke it up), secs = its length, count = slams
 
 const PATH := "user://combat_log.csv"
 const HEADER := "time,seed,floor_s,restless,event,kind,state,dist,secs,count,value,detail"
@@ -99,6 +109,34 @@ static func visitor(m: Monster) -> void:
 	if not enabled:
 		return
 	_row("visitor", m.kind, "", -1.0, -1.0, -1, "", "")
+
+
+static func scout(m: Monster, what: String, dist: float = -1.0, secs: float = -1.0, count: int = -1, value: String = "", detail: String = "") -> void:
+	if not enabled:
+		return
+	_row("scout", m.kind, what, dist, secs, count, value, detail)
+
+
+static func practice(archer: Variant, prop: Variant, dist: float, dealt: float, hit: Variant) -> void:
+	if not enabled:
+		return
+	var what := "nothing"
+	if hit != null and is_instance_valid(hit):
+		what = "prop" if hit == prop else ("hero" if hit.team == GameWorld.TEAM_HEROES else "other")
+	var label := str(prop.display_name) if prop != null and is_instance_valid(prop) else ""
+	_row("practice", "archer", what, dist, -1.0, -1, "%.1f" % dealt, label)
+
+
+static func brute_fight(lead: Monster, rival: Variant) -> void:
+	if not enabled:
+		return
+	_row("brawl", lead.kind, "start", GameWorld.flat_distance(lead.global_position, rival.global_position), -1.0, -1, "", str(rival.kind))
+
+
+static func brute_fight_end(lead: Variant, reason: String, secs: float, slams: int) -> void:
+	if not enabled:
+		return
+	_row("brawl_end", "brute", reason, -1.0, secs, slams, "", "")
 
 
 ## The floor is going away: close the open fight and write everything.

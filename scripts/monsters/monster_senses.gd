@@ -8,8 +8,13 @@ extends RefCounted
 ##   face_spawn(m, plan, seed)  spawn facing: toward the room's main door (else its centre) +/- 35 degrees, rolled on a
 ##                              generator seeded from the site's seed and the cell, never at a wall close ahead.
 ##   wall_ahead(m, dir)         is there a wall (or a rise) within 2 hexes straight ahead at chest height?
-##   restlessness()             R: 0 for the first 2 minutes of the floor, 1 at 8 minutes (host clock).
+##   restlessness()             R: 0 for the first 2 minutes of the floor, 1 at 6 minutes (host clock).
 ##   patrol_route / visitor_point   a skeleton's patrol points in its room, and the next room through the corridor.
+## Step 2 (monster-awareness.md, "Step 2 as built"):
+##   alarm(f, s)                the goblin scout's fireworks at F: resting monsters near F (or whose room has a door near
+##                              F) walk to the sighting point S on ALERT; a dormant hellgate near F wakes.
+##   fire_at(pos, radius)       a fireball's blast: a scout's rack in it goes up (the goblin's catch_fire).
+##   practice_hits / note_practice_hit   how many target-practice arrows a priced prop has taken this floor.
 ##
 ## Online: monster AI runs on the host only. A cast runs on every machine, so noise() runs everywhere, but it only
 ## reaches monsters this machine simulates (a client's are copies: Net.simulates is false there).
@@ -29,13 +34,24 @@ const SPAWN_SPREAD_DEG := 35.0
 const DOOR_MIN_DIST := 2.5        ## standing right at the door: face the room centre instead
 const WALL_AHEAD := 3.5           ## 2 hexes
 
-## Restlessness ramp (user, 2026-10-18: a floor takes about 8 minutes).
+## Restlessness ramp: 0 until 2 min, full at 6 min (user, 2026-10-18).
 const RESTLESS_START := 120.0
-const RESTLESS_FULL := 480.0
+const RESTLESS_FULL := 360.0
 
 const PATROL_MIN_HEX := 3         ## patrol points stand at least this many hexes apart
 const PATROL_PATH_NODES := 150
 const VISITOR_DEPTH := 40         ## how far (hex steps) a visitor looks for the next room
+
+## The goblin scout's fireworks alarm (monster-awareness.md Option 4, goblin-scout.md §3.1).
+const ALARM_RADIUS := 18.0        ## resting monsters this close to F hear the fireworks (flat, through walls) ...
+const ALARM_DOOR := 24.0          ## ... and so does every resting monster whose room has a door this close to F
+const ALARM_CAP := 12             ## the nearest this many, so one alarm never wakes the whole floor
+const ALARM_EDGE := 60.0          ## then they stay on edge this long (after the ALERT walk)
+const ALARM_GATE_RADIUS := 18.0   ## a dormant hellgate this close to F wakes (user, 2026-10-18)
+const ALARM_RESTLESS := 0.25      ## each volley adds this much floor-wide restlessness (Option 3)
+const NOISE_BRUTE_FIGHT := 14.0   ## a restless brute fight (Option 3: the crowd gathers to watch) ...
+const WATCH_DISTANCE := 4.5       ## ... this far from the fighters (the slam ring is 2)
+const ARRIVE_SLACK := 0.3
 
 ## >= 0 replaces restlessness(): tests (so they needn't wait 2 minutes of floor time), and the dev flag
 ## `--restless <0..1>` for a playtest of a restless floor straight away.
@@ -48,8 +64,10 @@ static func _cmdline_restless() -> float:
 	return clampf(float(args[i + 1]), 0.0, 1.0) if i >= 0 and i + 1 < args.size() else -1.0
 
 
-## A sound at `pos` that carries `radius`. `kind` names it for the combat log.
-static func noise(pos: Vector3, radius: float, kind: String = "") -> int:
+## A sound at `pos` that carries `radius`. `kind` names it for the combat log. `quiet` lists monsters that don't react
+## (the ones making it: two brutes don't break up their own fight). `stand_off` > 0: the hearers come no closer than this
+## (a crowd gathering to watch a brute fight): each one's point is on the line to it, that far from the sound.
+static func noise(pos: Vector3, radius: float, kind: String = "", quiet: Array = [], stand_off: float = 0.0) -> int:
 	if radius <= 0.0 or GameWorld.root == null or not GameWorld.root.is_inside_tree():
 		return 0
 	var map := GameWorld.map
@@ -57,14 +75,19 @@ static func noise(pos: Vector3, radius: float, kind: String = "") -> int:
 	var heard := 0
 	# Duck-typed on purpose (group "monsters" only holds Monsters; see Monster._alert_pack).
 	for n in GameWorld.root.get_tree().get_nodes_in_group("monsters"):
-		if n.dead or n.aggro_range <= 0.0 or not Net.simulates(n):
+		if n.dead or n.aggro_range <= 0.0 or not Net.simulates(n) or quiet.has(n):
 			continue
 		var d := GameWorld.flat_distance(n.global_position, pos)
 		if d > radius:
 			continue
 		if d > radius * THROUGH_WALL and map != null and not map.line_of_sight(ear, Combat.chest(n)):
 			continue
-		if n.hear(pos):
+		var at := pos
+		if stand_off > 0.0:
+			var away: Vector3 = n.global_position - pos
+			away.y = 0.0
+			at = pos + away.normalized() * stand_off if d > stand_off + ARRIVE_SLACK else pos.lerp(n.global_position, 0.85)
+		if n.hear(at):
 			heard += 1
 	CombatLog.noise(kind, heard)
 	return heard
@@ -93,11 +116,30 @@ static func floor_seconds() -> float:
 	return GameWorld.time - float(GameWorld.get_meta("awareness_t0", GameWorld.time))
 
 
-## R(t) = clamp((t - 120 s) / (480 s - 120 s), 0, 1) on the floor clock.
+## R(t) = clamp((t - RESTLESS_START) / (RESTLESS_FULL - RESTLESS_START), 0, 1) on the floor clock, plus 0.25 per fireworks volley on this floor.
 static func restlessness() -> float:
 	if restless_override >= 0.0:
 		return clampf(restless_override, 0.0, 1.0)
-	return ramp(floor_seconds())
+	return clampf(ramp(floor_seconds()) + float(_floor_meta("restless_bonus", 0.0)), 0.0, 1.0)
+
+
+## A value kept per floor (GameWorld metadata keyed by the floor's world root): a new floor starts from `default`.
+static func _floor_meta(key: String, default: Variant) -> Variant:
+	if GameWorld.root == null:
+		return default
+	var d: Dictionary = GameWorld.get_meta("awareness_floor_meta", {})
+	if int(d.get("_root", 0)) != GameWorld.root.get_instance_id():
+		d = {"_root": GameWorld.root.get_instance_id()}
+		GameWorld.set_meta("awareness_floor_meta", d)
+	return d.get(key, default)
+
+
+static func _set_floor_meta(key: String, value: Variant) -> void:
+	if GameWorld.root == null:
+		return
+	_floor_meta(key, null)   # (starts the floor's dictionary)
+	var d: Dictionary = GameWorld.get_meta("awareness_floor_meta", {})
+	d[key] = value
 
 
 static func ramp(seconds: float) -> float:
@@ -256,3 +298,115 @@ static func visitor_point(m: Monster, tag: String) -> Vector3:
 		return Vector3.INF
 	var last: Vector2i = found.back()
 	return Hex.to_world(last, float(map.get_cell(last).level))
+
+
+# --- Step 2: the fireworks alarm ------------------------------------------------------------------------------------
+
+## The goblin scout's volley went up at `f`; the crew was seen at `s`. Every IDLE, SUSPICIOUS or RETURN monster within
+## ALARM_RADIUS of F (flat, walls or not), or whose home room has a door within ALARM_DOOR of F, walks to S on ALERT:
+## the ALARM_CAP nearest of them. They stay on edge ALARM_EDGE s after the walk. Another scout within ALARM_RADIUS runs
+## to S instead of setting off his own. A dormant hellgate within ALARM_GATE_RADIUS wakes. Floor restlessness +0.25.
+## Host only (Net.simulates). Returns {woken, scouts, gates}.
+static func alarm(f: Vector3, s: Vector3, raiser: Node = null) -> Dictionary:
+	var out := {"woken": 0, "scouts": 0, "gates": 0}
+	if GameWorld.root == null or not GameWorld.root.is_inside_tree():
+		return out
+	var doors := room_doors()
+	var cands: Array = []
+	for n in GameWorld.root.get_tree().get_nodes_in_group("monsters"):   # (duck-typed, see Monster._alert_pack)
+		if n == raiser or n.dead or not Net.simulates(n) or n.is_frozen():
+			continue
+		if n.kind == "goblin":
+			if GameWorld.flat_distance(n.global_position, f) <= ALARM_RADIUS and n.assist(s):
+				out["scouts"] = int(out["scouts"]) + 1
+			continue
+		if not (n.state == Monster.State.IDLE or n.state == Monster.State.SUSPICIOUS or n.state == Monster.State.RETURN):
+			continue
+		var d := GameWorld.flat_distance(n.global_position, f)
+		var hears := d <= ALARM_RADIUS
+		if not hears and n._room != "":
+			for door: Vector3 in (doors.get(n._room, []) as Array):
+				if GameWorld.flat_distance(door, f) <= ALARM_DOOR:
+					hears = true
+					break
+		if hears:
+			cands.append([d, n])
+	cands.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for i in mini(cands.size(), ALARM_CAP):
+		var m = cands[i][1]
+		m._end_suspicion(false)
+		if m.alert(s):
+			m.edge_until = GameWorld.time + Monster.ALERT_TIME + ALARM_EDGE
+			out["woken"] = int(out["woken"]) + 1
+	for g in GameWorld.root.get_tree().get_nodes_in_group(Hellgate.GROUP):
+		var gate := g as Hellgate
+		if gate == null or gate.dead or gate.is_active() or not Net.simulates(gate) or Hellgate.spawns_stopped():
+			continue
+		if GameWorld.flat_distance(gate.global_position, f) <= ALARM_GATE_RADIUS:
+			gate.activate()
+			out["gates"] = int(out["gates"]) + 1
+	_set_floor_meta("restless_bonus", float(_floor_meta("restless_bonus", 0.0)) + ALARM_RESTLESS)
+	return out
+
+
+## Each room's doors on this floor: room tag -> [world points of its walkable cells that touch a corridor]. Built once
+## per floor.
+static func room_doors() -> Dictionary:
+	var cached: Variant = _floor_meta("room_doors", null)
+	if cached != null:
+		return cached
+	var out := {}
+	var map := GameWorld.map
+	if map != null:
+		for c: Vector2i in map.cells:
+			var cell := map.get_cell(c)
+			if cell == null or not cell.tag.begins_with("room:") or not map.is_walkable_cell(c):
+				continue
+			for nb in Hex.neighbors(c):
+				var nc := map.get_cell(nb)
+				if nc != null and nc.tag == "corridor":
+					if not out.has(cell.tag):
+						out[cell.tag] = []
+					(out[cell.tag] as Array).append(Hex.to_world(c, float(cell.level)))
+					break
+	_set_floor_meta("room_doors", out)
+	return out
+
+
+## A fireball's blast at `pos` (SpellBook, before its damage lands): a loaded scout's rack inside it goes up at once
+## (goblin-scout.md §4: fire always lights fireworks). Only the monsters this machine simulates.
+static func fire_at(pos: Vector3, radius: float) -> void:
+	if GameWorld.root == null or not GameWorld.root.is_inside_tree():
+		return
+	for n in GameWorld.root.get_tree().get_nodes_in_group("monsters"):
+		if n.dead or not Net.simulates(n) or not n.has_method("catch_fire"):
+			continue
+		if GameWorld.flat_distance(n.global_position, pos) <= radius + n.radius:
+			n.catch_fire()
+
+
+# --- Step 2: archer target practice ---------------------------------------------------------------------------------
+
+## How many target-practice arrows have been loosed at `prop` this floor (every archer together).
+static func practice_hits(prop: Node) -> int:
+	var d: Dictionary = _floor_meta("practice_hits", {})
+	return int(d.get(prop.get_instance_id(), 0))
+
+
+static func note_practice_hit(prop: Node) -> void:
+	var d: Dictionary = _floor_meta("practice_hits", {})
+	d[prop.get_instance_id()] = int(d.get(prop.get_instance_id(), 0)) + 1
+	_set_floor_meta("practice_hits", d)
+
+
+## Practice arrows in flight at `prop` (loosed, not landed yet): an archer counts them before it shoots, so two archers
+## never break a prop between them.
+static func practice_flying(prop: Node) -> int:
+	var d: Dictionary = _floor_meta("practice_flying", {})
+	return int(d.get(prop.get_instance_id(), 0))
+
+
+static func note_practice_flying(prop: Node, change: int) -> void:
+	var d: Dictionary = _floor_meta("practice_flying", {})
+	d[prop.get_instance_id()] = maxi(0, int(d.get(prop.get_instance_id(), 0)) + change)
+	_set_floor_meta("practice_flying", d)

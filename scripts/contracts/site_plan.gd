@@ -76,6 +76,10 @@ var ranked_rooms: Array[String] = []
 var pack_budgets: Dictionary = {}
 ## Cells monsters must not be placed on (gates, props, walk-blocking decor, employees and a margin around them).
 var blocked: Dictionary = {}
+## Goblin scouts (monster awareness step 2, docs/design/goblin-scout.md §5): one or two a floor, each walking one
+## corridor between two rooms: {route: Array[Vector2i] (waypoint cells, doorway to doorway), looks: [Vector2, Vector2]
+## (X/Z: into the room at each end), rooms: [tag a, tag b], start: int (the waypoint he starts at)}.
+var scouts: Array[Dictionary] = []
 
 
 ## Who may write each var (see Net). SiteBuilder.plan() builds all of it from (run, floor) on
@@ -87,7 +91,7 @@ func net_fields() -> Dictionary:
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "packages": Net.SPAWN,
 		"room_themes": Net.SPAWN, "decor": Net.SPAWN, "lights": Net.SPAWN, "entrances": Net.SPAWN,
 		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "dispatch": Net.SPAWN, "ranked_rooms": Net.SPAWN,
-		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN, "van": Net.SPAWN, "elevator": Net.SPAWN,
+		"pack_budgets": Net.SPAWN, "blocked": Net.SPAWN, "van": Net.SPAWN, "elevator": Net.SPAWN, "scouts": Net.SPAWN,
 	}
 
 

@@ -73,6 +73,9 @@ const LOOK_SPREAD_DEG := 70.0
 const NOISE_MEMORY := 30.0        ## look-arounds may turn toward a sound heard this recently
 const LIFE_RANGE := 28.0          ## idle life only within this of a hero (CPU, and bandwidth: still monsters are free)
 const STUCK_GIVE_UP := 3          ## an ALERT walk that got stuck this many times searches where it is
+# Step 2 (the goblin's fireworks alarm, monster-awareness.md Option 4): after an alarm a monster stays "on edge".
+const EDGE_CONE := 2.0            ## on edge: the front cone sees this much farther ...
+const EDGE_CONFIRM := 1.0         ## ... and a "?" confirms after this long instead of SUSPECT_CONFIRM
 
 # --- Tunables (kinds set these in _init) --------------------------------------------
 var kind := "monster"
@@ -128,6 +131,8 @@ var _room := ""                   ## its home room's tag ("" = none: no idle lif
 var _life_ok := false             ## a hero within LIFE_RANGE at the last scan
 var _suspect_at := -1.0           ## combat log: when the current "?" began
 var _first_hit_at := -1.0         ## combat log: when the crew first hit it
+var busy_until := -INF            ## step 2: a restless activity holds it in place until then (a brute picked a fight with it)
+var edge_until := -INF            ## step 2: on edge after a fireworks alarm (wider cone, quicker "?")
 
 # Navigation
 var _path: Array[Vector2i] = []
@@ -219,6 +224,7 @@ func net_fields() -> Dictionary:
 		"_seen_t": Net.PRIVATE, "_point": Net.PRIVATE, "_noise_at": Net.PRIVATE, "_noise_pos": Net.PRIVATE,
 		"_shout_at": Net.PRIVATE, "_speed_k": Net.PRIVATE, "_stuck_n": Net.PRIVATE, "_room": Net.PRIVATE,
 		"_life_ok": Net.PRIVATE, "_suspect_at": Net.PRIVATE, "_first_hit_at": Net.PRIVATE,
+		"busy_until": Net.PRIVATE, "edge_until": Net.PRIVATE,
 		"_path": Net.PRIVATE, "_path_i": Net.PRIVATE, "_path_goal": Net.PRIVATE,
 		"_path_age": Net.PRIVATE, "_repath_t": Net.PRIVATE, "_prog_t": Net.PRIVATE,
 		"_prog_pos": Net.PRIVATE, "_nudge_t": Net.PRIVATE, "_nudge_dir": Net.PRIVATE,
@@ -289,6 +295,16 @@ func alert(pos: Vector3) -> bool:
 	_stuck_n = 0
 	_clear_path()
 	return true
+
+
+## On edge after a fireworks alarm (MonsterSenses.alarm): the front cone sees EDGE_CONE farther and a "?" confirms in
+## EDGE_CONFIRM s.
+func is_on_edge() -> bool:
+	return GameWorld.time < edge_until
+
+
+func _edge_cone() -> float:
+	return EDGE_CONE if is_on_edge() else 0.0
 
 
 ## Spawn facing (MonsterSenses.face_spawn): look this way now and whenever it is back home.
@@ -366,11 +382,13 @@ func _tick_idle(delta: float) -> void:
 		if h != null:
 			aggro(h)
 			return
-		h = _cone_hero(aggro_range + CONE_EXTRA)
+		h = _cone_hero(aggro_range + CONE_EXTRA + _edge_cone())
 		if h != null:
 			_suspect(h.global_position, true)
 			return
 		_life_ok = _room != "" and _hero_within(LIFE_RANGE)
+	if GameWorld.time < busy_until:
+		return   # held by a restless activity (a brute's square-off): it stands, no look-arounds
 	if _life_ok and _idle_life(delta):
 		return
 	_look_t -= delta
@@ -419,12 +437,12 @@ func _tick_suspicious(delta: float) -> void:
 		if h != null:
 			aggro(h)
 			return
-		h = _cone_hero(aggro_range + CONE_EXTRA)
+		h = _cone_hero(aggro_range + CONE_EXTRA + _edge_cone())
 		if h != null:
 			_seen_t += SCAN_INTERVAL
 			_point = h.global_position
 			_aware_t = 0.0
-			if _seen_t >= SUSPECT_CONFIRM - 0.001:
+			if _seen_t >= (EDGE_CONFIRM if is_on_edge() else SUSPECT_CONFIRM) - 0.001:
 				aggro(h)
 				return
 	if _aware_t >= SUSPECT_FORGET:
@@ -1133,7 +1151,14 @@ func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: 
 			_on_windup_begin()
 		elif was == State.ATTACK:
 			_end_windup()
-	_telegraph = telegraph if state == State.ATTACK else 0.0
+	var tel := telegraph if state == State.ATTACK or state == State.IDLE else 0.0
+	if state == State.IDLE:
+		# An idle wind-up (step 2: an archer's practice draw, a brute's slam in a restless fight): its look only.
+		if tel > 0.0 and _telegraph <= 0.0:
+			_on_windup_begin()
+		elif tel <= 0.0 and _telegraph > 0.0:
+			_on_windup_end()
+	_telegraph = tel
 	if strike_count != strikes:
 		strikes = strike_count
 		_strike_t = 1.0

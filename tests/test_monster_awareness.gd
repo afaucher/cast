@@ -34,8 +34,8 @@ func setup() -> void:
 func _check_ramp() -> void:
 	near(MonsterSenses.ramp(0.0), 0.0, 0.0001, "R = 0 at the start of a floor")
 	near(MonsterSenses.ramp(120.0), 0.0, 0.0001, "R = 0 until 2 minutes")
-	near(MonsterSenses.ramp(300.0), 0.5, 0.0001, "R = 0.5 at 5 minutes")
-	near(MonsterSenses.ramp(480.0), 1.0, 0.0001, "R = 1 at 8 minutes")
+	near(MonsterSenses.ramp(240.0), 0.5, 0.0001, "R = 0.5 at 4 minutes")
+	near(MonsterSenses.ramp(360.0), 1.0, 0.0001, "R = 1 at 6 minutes")
 	near(MonsterSenses.ramp(900.0), 1.0, 0.0001, "R stays 1")
 
 

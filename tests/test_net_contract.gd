@@ -346,6 +346,7 @@ var REPLICATED := {
 	"res://scripts/monsters/archer.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/monsters/brute.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/monsters/swarmer.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/goblin.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/goblin.gd"], 5],
 	"res://scripts/contracts/employee.gd": [NetWorldCodec.EMPLOYEE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/employee.gd"], 5],
 	"res://scripts/contracts/hellgate.gd": [NetWorldCodec.GATE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/hellgate.gd"], 5],
 	"res://scripts/contracts/priced_prop.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/priced_prop.gd"], 0],

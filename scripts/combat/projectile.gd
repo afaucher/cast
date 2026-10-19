@@ -17,6 +17,9 @@ var hit_radius := 0.25
 var color := Color(1, 0.9, 0.4)
 var size := 0.15
 var on_hit: Callable = Callable()   ## optional: func(p: Projectile, hit: Actor, pos: Vector3)
+## Arrows and bolts (the archer's arrow, Wick's arrows, the hero bolt) also hit the priced props they run into (user,
+## 2026-10-18: "all arrows hit props"). A fireball's flight does not (its blast already reaches props).
+var hits_props := false
 
 var _travelled := 0.0
 
@@ -46,7 +49,7 @@ func net_fields() -> Dictionary:
 	return {
 		"source": Net.SPAWN,      # will travel as an entity id in the shot event
 		"target_team": Net.SPAWN, "direction": Net.SPAWN, "speed": Net.SPAWN, "damage": Net.SPAWN,
-		"max_range": Net.SPAWN, "hit_radius": Net.SPAWN, "color": Net.SPAWN, "size": Net.SPAWN,
+		"max_range": Net.SPAWN, "hit_radius": Net.SPAWN, "color": Net.SPAWN, "size": Net.SPAWN, "hits_props": Net.SPAWN,
 		"on_hit": Net.LOCAL,      # local effects (sparks, spell follow-ups), not shipped
 		"_travelled": Net.LOCAL,
 	}
@@ -71,7 +74,7 @@ func _physics_process(delta: float) -> void:
 	var step := speed * delta
 	var to := global_position + direction * step
 	_travelled += step
-	for a in GameWorld.hittable_in_radius(to, hit_radius, target_team):   # + breakables (mail packages)
+	for a in GameWorld.hittable_in_radius(to, hit_radius, target_team, hits_props):   # + breakables (+ priced props for arrows)
 		_impact(a, to)
 		return
 	var map: HexMap = GameWorld.map
@@ -85,8 +88,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _impact(hit: Actor, pos: Vector3) -> void:
-	if hit and Net.resolves_hit(hit, source):   # (online: the shot flies on every screen; one machine decides the hit)
-		hit.apply_damage(damage, source)
+	if hit and Net.resolves_hit(hit, source):   # (online: the shot flies on every screen; one machine decides the hit; a
+		hit.apply_damage(damage, source)        # client's hit on the host's prop or monster becomes a request: Net.route_hit)
 	if on_hit.is_valid():
 		on_hit.call(self, hit, pos)
 	impacted.emit(pos, hit)

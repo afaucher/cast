@@ -26,6 +26,13 @@ extends Node
 ## hero when its screen shows the strike's moment (render time >= s + l: Monster.net_strike), from where it shows the
 ## monster and where its own hero really is. What a player dodged on their screen did not hit them.
 ##
+## GOBLIN SCOUTS (monster awareness step 2, goblin-scout.md §7): a scout's phase and rack are `world.scout {id, p, l}` on
+## every change (his "!", the light, the fuse, the cower, an empty rack); his volley is `world.fireworks {id, x, y, z, s,
+## f, dx, dz}` (the launch point, its start on the shared clock, the fx seed and the drift: every screen builds the same
+## FireworksFx, a cosmetic) and a soaked rack `world.dud {x, y, z}`. The alarm itself is host gameplay (the host owns
+## every monster it wakes): nothing more travels for it. A late joiner gets every scout's phase in its snapshot
+## (scout_states / apply_scouts); a volley already in the air is skipped.
+##
 ## The game calls begin() at the floor's barrier (after NetFloor.assign_ids and freeze_copies) and set_active() with
 ## the hero sync (NetSnapshot.set_active). Nothing here knows about game.gd.
 
@@ -195,6 +202,10 @@ func _track(id: int, n: Actor, kind: int) -> void:
 	elif n is Monster:
 		_link((n as Monster).windup_begun, _on_windup.bind(id))
 		_link((n as Monster).windup_dropped, _on_unwind.bind(id))
+		if n.has_signal("scout_phase_changed"):
+			_link(Signal(n, "scout_phase_changed"), _on_scout.bind(id))
+			_link(Signal(n, "fireworks_launched"), _on_fireworks.bind(id))
+			_link(Signal(n, "fireworks_dud"), _on_dud)
 
 
 func _show(id: int, n: Actor, kind: int) -> void:
@@ -532,6 +543,43 @@ func _on_windup(length: float, id: int) -> void:
 	stats["windups"] = int(stats["windups"]) + 1
 
 
+## Host: a goblin scout's phase or rack changed.
+func _on_scout(phase: int, rack: bool, id: int) -> void:
+	_send("world.scout", {"id": id, "p": phase, "l": rack})
+	stats["scouts"] = int(stats.get("scouts", 0)) + 1
+
+
+## Host: a scout's volley went up at `pos` (its launch point) now.
+func _on_fireworks(pos: Vector3, fx_seed: int, drift: Vector3, id: int) -> void:
+	_send("world.fireworks", {"id": id, "x": pos.x, "y": pos.y, "z": pos.z, "s": _now(), "f": fx_seed, "dx": drift.x, "dz": drift.z})
+	stats["fireworks"] = int(stats.get("fireworks", 0)) + 1
+
+
+func _on_dud(pos: Vector3) -> void:
+	_send("world.dud", {"x": pos.x, "y": pos.y, "z": pos.z})
+
+
+## Host: every living scout's phase and rack, for a late joiner: [[id, phase, loaded]].
+func scout_states() -> Array:
+	var out: Array = []
+	for id: int in _tracks:
+		var tr: Track = _tracks[id]
+		if tr.kind == MONSTER and is_instance_valid(tr.node) and not tr.node.dead and tr.node.has_method("net_scout"):
+			out.append([id, int(tr.node.get("scout_phase")), bool(tr.node.get("loaded"))])
+	return out
+
+
+## The late joiner: the scouts' phases and racks (scout_states).
+func apply_scouts(list: Array) -> void:
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 3:
+			continue
+		var n := NetRegistry.node(int(row[0]))
+		if n != null and n.has_method("net_scout") and not (n as Actor).dead:
+			n.call("net_scout", int(row[1]), bool(row[2]))
+
+
 func _on_unwind(id: int) -> void:
 	_send("world.unwind", {"id": id})
 	stats["unwinds"] = int(stats["unwinds"]) + 1
@@ -611,6 +659,19 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 			var g := NetRegistry.node(int(data.get("id", 0))) as Hellgate
 			if g != null and not g.dead:
 				g.net_shove_fx()
+		"world.scout":
+			var sc := NetRegistry.node(int(data.get("id", 0)))
+			if sc != null and sc.has_method("net_scout") and not (sc as Actor).dead:
+				sc.call("net_scout", int(data.get("p", 0)), bool(data.get("l", true)))
+			stats["scouts"] = int(stats.get("scouts", 0)) + 1
+		"world.fireworks":
+			# Shown on the world's render clock, like the scout it comes from: it starts when this screen shows its moment.
+			var start := GameWorld.time + (float(data.get("s", _now())) - render_time())
+			var at := Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0)))
+			FireworksFx.launch(at, start, int(data.get("f", 1)), Vector3(float(data.get("dx", 0.0)), 0.0, float(data.get("dz", 0.0))))
+			stats["fireworks"] = int(stats.get("fireworks", 0)) + 1
+		"world.dud":
+			Fx.fizzle_puff(Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))))
 
 
 func _receive_spawn(gate_id: int, list: Array, quiet: bool = false) -> void:

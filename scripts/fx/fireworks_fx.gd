@@ -64,6 +64,19 @@ func net_fields() -> Dictionary:
 	}
 
 
+## Spawn a volley at `pos` that started (or starts) at `start` (GameWorld.time). The goblin scout's launch on the host,
+## and the world.fireworks event on every other screen (NetWorld), call this with the same seed and drift.
+static func launch(pos: Vector3, start: float, seed_value: int, lean: Vector3) -> FireworksFx:
+	if GameWorld.root == null or not GameWorld.root.is_inside_tree():
+		return null
+	var fw := FireworksFx.new()
+	fw.fx_seed = seed_value
+	fw.start_time = start
+	fw.drift = lean
+	GameWorld.spawn(fw, pos)
+	return fw
+
+
 ## Seconds from the launch until the last burst has faded (and the smoke is gone).
 func total_time() -> float:
 	return float(count - 1) * interval + RISE_TIME + RICOCHET_TIME + maxf(BURST_LIFE, SMOKE_LIFE)

@@ -102,13 +102,29 @@ func breakables_in_radius(pos: Vector3, radius: float) -> Array[Actor]:
 	return out
 
 
-## What a swing or a shot against `team` can hit: that team's living actors in radius plus every breakable.
-## (Priced props and employees stay out of it on purpose: nobody breaks the client's property by accident.)
-func hittable_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Actor]:
+## Living priced props (group "priced_props": the client's property) within radius. Arrows and bolts hit them
+## (user, 2026-10-18: "all arrows hit props"); swings do not.
+func props_in_radius(pos: Vector3, radius: float) -> Array[Actor]:
+	var out: Array[Actor] = []
+	if root == null or not root.is_inside_tree():
+		return out
+	for n in root.get_tree().get_nodes_in_group("priced_props"):
+		var a := n as Actor
+		if a != null and not a.dead and flat_distance(a.global_position, pos) <= radius + a.radius:
+			out.append(a)
+	return out
+
+
+## What a swing or a shot against `team` can hit: that team's living actors in radius plus every breakable, and with
+## `props` (arrows and bolts: Projectile.hits_props) the priced props too. Employees stay out of it, and so do props
+## for a swing: nobody breaks the client's property with a sword by accident.
+func hittable_in_radius(pos: Vector3, radius: float, team: int = -1, props: bool = false) -> Array[Actor]:
 	var out := actors_in_radius(pos, radius, team)
 	if team == -1:
-		return out   # everyone, breakables included
+		return out   # everyone, breakables and props included
 	out.append_array(breakables_in_radius(pos, radius))
+	if props:
+		out.append_array(props_in_radius(pos, radius))
 	return out
 
 

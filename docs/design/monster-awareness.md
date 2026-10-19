@@ -1,6 +1,6 @@
 # Monster awareness: alerts, idle life and the out-of-range problem
 
-Status: **step 1 built** (2026-10-18): see "Step 1 as built" at the end. The audit below describes the code before
+Status: **steps 1 and 2 built** (2026-10-18): see "Step 1 as built" and "Step 2 as built" at the end. The audit below describes the code before
 it. Line numbers refer to the working tree on 2026-10-18. Another agent was editing `site_builder.gd`, `actor.gd`, `game_world.gd` and `hex_map.gd` at the time, so
 those numbers may drift.
 
@@ -474,6 +474,9 @@ It ran against the working tree of 2026-10-18 (including the in-progress pool an
 - **Fireworks wake a hellgate that is ready to spawn.**
 - **Open, not defined yet:** what a fully restless floor does (hunters).
 - **Deferred:** speech as noise. Idea to keep: yelling a spell could have its own alert component.
+- **Ramp shortened (after the first logged round, 2026-10-18):** floors took 2:31, 5:22 and 2:28, so R peaked at 0.09,
+  0.56 and 0.08. The ramp is now **0 until 2 min, full at 6 min** (`MonsterSenses.RESTLESS_FULL` 360). This replaces the
+  8-minute figure used above.
 
 ## Step 1 as built (2026-10-18)
 
@@ -548,3 +551,95 @@ no brute fights, no archer target practice, no goblin, no speech-as-noise (all s
   wider imp drift). Without it, restlessness starts after 2 minutes on a floor and is full at 8.
 - After playing, `%APPDATA%\Godot\app_userdata\Cast\combat_log.csv` holds the rows (PlayLog's `play_log.csv` is next to
   it).
+
+## Step 2 as built (2026-10-18)
+
+The goblin scout (Option 4, `goblin-scout.md` "Step 2 as built"), archer target practice and brute restless fights
+(Option 3), with the decisions above and these later ones from the user: the goblin's clock is right, a kill once the
+fuse is lit still sets the fireworks off unless the rack is damp, no bonus damage, a restock about 60 s after a volley,
+one or two scouts a floor, fireworks wake a gate that is ready to spawn; **all arrows hit props** (archer arrows, Wick's
+arrows and the hero bolt alike, in a fight too; a practice shot is the archer's ordinary arrow); the 6-minute ramp. Still
+no "?"/"!" over ordinary monsters. The scout's own "!" stays: it is part of his animation (his tell), not the general
+indicator.
+
+### Where it lives
+- `scripts/monsters/goblin.gd` (new, kind `"goblin"`, in `MonsterFactory.SCRIPTS` but not in the pack `KINDS`); his
+  corridor routes are planned in `SiteBuilder._plan_scouts` (`SitePlan.scouts`) and spawned after the packs
+  (`Site.scouts`). `GoblinModel` moved from `MonsterModels.DESIGN_KINDS` to `KINDS`.
+- `scripts/monsters/archer.gd`: target practice (the safety constants are at the top). `scripts/monsters/brute.gd`:
+  restless fights.
+- `scripts/monsters/monster_senses.gd`: `alarm()` (the fireworks' propagation), `room_doors()`, `fire_at()` (a fireball's
+  blast lights a rack; one line in `SpellBook._cast_fireball`), the per-floor practice counters, a `quiet` list and a
+  `stand_off` for `noise()`, and +0.25 restlessness per volley.
+- `scripts/monsters/monster.gd` (kept small for the merge): `busy_until` (a brute holds its bullied skeleton), `edge_until`
+  / `is_on_edge()` (after an alarm), and `net_show` draws an IDLE wind-up (the practice draw, a fight slam's ring).
+- Arrows and props: `Projectile.hits_props` (SPAWN), set by `ArrowShot.shoot`, the hero bolt (`Hero._bolt_effect`) and the
+  archer's `_fire_arrow`; `GameWorld.props_in_radius` / `hittable_in_radius(..., props)`; PricedProp joins the group
+  `"priced_props"`.
+- Net: `NetWorld` sends `world.scout`, `world.fireworks`, `world.dud` and puts every scout's phase in the late-join
+  snapshot (`scout_states`, `NetJoin`); `NetEvents` names the carriers and the late-join way; `FireworksFx.launch` builds a
+  volley on any screen.
+- `scenes/awareness_lab.tscn` (`scripts/monsters/awareness_lab.gd`): the four behaviours staged live for screenshots.
+- Tests: `test_monster_goblin`, `test_monster_restless`, `test_arrow_props`, `test_net_monster_step2` (2 peers); the
+  ramp check in `test_monster_awareness`; the goblin in `test_net_contract`'s replicated classes.
+
+### The numbers
+
+| What | Value |
+|---|---|
+| Restlessness | 0 until 2 min, full at 6 min (`RESTLESS_START` 120, `RESTLESS_FULL` 360), +0.25 per fireworks volley on the floor; `--restless` pins it |
+| Fireworks alarm | IDLE / SUSPICIOUS / RETURN monsters within **18** of F (flat), or whose room has a door (a room cell touching a corridor) within **24** of F; the **12** nearest; ALERT toward S (where he saw the crew) for the usual 20 s; then **on edge** 60 s (front cone +2, "?" confirms in 1.0 s). Fighting monsters are left alone |
+| Gates | every dormant, open gate within **18** of F wakes (unless the site's spawns are stopped) |
+| Second scout | a scout within 18 runs to S (ASSIST, at most 10 s) and lights nothing for 30 s: no chain |
+| Archer practice | every **40 s -> 12 s** (R 0 -> 1, x0.8-1.2), a 0.5 s draw (the usual telegraph), the ordinary arrow (8 damage, hits whatever it meets first) |
+| Practice: what it may aim at | a priced prop within **10**, about level (0.6), in line of sight with a clear lane (nothing within 0.35 of the line); **before R 0.5 only props priced $3,000 or less** (`PRACTICE_PRICE_LIMIT`); at most **2** practice arrows per prop per floor, all archers together (`PRACTICE_HITS_PER_PROP`); never if those in flight plus this one would leave it under **1 HP** (`PRACTICE_BREAK_MARGIN`); never with a hero within **16** of the archer (`PRACTICE_CLEAR`: its cone sight); never at a prop in the room a hero stands in; idle only (any "?", alert, fight or shove drops the draw at once) |
+| Brute fights | a roll every **20 s**, p = **0.15 x R^2** (none while R is 0: the first 2 minutes); rival: the nearest idle brute within a **400**-node path, else the nearest idle skeleton within **12**; walk (80% speed, 25 s at most), **2 s** square-off, **3-5** slams over about **8 s** (two brutes take turns), the real 0.9 s slam ring |
+| Fight shoves | everyone of team MONSTERS in the 2.0 ring but the slammer; asked 2.2 but clamped so the slide stays under 0.95 (no wall-slam damage, `Actor.WALL_SLAM_MIN_SHOVE` 1.0), and skipped toward a void or a drop deeper than 2 levels: **no HP lost**. A shove into a priced prop chips or breaks it like any shove (billed as today) |
+| Fight noise | radius **14** at the roar and every slam; hearers come to watch from **4.5** away (`WATCH_DISTANCE`) |
+| Break-up | a hero sighting (either fighter), a hit, a noise or a shout: both CHASE (the culprit, else the nearest hero), **worked up** +20% speed for **10 s** (the `worked_up` move-speed modifier) |
+| Relevance | the 28-unit limit: a fight starts only with a hero within 28 of the brute **or of its rival** (a brute far away walks over to a rival near the crew) and stops when both are beyond 28 |
+
+### Online
+- **Goblin:** host AI. `world.scout {id, p, l}` on every phase change (about 5-8 a sighting), `world.fireworks` once a volley
+  (every screen builds the same `FireworksFx` at the world's render time), `world.dud`. His LIGHT rides the ATTACK state
+  and the telegraph byte; the cornered firecracker is a real `world.windup`, so each client resolves the pop on its own
+  hero. The alarm needs no message (the host owns what it wakes; the clients see the ALERT state in the stream).
+- **Archer practice:** the host decides the shot and the prop's damage (`obj.hurt` / `obj.break` as for any hit). There is
+  no `world.windup` for practice (the archer stays IDLE), so no client ever runs `net_strike` for it. The strike count
+  plays the puppet's arrow (`archer._on_strike_visual`): it carries the arrow's damage but, on a client, it can only hurt
+  that client's own hero (the victim decides); a prop, monster, employee or other hero is never decided there (the
+  archer is a copy, `Net.resolves_hit` is false), so there is no client-side prop hit and no double hit. A fight's
+  puppet arrow stays harmless (the strike was resolved from the wind-up event).
+- **Arrows on props (all):** an arrow is resolved by the shooter's machine. A client's hero's arrow or bolt hitting the
+  host's prop becomes `obj.req hit` (`Net.route_hit`); the host's replay of that arrow (its puppet) decides nothing.
+- **Brute fights:** host AI; both fighters stay IDLE on the wire; the slam's wind-up rides the telegraph (the ring) and
+  each slam the strike count (the shockwave). No `world.windup`, so no client resolves a fight slam on its hero.
+- `test_net_monster_step2`: the client sees the scout's phases in order, one volley, every monster the alarm woke on
+  ALERT; and a practice shot: one arrow shown, one 8-HP dent, no hit request from the client, its hero untouched.
+
+### The combat log (same columns)
+- `scout`: `sighted` (dist to the hero), `stopped` (detail killed / soaked: silent), `launch` (count = monsters woken,
+  value = gates woken, detail = scouts sent, secs = since the sighting), `dud`, `yell` (count woken by a soaked scout's
+  shout).
+- `practice`: state = what the arrow hit (prop / hero / other / nothing), dist, value = HP the prop lost, detail = the prop.
+- `brawl` (start, dist to the rival, detail = its kind) and `brawl_end` (state = done / far / lost, or sighting / hit /
+  noise / shout / pack / rival_<state> when the crew broke it up; secs; count = slams).
+
+### Deviations from the plan above
+- **Practice never breaks a prop.** All arrows hit props (the user's later rule), so a hero's arrow, a bolt and an
+  archer's fight arrow can break and bill one like any damage. Practice is limited by what the archer chooses to aim at
+  (2 hits, never the breaking one); the table's "4-17 arrows break one" is not what practice does.
+- **Arrows, before and after.** Before: `Projectile` (archer arrows, the hero bolt, the fireball's flight) and `ArrowShot`
+  (Wick) hit the foe team plus breakables (mail, crates); priced props and employees were skipped. After: archer arrows,
+  Wick's arrows and the hero bolt also hit priced props (`hits_props`); a pierce-1 arrow stops at the prop. The
+  fireball's flight is unchanged (its blast already hit props). Employees are still skipped by every arrow.
+- **Brute fights are an IDLE activity**, not a BUSY state: step 1 used every wire state.
+- **Onlookers stand off** at 4.5 (walking into the slam ring looked like a pile-up in the lab).
+- **The room-door rule** uses each room's cells that touch a corridor (there is no `SitePlan` at run time).
+- **No per-room activity cap** (Option 3's "1-2 activities per room"): fights are rare and practice is per archer.
+- **Not built:** room-heard agitation (+0.25 R for 60 s), hunters.
+
+### How to playtest it
+- `.\run.ps1 --seed 7 --contract 0 --spells heal,damp --no-mic --restless 1`: archers practise on cheap props near the
+  crew, brutes may pick fights, scouts walk the corridors. Without `--restless`, nothing restless happens for 2 minutes.
+- The lab: `godot --path . --resolution 1920x1080 -- --scene res://scenes/awareness_lab.tscn --shot <dir>/step2.png`.

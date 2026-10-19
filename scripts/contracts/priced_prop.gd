@@ -15,6 +15,8 @@ extends Actor
 ##   - Rebar's bowl: damage * BowlBoulder.PROP_DAMAGE_MULT to each prop it rolls through
 ##   - any actor SHOVED into it: damage scales with the shove (SHOVE_DAMAGE_PER_UNIT per world unit
 ##     of shove distance, less once it has slowed), credited to whoever caused the shove
+##   - arrows and bolts that run into it (Wick's arrows, the hero bolt, an archer's arrow, in a fight or at target
+##     practice: Projectile.hits_props, user 2026-10-18 "all arrows hit props"), credited to the shooter
 ##   - hero melee does not target neutral actors, so nobody breaks props by accident with a swing
 ##
 ## Usage:
@@ -34,6 +36,7 @@ const TAG_COLOR := Color(1.0, 0.86, 0.45)
 const TAG_OUTLINE := Color(0.12, 0.06, 0.03)
 const MONEY_RED := Color(1.0, 0.36, 0.3)
 const LIFE_AFTER_BREAK := 3.0           ## a prop without rubble lingers this long, then goes
+const GROUP := "priced_props"           ## arrows and bolts find props here (GameWorld.props_in_radius)
 
 ## One table for everything: display name, price (dollars), HP (fragility; corn does 60, fireball
 ## 40, a hard shove ~25), footprint radius and site. Order here = catalog order.
@@ -167,6 +170,7 @@ func _init() -> void:
 
 func _ready() -> void:
 	super._ready()
+	add_to_group(GROUP)
 	if kind == "":
 		return
 	_model = PropModels.build(kind)

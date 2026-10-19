@@ -35,6 +35,14 @@ const WORLD_CARRIES := {
 		"_windup_total": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
 		"_windup_left": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
 	},
+	"res://scripts/monsters/goblin.gd": {
+		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
+		"target": "world.windup names its victim (the cornered firecracker; NetWorld, M4)",
+		"_windup_total": "world.windup {s, l} (the firecracker; NetWorld, M4); the light rides _telegraph",
+		"_windup_left": "world.windup {s, l} (the firecracker; NetWorld, M4); the light rides _telegraph",
+		"scout_phase": "world.scout {id, p, l} on every change (NetWorld, step 2)",
+		"loaded": "world.scout {id, p, l} on every change (NetWorld, step 2)",
+	},
 	"res://scripts/contracts/employee.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
 		"_extracted": "world.extract (NetWorld)",
@@ -73,6 +81,8 @@ const WORLD_CARRIES := {
 ##                         break, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
 ##                         shove / mod passed on to the owner of a player's hero (host -> clients)
 ##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
+##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
+##                         volley (launch point, start, fx seed, drift) / a soaked rack
 ##   cast, act (reliable, M4)  NetCasts: a cast (lands LEAD later everywhere) / a hero's attack, owner -> host -> others
 ##   st (reliable, M4)     NetStatus: an actor's modifiers, fire or soak, owner -> host -> others
 ##   seat.take (reliable, M6)  host -> clients: a joiner took an AI's seat {seat, peer, character, epoch, state}
@@ -95,6 +105,7 @@ const LATE_JOIN := {
 	"res://scripts/monsters/archer.gd": "as monster.gd",
 	"res://scripts/monsters/brute.gd": "as monster.gd",
 	"res://scripts/monsters/swarmer.gd": "as monster.gd",
+	"res://scripts/monsters/goblin.gd": "as monster.gd (keyframe, gone ids); his phase and rack: replay of world.scout per scout in the snapshot (NetWorld.scout_states); a volley in the air: skipped (cosmetic)",
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",

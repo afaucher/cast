@@ -9,9 +9,8 @@ extends MonsterModel
 ## body. Nothing else on the floor has that top shape (imps are round with upright bat ears, the archer is
 ## a hood and a bow, the skeleton a sword, the brute a mass).
 ##
-## DESIGN ONLY (2026-10-18): no Monster kind uses it yet. MonsterModels.make("goblin") builds it for labs
-## and tests; MonsterModels.KINDS still lists only the live kinds. A future scripts/monsters/goblin.gd sets
-## kind = "goblin" and drives the hooks below from its states.
+## Live since monster awareness step 2: scripts/monsters/goblin.gd (kind "goblin") drives the hooks below from
+## its phases (Goblin._pose).
 ##
 ## Hooks (on top of MonsterModel's windup / attack_swing / set_downed / set_tint / set_fade):
 ##   windup(t)          LIGHTING THE FUSE: crouch, fuse end up in the left hand, the match brought to it

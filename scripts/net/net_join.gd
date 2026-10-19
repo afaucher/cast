@@ -337,6 +337,7 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		"ticket": int((joiners[peer] as Dictionary)["ticket"]), "at": now, "start_at": flow.start_at, "floor_start": flow.floor_start, "job": flow.job,
 		"seats": _session.seats.table(), "kits": kits, "heroes": heroes, "gone": gone,
 		"spawns": _session.world.runtime_spawns(), "world": _session.world.keyframe(now), "waits": waits,
+		"scouts": _session.world.scout_states(),
 		"objects": _session.objects.late_join_state(), "status": _session.status.late_join_state(),
 		"ledger": {"lines": Ledger.lines.duplicate(true), "value": Ledger.contract_value, "floor": Ledger.floor_number},
 		"take": {"seat": seat, "character": character, "epoch": _session.seats.epoch_of(seat) + 1, "state": state},
@@ -513,6 +514,7 @@ func _apply(d: Dictionary) -> void:
 			NetRegistry.unregister(id)
 	_session.world.apply_spawns(d.get("spawns", []) as Array)
 	var keys := _session.world.apply_keyframe(d.get("world", PackedByteArray()) as PackedByteArray, float(d.get("at", _now())))
+	_session.world.apply_scouts(d.get("scouts", []) as Array)   # (goblin scouts: their phase and rack)
 	var waits := d.get("waits", {}) as Dictionary
 	for k: Variant in waits:
 		var emp := NetRegistry.node(int(k)) as Employee

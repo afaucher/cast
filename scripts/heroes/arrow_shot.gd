@@ -29,6 +29,7 @@ static func shoot(shooter: Actor, dir: Vector3, dmg: float, spd: float, rng: flo
 	a.color = tint
 	a.size = 0.12 if is_drawn else 0.09
 	a.hit_radius = 0.2
+	a.hits_props = true   # an arrow chips (and can break) the priced prop it runs into
 	GameWorld.spawn(a, Combat.chest(shooter) + a.direction * 0.5)
 	return a
 
@@ -51,7 +52,7 @@ func _physics_process(delta: float) -> void:
 		left -= s
 		var to := global_position + direction * s
 		_travelled += s
-		for a in GameWorld.hittable_in_radius(to, hit_radius, target_team):   # + breakables (mail packages)
+		for a in GameWorld.hittable_in_radius(to, hit_radius, target_team, hits_props):   # + breakables and priced props
 			if _hit_ids.has(a.get_instance_id()):
 				continue
 			_strike(a, to)

@@ -1,8 +1,9 @@
 # Goblin scout
 
-Status: **design + model + lab** (2026-10-18). There's no gameplay code yet: no `goblin.gd`, and no spawning. What
-exists is the model (`scripts/art/lowpoly/monsters/goblin_model.gd`), the cosmetic volley
-(`scripts/fx/fireworks_fx.gd`) and a lab (`scenes/goblin_lab.tscn`). Numbers marked **[proposal]** wait on the user.
+Status: **built** (monster awareness step 2, 2026-10-18): `scripts/monsters/goblin.gd`, spawned in corridors by
+`SiteBuilder`; see "Step 2 as built" at the end. The model (`scripts/art/lowpoly/monsters/goblin_model.gd`), the cosmetic
+volley (`scripts/fx/fireworks_fx.gd`) and the look-dev lab (`scenes/goblin_lab.tscn`) came first. Numbers marked
+**[proposal]** were proposals; the decisions and "Step 2 as built" say what was built.
 
 > *Building security's idea of an alarm system: one goblin, five rockets, no off switch.*
 
@@ -342,3 +343,42 @@ The lab views are written as `<base>_<view>.png` at the resolution given:
 - **One per floor, sometimes two** (1-2).
 - **HUD name: "Goblin Scout".**
 - Not answered yet: "fireball lights the rack" and "vines stop him lighting" stay as designed until the playtest says otherwise.
+
+## Step 2 as built (2026-10-18)
+
+`scripts/monsters/goblin.gd` (kind `"goblin"`, HUD name "Goblin Scout"), built with the decisions above. The alarm's
+propagation is `MonsterSenses.alarm` (`monster-awareness.md`, "Step 2 as built").
+
+### The scout
+| What | As built |
+|---|---|
+| Stats | HP 24, patrol 2.0 / flee 5.0, radius 0.32, `shove_mult` 1.4; sight: front cone 110 degrees out to 14 with line of sight held **0.35 s**, all round 3 (that is his `aggro_range`: 0 freezes him like any monster) |
+| Clock | "!" **0.6 s** -> light **1.4 s** (`scaled_cooldown`: coffee on him speeds it) -> fuse **1.6 s** -> volley |
+| Patrol | his corridor route doorway to doorway (waypoints every 3 cells), a **2.5 s** look into the room at each end (+/- 80 degrees), a glance every **6-10 s** (ears perk 0.4 s, then a 1.2 s look 70-120 degrees aside) |
+| Stops | killed in "!" or the light: **silent**; shoved / staggered while lighting: starts over when free; rooted: no progress while rooted; soaked before the fuse: runs to the nearest resting pack (30 at most) and **yells** there (a shout: resting monsters within 10 go ALERT toward S); soaked with the fuse lit: **dud** (`Fx.fizzle_puff`, the rockets are spent); **killed with the fuse lit: the volley still goes up where he fell** (user), unless soaked; fire (a fireball's blast, before its damage lands, or burning for 1 s): an instant volley; no bonus damage |
+| After a volley | HIDE: behind the nearest monster farther from the crew (else 4-6 hexes away from the crew), cowering; cornered (a hero within 2): a firecracker, a 0.45 s wind-up, a pop 1.2 ahead of him (radius 1.5, 3 damage, shove 1.0) through `Combat`, every 3 s; after **20 s** with nobody within 4 he rejoins his route (rack empty) |
+| Restock | **60 s** after a volley or a dud, once he is patrolling or hiding |
+| Second scout | within 18 of a volley: runs to S (10 s at most), no volley of his own for 30 s |
+| Spawning | 1 on floor 1, 1 on floor 2 (2 at difficulty 0.6 or more), 2 on floor 3 (`SiteBuilder.scout_count`), fewer if the floor lacks corridors: each a different corridor link longer than 8 cells, never touching the start or arrival room, links with packs in both rooms first; a generator of its own seeded from the floor (nothing else in the plan moves). 15 floors measured: 20 scouts, every floor 1-2, the scouts' planning at most about 7 ms, the whole plan at most 160 ms (limit 600). Not in the packs, not in `Site.monsters`; a pest only on an "everything" contract |
+
+### Online (as §7, with these details)
+- His wire state stands for the phase: PATROL / LOOK IDLE, TELL SUSPICIOUS, LIGHT ATTACK (with the telegraph byte, so
+  the light shows), FUSE / RUN / ASSIST ALERT, HIDE SEARCH. `scout_phase` and `loaded` (OWNER) ride
+  `world.scout {id, p, l}` on every change; his route and timers are PRIVATE.
+- The volley: `world.fireworks {id, x, y, z, s, f, dx, dz}` (the launch point, its start on the shared clock, the fx seed
+  rolled on the host's `fx_rng`, the drift); a client starts its `FireworksFx` at the world's render time. A dud:
+  `world.dud`.
+- The light is not a `world.windup` (nothing to resolve); the cornered firecracker is.
+- A late joiner gets every scout's phase and rack in its snapshot (`NetWorld.scout_states`); a volley in the air is
+  skipped.
+- `test_net_monster_step2` covers the client seeing his phases in order, the volley and the woken monsters. The kill and
+  "client spotted" scenarios of §7.8 are covered by the single-process tests (`test_monster_goblin`), not over the wire.
+
+### Deviations from the design above
+- **A kill during the FUSE is the full alarm** (user), so the floor-firecracker POP (a room shout) is not built.
+- **The "!" in his animation stays** although the user turned down "?"/"!" indicators for monsters: it is his tell.
+- **A hit or shout on a patrolling scout** makes him look toward it (a doorway look); only being seen or hit by the crew
+  starts the "!". He never walks on ALERT himself.
+- **He patrols whether or not the crew is near** (one or two walkers a floor cost nothing next to the 28-unit limit).
+- **Sound cues are not built**; they would hook on `scout_phase_changed` (the squeak on TELL, the fizz on LIGHT/FUSE),
+  `fireworks_launched` (whistle, ricochet tink, bangs: `FireworksFx.burst_time`) and `fireworks_dud` (pfft).

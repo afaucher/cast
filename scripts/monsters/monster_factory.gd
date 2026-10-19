@@ -19,6 +19,7 @@ const SCRIPTS := {
 	"archer": preload("res://scripts/monsters/archer.gd"),
 	"brute": preload("res://scripts/monsters/brute.gd"),
 	"swarmer": preload("res://scripts/monsters/swarmer.gd"),
+	"goblin": preload("res://scripts/monsters/goblin.gd"),   ## the scout: never in a pack (SiteBuilder puts him in a corridor)
 }
 
 

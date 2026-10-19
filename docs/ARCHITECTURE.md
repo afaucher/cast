@@ -226,7 +226,9 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
   `nearest_actor(pos, team, max_range)`, `flat_distance`, `TEAM_HEROES = 0`, `TEAM_MONSTERS = 1`.
   `hittable_in_radius(pos, r, team)` is `actors_in_radius` plus every actor in the group `"breakables"` (mail
   packages): `Combat.melee_arc`, `Projectile` and `ArrowShot` use it, so swings and shots also break the mail
-  but still never hit priced props or employees.
+  but never hit employees. With `props` (`Projectile.hits_props`: the archer's arrow, Wick's arrows, the hero bolt) it
+  adds the priced props (`props_in_radius`, group `"priced_props"`): all arrows hit props (user, 2026-10-18); swings and
+  a fireball's flight do not.
   A test or scene calls `GameWorld.begin(map, root_node3d)` first.
 - **`Actor`** (`scripts/core/actor.gd`, extends Node3D): `team`, `max_hp`, `hp`,
   `move_speed`, `radius`, `dead`, `facing`, `climbing`. `move(dir, delta)` does the terrain
@@ -294,7 +296,8 @@ The player-controlled hero has `is_player = true`.
 `PlayerController` reads input. `AllyBrain` drives AI allies.
 
 ### Monsters (`scripts/monsters/*.gd`, each extends `Monster extends Actor`)
-`MonsterFactory.spawn(kind: String, cell: Vector2i) -> Monster`. Kinds: `grunt`, `archer`, `brute`, `swarmer`.
+`MonsterFactory.spawn(kind: String, cell: Vector2i) -> Monster`. Kinds: `grunt`, `archer`, `brute`, `swarmer` (the packs), and `goblin` (the scout: never in a pack,
+`SiteBuilder` puts one or two in corridors; `docs/design/goblin-scout.md`).
 `MonsterFactory.spawn_pack(room_cells: Array[Vector2i], budget: int, rng) -> Array[Monster]`.
 Monsters idle until a hero is within aggro range with line of sight, then act.
 
