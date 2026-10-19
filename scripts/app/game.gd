@@ -2112,17 +2112,18 @@ func _extract_followers(riders: Array[Actor], line: String) -> void:
 
 
 ## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
-## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice.
+## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No
+## pay in the line (user, 2026-10-19: "trim all the mentions of {pay}"): every line can be voiced ahead of time.
 const RESCUE_ONE: Array[String] = [
-	"Copy, %s is out. %s on the invoice.",
-	"%s just walked past my desk. Billing %s.",
-	"Got %s. All fingers accounted for. %s.",
-	"%s is topside and asking for a lawyer. %s.",
+	"Copy, %s is out.",
+	"%s just walked past my desk.",
+	"Got %s. All fingers accounted for.",
+	"%s is topside and asking for a lawyer.",
 ]
 const RESCUE_MANY: Array[String] = [
-	"Copy, %d staff out. %s on the invoice.",
-	"%d of them just came through. Billing %s.",
-	"Headcount up by %d. %s on the invoice.",
+	"Copy, %d staff out.",
+	"%d of them just came through.",
+	"Headcount up by %d.",
 ]
 
 
@@ -2132,9 +2133,9 @@ func _dispatch_rescue(riders: Array[Actor], pay: String) -> void:
 		return
 	var line: String
 	if riders.size() == 1:
-		line = RESCUE_ONE[GameWorld.fx_rng.randi() % RESCUE_ONE.size()] % [riders[0].display_name, pay]
+		line = RESCUE_ONE[GameWorld.fx_rng.randi() % RESCUE_ONE.size()] % riders[0].display_name
 	else:
-		line = RESCUE_MANY[GameWorld.fx_rng.randi() % RESCUE_MANY.size()] % [riders.size(), pay]
+		line = RESCUE_MANY[GameWorld.fx_rng.randi() % RESCUE_MANY.size()] % riders.size()
 	_banner.show_line(line, 4.0)
 
 

@@ -218,7 +218,7 @@ them are still down here. Bring them out." Floors 2 and 3 use the floor's own fa
 | 2 | Some of the staff made it this far before the {pest} did. Find them, then find the elevator. |
 | 3 | The {origin}'s on this floor. Close the big gate and the whole site goes quiet. |
 | 3 | This is where it started, in the {origin}. Close the gate there and every other gate stops with it. |
-| 3 | The big gate is in the {origin}. Closing it stops the site; only the elevator clocks you out. |
+| 3 | The big gate is in the {origin}. Closing it stops the site. |
 
 **Checked against `hellgate.gd`:** a gate spawns until it is closed (killed), so a closed gate stops
 spawning; closing the origin gate stops every gate's spawns site-wide (`HellgateEvents.stop_spawns`).
