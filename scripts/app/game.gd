@@ -966,6 +966,11 @@ func _show_picker() -> void:
 func _sign_license() -> void:
 	_board_seed = -1
 	controller.enabled = false
+	# The floor is already built behind the license form. While the rest of the crew signs, the heroes stay out of sight
+	# so the room is empty until the van (or the elevator) brings them in, as it does solo (user, 2026-10-19: the first
+	# to sign "gets spawned to the world before the others"). _start shows them again just before the arrival.
+	for h in _heroes():
+		h.visible = false
 	_flow.sign(_spells)
 	_update_waiting()
 
@@ -982,6 +987,8 @@ func _on_flow_load() -> void:
 
 
 func _start() -> void:
+	for h in _heroes():
+		h.visible = true   # (hidden while the crew signed, _sign_license; the arrival and the carry decide from here)
 	player.spell_slots = _spells.duplicate()
 	_assign_crew_spells()
 	_apply_dev_loadout()
