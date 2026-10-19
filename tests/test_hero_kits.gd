@@ -424,6 +424,7 @@ func _test_hud_bars() -> void:
 
 func _test_ally_primaries() -> void:
 	var cases := {"gasket": 28.0, "rebar": 15.0}
+	AllyBrain.restraint = false   # (the eager AI: an idle dummy is fair game; this is about the kit, test_ally_orders the restraint)
 	for id: String in cases:
 		_fresh()
 		var leader := Hero.new()
@@ -442,3 +443,4 @@ func _test_ally_primaries() -> void:
 		# Swing rate follows the kit's cooldown: ~4 s of fighting, minus the walk-in.
 		var cd: float = ally.melee_cooldown
 		check(swings[0] <= int(4.0 / cd) + 1, "%s cannot swing faster than its cooldown" % id)
+	AllyBrain.restraint = true

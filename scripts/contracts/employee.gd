@@ -16,6 +16,12 @@ extends Actor
 ##            still sets off PANIC, and once calm they walk back to the spot they were told to wait at. A
 ##            dismissed employee never rejoins by proximity, only another E (request_follow) recruits them.
 ##   EXTRACT  extract() was called: a cheer, then it shrinks away and is freed.
+##   FIGHT    a henchman told "attack" (a voice order): runs at the nearest monster and throws weak punches (HENCH_PUNCH)
+##            until nothing near is fighting, then follows whoever gave the order. Staff refuse ("I'm in accounts!").
+##
+## VOICE ORDERS (VoiceOrders, on the host; combat-proposals.md 1.0): order(kind, by, point). "go": walk to `point` and
+## wait there (a WAIT whose spot is the point: a monster still sends them running, then they walk back); "follow": follow
+## the speaker (from anywhere in earshot); "attack": FIGHT (henchmen) or a refusal bark (staff).
 ##
 ## Contract flow API (agent A): spawn(), is_following(), leader(), extract(), is_extracted(), alive(),
 ## signals rescued(employee) and died. Group "employees" holds the living, not-yet-extracted employees.
@@ -29,7 +35,7 @@ signal rescued(employee: Employee)
 ## A speech bubble started (say()): every screen shows it (NetWorld sends it, M3).
 signal said(text: String, seconds: float)
 
-enum State { COWER, PANIC, FOLLOW, EXTRACT, WAIT }
+enum State { COWER, PANIC, FOLLOW, EXTRACT, WAIT, FIGHT }
 
 const MAX_HP := 30.0
 const WALK_SPEED := 3.3
@@ -74,6 +80,16 @@ const PANIC_LINES := {"staff": "AAAH!", "henchman": "NOPE!"}
 const LATCH_LINES := {"staff": "oh, thank you!", "henchman": "I'm with you!"}
 const WAIT_LINES := {"staff": "Waiting here.", "henchman": "Waiting here, boss."}
 const RECALL_LINES := {"staff": "Right behind you!", "henchman": "Right behind you, boss!"}
+# Voice orders (see the header).
+const GO_LINES := {"staff": "If you insist...", "henchman": "On it, boss!"}
+const FIGHT_LINES: Array[String] = ["For the boss!", "Have at you!", "Put 'em up!"]
+const REFUSE_LINES: Array[String] = ["I'm in accounts!", "Not in my job description!", "I have a lanyard, not a sword!"]
+const HENCH_PUNCH := 3.0           ## a henchman's punch (FIGHT): weak on purpose
+const HENCH_PUNCH_EVERY := 1.1
+const HENCH_REACH := 0.75          ## punch reach beyond both bodies' radii
+const FIGHT_RANGE := 8.0           ## FIGHT goes for monsters this close ...
+const FIGHT_QUIET := 1.0           ## ... and ends after this long with none of them near
+const GO_GIVEUP_MIN := 8.0         ## "go": keeps trying to reach the spot at least this long (more for a far spot)
 
 ## "staff" (bunker) or "henchman" (lair). Set before the employee enters the tree (spawn() does).
 var style := "staff"
@@ -104,6 +120,10 @@ var _stuck_from := Vector3.ZERO
 var _path: Array[Vector2i] = []
 var _path_idx := 1
 var _path_goal := Vector2i(1 << 20, 1 << 20)
+var _fight_by: Actor = null         ## FIGHT: who said "attack" (followed when the fight is over)
+var _fight_foe: Actor = null        ## FIGHT: the monster it is going for
+var _punch_at := 0.0                ## FIGHT: the next punch may land then
+var _fight_quiet := -1.0            ## FIGHT: no monster near since then (-1: there is one)
 
 var _visual: Node3D = null
 var _bar: HpBar = null
@@ -193,6 +213,8 @@ func net_fields() -> Dictionary:
 		"_hero_pos": Net.PRIVATE, "_hero_pos_valid": Net.PRIVATE, "_catching": Net.PRIVATE,
 		"_stuck_t": Net.PRIVATE, "_stuck_from": Net.PRIVATE,
 		"_path": Net.PRIVATE, "_path_idx": Net.PRIVATE, "_path_goal": Net.PRIVATE,
+		# A henchman's fight (FIGHT; the state itself rides the stream): the host's AI only.
+		"_fight_by": Net.PRIVATE, "_fight_foe": Net.PRIVATE, "_punch_at": Net.PRIVATE, "_fight_quiet": Net.PRIVATE,
 		# Each screen works these out against its own heroes and monsters (name tag, cower
 		# bubble, scared pose).
 		"_hero_near": Net.LOCAL, "_scared": Net.LOCAL,
@@ -342,6 +364,72 @@ static func interact(hero: Actor) -> bool:
 	return e.request_wait(hero) if e.can_wait(hero) else e.request_follow(hero)
 
 
+## A voice order (VoiceOrders, on the host): "go" (to `point`), "follow" (`by`, the speaker's hero) or "attack". Says its
+## line (say(): every screen shows it). Returns "took", "refused" (staff told to attack: the refusal is said) or "" (it
+## can't: gone, or nothing to go to).
+func order(kind: String, by: Actor, point: Vector3 = Vector3.INF) -> String:
+	if dead or _extracted:
+		return ""
+	match kind:
+		"go":
+			if point == Vector3.INF:
+				return ""
+			_dismissed = true
+			_leader = null
+			_fight_by = null
+			_catching = false
+			_wait_spot = _walkable_near(point)
+			_set_state(State.WAIT)
+			_returning_to_spot = true   # (WAIT walks to its spot: the point)
+			_return_giveup = GameWorld.time + maxf(GO_GIVEUP_MIN, GameWorld.flat_distance(global_position, _wait_spot) / WALK_SPEED * 2.0 + 4.0)
+			model.set_mood("follow")
+			say(str(GO_LINES[style]), 1.6)
+			return "took"
+		"follow":
+			if by == null or not is_instance_valid(by) or by.dead:
+				return ""
+			_dismissed = false
+			_fight_by = null
+			_latch(by, str(RECALL_LINES[style]))
+			return "took"
+		"attack":
+			if style != "henchman":
+				say(REFUSE_LINES[variant % REFUSE_LINES.size()], 1.8)
+				return "refused"
+			_fight_by = by
+			_fight_foe = null
+			_fight_quiet = -1.0
+			_dismissed = false
+			_leader = null
+			_set_state(State.FIGHT)
+			say(FIGHT_LINES[variant % FIGHT_LINES.size()], 1.4)
+			return "took"
+	return ""
+
+
+## The walkable floor spot nearest `p` (within 3 rings), else `p`.
+func _walkable_near(p: Vector3) -> Vector3:
+	var map := GameWorld.map
+	if map == null:
+		return p
+	var c0 := Hex.from_world(p)
+	if map.is_walkable_cell(c0):
+		var lv0 := map.ground_level(p)
+		return Vector3(p.x, p.y if is_nan(lv0) else lv0, p.z)
+	var best := Vector3.INF
+	var best_d := INF
+	for c in Hex.range_cells(c0, 3):
+		if not map.is_walkable_cell(c):
+			continue
+		var lv := map.ground_level(Hex.to_world(c))
+		var w := Hex.to_world(c, 0.0 if is_nan(lv) else lv)
+		var d := GameWorld.flat_distance(w, p)
+		if d < best_d:
+			best_d = d
+			best = w
+	return p if best == Vector3.INF else best
+
+
 ## Contract flow calls this for followers at an exit (the drop-off, or the crew taking the elevator / van): a cheer
 ## and a fade-out, then the employee is freed. `line` is the bark. Emits `rescued` once, right away. Safe to call twice
 ## (the second call does nothing).
@@ -393,6 +481,8 @@ func _physics_process(delta: float) -> void:
 					_tick_follow(delta)
 				State.WAIT:
 					_tick_wait(delta)
+				State.FIGHT:
+					_tick_fight(delta)
 	_update_visual(delta)
 
 
@@ -453,7 +543,7 @@ func _look_around() -> Array:
 	_hero_near = hero != null and hero_d <= NEAR_RANGE
 	_scared = mon_d <= PANIC_RANGE + 1.0
 	if model != null:
-		model.set_scared(_scared and state != State.PANIC)
+		model.set_scared(_scared and state != State.PANIC and state != State.FIGHT)
 	return [mon_d, mon_pos, hero, hero_d]
 
 
@@ -539,6 +629,9 @@ func _set_state(s: int) -> void:
 			model.set_mood("follow")
 		State.EXTRACT:
 			model.set_mood("cheer")
+		State.FIGHT:
+			move_speed = RUN_SPEED
+			model.set_mood("panic")   # (arms flailing: a henchman's idea of a fighting stance)
 
 
 # --- Behaviour ticks ------------------------------------------------------------------
@@ -570,6 +663,61 @@ func _tick_wait(delta: float) -> void:
 			model.set_mood("cower")
 		if _hero_pos_valid and _hero_near:
 			face_point(_hero_pos)
+
+
+## A henchman told "attack": run at the nearest monster and punch it (weakly) until none is near, then follow whoever said it.
+func _tick_fight(delta: float) -> void:
+	move_speed = RUN_SPEED
+	var now := GameWorld.time
+	var foe := _fight_target()
+	if foe == null:
+		if _fight_quiet < 0.0:
+			_fight_quiet = now
+		elif now - _fight_quiet >= FIGHT_QUIET:
+			_end_fight()
+		return
+	_fight_quiet = -1.0
+	var to := foe.global_position - global_position
+	to.y = 0.0
+	if to.length() > radius + foe.radius + HENCH_REACH:
+		var moved := _walk_toward(foe.global_position, delta)
+		_check_stuck(moved, delta)
+		return
+	face_point(foe.global_position)
+	if now >= _punch_at:
+		_punch_at = now + HENCH_PUNCH_EVERY
+		if Combat.resolves(foe, self):
+			foe.apply_damage(HENCH_PUNCH, self)
+
+
+## The monster a fighting henchman goes for: the one it is on while it stays near, else the nearest within FIGHT_RANGE.
+func _fight_target() -> Actor:
+	if _fight_foe != null and is_instance_valid(_fight_foe) and not _fight_foe.dead \
+			and GameWorld.flat_distance(global_position, _fight_foe.global_position) <= FIGHT_RANGE * 1.5:
+		return _fight_foe
+	_fight_foe = null
+	var best_d := FIGHT_RANGE
+	for n in get_tree().get_nodes_in_group("monsters"):
+		var m := n as Actor
+		if m == null or m.dead or absf(m.global_position.y - global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
+			continue
+		var d := GameWorld.flat_distance(global_position, m.global_position)
+		if d <= best_d:
+			best_d = d
+			_fight_foe = m
+	return _fight_foe
+
+
+## The fight is over: follow whoever said "attack" (or hide, when they are gone).
+func _end_fight() -> void:
+	var by := _fight_by
+	_fight_by = null
+	_fight_foe = null
+	_fight_quiet = -1.0
+	if by != null and is_instance_valid(by) and not by.dead:
+		_latch(by, "Did we win?")
+	else:
+		_set_state(State.COWER)
 
 
 func _tick_panic(delta: float) -> void:

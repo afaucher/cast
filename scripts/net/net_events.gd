@@ -92,6 +92,10 @@ const WORLD_CARRIES := {
 ##   st (reliable, M4)     NetStatus: an actor's modifiers, fire or soak, owner -> host -> others
 ##   seat.take (reliable, M6)  host -> clients: a joiner took an AI's seat {seat, peer, character, epoch, state}
 ##   join.* (reliable, M6) NetJoin: wait, go, built, snapshot (the late joiner's way onto a running floor)
+##   ord.req / ord.ok (reliable)  NetOrders: a voice order, the speaker's machine -> host (req); the host applied it -> everyone
+##                         (ok: the AI heroes' barks, the people it names for a marker). Cosmetic once applied: what an order
+##                         changes is the host's AI state (AllyBrain, PRIVATE) or rides the employee's stream and keyframe
+##                         (state, leader, dismissed, wait spot), so a late joiner needs no replay of it
 const KIND_SEAT_AI := "seat.ai"
 const KIND_SEAT_TAKE := "seat.take"
 

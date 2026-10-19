@@ -594,6 +594,8 @@ func _on_utterance_finished(text: String, outcome: Dictionary, typed: bool) -> v
 			col = KIND_COLORS["accidental"] if bool(casts[0]["accidental"]) else KIND_COLORS["cast"]
 		"fizzle":
 			col = KIND_COLORS["fizzle"]
+		"order":
+			col = KIND_COLORS["cast"]
 		_:
 			_n_nomatch += 1
 			_log("[color=#ffd060]no match[/color] \"%s\"" % _esc(text))
@@ -613,6 +615,8 @@ static func outcome_text(outcome: Dictionary) -> String:
 			int(round(float(c["power"]) * 100.0))])
 	for f in outcome["fizzles"]:
 		parts.append("fizzle (%s)" % str(f["reason"]))
+	for o in outcome.get("orders", []):
+		parts.append("ORDER %s %s" % [str(o["who"]).to_upper(), str(o["order"]).to_upper()])
 	if parts.is_empty():
 		if not (outcome["ignored"] as Array).is_empty():
 			return "ignored (repeat)"

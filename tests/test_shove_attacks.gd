@@ -171,6 +171,9 @@ func setup() -> void:
 	check(gasket.shoot(Vector3.RIGHT), "the spin is ready again after 1.4 s")
 
 	# --- AllyBrain: Gasket spins when 2+ enemies are in reach, or 1 and the spin is ready.
+	# (The eager AI: idle dummies are fair game. This is about using the kit; the restraint baseline, where the bowl only
+	# peels, is test_ally_orders.)
+	AllyBrain.restraint = false
 	_fresh()
 	var d2 := HeroFactory.spawn_hero(Vector2i.ZERO, "Gasket", Color.PURPLE, "sword")
 	d2.secondary_kind = "spin"
@@ -228,4 +231,5 @@ func setup() -> void:
 	far_foe = _dummy(Vector3(1.8, 0, 0))
 	await frames(3)
 	near(p2.cooldown_left(Hero.KEY_RANGED), 0.0, 0.0001, "no bowl at point blank (melee instead)")
+	AllyBrain.restraint = true
 	finish()

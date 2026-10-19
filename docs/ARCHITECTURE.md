@@ -94,6 +94,7 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice |
 | `net_casts.gd` (`NetCasts`, child `Session/Casts`, `Session.casts`) | casts and hero attacks as events (M4): a cast is resolved on the caster's machine and lands `LEAD` (0.2 s) later on every machine (`SpellBook.apply`); a hero's swing, shot, bowl or spin (`act`) is replayed on its puppet everywhere at the moment the puppet shows |
 | `net_status.gd` (`NetStatus`, child `Session/Status`, `Session.status`) | statuses (M4): the target's owner applies a modifier, a fire or a soak and announces it (`st`); the other screens show it (`Actor.net_set_modifiers`, `Burning.show_remote`, `Coffee.show_remote`, `Wet.douse`) |
+| `net_orders.gd` (`NetOrders`, child `Session/Orders`, `Session.orders`) | voice orders (combat-proposals.md 1.8): the speaker's machine sends `ord.req`, the host applies it once (`VoiceOrders.apply`: the AI seats and the employees) and sends `ord.ok` to everyone (the AI heroes' barks, the players it names for a marker) |
 | `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
 | `steam_lobby.gd` (`SteamLobby`, child `Session/Lobby`) | lobbies: create, list, join, leave, invites, lobby data |
 
@@ -265,7 +266,12 @@ func inject_text(text: String) -> void             # debug: act as if `text` was
 signal trigger_heard(word: String)                 # the trigger word armed a cast (Incantation.trigger_armed): the "cast heard" cue
 signal speech_started                              # the gate's voice onset (raw input, ~50 ms in): cuts the fizzle
 func is_speaking() -> bool                         # inside a voice span right now (no hangover)
+signal order_spoken(who: String, order: String, heard: String)  # a voice order: "rebar" / "everyone" / "hench four", "go" / "attack" / "follow"
 ```
+Voice orders (`docs/design/combat-proposals.md` 1.8): `game.gd` hands an order to `VoiceOrders.give(who, order, player,
+aim point)` (`scripts/heroes/voice_orders.gd`), which applies it (solo) or sends it to the host (`Net.send_order` ->
+`NetOrders`): `AllyBrain.give_order` for an AI hero, `Employee.order` for an employee, a marker (`OrderFx`) for a hero a
+person plays. With no order an AI ally follows the restraint baseline (`AllyBrain.restraint`): it never opens a fight.
 Spell ids are lowercase: `heal`, `fireball`, `armor`, `corn`, `tentacles`, `teeth`, `vines`, `damp`, `coffee`, `chicken`.
 The voice layer listens for **all**
 spells. The game decides whether the local hero knows the spell (and fizzles it if not).

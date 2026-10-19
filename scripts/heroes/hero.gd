@@ -912,6 +912,11 @@ func _shoot_pose() -> void:
 	_swing_tween.tween_property(_weapon, "rotation", Vector3(0, deg_to_rad(SWING_REST_YAW), 0), 0.25).set_trans(Tween.TRANS_BACK)
 
 
+## A cosmetic acknowledgement (an AI hero taking a voice order, OrderFx / VoiceOrders.feedback): the cast pose, no spell.
+func gesture() -> void:
+	_cast_pose()
+
+
 func _cast_pose() -> void:
 	if visual_override != null and visual_override.has_method("cast_pose"):
 		visual_override.call("cast_pose")

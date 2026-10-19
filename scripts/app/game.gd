@@ -788,6 +788,12 @@ func _populate_site() -> void:
 			g.connect("closed", _on_gate_closed)
 	for e in _site.employees:
 		e.damaged.connect(func(_amount: float, source: Node) -> void: _emp_cause[e.get_instance_id()] = Ledger.culprit_name(source))
+	# Voice orders: this floor's employees answer to their own names too ("Marguerite go"), not only the decided list.
+	var names: Array[String] = []
+	for e in _site.employees:
+		names.append(VoiceOrders.call_name(e.display_name))
+	if voice != null:
+		voice.set_order_names(names)
 	_log("site: %d gates%s, %d employees, %d props, %d monsters (%d pests: %s)" % [small, " + origin" if origin else "", _site.employees.size(),
 		_site.props.size(), _site.monsters.size(), _site.pest_spawned, _run.pest], Color(0.8, 0.8, 1.0))
 	_log("themes: %s  decor %d" % [str(_site.plan.room_themes), _site.plan.decor.size()], Color(0.8, 0.8, 1.0))
@@ -806,6 +812,7 @@ func _setup_voice() -> void:
 	add_child(voice)
 	voice.spell_spoken.connect(_on_spell_spoken)
 	voice.spell_fizzled.connect(_on_spell_fizzled)
+	voice.order_spoken.connect(_on_order_spoken)
 	Sfx.listen_to_voice(voice)   # "cast heard", the fizzle and its cut on new speech: this machine only (your mic)
 	if voice.has_signal("heard"):
 		voice.connect("heard", _on_heard)
@@ -907,6 +914,15 @@ func _cast(id: String, power: float, heard: String, accidental: bool = false) ->
 		_log("%s%s recharging %.1fs" % [tag, id.to_upper(), cd], Color(1.0, 0.8, 0.4))
 	else:
 		_log("%s refused" % id.to_upper(), Color(1.0, 0.5, 0.5))
+
+
+## A voice (or typed) order: "Rebar go", "hench attack", "everyone follow" (VoiceOrders; online a request to the host). It
+## aims where this player aims. A downed speaker can still give orders.
+func _on_order_spoken(who: String, kind: String, heard: String) -> void:
+	if _ended or player == null or controller == null:
+		return
+	VoiceOrders.give(who, kind, player, controller.aim_point())
+	_log("ORDER %s %s  (\"%s\")" % [who.to_upper(), kind.to_upper(), heard], Color(0.6, 0.85, 1.0))
 
 
 func _on_spell_fizzled(heard: String, reason: String) -> void:
