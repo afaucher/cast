@@ -166,10 +166,6 @@ func check_clean(pest_alive: int, who: Node = null) -> int:
 	return pay
 
 
-func floor_clean(f: int = -1) -> bool:
-	var st := state(f)
-	return not st.is_empty() and bool(st["pest_paid"])
-
 
 func employee_lost(emp_name: String, cause: String) -> void:
 	var st := state()

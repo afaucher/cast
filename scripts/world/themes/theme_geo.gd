@@ -55,10 +55,6 @@ static func local_to_world(pos: Vector2, yaw_deg: float, lx: float, lf: float) -
 	return pos + lateral(yaw_deg) * lx + facing(yaw_deg) * lf
 
 
-## Smallest angle (degrees, 0..180) between two yaws.
-static func yaw_diff(a: float, b: float) -> float:
-	return absf(wrapf(a - b, -180.0, 180.0))
-
 
 ## Angle (degrees, 0..180) between a facing vector and a direction.
 static func angle_to(f: Vector2, dir: Vector2) -> float:
@@ -76,18 +72,6 @@ static func hex_dist(p: Vector2, c: Vector2i) -> float:
 		m = maxf(m, rel.dot(n))
 	return m - Hex.INNER
 
-
-## The unit normal of the face of cell c nearest to point p (pointing from the cell toward p).
-static func nearest_face(p: Vector2, c: Vector2i) -> Vector2:
-	var rel := p - world(c)
-	var best := Vector2.ZERO
-	var m := -INF
-	for n in normals():
-		var d := rel.dot(n)
-		if d > m:
-			m = d
-			best = n
-	return best
 
 
 ## Sample points of an oriented footprint: a grid over the rectangle (corners, edges and the middle).

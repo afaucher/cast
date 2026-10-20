@@ -32,12 +32,6 @@ func _init(text: String = "", size_px: int = 28, angle: float = -8.0, star_value
 	size = _get_minimum_size()
 
 
-func set_lines(text: String) -> void:
-	lines = text.split("\n")
-	update_minimum_size()
-	size = get_combined_minimum_size()
-	queue_redraw()
-
 
 func _get_minimum_size() -> Vector2:
 	var f := FormTheme.stamp_font()

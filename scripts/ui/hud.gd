@@ -109,10 +109,6 @@ func cards_rect() -> Rect2:
 	return _card_box.get_global_rect()
 
 
-## The screen rectangle of the cast toast (canvas pixels), for tests.
-func toast_rect() -> Rect2:
-	return _toast.get_global_rect() if _toast != null else Rect2()
-
 
 ## Add a full-screen Control (e.g. the SpellPicker) on top of the HUD.
 func add_overlay(c: Control) -> void:
@@ -168,7 +164,7 @@ func set_mic_level(v: float) -> void:
 	_mic_target = clampf(v, 0.0, 1.0)
 
 
-## Big center text: "You died", "Exit reached". hold <= 0 keeps it until clear_center().
+## Big center text: "You died", "Exit reached". hold <= 0 keeps it up.
 func show_center(text: String, color: Color = Color.WHITE, hold: float = 0.0) -> void:
 	if _center_tween:
 		_center_tween.kill()
@@ -183,11 +179,6 @@ func show_center(text: String, color: Color = Color.WHITE, hold: float = 0.0) ->
 		_center_tween.tween_property(_center, "modulate:a", 0.0, 0.5)
 		_center_tween.tween_callback(func() -> void: _center.visible = false)
 
-
-func clear_center() -> void:
-	if _center_tween:
-		_center_tween.kill()
-	_center.visible = false
 
 
 ## Add the typed-spell box (bottom right). It stays hidden until Enter shows and focuses it; submit, Esc or a click

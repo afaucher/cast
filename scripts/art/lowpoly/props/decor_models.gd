@@ -166,11 +166,6 @@ static func _seg(s: LowPoly.Soup, a: Vector2, b: Vector2, width: float, h: float
 	_b(s, Vector3(length, h, width), Vector3((a.x + b.x) * 0.5, y + h * 0.5, (a.y + b.y) * 0.5), col, Vector3(0, yaw, 0))
 
 
-## A cylinder scaled to an ellipse (rx, rz) merged into the soup.
-static func _oval(s: LowPoly.Soup, rx: float, rz: float, h: float, sides: int, pos: Vector3, col: Color) -> void:
-	var piece := LowPoly.cylinder(1.0, 1.0, h, sides, col, PropModels._n(), 0.0, 1, 0.05)
-	s.merge(piece, LowPoly.at(pos, Vector3.ZERO, Vector3(rx, 1.0, rz)))
-
 
 # --- the theme pieces ------------------------------------------------------------------------------------------------
 

@@ -27,7 +27,6 @@ extends Node3D
 ## Faceted low-poly in the house style: LowPoly soups, MonsterMaterial (ink outline, amber rim, vertex alpha 0.5 = glow).
 ## No randomness beyond the soups' own seeded paint jitter.
 
-const MOUTH_HALF := 2.598      ## 1.5 * sqrt(3): half the notch's mouth on the room's wall line
 const CAR_HALF := 1.732        ## sqrt(3): half the notch's back edge = the car's inner half width
 const CAR_DEPTH := 1.5         ## one hex row
 const JAMB_OUT := 2.75         ## the jambs reach a little past the mouth corners (hide the hex wall's corner)
@@ -49,7 +48,6 @@ const RUST := Color(0.50, 0.26, 0.12)
 const BRASS := Color(0.95, 0.73, 0.33)
 const BRASS_DK := Color(0.60, 0.42, 0.15)
 const MARBLE_K := Color(0.12, 0.11, 0.135)
-const MARBLE_V := Color(0.78, 0.72, 0.62)
 const WOOD := Color(0.42, 0.22, 0.11)
 const WOOD_DK := Color(0.24, 0.12, 0.06)
 const CARPET := Color(0.46, 0.07, 0.12)

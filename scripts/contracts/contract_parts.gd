@@ -29,20 +29,8 @@ static func script_of(path: String) -> GDScript:
 	return s
 
 
-static func has_hellgate() -> bool:
-	return script_of(HELLGATE) != null
 
 
-static func has_employee() -> bool:
-	return script_of(EMPLOYEE) != null
-
-
-static func has_prop() -> bool:
-	return script_of(PRICED_PROP) != null
-
-
-static func has_ticker() -> bool:
-	return script_of(DAMAGE_TICKER) != null
 
 
 ## Hellgate.spawn(cell, {difficulty, depth, origin, pest}). Null if the part is missing.

@@ -230,15 +230,6 @@ func delay_of(seat: int) -> float:
 	return pp.interp.delay if pp != null else NetInterp.DELAY
 
 
-## Where a hero's player is aiming: the streamed aim point for a puppet, the controller's for the local hero.
-func aim_of(seat: int) -> Vector3:
-	var pp := puppet(seat)
-	if pp != null and pp.shown != null:
-		return pp.shown.aim_point()
-	if _live.has(seat):
-		return _aim_of(_live[seat] as Track)
-	return Vector3.INF
-
 
 ## Where the hero in a puppet seat most likely is NOW (host, M3a: monsters aim here): the newest sample received,
 ## carried along its velocity for as long as that sample is old (at most LEAD_MAX). Vector3.INF without a sample.
@@ -253,15 +244,6 @@ func lead_point(seat: int) -> Vector3:
 	return Vector3(newest.pos.x + newest.vel.x * age, pp.hero.global_position.y, newest.pos.z + newest.vel.y * age)
 
 
-## Bytes a snapshot packet took, per second, since begin() (what the plan's 3 KB/s budget is measured on).
-func out_rate() -> float:
-	var span := maxf(_now() - float(stats["since"]), 0.001)
-	return float(stats["out_bytes"]) / span
-
-
-func in_rate() -> float:
-	var span := maxf(_now() - float(stats["since"]), 0.001)
-	return float(stats["in_bytes"]) / span
 
 
 # --- Sampling the heroes this machine owns --------------------------------------------------------------

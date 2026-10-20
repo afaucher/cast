@@ -83,10 +83,6 @@ func total_time() -> float:
 	return float(count - 1) * interval + RISE_TIME + RICOCHET_TIME + maxf(BURST_LIFE, SMOKE_LIFE)
 
 
-## When rocket i bursts (seconds after the launch).
-func burst_time(i: int) -> float:
-	return float(i) * interval + RISE_TIME + RICOCHET_TIME
-
 
 func _process(_delta: float) -> void:
 	if frozen:

@@ -318,9 +318,6 @@ func clock() -> float:
 	return _clock_t
 
 
-func is_voice_active() -> bool:
-	return _voice_active
-
 
 ## The player is speaking right now (the gate's raw voice span, no hangover; with the gate off, the recognizer's tracker).
 func is_speaking() -> bool:

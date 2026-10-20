@@ -346,15 +346,6 @@ class NeonFlicker extends Node:
 			mats[i].set_shader_parameter("glow_gain", g)
 
 
-## Slow turntable spin of the parent.
-class Spinner extends Node:
-	var speed_deg := 6.0
-
-	func _process(delta: float) -> void:
-		var p := get_parent() as Node3D
-		if p != null:
-			p.rotation.y += deg_to_rad(speed_deg) * delta
-
 
 ## A gentle bob (a hanging sign, a cable).
 class Swing extends Node:

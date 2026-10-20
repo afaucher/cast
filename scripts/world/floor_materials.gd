@@ -34,7 +34,6 @@ const F_CORR_CONCRETE := 12
 const F_CORR_STONE := 13
 
 # Wall ids (bits 8-15 of mat_id).
-const W_SLATE := 0
 const W_CONCRETE := 1
 const W_STONE := 2
 const W_PANELLING := 3

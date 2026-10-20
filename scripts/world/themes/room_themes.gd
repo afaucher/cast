@@ -190,6 +190,3 @@ static func _light_for(room: ThemeCtx.RoomInfo, def: Dictionary) -> Dictionary:
 	}
 
 
-## Unit facing vector of a placement (works for decor and priced entries alike).
-static func facing_of(entry: Dictionary) -> Vector2:
-	return ThemeGeo.facing(float(entry["yaw"]))

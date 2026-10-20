@@ -22,7 +22,6 @@ extends Node3D
 
 const LIVE_SLOTS := 700
 const FADE_STEP := 0.1            ## seconds between fade updates
-const GRID_COLS := GrimeAtlas.COLS
 
 const SHADER := """
 shader_type spatial;

@@ -4,12 +4,10 @@ extends Node3D
 ## One flat disc drawn by a shader, no textures: deep maroon wool with a woven diamond border and cream pinstripes,
 ## triangle-faceted tone and wear (so it reads low-poly, not photographic), sun-faded and threadbare patches that
 ## are worst where the crew walks, two tyre tracks that swing wide in front of the van and run in under it, a few oil stains, a ragged edge with
-## tassels. `set_scorch()` burns three black patches into it (the morning after a bad job).
+## tassels.
 ## Lit (banded like the toon look) so the garage lights, the grate spot and the night grade all land on it.
 ##
 ##   var rug := VanRug.new(4.4)
-##   rug.set_van_yaw(-10.0)        # the tracks run the way the van points
-##   rug.set_scorch(1.0)           # optional: burn marks
 
 const LIFT := 0.014                  ## above the hex top (the chalk circle sits at 0.035)
 
@@ -220,11 +218,6 @@ func _init(r: float = 4.4) -> void:
 	add_child(disc)
 
 
-## The tyre tracks run the way the van points: `yaw_deg` is the van holder's rotation about Y (its nose is +X before it).
-func set_van_yaw(yaw_deg: float) -> void:
-	var a := deg_to_rad(yaw_deg)
-	mat.set_shader_parameter("track_dir", Vector2(cos(a), -sin(a)))
-
 
 ## false for a rug no van parks on (the ritual rooms' summoning circle): no tyre tracks, no oil.
 func set_garage(on: bool) -> void:
@@ -236,6 +229,3 @@ func set_tone(k: float) -> void:
 	mat.set_shader_parameter("brightness", k)
 
 
-## 0 = clean, 1 = three burn marks.
-func set_scorch(k: float) -> void:
-	mat.set_shader_parameter("scorch", clampf(k, 0.0, 1.0))

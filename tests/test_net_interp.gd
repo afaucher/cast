@@ -80,12 +80,6 @@ func _truth(t: float) -> Vector2:
 	return p
 
 
-func _truth_vel(t: float) -> Vector2:
-	for leg: Array in _legs:
-		if t >= float(leg[0]) and t < float(leg[1]):
-			return (leg[2] as Vector2) * float(leg[3])
-	return Vector2.ZERO
-
 
 # --- The simulated stream --------------------------------------------------------------------------------
 

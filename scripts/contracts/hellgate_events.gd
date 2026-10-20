@@ -47,9 +47,6 @@ static func hub() -> Hub:
 	return h
 
 
-static func on_gate_closed(callback: Callable) -> void:
-	hub().gate_closed.connect(callback)
-
 
 static func on_origin_closed(callback: Callable) -> void:
 	hub().origin_closed.connect(callback)

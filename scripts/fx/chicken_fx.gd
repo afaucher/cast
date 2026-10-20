@@ -14,7 +14,6 @@ extends RefCounted
 const WHITE := Color(0.98, 0.97, 0.93)
 const CREAM := Color(0.92, 0.88, 0.78)
 const RUST := Color(0.85, 0.36, 0.24)
-const ZERO_COLOR := Color(0.92, 0.92, 0.9)
 
 static var _feather_mesh: Mesh = null
 

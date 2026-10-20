@@ -52,7 +52,6 @@ const EMPLOYEE_CLEAR := 2
 const GATE_CLEAR := 3              ## ThemeCtx.GATE_CLEAR / ORIGIN_GATE_CLEAR
 const ORIGIN_GATE_CLEAR := 4
 const MAX_CENTER_DIST := 7.0       ## world units from the room's centre to the pool's
-const GANTRY_SPAN := 6.0           ## leg to leg (the cells two rows over on each side of the middle basin cell)
 const GANTRY_HEIGHT := 3.3
 const LEG_FOOT := Vector2(0.42, 1.75)   ## a gantry leg's footprint: across the beam x along the pool's axis
 ## A moat room where no ring fits (a ring needs a clear area 7-11 cells across: crates, platforms, doors or a hellgate get

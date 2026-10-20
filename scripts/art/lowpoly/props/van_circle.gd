@@ -389,14 +389,6 @@ func sparks(on: bool) -> void:
 	spark_fx.emitting = on
 
 
-## The chalk's look. The defaults are the in-game one (faint, broken, smudged); the garage lays the circle on a rug
-## and wants it bold: more alpha, a fatter line, fewer gaps (`solid` 0..1), and a brighter chalk colour if given.
-func set_chalk_style(alpha: float, width: float = 1.0, solid: float = 0.0, color: Color = Color(0.90, 0.86, 0.74)) -> void:
-	floor_mat.set_shader_parameter("chalk_alpha", clampf(alpha, 0.0, 1.0))
-	floor_mat.set_shader_parameter("chalk_width", maxf(width, 0.1))
-	floor_mat.set_shader_parameter("chalk_solid", clampf(solid, 0.0, 1.0))
-	floor_mat.set_shader_parameter("chalk_col", Vector3(color.r, color.g, color.b))
-
 
 ## The final state: a faint chalk mark and nothing else.
 func settle() -> void:

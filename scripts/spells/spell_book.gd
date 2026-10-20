@@ -73,7 +73,6 @@ const HEAL_RADIUS := 3.0
 const HEAL_BASE := 35.0
 # --- Fireball
 const FIREBALL_SPEED := 11.0
-const FIREBALL_RANGE := 16.0
 const FIREBALL_DAMAGE := 40.0
 const FIREBALL_RADIUS_BASE := 1.4
 const FIREBALL_RADIUS_POWER := 1.0

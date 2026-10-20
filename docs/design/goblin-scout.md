@@ -383,4 +383,4 @@ propagation is `MonsterSenses.alarm` (`monster-awareness.md`, "Step 2 as built")
   starts the "!". He never walks on ALERT himself.
 - **He patrols whether or not the crew is near** (one or two walkers a floor cost nothing next to the 28-unit limit).
 - **Sound cues are not built**; they would hook on `scout_phase_changed` (the squeak on TELL, the fizz on LIGHT/FUSE),
-  `fireworks_launched` (whistle, ricochet tink, bangs: `FireworksFx.burst_time`) and `fireworks_dud` (pfft).
+  `fireworks_launched` (whistle, ricochet tink, a recorded whistle and bang per rocket: Sfx "firework") and `fireworks_dud` (pfft).

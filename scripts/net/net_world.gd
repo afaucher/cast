@@ -233,9 +233,6 @@ func _show(id: int, n: Actor, kind: int) -> void:
 
 # --- Asking ----------------------------------------------------------------------------------------------
 
-func is_shown(id: int) -> bool:
-	return _shown.has(id)
-
 
 func shown_ids() -> Array[int]:
 	var out: Array[int] = []

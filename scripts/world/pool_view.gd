@@ -230,14 +230,6 @@ static func foam_mesh(outline: Array, y: float, col: Color, hole: Array = []) ->
 	return _mesh(v, nn, cc)
 
 
-## A flat strip between two polygons of the same corner count (inner and outer offsets), at height y, facing up.
-static func strip_mesh(inner: PackedVector2Array, outer: PackedVector2Array, y: float, col: Color) -> ArrayMesh:
-	var v := PackedVector3Array()
-	var nn := PackedVector3Array()
-	var cc := PackedColorArray()
-	_strip(v, nn, cc, inner, outer, y, col)
-	return _mesh(v, nn, cc)
-
 
 static func _strip(v: PackedVector3Array, nn: PackedVector3Array, cc: PackedColorArray, inner: PackedVector2Array,
 		outer: PackedVector2Array, y: float, col: Color) -> void:

@@ -72,10 +72,6 @@ func take_teleport() -> bool:
 	return t
 
 
-## The delay the stream wants right now.
-func target_delay() -> float:
-	return _target
-
 
 func _compute_target() -> float:
 	if _lags.is_empty():

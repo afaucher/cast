@@ -88,9 +88,6 @@ func _add(kind: String, serial: int, rng: RandomNumberGenerator, away: Vector2, 
 	bits.append(b)
 
 
-func bit_count() -> int:
-	return bits.size()
-
 
 func count_of(kind: String) -> int:
 	var n := 0

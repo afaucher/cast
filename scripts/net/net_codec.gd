@@ -52,8 +52,6 @@ const HERO_FIELDS := {
 	"held_slot": "head",
 	"_draw_start": "draw",
 }
-## Carried, but not vars of the hero.
-const EXTRA_CARRIERS := ["position", "velocity", "aim", "teleport"]
 
 
 # --- Packing -------------------------------------------------------------------------------------------

@@ -33,7 +33,6 @@ var arrival: VanArrival
 var crew: Array[Hero] = []
 var _plan: Dictionary = {}
 var _cycle := 0.0
-var _shot_done := false
 
 
 func _ready() -> void:

@@ -39,7 +39,6 @@ var _shot_path := ""
 var _autocast := ""
 var _shot_after := 0.5
 var _frame := 0
-var _shot_frame := SHOT_FRAME
 var _started := false
 var _dummies: Array[TrainingDummy] = []
 
