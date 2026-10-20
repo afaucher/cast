@@ -36,14 +36,16 @@ const WAIST_RATIO := 0.45               ## the narrowest cross-section under thi
 const WAIST_MIN_LENGTH := 6             ## ... in a space at least this many steps long: a neck between lobes
 const COVERAGE_MIN := 0.6               ## seen from just outside its worst doorway, less than this share
 const VIS_ONE_SIDED_MAX := 0.03         ## ASSERTED: one-sided pairs per map, at most this share of the sampled ones
+const HALL_REACH_CUT := 26.0            ## ASSERTED with long halls cut: no hall space runs farther than this from a doorway
 
 
 func setup() -> void:
 	timeout_sec = 900.0
-	# as merged, then with RoomFog's prototype that cuts long halls into segments (runtime only)
+	# halls whole (as before 2026-10-20), then cut into segments (RoomFog.split_long_halls, the game since: "Turn it on")
+	var was := RoomFog.split_long_halls
 	for split: bool in [false, true]:
 		RoomFog.split_long_halls = split
-		var mode := "split halls" if split else "as merged"
+		var mode := "cut halls" if split else "halls whole"
 		print("FOG MODE | ", mode)
 		var rows: Array = []
 		for s in RUN_SEEDS:
@@ -53,8 +55,146 @@ func setup() -> void:
 		for id in range(1, LavaCave.COUNT + 1):
 			rows.append_array(_audit("cave %d" % id, LavaCave.build_map(id), _cave_skip(id)))
 		_summary(rows, mode)
-	RoomFog.split_long_halls = false
+		if split:
+			print("FOG CUTS | %d cuts | nearest real doorway cell %d steps | no-flicker spots %d (%d differ) | walks %d, revealed up to %d segment(s) ahead, %d looks 3+ ahead" % [
+					_cuts["cuts"], _cuts["clear_min"], _cuts["spots"], _cuts["flicker"], _cuts["walks"], _cuts["lead"], _cuts["far"]])
+	RoomFog.split_long_halls = was
 	finish()
+
+
+## LONG HALLS totals over every map (cut mode).
+var _cuts := {"cuts": 0, "clear_min": 99, "spots": 0, "flicker": 0, "walks": 0, "lead": 0, "far": 0}
+
+
+## LONG HALLS, asserted on every map: each cut sits on the floor between its two segments, at least 2 steps from any real
+## doorway's cells (a cut never draws over a doorway or its door); a hero on a cut sees the same from either side (no
+## flicker; nudged 0.01 each way: a bigger move can carry some other doorway across DOOR_SIGHT, as any step can); walking a cut hall end to end, the next segment always shows, and nothing 3 or more segments ahead is seen
+## unless through a room (a room's doorway into a farther segment).
+func _audit_cuts(label: String, m: HexMap, fog: RoomFog) -> void:
+	var real: Array[Vector2i] = []
+	for dw in fog.doorways:
+		if fog.is_cut(int(dw["id"])):
+			continue
+		real.append_array(dw["door_cells"] as Array[Vector2i])
+		real.append_array(dw["mouth_cells"] as Array[Vector2i])
+		for c: Vector2i in dw.get("band", []):
+			real.append(c)
+		if dw.has("cell"):
+			real.append(dw["cell"])
+	for dw in fog.doorways:
+		var id := int(dw["id"])
+		if not fog.is_cut(id):
+			continue
+		_cuts["cuts"] = int(_cuts["cuts"]) + 1
+		var ri := int(dw["ri"])
+		var hi := int(dw["hi"])
+		var ok := true
+		for c: Vector2i in dw["door_cells"]:
+			ok = ok and fog.space_of_cell(c) == ri
+		for c: Vector2i in dw["mouth_cells"]:
+			ok = ok and fog.space_of_cell(c) == hi
+		var mid: Vector3 = dw["mid"]
+		var g := m.ground_height(mid)
+		check(ok and fog.hall_group[ri] == fog.hall_group[hi], "%s cut %d (%s|%s) joins two segments of one hall" % [label, id, fog.tags[ri], fog.tags[hi]])
+		check(not is_nan(g) and absf(g - mid.y) < 0.6, "%s cut %d on the floor: mid %s" % [label, id, mid.snapped(Vector3.ONE * 0.01)])
+		var clear := 99
+		for c: Vector2i in (dw["door_cells"] as Array[Vector2i]) + (dw["mouth_cells"] as Array[Vector2i]):
+			for r in real:
+				clear = mini(clear, Hex.distance(c, r))
+		_cuts["clear_min"] = mini(int(_cuts["clear_min"]), clear)
+		check(clear >= 2, "%s cut %d keeps off real doorways (%d steps)" % [label, id, clear])
+		# no flicker
+		for a: Vector2i in dw["door_cells"]:
+			for d in Hex.DIRS:
+				var b: Vector2i = a + d
+				if not (dw["mouth_cells"] as Array).has(b) or not m.is_walkable_cell(a) or not m.is_walkable_cell(b):
+					continue
+				var pa := top(m, a)
+				var pb := top(m, b)
+				var step := (pb - pa).normalized() * 0.01
+				var views: Array = []
+				for p: Vector3 in [(pa + pb) * 0.5 - step, (pa + pb) * 0.5 + step]:
+					fog.seen.fill(0)
+					fog.update([p])
+					views.append(fog.view.duplicate())
+				_cuts["spots"] = int(_cuts["spots"]) + 1
+				if views[0] != views[1]:
+					_cuts["flicker"] = int(_cuts["flicker"]) + 1
+					check(false, "%s cut %d between %s and %s: the same in view either side" % [label, id, a, b])
+	# walks, one per cut hall
+	var groups := {}
+	for s in fog.space_count():
+		if fog.segmented[s] == 1:
+			groups[fog.hall_group[s]] = true
+	for gid: int in groups:
+		var segs := fog.hall_segments(gid)
+		var corr: Array[Vector2i] = []
+		for c: Vector2i in fog.cell_space:
+			if segs.has(fog.space_of_cell(c)) and m.cells[c].tag == "corridor" and standable_cell(m, c):
+				corr.append(c)
+		if corr.size() < 2:
+			continue
+		corr.sort()
+		var e0 := RoomFog._walk_far(corr, corr[0])[0] as Vector2i
+		var e1 := RoomFog._walk_far(corr, e0)[0] as Vector2i
+		var path := _walk_path(corr, e0, e1)
+		var rank := {}
+		for c in path:
+			var s := fog.space_of_cell(c)
+			if segs.has(s) and not rank.has(s):
+				rank[s] = rank.size()
+		_cuts["walks"] = int(_cuts["walks"]) + 1
+		fog.seen.fill(0)
+		fog.state.fill(0)
+		for c in path:
+			fog.update([top(m, c)])
+			var k := int(rank.get(fog.space_of_cell(c), -1))
+			if k < 0:
+				continue
+			for s: int in rank:
+				var ahead := int(rank[s]) - k
+				if ahead == 1:
+					check(fog.state_of(s) >= RoomFog.NEXT, "%s walk down %s at %s: the next segment shows" % [label, fog.tags[gid], c])
+				if ahead < 1 or fog.state_of(s) < RoomFog.SEEN:
+					continue
+				_cuts["lead"] = maxi(int(_cuts["lead"]), ahead)
+				if ahead >= 3:
+					var by_room := false
+					for l: Array in fog.links[s]:
+						by_room = by_room or (not fog.is_hall[int(l[0])] and fog.state_of(int(l[0])) >= RoomFog.SEEN)
+					_cuts["far"] = int(_cuts["far"]) + 1
+					check(by_room, "%s walk down %s at %s: segment %s, %d ahead, seen only through a room" % [label, fog.tags[gid], c, fog.tags[s], ahead])
+
+
+static func standable_cell(m: HexMap, c: Vector2i) -> bool:
+	var cell: HexMap.Cell = m.cells[c]
+	return m.is_walkable_cell(c) and cell.tag != "rim" and cell.tag != "lava" and cell.level != LavaCave.LAVA_BED
+
+
+## The shortest walk from `a` to `b` over `cells`.
+static func _walk_path(cells: Array[Vector2i], a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var inside := {}
+	for c in cells:
+		inside[c] = true
+	var parent := {a: a}
+	var queue: Array[Vector2i] = [a]
+	var i := 0
+	while i < queue.size():
+		var cur := queue[i]
+		i += 1
+		if cur == b:
+			break
+		for d in Hex.DIRS:
+			var n: Vector2i = cur + d
+			if inside.has(n) and not parent.has(n):
+				parent[n] = cur
+				queue.append(n)
+	if not parent.has(b):
+		return [a]
+	var out: Array[Vector2i] = [b]
+	while out[0] != a:
+		out.push_front(parent[out[0]])
+	return out
 
 
 ## A lava cave's cells that are no standable part of a space: the archers' isles (no path), the lava, the rim.
@@ -130,7 +270,7 @@ func _audit(label: String, m: HexMap, skip: Dictionary) -> Array:
 	# 3. doorways at their openings
 	for dw in fog.doorways:
 		if dw.get("split", false):
-			continue   # (the prototype's doorways between segments of one hall)
+			continue   # (a cut between segments of one long hall: _audit_cuts)
 		var mid: Vector3 = dw["mid"]
 		var g := m.ground_height(mid)
 		var near_corr := false
@@ -154,6 +294,10 @@ func _audit(label: String, m: HexMap, skip: Dictionary) -> Array:
 	for r: Array in rows:
 		if str(r[1]).begins_with("room:"):
 			check(not (r[2] as Array).has("WAIST"), "%s: %s has no neck (a room is not two lobes in one space): waist %d of %d" % [label, r[1], r[5], r[6]])
+		elif RoomFog.split_long_halls:
+			check(float(r[4]) <= HALL_REACH_CUT, "%s: %s, cut, runs at most %.0f from a doorway (%.1f)" % [label, r[1], HALL_REACH_CUT, r[4]])
+	if RoomFog.split_long_halls:
+		_audit_cuts(label, m, fog)
 	return rows
 
 
@@ -350,6 +494,8 @@ static func _why_blind(m: HexMap, fog: RoomFog, c: Vector2i, other: int) -> Stri
 	var dws := fog.doorways_between(here, other)
 	if dws.is_empty():
 		return "no direct doorway"
+	if fog.is_cut(dws[0]):
+		return "a cut of a long hall hidden from it"
 	for dw_id in dws:
 		var mid: Vector3 = fog.doorways[dw_id]["mid"]
 		if Vector2(mid.x - p.x, mid.z - p.z).length() <= RoomFog.DOOR_SIGHT:

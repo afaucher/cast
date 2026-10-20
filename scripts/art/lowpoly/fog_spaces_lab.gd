@@ -2,10 +2,20 @@ extends Node3D
 ## Fog SPACES lab (docs/design/fog-spaces-audit.md): top-down maps of how RoomFog / Doorways cut a floor into fog spaces.
 ## Look-dev only (no gameplay state). One run renders a list of maps:
 ##
-##   godot --path . --resolution 1920x1080 -- --scene res://scenes/fog_spaces_lab.tscn --maps s3f1,s7f2,c1 --out <dir> [--split]
+##   godot --path . --resolution 1920x1080 -- --scene res://scenes/fog_spaces_lab.tscn --maps s3f1,s7f2,c1 --out <dir> [--whole]
 ##
 ## sSfF: contract seed S (ContractBoard.run_for_seed), floor F (DungeonGen.for_run); cN: lava cave N (LavaCave).
-## --split: RoomFog's prototype that cuts long halls into segments (RoomFog.split_long_halls); files get "_split".
+## Long halls are cut into segments as in the game (RoomFog.split_long_halls); --whole: as before 2026-10-20, every hall
+## one space (files get "_whole").
+##
+## IN THE GAME (--game-shot): the real game (game.tscn, its game flags as given), then the crew walked partway down the
+## floor's longest cut hall, screenshots into --out: game_walk.png (the game camera on the player), game_ahead.png (the
+## crew and the silhouette ahead in one frame), game_cut.png (close up on the first boundary ahead between two segments
+## that show differently). With --whole the same spots, halls whole
+## ("_whole"). The walk stops at --walk-share of the hall (default 0.45).
+##
+##   godot --path . --resolution 1920x1080 -- --scene res://scenes/fog_spaces_lab.tscn --game-shot --out <dir>
+##       --seed 3 --floor 1 --spells heal,corn --no-mic --no-van-intro [--whole]
 ## Each cell is a flat hex in its space's colour (rooms saturated, halls pale, lighter for higher floor; walls dark; a
 ## lava cave's lava darker, its rim grey), white lines between spaces, thin dark lines where the floor steps inside a
 ## space, a white dot on a cell the generator left untagged (it took the nearest space), a yellow ring on each doorway
@@ -19,7 +29,16 @@ func _ready() -> void:
 	var a := OS.get_cmdline_user_args()
 	var maps := _arg(a, "--maps", "s3f1").split(",")
 	var out := _arg(a, "--out", "user://")
-	RoomFog.split_long_halls = a.has("--split")
+	RoomFog.split_long_halls = not a.has("--whole")
+	if a.has("--game-shot"):
+		var d := GameShot.new()
+		d.name = "FogGameShot"
+		d.out = out
+		d.whole = a.has("--whole")
+		d.share = float(_arg(a, "--walk-share", "0.45"))
+		get_tree().root.add_child.call_deferred(d)
+		get_tree().change_scene_to_file.call_deferred("res://scenes/game.tscn")
+		return
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.near = 0.1
@@ -30,7 +49,7 @@ func _ready() -> void:
 	env.environment.background_mode = Environment.BG_COLOR
 	env.environment.background_color = Color(0.06, 0.06, 0.07)
 	add_child(env)
-	_render_all(maps, out, a.has("--split"))
+	_render_all(maps, out, not a.has("--whole"))
 
 
 static func _arg(a: PackedStringArray, key: String, fallback: String) -> String:
@@ -56,7 +75,7 @@ func _render_all(maps: PackedStringArray, out: String, split: bool) -> void:
 			m = DungeonGen.for_run(run, int(parts[1]))
 			title = "seed %s floor %s" % [parts[0], parts[1]]
 		var fog := RoomFog.build(m)
-		title += "  |  %d spaces, %d doorways%s" % [fog.space_count(), fog.doorways.size(), "  |  long halls cut into segments (prototype)" if split else ""]
+		title += "  |  %d spaces, %d doorways%s" % [fog.space_count(), fog.doorways.size(), "  |  long halls cut into segments" if split else "  |  halls whole"]
 		if _holder != null:
 			_holder.queue_free()
 		_holder = Node3D.new()
@@ -69,7 +88,7 @@ func _render_all(maps: PackedStringArray, out: String, split: bool) -> void:
 		for i in 6:
 			await get_tree().process_frame
 		await RenderingServer.frame_post_draw
-		var path := "%s/spaces_%s%s.png" % [out, spec, "_split" if split else ""]
+		var path := "%s/spaces_%s%s.png" % [out, spec, "" if split else "_whole"]
 		var img := get_viewport().get_texture().get_image()
 		print("shot ", path, " ", img.save_png(path))
 	get_tree().quit()
@@ -210,3 +229,134 @@ static func _dot(st: SurfaceTool, at: Vector3, r: float, col: Color) -> void:
 		st.add_vertex(at + Hex.corner((i + 1) % 6) * r)
 		st.set_color(col)
 		st.add_vertex(at + Hex.corner(i) * r)
+
+
+## --game-shot: rides along with the real game (a node on the root, so it outlives the scene change), walks the crew down
+## the floor's longest cut hall and takes the screenshots. Look-dev only: it moves the crew the way game.gd's own dev
+## teleports do (_teleport_crew) and points the camera rig at a marker for the close-up.
+class GameShot extends Node:
+	var out := "user://"
+	var whole := false
+	var share := 0.45
+
+	func _ready() -> void:
+		var game: Node = null
+		for i in 1200:
+			await get_tree().process_frame
+			game = get_tree().current_scene
+			if game != null and game.get("fog_view") != null and game.get("map") != null and game.get("rig") != null:
+				break
+			game = null
+		if game == null:
+			push_error("fog game shot: the game never set up its fog")
+			get_tree().quit(1)
+			return
+		await get_tree().create_timer(7.0).timeout   # (past the floor's dispatch banner)
+		var map: HexMap = game.get("map")
+		# the hall and the walk from the cut plan (built the same either way, so --whole stands on the same spots)
+		var keep := RoomFog.split_long_halls
+		RoomFog.split_long_halls = true
+		var plan := RoomFog.build(map)
+		RoomFog.split_long_halls = keep
+		var longest := -1
+		for s in plan.space_count():
+			if plan.segmented[s] == 1 and (longest < 0 or plan.hall_segments(s).size() > plan.hall_segments(longest).size()):
+				longest = s
+		if longest < 0:
+			push_error("fog game shot: no cut hall on this floor")
+			get_tree().quit(1)
+			return
+		var segs := plan.hall_segments(longest)
+		var corr: Array[Vector2i] = []
+		for c: Vector2i in plan.cell_space:
+			if segs.has(plan.space_of_cell(c)) and map.cells[c].tag == "corridor" and map.is_walkable_cell(c):
+				corr.append(c)
+		corr.sort()
+		var e0 := RoomFog._walk_far(corr, corr[0])[0] as Vector2i
+		var e1 := RoomFog._walk_far(corr, e0)[0] as Vector2i
+		var path := _path(corr, e0, e1)
+		var stop := clampi(int(float(path.size()) * share), 1, path.size() - 1)
+		for i in range(0, stop + 1, 2):
+			game.call("_teleport_crew", path[i])
+			await get_tree().create_timer(0.12).timeout
+		game.call("_teleport_crew", path[stop])
+		await get_tree().create_timer(1.2).timeout
+		var tag := "_whole" if whole else ""
+		var rig: CameraRig = game.get("rig")
+		await _shot("%s/game_walk%s.png" % [out, tag])
+		# the cut plan walked the same way: the boundaries ahead of the crew where the state changes
+		for i in range(0, stop + 1, 2):
+			plan.update([_at(map, path[i])])
+		plan.update([_at(map, path[stop])])
+		var ahead: Array = []          # [path index, state before, state after]
+		for i in range(stop, path.size() - 1):
+			var a := plan.space_of_cell(path[i])
+			var b := plan.space_of_cell(path[i + 1])
+			if a != b and plan.state_of(a) != plan.state_of(b):
+				ahead.append([i, plan.state_of(a), plan.state_of(b)])
+		var marker := Marker3D.new()
+		game.add_child(marker)
+		# the crew and the silhouette ahead in one frame: the camera between them, zoomed out to fit
+		var crew_at := _at(map, path[stop])
+		var silhouette := crew_at
+		for e: Array in ahead:
+			if int(e[2]) == RoomFog.NEXT:
+				silhouette = (_at(map, path[int(e[0])]) + _at(map, path[int(e[0]) + 1])) * 0.5
+				break
+		marker.global_position = crew_at.lerp(silhouette, 0.5)
+		rig.target = marker
+		var fit := clampf(crew_at.distance_to(silhouette) * 0.9 + 10.0, 24.0, 36.0)
+		rig.set("_zoom_target", fit)
+		rig.camera.size = fit
+		rig.snap()
+		await get_tree().create_timer(0.6).timeout
+		await _shot("%s/game_ahead%s.png" % [out, tag])
+		# close up on the first boundary ahead with no monster standing on it
+		var target := Vector3.INF
+		for e: Array in ahead:
+			var p := (_at(map, path[int(e[0])]) + _at(map, path[int(e[0]) + 1])) * 0.5
+			var clear := true
+			for mn in get_tree().get_nodes_in_group("monsters"):
+				if mn is Node3D and Vector2((mn as Node3D).global_position.x - p.x, (mn as Node3D).global_position.z - p.z).length() < 3.0:
+					clear = false
+			if clear:
+				target = p
+				break
+		if target != Vector3.INF:
+			marker.global_position = target
+			rig.set("_zoom_target", 14.0)
+			rig.camera.size = 14.0
+			rig.snap()
+			await get_tree().create_timer(0.8).timeout
+			await _shot("%s/game_cut%s.png" % [out, tag])
+		print("fog game shot: %s, %d segments, crew at %s (step %d of %d), silhouette at %s, cut close-up at %s, boundaries ahead %s" % [
+				plan.tags[longest], segs.size(), path[stop], stop, path.size() - 1, silhouette, target, ahead])
+		get_tree().quit()
+
+	static func _at(map: HexMap, c: Vector2i) -> Vector3:
+		return Hex.to_world(c, float(map.cells[c].level))
+
+	func _shot(path: String) -> void:
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		print("shot ", path, " ", img.save_png(path))
+
+	static func _path(cells: Array[Vector2i], a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+		var inside := {}
+		for c in cells:
+			inside[c] = true
+		var parent := {a: a}
+		var queue: Array[Vector2i] = [a]
+		var i := 0
+		while i < queue.size():
+			var cur := queue[i]
+			i += 1
+			for d in Hex.DIRS:
+				var n: Vector2i = cur + d
+				if inside.has(n) and not parent.has(n):
+					parent[n] = cur
+					queue.append(n)
+		var out_path: Array[Vector2i] = [b]
+		while out_path[0] != a:
+			out_path.push_front(parent[out_path[0]])
+		return out_path
