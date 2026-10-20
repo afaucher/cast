@@ -9,13 +9,64 @@ extends "res://scripts/app/game.gd"
 ##   --to-gate --to-theme --to-corridor --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
 ##   --shark-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
+## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|nip|wire (the sewer slice, solo only:
+## scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built").
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
 var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
+var _sewer_layout: Dictionary = {}       ## --sewer: the layout being played (SewerLayouts.build)
+var _sewer_view: SewerView = null         ## ... its water and look
+var _sewer_staged: Dictionary = {}       ## ... what SewerDev.stage put on it (gators, wires, monsters, scout)
+
+
+func _parse_args() -> void:
+	super()
+	SewerDev.parse(OS.get_cmdline_user_args(), opts)
+
+
+## --sewer N: the sewer layout to build, or 0. Solo only: a shared run never uses it (phase 1 has no network shape).
+func _sewer() -> int:
+	return int(opts.get("sewer", 0)) if not _shared and not _dev_released else 0
+
+
+## The game's floor hook: --sewer swaps the generated floor for the layout's map and plan (before the world is built).
+func _dev_floor() -> void:
+	if _sewer() <= 0:
+		return
+	_sewer_layout = SewerLayouts.build(_sewer())
+	map = _sewer_layout["map"]
+	_plan = SewerLayouts.plan(_sewer_layout, _floor_n(), _run)
+	_dress_sewer.call_deferred()
+
+
+## The sewer's look over the terrain HexMapView just built: the water, foam, kerbs, the channel and the light.
+func _dress_sewer() -> void:
+	if not is_inside_tree() or map == null or _sewer_layout.is_empty():
+		return
+	_sewer_view = SewerView.dress(self, map, get_node_or_null("Terrain") as HexMapView, str(_sewer_layout["look"]), _sewer_layout["flows"])
+	for w: LiveWire in (_sewer_staged.get("wires", []) as Array):
+		w.view = _sewer_view
+
+
+## The sewer's staging (SewerDev.stage), once the plan's props, notes and employee are in the world; its pest-kind
+## monsters count toward the floor's pest objective.
+func _sewer_populate() -> void:
+	if _sewer() <= 0 or _site == null or _sewer_layout.is_empty() or not _sewer_staged.is_empty():
+		return
+	_sewer_staged = SewerDev.stage(_sewer_layout, _site, map, _run.floor_seed(_floor_n()), _sewer_view)
+	var pests := int(_sewer_staged["pests"])
+	_site.pest_spawned += pests
+	var st := _session.state()
+	if not st.is_empty():
+		st["pest_spawned"] = int(st["pest_spawned"]) + pests
+	_log("sewer %d: %s (%s): %d monsters, %d gator, %d live wire" % [_sewer(), _sewer_layout["name"], _sewer_layout["blurb"],
+		(_sewer_staged["monsters"] as Array).size(), (_sewer_staged["gators"] as Array).size(), (_sewer_staged["wires"] as Array).size()], Color(0.55, 0.9, 0.75))
 
 
 func _dev_on_floor_ready() -> void:
+	if _sewer() > 0 and opts.has("sewer_demo"):
+		_sewer_demo(str(opts["sewer_demo"]))
 	if opts.has("tour"):
 		get_tree().create_timer(1.0).timeout.connect(_dev_tour)
 	if opts.has("hazard_demo"):
@@ -720,8 +771,10 @@ func _slay_dev_monsters() -> void:
 			m.die()
 
 
-## Dev flag --spawn-near kind,n: n extra monsters of `kind` on open floor 4-5 cells from the player.
+## Dev flag --spawn-near kind,n: n extra monsters of `kind` on open floor 4-5 cells from the player. (The game calls this
+## hook once the floor's site is spawned: the --sewer staging goes in here too.)
 func _spawn_near() -> void:
+	_sewer_populate()
 	if not opts.has("spawn_near"):
 		return
 	var parts := str(opts["spawn_near"]).split(",")
@@ -827,3 +880,109 @@ func _stage_plateau() -> void:
 	_stage_center = best
 	for n in Hex.range_cells(best, 1):
 		map.get_cell(n).level = base + 5
+
+
+## --sewer-demo overview|nip|wire (screenshots), after --demo-after seconds (1.0):
+##   overview  the crew on the first sewer room's deck, the camera on the layout's middle; the staged monsters hold still
+##   nip       the player steps into the gator's territory in front of it: it watches, gapes (the wind-up) and nips
+##   wire      the crew dry by the first electrical panel, Rebar and two held skeletons wading near where its cable lands;
+##             the player breaks the panel: the cable drops into the water and the shock runs through it
+func _sewer_demo(stage: String) -> void:
+	for ally in allies:
+		var b := ally.get_node_or_null("AllyBrain")
+		if b != null:
+			b.set_physics_process(false)
+	for m: Monster in (_sewer_staged.get("monsters", []) as Array):
+		if is_instance_valid(m):
+			m.aggro_range = 0.0   # (they hold still for the picture)
+	var scout: Monster = _sewer_staged.get("scout")
+	if scout != null and is_instance_valid(scout):
+		scout.set_physics_process(false)
+	match stage:
+		"overview":
+			_teleport_crew(_sewer_layout["crew_at"])
+			_sewer_focus(Vector3(_sewer_layout["view"].x, 0.0, _sewer_layout["view"].y))
+		"nip":
+			await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
+			var gators: Array = _sewer_staged.get("gators", [])
+			if gators.is_empty() or player == null:
+				return
+			var g: Gator = gators[0]
+			var h := g.head()
+			var fwd := Vector3(g.facing.x, 0.0, g.facing.z).normalized()
+			var best := Vector3.INF
+			var best_s := INF
+			for c in Hex.range_cells(Hex.from_world(h), 3):
+				if not map.is_walkable_cell(c):
+					continue
+				var w := Hex.to_world(c)
+				var d := GameWorld.flat_distance(w, h)
+				if d < 1.6 or d > 2.7:
+					continue
+				var to := (w - g.global_position).normalized()
+				var s := absf(d - 2.2) - to.dot(fwd) * 1.5
+				if s < best_s:
+					best_s = s
+					best = w
+			if best == Vector3.INF:
+				return
+			player.global_position = Vector3(best.x, player.global_position.y, best.z)
+			player.snap_to_ground()
+			player.face_point(g.global_position)
+			var k := 0
+			for ally in allies:
+				var away := (best - g.global_position).normalized() * (7.0 + 1.5 * k) + Vector3(-fwd.z, 0.0, fwd.x) * (1.5 - 3.0 * k)
+				var spot := Hex.from_world(g.global_position + away)
+				for c in Hex.range_cells(spot, 3):
+					if map.is_walkable_cell(c) and GameWorld.flat_distance(Hex.to_world(c), h) > Gator.WATCH_R + 1.0:
+						ally.global_position = Hex.to_world(c)
+						ally.snap_to_ground()
+						break
+				k += 1
+			_sewer_focus((best + g.global_position) * 0.5)
+		"wire":
+			var wires: Array = _sewer_staged.get("wires", [])
+			if wires.is_empty() or player == null:
+				return
+			var w: LiveWire = wires[0]
+			var pan := w.panel
+			var dc := w.drop_cell
+			# the player and Gasket on dry floor beside the panel, Rebar wading near the drop, two skeletons in the water
+			var dry: Array[Vector2i] = []
+			var wet: Array[Vector2i] = []
+			for c in Hex.range_cells(dc, 4):
+				if not map.is_walkable_cell(c):
+					continue
+				if map.get_cell(c).pool_mask == HexMap.ALL_KITES and Hex.distance(c, dc) >= 1 and Hex.distance(c, dc) <= 3:
+					wet.append(c)
+				elif map.get_cell(c).pool_mask == 0 and GameWorld.flat_distance(Hex.to_world(c), pan.global_position) <= 5.0:
+					dry.append(c)
+			dry.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return GameWorld.flat_distance(Hex.to_world(a), pan.global_position) > GameWorld.flat_distance(Hex.to_world(b), pan.global_position))
+			if dry.is_empty() or wet.is_empty():
+				return
+			player.global_position = Hex.to_world(dry[0])
+			player.snap_to_ground()
+			player.face_point(pan.global_position)
+			for ally in allies:
+				if ally.display_name == "Rebar":
+					ally.global_position = Hex.to_world(wet[0])
+				else:
+					ally.global_position = Hex.to_world(dry[mini(1, dry.size() - 1)])
+				ally.snap_to_ground()
+			for i in mini(2, wet.size() - 1):
+				var sk := MonsterFactory.spawn("grunt", wet[i + 1])
+				if sk != null:
+					sk.aggro_range = 0.0
+			_sewer_focus(w.drop_point.lerp(player.global_position, 0.35))
+			await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
+			if is_instance_valid(pan) and not pan.dead:
+				pan.apply_damage(5.0, player)   # (the player's arrow, say: the panel breaks, the cable drops)
+
+
+func _sewer_focus(at: Vector3) -> void:
+	var mk := Node3D.new()
+	mk.name = "SewerFocus"
+	GameWorld.root.add_child(mk)
+	mk.global_position = at
+	rig.target = mk
+	rig.snap()

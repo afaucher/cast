@@ -46,6 +46,15 @@ func setup() -> void:
 		_check_pool_caps(pview.mesh_instance.mesh, mask)
 		_check_sides(pview.mesh_instance.mesh, "pool mask %d" % mask)
 		pview.free()
+	# water up to a wall (the sewer, docs/design/sewer-concept.md "Phase 1 as built"): a cut cell with pool kites too
+	for wall in range(1, HexMap.ALL_KITES):
+		var open := HexMap.ALL_KITES & ~wall
+		var low := open & -open   # (its first open kite alone: a rim reaching the wall)
+		for pool: int in [open, low]:
+			var mview := _build(_mixed_cell_map(wall, pool))
+			_check_mixed_caps(mview.mesh_instance.mesh, wall, pool)
+			_check_sides(mview.mesh_instance.mesh, "wall %d pool %d" % [wall, pool])
+			mview.free()
 	for theme in ["pool", "science", "moat"]:
 		for r in [7, 9]:
 			_check_pool_mesh(theme, r)
@@ -145,6 +154,35 @@ func _cap(groups: Dictionary, y: float, area: float, kites: int, ref_sign: int, 
 
 
 # --- pools ----------------------------------------------------------------------------------------------------------------
+
+## One cut cell with water up to its wall (the sewer): wall kites `wall` up to WALL_LV, pool kites `pool` one level under
+## the deck (FLOOR_LV), the rest deck, in a patch of level-0 floor.
+func _mixed_cell_map(wall: int, pool: int) -> HexMap:
+	var m := HexMap.new()
+	for c in Hex.range_cells(Vector2i.ZERO, 2):
+		m.set_cell(c, 0).tag = "room:0"
+	var cell := m.set_cell(Vector2i.ZERO, FLOOR_LV)
+	cell.tag = "room:0"
+	cell.wall_mask = wall
+	cell.wall_top = WALL_LV
+	cell.pool_mask = pool
+	cell.pool_level = FLOOR_LV - 1
+	m.midpoint_walls = true
+	return m
+
+
+## The wall cap over the wall kites, the deck top over the rest of the dry kites, the pool floor over the pool kites: each
+## exact (winding, its own kites, no overlap, area).
+func _check_mixed_caps(mesh: ArrayMesh, wall: int, pool: int) -> void:
+	var groups := _flat_groups(mesh)
+	var deck := HexMap.ALL_KITES & ~wall & ~pool
+	var top2 := HexMapView.TOP_SCALE * HexMapView.TOP_SCALE
+	var ref_sign := _sign_of(groups.get(0.0, []))
+	var tag := "wall %d pool %d" % [wall, pool]
+	_cap(groups, WALL_LV * LH, _bits(wall) * KITE_AREA * top2, wall, ref_sign, tag + " wall cap")
+	_cap(groups, FLOOR_LV * LH, _bits(deck) * KITE_AREA * top2, deck, ref_sign, tag + " deck top")
+	_cap(groups, (FLOOR_LV - 1) * LH, _bits(pool) * KITE_AREA, pool, ref_sign, tag + " pool floor")
+
 
 ## One ring cell (deck at FLOOR_LV, pool kites `mask` one level down) in a patch of level-0 floor.
 func _pool_cell_map(mask: int) -> HexMap:

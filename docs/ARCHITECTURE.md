@@ -354,7 +354,9 @@ moat ring (water between a convex outline and a convex island, its `hole`) into 
 after the themes are dealt): basin cells one level down and ring cells cut along midpoint lines
 (`Cell.pool_mask` / `pool_level`, `HexMap.pools`, `HexMap.water_at`). `HexMapView` draws them in its inset mode and
 `PoolView` (`scripts/world/pool_view.gd`) adds the water, coping and dressing; `Wading` (`scripts/world/wading.gd`) slows
-and soaks whoever stands in the water. See `docs/design/pool-options.md`, "Built".
+and soaks whoever stands in the water. See `docs/design/pool-options.md`, "Built". A cut cell may hold pool kites too
+(water up to a wall: the sewer slice, `--sewer N`, `SewerLayouts` / `SewerView` / `Gator` / `LiveWire`, dev and solo only;
+`docs/design/sewer-concept.md`, "Phase 1 as built").
 
 Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
 To keep that clean:

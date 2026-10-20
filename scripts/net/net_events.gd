@@ -160,6 +160,7 @@ const LATE_JOIN := {
 	"res://scripts/monsters/goblin.gd": "as monster.gd (keyframe, gone ids); his phase and rack: replay of world.scout per scout in the snapshot (NetWorld.scout_states); a volley in the air: skipped (cosmetic)",
 	"res://scripts/monsters/shark.gd": "keyframe (seed-built: position, facing, HP, state); a killed one: gone ids (removed); a charge or a beam under way: skipped (under 1.5 s)",
 	"res://scripts/monsters/jockey.gd": "as monster.gd (keyframe, gone ids); off its shark: replay of world.dismount per gunner in the snapshot (NetWorld.dismount_states)",
+	"res://scripts/monsters/gator.gd": "keyframe (seed-built: position, facing, HP, state), as the shark; a killed one: gone ids (removed); a nip under way: skipped (under a second). Phase 1 is solo (--sewer): phase 2 wires it",
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",

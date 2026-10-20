@@ -1,7 +1,8 @@
 extends RefCounted
-## Sewer models (docs/design/sewer-concept.md): LOOK-DEV FOR THE SEWER LAB ONLY (scenes/sewer_lab.tscn). Nothing in the
-## game builds these: they are not in DecorModels / PropModels, no theme or site places them, so they stay out of the
-## game's kits and the z-fight registry. Same kit as PoolProps (LowPoly soup, MonsterMaterial: ink outline, amber rim,
+## Sewer models (docs/design/sewer-concept.md): look-dev for the sewer labs (scenes/sewer_lab.tscn, sewer2_lab.tscn), and
+## since the sewer slice (phase 1, "Phase 1 as built") partly the game's: the gator (Gator, scripts/monsters/gator.gd), the
+## sump pump and the electrical panel (PropModels), and the decor kit outfall, pipe_bundle, grate, sluice, bars and tool_cart
+## (DecorModels) are built from here and checked by the z-fight registry (ZFightModels); the rest stays lab-only. Same kit as PoolProps (LowPoly soup, MonsterMaterial: ink outline, amber rim,
 ## vertex alpha 0.5 = an emissive face), origin at the base centre, FRONT = +Z. No class_name (the lab preloads it).
 ##
 ##   const SewerProps := preload("res://scripts/art/lowpoly/props/sewer_props.gd")
@@ -269,7 +270,7 @@ static func _pipe_bundle(s: LowPoly.Soup, length: float, col: Color) -> void:
 	for i in int(length / 1.4) + 1:
 		var x := -length * 0.5 + 0.7 + float(i) * 1.4
 		PropModels.box(s, Vector3(0.06, 0.85, 0.06), Vector3(x, 0.8, 0.04), IRON)
-		PropModels.box(s, Vector3(0.06, 0.06, 0.24), Vector3(x, 0.55, 0.12), IRON)
+		PropModels.box(s, Vector3(0.05, 0.06, 0.24), Vector3(x, 0.55, 0.12), IRON)   # (narrower than the upright: no shared side)
 	# a T down to the floor with a valve wheel, at one end
 	var tx := length * 0.5 - 0.5
 	PropModels.rod(s, Vector3(tx, 0.55, 0.18), Vector3(tx, 0.05, 0.18), 0.1, 0.1, 7, col)
@@ -285,7 +286,9 @@ static func _grate(s: LowPoly.Soup, size: float) -> void:
 	for side in 4:
 		var rot := Vector3(0, 90.0 * float(side), 0)
 		var b := Basis.from_euler(rot * PI / 180.0)
-		PropModels.box(s, Vector3(size, 0.05, 0.1), b * Vector3(0, 0.025, h - 0.05), IRON, rot)
+		# (the two cross pieces fit between the long ones and stand a hair lower: no shared faces at the corners)
+		var long := side % 2 == 0
+		PropModels.box(s, Vector3(size if long else size - 0.2, 0.05 if long else 0.046, 0.1), b * Vector3(0, 0.025 if long else 0.023, h - 0.05), IRON, rot)
 	var n := int(size / 0.16)
 	for i in n:
 		var x := -h + 0.12 + float(i) * (size - 0.24) / float(n - 1)

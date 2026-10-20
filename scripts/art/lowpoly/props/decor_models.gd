@@ -33,9 +33,11 @@ const GLYPHS := {
 }
 const PIXEL := 0.085                ## neon sign: world size of one glyph pixel
 const LETTER_GAP := 0.12
-const FLAT_KINDS: Array[String] = ["summoning_circle", "red_carpet", "yoga_mat"]
+const FLAT_KINDS: Array[String] = ["summoning_circle", "red_carpet", "yoga_mat", "grate"]
 ## The pool lab's models (scripts/art/lowpoly/props/pool_props.gd) dress the science room: lab bench, pipe run, hazard sign.
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
+## The sewer's decor kit (scripts/art/lowpoly/props/sewer_props.gd): outfall, pipe bundle, grate, sluice, bars, tool cart.
+const SewerProps := preload("res://scripts/art/lowpoly/props/sewer_props.gd")
 
 const CHALK := Color(0.93, 0.9, 0.82)
 const MAT_COLORS: Array[Color] = [Color(0.2, 0.75, 0.7), Color(0.62, 0.42, 0.92), Color(0.95, 0.5, 0.7), Color(0.95, 0.75, 0.25)]
@@ -96,6 +98,12 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 		"office_chair": _office_chair(s)
 		"rack_cab": _rack_cab(s)
 		"crate_stack": _crate_stack(s)
+		"outfall": SewerProps._outfall(s, float(params.get("radius", 0.6)), float(params.get("drop", 1.0)))
+		"pipe_bundle": SewerProps._pipe_bundle(s, float(params.get("length", 4.0)), params.get("col", SewerProps.RUST))
+		"grate": SewerProps._grate(s, float(params.get("size", 1.6)))
+		"sluice": SewerProps._sluice(s, float(params.get("width", 3.0)), float(params.get("open", 0.45)))
+		"bars": SewerProps._bars(s, float(params.get("width", 2.8)), float(params.get("height", 1.3)))
+		"tool_cart": SewerProps._tool_cart(s)
 		_:
 			PropModels.box(s, Vector3(0.6, 0.6, 0.6), Vector3(0, 0.3, 0), PropModels.GOLD)
 	var mi := MeshInstance3D.new()

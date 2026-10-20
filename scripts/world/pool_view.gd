@@ -82,6 +82,8 @@ func build(map: HexMap) -> void:
 	copings.clear()
 	fins.clear()
 	for rec in map.pools:
+		if bool(rec.get("body", false)):
+			continue   # a sewer's connected water (SewerBody: not a convex pool; SewerView draws it)
 		_build_pool(rec)
 
 
