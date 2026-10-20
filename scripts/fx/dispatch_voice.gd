@@ -64,7 +64,7 @@ static func clear_overrides() -> void:
 
 ## Every banner line the game can show, from the real constants (NoteCopy.DISPATCH, ClientArchetype events, NoteCopy.
 ## ORIGIN_SHUT, NoteCopy.RESCUE_*; no employee names), deduplicated by text: [{"key", "text", "spoken", "kind"}].
-## kind: "incident" (floor 1), "floor2", "floor3", "origin_shut", "rescue_one", "rescue_many".
+## kind: "incident" (floor 1), "floor2", "floor3", "origin_shut", "wipe", "rescue_one", "rescue_many".
 static func all_lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var seen := {}
@@ -85,6 +85,7 @@ static func all_lines() -> Array[Dictionary]:
 			for text in _fills(t, values):
 				_add(out, seen, text, kind)
 	_add(out, seen, NoteCopy.ORIGIN_SHUT, "origin_shut")
+	_add(out, seen, NoteCopy.WIPE, "wipe")
 	for t: String in NoteCopy.RESCUE_ONE:
 		_add(out, seen, t, "rescue_one")
 	for n in RESCUE_COUNTS:

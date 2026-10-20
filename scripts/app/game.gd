@@ -137,7 +137,7 @@ const VAN_USE_DIST := 2.8         ## the player can press E at the van from this
 const DROPOFF_DIST := 2.5         ## a FOLLOWING employee this close (world units) to the van door or the elevator leaves right away
 const OBJECTIVE_INTERVAL := 0.25
 const FOLLOW_EXTRACT_CELLS := 3   ## followers within this many cells of the elevator ride along
-const INCAP_DELAY := 2.2
+const INCAP_DELAY := 4.0
 const JOIN_LICENSE_BEAT := 0.6    ## a joiner sees its "Clocking in..." form this long before the license checkout opens over it
 ## The three crew seats. Seat 1 is the host's hero (the AI allies follow it); solo it is the hero picked on the main menu
 ## (Session.character_id). A human takes the seat with the character id the roster carries; an empty seat is an AI ally
@@ -2613,7 +2613,7 @@ func _check_crew() -> void:
 		if not _ending:
 			_ending = true
 			controller.enabled = false
-			hud.show_center("Crew incapacitated", Color(1.0, 0.4, 0.35))
+			_show_banner(NoteCopy.WIPE, INCAP_DELAY)   # dispatch calls it in (the invoice still says "Crew incapacitated")
 			if _keeps_books():   # (a client: the host ends the job and sends its invoice)
 				get_tree().create_timer(INCAP_DELAY).timeout.connect(func() -> void: _end_contract(ContractSession.END_INCAPACITATED))
 		return

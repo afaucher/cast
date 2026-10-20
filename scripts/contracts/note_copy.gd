@@ -198,6 +198,8 @@ const DISPATCH := {
 
 ## The headset line when the origin gate closes (Game).
 const ORIGIN_SHUT := "The origin gate is shut. The site calms down. The invoice does not."
+## The whole crew is down: dispatch on the headset, not a line of screen text (user, 2026-10-20).
+const WIPE := "Guys? You okay? I'm calling the medics."
 
 ## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
 ## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No

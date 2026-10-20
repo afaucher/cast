@@ -50,7 +50,7 @@ func _check_lines() -> void:
 		keys[key] = l["text"]
 		texts[l["text"]] = true
 		kinds[l["kind"]] = int(kinds.get(l["kind"], 0)) + 1
-	for kind: String in ["incident", "floor2", "floor3", "origin_shut", "rescue_one", "rescue_many"]:
+	for kind: String in ["incident", "floor2", "floor3", "origin_shut", "wipe", "rescue_one", "rescue_many"]:
 		check(int(kinds.get(kind, 0)) > 0, "lines of kind %s exist" % kind)
 	# every source is covered
 	var incidents := 0
