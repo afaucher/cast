@@ -162,7 +162,7 @@ func _check_floor(map: HexMap, run: ContractRun, f: int, plan: SitePlan, catalog
 				"%s: the origin room (%s) gets the story's theme (%s)" % [tag, plan.origin_room, run.story["origin"]])
 		check(plan.rooms_with_theme(plan.theme_of(plan.origin_room)).has(plan.origin_room), "%s: rooms_with_theme finds the origin room" % tag)
 	# --- priced props: still at most 6, themed, standing back to the wall
-	check(plan.props.size() <= 6 and SiteBuilder.MAX_PROPS == 6, "%s: at most 6 priced props (%d)" % [tag, plan.props.size()])
+	check(plan.props.size() <= 6 and PropPlanner.MAX_PROPS == 6, "%s: at most 6 priced props (%d)" % [tag, plan.props.size()])
 	for pr in plan.props:
 		var kind: String = pr["kind"]
 		var preferred := RoomThemes.priced_kinds(plan.theme_of(str(pr["room"])), catalog)

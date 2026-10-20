@@ -122,8 +122,8 @@ func _check_contract(run: ContractRun) -> void:
 						break
 			check(map.get_cell(c).type == HexMap.Tile.FLOOR, "%s: prop on floor" % ftag)
 			check(catalog.has(str(pr["kind"])), "%s: prop kind comes from the catalog" % ftag)
-		check(plan.props.size() <= 6 and SiteBuilder.MAX_PROPS == 6, "%s: at most 6 props a floor (%d)" % [ftag, plan.props.size()])
-		check(SiteBuilder.PROP_SPACING >= 4, "props keep at least 4 apart")
+		check(plan.props.size() <= 6 and PropPlanner.MAX_PROPS == 6, "%s: at most 6 props a floor (%d)" % [ftag, plan.props.size()])
+		check(PropPlanner.PROP_SPACING >= 4, "props keep at least 4 apart")
 		for i in plan.props.size():
 			var pc: Vector2i = plan.props[i]["cell"]
 			var by_wall := false
