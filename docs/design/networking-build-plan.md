@@ -929,7 +929,7 @@ does on arrival); the effect lands at `at` = the cast's host_time + `NetCasts.LE
 the caster's too, through `SpellBook.apply(caster, spec, start)` with `start` = the cast's moment in that machine's
 `GameWorld.time` (a late arrival starts in the past: scheduled effects catch up, as Vines and Damp already did). `ArmorZone`,
 `CornStrike` and `Tentacles` now take `start_time` as a SPAWN parameter like Vines and Damp. `heal` and `coffee` FOLLOW the
-teammate the aim snapped onto (`SpellBook.FOLLOWS`: the effect lands where that teammate's owner has it, rule 3); every other
+teammate the aim snapped onto (the spell def's `FOLLOWS`: the effect lands where that teammate's owner has it, rule 3); every other
 spell lands on the point (a teammate who sidesteps a corn is fine, rule 4). `ch` carries the caster's charges after the spend
 (the `_charges` carrier for casts). Measured (`test_net_m4_casts`): a corn cast by a client lands on all three machines
 2-17 ms after `at + LEAD + DELAY` on each one's own clock (a frame), and 3-13 ms apart in real time; no cast arrived late on

@@ -6,7 +6,7 @@ extends RefCounted
 ##   - SLOW: any actor (heroes, AI allies, employees, monsters alike) walks at SPEED_MULT while its feet are in the water
 ##     (Actor.effective_speed asks speed_mult()). Casting, attacks and weapons are unchanged.
 ##   - WET: an actor in the water is soaked the whole time it is in it, and for the normal damp time after it steps out:
-##     Wet.douse(actor, SpellBook.DAMP_SOAK), the Damp spell's status, refreshed while it wades and once more as it
+##     Wet.douse(actor, DampSpell.DAMP_SOAK), the Damp spell's status, refreshed while it wades and once more as it
 ##     leaves (so it is wet DAMP_SOAK seconds from the moment it leaves). Being soaked puts a fire out and blocks
 ##     ignition (Burning.soak), so wading in is the way to put out a burning hero, and a fireball fizzles on a wader.
 ##   - Going down in water has no consequence of its own.
@@ -57,12 +57,12 @@ static func tick() -> void:
 		if wet:
 			if not was:
 				a.set_meta(META_IN, true)
-			if Net.resolves(a) and Burning.soaked_left(a) < SpellBook.DAMP_SOAK - REFRESH:
-				Wet.douse(a, SpellBook.DAMP_SOAK)
+			if Net.resolves(a) and Burning.soaked_left(a) < DampSpell.DAMP_SOAK - REFRESH:
+				Wet.douse(a, DampSpell.DAMP_SOAK)
 		elif was:
 			a.remove_meta(META_IN)
 			if Net.resolves(a) and not a.dead:
-				Wet.douse(a, SpellBook.DAMP_SOAK)   # stepped out: wet for the full damp time from now
+				Wet.douse(a, DampSpell.DAMP_SOAK)   # stepped out: wet for the full damp time from now
 
 
 ## The ripple ring round a wader's legs on the water surface (cosmetic).

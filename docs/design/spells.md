@@ -162,7 +162,7 @@ caster if inside, monsters, employees) for about two seconds. Code: `scripts/spe
 ## Chicken [in game, 2026-10-18]
 **"Cast chicken"** (decided by the user, 2026-10-18): "chickens run around and do zero damage attacks to everything,
 distracting them." Code: `scripts/spells/chicken.gd` (the bird and its AI), `scripts/art/lowpoly/chicken_model.gd` (the
-model), `scripts/fx/chicken_fx.gd` (the feathers), `SpellBook._cast_chicken`. Tests: `tests/test_chicken.gd`,
+model), `scripts/fx/chicken_fx.gd` (the feathers), `ChickenSpell.cast` (`scripts/spells/defs/chicken.gd`). Tests: `tests/test_chicken.gd`,
 `tests/test_net_chicken.gd`. Look-dev: `scenes/new_spells_lab.tscn --spell chicken` (`--closeup`, `--pickup`).
 
 - **The flock [decided]:** one cast makes **4 chickens** that burst out of a feather cloud at the aim point, each its own

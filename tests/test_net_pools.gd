@@ -51,9 +51,9 @@ func run_host() -> void:
 	command(c, "out", {"at": dry})
 	check(await wait_reports("dried", 1, 10.0), "the client stepped out")
 	r = reported(c, "dried")
-	check(float(r["left"]) > SpellBook.DAMP_SOAK - 2.0, "a second after stepping out it has almost all the damp time left (%.1f s)" % float(r["left"]))
+	check(float(r["left"]) > DampSpell.DAMP_SOAK - 2.0, "a second after stepping out it has almost all the damp time left (%.1f s)" % float(r["left"]))
 	near(float(r["speed"]), 1.0, 0.01, "full speed on the deck")
-	check(Wet.is_wet(b) and Wet.remaining(b) > SpellBook.DAMP_SOAK - 3.0, "the host shows it still damp (%.1f s)" % Wet.remaining(b))
+	check(Wet.is_wet(b) and Wet.remaining(b) > DampSpell.DAMP_SOAK - 3.0, "the host shows it still damp (%.1f s)" % Wet.remaining(b))
 	# 3. the host's own hero wades: the host soaks it, the client sees it
 	var me := my_hero()
 	me.global_position = wet + Vector3(0.6, 0.0, 0.0)

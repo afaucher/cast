@@ -107,7 +107,7 @@ func run_host() -> void:
 	check(b_hero.get_node_or_null("Coffee") != null, "... with the steam (a show-only Coffee)")
 	command(b, "look", {"what": "coffee"})
 	check(await wait_reports("coffee", 1, 10.0), "B reports the coffee")
-	near(float(reported(b, "coffee")["speed"]), SpellBook.COFFEE_MOVE_MULT, 0.01, "B walks %.0f%% faster on its own machine" % ((SpellBook.COFFEE_MOVE_MULT - 1.0) * 100.0))
+	near(float(reported(b, "coffee")["speed"]), CoffeeSpell.COFFEE_MOVE_MULT, 0.01, "B walks %.0f%% faster on its own machine" % ((CoffeeSpell.COFFEE_MOVE_MULT - 1.0) * 100.0))
 
 	# 6. The host's armor at B.
 	_cast("armor", b_hero.global_position)

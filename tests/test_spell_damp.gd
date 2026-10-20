@@ -47,11 +47,11 @@ func _numbers() -> void:
 	eq(SpellBook.component_name("damp"), "Soggy sponge")
 	near(SpellBook.cooldown_of("damp"), 10.0, 0.001, "cooldown 10 s")
 	check(SpellBook.color_of("damp").b > 0.85 and SpellBook.color_of("damp").r < 0.4, "water blue")
-	check(SpellBook.damp_radius(1.0) > TentaclesSpell.tentacles_radius(1.0) and SpellBook.damp_radius(0.05) >= 4.0, "a WIDE area: wider than tentacles (%.2f)" % SpellBook.damp_radius(1.0))
-	near(SpellBook.damp_radius(1.0), 5.0, 0.001, "radius 4 + 1 * power")
-	near(SpellBook.DAMP_SOAK, 15.0, 0.001, "soaked for 15 s")
-	check(SpellBook.DAMP_PUDDLE_LIFE < Grime.LIFE, "the puddles dry before the 30 s grime marks fade")
-	near(SpellBook.DAMP_SLIDE_BONUS, 0.5, 0.001, "+50% slide on a wet cell")
+	check(DampSpell.damp_radius(1.0) > TentaclesSpell.tentacles_radius(1.0) and DampSpell.damp_radius(0.05) >= 4.0, "a WIDE area: wider than tentacles (%.2f)" % DampSpell.damp_radius(1.0))
+	near(DampSpell.damp_radius(1.0), 5.0, 0.001, "radius 4 + 1 * power")
+	near(DampSpell.DAMP_SOAK, 15.0, 0.001, "soaked for 15 s")
+	check(DampSpell.DAMP_PUDDLE_LIFE < Grime.LIFE, "the puddles dry before the 30 s grime marks fade")
+	near(DampSpell.DAMP_SLIDE_BONUS, 0.5, 0.001, "+50% slide on a wet cell")
 	near(Damp.slide_mult(Actor.new()), 1.0, 0.0001, "no puddles: shoves are normal")
 	var d := Damp.new()
 	var f: Dictionary = d.net_fields()
@@ -84,7 +84,7 @@ func _area_soak_and_fire() -> void:
 	await frames(12)
 	for a: Actor in [near_hero, wide_mon, worker, burning_a]:
 		check(Burning.is_soaked(a), "%s is soaked" % a.display_name)
-		check(Wet.is_wet(a) and Wet.remaining(a) > SpellBook.DAMP_SOAK - 0.6, "%s: about 15 s of damp left (%.1f)" % [a.display_name, Wet.remaining(a)])
+		check(Wet.is_wet(a) and Wet.remaining(a) > DampSpell.DAMP_SOAK - 0.6, "%s: about 15 s of damp left (%.1f)" % [a.display_name, Wet.remaining(a)])
 	check(not Burning.is_soaked(far_mon) and not Burning.is_soaked(far_hero) and not Burning.is_soaked(caster), "outside the radius stays dry")
 	check(not Burning.is_burning(burning_a) and not Burning.is_burning(near_hero), "it puts out the fires in the area (any team)")
 	check(Burning.is_burning(burning_far), "but not a fire outside it")
@@ -94,7 +94,7 @@ func _area_soak_and_fire() -> void:
 	check(Burning.ignite(near_hero, caster, 8.0) == null and Burning.ignite(wide_mon, caster, 8.0) == null, "soaked actors cannot be set alight")
 	check(not Burning.can_burn(worker), "an employee cannot burn while soaked")
 	# ... and they are dry again after 15 s.
-	GameWorld.time += SpellBook.DAMP_SOAK + 0.5
+	GameWorld.time += DampSpell.DAMP_SOAK + 0.5
 	await frames(2)
 	check(not Burning.is_soaked(near_hero) and Burning.can_burn(near_hero), "dry after 15 s: it can burn again")
 	check(Burning.ignite(near_hero, caster, 5.0) != null, "and does")
@@ -178,7 +178,7 @@ func _wet_floor() -> void:
 		if c is Damp:
 			field = c
 	check(field.is_wet_at(Vector3(0.1, 0, 0.0)) and not field.is_wet_at(Vector3(-6, 0, 6)), "the centre is wet, far away is dry")
-	near(Damp.slide_mult(wet_cell), 1.0 + SpellBook.DAMP_SLIDE_BONUS, 0.0001, "a fresh puddle: +50% slide")
+	near(Damp.slide_mult(wet_cell), 1.0 + DampSpell.DAMP_SLIDE_BONUS, 0.0001, "a fresh puddle: +50% slide")
 	near(Damp.slide_mult(dry_a), 1.0, 0.0001, "dry floor: normal")
 	# The same shove travels further from a wet cell.
 	var wx := wet_cell.global_position.x
@@ -210,10 +210,10 @@ func _wet_floor() -> void:
 	var rest := _dummy(Vector3(0.0, 0, 0.3))
 	# The puddles dry out: the bonus fades over the last DAMP_DRY_TIME seconds, then it is gone.
 	var left := field._end - GameWorld.time
-	GameWorld.time += left - SpellBook.DAMP_DRY_TIME * 0.5
+	GameWorld.time += left - DampSpell.DAMP_DRY_TIME * 0.5
 	near(field.wetness(), 0.5, 0.05, "half dry")
-	near(Damp.slide_mult(rest), 1.0 + SpellBook.DAMP_SLIDE_BONUS * 0.5, 0.05, "half the bonus")
-	GameWorld.time += SpellBook.DAMP_DRY_TIME
+	near(Damp.slide_mult(rest), 1.0 + DampSpell.DAMP_SLIDE_BONUS * 0.5, 0.05, "half the bonus")
+	GameWorld.time += DampSpell.DAMP_DRY_TIME
 	await frames(3)
 	near(Damp.slide_mult(rest), 1.0, 0.0001, "bone dry: back to a normal shove")
 	check(_damp_nodes() == 0, "the field frees itself")
@@ -316,7 +316,7 @@ func _grime_and_scheduling() -> void:
 		if mk["recipe"] == Grime.WET:
 			left += 1
 	eq(left, 0, "the puddle decals are gone after %d s" % int(Grime.LIFE))
-	check(SpellBook.DAMP_PUDDLE_LIFE <= Grime.LIFE, "and the wet floor itself ends first")
+	check(DampSpell.DAMP_PUDDLE_LIFE <= Grime.LIFE, "and the wet floor itself ends first")
 	# No layer: casting damp is harmless.
 	new_world(flat_map(10))
 	var c3 := _hero(Vector3(-8, 0, 0))
@@ -335,7 +335,7 @@ func _grime_and_scheduling() -> void:
 	await frames(2)
 	check(Burning.is_soaked(t4) and late.is_wet_at(Vector3(0.5, 0, 0)), "a late cast bursts on the first frame")
 	# The field expires and frees itself.
-	GameWorld.time += SpellBook.DAMP_PUDDLE_LIFE + 1.0
+	GameWorld.time += DampSpell.DAMP_PUDDLE_LIFE + 1.0
 	await frames(3)
 	check(not is_instance_valid(late), "the node frees itself")
 

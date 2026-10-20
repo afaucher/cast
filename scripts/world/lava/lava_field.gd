@@ -98,7 +98,7 @@ func _physics_process(_delta: float) -> void:
 		if d == null or _seen.has(d.get_instance_id()) or d.start_time < 0.0 or t < d.start_time + Damp.TELEGRAPH:
 			continue
 		_seen[d.get_instance_id()] = true
-		_make_crust(d.global_position, SpellBook.damp_radius(d.power) * CRUST_FRAC, d.start_time + Damp.TELEGRAPH)
+		_make_crust(d.global_position, DampSpell.damp_radius(d.power) * CRUST_FRAC, d.start_time + Damp.TELEGRAPH)
 	_rescue_stranded()
 	for cr in crusts.duplicate():
 		var left := float(cr["end"]) - t

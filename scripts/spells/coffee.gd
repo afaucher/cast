@@ -2,7 +2,7 @@ class_name Coffee
 extends Node3D
 ## The Coffee spell ("cast coffee"): haste, then a crash. A status node that lives as a child of the caffeinated
 ## Actor. Everyone in a SMALL radius at the aim point (heroes, monsters, employees: "caffeinate the swarmers by
-## accident") gets, for SpellBook.coffee_duration seconds (6 at full power):
+## accident") gets, for CoffeeSpell.coffee_duration seconds (6 at full power):
 ##   +60% move speed and +60% attack speed, as two Actor modifiers (STAT_MOVE_SPEED / STAT_ATTACK_RATE) that
 ##   stack by multiplication with anything else (a goo slow, a second source of haste) and are clamped;
 ##   and the jitters: a slight aim wobble for the LOCAL PLAYER (Coffee.jitter_aim, used by PlayerController) and
@@ -65,10 +65,10 @@ func net_fields() -> Dictionary:
 
 # --- Public API ---------------------------------------------------------------------------------
 
-## The spell: everyone (any team) within SpellBook.coffee_radius(power) of `pos` is caffeinated.
+## The spell: everyone (any team) within CoffeeSpell.coffee_radius(power) of `pos` is caffeinated.
 static func cast(caster: Actor, power: float, pos: Vector3) -> Array[Actor]:
-	var radius := SpellBook.coffee_radius(power)
-	var secs := SpellBook.coffee_duration(power)
+	var radius := CoffeeSpell.coffee_radius(power)
+	var secs := CoffeeSpell.coffee_duration(power)
 	var out := Combat.each_in_radius(pos, radius, func(a: Actor) -> void: Coffee.drink(a, secs))
 	CoffeeFx.splash(pos, radius)   # on EVERY cast, even one that hits nobody: the spill, steam, droplets and the radius ring
 	return out
@@ -168,8 +168,8 @@ func _refuel(seconds: float) -> void:
 		_haste_end = 0.0
 	_haste_end = maxf(_haste_end, now + seconds)
 	var left := _haste_end - now
-	target.set_modifier(MOD_MOVE, SpellBook.COFFEE_MOVE_MULT, left, Actor.STAT_MOVE_SPEED)
-	target.set_modifier(MOD_RATE, SpellBook.COFFEE_ATTACK_MULT, left, Actor.STAT_ATTACK_RATE)
+	target.set_modifier(MOD_MOVE, CoffeeSpell.COFFEE_MOVE_MULT, left, Actor.STAT_MOVE_SPEED)
+	target.set_modifier(MOD_RATE, CoffeeSpell.COFFEE_ATTACK_MULT, left, Actor.STAT_ATTACK_RATE)
 	if _steam_fx != null:
 		_steam_fx.emitting = true
 	if _steam_body != null:
@@ -219,9 +219,9 @@ func _show_remote_phase() -> void:
 
 
 func _start_crash(now: float) -> void:
-	_crash_end = now + SpellBook.COFFEE_CRASH_TIME
-	target.set_modifier(MOD_CRASH_MOVE, SpellBook.COFFEE_CRASH_MULT, SpellBook.COFFEE_CRASH_TIME, Actor.STAT_MOVE_SPEED)
-	target.set_modifier(MOD_CRASH_RATE, SpellBook.COFFEE_CRASH_MULT, SpellBook.COFFEE_CRASH_TIME, Actor.STAT_ATTACK_RATE)
+	_crash_end = now + CoffeeSpell.COFFEE_CRASH_TIME
+	target.set_modifier(MOD_CRASH_MOVE, CoffeeSpell.COFFEE_CRASH_MULT, CoffeeSpell.COFFEE_CRASH_TIME, Actor.STAT_MOVE_SPEED)
+	target.set_modifier(MOD_CRASH_RATE, CoffeeSpell.COFFEE_CRASH_MULT, CoffeeSpell.COFFEE_CRASH_TIME, Actor.STAT_ATTACK_RATE)
 	if _steam_fx != null:
 		_steam_fx.emitting = false
 	if _steam_body != null:

@@ -2,7 +2,7 @@ class_name Damp
 extends Node3D
 ## The Damp spell ("cast damp"). After a short telegraph a wide drizzle lands at this node's position:
 ##   - every fire in the area goes out (Burning.extinguish_in_radius);
-##   - everyone in it (any team: heroes, monsters, employees) is soaked for SpellBook.DAMP_SOAK seconds
+##   - everyone in it (any team: heroes, monsters, employees) is soaked for DampSpell.DAMP_SOAK seconds
 ##     (Wet.douse -> Burning.soak): they cannot ignite until dry, so a fireball blast hisses out on them;
 ##   - the floor gets puddles. Most hex cells in the area turn wet for DAMP_PUDDLE_LIFE seconds (drying over the
 ##     last DAMP_DRY_TIME), drawn as Grime decals (which fade by themselves inside the 30 s player-mark rule),
@@ -44,9 +44,9 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	if start_time < 0.0:
 		start_time = GameWorld.time
-	_end = start_time + TELEGRAPH + SpellBook.DAMP_PUDDLE_LIFE
+	_end = start_time + TELEGRAPH + DampSpell.DAMP_PUDDLE_LIFE
 	var col := SpellBook.color_of("damp")
-	Fx.ring(global_position, SpellBook.damp_radius(power), Color(col.r, col.g, col.b, 0.7), TELEGRAPH + 0.35, 0.0, false, 0.3)
+	Fx.ring(global_position, DampSpell.damp_radius(power), Color(col.r, col.g, col.b, 0.7), TELEGRAPH + 0.35, 0.0, false, 0.3)
 
 
 func _physics_process(_delta: float) -> void:
@@ -77,12 +77,12 @@ static func slide_mult(a: Actor) -> float:
 func slide_at(pos: Vector3) -> float:
 	if not _burst_done or not _wet.has(Hex.from_world(pos)):
 		return 1.0
-	return 1.0 + SpellBook.DAMP_SLIDE_BONUS * wetness()
+	return 1.0 + DampSpell.DAMP_SLIDE_BONUS * wetness()
 
 
 ## 1.0 while the puddles are fresh, easing to 0 over the last DAMP_DRY_TIME seconds, 0 once gone.
 func wetness() -> float:
-	return clampf((_end - GameWorld.time) / SpellBook.DAMP_DRY_TIME, 0.0, 1.0)
+	return clampf((_end - GameWorld.time) / DampSpell.DAMP_DRY_TIME, 0.0, 1.0)
 
 
 ## Is the cell under `pos` wet right now?
@@ -120,13 +120,13 @@ static func plan_cells(centre: Vector3, radius: float, stamp: float) -> Array[Ve
 
 func _burst() -> void:
 	_burst_done = true
-	var radius := SpellBook.damp_radius(power)
+	var radius := DampSpell.damp_radius(power)
 	var pos := global_position
 	var out := Burning.extinguish_in_radius(pos, radius)
 	if out > 0:
 		var steam: Array[Color] = [Color(0.92, 0.96, 1.0), Color(0.65, 0.74, 0.82)]
 		Fx.burst(pos + Vector3.UP * 0.6, steam, 14 + 3 * out, radius * 0.8, 0.22, 1.1, -1.4, Vector3.UP, 70.0, false)
-	for a in Wet.douse_in_radius(pos, radius, SpellBook.DAMP_SOAK):
+	for a in Wet.douse_in_radius(pos, radius, DampSpell.DAMP_SOAK):
 		if not a.is_in_group("breakables"):
 			Fx.number(a.global_position + Vector3(0, 2.4 + a.radius, 0), "DAMP", SpellBook.color_of("damp").lightened(0.2), 0.7)
 	for c in plan_cells(pos, radius, start_time):

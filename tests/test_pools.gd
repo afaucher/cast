@@ -8,7 +8,7 @@ extends MonsterTestBase
 ##    keep to dry floor; a specimen pool's gantry legs are solids on no_stand cells;
 ##  - walkable: the rim is a one-level step: A* and a walking body get in and out of the water from every side;
 ##  - wading: 0.75x speed for any actor in the water, dry speed on the deck;
-##  - wet: in the water an actor is soaked the whole time and stays soaked SpellBook.DAMP_SOAK seconds after it steps out;
+##  - wet: in the water an actor is soaked the whole time and stays soaked DampSpell.DAMP_SOAK seconds after it steps out;
 ##    wading in puts a fire out and a fireball fizzles on a wader;
 ##  - networking: only the actor's owner soaks it (a copy is left to the owner's NetStatus announcement);
 ##  - AI: an ally follows its leader through the pool, a monster chases across it, an employee follows through it;
@@ -385,7 +385,7 @@ func _check_wet() -> void:
 	a.snap_to_ground()
 	Wading.tick()
 	check(Wet.is_wet(a), "wet as soon as it is in the water")
-	near(Wet.remaining(a), SpellBook.DAMP_SOAK, 0.05, "soaked for the full damp time")
+	near(Wet.remaining(a), DampSpell.DAMP_SOAK, 0.05, "soaked for the full damp time")
 	check(a.get_node_or_null("Wet") != null, "dripping (the Damp spell's status node)")
 	check(a.get_node_or_null(Wading.RIPPLE_NAME) != null, "a ripple ring round the wader")
 	var t0 := GameWorld.time
@@ -398,14 +398,14 @@ func _check_wet() -> void:
 	a.global_position = _edge_out(rec, 0, 2.0)[0]
 	a.snap_to_ground()
 	Wading.tick()
-	near(Wet.remaining(a), SpellBook.DAMP_SOAK, 0.05, "stepping out it is wet for the full damp time from then")
+	near(Wet.remaining(a), DampSpell.DAMP_SOAK, 0.05, "stepping out it is wet for the full damp time from then")
 	await frames(1)
 	check(a.get_node_or_null(Wading.RIPPLE_NAME) == null or a.get_node(Wading.RIPPLE_NAME).is_queued_for_deletion(), "no ripple on the deck")
 	var out_t := GameWorld.time
-	GameWorld.time = out_t + SpellBook.DAMP_SOAK - 0.2
+	GameWorld.time = out_t + DampSpell.DAMP_SOAK - 0.2
 	Wading.tick()
 	check(Wet.is_wet(a), "still wet just before the damp time runs out")
-	GameWorld.time = out_t + SpellBook.DAMP_SOAK + 0.2
+	GameWorld.time = out_t + DampSpell.DAMP_SOAK + 0.2
 	Wading.tick()
 	check(not Wet.is_wet(a), "dry once the damp time is over")
 	a.queue_free()
@@ -720,7 +720,7 @@ func _check_moat() -> void:
 			back = true
 			break
 	check(back, "and wades back off the island to the room's floor")
-	check(Wet.is_wet(a) and Wet.remaining(a) > SpellBook.DAMP_SOAK - 3.0, "still wet after stepping out of the moat")
+	check(Wet.is_wet(a) and Wet.remaining(a) > DampSpell.DAMP_SOAK - 3.0, "still wet after stepping out of the moat")
 	near(a.effective_speed(), 4.0, 0.001, "full speed on the room's floor")
 	a.queue_free()
 	await frames(1)

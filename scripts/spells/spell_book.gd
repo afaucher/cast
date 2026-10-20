@@ -69,24 +69,6 @@ const SPELLS := {
 const SPELL_RANGE := Hero.BOLT_RANGE  ## same reach as the ranged attack
 const ALLY_SNAP := 1.3                ## aim this close to a hero snaps onto them
 
-# --- Damp
-const DAMP_RADIUS_BASE := 4.0      ## a WIDE area
-const DAMP_RADIUS_POWER := 1.0
-const DAMP_SOAK := 15.0            ## seconds nobody in the area can ignite (Burning.soak)
-const DAMP_PUDDLE_LIFE := 24.0     ## the wet floor lasts this long (Grime marks live 30 s)
-const DAMP_DRY_TIME := 8.0         ## ... and dries out over the last this-many seconds
-const DAMP_SLIDE_BONUS := 0.5      ## +50% shove distance on a fully wet puddle cell
-
-# --- Coffee
-const COFFEE_RADIUS_BASE := 1.5    ## a SMALL radius
-const COFFEE_RADIUS_POWER := 0.5
-const COFFEE_MOVE_MULT := 1.6      ## +60% walking speed
-const COFFEE_ATTACK_MULT := 1.6    ## +60% attack speed (cooldowns divide by it)
-const COFFEE_TIME_BASE := 4.5      ## seconds of haste at power ~0
-const COFFEE_TIME_POWER := 1.5     ## ... plus this at power 1 (6 s)
-const COFFEE_CRASH_MULT := 0.7     ## -30% move and attack speed
-const COFFEE_CRASH_TIME := 2.0
-
 const MIN_POWER := 0.05
 
 
@@ -159,11 +141,6 @@ static func find_in_text(text: String) -> String:
 	return ""
 
 
-## Support spells that follow the teammate the aim snapped onto (networking.md rule 3: the cast names the hero, and the
-## effect lands where that hero's owner has it). Every other spell lands on the point (a teammate who sidestepped a corn
-## is fine).
-const FOLLOWS := ["coffee"]
-
 ## The spell defs (scripts/spells/defs/, SpellDef), in spell order.
 const DEFS := [
 	preload("res://scripts/spells/defs/heal.gd"),
@@ -173,6 +150,9 @@ const DEFS := [
 	preload("res://scripts/spells/defs/tentacles.gd"),
 	preload("res://scripts/spells/defs/teeth.gd"),
 	preload("res://scripts/spells/defs/vines.gd"),
+	preload("res://scripts/spells/defs/damp.gd"),
+	preload("res://scripts/spells/defs/coffee.gd"),
+	preload("res://scripts/spells/defs/chicken.gd"),
 ]
 static var _defs_by_id := _index_defs()
 
@@ -189,16 +169,15 @@ static func def_of(id: String) -> GDScript:
 	return _defs_by_id.get(id) as GDScript
 
 
-static func _follows(id: String) -> bool:
-	var d := def_of(id)
-	return bool(d.FOLLOWS) if d != null else FOLLOWS.has(id)
-
-
 ## Cast spell `id` from `caster` toward world point `aim`. Returns false for an unknown
 ## spell or a dead caster. Does not check slots or cooldown (see Hero.try_cast).
 ## Online (a crewed floor, M4a) the cast is an EVENT: the caster's machine resolves the target here and sends it, and
 ## every machine (this one too) applies it NetCasts.LEAD seconds later from the same numbers (apply()). Solo it lands
 ## at once.
+## A support spell (its def's FOLLOWS) follows the teammate the aim snapped onto (networking.md rule 3: the cast names the
+## hero, and the effect lands where that hero's owner has it). Every other spell lands on the point (a teammate who
+## sidestepped a corn is fine). What a spell needs from the moment of the cast besides the target (a fireball's launch
+## point, direction and reach) is its def's cast_extra(), so every machine runs the same effect.
 static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 	if caster == null or caster.dead or not is_available(id) or GameWorld.root == null:
 		return false
@@ -206,8 +185,9 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 	if GameWorld.flat_distance(aim, caster.global_position) > 0.05:
 		caster.face_point(aim)
 	var target := resolve_target(caster, aim)
-	var spec := {"spell": id, "power": power, "target": target, "follow": snap_hero(aim) if _follows(id) else null,
-		"extra": _cast_extra(id, caster, target)}
+	var d := def_of(id)
+	var spec := {"spell": id, "power": power, "target": target, "follow": snap_hero(aim) if d.FOLLOWS else null,
+		"extra": d.cast_extra(caster, target)}
 	if Net.shares_cast(caster):
 		Net.send_cast(caster, spec)
 		return true
@@ -215,18 +195,11 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 	return true
 
 
-## What a spell needs from the moment of the cast besides the target (a fireball's launch point, direction and reach),
-## so every machine flies the same shot.
-static func _cast_extra(id: String, caster: Actor, target: Vector3) -> Dictionary:
-	var d := def_of(id)
-	return d.cast_extra(caster, target) if d != null else {}
-
-
 ## Apply a cast (here at once when solo; online on every machine at the cast's moment, NetCasts). `spec` holds the spell,
 ## the power, the resolved target point, the followed hero (or null) and the extra numbers; `start` is the cast's moment
 ## in GameWorld.time (scheduled effects run their telegraph from it). Returns the effect node it spawned, or null.
 ## Every target the effect reaches is applied by the machine that resolves it (Combat, layer 4), so this runs on every
-## machine without a hit landing twice.
+## machine without a hit landing twice. The effect itself is the spell def's cast().
 static func apply(caster: Actor, spec: Dictionary, start: float) -> Node:
 	if caster == null or not is_instance_valid(caster) or GameWorld.root == null:
 		return null
@@ -238,17 +211,9 @@ static func apply(caster: Actor, spec: Dictionary, start: float) -> Node:
 		target = Vector3(follow.global_position.x, follow.global_position.y, follow.global_position.z)   # where this screen has that teammate
 	var extra: Dictionary = spec.get("extra", {})
 	var d := def_of(id)
-	if d != null:
-		return d.cast(caster, power, target, start, extra)
-	match id:
-		"damp":
-			return _cast_damp(caster, power, target, start)
-		"coffee":
-			Coffee.cast(caster, power, target)
-		"chicken":
-			_cast_chicken(target)
-	return null
-
+	if d == null:
+		return null
+	return d.cast(caster, power, target, start, extra)
 
 ## Where a spell aimed at `aim` lands: clamped to SPELL_RANGE, snapped onto a hero
 ## standing near the aim point (so pointing at a teammate targets them), and pulled
@@ -288,41 +253,3 @@ static func snap_hero(aim: Vector3) -> Actor:
 static func fizzle(caster: Actor) -> void:
 	if caster and is_instance_valid(caster):
 		Fx.fizzle_puff(caster.global_position)
-
-
-# --- Damp ----------------------------------------------------------------------------------
-
-static func damp_radius(power: float) -> float:
-	return DAMP_RADIUS_BASE + DAMP_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-static func _cast_damp(caster: Actor, power: float, target: Vector3, start: float) -> Damp:
-	var d := Damp.new()
-	d.power = clampf(power, MIN_POWER, 1.0)
-	d.source_team = caster.team
-	d.caster = caster
-	d.start_time = start
-	GameWorld.spawn(d, target)
-	return d
-
-
-# --- Coffee --------------------------------------------------------------------------------
-
-static func coffee_radius(power: float) -> float:
-	return COFFEE_RADIUS_BASE + COFFEE_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-## Seconds of haste before the crash.
-static func coffee_duration(power: float) -> float:
-	return COFFEE_TIME_BASE + COFFEE_TIME_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-# --- Chicken -------------------------------------------------------------------------------
-
-## The flock lands (every machine, at the cast's moment): a feather cloud at the aim point on every screen, and the chickens
-## from the HOST only (Net.is_host: solo too). They are host-owned actors like monsters: a client gets them from the world
-## stream (NetWorld `world.spawn`), so a client's own cast never spawns any here. Power does not change the flock.
-static func _cast_chicken(target: Vector3) -> void:
-	ChickenFx.cast_cloud(target)
-	if Net.is_host():
-		Chicken.flock(target)

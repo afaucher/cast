@@ -60,7 +60,7 @@ become real water"): see "Moat" below.
 - **Slow:** any actor (heroes, AI allies, employees, monsters) walks at **0.75x** in the water (`Actor.effective_speed`);
   it stacks with coffee and the other speed modifiers.
 - **Casting and weapons** are unchanged in the water (knee deep: nothing about it stops a swing or a bow).
-- **Wet:** an actor in the water is soaked the whole time (`Wet.douse(actor, SpellBook.DAMP_SOAK)`, the Damp spell's
+- **Wet:** an actor in the water is soaked the whole time (`Wet.douse(actor, DampSpell.DAMP_SOAK)`, the Damp spell's
   status, re-applied when 2 s of it have run out) and once more as it steps out, so it stays wet the normal **15 s**
   after leaving. The soak puts a fire out and blocks ignition (`Burning.soak`), so wading in is how a burning hero
   puts itself out, and a fireball fizzles on a wader.
