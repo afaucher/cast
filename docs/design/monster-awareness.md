@@ -564,7 +564,7 @@ indicator.
 
 ### Where it lives
 - `scripts/monsters/goblin.gd` (new, kind `"goblin"`, in `MonsterFactory.SCRIPTS` but not in the pack `KINDS`); his
-  corridor routes are planned in `SiteBuilder._plan_scouts` (`SitePlan.scouts`) and spawned after the packs
+  corridor routes are planned in `ScoutPlanner.plan` (`scripts/contracts/planners/scout_planner.gd`) (`SitePlan.scouts`) and spawned after the packs
   (`Site.scouts`). `GoblinModel` moved from `MonsterModels.DESIGN_KINDS` to `KINDS`.
 - `scripts/monsters/archer.gd`: target practice (the safety constants are at the top). `scripts/monsters/brute.gd`:
   restless fights.

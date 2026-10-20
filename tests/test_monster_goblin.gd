@@ -321,7 +321,7 @@ func _check_floors() -> void:
 			var before := str(p.scouts)
 			p.scouts.clear()
 			var t0 := Time.get_ticks_usec()
-			SiteBuilder._plan_scouts(map, run, f, p)
+			ScoutPlanner.plan(map, run, f, p)
 			worst_scout_ms = maxf(worst_scout_ms, float(Time.get_ticks_usec() - t0) / 1000.0)
 			eq(str(p.scouts), before, "planning the scouts again gives the same routes")
 	print("goblin scouts: %d on 15 floors; worst plan %.1f ms (the scouts' part at most %.2f ms)" % [total, worst_ms, worst_scout_ms])
