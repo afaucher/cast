@@ -183,6 +183,17 @@ func give_order(kind: String, by: Hero, point: Vector3 = Vector3.INF) -> String:
 	return str(lines.get(kind, ""))
 
 
+## What the ally is doing under orders, for the party HUD (read on the machine that runs this brain: the host, or solo):
+## "follow" (no order), "go" (on its way to the spot), "hold" (there, holding it) or "attack".
+func order_state() -> String:
+	match order:
+		"go":
+			return "hold" if _arrived else "go"
+		"attack":
+			return "attack"
+	return "follow"
+
+
 ## "go": walk to the spot, then hold it. On the way only what attacks the ally itself is fought; once there, whatever is
 ## in the fight near the spot.
 func _tick_go(delta: float) -> void:

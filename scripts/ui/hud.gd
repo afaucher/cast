@@ -1,6 +1,7 @@
 class_name Hud
 extends CanvasLayer
-## The in-game HUD, built in code: player HP bar, ally mini bars, two spell
+## The in-game HUD, built in code: the party frame top left (PartyFrame: a portrait, name, HP and order chip per crew
+## member and the employees following you; PARTY_LOOK picks its look or the old HP bars), two spell
 ## cards (name, incantation, key, cooldown sweep, charges, an empty-slot look and a HELD
 ## highlight), toasts for casts / fizzles / pickups / out-of-component, a mic
 ## level meter, a big center message, and an optional typed-spell console (stand-in for voice;
@@ -21,6 +22,15 @@ const BAR_COLOR_ALLY := Color(0.4, 0.7, 0.95)
 const COLOR_DANGER := Color(1.0, 0.45, 0.4)
 const COLOR_NEUTRAL := Color(0.8, 0.8, 0.85)
 const COLOR_DAZED := Color(1.0, 0.82, 0.3)
+## The top-left party HUD (2026-10-19 redesign, until the user picks): "clean" (PartyFrame, dark game HUD), "paper"
+## (PartyFrame as crew ID cards) or "old" (the name over a big HP bar and the allies' small bars).
+const PARTY_LOOK := "clean"
+## The party frame lists the employees following you under the crew (a bubble each, "+N" past PartyFrame.MAX_FOLLOWERS).
+const SHOW_FOLLOWERS := true
+
+## What this run uses (the constants above; dev flags --party-hud / --party-followers override them for screenshots).
+static var party_look := PARTY_LOOK
+static var show_followers := SHOW_FOLLOWERS
 
 var player: Hero = null
 var allies: Array[Hero] = []
@@ -28,6 +38,7 @@ var console: LineEdit = null
 var trigger_word := "cast"   ## spoken keyword shown on the cards ("say: PICKLE HEAL")
 
 var _root: Control
+var party: PartyFrame = null     ## the party frame (null with party_look "old")
 var _player_bar: HudBar
 var _player_name: Label
 var _daze_tag: Label              ## "DAZED" beside your name while your hero is dazed (the brute's slam)
@@ -56,8 +67,15 @@ func _ready() -> void:
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	_build_player_panel()
-	_build_ally_panel()
+	if party_look == "old":
+		_build_player_panel()
+		_build_ally_panel()
+	else:
+		party = PartyFrame.new()
+		party.look = PartyFrame.Look.PAPER if party_look == "paper" else PartyFrame.Look.CLEAN
+		party.show_followers = show_followers
+		party.position = Vector2(16, 14)
+		_root.add_child(party)
 	_build_cards()
 	_build_toasts()
 	_build_mic()
@@ -67,6 +85,27 @@ func _ready() -> void:
 func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 	player = new_player
 	allies = new_allies
+	if party != null:
+		party.bind(player, allies)
+	else:
+		_bind_old_bars()
+	for c in _cards:
+		c.queue_free()
+	_cards.clear()
+	for i in SpellComponents.SLOT_COUNT:
+		var card := SpellCard.new()
+		card.setup(self, player, i)
+		card.custom_minimum_size = CARD_SIZE
+		_card_box.add_child(card)
+		_cards.append(card)
+	if not player.spell_cast.is_connected(_on_spell_cast):
+		player.spell_cast.connect(_on_spell_cast)
+	if not player.component_collected.is_connected(_on_component_collected):
+		player.component_collected.connect(_on_component_collected)
+
+
+## PARTY_LOOK "old": your name over the big bar, a small bar per ally.
+func _bind_old_bars() -> void:
 	_player_name.text = SteamIdentity.player_name(player.display_name)   # the Steam name; the hero name without Steam
 	for b in _ally_bars:
 		b.get_parent().queue_free()
@@ -86,23 +125,10 @@ func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 		row.add_child(bar)
 		_ally_box.add_child(row)
 		_ally_bars.append(bar)
-	for c in _cards:
-		c.queue_free()
-	_cards.clear()
-	for i in SpellComponents.SLOT_COUNT:
-		var card := SpellCard.new()
-		card.setup(self, player, i)
-		card.custom_minimum_size = CARD_SIZE
-		_card_box.add_child(card)
-		_cards.append(card)
-	if not player.spell_cast.is_connected(_on_spell_cast):
-		player.spell_cast.connect(_on_spell_cast)
-	if not player.component_collected.is_connected(_on_component_collected):
-		player.component_collected.connect(_on_component_collected)
 
 
 func _process(delta: float) -> void:
-	if player != null and is_instance_valid(player):
+	if party == null and player != null and is_instance_valid(player):
 		_player_bar.set_value(player.hp / player.max_hp, "%d / %d" % [int(ceilf(player.hp)), int(player.max_hp)])
 		var dazed := not player.dead and player.is_dazed()
 		_daze_tag.visible = dazed

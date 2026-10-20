@@ -412,11 +412,17 @@ func _test_hud_bars() -> void:
 	wick.apply_damage(17.0)
 	gasket.apply_damage(30.0)
 	await frames(3)
-	near(hud._player_bar.value, 120.0 / 160.0, 0.001, "player bar uses Rebar's 160 max HP")
-	eq(hud._player_bar.text, "120 / 160", "player bar text")
-	near(hud._ally_bars[0].value, 68.0 / 85.0, 0.001, "ally bar uses Wick's 85 max HP")
-	eq(hud._ally_bars[0].text, "68 / 85", "ally bar text")
-	near(hud._ally_bars[1].value, 90.0 / 120.0, 0.001, "ally bar uses Gasket's 120 max HP")
+	if hud.party != null:   # the party frame (Hud.PARTY_LOOK clean / paper): each row reads its hero's own max HP
+		var v: Array[Dictionary] = hud.party.views
+		near(float(v[0]["hp"]) / float(v[0]["max_hp"]), 120.0 / 160.0, 0.001, "your row uses Rebar's 160 max HP")
+		near(float(v[1]["hp"]) / float(v[1]["max_hp"]), 68.0 / 85.0, 0.001, "Wick's row uses his 85 max HP")
+		near(float(v[2]["hp"]) / float(v[2]["max_hp"]), 90.0 / 120.0, 0.001, "Gasket's row uses her 120 max HP")
+	else:
+		near(hud._player_bar.value, 120.0 / 160.0, 0.001, "player bar uses Rebar's 160 max HP")
+		eq(hud._player_bar.text, "120 / 160", "player bar text")
+		near(hud._ally_bars[0].value, 68.0 / 85.0, 0.001, "ally bar uses Wick's 85 max HP")
+		eq(hud._ally_bars[0].text, "68 / 85", "ally bar text")
+		near(hud._ally_bars[1].value, 90.0 / 120.0, 0.001, "ally bar uses Gasket's 120 max HP")
 	hud.queue_free()
 
 

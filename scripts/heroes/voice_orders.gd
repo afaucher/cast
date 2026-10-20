@@ -148,4 +148,4 @@ static func feedback(view: Dictionary, local: Hero) -> void:
 	if by == local and kind == "go" and int(view.get("took", 0)) > 0:
 		OrderFx.waypoint(p, local.hero_color)
 	if (view.get("marks", []) as Array).has(local) and by != null and by != local:
-		OrderFx.marker(p, "%s: %s" % [speaker_label(by), "go here" if kind == "go" else "attack here"], local, by.hero_color)
+		OrderFx.marker(p, "%s: %s" % [speaker_label(by), "go here" if kind == "go" else "attack here"], local, by.hero_color, kind)

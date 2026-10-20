@@ -106,8 +106,9 @@ static func waypoint(point: Vector3, color: Color) -> Node3D:
 
 
 ## An order to a hero a person plays, on that player's screen: a pin and "<speaker>: go here" over it, until `hero` gets
-## within MARKER_REACHED of it or MARKER_TIME passes. A newer marker replaces the old one.
-static func marker(point: Vector3, text: String, hero: Node3D, color: Color) -> Node3D:
+## within MARKER_REACHED of it or MARKER_TIME passes. A newer marker replaces the old one. `kind` ("go" / "attack") is what
+## the party HUD shows on that player's row while the marker stands (PartyInfo.order_of).
+static func marker(point: Vector3, text: String, hero: Node3D, color: Color, kind: String = "go") -> Node3D:
 	if not _world_ready() or point == Vector3.INF:
 		return null
 	for old in GameWorld.root.get_tree().get_nodes_in_group(Marker.GROUP):
@@ -115,6 +116,7 @@ static func marker(point: Vector3, text: String, hero: Node3D, color: Color) -> 
 	var m := Marker.new()
 	m.name = "OrderMarker"
 	m.hero = hero
+	m.kind = kind
 	m.add_child(_pin(point, color))
 	var l := Label3D.new()
 	l.text = text
@@ -138,7 +140,22 @@ class Marker extends Node3D:
 	const GROUP := "order_markers"
 	var hero: Node3D = null
 	var label: Label3D = null
+	var kind := "go"
 	var _age := 0.0
+
+	## The share of MARKER_TIME still to run, 1 -> 0 (the HUD's chip drains with it).
+	func left() -> float:
+		return clampf(1.0 - _age / OrderFx.MARKER_TIME, 0.0, 1.0)
+
+	## The live marker on `hero`, or null.
+	static func of(hero: Node3D) -> Marker:
+		if hero == null or not hero.is_inside_tree():
+			return null
+		for n in hero.get_tree().get_nodes_in_group(GROUP):
+			var m := n as Marker
+			if m != null and m.hero == hero and not m.is_queued_for_deletion():
+				return m
+		return null
 
 	func _ready() -> void:
 		add_to_group(GROUP)
