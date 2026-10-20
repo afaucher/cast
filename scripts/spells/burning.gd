@@ -233,6 +233,8 @@ static func on_blast(pos: Vector3, radius: float, power: float, source: Node) ->
 			if is_soaked(a) and not a.dead:
 				_fizzle(a)   # damp: the blast hisses out on a soaked actor (no roll, so the rng stream is unchanged)
 			continue
+		if Combat.shielded(a, pos, Combat.HIT_BLAST, source, false):
+			continue   # (a blast on a pavise's planks does not light the crossbowman behind them)
 		if not Net.resolves(a):
 			continue   # (online: each actor's owner rolls its own ignition, with its own GameWorld.rng)
 		var frac := GameWorld.flat_distance(a.global_position, pos) / maxf(radius, 0.001)

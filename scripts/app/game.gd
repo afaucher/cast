@@ -25,8 +25,10 @@ extends Node3D
 ##   --aim-offset x,z    dev: --autocast aims at the player's position plus this offset (world units) instead of at the monsters
 ##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
 ##   --hero wick|gasket|rebar  play this hero (Session.character_id) instead of the one picked on the main menu
-##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer) near the player;
-##                       --autocast then aims at them
+##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer/pavise/water_boy) near the
+##                       player; --autocast then aims at them. A mixed pack: groups joined by "+" (pavise,1+grunt,2+water_boy,1)
+##   --monster-demo aim|pulse  dev: with --spawn-near (and --demo-after S, default 1): the pavise plants 9 from the player
+##                       and aims at them, or the water boy pours on its roughed-up pack (screenshots)
 ##   --idle-monsters     dev: --spawn-near monsters ignore heroes until hurt
 ##   --stage-ledge       dev: raise a 7-cell tower +5 levels near the start; --spawn-near monsters stand on it
 ##   --give heal:9,corn:3  dev: slot these spells (up to 4) with these charges, after the picked two
@@ -374,6 +376,7 @@ func _parse_args() -> void:
 			"--hazard-near": opts["hazard_near"] = nxt
 			"--hazard-demo": opts["hazard_demo"] = nxt
 			"--shark-demo": opts["shark_demo"] = nxt
+			"--monster-demo": opts["monster_demo"] = nxt
 			"--demo-after": opts["demo_after"] = float(nxt)
 			"--to-hazard": opts["to_hazard"] = nxt
 			"--slay-near": opts["slay_near"] = true

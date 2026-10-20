@@ -409,6 +409,60 @@ with red chevrons, a sight notch at the top and a spike at the foot that it stam
 **Why it's fun:** it asks "who goes round?". The tank in front gets clanks; someone flanks, roots, chickens or corns
 it; the red line is something to shout about; Rebar gets a non-killing job, standing in the lane.
 
+### 2.9 As built (2026-10-20)
+
+The user: "build them now". The open picks were never answered, so the recommended ones are built as the defaults:
+**the crossbow carried "above"** (`pavise-read-test.md`, (b): shouldered, resting on the shield's top rim to aim:
+recommended, built as default) and, for the healer (section 3), **the Water Boy** (`enemy-healer-options.md` §7.3:
+recommended, built as default).
+
+- **Kind `"pavise"`** (`scripts/monsters/pavise.gd`, `Pavise`), a `MonsterDefs` row; the model is `PaviseModel` (the read
+  test's final look, C's paint on A's build, 15% wider; `MonsterModels.make("pavise")` builds the "above" carry). HUD and
+  log name "Pavise Crossbowman". Model 2,572 triangles (budget 2,800).
+- **Stats as 2.2:** HP 70, speed 2.2, turning 150°/s carried and 60°/s planted (`Pavise._turned`: every turn is rate
+  limited, look-arounds too; rooted by vines it cannot turn at all, 2.5's exception; coffee scales it, 96°/s). Bolt 18
+  plus a 0.8 push, range 20, 30 units/s; aim 1.2 s (tracks 0.8 s, locks 0.4 s); reload 2.0 s (3.0 s while Damp soaks
+  it); the shield bash 8 plus a 2.0 shove at 1.8 (wind-up 0.5 s, the monsters' orange pulse; 1.6 s cooldown); plant
+  0.6 s, lift 1.0 s, a trip 1.5 s. **Changed, with reasons:** sight is all round 10 and the front cone 16 (the doc's cone,
+  but not "all round 3": a monster's chase, leash and "lost it" distances are multiples of its aggro range, so 3 would
+  have it give up on a target 8 away); the bolt flies 1.25 over the feet (a +2 ledge does not stop it; walls and taller
+  rises do); it only starts aiming with its mark within 15° of its facing, and the locked line stays within 20° of the
+  shield (it shoots through the notch).
+- **Behaviour (2.3):** ADVANCE (carried) to a shot within 14, PLANT, AIM (a dashed floor line while it tracks, solid when
+  it locks: `PaviseFx`; the bolt head flares hot on the lock), the bolt, RELOAD, AIM again; TURN toward a hero within 4,
+  else its mark; past 90° it lifts and re-plants; with no shot for 1.5 s it lifts and advances. Its mark: the hero in
+  line of sight with no monster within 3 (the backline), else the nearest it can shoot ("whoever cast last" is not
+  built). A shove, a stagger or a daze calls the aim off, also after the lock. A chicken that pecked it gets its shield
+  and its bolts.
+- **The shield (2.4):** `Combat.shielded(target, from_point, kind)`, asked by `melee_arc`, `shove_radius`, `explode`,
+  `slam`, `beam`, `Projectile`, `ArrowShot`, `BowlBoulder` and the tentacles before they ask who resolves the hit. The
+  front 140° blocks while the shield is **carried or planted** (user). By kind: melee by the attacker's spot, shots and
+  arrows by where they came from, blasts and blast shoves by a centre ahead of the shield plane (0.55) and in the arc;
+  corn (`HIT_ABOVE`) never, teeth never (the pop grows out of it). A blocked hit does nothing: no damage, no shove (a
+  bonk), no request. It shows a spark and a grey "0"; an arrow or a bolt **sticks** (up to 9 shown), the bowl crumbles, a
+  fireball bursts on the planks (and a blocked blast lights nothing: `Burning.on_blast`). **No floor arc** (user).
+- **Who decides a block:** the machine that resolves the hit (`Net.resolves_hit`), with the shield's facing as it shows
+  it: the host for its own hero, the AI and every monster-on-monster hit; a client for its own hits (rule 2, 2.7.3: the
+  attacker decides). Every machine that runs the effect shows the block. The build brief's "the monster is host-owned,
+  so its machine decides" is read as this: the host's stream is the facing a client tests.
+- **Shoves that get through (2.4):** planted, it is left without its pavise (`LEFT`: the pavise stands where it was and
+  blocks nothing) and walks back to lift it; shoved from behind into its own shield it trips (`FLAT`, 1.5 s, then the
+  lift). Carried, the shield goes with it.
+- **Spawning:** pack cost 4, weight 0.75, from floor 2 (`min_floor`), at most one a pack (`max`); measured over 30
+  seeds: 1.2 a floor on floor 2, 1.0 on floor 3. Hellgates don't spawn it. Drops: armor 20%, vines 8%. **Not a pest:** a
+  pest is topped up to six a floor from floor 1, and a new pest name would re-deal every contract's pest. The room rules
+  of 2.6 (80+ cells, a sightline from the door) and "the fortress" are not built: it is dealt like any pack kind.
+- **Networking (2.7):** a host-owned actor; its aim and bolt ride the laser shark's events (`world.charge` / `uncharge` /
+  `lock`, the shared loose time; every machine looses the bolt and the victim decides), its shield `world.shield`
+  (`NetWorld`; a late joiner gets every pavise's in the snapshot). `NetEvents.WORLD_CARRIES` / `LATE_JOIN`,
+  `test_net_contract`. The bash is the monsters' wind-up.
+- **The AI allies:** a foe whose shield faces them makes them step round to its flank before they swing or shoot.
+  Rebar standing in the line does take the bolt (it stops at the first hero), but no ally does it on purpose.
+- **Not built:** sounds (no thud, clank or crank cues yet).
+- **Tests:** `test_monster_pavise` (blocks carried and planted, flank and rear hits, shoves, the aim's timings, the bolt,
+  a shove cancelling the aim, turning), `test_net_new_monsters` (a client's arrow blocked once, a flank hit, the late
+  joiner), `test_monster_models`, `test_monster_defs`. Combat log: `block` rows.
+
 ### 2.8 Alternative: the riot imp [proposal, brief]
 An imp holding a ripped-off office door marked **"SECURITY"** as a shield, throwing **staplers** (three in a burst, 5
 damage each, lobbed, range 12). Fast with the door (3.5), so it is harder to flank than the pavise, and funnier, but a
@@ -487,6 +541,34 @@ jar of glowing green liquid** with a squeeze-bulb nozzle; the beam comes out of 
 
 **Why it's fun:** "kill the medic" is a priority target that isn't the nearest thing. Behind a pavise it is a fortress
 no single hero cracks: someone flanks the shield, someone roots or corns the medic.
+
+### 3.8 As built (2026-10-20): the Water Boy
+
+Built from `enemy-healer-options.md` §3 A (the area pulse) carried by §7's **Water Boy** (recommended, built as default):
+a goblin sports medic wheeling the office water cooler on a hand truck. 3.1-3.6's beam medic is not built.
+
+- **Kind `"water_boy"`** (`scripts/monsters/water_boy.gd`, `WaterBoy`), a `MonsterDefs` row; the model is `WaterBoyModel`
+  (CoolerCarriers' blockout with the monster hooks: the whistle comes up for the tell, it rocks back and the truck tips
+  the cooler for the pour). The glow stays on the water (and the monsters' small ember eyes); the tell does not flare it.
+  1,430 triangles (budget 1,600).
+- **Numbers:** HP 30 (the brief's figure: goblin-light, between the old medic's 20 and the cooler demon's 60), speed 2.4,
+  aggro 8, cannot climb a +2 ledge (the truck). It keeps 6-9 from the nearest hero, on the far side of its pack (the
+  pack's centre plus 2, seen from that hero). When a monster within 5 is hurt: the tell (0.8 s, the whistle), then the
+  pulse: rings out to 5 and +15 to every monster inside but itself, imps included, never a hero, an employee or a
+  chicken; then a 5 s wait. A shove, a stagger or a daze during the tell calls the pour off, then it fumbles 1.5 s.
+- **Spawning:** pack cost 3, weight 2.0, from floor 2, at most one a pack and only once the pack holds three others (a
+  swarm of imps counts as four); measured over 30 seeds: 0.8 a floor on floor 2, 1.3 on floor 3. Never the pest, no
+  hellgate. Drops: heal 30%, damp 15%.
+- **Networking:** no state of its own. The tell is the monsters' wind-up event (`world.windup`, `world.unwind`); at the
+  strike every client runs the pulse on its own screen (the rings, the "+15" numbers) and the heals land only where
+  `Net.resolves` says: the host, which owns every monster; the HP rides the stream. Late join: a monster's keyframe.
+- **The AI allies:** the Water Boy is a priority target (`Monster.is_priority_target`): it ranks like a monster on a
+  teammate, and under "attack" it counts 3 nearer. Voice orders need nothing new ("attack" takes any monster).
+- **Not built:** the truck tipping over on a shove (§7.4 question 4), a halo for the greyscale read (question 3), the
+  Acolyte reskin.
+- **Tests:** `test_monster_water_boy` (the pulse heals monsters inside and not heroes, the tell and the cooldown, a shove or
+  a daze cancels it, it keeps its distance), `test_net_new_monsters` (the host heals, a client shows the rings and the HP;
+  a late joiner sees it). Combat log: `pulse` rows.
 
 ### 3.7 Alternatives [proposal, brief]
 - **Raise instead of heal:** a 2.5 s channel raises a dead imp within 6 (a green column from the corpse). Same breaks.

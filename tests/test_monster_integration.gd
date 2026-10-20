@@ -4,7 +4,11 @@ extends MonsterTestBase
 ## primitive bodies, a model-wearing monster shoved into a pit still dies and frees, and a pack
 ## fighting a dummy hero for 600 frames runs clean.
 
-const SIZES := {"grunt": GruntModel.MODEL_SCALE, "archer": ArcherModel.MODEL_SCALE, "brute": BruteModel.MODEL_SCALE, "swarmer": SwarmerModel.MODEL_SCALE}
+const SIZES := {"grunt": GruntModel.MODEL_SCALE, "archer": ArcherModel.MODEL_SCALE, "brute": BruteModel.MODEL_SCALE, "swarmer": SwarmerModel.MODEL_SCALE,
+	"pavise": PaviseModel.MODEL_SCALE, "water_boy": 1.1}
+## The kinds that wind up as soon as they reach a hero (the pavise winds up only for its bash, a hero right in front of it;
+## the water boy only for a pour, a hurt pack-mate beside it: _hooks sets those up).
+const CLASSIC: Array[String] = ["grunt", "archer", "brute", "swarmer"]
 
 
 func _init() -> void:
@@ -69,8 +73,12 @@ func _hooks() -> void:
 		var hero := add_hero(Vector2i(0, 0))
 		hero.max_hp = 1.0e9
 		hero.hp = hero.max_hp
-		var m := MonsterFactory.spawn(kind, Vector2i(4, 0))
+		var m := MonsterFactory.spawn(kind, Vector2i(1, 0) if kind == "pavise" else Vector2i(4, 0))
 		var mod: MonsterModel = m.model
+		if kind == "water_boy":
+			var patient := MonsterFactory.spawn("grunt", Vector2i(4, 1))
+			patient.set_physics_process(false)
+			patient.apply_damage(30.0, null)
 		m.aggro(hero)
 		var peak_wind := 0.0
 		var peak_swing := 0.0
@@ -130,6 +138,9 @@ func _proto() -> void:
 		check(m.model == null, "%s has no model with use_proto_visuals" % kind)
 		check(m._visual.get_child_count() > 3, "%s wears primitives (%d parts)" % [kind, m._visual.get_child_count()])
 		check(m._mats.size() > 0, "%s has primitive materials" % kind)
+		if not CLASSIC.has(kind):
+			m.free()   # (its wind-ups need a set-up: _hooks covers them with the model)
+			continue
 		m.aggro(hero)
 		var swelled := false
 		for i in 300:

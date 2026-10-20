@@ -146,6 +146,9 @@ func _check_hits() -> void:
 			side = Vector3(-direction.z, 0.0, direction.x) * _flip
 			_flip = -_flip
 		Fx.burst(a.global_position + Vector3.UP * 0.4, _dust_colors(), 8, 2.5, 0.09, 0.45, 3.0, Vector3.UP, 70.0, false)
+		if Combat.shielded(a, global_position - direction * 2.0, Combat.HIT_SHOT, source):
+			_stop()   # (a bonk on a pavise's planks: the boulder crumbles, nothing moves)
+			return
 		if not Combat.resolves(a, source):
 			continue   # (online: the boulder rolls on every screen; the victim decides a hero, the bowler the rest)
 		var push := (side.normalized() * 0.85 + direction * 0.5).normalized()

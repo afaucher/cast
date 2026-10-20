@@ -39,7 +39,7 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan, site: SiteBuilder.
 			if not p.blocked.has(c):
 				free.append(c)
 		rooms_free[tag] = free
-		var plan_kinds := SiteBuilder.biased_composition(int(p.pack_budgets[tag]), rng, run.pest)
+		var plan_kinds := SiteBuilder.biased_composition(int(p.pack_budgets[tag]), rng, run.pest, p.floor_number)
 		room_count[tag] = _place_kinds(map, free, plan_kinds, rng, site, SiteBuilder.room_cap(map, p.rooms[tag]))
 	# Make sure there is something to exterminate: top up the pest if the dice were unkind.
 	if run.pest != "everything":

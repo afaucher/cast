@@ -27,6 +27,11 @@ extends RefCounted
 ##   brawl      a restless brute fight began: state = start, detail = the rival's kind
 ##   brawl_end  it ended: state = why (done, far, lost: on its own; sighting, hit, noise, shout, pack, rival_<state>: the
 ##              crew broke it up), secs = its length, count = slams
+## The new monsters (combat-proposals.md §2 / §3, "As built"):
+##   block      a Pavise's shield stopped a hit (the machine that resolved it; on a client's hit that is the client, which
+##              writes no log, so the host's rows are the host's and the AI's hits): state = melee / shot / arrow / blast,
+##              dist = attacker to the pavise, detail = the attacker
+##   pulse      a Water Boy poured: count = monsters healed, value = HP restored in all
 
 const PATH := "user://combat_log.csv"
 const HEADER := "time,seed,floor_s,restless,event,kind,state,dist,secs,count,value,detail"
@@ -137,6 +142,20 @@ static func brute_fight_end(lead: Variant, reason: String, secs: float, slams: i
 	if not enabled:
 		return
 	_row("brawl_end", "brute", reason, -1.0, secs, slams, "", "")
+
+
+static func block(m: Monster, hit_kind: String, source: Node) -> void:
+	if not enabled:
+		return
+	var a := source as Node3D
+	var dist := GameWorld.flat_distance(m.global_position, a.global_position) if a != null and is_instance_valid(a) else -1.0
+	_row("block", m.kind, hit_kind, dist, -1.0, -1, "", str(source.get("display_name")) if source != null and is_instance_valid(source) else "")
+
+
+static func pulse(m: Monster, healed: int, restored: float) -> void:
+	if not enabled:
+		return
+	_row("pulse", m.kind, "", -1.0, -1.0, healed, "%.1f" % restored, "")
 
 
 ## The floor is going away: close the open fight and write everything.

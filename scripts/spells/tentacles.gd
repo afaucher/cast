@@ -63,6 +63,8 @@ func _burst() -> void:
 		if a.team == GameWorld.TEAM_MONSTERS:
 			Fx.attach_hit_feedback(a)
 	for a in Combat.hits_in_radius(global_position, radius, src):   # (online: the victim decides a hero, the caster the rest)
+		if Combat.shielded(a, global_position, Combat.HIT_BLAST, src):
+			continue   # (the centre in front of a pavise's planks: a bonk)
 		var away := a.global_position - global_position
 		away.y = 0.0
 		a.shove(away if away.length() > 0.05 else a.facing, dist, src)

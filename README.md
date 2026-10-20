@@ -128,6 +128,14 @@ them (a dented prop is free; a break bills its full price to whoever landed it).
 ### Monsters
 - **Skeletons** walk up and swing; **imps** come in fast clumps; **archers** keep their distance and shoot; **brutes**
   wind up a ground slam you can see coming. Hellgates spawn more until you close them.
+- **The Pavise Crossbowman** (from floor 2, about one a floor) hides behind a door-sized shield with a crimson front:
+  nothing gets through the front, carried or planted. Arrows stick in it and a blocked hit shows a grey "0". It
+  plants, draws a dashed red line on the floor to whoever it aims at, locks it solid, and fires a heavy bolt (18 and a
+  push, range 20) that outranges the crew. Go round it: hit it from the flank or the back, drop corn on it, root it
+  with vines (then it can't turn), or shove it off its shield. Standing in the line takes the bolt for a teammate.
+- **The Water Boy** (from floor 2, only with a pack of three or more) wheels the office water cooler around on a hand
+  truck behind his pack. When one of them is hurt he raises his whistle and pours: green rings heal every monster
+  nearby by 15. A shove or a daze stops the pour. He has 30 HP. Kill him first.
 - **Awareness:** monsters see further in front than behind, hear spells and fights, and a hit wakes the ones nearby.
   The longer a floor takes (from 2 minutes, fully by 6), the more restless they get: skeletons patrol, imps roam,
   idle archers take practice shots at the client's cheaper props, and brutes start shoving matches.

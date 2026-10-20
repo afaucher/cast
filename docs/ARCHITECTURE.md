@@ -346,8 +346,11 @@ The player-controlled hero has `is_player = true`.
 `PlayerController` reads input. `AllyBrain` drives AI allies.
 
 ### Monsters (`scripts/monsters/*.gd`, each extends `Monster extends Actor`)
-`MonsterFactory.spawn(kind: String, cell: Vector2i) -> Monster`. Kinds: `grunt`, `archer`, `brute`, `swarmer` (the packs), and `goblin` (the scout: never in a pack,
-`SiteBuilder` puts one or two in corridors; `docs/design/goblin-scout.md`).
+`MonsterFactory.spawn(kind: String, cell: Vector2i) -> Monster`. Kinds: `grunt`, `archer`, `brute`, `swarmer` (the packs), `pavise` and
+`water_boy` (packs from floor 2: the shielded crossbowman and the healer, `docs/design/combat-proposals.md` §2.9 / §3.8), and
+`goblin` (the scout: never in a pack, `SiteBuilder` puts one or two in corridors; `docs/design/goblin-scout.md`). Every kind is a
+`MonsterDefs` row (`MonsterFactory.compose` deals a pack kind from its row's `min_floor`, at most `max` a pack, `after` that
+many others). A shield is a target's `blocks_hit(from_point, kind)`, asked through `Combat.shielded` by every hit helper.
 `MonsterFactory.spawn_pack(room_cells: Array[Vector2i], budget: int, rng) -> Array[Monster]`.
 Monsters idle until a hero is within aggro range with line of sight, then act.
 
