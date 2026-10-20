@@ -22,7 +22,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Voice casting | `scripts/voice/*`, `addons/hero_listen/*` (copied from Hero-Reader), `tools/make_voice_clips.ps1`, `tests/test_voice*.gd`, `scenes/voice_lab.tscn` | voice agent |
 | Heroes, allies, spells, HUD, camera | `scripts/heroes/*`, `scripts/spells/*`, `scripts/ui/*`, `scripts/fx/*`, `scenes/arena.tscn`, `tests/test_hero*.gd`, `tests/test_spell*.gd` | heroes agent |
 | Monsters | `scripts/monsters/*`, `tests/test_monster*.gd` | monsters agent |
-| Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` | lead |
+| Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` (the game), `scripts/app/dev/game_dev.gd` (GameDev: the dev and screenshot drivers behind the `--` flags, the script the scene runs; new dev drivers go there) | lead |
 | Networking: authority kinds, the net contract test | `scripts/net/*`, `tests/test_net_contract.gd` | lead. Every owner adds `net_fields()` entries for its own vars |
 | Design docs | `docs/design/*` | design agent |
 

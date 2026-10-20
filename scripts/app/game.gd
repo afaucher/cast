@@ -11,7 +11,8 @@ extends Node3D
 ## contract resets everything (spells are re-picked). All heroes down ends the contract: "Crew
 ## incapacitated" and the invoice shows what was earned so far.
 ##
-## Command line (after `--`):
+## Command line (after `--`). This script parses every flag; the dev and screenshot drivers behind most of them live in
+## scripts/app/dev/game_dev.gd (GameDev, the script scenes/game.tscn runs), and game.gd only calls their no-op hooks.
 ##   --seed N            dungeon seed (default: random). Seeds the job board; with --contract N / --spells it is
 ##                       the contract's seed and floor 1 is exactly DungeonGen.for_run(run, 1) (seed N and the job's elevator)
 ##   --contract K        skip the board: take offer K (0-2) of the board, or, for K >= 3, the contract rolled from seed K
@@ -210,10 +211,7 @@ var _exit_cell := Vector2i(1 << 20, 1 << 20)
 var _closed_gates: Dictionary = {}  ## instance id -> true, so a gate pays once
 var _emp_cause: Dictionary = {}     ## employee instance id -> last culprit name
 var _player_down_noted := false
-var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_hazards: Array[PricedProp] = []  ## --hazard-near (ExplosiveProp)
-var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
-var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 var _arrival: VanArrival = null     ## the work van and its arrival sequence (null when the start room had no room for it)
 
 # --- The shared run (online crew) ---
@@ -881,58 +879,6 @@ func _populate_site() -> void:
 	_log("doors: %d (%s)" % [_site.doors.size(), ", ".join(_site.doors.map(func(d: OfficeDoor) -> String: return "%d" % d.doorway_id))], Color(0.8, 0.8, 1.0))
 
 
-## --tour S: walk the player along a path toward the elevator for S seconds (the controller's move_override), then stop.
-func _dev_tour() -> void:
-	if player == null or controller == null or map == null:
-		return
-	var goal_cell := _exit_cell if map.has_cell(_exit_cell) else player.current_cell()
-	if opts.has("to_door") and _site != null and not _site.plan.doors.is_empty():
-		goal_cell = _door_cells_dev(_site.plan.doors[clampi(int(opts["to_door"]), 0, _site.plan.doors.size() - 1)])[1]
-	var path := map.find_path(player.current_cell(), goal_cell, true)
-	print("[game] tour: %d cells toward %s" % [path.size(), goal_cell])
-	var vp := get_viewport().get_viewport_rid()
-	RenderingServer.viewport_set_measure_render_time(vp, true)
-	var state := {"i": 1, "end": GameWorld.time + float(opts["tour"]), "n": 0, "cpu": 0.0, "gpu": 0.0, "fog": 0.0}
-	var step := func() -> void:
-		if not is_instance_valid(player) or controller == null:
-			return
-		var i: int = state["i"]
-		if GameWorld.time > float(state["end"]) or i >= path.size():
-			if controller.move_override != Vector3.INF:
-				# frame cost over the walk (the fog's CPU share: FogView's last update + contents pass, sampled per tick)
-				var n := maxf(1.0, float(state["n"]))
-				print("[game] tour: stopped at cell %d of %d, %s; frames: process+render %.2f ms (vsync-bound), gpu %.2f ms, fog cpu %.3f ms (%s)" % [i, path.size(),
-						player.current_cell(), float(state["cpu"]) / n, float(state["gpu"]) / n, float(state["fog"]) / n,
-						"fog off" if fog_view == null else "fog on"])
-			controller.move_override = Vector3.INF
-			return
-		state["n"] = int(state["n"]) + 1
-		state["cpu"] = float(state["cpu"]) + RenderingServer.viewport_get_measured_render_time_cpu(vp) + Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
-		state["gpu"] = float(state["gpu"]) + RenderingServer.viewport_get_measured_render_time_gpu(vp)
-		if fog_view != null:
-			state["fog"] = float(state["fog"]) + (float(fog_view.stats.get("contents_us", 0.0)) + float(fog_view.stats.get("update_us", 0.0)) / (FogView.UPDATE_EVERY * 60.0)) / 1000.0
-		var d := Hex.to_world(path[i]) - player.global_position
-		d.y = 0.0
-		if d.length() < 0.45:
-			state["i"] = i + 1
-		# The path knows walls, not the van or a crate: no headway for 0.3 s and it sidesteps for 0.5 s.
-		var t := GameWorld.time
-		if d.length() < float(state.get("best", INF)) - 0.05:
-			state["best"] = d.length()
-			state["since"] = t
-		elif t - float(state.get("since", t)) > 0.3:
-			state["side"] = t + 0.5
-			state["since"] = t + 0.5
-			state["best"] = INF
-		var dir := d.normalized() if d.length() > 0.01 else Vector3.ZERO
-		if t < float(state.get("side", -1.0)):
-			dir = (dir + Vector3(-dir.z, 0.0, dir.x) * 1.5).normalized()
-		if int(state["i"]) != i:
-			state["best"] = INF
-		controller.move_override = dir
-	get_tree().physics_frame.connect(step)
-
-
 ## --lava-cave N: the cave layout to build, or 0. Solo only: a shared run never uses it (the prototype has no network shape:
 ## docs/design/lava-playtest.md).
 func _lava_cave() -> int:
@@ -1207,70 +1153,24 @@ func _start() -> void:
 	_drop_near()
 	_setup_fog()
 	_start_lava()
-	if opts.has("tour"):
-		get_tree().create_timer(1.0).timeout.connect(_dev_tour)
-	if opts.has("hazard_demo"):
-		_hazard_demo(str(opts["hazard_demo"]))
-	if opts.has("shark_demo"):
-		_shark_demo(str(opts["shark_demo"]))
-	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
-		var marker := Node3D.new()
-		GameWorld.root.add_child(marker)
-		marker.global_position = _dev_centroid()
-		rig.target = marker
-		rig.snap()
-	elif opts.get("focus", "") == "elevator" and _lift != null:
-		var lm := Node3D.new()   # the camera looks at the elevator's landing (screenshots of a floor-1 elevator, shut)
-		GameWorld.root.add_child(lm)
-		lm.global_position = Hex.to_world(_exit_cell, float(map.get_cell(_exit_cell).level))
-		rig.target = lm
-		rig.snap()
+	_dev_on_floor_ready()
 	_enter_barrier()
-	if opts.has("slay_near"):
-		get_tree().create_timer(1.5).timeout.connect(_slay_dev_monsters)
-	if opts.has("kit_demo"):
-		_kit_demo(str(opts["kit_demo"]))
-	if opts.has("autocast"):
-		await get_tree().create_timer(1.0).timeout
-		if _shared:
-			# A shared run (M4): the world is frozen behind the barrier, so cast once the floor runs and the crew is out of
-			# the van (the cast is an event that lands on every screen).
-			while is_inside_tree() and not (_floor_begun and _arrivals_done()):
-				await get_tree().process_frame
-			await get_tree().create_timer(float(opts.get("autocast_after", 0.5))).timeout
-			if not is_inside_tree() or player == null:
-				return
-		var centre := _dev_centroid()
-		if opts.has("aim_offset"):
-			var off := str(opts["aim_offset"]).split(",")
-			centre = player.global_position + Vector3(float(off[0]), 0.0, float(off[1]) if off.size() > 1 else 0.0)
-		if centre != Vector3.INF:
-			controller.aim_override = centre
-		_cast(str(opts["autocast"]), 1.0, "autocast")
-	if opts.has("pause_demo"):
-		_pause_demo()
-	if opts.has("invite_demo"):
-		_invite_demo()
-	if opts.has("press_e"):
-		get_tree().create_timer(float(opts["press_e"])).timeout.connect(func() -> void:
-			if opts.has("to_note") and not _site.notes.is_empty():
-				# the crew settles after the teleport; step the player back up to the note's front before E
-				var n: ClueNote = _site.notes[clampi(int(opts["to_note"]), 0, _site.notes.size() - 1)]
-				var f := ThemeGeo.facing(n.yaw - 90.0) * 1.2
-				player.global_position = n.global_position + Vector3(f.x, 0.0, f.y)
-				player.snap_to_ground()
-			var used := controller.press_use()
-			_log("press-e: %s" % ("used" if used else "nothing"), Color(0.8, 1.0, 0.8)))
-	if opts.has("break_crates"):
-		get_tree().create_timer(float(opts["break_crates"])).timeout.connect(_break_crates_dev)
-	if opts.has("demo_damage"):
-		get_tree().create_timer(1.0).timeout.connect(func() -> void:
-			Ledger.damage("Vintage 1787 wine barrel", 4000, player)
-			Ledger.damage("Zen fountain", 900, allies[0]))
-	if opts.has("hud_stage") or opts.has("hud_followers"):
-		HudStage.run(self, str(opts.get("hud_stage", "solo")), int(opts.get("hud_followers", 0)), float(opts.get("shot_after", 3.0)))
+	if not await _dev_after_barrier():
+		return
 	if opts.has("shot") and not _shared:
 		_take_shot_later(str(opts["shot"]), float(opts.get("shot_after", 3.0)))   # (a shared run starts its clock at the shared start)
+
+
+## Dev hook: right after the floor is set up and before the load barrier (--tour, --hazard-demo, --shark-demo,
+## --focus dev|elevator). GameDev does it.
+func _dev_on_floor_ready() -> void:
+	pass
+
+
+## Dev hook: after the load barrier (--slay-near, --kit-demo, --autocast, --pause-demo, --invite-demo, --press-e,
+## --break-crates, --demo-damage, --hud-stage). False: the game left the tree meanwhile, so _start stops. GameDev does it.
+func _dev_after_barrier() -> bool:
+	return true
 
 
 ## The crew arrives in the work van on the FIRST floor only: it teleports in over a summoning circle in the start room and
@@ -1341,27 +1241,6 @@ func _arrivals_done() -> bool:
 ## An arrival is still playing (the player has no control yet).
 func _arrival_running() -> bool:
 	return (_arrival != null and _arrival.is_running()) or (_lift != null and _lift.is_running())
-
-
-## --pause-demo: open the pause overlay 1.5 s into the floor (a shared run: 1.5 s after the shared start and the arrival).
-func _pause_demo() -> void:
-	if _shared:
-		while is_inside_tree() and not (_floor_begun and _arrivals_done()):
-			await get_tree().process_frame
-	await get_tree().create_timer(1.5).timeout
-	if is_inside_tree() and _can_pause():
-		_open_pause()
-
-
-## --invite-demo: the overlay-invite question 1.5 s into the floor, as if Steam had sent one (M7 screenshots).
-func _invite_demo() -> void:
-	if _shared:
-		while is_inside_tree() and not (_floor_begun and _arrivals_done()):
-			await get_tree().process_frame
-	await get_tree().create_timer(1.5).timeout
-	if is_inside_tree() and not _leaving:
-		Session.pending_invite = {"lobby": 0, "inviter": str(opts["invite_demo"])}
-		_on_invite(0, str(opts["invite_demo"]))
 
 
 ## The animation plays unless --no-van-intro; tests and screenshots skip it unless --van-intro.
@@ -2585,46 +2464,9 @@ func _on_again_requested(peer: int) -> void:
 		_on_next_contract()
 
 
-## --invoice-demo: a sample contract with a believable ledger, straight to the invoice.
+## Dev hook (--invoice-demo): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _invoice_demo() -> void:
-	var run := ContractBoard.run_for_seed(int(opts.get("seed", 12)))
-	var s := ContractSession.begin(run, 1)
-	var wick := _demo_hero("Wick")
-	var rebar := _demo_hero("Rebar")
-	var gasket := _demo_hero("Gasket")
-	s.enter_floor(1, run.floor_gates[0], false, run.floor_employees[0], 12)
-	for _i in run.floor_gates[0]:
-		s.gate_closed(false)
-	s.check_clean(0)
-	s.extract(2)
-	Ledger.damage("Wine rack", 1200, wick)
-	s.enter_floor(2, run.floor_gates[1], false, run.floor_employees[1], 14)
-	for _i in run.floor_gates[1]:
-		s.gate_closed(false)
-	s.check_clean(0)
-	Ledger.damage("Zen fountain", 900, rebar)
-	Ledger.damage("Crystal lamp", 600, wick)
-	Ledger.damage("Crystal lamp", 600, gasket)
-	s.employee_lost("Pearl (valet)", "Wick")
-	s.enter_floor(3, 0, true, run.floor_employees[2], 18)
-	s.gate_closed(true)
-	s.check_clean(0)
-	s.extract(1)
-	Ledger.damage("Gold toilet", 15000, wick)
-	s.finish(ContractSession.END_CASHED_OUT)
-	var inv := ContractInvoice.build(s)
-	for h in [wick, rebar, gasket]:
-		h.free()
-	_session = s
-	_run = run
-	_show_invoice(inv)
-	_invoice.next_contract.disconnect(_on_next_contract)
-
-
-func _demo_hero(hero_name: String) -> Actor:
-	var a := Actor.new()
-	a.display_name = hero_name
-	return a
+	pass
 
 
 # --- Crew ------------------------------------------------------------------------------------------------
@@ -3002,632 +2844,31 @@ func _take_shot_later(path: String, after: float) -> void:
 	get_tree().quit()
 
 
-## --to-door N: [a hall cell two back from the door's mouth, a room cell four past the door] (a straight line through it).
-func _door_cells_dev(rec: Dictionary) -> Array[Vector2i]:
-	var door_c: Vector2i = (rec["door_cells"] as Array)[0]
-	var mouth_c: Vector2i = (rec["mouth_cells"] as Array)[0]
-	var step := door_c - mouth_c
-	var stand := mouth_c - step * 2
-	if not map.is_walkable_cell(stand):
-		stand = mouth_c
-	var inside := door_c + step * 4
-	if not map.is_walkable_cell(inside):
-		inside = door_c + step
-	return [stand, inside]
-
-
-## Dev flags --to-gate / --to-exit: move the crew (screenshots).
+## Dev hook (--to-gate / --to-theme / --to-pool / --to-shark / ...): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _dev_teleports() -> void:
-	if opts.has("to_hazard") and _to_hazard(str(opts["to_hazard"])):
-		return
-	if opts.has("to_shark") and _to_shark(str(opts["to_shark"])):
-		return
-	if opts.has("to_pool") and _to_pool(str(opts["to_pool"])):
-		return
-	if opts.has("to_theme") and _site != null:
-		var themed := _site.plan.rooms_with_theme(str(opts["to_theme"]))
-		if not themed.is_empty():
-			# the middle of the room's set dressing (the room's centre when it has none)
-			var focus: Vector2i = _site.plan.centers[themed[0]]
-			var sum := Vector2.ZERO
-			var n := 0
-			for dc in _site.plan.decor:
-				if str(dc["room"]) == themed[0] and String(dc["place"]) != "ring":
-					sum += dc["pos"]
-					n += 1
-			if n > 0:
-				var mid := sum / float(n)
-				focus = Hex.from_world(Vector3(mid.x, 0.0, mid.y))
-				if map.get_cell(focus) == null or map.get_cell(focus).type != HexMap.Tile.FLOOR:
-					focus = _site.plan.centers[themed[0]]
-			if opts.get("focus", "") == "sign":
-				# a few steps in front of the room's neon sign (screenshots of the sign)
-				for dc in _site.plan.decor:
-					if str(dc["room"]) == themed[0] and str(dc["kind"]) == "neon_sign":
-						var front: Vector2 = (dc["pos"] as Vector2) + ThemeGeo.facing(float(dc["yaw"])) * 5.5
-						var fc := Hex.from_world(Vector3(front.x, 0.0, front.y))
-						if map.is_walkable_cell(fc):
-							focus = fc
-			_teleport_crew(focus)
-			return
-	if opts.has("to_corridor"):
-		var corr: Array[Vector2i] = []
-		for cc: Vector2i in map.cells:
-			if map.cells[cc].tag == "corridor" and map.is_walkable_cell(cc):
-				corr.append(cc)
-		if not corr.is_empty():
-			corr.sort()
-			_teleport_crew(corr[int(corr.size() * 0.5)])
-			return
-	if opts.has("to_door") and _site != null and not _site.plan.doors.is_empty():
-		# in the hall, two cells back from door N's mouth (--tour then walks through it into the room)
-		var stand2 := _door_cells_dev(_site.plan.doors[clampi(int(opts["to_door"]), 0, _site.plan.doors.size() - 1)])[0]
-		_teleport_crew(stand2)
-		return
-	if opts.has("to_note") and _site != null and not _site.plan.notes.is_empty():
-		# beside note N (the story note is 0, the hint slip 1), off to its side so nobody hides it from the camera
-		var nt: Dictionary = _site.plan.notes[clampi(int(opts["to_note"]), 0, _site.plan.notes.size() - 1)]
-		var nc: Vector2i = nt["cell"]
-		var front := ThemeGeo.world(nc) + ThemeGeo.facing(float(nt.get("yaw", 0.0)) - 90.0) * 1.5
-		var stand := nc
-		var stand_d := INF
-		var nlevel: int = map.get_cell(nc).level
-		for c in Hex.range_cells(nc, 2):
-			var cell4: HexMap.Cell = map.get_cell(c)
-			if c != nc and cell4 != null and cell4.type == HexMap.Tile.FLOOR and cell4.level == nlevel and not _site.plan.blocked.has(c) 					and ThemeGeo.world(c).distance_to(front) < stand_d:
-				stand_d = ThemeGeo.world(c).distance_to(front)
-				stand = c
-		_teleport_crew(stand)
-		_log("to-note: %s %s at %s, crew at %s" % [nt["kind"], nt["format"], nc, stand], Color(0.8, 0.8, 1.0))
-		return
-	if opts.has("to_employee") and _site != null and not _site.plan.employees.is_empty():
-		var ec: Vector2i = _site.plan.employees[0]["cell"]
-		var stand := ec
-		for c in Hex.ring(ec, 1):
-			var cell3: HexMap.Cell = map.get_cell(c)
-			if cell3 != null and cell3.type == HexMap.Tile.FLOOR:
-				stand = c
-				break
-		_teleport_crew(stand)
-		return
-	if opts.has("to_package") and _site != null and not _site.plan.packages.is_empty():
-		# two cells from the first stack, toward the middle of its room
-		var pk: Dictionary = _site.plan.packages[0]
-		var pc: Vector2i = pk["cell"]
-		var mid: Vector2i = _site.plan.centers[str(pk["room"])]
-		var near := pc
-		var near_d := 99
-		for c in Hex.ring(pc, 2):
-			var cell2: HexMap.Cell = map.get_cell(c)
-			if cell2 != null and cell2.type == HexMap.Tile.FLOOR and Hex.distance(c, mid) < near_d:
-				near_d = Hex.distance(c, mid)
-				near = c
-		_teleport_crew(near)
-		return
-	if opts.has("to_gate") and _site != null and not _site.gates.is_empty():
-		var gc: Vector2i = _site.plan.gates[0]["cell"]
-		var best := gc
-		var best_d := 99
-		for c in Hex.ring(gc, 5):
-			var cell: HexMap.Cell = map.get_cell(c)
-			if cell != null and cell.type == HexMap.Tile.FLOOR and absi(cell.level - map.get_cell(gc).level) <= 1:
-				var d := Hex.distance(c, gc)
-				if d < best_d:
-					best_d = d
-					best = c
-		_teleport_crew(best)
-	elif opts.has("to_exit"):
-		_teleport_crew(_exit_cell)
+	pass
 
 
-## Dev flag --break-crates: hit the crate stacks around the player (screenshots of the break).
-func _break_crates_dev() -> void:
-	for a in GameWorld.breakables_in_radius(player.global_position, 9.0):
-		if a is BreakableCrate:
-			a.apply_damage(5.0, player)
-
-
-## --to-pool: the crew at the floor's first pool (of `look`, any when ""): seat 1 wading in the middle, seat 2 on the deck at
-## the camera-near rim, seat 3 wading by the far rim; at a moat all three wade along the channel nearest the camera.
-## False when the floor has no such pool.
-func _to_pool(look: String) -> bool:
-	for rec in map.pools:
-		_log("pool: %s in %s (%s), %d basin cells" % [rec["look"], rec["room"], _site.plan.theme_of(str(rec["room"])) if _site != null else "", (rec["basin"] as Array).size()], Color(0.6, 0.9, 1.0))
-	for rec in map.pools:
-		if look != "" and str(rec["look"]) != look:
-			continue
-		var c: Vector2 = rec["center"]
-		var ax: Vector2 = rec["axis"]
-		var n := Vector2(-ax.y, ax.x)
-		if n.dot(ThemeGeo.CAMERA_DIR) < 0.0:
-			n = -n   # toward the camera
-		var hw := float(rec["half_wid"])
-		var spots: Array[Vector2] = [c + ax * 0.6, c + n * (hw + 0.75) - ax * 0.4, c - n * (hw - 0.75) - ax * 1.2]
-		var path := PoolGeo.channel(rec)
-		if path.size() >= 3:
-			# a moat: the whole crew wading along the channel on the side nearest the camera
-			var total := 0.0
-			for i in path.size():
-				total += path[i].distance_to(path[(i + 1) % path.size()])
-			var best_s := 0.0
-			var best := -INF
-			for k in 64:
-				var s := total * float(k) / 64.0
-				var q: Vector2 = DecorAnim.path_pose(path, total, s)[0]
-				if q.dot(ThemeGeo.CAMERA_DIR) > best:
-					best = q.dot(ThemeGeo.CAMERA_DIR)
-					best_s = s
-			spots.clear()
-			if opts.get("focus", "") == "island_corner":
-				best_s += total * 0.5   # (on the far side, out of the way of the island corner the camera looks at)
-			for off: float in [0.0, -1.7, 1.7]:
-				spots.append(DecorAnim.path_pose(path, total, best_s + off)[0])
-		var list: Array[Hero] = []
-		for seat in range(1, NetSession.MAX_CREW + 1):
-			if heroes_by_seat.has(seat):
-				list.append(heroes_by_seat[seat])
-		for i in list.size():
-			var p: Vector2 = spots[mini(i, spots.size() - 1)]
-			list[i].global_position = Vector3(p.x, 0.0, p.y)
-			list[i].snap_to_ground()
-			list[i].facing = Vector3(-n.x, 0.0, -n.y) if i == 1 and path.size() < 3 else Vector3(n.x, 0.0, n.y)
-			var brain := list[i].get_node_or_null("AllyBrain")
-			if brain != null:
-				brain.set_physics_process(false)   # (the allies hold their spots for the screenshot)
-		if opts.get("focus", "") == "pool_corner":
-			# the corner farthest from the camera: the liner, the coping and the deck all show there
-			var best: Vector2 = (rec["outline"] as Array)[0]
-			for q: Vector2 in (rec["outline"] as Array):
-				if q.dot(ThemeGeo.CAMERA_DIR) < best.dot(ThemeGeo.CAMERA_DIR):
-					best = q
-			var mk := Node3D.new()
-			GameWorld.root.add_child(mk)
-			mk.global_position = Vector3(best.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, best.y)
-			rig.target = mk
-		elif path.size() >= 3 and not opts.has("focus"):
-			# a moat: look at the whole ring, not just the player
-			var mc := Node3D.new()
-			GameWorld.root.add_child(mc)
-			mc.global_position = Vector3(c.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, c.y)
-			rig.target = mc
-		elif opts.get("focus", "") == "island_corner" and not (rec.get("hole", []) as Array).is_empty():
-			# a moat's island corner nearest the camera: the island's liner, its coping and the water round it show there
-			var best: Vector2 = (rec["hole"] as Array)[0]
-			for q: Vector2 in (rec["hole"] as Array):
-				if q.dot(ThemeGeo.CAMERA_DIR) > best.dot(ThemeGeo.CAMERA_DIR):
-					best = q
-			var mk := Node3D.new()
-			GameWorld.root.add_child(mk)
-			mk.global_position = Vector3(best.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, best.y)
-			rig.target = mk
-		rig.snap()
-		return true
-	return false
-
-
-func _teleport_crew(cell: Vector2i) -> void:
-	var spots := _free_cells_near(cell, 2)
-	# In seat order (solo that is the player, Rebar, Gasket, as before), so every machine of a crew puts every hero on the
-	# same cell and the floor checksum agrees (the player is a different seat on each machine).
-	var list: Array[Hero] = []
-	for seat in range(1, NetSession.MAX_CREW + 1):
-		if heroes_by_seat.has(seat):
-			list.append(heroes_by_seat[seat])
-	if list.size() != _heroes().size():
-		list = _heroes()
-	for i in list.size():
-		var c := cell if i == 0 else spots[(i - 1) % spots.size()]
-		var lv := map.ground_level(Hex.to_world(c))
-		list[i].global_position = Hex.to_world(c, 0.0 if is_nan(lv) else lv)
-		list[i].snap_to_ground()
-	rig.snap()
-
-
-## Dev flag --give: "heal:9,corn:3" slots (or tops up) those spells with those charges.
+## Dev hook (--give / --give-allies / --hold): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _apply_dev_loadout() -> void:
-	if opts.has("give"):
-		for part in str(opts["give"]).split(","):
-			var bits := part.strip_edges().split(":")
-			var id := bits[0].strip_edges()
-			var n := int(bits[1]) if bits.size() > 1 else SpellComponents.START_CHARGES
-			if SpellBook.is_available(id):
-				player.slot_in(id, n)
-	if opts.has("hold"):
-		player.select_slot(int(opts["hold"]) - 1)
-	if opts.has("give_allies"):
-		var ids := str(opts["give_allies"]).split(",")
-		for i in mini(ids.size(), allies.size()):
-			allies[i].slot_in(ids[i].strip_edges(), SpellComponents.START_CHARGES)
+	pass
 
 
-## Dev flag --drop-near: pickups for the listed spells, right next to the player.
+## Dev hook (--drop-near): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _drop_near() -> void:
-	if not opts.has("drop_near"):
-		return
-	var ids := str(opts["drop_near"]).split(",")
-	# The first one lies just outside the collect radius but inside the swap radius, so a hero with
-	# full slots is offered the swap at once; the rest follow in a row.
-	var base := player.global_position + Vector3(0.9, 0.0, 0.55)
-	for i in ids.size():
-		var id := ids[i].strip_edges()
-		var p := ComponentPickup.drop(id, SpellComponents.PICKUP_CHARGES, base + Vector3(0.0, 0.0, 1.4 * i))
-		_log("drop-near: %s %s" % [id, "ok" if p != null else "no floor"], Color(0.8, 0.8, 1.0))
+	pass
 
 
-## Dev flag --hazard-near kind[,kind...]: explosive props (ExplosiveProp) in a cluster on open floor 3-6 cells from seat 1's
-## hero, each 2.4-3.1 units from the one before (inside its blast: they chain). Built in _start, before the barrier numbers
-## the floor, so every machine of a crew builds the same ones (tests, screenshots).
+## Dev hook (--hazard-near): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _hazard_near() -> void:
-	if not opts.has("hazard_near"):
-		return
-	var near_hero: Hero = heroes_by_seat.get(1, player) if _shared else player
-	var here := near_hero.current_cell()
-	var level: int = map.get_cell(here).level
-	var cands: Array[Vector2i] = []
-	for c in Hex.range_cells(here, 6):
-		if Hex.distance(c, here) >= 3 and map.is_walkable_cell(c) and map.get_cell(c).level == level:
-			cands.append(c)
-	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		var da := Hex.distance(a, here)
-		var db := Hex.distance(b, here)
-		return da < db or (da == db and (a.x < b.x or (a.x == b.x and a.y < b.y))))
-	var placed: Array[Vector3] = []
-	for k in str(opts["hazard_near"]).split(","):
-		var kind := k.strip_edges()
-		for c in cands:
-			var w := Hex.to_world(c)
-			var ok := true
-			var near_last := placed.is_empty()
-			for q in placed:
-				var d := GameWorld.flat_distance(q, w)
-				ok = ok and d >= 2.4
-			if not placed.is_empty():
-				var d_last := GameWorld.flat_distance(placed.back(), w)
-				near_last = d_last >= 2.4 and d_last <= 3.1
-			if not ok or not near_last:
-				continue
-			var e := PricedProp.spawn(c, kind, {})
-			if e != null:
-				placed.append(w)
-				_dev_hazards.append(e)
-			break
-	_log("hazard-near: %d explosive props" % placed.size(), Color(0.8, 0.8, 1.0))
+	pass
 
 
-## Dev flag --to-hazard kind[:n] ("any": any kind): the crew stands a few steps beside the floor's first (n-th) explosive
-## prop of that kind, and --focus dev puts the camera on it (screenshots).
-func _to_hazard(want: String) -> bool:
-	if _site == null:
-		return false
-	var skip := int(want.get_slice(":", 1)) if want.contains(":") else 0   # kind:n = the n-th of that kind
-	want = want.get_slice(":", 0)
-	for h in _site.hazards:
-		var e := h as ExplosiveProp
-		if e == null or (want != "any" and e.kind != want):
-			continue
-		if skip > 0:
-			skip -= 1
-			continue
-		# off to one side of it (in front, the crew would stand between the camera and the prop)
-		var f := e.facing_vector()
-		var best := Hex.from_world(e.global_position)
-		var best_d := INF
-		for side: float in [1.0, -1.0]:
-			var target := e.global_position + Vector3(f.x, 0.0, f.y) * 1.2 + Vector3(-f.y, 0.0, f.x) * 3.6 * side
-			for c in Hex.range_cells(Hex.from_world(target), 2):
-				var d := Hex.to_world(c).distance_to(target) + (0.0 if side > 0.0 else 0.5)
-				if map.is_walkable_cell(c) and not _site.plan.blocked.has(c) and d < best_d:
-					best_d = d
-					best = c
-		_teleport_crew(best)
-		_dev_hazards.append(e)
-		_log("to-hazard: %s in %s" % [e.display_name, _site.plan.theme_of(str(_site.plan.hazards[_site.hazards.find(h)]["room"]))], Color(0.8, 0.8, 1.0))
-		return true
-	return false
-
-
-## Dev flag --to-shark [regular|laser|imp|lagoon|any] (screenshots): the crew on the deck beside the floor's first pool shark
-## of that variant (lagoon: the first in a lagoon), the camera on its pool, the AI allies holding their spots. Sharks live
-## from floor 2 (the log lists the floor's sharks).
-func _to_shark(want: String) -> bool:
-	if _site == null:
-		return false
-	for s in _site.sharks:
-		_log("shark: %s in %s (pool %d%s)" % [s.variant, str(s.pool_record().get("room", "")), s.pool_index,
-			", lagoon" if str(s.pool_record().get("shape", "")) == PoolGeo.LAGOON else ""], Color(0.6, 0.9, 1.0))
-	for s in _site.sharks:
-		var rec := s.pool_record()
-		if want == "lagoon":
-			if str(rec.get("shape", "")) != PoolGeo.LAGOON:
-				continue
-		elif want != "any" and want != "" and s.variant != want:
-			continue
-		# the rim nearest the camera: the crew stands on the deck there, the player closest
-		var c: Vector2 = rec["center"]
-		var ol: Array = rec["outline"]
-		var normals := PoolGeo.edge_normals(ol)
-		var best := 0
-		for i in normals.size():
-			if normals[i].dot(ThemeGeo.CAMERA_DIR) > normals[best].dot(ThemeGeo.CAMERA_DIR):
-				best = i
-		var a: Vector2 = ol[best]
-		var b: Vector2 = ol[(best + 1) % ol.size()]
-		var n: Vector2 = normals[best]
-		var t := (b - a).normalized()
-		var spots: Array[Vector2] = [(a + b) * 0.5 + n * 1.6, (a + b) * 0.5 + n * 2.6 + t * 2.2, (a + b) * 0.5 + n * 2.6 - t * 2.2]
-		if opts.get("shark_demo", "") == "laser":
-			spots[0] = (a + b) * 0.5 + n * 6.0
-		var list: Array[Hero] = []
-		for seat in range(1, NetSession.MAX_CREW + 1):
-			if heroes_by_seat.has(seat):
-				list.append(heroes_by_seat[seat])
-		var deck_lv := int(rec["deck_level"])
-		var room := str(rec["room"])
-		for i in list.size():
-			var p: Vector2 = spots[mini(i, spots.size() - 1)]
-			# onto the nearest dry floor of the pool's room at deck level (a spot past the room's wall would be void)
-			var wish := Vector3(p.x, 0.0, p.y)
-			var best_c := Hex.from_world(wish)
-			var best_d := INF
-			for cc in Hex.range_cells(Hex.from_world(wish), 4):
-				var cell := map.get_cell(cc)
-				if cell == null or not map.is_walkable_cell(cc) or map.is_pool_cell(cc) or cell.level != deck_lv or cell.tag != room:
-					continue
-				var dd := Hex.to_world(cc).distance_to(wish)
-				if dd < best_d:
-					best_d = dd
-					best_c = cc
-			if best_d < INF and best_d > 0.9:
-				var w := Hex.to_world(best_c)
-				p = Vector2(w.x, w.z)
-			list[i].global_position = Vector3(p.x, 0.0, p.y)
-			list[i].snap_to_ground()
-			list[i].facing = Vector3(-n.x, 0.0, -n.y)
-			var brain := list[i].get_node_or_null("AllyBrain")
-			if brain != null:
-				brain.set_physics_process(false)
-		var mk := Node3D.new()
-		GameWorld.root.add_child(mk)
-		var mid := c.lerp((a + b) * 0.5 + n * 2.0, 0.45)
-		mk.global_position = Vector3(mid.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, mid.y)
-		rig.target = mk
-		rig.snap()
-		_dev_sharks.append(s)
-		return true
-	return false
-
-
-## Dev flag --shark-demo bite|laser|knock|kill (with --to-shark; screenshots), after --demo-after seconds (1.0):
-##   bite   the player steps to the rim: the shark comes for it (its own senses)
-##   laser  the shark charges at the player (who stands 6 out on the deck) and fires
-##   knock  the player's shove (2.0) knocks the imp gunner off its shark
-##   kill   the player's hit kills the shark (the bill)
-func _shark_demo(stage: String) -> void:
-	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
-	if _dev_sharks.is_empty() or player == null:
-		return
-	var s: Shark = _dev_sharks[0]
-	if not is_instance_valid(s) or s.dead:
-		return
-	match stage:
-		"bite":
-			var p := Vector2(player.global_position.x, player.global_position.z)
-			var out := s.steer.out_of_water(p)
-			var q := p
-			for _i in 40:
-				if s.steer.rim(q) > -0.7:
-					break
-				q -= out * 0.1
-			player.global_position = Vector3(q.x, player.global_position.y, q.y)
-			player.snap_to_ground()
-		"laser":
-			if s.has_laser():
-				# the player steps onto the deck ahead of the shark's snout (in its nose cone), then it charges
-				var rec := s.pool_record()
-				var best := Vector3.INF
-				var best_d := INF
-				for d: float in [6.0, 5.0, 7.0, 4.5, 8.0]:
-					var want_at := s.global_position + s.facing * d
-					for cc in Hex.range_cells(Hex.from_world(want_at), 2):
-						var cell := map.get_cell(cc)
-						if cell == null or not map.is_walkable_cell(cc) or map.is_pool_cell(cc) or cell.level != int(rec["deck_level"]):
-							continue
-						var w := Hex.to_world(cc)
-						var to := w - s.global_position
-						to.y = 0.0
-						var off := rad_to_deg(Vector2(s.facing.x, s.facing.z).angle_to(Vector2(to.x, to.z)))
-						var score := absf(off) * 0.1 + absf(to.length() - 6.0)
-						if absf(off) < 30.0 and s.steer.rim(Vector2(w.x, w.z)) < -1.4 and score < best_d:
-							best_d = score
-							best = w
-					if best != Vector3.INF:
-						break
-				if best != Vector3.INF:
-					player.global_position = Vector3(best.x, player.global_position.y, best.z)
-					player.snap_to_ground()
-				s._begin_charge(player)
-		"knock":
-			if s.rider != null and is_instance_valid(s.rider):
-				s.rider.shove(s.rider.global_position - player.global_position, 2.0, player)
-		"kill":
-			s.apply_damage(s.hp + 1.0, player)
-
-
-## Dev flag --hazard-demo fuse|chain|invoice (with --hazard-near or --to-hazard; screenshots): after --demo-after seconds (1.0)
-## the player sets off the first one. "chain" and "invoice" stand two frozen grunts beside each explosive first;
-## "invoice" cashes out 2.5 s after the last blast, so the invoice shows the bill.
-func _hazard_demo(stage: String) -> void:
-	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
-	var list: Array[ExplosiveProp] = []
-	for h in _dev_hazards:
-		if is_instance_valid(h) and h is ExplosiveProp and not h.dead:
-			list.append(h as ExplosiveProp)
-	if list.is_empty() or player == null:
-		return
-	if stage != "fuse":
-		var k := 0
-		for e in list:
-			for a: float in [0.6, 2.4]:
-				var ang := a + float(k) * 1.1
-				var at := e.global_position + Vector3(cos(ang), 0.0, sin(ang)) * 1.7
-				if not map.is_walkable_cell(Hex.from_world(at)):
-					continue
-				var m := MonsterFactory.spawn("grunt", Hex.from_world(at))
-				if m != null:
-					m.global_position = Vector3(at.x, m.global_position.y, at.z)
-					m.snap_to_ground()
-					m.set_physics_process(false)
-			k += 1
-	list[0].ignite(player)
-	if stage != "invoice":
-		return
-	while list.any(func(e: ExplosiveProp) -> bool: return is_instance_valid(e) and not e.dead):
-		await get_tree().create_timer(0.2).timeout
-	await get_tree().create_timer(2.5).timeout
-	_end_contract(ContractSession.END_CASHED_OUT)
-
-
-## Dev flag --kit-demo: show one hero's primary / secondary on the --spawn-near monsters (screenshots).
-func _kit_demo(kind: String) -> void:
-	for ally in allies:   # only the demo hero acts
-		var b := ally.get_node_or_null("AllyBrain")
-		if b != null:
-			b.set_physics_process(false)
-	await get_tree().create_timer(0.8).timeout
-	var centre := _dev_centroid()
-	if centre == Vector3.INF:
-		return
-	if kind == "draw":
-		controller.enabled = false   # no mouse button is held, so the controller would release at once
-		player.face_point(centre)
-		player.start_draw()
-		await get_tree().create_timer(1.3).timeout
-		player.release_draw(centre - player.global_position)
-		return
-	var hero: Hero = allies[0]
-	for h: Hero in allies:   # (by kit, not seat: the AI seats depend on the pick)
-		if h.kit_id == (HeroKit.GASKET if kind == "hammer" else HeroKit.REBAR):
-			hero = h
-	var away := (centre - player.global_position)
-	away.y = 0.0
-	away = away.normalized()
-	var spot := centre - away * (hero.melee_reach - 0.25)
-	hero.global_position = Vector3(spot.x, hero.global_position.y, spot.z)
-	hero.snap_to_ground()
-	hero.face_point(centre)
-	hero.melee(away)
-
-
-func _slay_dev_monsters() -> void:
-	for m in _dev_monsters:
-		if is_instance_valid(m) and not m.dead:
-			m.die()
-
-
-## Dev flag --spawn-near kind,n: n extra monsters of `kind` on open floor 4-5 cells from the player.
+## Dev hook (--spawn-near): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _spawn_near() -> void:
-	if not opts.has("spawn_near"):
-		return
-	var parts := str(opts["spawn_near"]).split(",")
-	var kind := parts[0].strip_edges()
-	var n := int(parts[1]) if parts.size() > 1 else 3
-	if map.has_cell(_stage_center):
-		for c in Hex.ring(_stage_center, 1):
-			if _dev_monsters.size() >= n:
-				break
-			var tm := MonsterFactory.spawn(kind, c)
-			if tm != null:
-				_dev_monsters.append(tm)
-		_log("spawn-near: %d %s on the tower" % [_dev_monsters.size(), kind], Color(0.8, 0.8, 1.0))
-		return
-	var near_hero: Hero = heroes_by_seat.get(1, player) if _shared else player   # (a shared run: seat 1's spot on every machine)
-	var here := near_hero.current_cell()
-	var base_level: int = map.get_cell(here).level
-	var cands: Array[Vector2i] = []
-	for c in Hex.range_cells(here, 5):
-		var d := Hex.distance(c, here)
-		var cell: HexMap.Cell = map.get_cell(c)
-		if d >= 4 and cell != null and cell.type == HexMap.Tile.FLOOR and absi(cell.level - base_level) <= 1:
-			cands.append(c)
-	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
-	if parts.size() > 2 and parts[2].strip_edges() == "cluster":
-		# Candidates 5-7 cells out with a clear view of the player (so Rebar can bowl at them).
-		cands.clear()
-		for c in Hex.range_cells(here, 7):
-			var cc: HexMap.Cell = map.get_cell(c)
-			if Hex.distance(c, here) >= 5 and cc != null and cc.type == HexMap.Tile.FLOOR and cc.level == base_level:
-				if map.line_of_sight(Combat.chest(near_hero), Hex.to_world(c, cc.level) + Vector3.UP * 0.9):
-					cands.append(c)
-		cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
-	if parts.size() > 2 and parts[2].strip_edges() == "cluster" and not cands.is_empty():
-		# A tight clump: the n candidates nearest to the first one.
-		var anchor := cands[0]
-		cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return Hex.distance(a, anchor) < Hex.distance(b, anchor))
-		for c in cands:
-			if _dev_monsters.size() >= n:
-				break
-			var cm := MonsterFactory.spawn(kind, c)
-			if cm != null:
-				_dev_monsters.append(cm)
-	else:
-		# Spread them: take every k-th candidate.
-		var stride := maxi(1, cands.size() / maxi(n, 1))
-		var i := 0
-		while _dev_monsters.size() < n and i < cands.size():
-			var m := MonsterFactory.spawn(kind, cands[i])
-			if m != null:
-				_dev_monsters.append(m)
-			i += stride
-	if opts.has("idle_monsters"):
-		for im in _dev_monsters:
-			im.aggro_range = 0.0
-	_log("spawn-near: %d %s" % [_dev_monsters.size(), kind], Color(0.8, 0.8, 1.0))
+	pass
 
 
-## Average position of the living --spawn-near monsters, or Vector3.INF if none.
-func _dev_centroid() -> Vector3:
-	var sum := Vector3.ZERO
-	var count := 0
-	for m in _dev_monsters:
-		if is_instance_valid(m) and not m.dead:
-			sum += m.global_position
-			count += 1
-	for h in _dev_hazards:   # (--hazard-near / --to-hazard: the explosives)
-		if is_instance_valid(h) and not h.dead:
-			sum += h.global_position
-			count += 1
-	return sum / count if count > 0 else Vector3.INF
-
-
-## Dev flag --stage-ledge: a 7-cell tower 5 levels tall on the roomiest flat ground 2-5 cells from
-## the start (so a shove off its edge is a 5-level fall onto open floor). --spawn-near then stands
-## its monsters on top.
+## Dev hook (--stage-ledge): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _stage_plateau() -> void:
-	var start: Vector2i = map.cells_with_tag("start")[0]
-	var base: int = map.get_cell(start).level
-	var best := Vector2i(1 << 20, 1 << 20)
-	var best_score := -1
-	for c in Hex.range_cells(start, 5):
-		if Hex.distance(c, start) < 3:
-			continue
-		var ok := true
-		for n in Hex.range_cells(c, 1):
-			var cell: HexMap.Cell = map.get_cell(n)
-			if cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != base or Hex.distance(n, start) < 2:
-				ok = false
-				break
-		if not ok:
-			continue
-		var score := 0
-		for n in Hex.range_cells(c, 4):
-			var cell: HexMap.Cell = map.get_cell(n)
-			if cell != null and cell.type == HexMap.Tile.FLOOR and cell.level == base:
-				score += 1
-		if score > best_score:
-			best_score = score
-			best = c
-	if best_score < 0:
-		return
-	_stage_center = best
-	for n in Hex.range_cells(best, 1):
-		map.get_cell(n).level = base + 5
+	pass

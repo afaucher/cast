@@ -186,7 +186,7 @@ func _check_menu() -> void:
 	check(game_scene != null, "the game scene loads")
 	if game_scene != null:
 		var g := game_scene.instantiate()
-		check(g is Node3D and g.get_script() == GAME, "it is the game")
+		check(g is Node3D and (g.get_script() as Script).get_base_script() == GAME, "it is the game (GameDev, the dev drivers, over game.gd)")
 		g.free()
 
 	# Sub-screens and Esc.
