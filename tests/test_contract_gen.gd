@@ -190,7 +190,7 @@ func _check_spawn_smoke() -> void:
 	GameWorld.begin(map, world, 1)
 	var site := SiteBuilder.build(map, run, 1)
 	check(site.monsters.size() > 0, "monsters spawned")
-	check(site.pest_spawned >= SiteBuilder.PEST_MIN, "at least %d pests on the floor (got %d)" % [SiteBuilder.PEST_MIN, site.pest_spawned])
+	check(site.pest_spawned >= PackPlanner.PEST_MIN, "at least %d pests on the floor (got %d)" % [PackPlanner.PEST_MIN, site.pest_spawned])
 	var swarmers := 0
 	for m in site.monsters:
 		if m.kind == "swarmer":
