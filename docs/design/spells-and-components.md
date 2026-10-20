@@ -10,7 +10,7 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 | Slot count, charges, cap, held boost, pickup radii, **drop table** | `scripts/spells/spell_components.gd` (`SpellComponents`) |
 | Per-spell component name, `available` flag, cooldowns | `scripts/spells/spell_book.gd` (`SpellBook.SPELLS`) |
 | Pickup actor | `scripts/spells/component_pickup.gd` (`ComponentPickup`) |
-| Faceted prop for each component (pickup and hand) | `scripts/spells/component_props.gd` (`ComponentProps`) |
+| Faceted prop for each component (pickup and hand) | each spell's def (`scripts/spells/defs/<id>.gd`: `component_soup()`, `GLOW`), built by `ComponentProps.make` (`scripts/spells/component_props.gd`) |
 | Slots, charges, held slot, swap | `scripts/heroes/hero.gd` |
 | Keys 1-4 / E (use) / F, the cast entry point | `scripts/heroes/player_controller.gd`, `scripts/app/input_setup.gd` |
 | Cards, toasts, swap prompt | `scripts/ui/hud.gd` |

@@ -46,3 +46,34 @@ static func teeth_splash_damage(power: float) -> float:
 static func cast(caster: Actor, power: float, target: Vector3, _start: float, _extra: Dictionary) -> Node:
 	Teeth.cast(caster, power, target)
 	return null
+
+
+# --- The component: Loose teeth (ComponentProps.make builds it, and holds it in a hero's hand) ---
+
+## How strongly the prop's own colour glows (the neon variant of the shared material).
+const GLOW := 0.04
+const BONE := Color(0.95, 0.92, 0.80)
+const BONE_DARK := Color(0.78, 0.72, 0.58)
+const BONE_LIGHT := Color(1.0, 0.98, 0.90)
+const GOLD := Color(0.95, 0.76, 0.22)
+
+
+static func _tooth(seed_value: int, size: float) -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(seed_value, 0.05)
+	s.merge(LowPoly.frustum(Vector2(0.15, 0.13) * size, Vector2(0.19, 0.16) * size, 0.14 * size, BONE, seed_value + 1, 0.02, 1, Vector2.ZERO, 0.04), LowPoly.at(Vector3(0.0, 0.07 * size, 0.0)))   # crown
+	for cx: float in [-1.0, 1.0]:
+		for cz: float in [-1.0, 1.0]:
+			s.merge(LowPoly.boulder(Vector3(0.055, 0.045, 0.05) * size, 0, 0.12, BONE_LIGHT, seed_value + 4, 0.03), LowPoly.at(Vector3(0.055 * cx, 0.15, 0.045 * cz) * size))   # cusps
+	for sx: float in [-1.0, 1.0]:
+		s.merge(LowPoly.cylinder(0.05 * size, 0.012 * size, 0.2 * size, 5, BONE_DARK, seed_value + 3, 0.01), LowPoly.at(Vector3(0.05 * size * sx, -0.07 * size, 0.0), Vector3(0, 0, 10.0 * sx)))   # roots
+	return s
+
+
+## Three white molars, one with a gold filling.
+static func component_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(771, 0.05)
+	s.merge(_tooth(772, 1.2), LowPoly.at(Vector3(-0.12, 0.0, 0.04), Vector3(0, 20, 12)))
+	s.merge(_tooth(776, 1.05), LowPoly.at(Vector3(0.12, -0.03, -0.05), Vector3(0, -15, -18)))
+	s.merge(_tooth(780, 0.9), LowPoly.at(Vector3(0.0, 0.02, 0.15), Vector3(-30, 0, 4)))
+	s.merge(LowPoly.box(Vector3(0.07, 0.045, 0.035), GOLD, 784, 0.0, 1, 0.03), LowPoly.at(Vector3(-0.12, 0.17, -0.06)))   # gold filling
+	return s

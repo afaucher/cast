@@ -101,3 +101,35 @@ static func _shrink_curve() -> Curve:
 	c.add_point(Vector2(0, 1))
 	c.add_point(Vector2(1, 0))
 	return c
+
+
+# --- The component: Ember horn (ComponentProps.make builds it, and holds it in a hero's hand) ---
+
+## How strongly the prop's own colour glows (the neon variant of the shared material).
+const GLOW := 0.22
+const HORN := Color(0.17, 0.12, 0.12)
+const HORN_LIGHT := Color(0.30, 0.22, 0.20)
+const EMBER := Color(1.0, 0.55, 0.12)
+const EMBER_HOT := Color(1.0, 0.85, 0.35)
+
+
+## A curved horn standing up: five tapering segments bending sideways, glowing ember bands between
+## them, an orange-hot cut base and a bright ember tip.
+static func component_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(711, 0.07)
+	var pos := Vector3(-0.08, -0.24, 0.0)
+	var bend := 0.0
+	var radii: Array[float] = [0.105, 0.088, 0.070, 0.052, 0.036, 0.020]
+	for i in 5:
+		var h := 0.11
+		var mid := pos + Vector3(sin(bend) * h * 0.5, cos(bend) * h * 0.5, 0.0)
+		var seg := LowPoly.cylinder(radii[i], radii[i + 1], h * 1.0, 6, HORN if i % 2 == 0 else HORN_LIGHT, 712 + i, 0.012, 1, 0.07)
+		s.merge(seg, LowPoly.at(mid, Vector3(0.0, 0.0, -rad_to_deg(bend))))
+		if i > 0:
+			var band := LowPoly.cylinder(radii[i] * 1.12, radii[i] * 1.12, 0.03, 6, EMBER, 722 + i, 0.006, 1, 0.05)
+			s.merge(band, LowPoly.at(pos, Vector3(0.0, 0.0, -rad_to_deg(bend))))
+		pos += Vector3(sin(bend) * h, cos(bend) * h, 0.0)
+		bend += 0.26
+	s.merge(LowPoly.cylinder(0.11, 0.11, 0.04, 6, EMBER, 720, 0.008), LowPoly.at(Vector3(-0.08, -0.255, 0.0)))   # glowing cut base
+	s.merge(LowPoly.boulder(Vector3(0.065, 0.075, 0.065), 0, 0.15, EMBER_HOT, 721, 0.04), LowPoly.at(pos + Vector3(0.015, 0.025, 0.0)))   # ember tip
+	return s

@@ -40,3 +40,26 @@ static func cast(caster: Actor, power: float, pos: Vector3, _start: float, _extr
 		tree.create_timer(0.18 * i).timeout.connect(func() -> void:
 			Fx.ring(pos, HEAL_RADIUS * (1.0 - 0.18 * i), Color(col.r, col.g, col.b, 0.7), 0.8, 1.8, true, 0.2))
 	return null
+
+
+# --- The component: Grave moss (ComponentProps.make builds it, and holds it in a hero's hand) ---
+
+## How strongly the prop's own colour glows (the neon variant of the shared material).
+const GLOW := 0.12
+const MOSS := Color(0.28, 0.72, 0.32)
+const MOSS_LIGHT := Color(0.50, 0.92, 0.48)
+const MOSS_DARK := Color(0.16, 0.45, 0.24)
+const SPORE := Color(0.98, 0.95, 0.60)
+
+
+## A green clump of moss with pale spore buds.
+static func component_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(701, 0.08)
+	s.merge(LowPoly.boulder(Vector3(0.22, 0.13, 0.20), 0, 0.2, MOSS_DARK, 702, 0.08), LowPoly.at(Vector3(0.0, -0.12, 0.0)))
+	s.merge(LowPoly.boulder(Vector3(0.17, 0.15, 0.16), 0, 0.2, MOSS, 703, 0.08), LowPoly.at(Vector3(-0.09, -0.03, 0.05)))
+	s.merge(LowPoly.boulder(Vector3(0.15, 0.16, 0.15), 0, 0.2, MOSS_LIGHT, 704, 0.08), LowPoly.at(Vector3(0.10, 0.00, -0.04)))
+	s.merge(LowPoly.boulder(Vector3(0.13, 0.12, 0.13), 0, 0.2, MOSS, 705, 0.08), LowPoly.at(Vector3(0.01, 0.06, 0.08)))
+	s.merge(LowPoly.boulder(Vector3(0.11, 0.10, 0.11), 0, 0.2, MOSS_LIGHT, 706, 0.08), LowPoly.at(Vector3(-0.04, 0.11, -0.05)))
+	for p: Vector3 in [Vector3(-0.07, 0.19, -0.03), Vector3(0.09, 0.15, 0.0), Vector3(0.02, 0.20, 0.08)]:
+		s.merge(LowPoly.boulder(Vector3(0.035, 0.035, 0.035), 0, 0.15, SPORE, 707 + int(p.x * 100.0)), LowPoly.at(p))
+	return s

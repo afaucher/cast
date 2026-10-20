@@ -33,3 +33,25 @@ static func cast(caster: Actor, power: float, target: Vector3, start: float, _ex
 	d.start_time = start
 	GameWorld.spawn(d, target)
 	return d
+
+
+# --- The component: Soggy sponge (ComponentProps.make builds it, and holds it in a hero's hand) ---
+
+## How strongly the prop's own colour glows (the neon variant of the shared material).
+const GLOW := 0.18
+const SPONGE := Color(0.95, 0.80, 0.25)
+const SPONGE_DARK := Color(0.72, 0.55, 0.12)
+const SPONGE_HOLE := Color(0.50, 0.36, 0.08)
+const WATER := Color(0.35, 0.80, 0.98)
+
+
+## A chunky yellow sponge, full of holes, with a bright drip hanging off one corner.
+static func component_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(821, 0.07)
+	s.merge(LowPoly.box(Vector3(0.36, 0.2, 0.26), SPONGE, 822, 0.02, 2, 0.08), LowPoly.at(Vector3(0.0, 0.0, 0.0), Vector3(0, 18, 0)))
+	s.merge(LowPoly.box(Vector3(0.36, 0.06, 0.26), SPONGE_DARK, 823, 0.02, 1, 0.08), LowPoly.at(Vector3(0.0, -0.08, 0.0), Vector3(0, 18, 0)))   # the scrubby underside
+	for p: Vector3 in [Vector3(-0.1, 0.1, 0.04), Vector3(0.07, 0.1, -0.06), Vector3(0.12, 0.1, 0.07), Vector3(-0.03, 0.1, -0.07), Vector3(0.0, 0.1, 0.07)]:
+		s.merge(LowPoly.boulder(Vector3(0.032, 0.02, 0.032), 0, 0.12, SPONGE_HOLE, 824 + int(p.x * 100.0), 0.05), LowPoly.at(p))
+	s.merge(LowPoly.boulder(Vector3(0.045, 0.07, 0.045), 0, 0.10, WATER, 830, 0.05), LowPoly.at(Vector3(0.17, -0.12, 0.1)))   # the drip
+	s.merge(LowPoly.boulder(Vector3(0.025, 0.035, 0.025), 0, 0.10, WATER, 831, 0.05), LowPoly.at(Vector3(0.18, -0.22, 0.1)))
+	return s
