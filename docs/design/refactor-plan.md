@@ -10,6 +10,10 @@ Status: **in progress**. Done so far:
   `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`), each with `plan(...)` and
   `spawn(...)` on the old parameters. `SiteBuilder.plan` / `spawn` are the explicit ordered call lists; golden floors
   unchanged.
+- H6: the E key is the `Usable` contract (`scripts/app/usable.gd`): `use_kind`, `use_score`, `use_prompt`, `use_point`
+  and `use_press` on `Employee`, `ClueNote`, `OfficeDoor` and `ComponentPickup`, with thin adapters for the van and
+  the elevator (`VanExitUse`, `ElevatorUse`). `game.gd` `use_target()` is a query over one candidate per kind; score
+  bands keep the old order. `UseTarget` and the `_use_key` match are gone; requests and golden floors unchanged.
 
 Moved to later waves:
 - the factory's pack planner, to H3;
@@ -143,7 +147,7 @@ Seed-built specials (scout, shark, and soon the Pavise and Water Cooler) declare
 - **Runtime actors:** the chicken is the template. One "runtime actor" track in `NetWorld`, with a codec field list
   per class, replaces the about 9 `is Chicken` branches.
 
-### H6: interactables
+### H6: interactables (done)
 A `Usable` contract on the van, elevator, employee, note, door and pickup: `use_priority(hero)`, `prompt()` and
 `use(hero)`. `game.gd` `use_target` becomes a query, and `UseTarget` and the `_use_key` match go away.
 

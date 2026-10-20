@@ -266,9 +266,20 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
   glow, shake, the blast ring); at its end a `Combat.explode` blast on everyone (team -1) with a shove, chained to the
   explosives in reach, billed once to whoever set it off. A soaked one is a dud and a soak puts a fuse out. Placed by
   the room themes (`RoomThemeDefs` "hazards", `HazardPlanner.plan`, `SitePlan.hazards`, `Site.hazards`).
+- **`Usable`** (`scripts/app/usable.gd`, the E key's contract; its header is the reference): anything E acts on has
+  `use_kind()`, `use_score(hero, game)` (-INF when not usable now), `use_prompt(hero, game)` (the prompt's verb),
+  `use_point(hero, game)` and `use_press(hero, game)`. `game.gd` `use_target()` collects one candidate per kind
+  (`_use_candidates()`: each kind's own nearest-in-reach finder) and `Usable.pick` takes the best score, the first on a
+  tie; the prompt (`_update_use_prompts`) and the press (`_use_key`) read that one `Usable.Target {node, kind, verb, pos}`.
+  The scores are per-kind bands (`Usable.VAN` .. `PICKUP`): the van exit, the elevator, an employee, a note, an office
+  door, a component pickup. Implemented by `Employee`, `ClueNote`, `OfficeDoor` and `ComponentPickup`, and by two thin
+  adapters over `game.gd`'s exit state, `VanExitUse` and `ElevatorUse` (`scripts/app/usables/`). A new interactable is a
+  class with the five methods, a band, and one line in `_use_candidates()`. A client's E keeps its own request path
+  inside each `use_press` (`Employee.interact`, `OfficeDoor.use`, `Hero.swap_in_pickup`: `Net.request`).
 - **Input** (`scripts/app/input_setup.gd`): `move_up/down/left/right` (WASD),
   `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1..4` (keys 1-4: ready/hold a spell slot),
-  `use` (E: the van's clock-out slip, the elevator or an employee, in that order; never casts), `swap_pickup` (F: swap a dropped component into
+  `use` (E: the best `Usable` in reach: the van's clock-out slip, the elevator, an employee, a note, an office door or a
+  pickup swap, in that order; never casts), `swap_pickup` (F: swap a dropped component into
   the held slot), `toggle_voice_debug` (F1), `restart` (F5), `pause` (Esc).
 
 ## Cross-agent contracts (implemented by the owning agent)

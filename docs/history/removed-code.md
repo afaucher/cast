@@ -9,6 +9,17 @@ commit if you only know the path.
 
 Entries are grouped by the wave that removed them. Newest first.
 
+## H6 (2026-10-20): the E key's if/elif chain, removed in 0ba7bbe
+- **Path:** in `scripts/app/game.gd`: `class UseTarget` (kind, verb, pos and an `employee` / `note` / `door` field per
+  kind), the if/elif chain in `use_target()` that filled it, the `match t.kind` in `_use_key()`, and the
+  `PROMPT_ABOVE_VAN` / `_ELEVATOR` / `_PICKUP` constants. About 70 lines.
+- **What it was:** the one place that decided what E acts on (the van exit, then the elevator, then an employee, a note,
+  an office door, a pickup) and what the press did for each. A new interactable meant editing all three.
+- **What replaced it:** the `Usable` contract (`scripts/app/usable.gd`, refactor-plan.md H6). Each kind's branch moved
+  into its own class's `use_*` methods (the van and the elevator into `VanExitUse` / `ElevatorUse`), `use_target()`
+  ranks one candidate per kind by score bands that keep the old order, and it returns a `Usable.Target`. Nothing changes
+  in play.
+
 ## Wave 2 (2026-10-20): superseded code that still had callers, removed in fcf91f2
 
 Each piece below still had a caller, and the caller changed with it in the same commit. Nothing changes in play, and
