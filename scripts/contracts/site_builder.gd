@@ -1290,35 +1290,7 @@ static func _spawn_scouts(map: HexMap, p: SitePlan, site: Site) -> void:
 ## MonsterFactory.plan_composition with the pest's weight multiplied (a swarmer is still at most one
 ## group per pack).
 static func biased_composition(budget: int, rng: RandomNumberGenerator, pest: String) -> Array[String]:
-	var plan: Array[String] = []
-	var counts := {}
-	var left := budget
-	while true:
-		var kinds: Array[String] = []
-		var weights: Array[float] = []
-		var total := 0.0
-		for k in MonsterFactory.KINDS:
-			if MonsterFactory.COSTS[k] > left or (k == "swarmer" and counts.get("swarmer", 0) > 0):
-				continue
-			var w: float = MonsterFactory.WEIGHTS[k] * pow(0.5, counts.get(k, 0))
-			if k == pest:
-				w *= PEST_WEIGHT_MULT
-			kinds.append(k)
-			weights.append(w)
-			total += w
-		if kinds.is_empty():
-			break
-		var roll := rng.randf() * total
-		var pick := kinds[kinds.size() - 1]
-		for i in kinds.size():
-			roll -= weights[i]
-			if roll <= 0.0:
-				pick = kinds[i]
-				break
-		plan.append(pick)
-		counts[pick] = counts.get(pick, 0) + 1
-		left -= MonsterFactory.COSTS[pick]
-	return plan
+	return MonsterFactory.compose(budget, rng, {pest: PEST_WEIGHT_MULT})
 
 
 ## The most monsters one room may hold: one per MonsterFactory.CELLS_PER_MONSTER walkable floor cells (at least 2).
@@ -1345,7 +1317,7 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 		if usable.is_empty() or spawned >= cap:
 			break
 		var center: Vector2i = MonsterFactory._pick_spread(usable, placed, rng)
-		if kind != "swarmer":
+		if not MonsterDefs.is_swarm(kind):
 			var m := MonsterFactory.spawn(kind, center)
 			if m != null:
 				MonsterSenses.face_spawn(m, site.plan, rng.seed)   # toward the room's door or centre (monster-awareness.md)
@@ -1363,12 +1335,12 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 				near.append(c)
 		near.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return Hex.distance(a, center) < Hex.distance(b, center))
 		for i in mini(want, near.size()):
-			var sm := MonsterFactory.spawn("swarmer", near[i])
+			var sm := MonsterFactory.spawn(kind, near[i])
 			if sm != null:
 				MonsterSenses.face_spawn(sm, site.plan, rng.seed)
 				spawned += 1
 				site.monsters.append(sm)
-				if site.pest == "everything" or site.pest == "swarmer":
+				if site.pest == "everything" or site.pest == kind:
 					site.pest_spawned += 1
 			usable.erase(near[i])
 		placed.append(center)

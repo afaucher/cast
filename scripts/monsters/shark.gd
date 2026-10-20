@@ -48,8 +48,9 @@ const HELD := 6
 const CHUM := 7
 
 const HP := 150.0
-const PRICES := {"regular": 8400, "laser": 12600, "imp": 12600}   ## user, 2026-10-19: the design's prices less 30 %
-const NAMES := {"regular": "Shark", "laser": "Laser shark", "imp": "Laser shark"}
+## What killing one bills, per variant: the shark's MonsterDefs "billed" row (user, 2026-10-19: the design's prices less 30 %).
+static var PRICES: Dictionary = MonsterDefs.prices("shark")
+static var NAMES: Dictionary = MonsterDefs.bill_names("shark")
 const FLOAT := 0.06
 const SCAN := 0.25
 const BITE_ZONE := 1.2           ## a target this far onto the deck (or anywhere in the water) can be bitten

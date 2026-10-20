@@ -11,14 +11,14 @@ extends RefCounted
 
 const IDS: Array[String] = ["prepper", "supervillain", "guru", "founder", "influencer"]
 
-## Display names of the monster kinds as the client would write them.
-const PEST_NAMES := {
-	"grunt": "skeletons",
-	"archer": "archers",
-	"brute": "brutes",
-	"swarmer": "imps",
-	"everything": "everything",
-}
+## Display names of the monster kinds as the client would write them (each kind's MonsterDefs "pest"), plus "everything".
+static var PEST_NAMES: Dictionary = _pest_names()
+
+
+static func _pest_names() -> Dictionary:
+	var out := MonsterDefs.pest_names()
+	out["everything"] = "everything"
+	return out
 
 const DATA := {
 	"prepper": {

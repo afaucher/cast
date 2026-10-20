@@ -88,14 +88,6 @@ const SHOVE_WINDUP := 0.9         ## telegraph before the phase-change shove
 const SHOVE_RADIUS := 5.5
 const SHOVE_DISTANCE := 3.5
 # Kind mix (relative weights). Pressure shifts it a little; the phase adds brutes.
-const WEIGHT_SWARMER := 5.0
-const WEIGHT_GRUNT := 4.0
-const WEIGHT_ARCHER := 2.0
-const WEIGHT_BRUTE := 0.5
-const WEIGHT_ARCHER_PER_P := 1.0
-const WEIGHT_BRUTE_PER_P := 1.5
-const WEIGHT_BRUTE_PER_PHASE := 0.8
-const WEIGHT_SWARMER_PER_P := -1.0
 # Closing
 const CLOSE_TIME := 1.4           ## collapse animation length before the node frees itself
 # ================================================================================================
@@ -178,13 +170,9 @@ static func profile(difficulty_value: float, depth_value: int, is_origin: bool =
 
 
 ## Relative kind weights {kind: weight} at pressure p and origin phase.
+## Each kind's "gate" row in MonsterDefs, rolled in MonsterDefs.GATE_ORDER.
 static func kind_weights(p: float, phase_value: int = 0) -> Dictionary:
-	return {
-		"swarmer": maxf(0.5, WEIGHT_SWARMER + WEIGHT_SWARMER_PER_P * p),
-		"grunt": WEIGHT_GRUNT,
-		"archer": WEIGHT_ARCHER + WEIGHT_ARCHER_PER_P * p,
-		"brute": WEIGHT_BRUTE + WEIGHT_BRUTE_PER_P * p + WEIGHT_BRUTE_PER_PHASE * float(phase_value),
-	}
+	return MonsterDefs.gate_weights(p, phase_value)
 
 
 ## Stop every gate's spawns in the current world (what closing the origin gate does).

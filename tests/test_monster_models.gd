@@ -6,7 +6,14 @@ extends TestCase
 
 const MAX_NODES := 20
 ## kind -> triangle budget
-const BUDGET := {"grunt": 1500, "archer": 1700, "brute": 2600, "swarmer": 1000, "goblin": 1900}
+var BUDGET := _budgets()   # each kind's MonsterDefs "tris"
+
+
+static func _budgets() -> Dictionary:
+	var out := {}
+	for k in MonsterDefs.model_kinds():
+		out[k] = int(MonsterDefs.row(k)["tris"])
+	return out
 
 
 func _part_names(kind: String) -> Array[String]:

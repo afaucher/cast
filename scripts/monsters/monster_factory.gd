@@ -1,26 +1,29 @@
 class_name MonsterFactory
 extends RefCounted
-## Spawns monsters and builds varied packs for a room from a point budget.
-##
-##   grunt 2, archer 3, brute 6, swarmer PACK (4-6 imps) 4.
-## A pack never contains more than one swarmer group.
+## Spawns monsters and builds varied packs for a room from a point budget. The kinds, their costs and pick weights are
+## MonsterDefs rows (grunt 2, archer 3, brute 6, swarmer PACK (4-6 imps) 4); a pack never holds more than one swarm.
 
-const KINDS: Array[String] = ["grunt", "archer", "brute", "swarmer"]
-const COSTS := {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4}
+## The pack kinds, in the roll's order (MonsterDefs order).
+static var KINDS: Array[String] = MonsterDefs.pack_kinds()
+static var COSTS: Dictionary = MonsterDefs.pack_field("cost")
 ## Relative pick weights; repeats of a kind are halved each time so rooms vary.
-const WEIGHTS := {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5}
+static var WEIGHTS: Dictionary = MonsterDefs.pack_field("weight")
 const SWARM_MIN := 4
 const SWARM_MAX := 6
 const CELLS_PER_MONSTER := 6      ## density cap for a room: at most one monster per this many walkable cells
 const SPREAD_CANDIDATES := 16     ## farthest-point sampling tries when placing a pack member (more = more spread)
 
-const SCRIPTS := {
-	"grunt": preload("res://scripts/monsters/grunt.gd"),
-	"archer": preload("res://scripts/monsters/archer.gd"),
-	"brute": preload("res://scripts/monsters/brute.gd"),
-	"swarmer": preload("res://scripts/monsters/swarmer.gd"),
-	"goblin": preload("res://scripts/monsters/goblin.gd"),   ## the scout: never in a pack (SiteBuilder puts him in a corridor)
-}
+## Every kind spawn() can build: the MonsterDefs kinds with a model (the pack kinds and the goblin scout; the sharks are
+## built by SiteBuilder).
+static var SCRIPTS: Dictionary = _factory_scripts()
+
+
+static func _factory_scripts() -> Dictionary:
+	var out := {}
+	var all := MonsterDefs.scripts()
+	for k in MonsterDefs.model_kinds():
+		out[k] = all[k]
+	return out
 
 
 ## Spawn one monster of `kind` standing on `cell`. Null for an unknown kind.
@@ -40,8 +43,10 @@ static func spawn(kind: String, cell: Vector2i) -> Monster:
 	return m
 
 
-## Pick a varied composition (list of kinds; "swarmer" appears at most once and means a whole pack).
-static func plan_composition(budget: int, rng: RandomNumberGenerator) -> Array[String]:
+## Pick a varied composition (list of kinds; a swarm kind appears at most once and means a whole clump). `bias`
+## multiplies a kind's pick weight ({kind: factor}: SiteBuilder favours the contract's pest). The one pack composer: the
+## floor plan depends on its exact rolls.
+static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = {}) -> Array[String]:
 	var plan: Array[String] = []
 	var counts := {}
 	var left := budget
@@ -50,9 +55,11 @@ static func plan_composition(budget: int, rng: RandomNumberGenerator) -> Array[S
 		var weights: Array[float] = []
 		var total := 0.0
 		for k in KINDS:
-			if COSTS[k] > left or (k == "swarmer" and counts.get("swarmer", 0) > 0):
+			if COSTS[k] > left or (MonsterDefs.is_swarm(k) and counts.get(k, 0) > 0):
 				continue
 			var w: float = WEIGHTS[k] * pow(0.5, counts.get(k, 0))
+			if bias.has(k):
+				w *= float(bias[k])
 			kinds.append(k)
 			weights.append(w)
 			total += w
@@ -71,18 +78,18 @@ static func plan_composition(budget: int, rng: RandomNumberGenerator) -> Array[S
 	return plan
 
 
-## Point cost of a list of spawned monsters (a swarmer group counts as 4 per 6 imps).
+## Point cost of a list of spawned monsters (a swarm counts its cost per SWARM_MAX members).
 static func cost_of(monsters: Array) -> int:
 	var total := 0
-	var swarmers := 0
+	var swarms := {}
 	for m in monsters:
 		var k: String = m.kind
-		if k == "swarmer":
-			swarmers += 1
+		if MonsterDefs.is_swarm(k):
+			swarms[k] = int(swarms.get(k, 0)) + 1
 		else:
 			total += COSTS.get(k, 0)
-	if swarmers > 0:
-		total += COSTS["swarmer"] * int(ceil(float(swarmers) / SWARM_MAX))
+	for k: String in swarms:
+		total += COSTS[k] * int(ceil(float(swarms[k]) / SWARM_MAX))
 	return total
 
 
@@ -105,16 +112,16 @@ static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumb
 		return out
 
 	var placed: Array[Vector2i] = []
-	for kind in plan_composition(budget, rng):
+	for kind in compose(budget, rng):
 		if free.is_empty() or (max_count >= 0 and out.size() >= max_count):
 			break
 		var center := _pick_spread(free, placed, rng)
-		if kind != "swarmer":
+		if not MonsterDefs.is_swarm(kind):
 			out.append(spawn(kind, center))
 			placed.append(center)
 			free.erase(center)
 			continue
-		# Swarmers: a tight clump around the chosen cell.
+		# A swarm: a tight clump around the chosen cell.
 		var want := rng.randi_range(SWARM_MIN, SWARM_MAX)
 		if max_count >= 0:
 			want = mini(want, max_count - out.size())
@@ -124,7 +131,7 @@ static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumb
 				near.append(c)
 		near.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return Hex.distance(a, center) < Hex.distance(b, center))
 		for i in mini(want, near.size()):
-			out.append(spawn("swarmer", near[i]))
+			out.append(spawn(kind, near[i]))
 			free.erase(near[i])
 		placed.append(center)
 	return out
