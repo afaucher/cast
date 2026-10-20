@@ -1,7 +1,18 @@
 # Refactor plan: dead code out, content into units (2026-10-20)
 
-Status: **in progress**. Wave 0 (the golden-floor test, the history doc) and wave 1 (D1 except `tools/theme_options/`)
-are done; the rest is a proposal. Surveys were run against main at c2080ad; the line numbers are from then.
+Status: **in progress**. Done so far:
+- wave 0: the golden-floor test and the history doc;
+- wave 1: D1, except `tools/theme_options/`;
+- wave 2: D2, except the beast's peek/whip, SignLine's pen and the factory planner; H1's single spell list; an Actor
+  guard in test_net_contract.
+
+Moved to later waves:
+- the factory's pack planner, to H3;
+- the beast's peek/whip, which needs a visual check;
+- `NoteFacts.ROOM_WORDS`, to H4. It holds the shorter names notes use, so it isn't a copy, and it belongs in the theme
+  rows.
+
+The rest is a proposal. Surveys were run against main at c2080ad; the line numbers are from then.
 
 Two buckets, from the user's brief:
 1. **Dead code that is only of historical interest** is removed, and each removal is written up in

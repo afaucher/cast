@@ -9,6 +9,70 @@ commit if you only know the path.
 
 Entries are grouped by the wave that removed them. Newest first.
 
+## Wave 2 (2026-10-20): superseded code that still had callers, removed in fcf91f2
+
+Each piece below still had a caller, and the caller changed with it in the same commit. Nothing changes in play, and
+`test_golden_floor` shows every floor unchanged.
+
+### ContractParts, the "soft links"
+- **Path:** `scripts/contracts/contract_parts.gd`, about 70 lines.
+- **What it was:** while the contract parts were built in parallel (1203fd5), the generator and the game reached Hellgate,
+  Employee, PricedProp and DamageTicker through `load()` and `ResourceLoader.exists()`, so everything ran even with a
+  part missing. It also kept a `FALLBACK_PROPS` list of props that never shipped (throne, cinema screen, gold bars,
+  trophy case).
+- **Why it went:** every part has existed since then. The callers now use `Hellgate.spawn`, `Employee.spawn`,
+  `PricedProp.spawn` and `PricedProp.catalog`, and `DamageTicker.new()` directly: `SiteBuilder`, `game.gd`, two
+  labs, the z-fight registry, the grime bench and about 20 tests.
+
+### The HUD mic meter and centre text
+- **Paths:** in `scripts/ui/hud.gd`: the `MIC` label and bar, the `HudBar` control, `set_mic_level` (and `game.gd` feeding
+  it every frame), `show_center` and its label. About 90 lines.
+- **What it was:** the mic meter was hidden during play on 2026-10-18 (3534ea5). Voice setup and the F1 panel still show
+  the mic. The big centre text carried "FLOOR CLEAN", "ORIGIN GATE CLOSED", "Floor 2 of 3" and "Crew incapacitated",
+  and all of those became dispatch calls or went away in 6c06ed1 and fa1d083.
+- **What's left:** only the arena test scene still used centre text. Its "You died" is now a toast.
+
+### The monster fight scene
+- **Paths:** `scripts/monsters/monster_fight.gd`, `scenes/monster_fight.tscn`, and its line in the
+  `test_net_contract` write allowlist. About 107 lines.
+- **What it was:** an early screenshot scene that put monsters in front of the crew. It could also show the old
+  primitive bodies with `--proto-monsters`.
+- **Why it went:** the game's `--spawn-near kind,n` (with `--idle-monsters`, `--zoom` and `--focus`) does the same job on
+  a real floor.
+
+### Sound audition rounds 1-3
+- **Paths:** in `tools/sfx_proto/sfx_synth.gd` and `sfx_round3.gd`: every recipe the game doesn't render (41 functions)
+  and the `CUES`, `V2` and `CUES3` lists. About 510 lines.
+- **What they were:** the procedural and recorded sound options the user auditioned on 2026-10-18:
+  - round 1: 03f7414;
+  - round 2: 2f8d255;
+  - round 3: 13ef198 and 435ab0c.
+  
+  The picks are recorded in `docs/design/audio-plan.md`.
+- **What's left:** the recipes named in `render_game_sfx.gd` `GAME_CUES` and everything they call, found by a call-graph
+  walk. The rendered cues are byte-identical to before.
+- **Tool changes:** `make_sfx` and `mic_leak_probe` now default to `GAME_CUES`. To hear a removed take, check out
+  `fcf91f2^` and run `make_sfx` with its name.
+- **Recordings:** some recordings under `assets/audio/third_party/` are now used by no recipe. They are untracked; see
+  `SOURCES.md`.
+
+### Not removed, on purpose
+- **SignLine's "pen" signature:** form-rules.md still lists the grease pencil as a player mark, and it's 12 lines.
+- **MonsterFactory's pack planner:** `plan_composition`, `cost_of` and `spawn_pack` go when one pack composer replaces it
+  and `SiteBuilder`'s copy (refactor plan H3). They are tested today.
+- **The hellgate beast's lab-only "peek" style and "whip" exit:** these share the shipped abyss look's shader, so removing
+  them needs a visual check. They are deferred.
+
+## Wave 2, also: single sources (d01ccc6)
+Nothing was removed; this records where the duplicate lists went. The spell id list was written out in about 12 places:
+- `VoiceCaster.DEFAULT_SPELLS`;
+- the `Incantation` and `VoiceSettings` defaults;
+- `voice_lab`;
+- two tools, two of them stale at 9 spells;
+- six voice tests.
+
+All of them now read `SpellBook.ids()`, via `VoiceCaster.default_spells()`.
+
 ## Wave 1 (2026-10-20): dead code, removed in 04c4eb4
 
 Nothing here had a caller left when it went. `test_golden_floor` showed every floor unchanged.
