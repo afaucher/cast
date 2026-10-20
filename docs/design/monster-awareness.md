@@ -569,7 +569,7 @@ indicator.
 - `scripts/monsters/archer.gd`: target practice (the safety constants are at the top). `scripts/monsters/brute.gd`:
   restless fights.
 - `scripts/monsters/monster_senses.gd`: `alarm()` (the fireworks' propagation), `room_doors()`, `fire_at()` (a fireball's
-  blast lights a rack; one line in `SpellBook._cast_fireball`), the per-floor practice counters, a `quiet` list and a
+  blast lights a rack; one line in `FireballSpell.cast`), the per-floor practice counters, a `quiet` list and a
   `stand_off` for `noise()`, and +0.25 restlessness per volley.
 - `scripts/monsters/monster.gd` (kept small for the merge): `busy_until` (a brute holds its bullied skeleton), `edge_until`
   / `is_on_edge()` (after an alarm), and `net_show` draws an IDLE wind-up (the practice draw, a fight slam's ring).

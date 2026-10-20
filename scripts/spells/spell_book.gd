@@ -68,14 +68,6 @@ const SPELLS := {
 # --- Targeting: every spell lands where the player aims, like the ranged bolt.
 const SPELL_RANGE := Hero.BOLT_RANGE  ## same reach as the ranged attack
 const ALLY_SNAP := 1.3                ## aim this close to a hero snaps onto them
-# --- Heal
-const HEAL_RADIUS := 3.0
-const HEAL_BASE := 35.0
-# --- Fireball
-const FIREBALL_SPEED := 11.0
-const FIREBALL_DAMAGE := 40.0
-const FIREBALL_RADIUS_BASE := 1.4
-const FIREBALL_RADIUS_POWER := 1.0
 # --- Armor
 const ARMOR_MULT_WEAK := 0.75      ## damage multiplier at power ~0
 const ARMOR_MULT_STRONG := 0.4     ## damage multiplier at power 1
@@ -198,7 +190,31 @@ static func find_in_text(text: String) -> String:
 ## Support spells that follow the teammate the aim snapped onto (networking.md rule 3: the cast names the hero, and the
 ## effect lands where that hero's owner has it). Every other spell lands on the point (a teammate who sidestepped a corn
 ## is fine).
-const FOLLOWS := ["heal", "coffee"]
+const FOLLOWS := ["coffee"]
+
+## The spell defs (scripts/spells/defs/, SpellDef), in spell order.
+const DEFS := [
+	preload("res://scripts/spells/defs/heal.gd"),
+	preload("res://scripts/spells/defs/fireball.gd"),
+]
+static var _defs_by_id := _index_defs()
+
+
+static func _index_defs() -> Dictionary:
+	var out := {}
+	for d: GDScript in DEFS:
+		out[d.ID] = d
+	return out
+
+
+## The def script of spell `id` (a SpellDef), or null.
+static func def_of(id: String) -> GDScript:
+	return _defs_by_id.get(id) as GDScript
+
+
+static func _follows(id: String) -> bool:
+	var d := def_of(id)
+	return bool(d.FOLLOWS) if d != null else FOLLOWS.has(id)
 
 
 ## Cast spell `id` from `caster` toward world point `aim`. Returns false for an unknown
@@ -213,7 +229,7 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 	if GameWorld.flat_distance(aim, caster.global_position) > 0.05:
 		caster.face_point(aim)
 	var target := resolve_target(caster, aim)
-	var spec := {"spell": id, "power": power, "target": target, "follow": snap_hero(aim) if FOLLOWS.has(id) else null,
+	var spec := {"spell": id, "power": power, "target": target, "follow": snap_hero(aim) if _follows(id) else null,
 		"extra": _cast_extra(id, caster, target)}
 	if Net.shares_cast(caster):
 		Net.send_cast(caster, spec)
@@ -225,15 +241,8 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 ## What a spell needs from the moment of the cast besides the target (a fireball's launch point, direction and reach),
 ## so every machine flies the same shot.
 static func _cast_extra(id: String, caster: Actor, target: Vector3) -> Dictionary:
-	if id != "fireball":
-		return {}
-	var dir := target - caster.global_position
-	dir.y = 0.0
-	var reach := clampf(dir.length(), 1.0, SPELL_RANGE)   # explodes at the aim point unless it hits something first
-	if dir.length() < 0.05:
-		dir = caster.facing
-	dir = dir.normalized()
-	return {"o": Combat.chest(caster) + dir * 0.6, "d": dir, "r": reach}
+	var d := def_of(id)
+	return d.cast_extra(caster, target) if d != null else {}
 
 
 ## Apply a cast (here at once when solo; online on every machine at the cast's moment, NetCasts). `spec` holds the spell,
@@ -251,11 +260,10 @@ static func apply(caster: Actor, spec: Dictionary, start: float) -> Node:
 	if follow != null and is_instance_valid(follow) and not follow.dead:
 		target = Vector3(follow.global_position.x, follow.global_position.y, follow.global_position.z)   # where this screen has that teammate
 	var extra: Dictionary = spec.get("extra", {})
+	var d := def_of(id)
+	if d != null:
+		return d.cast(caster, power, target, start, extra)
 	match id:
-		"heal":
-			_cast_heal(caster, power, target)
-		"fireball":
-			return _cast_fireball(caster, power, target, extra)
 		"armor":
 			return _cast_armor(caster, power, target, start)
 		"corn":
@@ -313,108 +321,6 @@ static func snap_hero(aim: Vector3) -> Actor:
 static func fizzle(caster: Actor) -> void:
 	if caster and is_instance_valid(caster):
 		Fx.fizzle_puff(caster.global_position)
-
-
-# --- Heal --------------------------------------------------------------------------------
-
-## HP restored by Heal at a given power.
-static func heal_amount(power: float) -> float:
-	return HEAL_BASE * (0.4 + 0.6 * clampf(power, MIN_POWER, 1.0))
-
-
-static func _cast_heal(caster: Actor, power: float, pos: Vector3) -> void:
-	var col := color_of("heal")
-	var amount := heal_amount(power)
-	for a in GameWorld.actors_in_radius(pos, HEAL_RADIUS, caster.team):
-		if Teeth.cancel_on(a):   # the dentist: a heal pulls the teeth before they pop (on every screen: the pop is off everywhere)
-			Fx.number(a.global_position + Vector3(0, 3.0, 0), "DENTIST!", SpellBook.color_of("teeth"), 1.0)
-		var sparkle: Array[Color] = [Color(0.7, 1.0, 0.75), col]
-		Fx.burst(a.global_position + Vector3.UP * 0.2, sparkle, 12, 1.4, 0.07, 1.0, -1.5, Vector3.UP, 35.0)
-	for e: Array in Combat.heal_radius(pos, HEAL_RADIUS, amount, caster.team):   # (online: each hero's owner heals it, once)
-		var a: Actor = e[0]
-		if float(e[1]) > 0.5:
-			Fx.number(a.global_position + Vector3(0, 2.4, 0), "+%d" % int(roundf(float(e[1]))), Fx.NUMBER_HEAL, 1.1)
-	# Three rising hex rings, staggered.
-	Fx.ring(pos, HEAL_RADIUS, Color(col.r, col.g, col.b, 0.85), 0.9, 2.0, true, 0.2)
-	var tree := GameWorld.root.get_tree()
-	for i in [1, 2]:
-		tree.create_timer(0.18 * i).timeout.connect(func() -> void:
-			Fx.ring(pos, HEAL_RADIUS * (1.0 - 0.18 * i), Color(col.r, col.g, col.b, 0.7), 0.8, 1.8, true, 0.2))
-
-
-# --- Fireball -----------------------------------------------------------------------------
-
-static func fireball_radius(power: float) -> float:
-	return FIREBALL_RADIUS_BASE + FIREBALL_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-static func fireball_damage(power: float) -> float:
-	return FIREBALL_DAMAGE * clampf(power, MIN_POWER, 1.0)
-
-
-static func _cast_fireball(caster: Actor, power: float, aim: Vector3, extra: Dictionary) -> Projectile:
-	if extra.is_empty():
-		extra = _cast_extra("fireball", caster, aim)
-	var dir: Vector3 = extra["d"]
-	var reach := float(extra["r"])   # explodes at the aim point unless it hits something first
-	var from: Vector3 = extra["o"]
-	var radius := fireball_radius(power)
-	var dmg := fireball_damage(power)
-	var col := color_of("fireball")
-	var team := GameWorld.other_team(caster.team)
-	var src_ref: WeakRef = weakref(caster)   # the caster may be gone by the time the fireball lands
-	var on_hit := func(_p: Projectile, _hit: Actor, pos: Vector3) -> void:
-		for a in GameWorld.actors_in_radius(pos, radius, team):
-			Fx.attach_hit_feedback(a)
-		var src: Node = src_ref.get_ref() as Node
-		MonsterSenses.fire_at(pos, radius)   # fire lights a goblin scout's rockets, before the blast's damage lands
-		ExplosiveProp.fire_at(pos, radius, src)   # ... and the fuse of an explosive prop (the host lights it; a soaked one fizzles)
-		Combat.explode(pos, radius, dmg, team, src, 1.0)
-		# Every neutral actor takes the blast too: priced props (breaking one costs money) and employees.
-		for n in GameWorld.actors_in_radius(pos, radius, GameWorld.TEAM_NEUTRAL):
-			Fx.attach_hit_feedback(n)
-		Combat.explode(pos, radius, dmg, GameWorld.TEAM_NEUTRAL, src, 1.0)
-		Burning.on_blast(pos, radius, power, src)   # anyone near may catch fire (all teams, see burning.gd)
-		MonsterSenses.noise(pos, MonsterSenses.NOISE_FIREBALL, "fireball")   # (only the monsters this machine runs hear)
-		Fx.explosion(pos, radius, col)
-		Grime.mark(Grime.SCORCH, pos, radius)   # a scorch that fades after 30 s (no-op without a GrimeLayer)
-	var size := 0.22 + 0.12 * power
-	# damage 0 on the direct hit: all damage comes from the explosion (monsters only).
-	var p := Fx.make_projectile(caster, from, dir, 0.0, FIREBALL_SPEED, reach, col, size, on_hit)
-	var light := OmniLight3D.new()
-	light.light_color = col
-	light.light_energy = 3.0
-	light.omni_range = 5.0
-	p.add_child(light)
-	var embers := CPUParticles3D.new()
-	embers.amount = 24
-	embers.lifetime = 0.45
-	embers.local_coords = false
-	embers.direction = Vector3.UP
-	embers.spread = 60.0
-	embers.initial_velocity_min = 0.2
-	embers.initial_velocity_max = 1.0
-	embers.gravity = Vector3(0, 1.0, 0)
-	var sm := SphereMesh.new()
-	sm.radius = size * 0.45
-	sm.height = size * 0.9
-	sm.radial_segments = 6
-	sm.rings = 3
-	sm.material = Fx.glow_material(Color(1.0, 0.6, 0.15, 0.8))
-	embers.mesh = sm
-	embers.scale_amount_curve = _shrink_curve()
-	embers.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	p.add_child(embers)
-	# A little muzzle flash at the caster's hands.
-	Fx.flash_sphere(from, 0.35, Color(col.r, col.g, col.b, 0.8), 0.2)
-	return p
-
-
-static func _shrink_curve() -> Curve:
-	var c := Curve.new()
-	c.add_point(Vector2(0, 1))
-	c.add_point(Vector2(1, 0))
-	return c
 
 
 # --- Armor --------------------------------------------------------------------------------

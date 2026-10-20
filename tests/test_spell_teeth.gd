@@ -259,7 +259,7 @@ func _test_heal_cancels() -> void:
 	check(not fx_a.is_growing(), "fx cancelled")
 	check(fx_mon.is_growing(), "the monster's fx keeps growing")
 	await frames(90)
-	near(hero_a.hp, 50.0 + SpellBook.heal_amount(1.0), 0.01, "healed and no pop damage")
+	near(hero_a.hp, 50.0 + HealSpell.heal_amount(1.0), 0.01, "healed and no pop damage")
 	near(hero_b.hp, 100.0, 0.001, "no pop damage")
 	near(mon.hp, mon.max_hp - 25.0, 0.001, "the monster still pops")
 	eq(Teeth.cancel_on(hero_a), false, "nothing left to pull")

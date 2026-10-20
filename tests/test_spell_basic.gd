@@ -47,7 +47,7 @@ func setup() -> void:
 	GameWorld.spawn(dummy, Vector3(1.5, 0, 1.5))
 	dummy.hp = 40.0
 	check(SpellBook.cast("heal", caster, 1.0, Vector3.ZERO), "heal casts")
-	var full_heal := SpellBook.heal_amount(1.0)
+	var full_heal := HealSpell.heal_amount(1.0)
 	near(full_heal, 35.0, 0.001, "35 at full power")
 	near(caster.hp, 40.0 + full_heal, 0.01, "caster healed")
 	near(near_ally.hp, 40.0 + full_heal, 0.01, "ally in radius healed")
@@ -55,8 +55,8 @@ func setup() -> void:
 	near(almost_full.hp, 100.0, 0.01, "heal capped at max_hp")
 	near(dummy.hp, 40.0, 0.01, "monsters not healed")
 	# Power scaling: 0.4 + 0.6 * power.
-	near(SpellBook.heal_amount(0.5), 35.0 * 0.7, 0.001, "half power heal")
-	check(SpellBook.heal_amount(0.2) < SpellBook.heal_amount(0.6) and SpellBook.heal_amount(0.6) < SpellBook.heal_amount(1.0), "heal monotonic in power")
+	near(HealSpell.heal_amount(0.5), 35.0 * 0.7, 0.001, "half power heal")
+	check(HealSpell.heal_amount(0.2) < HealSpell.heal_amount(0.6) and HealSpell.heal_amount(0.6) < HealSpell.heal_amount(1.0), "heal monotonic in power")
 	# Dead (downed) heroes are not revived.
 	almost_full.apply_damage(9999.0)
 	SpellBook.cast("heal", caster, 1.0, Vector3.ZERO)

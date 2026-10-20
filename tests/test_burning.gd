@@ -65,7 +65,7 @@ func setup() -> void:
 	var crowd: Array[Actor] = []
 	for i in 300:
 		crowd.append(_dummy(Vector3(cos(float(i)) * 0.3, 0, sin(float(i)) * 0.3)))
-	var radius := SpellBook.fireball_radius(1.0)
+	var radius := FireballSpell.fireball_radius(1.0)
 	var expected := 0.0
 	for a in crowd:
 		expected += Burning.ignite_chance(1.0, GameWorld.flat_distance(a.global_position, Vector3.ZERO) / radius)

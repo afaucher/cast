@@ -46,7 +46,7 @@ func setup() -> void:
 		Burning.set_fireproof(a, true)   # this block checks the blast damage exactly; burning is covered by test_burning
 	check(SpellBook.cast("fireball", caster, 1.0, target.global_position), "fireball casts")
 	await frames(70)
-	near(target.hp, target.max_hp - SpellBook.fireball_damage(1.0), 0.01, "fireball damages the monster")
+	near(target.hp, target.max_hp - FireballSpell.fireball_damage(1.0), 0.01, "fireball damages the monster")
 	near(buddy.hp, buddy.max_hp, 0.01, "fireball spares heroes")
 	near(caster.hp, caster.max_hp, 0.01, "fireball spares the caster")
 	await _clear()
@@ -74,10 +74,10 @@ func setup() -> void:
 	await _clear()
 
 	# --- Fireball power scaling: damage and radius both grow.
-	check(SpellBook.fireball_damage(0.3) < SpellBook.fireball_damage(0.6) and SpellBook.fireball_damage(0.6) < SpellBook.fireball_damage(1.0), "fireball damage monotonic")
-	check(SpellBook.fireball_radius(0.3) < SpellBook.fireball_radius(0.6) and SpellBook.fireball_radius(0.6) < SpellBook.fireball_radius(1.0), "fireball radius monotonic")
-	near(SpellBook.fireball_radius(1.0), 2.4, 0.001)
-	near(SpellBook.fireball_damage(0.5), 20.0, 0.001)
+	check(FireballSpell.fireball_damage(0.3) < FireballSpell.fireball_damage(0.6) and FireballSpell.fireball_damage(0.6) < FireballSpell.fireball_damage(1.0), "fireball damage monotonic")
+	check(FireballSpell.fireball_radius(0.3) < FireballSpell.fireball_radius(0.6) and FireballSpell.fireball_radius(0.6) < FireballSpell.fireball_radius(1.0), "fireball radius monotonic")
+	near(FireballSpell.fireball_radius(1.0), 2.4, 0.001)
+	near(FireballSpell.fireball_damage(0.5), 20.0, 0.001)
 	var damages: Array[float] = []
 	for p in [0.3, 0.6, 1.0]:
 		caster = _hero(Vector3.ZERO)

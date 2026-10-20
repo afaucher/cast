@@ -97,7 +97,7 @@ func run_host() -> void:
 	var b_before := float(r_b["after"])
 	command(a, "cast", {"spell": "heal", "aim": p})
 	check(await wait_reports("heal", 2, 20.0), "A and B report the heal")
-	var heal := SpellBook.heal_amount(1.0)
+	var heal := HealSpell.heal_amount(1.0)
 	var r_bh: Dictionary = reported(b, "heal")
 	near(float(r_bh["hp"]) - b_before, heal, 0.01, "the heal aimed at B healed B once, by one heal (%.0f)" % heal)
 	eq(int(r_bh["heals"]), 1, "B's machine healed it once")

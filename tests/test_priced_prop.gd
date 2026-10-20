@@ -154,8 +154,8 @@ func setup() -> void:
 	var statue := _prop("marble_statue", Vector3(3, 0, -1.4))         # 110 hp
 	SpellBook.cast("fireball", hero, 1.0, wine.global_position)
 	await frames(90)
-	near(wine.hp, wine.max_hp - SpellBook.fireball_damage(1.0), 0.01, "fireball damages a prop")
-	near(statue.hp, statue.max_hp - SpellBook.fireball_damage(1.0), 0.01, "and a second prop in the blast")
+	near(wine.hp, wine.max_hp - FireballSpell.fireball_damage(1.0), 0.01, "fireball damages a prop")
+	near(statue.hp, statue.max_hp - FireballSpell.fireball_damage(1.0), 0.01, "and a second prop in the blast")
 	near(buddy.hp, buddy.max_hp, 0.001, "fireball still spares heroes")
 	near(hero.hp, hero.max_hp, 0.001, "and the caster")
 	eq(Ledger.lines.size(), 0, "dented props cost nothing")

@@ -163,7 +163,7 @@ func _rooted_cannot_move_but_can_act() -> void:
 	hero.spell_slots = ["heal", "vines"] as Array[String]
 	hero.apply_damage(60.0)
 	check(hero.try_cast("heal", 1.0, hero.global_position), "a rooted hero can cast")
-	near(hero.hp, hero.max_hp - 60.0 + SpellBook.heal_amount(1.0), 0.5, "the heal landed")
+	near(hero.hp, hero.max_hp - 60.0 + HealSpell.heal_amount(1.0), 0.5, "the heal landed")
 	# A rooted monster cannot chase, but it still strikes what is in reach.
 	_fresh()
 	var grunt := MonsterFactory.spawn("grunt", Vector2i(0, 0)) as Monster
