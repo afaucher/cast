@@ -88,7 +88,7 @@ var scouts: Array[Dictionary] = []
 ## Doorways.find (id, room, hall, axis, cell, band, the door line a / b and its middle `center`), plus `style`. Their
 ## doorways also have the tread-plate threshold floor (DoorFloors, in the cells' materials), so both are in the checksum.
 var doors: Array[Dictionary] = []
-## Pool sharks (docs/design/sharks.md "As built"; SiteBuilder._plan_sharks): {pool: index into HexMap.pools, variant:
+## Pool sharks (docs/design/sharks.md "As built"; SharkPlanner): {pool: index into HexMap.pools, variant:
 ## "regular" | "laser" | "imp", start: Vector2 (X/Z: the head joint), heading: Vector2}. Their pools' records carry
 ## `shark` (the variant) too, so PoolView builds no decorative fins there.
 var sharks: Array[Dictionary] = []

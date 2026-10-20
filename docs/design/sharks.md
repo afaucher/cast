@@ -19,7 +19,7 @@ The lab is still there:
 - `jockey.gd` `Jockey`: the imp gunner, a swarmer.
 - `scripts/fx/shark_laser_fx.gd`: the red line, the reticle, the beam and the scorch.
 - `Combat.bite` and `Combat.beam`.
-- Placement: `SiteBuilder._plan_sharks` / `_spawn_sharks`, `SitePlan.sharks`, the lagoon in `PoolGeo`, and `rec.shark`
+- Placement: `SharkPlanner.plan` / `spawn` (`scripts/contracts/planners/shark_planner.gd`), `SitePlan.sharks`, the lagoon in `PoolGeo`, and `rec.shark`
   (fins off).
 - Net: `world.charge`, `world.uncharge`, `world.lock` and `world.dismount` in `NetWorld`; `dismounts` in the late-join
   snapshot; the `NetEvents` carriers.
@@ -62,7 +62,7 @@ The lab is still there:
   sharks, so its moats keep their rings and decorative fins. `test_room_themes`' synthetic moat (floor 1) is still a
   ring.
 - **Imp odds:** a floor-3 moat pool or lagoon is regular 20 %, laser 35 %, imp 45 %. On floor 2 it is 50 % regular,
-  50 % laser. 35 % of the bunker's two-row indoor pools get a regular shark (`SiteBuilder.SHARK_*`).
+  50 % laser. 35 % of the bunker's two-row indoor pools get a regular shark (`SharkPlanner.SHARK_*`).
 - **Spells:**
   - **Corn:** `Shark.corn_at` from `CornStrike._slam`, so the kernels in its water are chum for 4 s, as well as corn's
     damage.

@@ -1,5 +1,5 @@
 extends MonsterTestBase
-## Pool sharks (docs/design/sharks.md "As built"; Shark, SharkSteer, SharkBody, Jockey, SiteBuilder._plan_sharks, PoolGeo's
+## Pool sharks (docs/design/sharks.md "As built"; Shark, SharkSteer, SharkBody, Jockey, SharkPlanner, PoolGeo's
 ## lagoon), one process:
 ##  - confinement: a shark patrolling a convex pool and a moat ring never leaves its water and keeps its centre line off
 ##    the rim (except the lunge's head, up to LUNGE_OVER onto the deck);
@@ -335,7 +335,7 @@ func _check_generated() -> void:
 					eq(str(rec.get("shark", "")), v, "%s: its pool record carries the shark (no decorative fins)" % tag)
 					if str(rec["look"]) == PoolGeo.LOOK_SPECIMEN:
 						bad += 1
-					elif (rec["hole"] as Array).is_empty() and SharkSteer.inradius(PackedVector2Array(rec["outline"])) < SiteBuilder.SHARK_MIN_INRADIUS:
+					elif (rec["hole"] as Array).is_empty() and SharkSteer.inradius(PackedVector2Array(rec["outline"])) < SharkPlanner.SHARK_MIN_INRADIUS:
 						bad += 1
 					elif not (rec["hole"] as Array).is_empty() and v != "regular":
 						bad += 1
