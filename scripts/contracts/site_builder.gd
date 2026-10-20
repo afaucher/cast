@@ -153,27 +153,13 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	FloorMaterials.assign(map, p, run.site_type)
 	# The office doors and their thresholds (after the materials: a threshold writes its cells' floor). Timed on its own.
 	var t_doors := Time.get_ticks_usec()
-	_plan_doors(map, run, floor_n, p)
+	DoorPlanner.plan(map, run, floor_n, p)
 	last_door_usec = Time.get_ticks_usec() - t_doors
 	# The pool sharks (docs/design/sharks.md): after everything else, with dice of their own. Timed on its own.
 	var t_sharks := Time.get_ticks_usec()
 	SharkPlanner.plan(map, run, floor_n, p)
 	last_shark_usec = Time.get_ticks_usec() - t_sharks
 	return p
-
-
-## Which doorways get an office door (DoorPlan: every narrow doorway but dead ends and the start / elevator rooms) and the
-## diamond tread-plate threshold on the cells their door line crosses (DoorFloors; open archways keep their floors).
-static func _plan_doors(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> void:
-	var sp := Doorways.spaces(map)
-	var dws := Doorways.find(map, sp)
-	for id in DoorPlan.choose(dws, p, run.floor_seed(floor_n)):
-		var dw: Dictionary = dws[id]
-		var rec := {"style": OfficeDoor.DEFAULT_STYLE}
-		for k in ["id", "room", "hall", "axis", "cell", "band", "a", "b", "center", "door_cells", "mouth_cells", "door_ok"]:
-			rec[k] = dw[k]
-		p.doors.append(rec)
-		DoorFloors.for_doorway(map, sp, dw, true)
 
 
 ## The crew's work van, parked beside the start cell (VanPlan) on the FIRST floor only: the van stays where it parked, so
@@ -1076,10 +1062,7 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	SharkPlanner.spawn(run, p, site)
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
-	for dr in p.doors:
-		var door := OfficeDoor.spawn(dr, str(dr.get("style", OfficeDoor.DEFAULT_STYLE)), true)
-		if door != null:
-			site.doors.append(door)
+	DoorPlanner.spawn(p, site)
 	return site
 
 

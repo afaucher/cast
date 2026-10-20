@@ -115,7 +115,7 @@ segment) as before.
 
 Spaces 296 -> 390. One-sided pairs stay at most 2.2 % per floor (seed 26 floor 1), 0.9 % in caves.
 
-**Kind:** runtime only. It touches only `scripts/world/room_fog.gd`; `Doorways.find`, `SiteBuilder._plan_doors`, doors,
+**Kind:** runtime only. It touches only `scripts/world/room_fog.gd`; `Doorways.find`, `DoorPlanner.plan`, doors,
 the floor plan and the floor checksum are unchanged. **No generator change is needed**: rooms have no necks.
 
 Before and after maps (in the session scratchpad, `sewer/lava2/spaces/`; file names as of the audit): `spaces_s3f1` / `spaces_s3f1_split`,
