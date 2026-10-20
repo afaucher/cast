@@ -17,3 +17,4 @@ is generated in GDScript by Cast's own code, so we own it.
 | `paper` | `paper_flip` | `bookFlip3.ogg` from the RPG Audio pack, as recorded (silence trimmed, levelled) | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/rpg-audio |
 | `elevator_ding` | `elevator_ding_v4b` | synth (a two-tone lobby chime, A5 then F5) | Cast | ours | `tools/sfx_proto/sfx_round3.gd` |
 | `fuse` | `fuse_hiss_v6` | synth (a "pssht" as it lights, then a quiet high sizzle that dies away) | Cast | ours | `tools/sfx_proto/sfx_round3.gd` |
+| `firework` | `firework_v1` | "Whistle and Explosion Single_Firework" (336008), its start cut so the bang lands on the burst | Rudmer_Rotteveel (Freesound) | CC0 1.0 | `tools/sfx_proto/sfx_round3.gd` |

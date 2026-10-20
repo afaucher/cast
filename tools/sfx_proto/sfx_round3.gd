@@ -15,6 +15,7 @@ const STAMP_3 := "freesound/362624__kermite607__stamp.wav"
 const K_IMPACT := "kenney_impact-sounds/"
 const K_UI := "kenney_interface-sounds/"
 const K_RPG := "kenney_rpg-audio/"
+const FIREWORK := "freesound/336008__rudmer_rotteveel__whistle-and-explosion-single_firework.wav"
 
 const CUES3 := ["cast_armed_v4a", "cast_armed_v4b", "cast_armed_v4c", "cast_armed_v4d", "fizzle_pfft_v4",
 		"fizzle_pfft_v4b", "spell_fireball_v4", "spell_fireball_v4b", "stamp_thunk_v4", "stamp_thunk_v4b",
@@ -41,6 +42,7 @@ const SOURCES := {
 	"order_click_v1": [K_UI + "tick_002.ogg"],
 	"fuse_hiss_v5": ["synth"],
 	"fuse_hiss_v6": ["synth"],
+	"firework_v1": [FIREWORK],
 }
 
 
@@ -304,3 +306,14 @@ func _fuse_hiss_v6() -> PackedFloat32Array:
 	_add_soft_crackle(o, 0.1, 1.15, 14.0, 0.08, 6000.0)
 	_fade_out(o, 0.05)
 	return _normalize(o, -10.0)
+
+
+# ---------------------------------------------------------------- goblin scout fireworks (2026-10-20)
+
+## One rocket of the goblin scout's volley (FireworksFx): the recording's whistle and bang (Rudmer_Rotteveel, CC0), its
+## start cut so the bang lands 0.77 s in, on the rocket's burst (FireworksFx RISE_TIME + RICOCHET_TIME). The game plays
+## it once per rocket with pitch jitter, so a volley of three reads as three (user, 2026-10-20: "use the firework sound
+## we have for them. Maybe altered to read as multiple?").
+func _firework_v1() -> PackedFloat32Array:
+	var s := Rec.cut(Rec.load_mono(FIREWORK), 0.38)
+	return Rec.normalize(Rec.fade(s, 0.03, 0.45), -3.0)

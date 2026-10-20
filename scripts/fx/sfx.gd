@@ -42,6 +42,10 @@ const CUES := {
 	## Front-loaded and above 4.5 kHz (audio-plan.md §4); a doused fuse cuts it.
 	"fuse": {"file": "fuse.wav", "bus": "World", "volume_db": -3.0, "pitch_jitter": 0.06,
 		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
+	## One goblin-scout rocket (FireworksFx: each rocket as it launches, its bang on the burst), on every machine (the
+	## world.fireworks event). Wide pitch jitter so a volley reads as several rockets.
+	"firework": {"file": "firework.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.12,
+		"max_voices": 4, "min_gap": 0.08, "positional": true, "unit_size": 14.0, "max_distance": 80.0},
 	## The elevator doors open (ElevatorArrival.doors_opened).
 	"elevator_ding": {"file": "elevator_ding.wav", "bus": "World", "volume_db": -2.0, "pitch_jitter": 0.0,
 		"max_voices": 1, "min_gap": 1.5, "positional": true, "unit_size": 16.0, "max_distance": 80.0},

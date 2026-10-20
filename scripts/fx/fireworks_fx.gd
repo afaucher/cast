@@ -3,7 +3,8 @@ extends Node3D
 ## The goblin scout's fireworks volley (docs/design/goblin-scout.md): COSMETIC ONLY. A string of rockets
 ## leaves the launch point (this node's position) one after another, climbs on a fizzing trail, ricochets off
 ## the bunker's ceiling with a spark, and bursts into a ball of faceted star streaks in red / gold / lime with a
-## flash of coloured light over the room and a comic "BANG!". The alert it stands for is gameplay and lives on
+## flash of coloured light over the room; each rocket has its own whistle and bang (Sfx "firework"). No comic words
+## (user, 2026-10-20: "it hurts the reading more than helps"). The alert it stands for is gameplay and lives on
 ## the host (the scout raises it); this node only shows it.
 ##
 ## A scheduled effect: every machine builds it from (launch point, start time, fx_seed) and everything after is a
@@ -19,7 +20,6 @@ const LIME := Color(0.66, 1.0, 0.26)
 const CORE := Color(1.0, 0.96, 0.82)
 const SMOKE := Color(0.46, 0.42, 0.40, 0.55)
 const PALETTE: Array[Color] = [RED, GOLD, LIME]
-const WORDS: Array[String] = ["BANG!", "FWOOSH!", "POP!", "KRAK!"]
 
 const RISE_TIME := 0.55          ## launch to the ceiling
 const RICOCHET_TIME := 0.22      ## ceiling to the burst point
@@ -45,6 +45,7 @@ var frozen := false
 
 var _rockets: Array[Dictionary] = []
 var _t := 0.0
+var _sounded := 0        ## rockets whose sound has started (one cue each, as it launches)
 
 
 func _ready() -> void:
@@ -60,7 +61,7 @@ func net_fields() -> Dictionary:
 	return {
 		"count": Net.SPAWN, "interval": Net.SPAWN, "ceiling": Net.SPAWN, "drift": Net.SPAWN, "fx_seed": Net.SPAWN,
 		"start_time": Net.SPAWN,
-		"frozen": Net.LOCAL, "_rockets": Net.LOCAL, "_t": Net.LOCAL,
+		"frozen": Net.LOCAL, "_rockets": Net.LOCAL, "_t": Net.LOCAL, "_sounded": Net.LOCAL,
 	}
 
 
@@ -92,8 +93,18 @@ func _process(_delta: float) -> void:
 		return
 	var t := GameWorld.time - start_time
 	sample(t)
+	_sound(t)
 	if t > total_time():
 		queue_free()
+
+
+## Each rocket's whistle and bang as it launches (its bang lands on the burst). A rocket that launched well before this
+## machine heard of the volley stays quiet rather than bang late.
+func _sound(t: float) -> void:
+	while _sounded < _rockets.size() and t >= float(_rockets[_sounded]["t0"]):
+		if t - float(_rockets[_sounded]["t0"]) < 0.3:
+			Sfx.play_at("firework", global_position)
+		_sounded += 1
 
 
 # ------------------------------------------------------------------ build
@@ -111,7 +122,6 @@ func _build() -> void:
 	var rocket_mat := LowPolyMaterial.make(1.6)
 	var smoke_mat := Fx.glow_material(SMOKE, false)
 	smoke_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	var used: Array[int] = []
 	for i in count:
 		var r := {}
 		var col: Color = PALETTE[i % PALETTE.size()]
@@ -163,22 +173,6 @@ func _build() -> void:
 		light.shadow_enabled = false
 		add_child(light)
 		r["light"] = light
-		var label := Label3D.new()
-		var w := rng.randi_range(0, WORDS.size() - 1)
-		while used.has(w) and used.size() < WORDS.size():
-			w = (w + 1) % WORDS.size()
-		used.append(w)
-		label.text = WORDS[w]
-		label.font_size = 96
-		label.outline_size = 22
-		label.pixel_size = 0.012
-		label.modulate = Color(1.0, 0.92, 0.45).lerp(col, 0.35)
-		label.outline_modulate = Color(0.12, 0.06, 0.04)
-		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label.no_depth_test = true
-		label.render_priority = 20
-		add_child(label)
-		r["label"] = label
 		_rockets.append(r)
 
 
@@ -288,9 +282,3 @@ func sample(t: float) -> void:
 			light.light_color = Color(1.0, 0.8, 0.5)
 		if bursting:
 			light.light_color = col
-		var label: Label3D = r["label"]
-		label.visible = bursting and bu < 0.75
-		if label.visible:
-			label.position = centre + Vector3(0.0, 0.9 + 0.6 * bu, 0.0)
-			label.scale = Vector3.ONE * (0.7 + 0.5 * minf(bu * 6.0, 1.0))
-			label.modulate.a = 1.0 - smoothstep(0.45, 0.75, bu)

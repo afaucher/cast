@@ -20,6 +20,7 @@ const GAME_CUES := {
 	"elevator_ding": "elevator_ding_v4b",
 	"paper": "paper_flip",
 	"fuse": "fuse_hiss_v6",
+	"firework": "firework_v1",
 }
 
 
