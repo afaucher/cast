@@ -33,9 +33,9 @@ func _ready() -> void:
 	if start_time < 0.0:
 		start_time = GameWorld.time
 	_fx = VinesFx.new()
-	_fx.radius = SpellBook.vines_radius(power)
+	_fx.radius = VinesSpell.vines_radius(power)
 	_fx.telegraph = TELEGRAPH
-	_fx.hold = SpellBook.vines_duration(power)
+	_fx.hold = VinesSpell.vines_duration(power)
 	_fx.power = power
 	_fx.start_time = start_time
 	add_child(_fx)
@@ -55,12 +55,12 @@ func _physics_process(_delta: float) -> void:
 	var t := GameWorld.time - start_time
 	if not _burst_done and t >= TELEGRAPH:
 		_burst()
-	elif _burst_done and t >= TELEGRAPH + SpellBook.vines_duration(power) + VinesFx.RETRACT + 0.1:
+	elif _burst_done and t >= TELEGRAPH + VinesSpell.vines_duration(power) + VinesFx.RETRACT + 0.1:
 		queue_free()
 
 
 func _burst() -> void:
 	_burst_done = true
-	var dur := SpellBook.vines_duration(power)
-	for a in Combat.modify_radius(global_position, SpellBook.vines_radius(power), "vines", 1.0, dur, Actor.STAT_ROOT):
+	var dur := VinesSpell.vines_duration(power)
+	for a in Combat.modify_radius(global_position, VinesSpell.vines_radius(power), "vines", 1.0, dur, Actor.STAT_ROOT):
 		VineWrap.attach(a, dur)

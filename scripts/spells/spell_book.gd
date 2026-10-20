@@ -69,22 +69,6 @@ const SPELLS := {
 const SPELL_RANGE := Hero.BOLT_RANGE  ## same reach as the ranged attack
 const ALLY_SNAP := 1.3                ## aim this close to a hero snaps onto them
 
-# --- Teeth
-const TEETH_RADIUS_BASE := 2.0
-const TEETH_RADIUS_POWER := 0.6
-const TEETH_GROW_SLOW := 2.0       ## grow time at power ~0 (seconds)
-const TEETH_GROW_FAST := 1.0       ## grow time at power 1
-const TEETH_DAMAGE := 25.0         ## the carrier, times power
-const TEETH_SPLASH_DAMAGE := 10.0  ## everyone else near the carrier, times power
-const TEETH_SPLASH_RADIUS := 1.5
-const TEETH_SHOVE := 1.2           ## mild shove outward from the carrier
-
-# --- Vines
-const VINES_RADIUS_BASE := 2.4
-const VINES_RADIUS_POWER := 0.6
-const VINES_ROOT_BASE := 1.6       ## seconds rooted at power ~0
-const VINES_ROOT_POWER := 0.6      ## ... plus this at power 1 (2.2 s)
-
 # --- Damp
 const DAMP_RADIUS_BASE := 4.0      ## a WIDE area
 const DAMP_RADIUS_POWER := 1.0
@@ -187,6 +171,8 @@ const DEFS := [
 	preload("res://scripts/spells/defs/armor.gd"),
 	preload("res://scripts/spells/defs/corn.gd"),
 	preload("res://scripts/spells/defs/tentacles.gd"),
+	preload("res://scripts/spells/defs/teeth.gd"),
+	preload("res://scripts/spells/defs/vines.gd"),
 ]
 static var _defs_by_id := _index_defs()
 
@@ -255,10 +241,6 @@ static func apply(caster: Actor, spec: Dictionary, start: float) -> Node:
 	if d != null:
 		return d.cast(caster, power, target, start, extra)
 	match id:
-		"teeth":
-			Teeth.cast(caster, power, target)
-		"vines":
-			return _cast_vines(caster, power, target, start)
 		"damp":
 			return _cast_damp(caster, power, target, start)
 		"coffee":
@@ -306,50 +288,6 @@ static func snap_hero(aim: Vector3) -> Actor:
 static func fizzle(caster: Actor) -> void:
 	if caster and is_instance_valid(caster):
 		Fx.fizzle_puff(caster.global_position)
-
-
-# --- Teeth ---------------------------------------------------------------------------------
-
-## Everyone (any team) within this of the aim point is afflicted.
-static func teeth_radius(power: float) -> float:
-	return TEETH_RADIUS_BASE + TEETH_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-## Seconds the teeth grow before the pop: 2.0 at the weakest, 1.0 at full power.
-static func teeth_grow_time(power: float) -> float:
-	return TEETH_GROW_SLOW - (TEETH_GROW_SLOW - TEETH_GROW_FAST) * clampf(power, MIN_POWER, 1.0)
-
-
-## Damage to the carrier at the pop.
-static func teeth_damage(power: float) -> float:
-	return TEETH_DAMAGE * clampf(power, MIN_POWER, 1.0)
-
-
-## Damage to everyone else near the carrier at the pop.
-static func teeth_splash_damage(power: float) -> float:
-	return TEETH_SPLASH_DAMAGE * clampf(power, MIN_POWER, 1.0)
-
-
-# --- Vines ---------------------------------------------------------------------------------
-
-## Everyone (any team) within this of the aim point is rooted.
-static func vines_radius(power: float) -> float:
-	return VINES_RADIUS_BASE + VINES_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-## Seconds the roots hold.
-static func vines_duration(power: float) -> float:
-	return VINES_ROOT_BASE + VINES_ROOT_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-static func _cast_vines(caster: Actor, power: float, target: Vector3, start: float) -> Vines:
-	var v := Vines.new()
-	v.power = clampf(power, MIN_POWER, 1.0)
-	v.source_team = caster.team
-	v.caster = caster
-	v.start_time = start
-	GameWorld.spawn(v, target)
-	return v
 
 
 # --- Damp ----------------------------------------------------------------------------------

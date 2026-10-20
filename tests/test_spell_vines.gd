@@ -63,11 +63,11 @@ func _numbers() -> void:
 	near(SpellBook.cooldown_of("vines"), 10.0, 0.001, "cooldown 10 s")
 	check(SpellBook.color_of("vines").g > 0.7 and SpellBook.color_of("vines").b < 0.4, "leaf green")
 	check(SpellBook.find_in_text("cast vines") == "vines", "text lookup")
-	near(SpellBook.vines_radius(1.0), 3.0, 0.001, "radius 2.4 + 0.6 * power")
-	near(SpellBook.vines_duration(1.0), 2.2, 0.001, "root 1.6 + 0.6 * power: about two seconds")
-	check(SpellBook.vines_radius(0.2) < SpellBook.vines_radius(0.6) and SpellBook.vines_radius(0.6) < SpellBook.vines_radius(1.0), "radius monotonic")
-	check(SpellBook.vines_duration(0.2) < SpellBook.vines_duration(1.0), "duration monotonic")
-	check(SpellBook.vines_duration(0.05) >= 1.5 and SpellBook.vines_duration(1.0) <= 2.3, "always about two seconds (%.2f..%.2f)" % [SpellBook.vines_duration(0.05), SpellBook.vines_duration(1.0)])
+	near(VinesSpell.vines_radius(1.0), 3.0, 0.001, "radius 2.4 + 0.6 * power")
+	near(VinesSpell.vines_duration(1.0), 2.2, 0.001, "root 1.6 + 0.6 * power: about two seconds")
+	check(VinesSpell.vines_radius(0.2) < VinesSpell.vines_radius(0.6) and VinesSpell.vines_radius(0.6) < VinesSpell.vines_radius(1.0), "radius monotonic")
+	check(VinesSpell.vines_duration(0.2) < VinesSpell.vines_duration(1.0), "duration monotonic")
+	check(VinesSpell.vines_duration(0.05) >= 1.5 and VinesSpell.vines_duration(1.0) <= 2.3, "always about two seconds (%.2f..%.2f)" % [VinesSpell.vines_duration(0.05), VinesSpell.vines_duration(1.0)])
 	var v := Vines.new()
 	var f: Dictionary = v.net_fields()
 	eq(f["start_time"], Net.SPAWN, "the cast's stamp is a SPAWN parameter")
@@ -95,7 +95,7 @@ func _area_and_duration() -> void:
 	await frames(15)   # the telegraph is 0.3 s
 	for a in inside:
 		check(a.is_rooted() and a.has_modifier("vines"), "%s is rooted" % a.display_name)
-		near(a.modifier_left("vines"), SpellBook.vines_duration(1.0), 0.2, "%s is rooted for about 2.2 s" % a.display_name)
+		near(a.modifier_left("vines"), VinesSpell.vines_duration(1.0), 0.2, "%s is rooted for about 2.2 s" % a.display_name)
 	check(not far_hero.is_rooted() and not far_mon.is_rooted() and not caster.is_rooted(), "outside the radius is free (and the caster stood well away)")
 	# Everyone is hit regardless of team: a hero, a monster and an employee were all in the list above.
 	eq(friend.team, GameWorld.TEAM_HEROES)
@@ -125,16 +125,16 @@ func _area_and_duration() -> void:
 	var near_edge := _dummy(Vector3(3.1, 0, 0))   # inside radius 3.0 (+ its own 0.45) at power 1, outside 2.43 (+ 0.45) at power 0.05
 	SpellBook.cast("vines", c2, 0.05, Vector3.ZERO)
 	await frames(25)
-	check(not near_edge.is_rooted(), "a weak cast has a smaller radius (%.2f)" % SpellBook.vines_radius(0.05))
+	check(not near_edge.is_rooted(), "a weak cast has a smaller radius (%.2f)" % VinesSpell.vines_radius(0.05))
 	SpellBook.cast("vines", c2, 1.0, Vector3.ZERO)
 	await frames(25)
 	check(near_edge.is_rooted(), "a full-power cast reaches it")
-	near(near_edge.modifier_left("vines"), SpellBook.vines_duration(1.0), 0.2, "and holds it 2.2 s")
+	near(near_edge.modifier_left("vines"), VinesSpell.vines_duration(1.0), 0.2, "and holds it 2.2 s")
 	# Re-casting refreshes the root; it never stacks into a longer one.
 	await frames(60)
 	SpellBook.cast("vines", c2, 1.0, Vector3.ZERO)
 	await frames(25)
-	check(near_edge.modifier_left("vines") <= SpellBook.vines_duration(1.0) + 0.01, "a second cast refreshes, it does not stack")
+	check(near_edge.modifier_left("vines") <= VinesSpell.vines_duration(1.0) + 0.01, "a second cast refreshes, it does not stack")
 
 
 # --- Rooted: no walking, but attacks and spells still work ----------------------------------------------

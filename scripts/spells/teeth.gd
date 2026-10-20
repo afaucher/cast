@@ -4,7 +4,7 @@ extends RefCounted
 ## the caster and monsters alike) is afflicted: TeethFx sprouts too many teeth on it, they grow for
 ## 1 to 2 s (stronger casts grow faster), then POP. Design record: docs/design/spells.md.
 ##
-##   Teeth.cast(caster, power, point)          # afflict everyone within SpellBook.teeth_radius(power)
+##   Teeth.cast(caster, power, point)          # afflict everyone within TeethSpell.teeth_radius(power)
 ##   Teeth.cancel_on(actor)                    # the dentist (a heal calls this); true if teeth were pulled
 ##   Teeth.is_afflicted(actor)
 ##
@@ -40,8 +40,8 @@ class Affliction extends RefCounted:
 ## Afflict everyone near `pos`. Returns the afflicted actors. Used by SpellBook.cast.
 static func cast(caster: Actor, power: float, pos: Vector3) -> Array[Actor]:
 	power = clampf(power, SpellBook.MIN_POWER, 1.0)
-	var radius := SpellBook.teeth_radius(power)
-	var grow := SpellBook.teeth_grow_time(power)
+	var radius := TeethSpell.teeth_radius(power)
+	var grow := TeethSpell.teeth_grow_time(power)
 	var out: Array[Actor] = []
 	for a in GameWorld.actors_in_radius(pos, radius):
 		if afflict(a, caster, power, grow) != null:
@@ -132,15 +132,15 @@ static func _on_pop(aff: Affliction) -> void:
 	var carrier_alive := carrier != null and not carrier.dead
 	if carrier_alive:
 		Fx.attach_hit_feedback(carrier)
-		_hurt(carrier, SpellBook.teeth_damage(power), aff.caster_team, src)
+		_hurt(carrier, TeethSpell.teeth_damage(power), aff.caster_team, src)
 	# The splash: everyone else near the carrier, any team (including other carriers).
-	var splash := SpellBook.teeth_splash_damage(power)
-	for a in GameWorld.actors_in_radius(pos, SpellBook.TEETH_SPLASH_RADIUS):
+	var splash := TeethSpell.teeth_splash_damage(power)
+	for a in GameWorld.actors_in_radius(pos, TeethSpell.TEETH_SPLASH_RADIUS):
 		if a == carrier:
 			continue
 		Fx.attach_hit_feedback(a)
 		_hurt(a, splash, aff.caster_team, src)   # (_hurt asks Combat.resolves: the pop runs on every screen)
-	Combat.shove_radius(pos, SpellBook.TEETH_SPLASH_RADIUS, SpellBook.TEETH_SHOVE, src, -1, carrier)
+	Combat.shove_radius(pos, TeethSpell.TEETH_SPLASH_RADIUS, TeethSpell.TEETH_SHOVE, src, -1, carrier)
 
 
 ## Damage with the friendly-fire floor: a hero's spell never takes a hero below 1 HP.
