@@ -57,6 +57,21 @@ const WORLD_CARRIES := {
 		"lock_dir": "world.lock {id, x, y, z, dx, dz, t} (NetWorld): the locked beam's direction",
 		"fire_at": "world.lock {t} (NetWorld): the shared moment it fires, on every machine's own clock",
 	},
+	# The Pavise Crossbowman (combat-proposals.md §2, "As built"): a monster-format entry; its aim and bolt ride the laser
+	# shark's events, its shield world.shield. Its bash is the monsters' wind-up.
+	"res://scripts/monsters/pavise.gd": {
+		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
+		"target": "world.windup names the bash's victim (each client resolves the bash on its own hero)",
+		"_windup_total": "world.windup {s, l}: the bash's wind-up; the look rides _telegraph",
+		"_windup_left": "world.windup {s, l}: the bash's wind-up; the look rides _telegraph",
+		"shield_state": "world.shield {id, st, x, y, z, w} (NetWorld) on every change: carried, planted, left, flat",
+		"shield_pos": "world.shield {x, y, z} (NetWorld): where a left or flat pavise stands or lies",
+		"shield_yaw": "world.shield {w} (NetWorld): which way it faces",
+		"charge_victim": "world.charge {id, s, l, v} (NetWorld): the aim's victim the dashed line tracks; world.uncharge drops it",
+		"lock_origin": "world.lock {id, x, y, z, dx, dz, t} (NetWorld): the locked bolt's origin",
+		"lock_dir": "world.lock {id, x, y, z, dx, dz, t} (NetWorld): the locked bolt's direction",
+		"fire_at": "world.lock {t} (NetWorld): the shared moment it looses, on every machine's own clock; world.uncharge calls it off",
+	},
 	# The imp gunner riding an imp laser shark: a swarmer that sits in the saddle until world.dismount.
 	"res://scripts/monsters/jockey.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
@@ -126,6 +141,7 @@ const WORLD_CARRIES := {
 ##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
 ##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
+##   world.shield (reliable)  host -> clients: a Pavise's shield state {id, st, x, y, z, w} (carried, planted, left, flat)
 ##   world.charge / world.uncharge / world.lock / world.dismount (reliable)  host -> clients: a laser shark's charge (start,
 ##                         length, victim) / dropped / its beam locked (origin, direction, the shared fire time: every machine
 ##                         fires it then and applies what it resolves) / an imp gunner off its shark (how, where)
@@ -160,6 +176,8 @@ const LATE_JOIN := {
 	"res://scripts/monsters/goblin.gd": "as monster.gd (keyframe, gone ids); his phase and rack: replay of world.scout per scout in the snapshot (NetWorld.scout_states); a volley in the air: skipped (cosmetic)",
 	"res://scripts/monsters/shark.gd": "keyframe (seed-built: position, facing, HP, state); a killed one: gone ids (removed); a charge or a beam under way: skipped (under 1.5 s)",
 	"res://scripts/monsters/jockey.gd": "as monster.gd (keyframe, gone ids); off its shark: replay of world.dismount per gunner in the snapshot (NetWorld.dismount_states)",
+	"res://scripts/monsters/pavise.gd": "as monster.gd (keyframe, gone ids); its shield: replay of world.shield per pavise in the snapshot (NetWorld.shield_states); an aim or a bolt under way: skipped (under 1.5 s); stuck arrows: cosmetic, skipped",
+	"res://scripts/monsters/water_boy.gd": "as monster.gd (keyframe, gone ids); a pour under way: skipped (a wind-up, under a second)",
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",

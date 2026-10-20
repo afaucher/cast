@@ -15,6 +15,33 @@ static func resolves(target: Actor, source: Node) -> bool:
 	return Net.resolves_hit(target, source)
 
 
+# --- Shields (the Pavise crossbowman, docs/design/combat-proposals.md §2.4 and "As built") ----------------------------
+# What kind of hit is coming, for a shield's test. `from_point` is where it comes from: the attacker (melee), a point back
+# along a projectile's travel (shots, arrows), the blast's centre (blasts). A hit from above (corn) is never blocked;
+# a hit from inside (teeth growing out of it) never asks.
+const HIT_MELEE := "melee"
+const HIT_SHOT := "shot"        ## a projectile that does not stick (the fireball, the bowl, a beam)
+const HIT_ARROW := "arrow"      ## an arrow or a bolt: it sticks in the planks
+const HIT_BLAST := "blast"      ## a blast or a shove from a point (explode, a teeth pop's splash, tentacles)
+const HIT_ABOVE := "above"      ## from above (corn): never blocked
+
+
+## True when `target` carries a shield that stops this hit (an actor with `blocks_hit(from_point, kind)`: the Pavise). Asked
+## by every helper here, by Projectile, ArrowShot, BowlBoulder and Tentacles BEFORE they ask who resolves the hit, so every
+## machine that runs the effect shows the block (`show_block`: the spark, the grey "0", a stuck arrow); the machine that
+## resolves the hit (`source`'s, Net.resolves_hit) is the one whose decision counts: it applies nothing, so no damage,
+## no shove and no request travel. Each machine tests the shield's facing as it shows it (a client: the host's stream).
+## `show` false only asks (the AI allies' "go round it").
+static func shielded(target: Actor, from_point: Vector3, kind: String = HIT_MELEE, source: Node = null, show: bool = true) -> bool:
+	if target == null or not is_instance_valid(target) or target.dead or kind == HIT_ABOVE or not target.has_method("blocks_hit"):
+		return false
+	if not bool(target.call("blocks_hit", from_point, kind)):
+		return false
+	if show:
+		target.call("show_block", from_point, kind, Net.resolves_hit(target, source), source)
+	return true
+
+
 ## Hit every actor of the other team within `reach` of the attacker and
 ## inside a cone of `arc_deg` around `dir`, plus any breakable (mail package, GameWorld.hittable_in_radius). A hero's
 ## swing also hits the priced props in it (user, 2026-10-18: "let player attacks break them"); a monster's does not.
@@ -33,6 +60,8 @@ static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: floa
 		# Can't swing up/down a cliff: at most a 2-level difference.
 		if absf(a.global_position.y - attacker.global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
 			continue
+		if shielded(a, attacker.global_position, HIT_MELEE, attacker):
+			continue   # (a clank on the planks: no damage, no shove)
 		if not Net.resolves_hit(a, attacker):
 			continue   # (online: another machine decides this one)
 		a.apply_damage(damage, attacker)
@@ -51,6 +80,8 @@ static func shove_radius(pos: Vector3, radius: float, distance: float, source: N
 	for a in GameWorld.actors_in_radius(pos, radius, team):
 		if a == skip or (max_dy >= 0.0 and absf(a.global_position.y - pos.y) > max_dy):
 			continue
+		if shielded(a, pos, HIT_BLAST, source):
+			continue   # (a bonk: nothing moves)
 		if not Net.resolves_hit(a, source):
 			continue
 		var away := a.global_position - pos
@@ -106,11 +137,12 @@ static func heal_radius(pos: Vector3, radius: float, amount: float, team: int) -
 ## prop's blast: the prop) is whose machine decides the hits on everything but a hero, when that is not `source`'s: the
 ## blast is the host's prop, so the host applies it to monsters, props and employees even when a client's hero set it off
 ## (the bill and the kill credit still go to `source`). Null: `source` decides, as for every other explosion.
-static func explode(pos: Vector3, radius: float, damage: float, team: int, source: Node = null, edge_mult: float = 0.5, shove: float = 0.0, decider: Node = null) -> Array[Actor]:
+## `kind`: HIT_BLAST (a shield facing the centre stops it) or HIT_ABOVE (corn: nothing stops it).
+static func explode(pos: Vector3, radius: float, damage: float, team: int, source: Node = null, edge_mult: float = 0.5, shove: float = 0.0, decider: Node = null, kind: String = HIT_BLAST) -> Array[Actor]:
 	var hit: Array[Actor] = []
 	var judge: Node = decider if decider != null else source
 	for a in GameWorld.actors_in_radius(pos, radius, team):
-		if a == decider or not Net.resolves_hit(a, judge):
+		if a == decider or shielded(a, pos, kind, judge) or not Net.resolves_hit(a, judge):
 			continue
 		var d := GameWorld.flat_distance(a.global_position, pos)
 		var k := lerpf(1.0, edge_mult, clampf(d / maxf(radius, 0.001), 0.0, 1.0))
@@ -135,6 +167,8 @@ static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, s
 		var d := GameWorld.flat_distance(a.global_position, pos)
 		if d > radius + 0.1:
 			continue   # judged by the actor's center, so the ring is honest
+		if shielded(a, pos, HIT_BLAST, source):
+			continue
 		if not Net.resolves_hit(a, source):
 			continue
 		a.apply_damage(damage * lerpf(1.0, edge_mult, clampf(d / radius, 0.0, 1.0)), source)
@@ -213,6 +247,8 @@ static func beam(source: Actor, from: Vector3, dir: Vector3, reach: float, damag
 		first = a
 		first_t = t
 	var applied := false
+	if first != null and shielded(first, from, HIT_SHOT, source):
+		return {"end": from + dir * first_t, "hit": first, "applied": false}   # (it splashes on a shield's planks)
 	if first != null and Net.resolves_hit(first, source):
 		first.apply_damage(damage, source)
 		applied = true

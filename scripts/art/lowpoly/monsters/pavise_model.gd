@@ -1,7 +1,9 @@
 class_name PaviseModel
 extends MonsterModel
 ## Pavise Crossbowman look (docs/design/combat-proposals.md §2; read test and decisions: docs/design/pavise-read-test.md).
-## LAB ONLY: no Monster kind, not in MonsterModels, no net. scripts/art/lowpoly/monsters/pavise_lab.gd renders it.
+## The game's model for the "pavise" kind (MonsterDefs, scripts/monsters/pavise.gd; combat-proposals.md §2 "As built"), and
+## the lab's (scripts/art/lowpoly/monsters/pavise_lab.gd renders it). MonsterModels.make("pavise") builds the "above" carry
+## (recommended in the read test and built as the default, 2026-10-20).
 ##
 ## The final look (the user, 2026-10-20, after the first read test): the grunt skeleton in a crimson tabard behind a
 ## door-sized pavise with an iron rim, a sight notch, a foot spike and a prop leg. Its front is painted crimson with a
@@ -15,9 +17,11 @@ extends MonsterModel
 ##   "above"  shouldered, nose forward and up, over the shield's top; it reloads laid over the top rim in the notch.
 ##
 ## Shield states (set_shield): "carried" (walks behind it), "planted" (stamped in: aim 0 = reloading, aim 1 = aiming
-## through the notch), "left" (shoved off it: the pavise stands alone ahead of it), "dropped" (lying flat in front of
-## it), "broken" (a stub of planks on the arm, splinters on the floor). windup(t) is the AIM; set_locked(true) is the
-## last 0.4 s (a hotter flare). set_stuck(n): n hero arrows stuck in the front.
+## through the notch), "left" (shoved off it: the pavise stands alone ahead of it, or where set_left_anchor says in the
+## world), "dropped" (lying flat in front of it), "broken" (a stub of planks on the arm, splinters on the floor). set_aim(k)
+## is the AIM (the bow raised into the notch, planted); set_locked(true) is the last 0.4 s (a hotter flare). windup(t) is
+## the SHIELD BASH's wind-up (the pavise drawn back) and attack_swing() the bash (shoved forward), in any state that holds
+## it. set_stuck(n): n hero arrows stuck in the front.
 ##
 ## Faces local -Z, +X is its right; origin at the feet. Rigid named parts (MeshInstance3D): body, head, jaw, gear,
 ## arm_l, arm_r, leg_l, leg_r (the grunt's skeleton), weapon (the crossbow, under the root), string and bolt (under
@@ -25,6 +29,10 @@ extends MonsterModel
 ## part: the bolt head's flare (an additive billboard).
 
 const CARRY_STYLES: Array[String] = ["side", "above"]
+## The carry the game builds (pavise-read-test.md: (b) "above", recommended, built as the default).
+const GAME_CARRY := "above"
+## The rigid parts the game animates (test_monster_models).
+const PART_NAMES: Array[String] = ["body", "head", "jaw", "gear", "arm_l", "arm_r", "leg_l", "leg_r", "weapon", "string", "bolt", "shield", "prop"]
 const STATES: Array[String] = ["carried", "planted", "left", "dropped", "broken"]
 const MODEL_SCALE := 1.20
 
@@ -101,15 +109,19 @@ void fragment() {
 """
 
 var carry := "side"
+var aim_k := 0.0                  ## planted: 0 = reloading (cranking), 1 = aiming through the notch (set_aim)
 var _state := "carried"
 var _locked := false
+var _anchored := false            ## "left": the pavise stands at _anchor_pos / _anchor_yaw in the world (set_left_anchor)
+var _anchor_pos := Vector3.ZERO
+var _anchor_yaw := 0.0
 var _stuck := 0
 var _thin_mat: ShaderMaterial
 var _flare: MeshInstance3D
 var _flare_mat: ShaderMaterial
 
 
-func _init(carry_style: String = "side") -> void:
+func _init(carry_style: String = GAME_CARRY) -> void:
 	carry = carry_style if CARRY_STYLES.has(carry_style) else "side"
 	_setup_model("PaviseModel_" + carry, MODEL_SCALE)
 	monster_kind = "pavise"
@@ -408,6 +420,21 @@ func shield_state() -> String:
 	return _state
 
 
+## The aim (planted): 0 = reloading, 1 = the stock on the saddle, aiming.
+func set_aim(k: float) -> void:
+	aim_k = clampf(k, 0.0, 1.0)
+	_update_fx(aim_k)
+	_refresh()
+
+
+## "left": the pavise stands on its own at this world point (its foot) with this yaw (the visual's: atan2(-f.x, -f.z)),
+## wherever the crossbowman goes.
+func set_left_anchor(pos: Vector3, yaw: float) -> void:
+	_anchored = true
+	_anchor_pos = pos
+	_anchor_yaw = yaw
+
+
 ## The last 0.4 s of the aim: the flare runs hot.
 func set_locked(on: bool) -> void:
 	_locked = on
@@ -438,7 +465,8 @@ func shield_point(v: float = 0.6) -> Vector3:
 func pose_state(state: String, aim: float = 0.0, walk_speed: float = 0.0, t: float = 0.6, locked: bool = false) -> void:
 	idle_enabled = false
 	_locked = locked
-	_wind = clampf(aim, 0.0, 1.0)
+	aim_k = clampf(aim, 0.0, 1.0)
+	_wind = 0.0
 	_swing = 0.0
 	_state = state
 	set_shield(state)
@@ -503,7 +531,8 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var walk := clampf(speed / 2.5, 0.0, 1.0)
 	var breath := sin(t * 2.0)
 	var stride := sin(t * 7.0)
-	var w := wind_e()
+	var w := aim_k * aim_k * (3.0 - 2.0 * aim_k)
+	var bash := wind_e()                       # the shield bash: drawn back (windup), shoved forward (_swing)
 	var body := parts["body"] as MeshInstance3D
 	var head := parts["head"] as MeshInstance3D
 	var leg_l := parts["leg_l"] as MeshInstance3D
@@ -550,13 +579,24 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 			leg_l.rotation = Vector3(0.22, 0.0, -0.10)
 			leg_r.rotation = Vector3(-0.12, 0.0, 0.10)
 			prop.rotation = Vector3(-0.50, 0.0, 0.0)
-			if _state == "left":
+			if _state == "left" and _anchored and is_inside_tree():
+				var world := Transform3D(Basis(Vector3.UP, _anchor_yaw) * Basis(Vector3.RIGHT, 0.06) * MODEL_SCALE, _anchor_pos)
+				shield_xf = global_transform.affine_inverse() * world
+			elif _state == "left":
 				shield_xf = Transform3D(planted_xf.basis, planted_xf.origin + Vector3(0, 0, -LEFT_GAP))
 			else:
 				prop.rotation = Vector3(-0.04, 0.0, 0.0)
 				shield_xf = Transform3D(Basis(Vector3.UP, PI + 0.35) * Basis(Vector3.RIGHT, PI * 0.5), Vector3(0.30, TH * 0.5 + 0.075, -0.75))
 			bow_xf = Transform3D(Basis(Vector3.UP, 0.45) * Basis(Vector3.RIGHT, -0.25), Vector3(0.10, 0.96, -0.30))
 			hand_l = bow_xf * Vector3(0.0, -0.07, -0.26)
+	if (bash > 0.0 or _swing > 0.0) and (_state == "carried" or _state == "planted"):
+		# The bash: the pavise drawn back and tipped (the wind-up), then shoved out at the hero (the swing). The hand on its
+		# grip and the body go with it.
+		var tip := Basis(Vector3.RIGHT, -0.38 * bash + 0.22 * _swing)
+		shield_xf = Transform3D(shield_xf.basis * tip, shield_xf.origin + Vector3(0.0, 0.05 * bash, 0.30 * bash - 0.42 * _swing))
+		body.rotation.x += 0.16 * bash - 0.20 * _swing
+		if _state == "carried":
+			hand_l = shield_xf * Vector3(0.0, H * 0.55, TH * 0.5 + 0.08)
 	(parts["shield"] as MeshInstance3D).transform = shield_xf
 	(parts["shield_broken"] as MeshInstance3D).transform = shield_xf
 	(parts["weapon"] as MeshInstance3D).transform = bow_xf
@@ -619,6 +659,8 @@ func _bow_carry_xf(swing: float) -> Transform3D:
 
 
 func _update_fx(w: float) -> void:
+	if _flare == null:
+		return
 	var aiming := _state == "planted" and w > 0.04
 	_flare.visible = _state != "broken"
 	var k := w if aiming else 0.0

@@ -25,6 +25,11 @@ extends Node
 ## it. Rebar's bowl peels a monster off a teammate (within PEEL_RANGE of the hero it attacks); it never opens a fight.
 ## `restraint` false is the old eager AI (the nearest monster near the leader, at once), kept so tests can measure both.
 ##
+## THE NEW MONSTERS (combat-proposals.md §2 / §3, "As built"): a priority target (the Water Boy healer,
+## Monster.is_priority_target) ranks like a monster on a teammate, and under "attack" it counts PRIORITY_BONUS nearer: the
+## AI goes for the healer a little sooner, still only once it is in the fight. A foe whose shield faces this ally (the
+## Pavise, Combat.shielded) is not swung or shot at from the front: the ally steps round toward its flank first.
+##
 ## ORDERS (voice, VoiceOrders; combat-proposals.md 1.0): one at a time, `give_order(kind, by, point)` on the host:
 ##   "go"      walk to `point` (a walkable spot near where the speaker aimed), then hold there until a new order: fight
 ##             what is in the fight within HOLD_RANGE of the spot (on the way there, only what attacks the ally itself)
@@ -67,6 +72,8 @@ const ATTACK_RANGE := 9.0      ## "attack": anything within this of the ally ...
 const ATTACK_LEASH := 14.0     ## ... while it is no farther than this from the speaker
 const ATTACK_END_RANGE := 10.0 ## "attack" ends once no monster within this is in the fight ...
 const ATTACK_QUIET := 1.0      ## ... for this long
+const PRIORITY_BONUS := 3.0    ## "attack": a priority target (the Water Boy) counts this much nearer
+const FLANK_TIME := 0.5        ## a shielded foe: step round its flank this long before trying again
 ## What the ally says when it takes an order, by kit (VoiceOrders shows it over its head on every screen).
 const BARKS := {
 	"rebar": {"go": "Moving.", "attack": "Finally.", "follow": "Right behind you."},
@@ -314,6 +321,8 @@ func _pick_free(anchor: Vector3, reach: float) -> Actor:
 		if GameWorld.flat_distance(m.global_position, anchor) > reach:
 			continue
 		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
+		if m is Monster and (m as Monster).is_priority_target():
+			d -= PRIORITY_BONUS
 		if d < best_d and (_in_fight(m) or _has_los(m)):
 			best_d = d
 			best = m
@@ -386,14 +395,15 @@ func _target_of(m: Actor) -> Actor:
 	return mm.target
 
 
-## 0: it attacks the leader; 1: a teammate (this ally included); 2: anything else.
+## 0: it attacks the leader; 1: a teammate (this ally included), or a priority target (the Water Boy); 2: anything else.
 func _rank(m: Actor) -> int:
 	var t := _target_of(m)
+	var floor_rank := 1 if m is Monster and (m as Monster).is_priority_target() else 2
 	if t == null:
-		return 2
+		return floor_rank
 	if t == leader:
 		return 0
-	return 1 if t.team == hero.team else 2
+	return 1 if t.team == hero.team else floor_rank
 
 
 func _forget_gone() -> void:
@@ -411,6 +421,9 @@ func _fight(foe: Actor, delta: float) -> void:
 		hero.face_point(foe.global_position)
 		return
 	if _try_secondary(foe):
+		return
+	if Combat.shielded(foe, hero.global_position, Combat.HIT_MELEE, hero, false):
+		_flank(foe)   # (a pavise facing this ally: its front takes nothing)
 		return
 	var to := foe.global_position - hero.global_position
 	to.y = 0.0
@@ -466,6 +479,18 @@ func _shoot(foe: Actor, dir: Vector3, dist: float) -> void:
 		_hold(foe)
 		return
 	hero.shoot(dir)
+
+
+## A shield faces this ally: step round toward the foe's flank (the side this ally is already on), a little forward.
+func _flank(foe: Actor) -> void:
+	var f := Vector3(foe.facing.x, 0.0, foe.facing.z).normalized()
+	var side := Vector3(-f.z, 0.0, f.x)
+	var rel := hero.global_position - foe.global_position
+	rel.y = 0.0
+	if side.dot(rel) < 0.0:
+		side = -side
+	_sidestep_dir = (side - f * 0.35).normalized()
+	_sidestep_until = GameWorld.time + FLANK_TIME
 
 
 ## Hold the attack: step around the target, to the side away from the nearest prop in the way.

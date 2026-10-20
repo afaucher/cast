@@ -41,10 +41,10 @@
 		"spawn": "abb260972786466b"
 	},
 	"1/2": {
-		"actors": 46,
-		"all": "2c44e45b9eb31957",
+		"actors": 47,
+		"all": "1b6418650fc2ddb1",
 		"cells": 1505,
-		"ids": 46,
+		"ids": 47,
 		"map": "d2117cafa4167465",
 		"plan": "8371dbccb8e8b0f0",
 		"plan_keys": {
@@ -79,13 +79,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "47710adb56d2abda",
-		"spawn": "5f99af7c0bc6770e"
+		"spawn": "abd59cb897ad153e"
 	},
 	"1/3": {
-		"actors": 59,
-		"all": "998aef2942c8939c",
+		"actors": 68,
+		"all": "4bb03742d11c28d7",
 		"cells": 1771,
-		"ids": 59,
+		"ids": 68,
 		"map": "5f56fe063fdd0428",
 		"plan": "54ff722a40630a1d",
 		"plan_keys": {
@@ -120,7 +120,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "47710adb56d2abda",
-		"spawn": "b56267b2f80ba5f4"
+		"spawn": "01fc7389d21d042c"
 	},
 	"10/1": {
 		"actors": 64,
@@ -164,10 +164,10 @@
 		"spawn": "c6f92779e7e149ad"
 	},
 	"10/2": {
-		"actors": 80,
-		"all": "c0a1bbafbdfb6346",
+		"actors": 81,
+		"all": "be12ab9dc1787fad",
 		"cells": 1810,
-		"ids": 80,
+		"ids": 81,
 		"map": "163cb30719cfd0c7",
 		"plan": "61fc605fab58cf72",
 		"plan_keys": {
@@ -202,13 +202,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "5735a00be81c740e",
-		"spawn": "0dbbc581505a3c9f"
+		"spawn": "16f5e55a0ca80d51"
 	},
 	"10/3": {
-		"actors": 81,
-		"all": "8953a1ef0ee791db",
+		"actors": 84,
+		"all": "3b5383cd0cdc01b5",
 		"cells": 2077,
-		"ids": 81,
+		"ids": 84,
 		"map": "7a2189443ed8e88b",
 		"plan": "37932ea9782fae32",
 		"plan_keys": {
@@ -243,7 +243,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "5735a00be81c740e",
-		"spawn": "1e6ce08c4c2fd7e1"
+		"spawn": "e49a669c13f46c27"
 	},
 	"2/1": {
 		"actors": 41,
@@ -287,10 +287,10 @@
 		"spawn": "1ddac8bbf1026260"
 	},
 	"2/2": {
-		"actors": 47,
-		"all": "a64d7edcc2dfb417",
+		"actors": 42,
+		"all": "7716c3367bc08553",
 		"cells": 1473,
-		"ids": 47,
+		"ids": 42,
 		"map": "430bd39868073bdb",
 		"plan": "32b8b16b57ef270b",
 		"plan_keys": {
@@ -325,13 +325,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "d34b7c6a11e5800b",
-		"spawn": "79ee6461829b6748"
+		"spawn": "9555db04bf168357"
 	},
 	"2/3": {
-		"actors": 76,
-		"all": "c51223f6023a1097",
+		"actors": 80,
+		"all": "0fb9e12282fe40b0",
 		"cells": 2003,
-		"ids": 76,
+		"ids": 80,
 		"map": "380e858056250e79",
 		"plan": "a2db6989c34c66f1",
 		"plan_keys": {
@@ -366,7 +366,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "d34b7c6a11e5800b",
-		"spawn": "bf9a0b21ea7e3854"
+		"spawn": "65f38cbf7c2f367f"
 	},
 	"3/1": {
 		"actors": 46,
@@ -410,10 +410,10 @@
 		"spawn": "bf0953e32a392255"
 	},
 	"3/2": {
-		"actors": 59,
-		"all": "425130dd68f5dfa4",
+		"actors": 51,
+		"all": "cecbce44ef7602bb",
 		"cells": 1331,
-		"ids": 59,
+		"ids": 51,
 		"map": "de2b41e8c0dd9136",
 		"plan": "485fe74fe1988c5d",
 		"plan_keys": {
@@ -448,13 +448,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "b67c12bc1f42ed6b",
-		"spawn": "7ed7d826b89461f7"
+		"spawn": "61933f5f3921029e"
 	},
 	"3/3": {
-		"actors": 86,
-		"all": "a7a25364c06939fe",
+		"actors": 80,
+		"all": "35df7e04e0374af7",
 		"cells": 1990,
-		"ids": 86,
+		"ids": 80,
 		"map": "789ae0ca2abcb5ec",
 		"plan": "f7c62633635f4e1a",
 		"plan_keys": {
@@ -489,7 +489,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "b67c12bc1f42ed6b",
-		"spawn": "9b4a66da58ec1e54"
+		"spawn": "c85e7b3de321b8c0"
 	},
 	"4/1": {
 		"actors": 45,
@@ -533,10 +533,10 @@
 		"spawn": "d490d4702ee3d340"
 	},
 	"4/2": {
-		"actors": 67,
-		"all": "0c155bed5f9148e0",
+		"actors": 68,
+		"all": "1cb19453143a41e1",
 		"cells": 1737,
-		"ids": 67,
+		"ids": 68,
 		"map": "cc14d62b3642241a",
 		"plan": "2c4bb814965c1ccf",
 		"plan_keys": {
@@ -571,13 +571,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "d8f246386db8ef3f",
-		"spawn": "404c51de706c8832"
+		"spawn": "d1e72504d1a4637a"
 	},
 	"4/3": {
-		"actors": 73,
-		"all": "f12bfcbb92165e54",
+		"actors": 66,
+		"all": "edd7643d2b963767",
 		"cells": 1821,
-		"ids": 73,
+		"ids": 66,
 		"map": "8ac6e79b3229369a",
 		"plan": "16265a5c7b8548c9",
 		"plan_keys": {
@@ -612,7 +612,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "d8f246386db8ef3f",
-		"spawn": "6981d34a83712df0"
+		"spawn": "da7cc9e76e4525a3"
 	},
 	"5/1": {
 		"actors": 73,
@@ -656,10 +656,10 @@
 		"spawn": "1b240e8096e67777"
 	},
 	"5/2": {
-		"actors": 63,
-		"all": "e448af1129cd9787",
+		"actors": 58,
+		"all": "05d92dfeb58b9146",
 		"cells": 1774,
-		"ids": 63,
+		"ids": 58,
 		"map": "bd59b1a1e04f7916",
 		"plan": "8b726d7bd780bfef",
 		"plan_keys": {
@@ -694,11 +694,11 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "376d34e2507a3bcf",
-		"spawn": "b7e71eff9c6d33ec"
+		"spawn": "ff2895d2bc86e80e"
 	},
 	"5/3": {
 		"actors": 96,
-		"all": "48110a465855f0b7",
+		"all": "f5015f15ac810904",
 		"cells": 2059,
 		"ids": 96,
 		"map": "4c016ad64f7545c2",
@@ -735,7 +735,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "376d34e2507a3bcf",
-		"spawn": "f8544296f55f32b7"
+		"spawn": "74f0910efbb9678f"
 	},
 	"6/1": {
 		"actors": 60,
@@ -779,10 +779,10 @@
 		"spawn": "440484ee05d5dd47"
 	},
 	"6/2": {
-		"actors": 72,
-		"all": "c855b5eec0102340",
+		"actors": 66,
+		"all": "cd8918b8d820876c",
 		"cells": 1810,
-		"ids": 72,
+		"ids": 66,
 		"map": "4241987a3aa70fe8",
 		"plan": "816f8945790d8896",
 		"plan_keys": {
@@ -817,13 +817,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "76606d30b55614e0",
-		"spawn": "be5003ff22116355"
+		"spawn": "cf1e156bfc40bc2a"
 	},
 	"6/3": {
-		"actors": 81,
-		"all": "f7feb81a06356d5f",
+		"actors": 91,
+		"all": "0f563f6b437d633a",
 		"cells": 2004,
-		"ids": 81,
+		"ids": 91,
 		"map": "dc446d70027d1019",
 		"plan": "d9ea120233f55d3c",
 		"plan_keys": {
@@ -858,7 +858,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "76606d30b55614e0",
-		"spawn": "44c5661cd90c19c2"
+		"spawn": "02b4a40282b13768"
 	},
 	"7/1": {
 		"actors": 76,
@@ -902,10 +902,10 @@
 		"spawn": "7a589cc390127114"
 	},
 	"7/2": {
-		"actors": 56,
-		"all": "5ea45877106eb838",
+		"actors": 53,
+		"all": "0ff599ae568fc2e9",
 		"cells": 1374,
-		"ids": 56,
+		"ids": 53,
 		"map": "b8f5ca172404a1cc",
 		"plan": "28bd3e2e3d7468c8",
 		"plan_keys": {
@@ -940,13 +940,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "9858f0e817309aff",
-		"spawn": "bb05ad59e27ad4ec"
+		"spawn": "005fb7e358171524"
 	},
 	"7/3": {
-		"actors": 76,
-		"all": "6e3f61ce1237672c",
+		"actors": 75,
+		"all": "c4349825a0ed9cf1",
 		"cells": 1802,
-		"ids": 76,
+		"ids": 75,
 		"map": "a8da0e438dfd6e38",
 		"plan": "116d3bf0210e9daa",
 		"plan_keys": {
@@ -981,7 +981,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "9858f0e817309aff",
-		"spawn": "81fba6345c1b18ea"
+		"spawn": "0d26de1de245667c"
 	},
 	"8/1": {
 		"actors": 71,
@@ -1025,10 +1025,10 @@
 		"spawn": "8c0933f17cb40518"
 	},
 	"8/2": {
-		"actors": 83,
-		"all": "d5e2c1660fb49ffb",
+		"actors": 85,
+		"all": "bfd1065aa963fccf",
 		"cells": 1988,
-		"ids": 83,
+		"ids": 85,
 		"map": "96cc3aabce09791a",
 		"plan": "29d9b14e6461ff08",
 		"plan_keys": {
@@ -1063,13 +1063,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "520f553408d9ef79",
-		"spawn": "ee67a7de29076109"
+		"spawn": "972b13675e0f8b13"
 	},
 	"8/3": {
-		"actors": 90,
-		"all": "fc05944a902cbb51",
+		"actors": 100,
+		"all": "630d1b59e0c69d05",
 		"cells": 1980,
-		"ids": 90,
+		"ids": 100,
 		"map": "946739d9e91d7e5a",
 		"plan": "bd4c93ddbad84911",
 		"plan_keys": {
@@ -1104,7 +1104,7 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "520f553408d9ef79",
-		"spawn": "e8c78275a352a3d5"
+		"spawn": "3f7054364fcdb727"
 	},
 	"9/1": {
 		"actors": 67,
@@ -1148,10 +1148,10 @@
 		"spawn": "00939ee496176e3a"
 	},
 	"9/2": {
-		"actors": 66,
-		"all": "6046ee87a3a3f773",
+		"actors": 71,
+		"all": "61b776ac3477f764",
 		"cells": 2150,
-		"ids": 66,
+		"ids": 71,
 		"map": "c4322c33273b43b0",
 		"plan": "906145e5f48662bb",
 		"plan_keys": {
@@ -1186,13 +1186,13 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "a49772a48d64cf9a",
-		"spawn": "db853d209d7b2788"
+		"spawn": "1594a8beb72db96e"
 	},
 	"9/3": {
-		"actors": 63,
-		"all": "526e8c2385f0f865",
+		"actors": 62,
+		"all": "55aa753dbcdcd01a",
 		"cells": 1739,
-		"ids": 63,
+		"ids": 62,
 		"map": "435ac7f832841b32",
 		"plan": "218a39cb108e4b4c",
 		"plan_keys": {
@@ -1227,6 +1227,6 @@
 			"van": "44136fa355b3678a"
 		},
 		"run": "a49772a48d64cf9a",
-		"spawn": "815cea5fa63e3389"
+		"spawn": "88367fc1487baceb"
 	}
 }

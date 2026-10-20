@@ -275,6 +275,9 @@ Renders (1920x1080, the game camera unless noted) in the session scratchpad `med
 3. **Office Temp.** Funniest, clear hug, but too slight and too bone-white next to the grunts.
 4. **Night Janitor.** "Set down and tended" reads, the healer does not.
 
+**Built (2026-10-20):** the user said "build them now" without answering 7.4, so the recommended Water Boy is built as the
+default: `combat-proposals.md` §3.8 "As built" (kind `water_boy`, `scripts/monsters/water_boy.gd`, `WaterBoyModel`).
+
 ### 7.4 Questions for the user
 
 1. **Water Boy?** Or the Acolyte, or the Water Boy everywhere with the Acolyte on guru sites?

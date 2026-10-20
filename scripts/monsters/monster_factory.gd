@@ -44,9 +44,11 @@ static func spawn(kind: String, cell: Vector2i) -> Monster:
 
 
 ## Pick a varied composition (list of kinds; a swarm kind appears at most once and means a whole clump). `bias`
-## multiplies a kind's pick weight ({kind: factor}: SiteBuilder favours the contract's pest). The one pack composer: the
-## floor plan depends on its exact rolls.
-static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = {}) -> Array[String]:
+## multiplies a kind's pick weight ({kind: factor}: SiteBuilder favours the contract's pest). `floor_n`: the floor the pack
+## is for; a kind whose row says "min_floor" above it is not dealt (so floor 1 rolls exactly as before the pavise and the
+## water boy), "max" caps a kind per pack and "after" deals it only once the pack holds that many others. The one pack
+## composer: the floor plan depends on its exact rolls.
+static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = {}, floor_n: int = 1) -> Array[String]:
 	var plan: Array[String] = []
 	var counts := {}
 	var left := budget
@@ -56,6 +58,8 @@ static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = 
 		var total := 0.0
 		for k in KINDS:
 			if COSTS[k] > left or (MonsterDefs.is_swarm(k) and counts.get(k, 0) > 0):
+				continue
+			if not _dealt(k, floor_n, int(counts.get(k, 0)), plan):
 				continue
 			var w: float = WEIGHTS[k] * pow(0.5, counts.get(k, 0))
 			if bias.has(k):
@@ -76,6 +80,23 @@ static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = 
 		counts[pick] = counts.get(pick, 0) + 1
 		left -= COSTS[pick]
 	return plan
+
+
+## The row's gates (see compose): its floor, its cap per pack, and the others it needs in the pack first.
+static func _dealt(kind: String, floor_n: int, have: int, plan: Array[String]) -> bool:
+	var p: Dictionary = MonsterDefs.row(kind).get("pack", {})
+	if floor_n < int(p.get("min_floor", 1)):
+		return false
+	if p.has("max") and have >= int(p["max"]):
+		return false
+	if p.has("after"):
+		var others := 0
+		for k in plan:
+			if k != kind:
+				others += SWARM_MIN if MonsterDefs.is_swarm(k) else 1
+		if others < int(p["after"]):
+			return false
+	return true
 
 
 ## Point cost of a list of spawned monsters (a swarm counts its cost per SWARM_MAX members).

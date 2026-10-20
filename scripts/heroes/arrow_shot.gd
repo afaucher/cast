@@ -75,6 +75,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _strike(a: Actor, pos: Vector3) -> void:
+	if Combat.shielded(a, pos - direction * 3.0, Combat.HIT_ARROW, source):
+		_hit_ids[a.get_instance_id()] = true
+		pierce = 0   # (it sticks in a pavise's planks: even a drawn arrow stops there)
+		return
 	_hit_ids[a.get_instance_id()] = true
 	hits.append(a)
 	pierce -= 1

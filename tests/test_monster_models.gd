@@ -26,6 +26,10 @@ func _part_names(kind: String) -> Array[String]:
 			return BruteModel.PART_NAMES
 		"goblin":
 			return GoblinModel.PART_NAMES
+		"pavise":
+			return PaviseModel.PART_NAMES
+		"water_boy":
+			return WaterBoyModel.PART_NAMES
 		_:
 			return SwarmerModel.PART_NAMES
 

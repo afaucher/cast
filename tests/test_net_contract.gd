@@ -365,6 +365,9 @@ var REPLICATED := {
 	# the pool shark and its imp gunner (docs/design/sharks.md): monster-format entries plus their own events
 	"res://scripts/monsters/shark.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/shark.gd"], 5],
 	"res://scripts/monsters/jockey.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/jockey.gd"], 5],
+	# the Pavise Crossbowman (its shield and bolt: their own events) and the Water Boy (a plain monster: its pour is a wind-up)
+	"res://scripts/monsters/pavise.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/pavise.gd"], 5],
+	"res://scripts/monsters/water_boy.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/contracts/employee.gd": [NetWorldCodec.EMPLOYEE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/employee.gd"], 5],
 	"res://scripts/contracts/hellgate.gd": [NetWorldCodec.GATE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/hellgate.gd"], 5],
 	"res://scripts/contracts/priced_prop.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/priced_prop.gd"], 0],

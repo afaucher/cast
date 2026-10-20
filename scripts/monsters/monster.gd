@@ -193,6 +193,7 @@ func _ready() -> void:
 	else:
 		_build_visual(_visual)
 	damaged.connect(_on_damaged)
+	healed.connect(_on_healed)
 	# Stagger timers so a pack never scans/paths on the same frame.
 	_scan_t = GameWorld.rng.randf() * SCAN_INTERVAL
 	_repath_t = GameWorld.rng.randf() * REPATH_MAX
@@ -322,6 +323,11 @@ func set_spawn_facing(dir: Vector3) -> void:
 	facing = spawn_facing
 	if _visual != null:
 		_visual.rotation.y = atan2(-facing.x, -facing.z)
+
+
+## A priority target for the AI allies (the Water Boy healer: they rank it like a monster on a teammate). Default: no.
+func is_priority_target() -> bool:
+	return false
 
 
 ## True while the monster has a target (chasing or winding up an attack).
@@ -1084,6 +1090,11 @@ func _on_damaged(_amount: float, source: Node) -> void:
 	if not is_frozen() and GameWorld.time >= _shout_at:
 		_shout_at = GameWorld.time + SHOUT_EVERY
 		_shout(a.global_position)
+
+
+## A heal (the Water Boy's pulse, on the machine that runs it): the bar shows it.
+func _on_healed(_amount: float) -> void:
+	_update_bar()
 
 
 ## The state's name (the combat log).

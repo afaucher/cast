@@ -1,8 +1,8 @@
 # Pavise Crossbowman: read test (2026-10-20)
 
 The user (2026-10-19): "The crossbowman - I like the idea of the bigger threat but I am not sure how it will visually
-read. Lets test it out." This tests the look of `combat-proposals.md` §2 (and touches §2.8). It is a lab only: no
-Monster kind, nothing in `MonsterModels`, no net code.
+read. Lets test it out." This tests the look of `combat-proposals.md` §2 (and touches §2.8). It was a lab only; since
+2026-10-20 `PaviseModel` is also the game's model for the `pavise` kind (`combat-proposals.md` §2.9 "As built").
 
 - Model: `scripts/art/lowpoly/monsters/pavise_model.gd` (`PaviseModel`): the final look, two crossbow carry styles,
   five shield states, the aim and lock, reloading, and stuck arrows. It is in the z-fight registry (`ZFightModels`:
@@ -47,7 +47,7 @@ enemy." Recorded in `combat-proposals.md` §2.0.
   | Aiming | In the notch, the stock on the saddle, the prod and glowing bolt head in front of the boards | the same |
   | Shoved off, dropped, broken | Held low in both hands (the same in both styles) | the same |
 
-### Recommended: (b) "above"
+### Recommended: (b) "above" (built as the default, 2026-10-20: `combat-proposals.md` §2.9 "As built")
 
 - **The front stays marked in every state.** The glowing bolt head sits above and in front of the shield's top while it
   walks, reloads and aims, so even a carried shield points somewhere. In (a) the bolt head hangs by the right foot, and

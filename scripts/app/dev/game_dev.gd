@@ -7,7 +7,7 @@ extends "res://scripts/app/game.gd"
 ## Flags this file serves (each flag's arguments: the Command line list at the top of game.gd, which parses them):
 ##   --spawn-near --idle-monsters --stage-ledge --slay-near --kit-demo --hazard-near --hazard-demo --to-hazard
 ##   --to-gate --to-theme --to-corridor --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
-##   --shark-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
+##   --shark-demo --monster-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
@@ -22,6 +22,8 @@ func _dev_on_floor_ready() -> void:
 		_hazard_demo(str(opts["hazard_demo"]))
 	if opts.has("shark_demo"):
 		_shark_demo(str(opts["shark_demo"]))
+	if opts.has("monster_demo"):
+		_monster_demo(str(opts["monster_demo"]))
 	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
 		var marker := Node3D.new()
 		GameWorld.root.add_child(marker)
@@ -649,6 +651,71 @@ func _shark_demo(stage: String) -> void:
 			s.apply_damage(s.hp + 1.0, player)
 
 
+## Dev flag --monster-demo aim|pulse (with --spawn-near holding a pavise / a water boy; screenshots), after --demo-after
+## seconds (1.0). The AI allies hold still; the monsters (frozen until then with --idle-monsters, so the allies leave them
+## alone) wake with their own sight and run their own AI from there.
+##   aim    the pavise stands 7-9 from the player (to the screen's right if it can), plants facing them and aims (the dashed line
+##          tracks for 0.8 s, then the solid line locks for 0.4 s and the bolt looses)
+##   pulse  the pack is roughed up (each other monster 40% down), and the water boy raises its whistle and pours (0.8 s)
+func _monster_demo(stage: String) -> void:
+	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
+	if player == null or not is_inside_tree():
+		return
+	for ally in allies:
+		var b := ally.get_node_or_null("AllyBrain")
+		if b != null:
+			b.set_physics_process(false)
+	var pv: Pavise = null
+	var wb: WaterBoy = null
+	for m in _dev_monsters:
+		if not is_instance_valid(m) or m.dead:
+			continue
+		if m.aggro_range <= 0.0:
+			var probe: Monster = MonsterDefs.scripts()[m.kind].new()
+			m.aggro_range = probe.aggro_range   # (--idle-monsters froze it: its own sight back)
+			probe.free()
+		if m is Pavise and pv == null:
+			pv = m as Pavise
+		elif m is WaterBoy and wb == null:
+			wb = m as WaterBoy
+	match stage:
+		"aim":
+			if pv == null:
+				return
+			var up := Vector3(cos(deg_to_rad(45.0)), 0.0, -sin(deg_to_rad(45.0)))   # (screen right, clear of the HUD and the banner)
+			var placed := false
+			for turn: float in [0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 135.0, -135.0, 180.0]:
+				for d: float in [7.5, 8.5, 6.5, 9.5]:
+					var at := player.global_position + up.rotated(Vector3.UP, deg_to_rad(turn)) * d
+					var c := Hex.from_world(at)
+					if not map.is_walkable_cell(c) or map.get_cell(c).level != map.get_cell(player.current_cell()).level:
+						continue
+					var w := Hex.to_world(c, float(map.get_cell(c).level))
+					if map.line_of_sight(w + Vector3.UP * 1.25, player.global_position + Vector3.UP * 1.25, 0.08):
+						pv.global_position = w
+						placed = true
+						break
+				if placed:
+					break
+			pv.aggro(player)
+			pv.set_spawn_facing(player.global_position - pv.global_position)
+			pv._mark = player
+			pv._mark_t = 99.0
+			pv.target = player
+			pv._set_shield(Pavise.Shield.PLANTED)
+			pv._phase = Pavise.Phase.AIM
+			pv._begin_charge(player)
+		"pulse":
+			if wb == null:
+				return
+			for m in _dev_monsters:
+				if is_instance_valid(m) and not m.dead and m != wb:
+					m.apply_damage(m.max_hp * 0.4, player)
+			wb.aggro(player)
+			wb.target = player
+			wb._begin_windup(WaterBoy.POUR_TELL)
+
+
 ## Dev flag --hazard-demo fuse|chain|invoice (with --hazard-near or --to-hazard; screenshots): after --demo-after seconds (1.0)
 ## the player sets off the first one. "chain" and "invoice" stand two frozen grunts beside each explosive first;
 ## "invoice" cashes out 2.5 s after the last blast, so the invoice shows the bill.
@@ -720,9 +787,21 @@ func _slay_dev_monsters() -> void:
 			m.die()
 
 
-## Dev flag --spawn-near kind,n: n extra monsters of `kind` on open floor 4-5 cells from the player.
+## Dev flag --spawn-near kind,n: n extra monsters of `kind` on open floor 4-5 cells from the player. A mixed pack is
+## groups joined by "+" (e.g. pavise,1+grunt,2+water_boy,1): each group as its own spawn, in order.
 func _spawn_near() -> void:
 	if not opts.has("spawn_near"):
+		return
+	var groups := str(opts["spawn_near"]).split("+")
+	if groups.size() > 1:
+		var all: Array[Monster] = []
+		for g in groups:
+			_dev_monsters.clear()
+			opts["spawn_near"] = g
+			_spawn_near()
+			all.append_array(_dev_monsters)
+		_dev_monsters = all
+		opts["spawn_near"] = "+".join(groups)
 		return
 	var parts := str(opts["spawn_near"]).split(",")
 	var kind := parts[0].strip_edges()
@@ -770,6 +849,9 @@ func _spawn_near() -> void:
 		var stride := maxi(1, cands.size() / maxi(n, 1))
 		var i := 0
 		while _dev_monsters.size() < n and i < cands.size():
+			if not GameWorld.actors_in_radius(Hex.to_world(cands[i]), 1.0).is_empty():
+				i += 1   # (a mixed pack: an earlier group stands there)
+				continue
 			var m := MonsterFactory.spawn(kind, cands[i])
 			if m != null:
 				_dev_monsters.append(m)

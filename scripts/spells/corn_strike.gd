@@ -78,7 +78,7 @@ func _slam() -> void:
 	for a in GameWorld.actors_in_radius(pos, RADIUS, team_arg):
 		Fx.attach_hit_feedback(a)
 	var src: Node = caster if is_instance_valid(caster) else null
-	Combat.explode(pos, RADIUS, SpellBook.corn_damage(power), team_arg, src, 1.0)   # (each machine: what it resolves)
+	Combat.explode(pos, RADIUS, SpellBook.corn_damage(power), team_arg, src, 1.0, 0.0, null, Combat.HIT_ABOVE)   # (each machine: what it resolves; from above: no shield stops it)
 	MonsterSenses.noise(pos, MonsterSenses.NOISE_CORN, "corn")   # (each machine: only the monsters it runs hear)
 	Shark.corn_at(pos)   # (the kernels in a shark's water are chum: the host runs its sharks)
 	landed.emit(pos)

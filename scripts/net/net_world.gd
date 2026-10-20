@@ -33,6 +33,11 @@ extends Node
 ## every monster it wakes): nothing more travels for it. A late joiner gets every scout's phase in its snapshot
 ## (scout_states / apply_scouts); a volley already in the air is skipped.
 ##
+## THE PAVISE (combat-proposals.md §2, "As built"): its aim and bolt ride the laser shark's events (world.charge / uncharge /
+## lock: the dashed line, the locked line, the shared loose time); its shield's state is `world.shield {id, st, x, y, z, w}`
+## on every change (carried, planted, or left standing / lying flat where it fell: where and its yaw). A late joiner gets
+## every pavise's in its snapshot (shield_states / apply_shields). The Water Boy's pour is a plain wind-up (world.windup).
+##
 ## CHICKENS (the Chicken spell): the host spawns a flock when a chicken cast lands and runs it; each chicken is a runtime
 ## spawn like a gate's monster (`world.spawn`, kind "chicken", gate 0), rides the stream as a MONSTER-format entry
 ## (NetWorldCodec.read_chicken / write_chicken: the codec's layout is unchanged, this file knows which ids are chickens) and
@@ -220,6 +225,8 @@ func _track(id: int, n: Actor, kind: int) -> void:
 			_link(Signal(n, "beam_locked"), _on_lock.bind(id))
 		if n.has_signal("dismounted"):
 			_link(Signal(n, "dismounted"), _on_dismount.bind(id))
+		if n.has_signal("shield_changed"):
+			_link(Signal(n, "shield_changed"), _on_shield.bind(id))
 
 
 func _show(id: int, n: Actor, kind: int) -> void:
@@ -663,6 +670,35 @@ func apply_dismounts(list: Array) -> void:
 			n.call("net_dismount", str(row[1]), Vector3(float(row[2]), float(row[3]), float(row[4])))
 
 
+## Host: a pavise's shield changed (picked up, planted, left standing, tripped over).
+func _on_shield(st: int, pos: Vector3, yaw: float, id: int) -> void:
+	_flush_spawns()   # (a pavise spawned this frame is announced before its shield)
+	_send("world.shield", {"id": id, "st": st, "x": pos.x, "y": pos.y, "z": pos.z, "w": yaw})
+	stats["shields"] = int(stats.get("shields", 0)) + 1
+
+
+## Host: every living pavise's shield, for a late joiner: [[id, state, x, y, z, yaw]].
+func shield_states() -> Array:
+	var out: Array = []
+	for id: int in _tracks:
+		var tr: Track = _tracks[id]
+		if is_instance_valid(tr.node) and not tr.node.dead and tr.node.has_method("net_shield"):
+			var p: Vector3 = tr.node.get("shield_pos")
+			out.append([id, int(tr.node.get("shield_state")), p.x, p.y, p.z, float(tr.node.get("shield_yaw"))])
+	return out
+
+
+## The late joiner: the pavises' shields (shield_states).
+func apply_shields(list: Array) -> void:
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 6:
+			continue
+		var n := NetRegistry.node(int(row[0]))
+		if n != null and n.has_method("net_shield") and not (n as Actor).dead:
+			n.call("net_shield", int(row[1]), Vector3(float(row[2]), float(row[3]), float(row[4])), float(row[5]))
+
+
 func _send(kind: String, data: Dictionary) -> void:
 	if _session == null or not _session.online() or _session.roster.size() < 2:
 		return
@@ -769,6 +805,11 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 			if jk != null and jk.has_method("net_dismount") and not (jk as Actor).dead:
 				jk.call("net_dismount", str(data.get("h", "knocked")), Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))))
 			stats["dismounts"] = int(stats.get("dismounts", 0)) + 1
+		"world.shield":
+			var pv := NetRegistry.node(int(data.get("id", 0)))
+			if pv != null and pv.has_method("net_shield") and not (pv as Actor).dead:
+				pv.call("net_shield", int(data.get("st", 0)), Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))), float(data.get("w", 0.0)))
+			stats["shields"] = int(stats.get("shields", 0)) + 1
 		"world.dud":
 			Fx.fizzle_puff(Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))))
 

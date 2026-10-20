@@ -10,7 +10,9 @@ extends RefCounted
 ##   model      the MonsterModel class's path (MonsterModels.make); none for a kind that builds its own (the sharks)
 ##   tris       the model's triangle budget (test_monster_models)
 ##   pack       {cost, weight}: the kind is dealt into room packs (MonsterFactory.KINDS / compose) at this point cost and
-##              pick weight; "swarm": true means one pick is a clump of SWARM_MIN-SWARM_MAX of them (and at most one a pack)
+##              pick weight; "swarm": true means one pick is a clump of SWARM_MIN-SWARM_MAX of them (and at most one a pack);
+##              "min_floor": not dealt on a floor below it; "max": at most this many a pack; "after": only once the pack
+##              already holds this many other monsters (a swarm pick counts SWARM_MIN)
 ##   gate       {w, per_p, per_phase, min}: a hellgate spawns it with weight max(min, w + per_p * pressure + per_phase *
 ##              origin phase). The row order of the gate kinds is the roll order (GATE_ORDER), so it stays fixed.
 ##   drops      component drops when one dies: [{spells, chance, charges?}] (SpellComponents.roll_drops)
@@ -62,6 +64,16 @@ const DEFS := {
 	"jockey": {   ## the imp gunner riding a laser shark
 		"script": "res://scripts/monsters/jockey.gd",
 	},
+	"pavise": {   ## the Pavise Crossbowman (combat-proposals.md Â§2, "As built"): packs from floor 2, one a pack; no gate, no pest
+		"script": "res://scripts/monsters/pavise.gd", "model": "res://scripts/art/lowpoly/monsters/pavise_model.gd", "tris": 2800,
+		"pack": {"cost": 4, "weight": 0.75, "min_floor": 2, "max": 1},
+		"drops": [{"spells": ["armor"], "chance": 0.20}, {"spells": ["vines"], "chance": 0.08}],
+	},
+	"water_boy": {   ## the Water Boy healer (enemy-healer-options.md Â§7, "As built"): from floor 2, one a pack, after 3 others
+		"script": "res://scripts/monsters/water_boy.gd", "model": "res://scripts/art/lowpoly/monsters/water_boy_model.gd", "tris": 1600,
+		"pack": {"cost": 3, "weight": 2.0, "min_floor": 2, "max": 1, "after": 3},
+		"drops": [{"spells": ["heal"], "chance": 0.30}, {"spells": ["damp"], "chance": 0.15}],
+	},
 }
 
 ## The hellgate roll walks its kinds in this order (a different order would spawn different kinds for the same roll).
@@ -83,6 +95,11 @@ static func pack_kinds() -> Array[String]:
 		if (DEFS[k] as Dictionary).has("pack"):
 			out.append(k)
 	return out
+
+
+## The floor a pack kind is first dealt on (1: every floor).
+static func min_floor(kind: String) -> int:
+	return int((row(kind).get("pack", {}) as Dictionary).get("min_floor", 1))
 
 
 ## One pick of this kind is a clump (the imps).
