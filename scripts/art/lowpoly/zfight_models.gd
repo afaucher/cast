@@ -65,6 +65,12 @@ static func models() -> Array[Dictionary]:
 	out.append({"name": "hero/rebar", "make": func() -> Node3D: return RebarModel.new(), "ground": true})
 	for kind: String in MonsterModels.KINDS + MonsterModels.DESIGN_KINDS:
 		out.append({"name": "monster/" + kind, "make": MonsterModels.make.bind(kind), "ground": true})
+	# the Pavise Crossbowman read test (lab only, docs/design/pavise-read-test.md): every variant in every shield state,
+	# and planted with arrows stuck in it and the glint cue on
+	for v: String in PaviseModel.VARIANTS:
+		for st: String in PaviseModel.STATES:
+			out.append({"name": "pavise/%s/%s" % [v, st], "make": _pavise.bind(v, st, false), "ground": true})
+		out.append({"name": "pavise/%s/arrows_cues" % v, "make": _pavise.bind(v, "planted", true), "ground": true})
 	out.append({"name": "chicken", "make": func() -> Node3D: return ChickenModel.new(), "ground": true})
 	for id: String in SpellBook.SPELLS:
 		out.append({"name": "component/" + id, "make": ComponentProps.make.bind(id, false), "ground": true})
@@ -146,6 +152,17 @@ static func _stack(kinds: Array, twists: Array) -> Array:
 		items.append(["box%d_%s" % [i, kinds[i]], holder])
 		lift += PackageModels.height_of(String(kinds[i]))
 	return items
+
+
+## A Pavise Crossbowman look (lab only) in one shield state (planted: aiming, locked); `extras`: 9 stuck arrows and the
+## glint cue on.
+static func _pavise(variant: String, state: String, extras: bool) -> Node3D:
+	var m := PaviseModel.new(variant)
+	m.pose_state(state, 1.0 if state == "planted" else 0.0, 0.0, 0.6, state == "planted")
+	if extras:
+		m.set_stuck(9)
+		m.set_front_cue("glint")
+	return m
 
 
 ## A shark at rest; the imp variant without its rider (the rider is the swarmer model, checked on its own).
