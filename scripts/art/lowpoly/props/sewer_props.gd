@@ -12,6 +12,11 @@ extends RefCounted
 ##        (radius, drop: a pipe mouth in a wall pouring into the channel), pipe_bundle (length, col), grate (size),
 ##        grate_bridge (length, width), sluice (width, open), springer (height, col: a brick arch rib against a wall),
 ##        ladder_wall (height), duck (a floating rubber duck), bars (width, height: iron bars across a culvert).
+## Round 2 (staging, docs/design/sewer-concept.md "Sewer round 2"): pump (col: a sump pump on a skid, a priced prop to
+##        be), junction_box (drop: where the live cable's end hangs, relative; dropped: the cable lies in the water), gas
+##        (radius, seed: a sewer-gas pocket's bubbles and haze on the water), tool_cart, shock (points: a world-space-free
+##        list of Vector3 the arc runs through, local), steam_wall (length: a vented steam wall along +X), corn_float (count,
+##        radius: corn kernels floating on the water, y = 0 the surface).
 
 const IRON := Color(0.2, 0.21, 0.22)
 const RUST := Color(0.5, 0.27, 0.14)
@@ -55,6 +60,13 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 		"ladder_wall": _ladder_wall(s, float(params.get("height", 1.6)))
 		"duck": _duck(s)
 		"bars": _bars(s, float(params.get("width", 1.6)), float(params.get("height", 1.0)))
+		"pump": _pump(s, params.get("col", Color(0.22, 0.4, 0.55)))
+		"junction_box": _junction_box(s, params.get("drop", Vector3(0, -1.2, 1.4)), bool(params.get("dropped", false)))
+		"gas": _gas(s, float(params.get("radius", 0.9)), int(params.get("seed", 5)))
+		"tool_cart": _tool_cart(s)
+		"shock": _shock(s, params.get("points", []), int(params.get("seed", 3)))
+		"steam_wall": _steam_wall(s, float(params.get("length", 4.0)), int(params.get("seed", 2)))
+		"corn_float": _corn_float(s, int(params.get("count", 14)), float(params.get("radius", 1.0)), int(params.get("seed", 9)))
 		_:
 			PropModels.box(s, Vector3(0.5, 0.5, 0.5), Vector3(0, 0.25, 0), PropModels.GOLD)
 	var mi := MeshInstance3D.new()
@@ -370,3 +382,125 @@ static func _bars(s: LowPoly.Soup, width: float, height: float) -> void:
 		PropModels.rod(s, Vector3(x, 0.0, 0), Vector3(x + lean, height, lean * 0.6), 0.025, 0.025, 4, RUST if i % 3 else RUST_DK)
 	PropModels.box(s, Vector3(width, 0.06, 0.06), Vector3(0, height, 0), IRON)
 	PropModels.box(s, Vector3(width, 0.05, 0.05), Vector3(0, height * 0.45, 0), IRON)
+
+
+# --- round 2: staging ------------------------------------------------------------------------------------------
+
+## A sump pump on a steel skid (the wall behind it, -Z): a squat motor drum with cooling fins, a pump volute, a riser pipe
+## up the wall and a discharge elbow, a pressure gauge and a hazard-striped guard. Footprint about 1.1 x 0.8.
+static func _pump(s: LowPoly.Soup, col: Color) -> void:
+	PropModels.box(s, Vector3(1.2, 0.12, 0.85), Vector3(0, 0.06, 0.05), IRON)
+	PropModels.cyl(s, 0.3, 0.3, 0.62, 10, Vector3(-0.22, 0.45, 0.1), col, Vector3(0, 0, 90))
+	for i in 5:
+		PropModels.cyl(s, 0.34, 0.34, 0.035, 10, Vector3(-0.44 + float(i) * 0.1, 0.45, 0.1), col.darkened(0.3), Vector3(0, 0, 90))
+	PropModels.cyl(s, 0.26, 0.26, 0.3, 10, Vector3(0.28, 0.4, 0.1), STEEL.darkened(0.1), Vector3(90, 0, 0))
+	PropModels.rod(s, Vector3(0.28, 0.4, -0.05), Vector3(0.28, 0.4, -0.3), 0.12, 0.12, 8, STEEL.darkened(0.25))
+	PropModels.rod(s, Vector3(0.28, 0.55, 0.1), Vector3(0.28, 1.6, 0.1), 0.1, 0.1, 8, RUST)
+	PropModels.rod(s, Vector3(0.28, 1.6, 0.1), Vector3(0.28, 1.6, -0.3), 0.1, 0.1, 8, RUST)
+	PropModels.cyl(s, 0.14, 0.14, 0.06, 8, Vector3(0.28, 1.0, 0.1), RUST_DK)
+	PropModels.cyl(s, 0.09, 0.09, 0.04, 10, Vector3(0.0, 0.85, 0.32), Color(0.9, 0.9, 0.85), Vector3(90, 0, 0))
+	PropModels.box(s, Vector3(0.012, 0.07, 0.01), Vector3(0.02, 0.87, 0.35), Color(0.8, 0.1, 0.1), Vector3(0, 0, -40))
+	PropModels.box(s, Vector3(1.0, 0.06, 0.04), Vector3(0, 0.22, 0.47), HAZARD)
+	PropModels.box(s, Vector3(0.06, 0.12, 0.06), Vector3(-0.44, 0.92, 0.1), g(Color(0.3, 1.0, 0.3)))
+
+
+## A grey electrical junction box on a wall (the wall behind, -Z, its bottom 1.0 up) and the live cable torn out of it,
+## sagging to `drop` (relative to the box's base) where its bare end spits sparks. `dropped`: the end lies in the water.
+static func _junction_box(s: LowPoly.Soup, drop: Vector3, dropped: bool) -> void:
+	var grey := Color(0.55, 0.57, 0.55)
+	PropModels.box(s, Vector3(0.6, 0.75, 0.22), Vector3(0, 1.4, 0.11), grey)
+	PropModels.box(s, Vector3(0.52, 0.66, 0.03), Vector3(0, 1.4, 0.235), grey.lightened(0.1))
+	PropModels.box(s, Vector3(0.22, 0.2, 0.02), Vector3(0, 1.5, 0.255), HAZARD)
+	PropModels.box(s, Vector3(0.1, 0.1, 0.02), Vector3(0, 1.5, 0.265), Color(0.06, 0.06, 0.06), Vector3(0, 0, 45))
+	PropModels.box(s, Vector3(0.05, 0.05, 0.04), Vector3(0.18, 1.68, 0.25), g(Color(1.0, 0.25, 0.1)))
+	var a := Vector3(0.0, 1.05, 0.2)
+	var end := drop + Vector3(0, 1.0, 0)
+	var n := 8
+	var prev := a
+	for i in range(1, n + 1):
+		var t := float(i) / float(n)
+		var p := a.lerp(end, t)
+		p.y -= sin(t * PI) * (0.15 if dropped else 0.35)
+		PropModels.rod(s, prev, p, 0.035, 0.035, 5, Color(0.06, 0.06, 0.07))
+		prev = p
+	PropModels.rod(s, end, end + Vector3(0, -0.12, 0.04), 0.02, 0.01, 4, Color(0.85, 0.5, 0.2))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for i in (14 if not dropped else 6):
+		var d := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.6, 1), rng.randf_range(-1, 1)).normalized()
+		var r0 := end + Vector3(0, -0.12, 0)
+		var r1 := r0 + d * rng.randf_range(0.12, 0.35)
+		PropModels.rod(s, r0, r1, 0.018, 0.004, 3, g(Color(1.0, 0.95, 0.55)))
+	PropModels.ball(s, Vector3(0.07, 0.07, 0.07), end + Vector3(0, -0.12, 0), g(Color(1.0, 1.0, 0.8)), 0, 0.0)
+
+
+## A sewer-gas pocket on the water (y = 0 the surface): domes of bubbles breaking the surface over a sickly yellow-green
+## haze disc. Seeded for the look.
+static func _gas(s: LowPoly.Soup, radius: float, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for i in 18:
+		var a := rng.randf() * TAU
+		var r := sqrt(rng.randf()) * radius
+		var k := rng.randf_range(0.04, 0.1)
+		var col := Color(0.78, 0.82, 0.45) if i % 3 else g(Color(0.7, 0.8, 0.3))
+		PropModels.ball(s, Vector3(k, k * 0.7, k), Vector3(cos(a) * r, k * 0.2, sin(a) * r), col, 0, 0.0)
+	# a thin ring of scummy froth where the gas breaks the surface
+	for i in 10:
+		var a := TAU * float(i) / 10.0
+		PropModels.ball(s, Vector3(0.16, 0.03, 0.1), Vector3(cos(a) * radius * 0.85, 0.01, sin(a) * radius * 0.85), Color(0.62, 0.66, 0.36), 0, 0.02, Vector3(0, -rad_to_deg(a), 0))
+
+
+## A maintenance tool cart: two shelves on casters, a toolbox, a coil of hose, a red wrench.
+static func _tool_cart(s: LowPoly.Soup) -> void:
+	var blue := Color(0.2, 0.32, 0.55)
+	for y: float in [0.25, 0.7]:
+		PropModels.box(s, Vector3(0.8, 0.05, 0.45), Vector3(0, y, 0), blue)
+	for sx: float in [-1.0, 1.0]:
+		for sz: float in [-1.0, 1.0]:
+			PropModels.box(s, Vector3(0.04, 0.6, 0.04), Vector3(sx * 0.37, 0.45, sz * 0.2), IRON)
+			PropModels.ball(s, Vector3(0.05, 0.05, 0.05), Vector3(sx * 0.35, 0.05, sz * 0.18), Color(0.08, 0.08, 0.08), 0, 0.0)
+	PropModels.box(s, Vector3(0.42, 0.18, 0.24), Vector3(-0.12, 0.82, 0), Color(0.8, 0.15, 0.1))
+	PropModels.cyl(s, 0.17, 0.17, 0.1, 10, Vector3(0.22, 0.33, 0), Color(0.15, 0.4, 0.2))
+	PropModels.box(s, Vector3(0.3, 0.03, 0.06), Vector3(0.2, 0.74, 0.08), STEEL, Vector3(0, 30, 0))
+
+
+## An electric arc through `points` (local), jagged, glowing white-yellow: the live wire's shock running along the water.
+static func _shock(s: LowPoly.Soup, points: Array, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for i in points.size() - 1:
+		var a: Vector3 = points[i]
+		var b: Vector3 = points[i + 1]
+		var n := maxi(2, int(a.distance_to(b) / 0.35))
+		var prev := a
+		for k in range(1, n + 1):
+			var p := a.lerp(b, float(k) / float(n))
+			if k < n:
+				p += Vector3(rng.randf_range(-0.22, 0.22), rng.randf_range(0.0, 0.16), rng.randf_range(-0.22, 0.22))
+			PropModels.rod(s, prev, p, 0.035, 0.035, 3, g(Color(1.0, 0.97, 0.6)))
+			prev = p
+
+
+## A vented steam wall along +X (`length`, about one hex wide), from the floor up to 1.8: stacked white puffs, densest
+## near the vent at x = 0.
+static func _steam_wall(s: LowPoly.Soup, length: float, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var n := int(length / 0.3)
+	for i in n:
+		var x := float(i) * 0.3 + rng.randf_range(-0.1, 0.1)
+		for j in 3:
+			var r := rng.randf_range(0.25, 0.45) * (1.0 - 0.3 * x / length)
+			PropModels.ball(s, Vector3(r, r * 0.8, r), Vector3(x, 0.3 + float(j) * 0.5 + rng.randf_range(-0.1, 0.1), rng.randf_range(-0.25, 0.25)), Color(0.93, 0.95, 0.96).darkened(rng.randf_range(0.0, 0.12)), 1, 0.08)
+
+
+## Corn kernels floating on the water (y = 0 the surface), spread in a disc, drifting into a streak downstream (+X).
+static func _corn_float(s: LowPoly.Soup, count: int, radius: float, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for i in count:
+		var a := rng.randf() * TAU
+		var r := sqrt(rng.randf()) * radius
+		var p := Vector3(cos(a) * r * 1.8 + 0.5 * radius, 0.02, sin(a) * r * 0.6)
+		PropModels.ball(s, Vector3(0.07, 0.05, 0.08), p, g(Color(1.0, 0.82, 0.2)), 0, 0.03, Vector3(0, rng.randf() * 180.0, 0))

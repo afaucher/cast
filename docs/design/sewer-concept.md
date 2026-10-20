@@ -3,6 +3,10 @@
 Status: **concept only** (2026-10-20). Nothing here is built into the game: no change to the site builder, DungeonGen,
 `game.gd`, the monsters or the net layer. Two lab scenes fake both environments on the game's real terrain drawing.
 
+**Round 2** ("Sewer round 2: connected water, staging, fights", after Part 1) answers the user's verdict on round 1.
+Where the two differ, round 2 replaces Part 1: the water as one connected body, the gator, grate bridges as dry
+crossings, and the eel's reach.
+
 **The user's words:**
 - 2026-10-19: "For water monsters - I am wondering if a sewer theme makes sense for some rooms. Like they would be
   connected and the hallways between them would be flooded. Do not build this yet. What might this look like?"
@@ -268,6 +272,431 @@ their water). Their numbers follow `sharks.md`'s style.
 | foam, flow streaks, drips, steam, the duck | **cosmetic** | `fx_rng` |
 
 There is no new shape. The death roll's hold is a status the victim's owner applies, like a daze.
+
+---
+
+## Sewer round 2: connected water, staging, fights
+
+Status: **concept only** (2026-10-20). A second lab, `scripts/art/lowpoly/sewer2_lab.gd` (`scenes/sewer2_lab.tscn`),
+stages five populated clusters and three fight moments. No change to the generator, `game.gd`, the monsters or the net
+layer.
+
+**The user's words:**
+- 2026-10-20, on round 1: "For the sewer, we are not there yet. The water channel is the point so the different rooms
+  water should always connect to the water filled hallways. We need to look at what these rooms would look like
+  populated. What would we stage in them? How would fights work? I am assuming the water is wade deep so players can
+  traverse easily."
+- 2026-10-20, gators: "Gators should be billed property like sharks. They should also cross land and nip at enemies.
+  They should only be aggressive when approached and periodically move."
+- 2026-10-20, the bridge: "The sewer bridge is rotated wrong by 90 degrees so it doesn't provide crossing."
+
+**What this round changes:**
+- **The water is one body.** In every sewer room a channel comes in through one doorway, crosses the room and leaves
+  through another into the next flooded hall. No sewer room has an isolated pool, and every sump sits on a channel.
+- **Wading everywhere**, as the user assumed: the pools' depth (0.36), 0.75x for everyone and soaked. No swimming and no
+  deep water.
+- **The bridge is fixed.** `_dress_rooms` and the junction case added 90 degrees to the yaw, which laid the grate bridge
+  along the channel. Both now use `SewerLab._bridge_over(at, axis, ...)`, which spans the channel from bank to bank.
+  `_check_bridges()` tests every bridge in both labs. Each bridge's two ends must be on dry floor (not a wet cell, a pool
+  kite or a wall part), and the span between them must pass over water. It prints one line per bridge and raises an
+  error on a failure. It caught one bad bridge in this round's L3 (over the aquarium basin, where the water is two rows
+  wide), which was removed. All 22 bridges in the five layouts and the two in round 1's cases pass. `bridge_fix_rooms.png` and
+  `bridge_fix_junction.png` are the round-1 cases re-rendered with the fix.
+- **The gator** is now territorial priced property that walks on land as well as swimming (below).
+
+### The connected-water rule (layout grammar)
+
+1. **Every sewer room's channel joins its sewer doorways.** It is a hex line between the door cells, drawn by how far
+   apart the doorways are:
+   - **opposite corners:** straight through the centre (L1's cistern, L2's pump post);
+   - **corners 120 degrees apart:** through the centre with one 60-degree bend (L1's intake, L4's valve room);
+   - **adjacent corners:** along the wall between them, two rows wide (ring R-1 plus the cut ring R), so the water runs
+     to the wall (L4's overflow chamber and grit chamber);
+   - **three doorways:** a Y into a central sump over a drain (L2's junction).
+2. **A room at the cluster's edge** has a channel that starts at a **source** (an outfall pipe, the villain's cracked
+   aquarium) or ends at a **barred culvert** in the far corner, where the water goes on out of sight. A channel never
+   dead-ends in a pool.
+3. **Every hall meets its room channel at the doorway with no step and no jog:**
+   - a narrow hall: wall to wall, 3.0, one row;
+   - a wide hall: the route row and the near cut row, with a 1.5 ledge on the far side;
+   - a 6.0 main: the middle row, with a ledge each side. The room's channel row lines up with it.
+4. **One body per cluster.** A flood fill over the wet cells must reach every one of them.
+5. **Dry decks connect by bridges.** A channel through a room splits its floor. Each split-off deck that holds a doorway
+   or a staged thing gets a grate bridge, so every doorway is reachable dry inside the room. Getting **between** rooms
+   stays wet down a narrow hall, or dry along a wide hall's ledge.
+
+### The bridge: a dry crossing (proposal)
+
+Round 1 drew the grate bridge as decor you wade through. The user's note ("so it doesn't provide crossing") reads it as
+a crossing, which is also what makes ledges and decks worth fighting for. Proposal:
+- **The bridge cell is deck-level for walkers.** Heroes, monsters and employees on it are at the deck's height: dry, not
+  slowed and not soaked. The water body still includes the cell, so the flow, the gator and eels pass **under** it, and
+  shocks and corn pass under it too.
+- **Low handrails:** a slide of **1.5 or more** goes over the rail into the channel (Rebar's fist, the gator's nip,
+  tentacles, the bowl, a blast). A smaller slide stops at the rail, with no damage. The ends are open.
+- **The check that keeps it honest:** both ends on dry floor on opposite banks, the lab's `_check_bridges` as a
+  generator assertion.
+
+### The gator (decided 2026-10-20; numbers proposed)
+
+| | Proposal | Why |
+|---|---|---|
+| **Property** | kill and bill once, to the killer, like the shark. **$6,300**; HP 150; never toward "Exterminate"; AI allies never target it | It is smaller than a regular shark ($8,400) and has no rig. It leaves the water, so a stray blast is more likely to finish it, and a lower price keeps that from wrecking an invoice. 150 HP keeps the kill deliberate, as for the shark |
+| **Moves** | water 2.4, land 1.4 (relocating: 1.2 / 0.9); it walks the same cells as anyone | "Cross land": slower out of the water. A hero walks 4.5 and wades 3.4, so it can always walk away |
+| **Home region** | the cluster's wet cells plus the dry cells within 2 of the water | It never wanders into a dry room or down a dry hall |
+| **Watch** (radius **4.5**) | anything inside: it turns to track it, eyes bright, head up, a low hiss | the tell. You can read the radius before you are in it |
+| **Territory** (radius **3.0** from its head) | anything inside for **0.4 s**, or anything that touches or hits it: a **nip** | "only aggressive when approached" |
+| **Nip** | wind-up **0.5 s** (jaws gape, the monsters' orange pulse, the hiss swells), a lunge of up to 1.0, a bite within 1.4 of the snout: **10 damage and a 1.6 shove away from the gator**. Cooldown 1.6 s, one victim a nip | A small bite and a big shove, so the threat is where it puts you. It is Rebar's fist shove, so it goes over a bridge rail. From the water it shoves a ledge-walker onto the deck, the shark's rule |
+| **Targets** | any body inside the territory: heroes, monsters, employees, chickens. Not a downed hero, another gator or a prop. Nearest to the snout, those in its 120-degree front counted at 0.7 of their distance, the latest arrival breaking ties. It keeps a victim through a nip and picks again after | "Nip at enemies": both sides have to respect it, and a gator between the crew and a pack is a tool |
+| **Riled** | after any hit on it: the territory grows to 4.5 for 8 s and it advances up to 2.0 toward its attacker, once. It never chases further | Hitting it has a cost but it never turns into a hunter |
+| **Relocation** | every **30-45 s** (rolled per gator from the floor seed), when calm and nobody is within 6, it moves slowly to another **bask spot** within 14 (path) and settles there. Its territory while moving is 2.0 | "Periodically move." The map changes under the crew: a lane that was clear becomes a gator's |
+| **Bask spots** | its home sump, channel bends, the middle of a flooded hall, dry deck cells beside the water. Never a doorway, a bridge or a ledge narrower than 1.5 | It never blocks the only route |
+| **Tells** | calm: eyes half-lit, slow bubbles. Watch: eyes bright, head tracking, hiss. Wind-up: gape and orange pulse. Riled: tail thrash. Relocating: a tail swish and a grunt, then a V-wake or footprints | one clear telegraph per state |
+
+**Spells and the gator:**
+- **Corn:** 60 damage, and chum: it turns to kernels within 6 in its water for 4 s, with no nips. Kernels float
+  downstream, so cast corn upstream of it.
+- **Fireball:** 40. In the water it can't catch fire (soaked). On land, after 15 s dry it can burn, and a burning gator
+  makes straight for the water and doesn't nip (proposal, question 10).
+- **Tentacles, the bowl, blasts:** a shove of 1.0+ **holds** it 1.2 s and doesn't move it, as for the shark (question 4).
+- **Vines** root it 2 s. **Coffee** speeds it. **Damp** soaks it.
+- A **chicken** in its territory is eaten.
+
+**Monsters and allies:**
+- Monsters don't target it, and a monster that gets nipped carries on (the shark's rule). Monsters path straight
+  through its territory: that is the tool.
+- AI allies treat it as a priced prop: they never target it, keep formation slots out of its territory and never idle
+  inside its watch radius.
+
+**Networking shape: a host-owned actor that is not confined to water.**
+- It is a `Monster` subclass like `Shark`: team NEUTRAL, groups "gators" and `PricedProp.GROUP`, streamed in the
+  MONSTER entry.
+- The nip is the shark's bite path. `world.windup {id, s, l = 0.5}` goes out; each client resolves the strike on its
+  own hero (`Monster.net_strike`); the host resolves monsters, employees and AI heroes. The shove is applied by the
+  victim's owner.
+- Death and the bill are the shark's: `world.die`, and `Ledger.damage` once on the host.
+- It is a dynamic fog group. Late join gets a keyframe; a dead gator is a gone id.
+
+**What changes from the shark's confinement:**
+
+| | Shark | Gator |
+|---|---|---|
+| Movement | clipped to its pool record (convex outline), steered by SharkSteer | ordinary walking (`find_path`, `movement_check`) restricted to its **home region**, a SPAWN cell set from the seed that goes in the checksum. It swims with the per-body distance field (round 1) and walks on land like a monster |
+| Speed | always water speed | picked each step by `HexMap.water_at` under it. The same pure function runs on every machine; only the host moves it |
+| Shoves | held, clipped to the water | held (no clipping needed, since it isn't moved) |
+| States (3 bits) | CRUISE, HUNT, BITE, RECOIL, DEAD, CHARGE, HELD, CHUM | CALM 0, RILED 1, NIP 2, MOVE 3, DEAD 4, WATCH 5, HELD 6, CHUM 7 |
+| PRIVATE | steering, scans | the territory scan, the relocation timer and target spot, the victim pick |
+| SPAWN | variant, pool index | home region index, bask spot list, price |
+
+There is no new shape: it is an owned actor with one new piece of spawn data, the home region.
+
+### Population: what we stage
+
+**Monsters** (the existing kinds; how a sewer changes them):
+
+| Kind | Where in a sewer | What the water does |
+|---|---|---|
+| Skeletons (grunt) | the pack's body: decks and walkways near bridges, one or two wading as a patrol (the existing skeleton patrol) | They path the shortest way, so they **wade** (0.75x, soaked) and walk through the gator's lanes. Don't teach them to avoid water |
+| Archers | **dry decks and ledges with a channel between them and the room's main doorway**, or a main's far ledge | The crew has to wade (slowly) or take the bridge, a chokepoint the archer covers. Archers flee inside 3.5, so a dry deck with its back to a wall pins them |
+| Brute | a wide deck or a filter island | Its slam (radius 2, shove 1.0) knocks waders along the channel. On an island it is the "shove it off into the gator's lane" target |
+| Rats (the imp swarm's cousin) | decks by outfalls and grates; rafts of them along the walls | Proposal: a sewer **reskin of the swarmer pack**: the same numbers, named "rats", swimming at 0.6x. Fire scatters them; corn distracts them (they eat it) |
+| Goblin scout | a hall's ledge (his corridor route runs along it) | On the ledge he is out of the water and sees down the whole hall |
+| Eels | channels, a sump, or escaped from the aquarium | Their shock reaches waders within 6 **along the water** (no longer "the whole body": the whole cluster is one body now) |
+| Gator | one a cluster, two in a cluster of four rooms | its home sump, a flooded narrow hall, or basking on a deck |
+
+**Priced props and decor:**
+
+| Fits a sewer | Kind | Status |
+|---|---|---|
+| Sump pump | **new** priced prop, **$3,500** (lab model `pump`) | the pump room's money call |
+| Electrical panel | **new**, **$250** (lab model `junction_box`): the live-wire source of `combat-proposals.md` §4.1 | |
+| The villain's aquarium (`shark_tank`, $7,000), specimen vat ($5,000) | existing | the aquarium overflow's source |
+| Henchman locker ($300), evil portrait ($2,000), brazier ($400) | existing | lair pump posts |
+| Oil drum, gas cylinders, propane tank | existing explosives | **only on dry deck cells, never wet or rim cells** (a soaked drum is a dud) |
+| Outfall, pipe bundles, valve wheels, grates, springers, ladder and light shaft, iron bars, rubber duck | lab decor (round 1) | |
+| Tool cart (new lab model), wet-floor sign, crate stacks, barrels, `lab_console` as a pump or filter console | decor | |
+
+**Employees:**
+- **Bunker:** maintenance staff on duty: "Stan (maintenance)" (existing), and proposed "Doug (pumps)" and "Rhonda (water
+  quality)".
+- **Lair:** henchmen on pump duty with their clipboards, and an aquarium keeper.
+- They cower on decks next to their machines.
+- Escorting one out is a route problem: proposal, employees cost water at x3 in their paths, so a follower takes the
+  bridges and ledges.
+
+**Notes** (existing formats):
+- sign: "RECLAIMED WATER: DO NOT DRINK";
+- sign: "GATOR CROSSING";
+- sign: "LEVEL RISES WITHOUT WARNING";
+- memo: the gator feeding rota;
+- complaint: "Who keeps putting the gator in the aquarium?";
+- report: the pump log;
+- voicemail: the plumber who will not come back.
+
+**Hazards:**
+- **Live wire + water** (§4.1, the electrical panel): the shock runs **8 cells along the connected water** from where
+  the cable lands. A shut sluice stops it, so sluices are the breakers. 12 damage (18 on soaked waders) and a 0.6 s daze,
+  both sides. Bridges and decks are safe. The reach is a BFS over wet cells, precomputed per panel as spawn data.
+- **Steam valves** (§4.4) on pipe runs: in a hall or a main, the steam wall vents **across** it (one hex wide, wall to
+  wall). It blocks sight and passage for 3 s.
+- **Sewer gas pocket** (new): bubbles on a sump. Any fire sets it off (a fireball, a burning actor, a blast): a 1.0 s
+  boil, then a flash of radius 3.0, 30 damage and a 2.0 shove. One use. It isn't property, so it bills nothing
+  (question 6).
+- **Explosive drums** on decks over the channel: the blast shoves into the water, toward the gator.
+
+**Loot:** mail packages on dry decks near doorways (never in the water) and component pickups as now. The sewer's own
+gag: the rubber duck, which is decor.
+
+### The five layouts
+
+All five are at the game camera (size 24, 1920 x 1080) with a top-down plan. The plan shows:
+- the water body (blue), dry room decks (green), ledges (yellow) and dry halls (grey);
+- bridges (white), sluices and doors (red) and open arches (green bars);
+- the fog spaces as `RoomFog` builds them, unchanged (cyan edges, names);
+- the gator's territory and watch rings, bask spots and relocation route (orange);
+- labels for everything staged.
+
+#### L1 Reclamation run (bunker, concrete): `reclaim.png`, `reclaim_game2.png`, `reclaim_plan.png`
+
+**Layout:**
+- A **intake** (an outfall in the back corner; the channel bends through) -> a narrow flooded hall (sluices at both
+  ends) -> B **settling cistern** (straight through a radius-2 sump) -> a wide hall with a ledge (open arches) -> C
+  **pump room** (the channel ends in a drain sump under the pumps).
+- Dry halls lead in at A's south corner and out of C's north corner.
+- Bridges: 5. Fog spaces: 5 rooms and 4 halls.
+
+**Staging:**
+- A: rats on the intake deck, the "do not drink" sign.
+- The hall: one skeleton wading.
+- B: the gator in the sump, three skeletons on the decks, an archer on the north deck, a gas pocket.
+- The ledge: the goblin scout.
+- C: two sump pumps ($3,500), the electrical panel over the drain, a brute and two archers on the pump deck, Stan
+  cowering by the pumps, the pump log on the tool cart, an oil drum.
+
+**Fight:**
+- **Entry:** dry, from the stair onto A's south deck. A's channel separates the crew from the rats. The bridges are the
+  only dry way to the hall.
+- **Positioning:** the A-B hall is a 3.1 s wade, and a soaked arrival can't burn, so fire can't punish the crew. B's
+  decks are split by the sump; the two bridges are the dry crossings, and the gator sits between them.
+- **The gator's lane:** the sump, with a bask spot on B's south deck and one in the wide hall. When it relocates into the
+  wide hall, the ledge is the only dry way past, 1.5 wide and within its territory (it turns, hisses and nips whoever
+  hugs the ledge's water edge).
+- **Spells in water:** corn cast upstream (A's side) drifts toward B's sump and chums the gator off the bridges. A
+  fireball on B's gas pocket flashes the skeletons on the decks.
+- **Ranged:** C's two archers on the pump deck shoot across the channel at anyone in the wide hall.
+- **Shoves:** Rebar's fist on a bridge sends a skeleton over the rail into the sump.
+- **The money call:** the panel over C's drain. Tripping it shocks every wader within 8 cells (the brute's side has to
+  wade to reach the crew), but a blast near the pumps is $3,500 each.
+
+#### L2 The Y junction (lair, brick): `junction.png`, `junction_plan.png`, fight: `fight_shove.png`, `fight_shove_close.png`
+
+**Layout:**
+- J **drain junction**: three channels meet over a drain sump, with three dry wedges joined by three bridges.
+- Three flooded narrow halls lead to three small rooms:
+  - E **pump post** (straight through, out by a barred culvert);
+  - N **aquarium overflow** (the cracked tank is the source);
+  - W **storeroom** (through, out by a culvert).
+- The crew comes in down a dry wide hall onto J's south wedge.
+- Bridges: 6. Sluices: 6. Fog spaces: 5 rooms and 4 halls.
+
+**Staging:**
+- J: the gator in the sump; three skeletons on the NE wedge and one wading; an archer on the NW wedge; the "do not feed
+  the gator" note.
+- E: two archers and Gary (Henchman 1) on pump duty; the feeding rota memo.
+- N: rats and an escaped eel.
+- W: a brute by two oil drums and the gas cylinders.
+
+**Fight** (`fight_shove`):
+- **Entry:** the south wedge is dry, but each wedge is an island between two channels.
+- **Positioning:** the pack on the NE wedge wades the east channel to reach the crew, under the east bridge and through
+  the gator's 3.0. The crew holds the south wedge and the bridges.
+- **Shoves:** Rebar on the east bridge punches the lead skeleton back over the rail. It lands inside the gator's
+  territory, and the gator's nip (10 and a 1.6 shove) sends it on, into the next wader or back up the hall.
+- **The gator is a wall that both sides respect.** Nobody crosses the sump. Relocation moves it to the NW wedge (on
+  land) or into the north hall, which opens the sump and closes another route.
+- **Spells in water:** corn on the east channel stacks the pack in the water and chums the gator onto them.
+- **Ranged:** the NW archer has a free line over the sump at the south wedge. W's brute is the explosive play: a
+  fireball on the drums while he stands by them.
+- **What's different:** the room is three islands. Fights happen at the bridges, and the gator decides which bridge is
+  safe.
+
+#### L3 Aquarium overflow (lair, toxic): `aquarium.png`, `aquarium_game2.png`, `aquarium_plan.png`, fight: `fight_wire.png`, `fight_wire_close.png`
+
+**Layout:**
+- A **aquarium gallery**: three tanks ($7,000) on the north walls. The cracked one pours into an overflow basin, whose
+  channel bends east out of A.
+- A wide ledged hall leads to B **filtration**, where the channel splits round a filter island (bridges on and off).
+- A flooded narrow hall (sluices) leads to a weir with a culvert.
+- Dry entry from A's south corner. Bridges: 3. Fog spaces: 4 rooms and 3 halls.
+
+**Staging:**
+- A: two eels in the channel; two archers and Keith (Henchman 10, panicking) on the west deck by the tanks; two skeletons
+  (one wading); the electrical panel over the channel's mouth; the complaint note.
+- The ledge: the goblin scout.
+- B: the brute on the filter island, the gator **basking on land** on the south deck, rats, a gas pocket, gas cylinders.
+
+**Fight** (`fight_wire`):
+- **Entry:** dry, onto A's south deck, with the archers across the basin.
+- **Positioning:** A's dry ground is the south deck, the west deck and one bridge. The eels make the channel the worst
+  place to stand.
+- **Live wire:** Wick shoots the panel ($250); the cable drops into the channel. The shock runs 8 cells along the water
+  both ways: into the basin and down the hall. It hits every wader (two skeletons, the eel, Rebar if he is in) for 18
+  and a 0.6 s daze. Gasket on the bridge is dry and untouched.
+- **The gator on land:** in B it basks on the south deck, beside the bridge to the island. Its 3.0 covers the bridge's
+  south end, so going for the brute means passing it.
+- **Shoves:** tentacles or the bowl on the brute shove him off the island into the ring channel. Rebar's fist knocks the
+  scout off the ledge into the hall's channel.
+- **What's different:** the water is a conductor. One hit turns the crew's own route into a trap for whoever is in it.
+
+#### L4 Storm-drain loop (bunker, concrete): `loop.png`, `loop_plan.png`
+
+**Layout:**
+- Four rooms in a ring:
+  - P0 **overflow chamber**: the outfall; its channel runs along the north wall;
+  - P1 **valve room**: through, bent;
+  - P2 **grit chamber**: the drain; its channel runs along the south wall;
+  - P3 **generator nook**: through, bent.
+- **Two ledged wide halls** (P0-P1, P3-P2) are the dry long way. **Two fully flooded narrow halls** (P0-P3, P1-P2,
+  sluices) are the wet short way.
+- The water runs both ways round from P0's outfall to P2's drain.
+- Bridges: 4. Fog spaces: 5 rooms and 5 halls.
+
+**Staging:**
+- P0: the crew and the "level rises" sign.
+- The P0-P1 ledge: the goblin scout.
+- P1: two skeletons; Doug (pumps) panicking on the east deck; the pipes and the steam valve.
+- The gator in the flooded P1-P2 hall.
+- P2: the brute and rats.
+- P3: two archers, a propane tank and an oil drum.
+
+**Fight:**
+- **The route choice is the fight.** Every way to P3 crosses one flooded hall.
+  - **The short way** is the P0-P3 hall: 4 hexes of water (2.0 s wading instead of 1.5 s walking), coming out soaked
+    in front of P3's archers.
+  - **The long way** is P0-P1 on the ledge, past the scout, then the P1-P2 hall past the gator, then the P2-P3 ledge.
+    It is about three times as far with the same 4 hexes of water, and it comes in behind the archers.
+- **The gator relocates round the ring** (its route is drawn on the plan). The shortcut it sits in today is open in 40
+  seconds, and the ledge it moves next to is not.
+- **Ranged:** P3's archers have a deck behind the bend. Wading in means crossing in front of them.
+- **Hazards:** a fireball on P3's propane tank goes off on a dry deck, which works. The same blast on the soaked wader
+  beside it does 40 but sets nothing alight.
+- **What's different:** a loop gives the crew and the pack two ways round, and the gator makes one of them dangerous at a
+  time.
+
+#### L5 The sewer main (lair, brick): `main.png`, `main_plan.png`, fight: `fight_ledge.png`, `fight_ledge_close.png`
+
+**Layout:**
+- A **grand cistern** (radius 6): an outfall on its west wall and a big sump on the channel.
+- A **6.0 main** 13 hexes long: the middle channel, a ledge each side, a grate bridge halfway.
+- B **outfall gallery**: the channel crosses it and leaves by a barred culvert.
+- Dry halls lead in and out. Bridges: 4. Fog spaces: 4 rooms and 3 halls.
+
+**Staging:**
+- A: three skeletons and rats on the north deck; Dave (Henchman 4) cowering; lockers, a portrait and a brazier; the
+  "gator crossing" sign at the main's mouth.
+- The main: the gator in the channel, two archers on the far ledge, a steam valve on the far wall.
+- B: the brute, a gas pocket, an oil drum.
+
+**Fight** (`fight_ledge`):
+- **Entry:** the near ledge of the main, from A.
+- **Ranged:** the far ledge is the archers' ground. There is no dry way over except the bridge halfway, which they
+  cover. Wading over takes about a second, in the gator's lane.
+- **Steam:** the steam valve vents across the main and walls one archer off for 3 s, a voice play ("hit the valve!").
+- **The gator's lane:** the main is its lane: 13 hexes of water, which it patrols between A's sump and the far end.
+  Wick's corn, cast upstream, floats down the channel and holds it on the kernels for 4 s while Rebar wades to the
+  bridge.
+- **Shoves:** an archer on a 1.5 ledge is one shove from the water, and the water is the gator's.
+- **What's different:** long sightlines (a main is one fog space, so the whole tunnel is in view), ranged enemies
+  across water, and a crossing that has to be bought with a spell.
+
+### How fights work in a sewer (all layouts)
+
+1. **Everyone is slow in the water**, monsters too (0.75x). Monsters path the short way, so they wade; the crew can choose
+   not to. **Dry ground is the high ground:** bridges, ledges, decks and islands.
+2. **Fire changes.** Waders are soaked, so a fireball still does its 40 but sets nobody alight. Fire plays on the decks
+   (drums, gas pockets, burning dry targets). Steam puffs over water are cosmetic.
+3. **Shoves have destinations:** into the channel (slowed and soaked), into the gator's territory, over a bridge rail
+   (1.5+), off a ledge.
+4. **A neutral third party.** The gator nips whoever comes close, so it is a wall, a trap for the pack, and a hazard to
+   the crew, and it moves.
+5. **The water conducts.** A live wire or an eel turns connected water into damage. The crew stays dry or shuts a sluice.
+6. **Long sightlines.** A flooded hall is one fog space, so you see the gator's wake and the archers at the far end
+   before you commit.
+
+### Generator implications of always-connected water
+
+These are on top of round 1's list:
+1. **Route channels per room** from its sewer doorways (the grammar above): a hex line between door cells through the
+   centre, along the wall for adjacent corners, a Y for three doorways, a source or a culvert at the cluster's edge.
+2. **Assert one body:** a flood fill over the cluster's wet cells reaches all of them, and every flooded hall touches a
+   room channel at both ends. A `test_sewer` runs it over many seeds.
+3. **Bridges by rule:** for each deck a channel cuts off that holds a doorway or a placement, pick a channel cell where
+   both banks are dry full cells across the channel. If none exists, reroute. Bridges are a new **deck-level cell
+   flag** over water: `ground_level` gives the deck for walkers, and the water body keeps the cell. Keep the lab's
+   two-ends check as the assertion.
+4. **Doors:** sluices at both ends of every flooded narrow hall; open arches on wide halls and mains; office doors on the
+   dry halls leaving the cluster.
+5. **Placement on dry cells only**, as round 1 said, plus:
+   - explosives never on wet or rim cells;
+   - archers prefer decks with water between them and the main doorway;
+   - packs never on bridges;
+   - bask spots are listed per gator (sumps, bends, mid-hall, dry deck cells beside water; never doorways or bridges);
+   - the gator's home region is the wet cells plus the dry cells within 2.
+6. **Hazard spawn data:**
+   - each electrical panel's shock reach (a BFS of 8 wet cells, stopped by sluice cells);
+   - gas pockets on sumps (one per cluster at most).
+7. **Checksum:** body records, bridge cells, home regions, bask spots and shock reaches.
+8. **Perf:** routing is a few hex lines per room; the flood fill and the BFS are a few hundred cells. Time it with the
+   round-1 sewer pass (`last_sewer_usec`).
+
+### Lab (round 2)
+
+```
+godot --path . --resolution 1920x1080 -- --scene res://scenes/sewer2_lab.tscn --case <case> --shot <png> [--view <name>] [--look brick|concrete|toxic]
+```
+
+- `scripts/art/lowpoly/sewer2_lab.gd` extends the round-1 lab.
+  - Layout cases (views `game`, sometimes `game2`, and `plan`): `reclaim`, `junction`, `aquarium`, `loop`, `main`.
+  - Fight cases (views `game` and `close`): `fight_shove`, `fight_wire`, `fight_ledge`.
+- The actors are static models: the heroes, `MonsterModels`, `EmployeeModel`, `NoteModels`, `PropModels`,
+  `DecorModels`, `PoolProps` and `SewerProps`.
+- New lab-only `SewerProps` kinds: `pump`, `junction_box` (with its cable, hanging or dropped), `gas`, `tool_cart`,
+  `shock`, `steam_wall`, `corn_float`.
+
+### Renders (round 2)
+
+In `...\scratchpad\sewer\sewer2\`:
+
+| File | What |
+|---|---|
+| `reclaim.png`, `reclaim_game2.png`, `reclaim_plan.png` | L1 Reclamation run |
+| `junction.png`, `junction_plan.png` | L2 The Y junction |
+| `aquarium.png`, `aquarium_game2.png`, `aquarium_plan.png` | L3 Aquarium overflow |
+| `loop.png`, `loop_plan.png` | L4 Storm-drain loop |
+| `main.png`, `main_plan.png` | L5 The sewer main |
+| `fight_shove.png`, `fight_shove_close.png` | L2: Rebar shoves a skeleton into the gator's territory; the nip winds up |
+| `fight_wire.png`, `fight_wire_close.png` | L3: the panel is shot; the shock runs 8 cells along the channel; Gasket dry on the bridge |
+| `fight_ledge.png`, `fight_ledge_close.png` | L5: archers on the far ledge, a steam wall across the main, corn as chum |
+| `bridge_fix_rooms.png`, `bridge_fix_junction.png` | the round-1 cases with the bridge fixed |
+
+### Questions for the user (round 2)
+
+1. **Bridges as dry crossings** (deck-level over the water, the gator passing under, rails a 1.5 shove goes over), or
+   decor you wade through as in round 1?
+2. **Gator price $6,300** (a quarter less than the shark), or the shark's $8,400?
+3. **Gator numbers:** watch 4.5, territory 3.0, nip 10 and a 1.6 shove after 0.5 s, relocating every 30-45 s, slower
+   on land (1.4) than in water (2.4). Right feel?
+4. **Shoving a gator:** hold it in place like the shark (proposed), or let a big shove move it, so the crew can push the
+   gator into a pack?
+5. **Live-wire reach:** 8 cells of connected water, stopped by a shut sluice (proposed), or the whole body (the whole
+   cluster)?
+6. **Sewer gas pocket:** a hazard that bills nothing (it isn't anyone's property), or bill it as "Sewer remediation"?
+7. **Rats:** reskin the imp swarm for sewers (same numbers, swims slowly), or a separate swarm actor?
+8. **Which layouts first?** Proposal: L2 (junction) and L1 (linear run), the generator's two basic shapes; then L4 (the
+   loop needs a cycle in the cluster); L5 last (the 6.0 main is a new width).
+9. **Employees prefer dry routes** when following (water costs x3 in their paths)?
+10. **A gator on land dries out after 15 s and can be set on fire** (it then runs for the water), or is it always
+    fireproof like the shark?
 
 ---
 
