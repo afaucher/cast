@@ -288,6 +288,16 @@ hero, the host owns monsters, and cross-owner hits and shoves travel as messages
 - Restock spell components at the van (floor 1 only); later.
 - **P2** Villain-lair site type (torture chamber, throne room, lab, moat, barracks). See `environment.md`.
 
+## 15b. Downed heroes and revives
+
+- **Decided (user, 2026-10-20): "Option A is fine for now."** The contract ends ("crew incapacitated") when every
+  human-played hero is down; AI seats do not keep it alive (solo: you down = crew down). Before, a solo player who went
+  down watched the last AI ally until it died, and the AI cannot take the elevator.
+- **P2** A real revive mechanic ("We can consider C when we define a revive mechanic"): the nearest ally walks to a
+  downed hero and channels a revive (~3 s, exposed), the hero gets up with some HP, the revive is billed like today's
+  end-of-job revival. Needs a networked revive (the reviver's machine requests, the host decides) and an AI rule for what
+  allies do while a human is down.
+
 ## 16. Gags and one-offs
 
 - **P3** A half-man, half-shark **employee** (user, 2026-10-20: "a half man half shark employee. It would be a good gag").
