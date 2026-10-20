@@ -288,6 +288,64 @@ func net_show(is_shut: bool, swing_dir: int) -> void:
 		state_changed.emit(self)
 
 
+# --- The net-object contract (NetObjects) ------------------------------------------------------------------------------
+
+## Host: an opened or shut door goes to everyone as `obj.door {id, s, w}`; a brute's smash as `obj.break {id, by}` (the bill
+## goes out as obj.ledger).
+func net_link(objects: NetObjects, id: int) -> void:
+	objects.link(state_changed, _net_changed.bind(objects, id))
+	objects.link(smashed, _net_smashed.bind(objects, id))
+
+
+func _net_changed(_door: OfficeDoor, objects: NetObjects, id: int) -> void:
+	if broken:
+		return   # (a smash is obj.break)
+	objects.tell("obj.door", {"id": id, "s": shut, "w": swing})
+	objects.count("doors_out")
+
+
+func _net_smashed(_door: OfficeDoor, by: Node, objects: NetObjects, id: int) -> void:
+	objects.tell("obj.break", {"id": id, "by": NetObjects.net_id(by)})
+	objects.count("breaks")
+
+
+## Client: the host's decision (obj.door) or a brute's smash (obj.break; the bill is the host's, in obj.ledger).
+func net_event(kind: String, data: Dictionary, objects: NetObjects) -> void:
+	match kind:
+		"obj.door":
+			net_show(bool(data.get("s", true)), int(data.get("w", 1)))
+			objects.count("doors_in")
+		"obj.break":
+			smash(NetRegistry.node(int(data.get("by", 0))))
+			objects.count("breaks")
+
+
+## Host: a client's E on this door, or its hero walking into it shut (`door {shut}`): decided once (host_decide), and everyone
+## hears of it as obj.door. The asker's hero is who opened it (the leaves swing away from it).
+func net_request(what: String, data: Dictionary, peer: int, objects: NetObjects) -> void:
+	if what != "door":
+		return
+	objects.count("door_reqs")
+	if objects.active:
+		host_decide(bool(data.get("shut", false)), objects.hero_of(peer))
+
+
+## Host: this door for a late joiner, `doors` [id, shut, swing, broken] (an obj.door / obj.break replay).
+func late_join_state(_objects: NetObjects, id: int) -> Dictionary:
+	return {"doors": [id, shut, swing, broken]}
+
+
+func apply_late_join(section: String, row: Array, objects: NetObjects) -> void:
+	if section != "doors" or row.size() < 4:
+		return
+	if bool(row[3]):
+		smash(null)
+	else:
+		net_show(bool(row[1]), int(row[2]))
+	open_k = 0.0 if shut else 1.0   # (no swing on arrival: it is already where the host has it)
+	objects.count("doors_in")
+
+
 func _apply_blocker() -> void:
 	var map := GameWorld.map
 	if map == null:
