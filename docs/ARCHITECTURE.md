@@ -264,7 +264,7 @@ Lessons carried over from Bridge to Friendship (its `CLAUDE.md`):
   `docs/design/hazards.md`): fire, a hard hit, any arrow or a hard shove lights a short fuse (`FuseFx`: hiss, sparks,
   glow, shake, the blast ring); at its end a `Combat.explode` blast on everyone (team -1) with a shove, chained to the
   explosives in reach, billed once to whoever set it off. A soaked one is a dud and a soak puts a fuse out. Placed by
-  the room themes (`RoomThemeDefs` "hazards", `SiteBuilder._plan_hazards`, `SitePlan.hazards`, `Site.hazards`).
+  the room themes (`RoomThemeDefs` "hazards", `HazardPlanner.plan`, `SitePlan.hazards`, `Site.hazards`).
 - **Input** (`scripts/app/input_setup.gd`): `move_up/down/left/right` (WASD),
   `attack_melee` (LMB), `attack_ranged` (RMB), `cast_slot_1..4` (keys 1-4: ready/hold a spell slot),
   `use` (E: the van's clock-out slip, the elevator or an employee, in that order; never casts), `swap_pickup` (F: swap a dropped component into
@@ -376,7 +376,7 @@ within `FEATURE_CENTER_CLEAR` (2) of a room's center or `FEATURE_DOOR_CLEAR` (3)
 about 130 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder` then puts at most 6 priced props on a floor
 (next to walls, 4+ apart, flush and square against the flat face: `ThemeCtx.wall_pose_at` marches to the face and
 refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`) and at most 3
-explosive props (`SiteBuilder._plan_hazards`, own dice, the same wall poses), scales the monster pack budgets by 0.7 and caps a room at one monster per
+explosive props (`HazardPlanner.plan`, own dice, the same wall poses), scales the monster pack budgets by 0.7 and caps a room at one monster per
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.
 

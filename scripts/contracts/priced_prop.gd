@@ -68,7 +68,7 @@ const TABLE := {
 	"evil_portrait": {"name": "Evil portrait", "price": 2000, "hp": 30.0, "radius": 0.55, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.1, 1.0)},
 	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
 	# Explosive props (ExplosiveProp: a fuse, then a blast; docs/design/hazards.md). Site "hazard": never in a site's
-	# catalog; the room themes place them (RoomThemeDefs "hazards", SiteBuilder._plan_hazards). The blast numbers are
+	# catalog; the room themes place them (RoomThemeDefs "hazards", HazardPlanner.plan). The blast numbers are
 	# ExplosiveProp.BLAST.
 	"oil_drum": {"name": "Oil drum", "price": 800, "hp": 40.0, "radius": 0.45, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 0.85)},
 	"gas_cylinders": {"name": "Gas cylinders", "price": 1800, "hp": 35.0, "radius": 0.5, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.15, 0.5)},

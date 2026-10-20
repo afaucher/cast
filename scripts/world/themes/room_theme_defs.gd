@@ -57,7 +57,7 @@ const ORIGIN_KEYWORDS := {
 }
 
 ## id -> {name, site, min_cells (the smallest room it is dealt), priced (PricedProp kinds it prefers), hazards (the
-##        explosive props it may hold, ExplosiveProp: SiteBuilder._plan_hazards; none = a room without them),
+##        explosive props it may hold, ExplosiveProp: HazardPlanner.plan; none = a room without them),
 ##        recipe (ops run in order while the room's decor budget lasts), light (the accent light),
 ##        needs_center (true: its centrepiece wants the middle of the room, so it is not dealt to the exit room or to a
 ##        room with a hellgate in the middle), avoid_exit (not dealt to the exit room: the elevator sits in its middle)}.

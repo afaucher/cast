@@ -16,7 +16,7 @@ Hazards make the room a tool.
 
 Code: `scripts/contracts/explosive_prop.gd` (`ExplosiveProp extends PricedProp`), `scripts/fx/fuse_fx.gd` (the warning),
 `scripts/fx/blast_fx.gd` (the blast's look), the models in `scripts/art/lowpoly/props/prop_models.gd`, placement in
-`SiteBuilder._plan_hazards`. Tests: `tests/test_explosive_props.gd`, `tests/test_net_explosives.gd` (two processes).
+`HazardPlanner.plan`. Tests: `tests/test_explosive_props.gd`, `tests/test_net_explosives.gd` (two processes).
 
 ### The props
 Each is a priced prop (`PricedProp.TABLE`, site `"hazard"`, so never one of a site's random priced props). The room
@@ -92,7 +92,7 @@ standing next to a lit fuse.
 - AI allies treat them as priced props: they avoid swinging at a target with one in the arc. They don't step out of a
   lit fuse's ring yet (a follow-up).
 
-### Placement (`SiteBuilder._plan_hazards`)
+### Placement (`HazardPlanner.plan`)
 - Explosives go in rooms whose theme lists some, never in the start room, and on the same wall cells and poses as a priced
   prop: wall-backed, flush to the face, with a clear lane in front. That keeps them out of the start, exit and elevator
   zones and away from the doors (cells near a corridor).

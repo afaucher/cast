@@ -390,9 +390,9 @@ func _check_placement() -> void:
 				floors += 1
 				hz_usec += SiteBuilder.last_hazard_usec
 				var tag := "%s#%d/%d" % [id, s, f]
-				if plan.hazards.size() > SiteBuilder.MAX_HAZARDS:
+				if plan.hazards.size() > HazardPlanner.MAX_HAZARDS:
 					bad += 1
-					_fail("%s: %d explosives (max %d)" % [tag, plan.hazards.size(), SiteBuilder.MAX_HAZARDS])
+					_fail("%s: %d explosives (max %d)" % [tag, plan.hazards.size(), HazardPlanner.MAX_HAZARDS])
 				var near_corr := SiteBuilder._corridor_zone(map)
 				var keep := ElevatorGeo.keep_cells(plan.elevator)
 				var per_room := {}
@@ -409,9 +409,9 @@ func _check_placement() -> void:
 					ok = ok and not near_corr.has(c) and not keep.has(c)
 					ok = ok and not (plan.van.get("cells", []) as Array).has(c)
 					for g in plan.gate_cells():
-						ok = ok and Hex.distance(g, c) >= SiteBuilder.HAZARD_GATE_CLEAR
+						ok = ok and Hex.distance(g, c) >= HazardPlanner.HAZARD_GATE_CLEAR
 					for e in plan.employees:
-						ok = ok and Hex.distance(e["cell"], c) >= SiteBuilder.HAZARD_EMPLOYEE_CLEAR
+						ok = ok and Hex.distance(e["cell"], c) >= HazardPlanner.HAZARD_EMPLOYEE_CLEAR
 					if not ok:
 						bad += 1
 						_fail("%s: %s at %s in %s (%s) breaks a placement rule" % [tag, kind, c, room, plan.theme_of(room)])
@@ -421,7 +421,7 @@ func _check_placement() -> void:
 					if list.size() == 2:
 						pairs += 1
 						var d := (list[0]["pos"] as Vector2).distance_to(list[1]["pos"] as Vector2)
-						check(d >= SiteBuilder.HAZARD_PAIR_MIN - 0.001 and d <= SiteBuilder.HAZARD_PAIR_MAX + 0.001, "%s: a pair %.2f apart (inside each other's blast)" % [tag, d])
+						check(d >= HazardPlanner.HAZARD_PAIR_MIN - 0.001 and d <= HazardPlanner.HAZARD_PAIR_MAX + 0.001, "%s: a pair %.2f apart (inside each other's blast)" % [tag, d])
 				# Deterministic per seed, and the floor's other things do not move (the decor still places the same way).
 				if f == 1 and s == 3:
 					var again := SiteBuilder.plan(DungeonGen.generate(run.floor_seed(f)), run, f, catalog)
