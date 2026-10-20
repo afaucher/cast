@@ -1,29 +1,27 @@
 extends Node3D
-## Pavise Crossbowman READ TEST (docs/design/combat-proposals.md Â§2; findings: docs/design/pavise-read-test.md). The four
-## PaviseModel variants on the real terrain look (HexMapView + DungeonLook, the game's light and floors), with the live
-## monsters and the crew, shot with the real game camera (orthographic, yaw 45, pitch -56, size 24) unless named
-## "close" (size 9, same angle). Lab only: nothing in the game uses PaviseModel. Scene: scenes/pavise_lab.tscn.
+## Pavise Crossbowman lab (docs/design/combat-proposals.md §2; read test and decisions: docs/design/pavise-read-test.md).
+## The final look (PaviseModel) with its two crossbow carry styles, "side" (slung at the hip, outside the shield's edge)
+## and "above" (shouldered over the shield's top), on the real terrain look (HexMapView + DungeonLook, the game's light
+## and floors) with the live monsters and the crew. "game" views use the game camera (orthographic, yaw 45, pitch -56,
+## size 24), "close" views the same angle at size 9. Lab only: nothing in the game uses PaviseModel.
+## Scene: scenes/pavise_lab.tscn.
 ##
 ##   godot --path . --resolution 1920x1080 -- --scene res://scenes/pavise_lab.tscn --shot <dir>/pavise.png
 ##
 ## --shot <png>  renders every view and quits; each is <base>_<view>.png, game-size views also <base>_<view>_crop.png
-##               (the middle of the frame at 2x, nearest, so the game's pixels can be inspected):
-##                 solo_<v>                  the variant alone: walking with the shield, planted (front), planted (side),
-##                                           planted (back)
-##                 pack_<v>_<front|back|side> planted on the far side of a room with 2 grunts, 2 archers, 3 imps and a
-##                                           brute, the crew coming at it from the camera side / the far side / the left
-##                 aim_<mode>_<v>            the aim telegraph on Wick: glow (the bolt head only), track (a dim dashed
-##                                           floor line, the first 0.8 s), lock (a solid floor line, the last 0.4 s),
-##                                           beam (a raised line from the bolt head)
-##                 arrows_<v> / arrows_<v>_close   a pavise bristling with Wick's arrows, a blocked hit's spark and "0"
-##                 close_<v>                 size 9: walking, aiming (front), aiming (back) / left, dropped, broken
-##                 cues_<cue>                variant A in five facings with a front cue: none, glint, arc
-##                 lineup                    the crew, the four variants and the live monsters in a row, for scale
-##                 compare (+ _gray, _both)  the four variants side by side at game size: planted front, planted back,
-##                                           walking; and the same in grayscale (silhouette and value only)
-##               and a contact sheet of the main views at <png>.
-## --view <a,b,..> only those views (same file names).
-## No --shot: the comparison layout, the variants cycling carry / plant / aim.
+##               (the area round the pavise at 2x, nearest, so the game's pixels can be inspected):
+##                 states_close / states_game     walking, planted (raising the bow), aiming (locked) and reloading;
+##                                                the top row carries the crossbow "side", the bottom row "above"
+##                 facings_close / facings_game   walking (front), aiming front, side and back; rows as above
+##                 exposed_close                  shoved off it (left), dropped, broken; rows as above
+##                 aim_track / aim_lock           the telegraph on Wick in a pack: a dashed floor line while it tracks
+##                                                (0.8 s), then a solid one when it locks (0.4 s)
+##                 arrows / arrows_close          bristling with Wick's arrows, a blocked hit's spark and grey "0"
+##                 lineup                         the crew, both carry styles and the live monsters, for scale
+##               and a contact sheet of the views at <png>.
+## --view <a,b,..> only those views (same file names). turn_<side|above>_<carried|planted|reload|left|dropped|broken>
+## (not in the set): one state in four facings from a low camera, for model review.
+## No --shot: the facings layout, cycling carry / reload / aim.
 
 const GAME_YAW := 45.0
 const GAME_PITCH := -56.0
@@ -32,9 +30,10 @@ const CLOSE_SIZE := 9.0
 const ROOM := 12                         ## hex radius of the room (DungeonGen-style wall ring round it)
 const WALL_HEIGHT := 3
 
-const VARIANTS: Array[String] = ["a", "b", "c", "d"]
-const AIM_MODES: Array[String] = ["glow", "track", "lock", "beam"]
-const CUES: Array[String] = ["none", "glint", "arc"]
+const CARRIES: Array[String] = ["side", "above"]
+const RECOMMENDED := "above"             ## the carry style the aim and arrows views use (pavise-read-test.md)
+const VIEWS: Array[String] = ["states_close", "states_game", "facings_close", "facings_game", "exposed_close",
+		"aim_track", "aim_lock", "arrows", "arrows_close", "lineup"]
 const LINE_RED := Color(1.0, 0.16, 0.08)
 
 const LINE_SHADER := """
@@ -88,7 +87,7 @@ func _ready() -> void:
 	if shot_path != "":
 		_run_shots()
 	else:
-		_place("compare")
+		_place("facings_game")
 
 
 static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
@@ -156,8 +155,8 @@ func _game(tgt: Vector3, size: float = GAME_SIZE) -> void:
 	_aim(GAME_YAW, GAME_PITCH, size, tgt + Vector3(0, 0.6, 0))
 
 
-func _pavise(v: String, pos: Vector3, face: Vector3, state: String = "planted", aim: float = 1.0, walk: float = 0.0, locked: bool = false) -> PaviseModel:
-	var m := PaviseModel.new(v)
+func _pavise(carry: String, pos: Vector3, face: Vector3, state: String = "planted", aim: float = 1.0, walk: float = 0.0, locked: bool = false) -> PaviseModel:
+	var m := PaviseModel.new(carry)
 	_keep(m)
 	_put(m, pos, face)
 	m.pose_state(state, aim, walk, 0.35 if walk > 0.0 else 0.6, locked)
@@ -241,11 +240,6 @@ func _floor_line(from: Vector3, to: Vector3, locked: bool) -> void:
 		_strip(p0, p1, 0.13, Color(LINE_RED.r, LINE_RED.g, LINE_RED.b, 0.7), 1.3)
 
 
-## A raised beam from the bolt head to the target's chest.
-func _beam(from: Vector3, to: Vector3) -> void:
-	_strip(from, to, 0.10, LINE_RED, 2.4)
-
-
 ## A blocked hit on the front of the shield: a white-hot spark, a few streaks and the grey "0" (the chicken's style).
 func _blocked_spark(p: Vector3, face: Vector3) -> void:
 	var f := MeshInstance3D.new()
@@ -290,41 +284,62 @@ func _place(view: String) -> void:
 	_clear()
 	_focus = Vector3.INF
 	var parts := view.split("_")
-	match String(parts[0]):
-		"solo":
-			_place_solo(parts[1])
-		"pack":
-			_place_pack(parts[1], parts[2])
-		"aim":
-			_place_aim(parts[1], parts[2])
-		"arrows":
-			_place_arrows(parts[1], parts.size() > 2)
-		"close":
-			_place_close(parts[1])
-		"cues":
-			_place_cues(parts[1])
+	match view:
+		"states_close", "states_game":
+			_place_rows(["walk", "raise", "aim", "reload"], view.ends_with("close"))
+			_caption("States, %s  |  walking - raising the bow - aiming (locked) - reloading  |  top: crossbow (a) side   bottom: (b) above" % ("size 9" if view.ends_with("close") else "game camera"))
+		"facings_close", "facings_game":
+			_place_rows(["walk", "front", "side", "back"], view.ends_with("close"))
+			_caption("Facings, %s  |  walking - aiming: front, side, back  |  top: crossbow (a) side   bottom: (b) above" % ("size 9" if view.ends_with("close") else "game camera"))
+		"exposed_close":
+			_place_rows(["left", "dropped", "broken"], true)
+			_caption("Off its pavise, size 9  |  shoved off it - dropped - broken  |  top: crossbow (a) side   bottom: (b) above")
+		"aim_track", "aim_lock":
+			_place_aim(view == "aim_lock")
+		"arrows", "arrows_close":
+			_place_arrows(view == "arrows_close")
 		"lineup":
 			_place_lineup()
-		"compare":
-			_place_compare()
-		"turn":
-			_place_turn(parts[1], parts[2] if parts.size() > 2 else "planted")
+		_:
+			if String(parts[0]) == "turn":
+				_place_turn(parts[1], parts[2] if parts.size() > 2 else "planted")
 
 
-func _place_solo(v: String) -> void:
-	var c := Vector3.ZERO
-	_pavise(v, c + R * -6.0, TC, "carried", 0.0, 2.5)
-	_pavise(v, c + R * -2.0, TC, "planted", 1.0)
-	_pavise(v, c + R * 2.0, R, "planted", 1.0)
-	_pavise(v, c + R * 6.0, U, "planted", 1.0)
-	_game(c)
-	_caption("%s alone, game camera (size 24)   |   walking with it  -  planted, front  -  planted, side  -  planted, back" % PaviseModel.TITLES[v])
+## Two rows (top: "side", bottom: "above"), one column per pose.
+func _place_rows(poses: Array, close: bool) -> void:
+	var gap := 3.6 if close else 4.0
+	var row_gap := 2.2 if close else 2.6
+	for r in CARRIES.size():
+		for i in poses.size():
+			var pos := R * (gap * (i - (poses.size() - 1) * 0.5)) + U * (row_gap if r == 0 else -row_gap)
+			_pose(CARRIES[r], String(poses[i]), pos)
+	if close:
+		_game(-U * 0.5, CLOSE_SIZE)
+	else:
+		_game(Vector3.ZERO)
+
+
+func _pose(carry: String, pose: String, pos: Vector3) -> PaviseModel:
+	match pose:
+		"walk":
+			return _pavise(carry, pos, TC, "carried", 0.0, 2.5)
+		"raise":
+			return _pavise(carry, pos, TC, "planted", 0.5)
+		"aim", "front":
+			return _pavise(carry, pos, TC, "planted", 1.0, 0.0, pose == "aim")
+		"reload":
+			return _pavise(carry, pos, TC, "planted", 0.0)
+		"side":
+			return _pavise(carry, pos, R, "planted", 1.0)
+		"back":
+			return _pavise(carry, pos, U, "planted", 1.0)
+	return _pavise(carry, pos, TC, pose, 0.0)
 
 
 ## The pack: the pavise planted on the far side, facing the crew; fodder rushing, archers either side, a brute.
-func _pack(v: String, p: Vector3, f: Vector3, aim: float = 1.0, locked: bool = false) -> PaviseModel:
+func _pack(carry: String, p: Vector3, f: Vector3, aim: float = 1.0, locked: bool = false) -> PaviseModel:
 	var s := f.cross(Vector3.UP).normalized()
-	var pav := _pavise(v, p, f, "planted", aim, 0.0, locked)
+	var pav := _pavise(carry, p, f, "planted", aim, 0.0, locked)
 	_monster("grunt", p + f * 5.0 + s * 1.4, f, "rest", 1.0, 3.0)
 	_monster("grunt", p + f * 4.4 - s * 1.8, f, "windup", 0.4, 3.0)
 	_monster("archer", p + f * 0.6 + s * 3.6, f, "windup", 0.6)
@@ -344,53 +359,26 @@ func _crew(p: Vector3, f: Vector3) -> Dictionary:
 	return {"wick": w, "gasket": g, "rebar": r}
 
 
-func _place_pack(v: String, side: String) -> void:
-	var f := TC
-	match side:
-		"back":
-			f = U
-		"side":
-			f = -R
-	var p := -f * 6.0
-	_pack(v, p, f)
-	_crew(p, f)
-	_game(p + f * 6.0)
-	_focus = p + f * 3.0
-	var what := {"front": "crew on the camera side: the shield faces the camera",
-			"back": "crew on the far side: we see its back", "side": "crew on the left: we see it side-on"}
-	_caption("%s in a pack (2 grunts, 2 archers, 3 imps, a brute) with the crew, game camera   |   %s" % [PaviseModel.TITLES[v], what[side]])
-
-
-func _place_aim(mode: String, v: String) -> void:
+## The telegraph on Wick: tracking (aim 0.5, a dim dashed floor line) or locked (a solid one).
+func _place_aim(locked: bool) -> void:
 	var f := (TC - R).normalized()
 	var p := -f * 6.5 + R * 0.5
-	var locked := mode != "track"
-	var pav := _pack(v, p, f, 0.5 if mode == "track" else 1.0, locked)
-	var crew := _crew(p, f)
-	var wick := crew["wick"] as Node3D
-	# turn the pavise to its target (Wick)
+	var aim := 1.0 if locked else 0.5
+	var pav := _pack(RECOMMENDED, p, f, aim, locked)
+	var wick := _crew(p, f)["wick"] as Node3D
 	_put(pav, pav.global_position, wick.global_position - pav.global_position)
-	pav.aim_distance = (wick.global_position - pav.global_position).length()
-	pav.pose_state("planted", 0.5 if mode == "track" else 1.0, 0.0, 0.6, locked)
-	var tip := pav.tip_position()
-	match mode:
-		"track":
-			_floor_line(pav.global_position + (wick.global_position - pav.global_position).normalized() * 0.9, wick.global_position, false)
-		"lock":
-			_floor_line(pav.global_position + (wick.global_position - pav.global_position).normalized() * 0.9, wick.global_position, true)
-		"beam":
-			_beam(tip, wick.global_position + Vector3(0, 1.35, 0))
+	pav.pose_state("planted", aim, 0.0, 0.6, locked)
+	var dir := (wick.global_position - pav.global_position).normalized()
+	_floor_line(pav.global_position + dir * 0.9, wick.global_position, locked)
 	_game(p + f * 6.5)
 	_focus = p + f * 6.8
-	var what := {"glow": "the bolt head's glow only (no line)", "track": "tracking (first 0.8 s): a dim dashed floor line",
-			"lock": "locked (last 0.4 s): a solid floor line", "beam": "a raised beam from the bolt head to Wick's chest"}
-	_caption("%s aiming at Wick   |   %s" % [PaviseModel.TITLES[v], what[mode]])
+	_caption("Aiming at Wick   |   %s" % ("locked (last 0.4 s): a solid floor line, the bolt head flares" if locked else "tracking (first 0.8 s): a dim dashed floor line"))
 
 
-func _place_arrows(v: String, close: bool) -> void:
+func _place_arrows(close: bool) -> void:
 	var f := (TC - R).normalized()
 	var p := Vector3.ZERO
-	var pav := _pavise(v, p, f, "planted", 0.0)
+	var pav := _pavise(RECOMMENDED, p, f, "planted", 0.0)
 	pav.set_stuck(9)
 	var s := f.cross(Vector3.UP).normalized()
 	_hero("wick", p + f * 7.5 + s * 0.4, -f, "shoot")
@@ -402,75 +390,38 @@ func _place_arrows(v: String, close: bool) -> void:
 	else:
 		_game(p + f * 3.5)
 		_focus = p + f * 2.5
-	_caption("%s bristling with Wick's arrows, a blocked hit (spark + grey 0), Rebar in front, Gasket on its flank   |   %s" % [
-			PaviseModel.TITLES[v], "size 9" if close else "game camera"])
-
-
-func _place_close(v: String) -> void:
-	var c := Vector3.ZERO
-	_pavise(v, c + R * -4.6 + U * 2.0, TC, "carried", 0.0, 2.5)
-	_pavise(v, c + U * 2.0, TC, "planted", 1.0, 0.0, true)
-	_pavise(v, c + R * 4.6 + U * 2.0, U, "planted", 1.0)
-	_pavise(v, c + R * -4.6 - U * 1.8, TC, "left", 0.0)
-	_pavise(v, c - U * 1.8, TC, "dropped", 0.0)
-	_pavise(v, c + R * 4.6 - U * 1.8, TC, "broken", 0.0)
-	_game(c - U * 0.7, CLOSE_SIZE)
-	_caption("%s, size 9   |   back row: walking with it - aiming, locked (front) - aiming (back)   |   front row: shoved off it (left) - dropped - broken" % PaviseModel.TITLES[v])
-
-
-## Variant A in five facings, with one front cue: none, glint (lit front edges) or arc (a red fan over the blocked arc).
-func _place_cues(cue: String) -> void:
-	var c := Vector3.ZERO
-	var faces: Array[Vector3] = [TC, (TC - R).normalized(), -R, (U - R).normalized(), U]
-	for i in faces.size():
-		var m := _pavise("a", c + R * (-8.0 + 4.0 * i), faces[i], "planted", 0.0)
-		m.set_front_cue("" if cue == "none" else cue)
-	_hero("wick", c + R * -8.0 - U * 6.0, U)
-	_game(c - U * 1.0)
-	_caption("A doc pavise, front cue: %s   |   facing: camera - camera-left - left - away-left - away" % cue)
+	_caption("Bristling with Wick's arrows, reloading; a blocked hit (spark + grey 0); Rebar in front, Gasket on its flank   |   %s" % ("size 9" if close else "game camera"))
 
 
 func _place_lineup() -> void:
-	var c := Vector3.ZERO
-	var row: Array = [["wick", -15.0], ["gasket", -12.6], ["rebar", -9.8], ["a", -6.6], ["b", -3.6], ["c", -0.6], ["d", 2.4],
-			["grunt", 5.2], ["archer", 7.4], ["swarmer", 9.4], ["brute", 12.2]]
+	var row: Array = [["wick", -12.6], ["gasket", -10.2], ["rebar", -7.4], ["side", -4.2], ["above", -1.4],
+			["grunt", 1.6], ["archer", 3.8], ["swarmer", 5.8], ["brute", 8.6]]
 	for e: Array in row:
 		var id: String = e[0]
-		var pos := c + R * float(e[1])
+		var pos := R * float(e[1])
 		if id in ["wick", "gasket", "rebar"]:
 			_hero(id, pos, TC)
-		elif id.length() == 1:
+		elif id in CARRIES:
 			_pavise(id, pos, TC, "planted", 1.0)
 		else:
 			_monster(id, pos, TC)
-	_game(c)
-	_caption("Scale: Wick, Gasket, Rebar  |  A doc, B heavy, C painted, D lamp (planted, aiming)  |  grunt, archer, imp, brute")
-
-
-## The four side by side at game size: planted front, planted back, walking.
-func _place_compare() -> void:
-	var c := Vector3.ZERO
-	for i in VARIANTS.size():
-		var x := R * (-6.0 + 4.0 * i)
-		_pavise(VARIANTS[i], c + x - U * 3.2, TC, "planted", 1.0)
-		_pavise(VARIANTS[i], c + x + U * 0.4, U, "planted", 1.0)
-		_pavise(VARIANTS[i], c + x + U * 4.0, TC, "carried", 0.0, 2.5)
-	_monster("grunt", c + R * -10.0 + U * 0.4, TC)
-	_monster("archer", c + R * 10.0 + U * 0.4, TC)
-	_game(c)
-	_caption("A doc - B heavy - C painted - D lamp   |   front row: planted, facing the camera   middle: planted, facing away   back: walking   (grunt left, archer right)")
+	_game(R * -2.0)
+	_focus = R * -2.0
+	_caption("Scale: Wick, Gasket, Rebar  |  the pavise (crossbow side, above), aiming  |  grunt, archer, imp, brute")
 
 
 ## Model review (not the game camera): one state in four facings from a low three-quarter camera.
-func _place_turn(v: String, state: String) -> void:
+func _place_turn(carry: String, state: String) -> void:
 	var yaw := deg_to_rad(160.0)
 	var tc := Vector3(sin(yaw), 0.0, cos(yaw))
 	var rt := Vector3(cos(yaw), 0.0, -sin(yaw))
 	var faces: Array[Vector3] = [tc, tc.rotated(Vector3.UP, 0.8), tc.rotated(Vector3.UP, PI * 0.5), -tc]
+	var aim := 1.0 if state == "planted" else 0.0
+	var st := "planted" if state == "reload" else state
 	for i in faces.size():
-		_pavise(v, rt * (-4.8 + 3.2 * i), faces[i], state, 1.0 if state == "planted" else 0.0, 2.5 if state == "carried" else 0.0)
+		_pavise(carry, rt * (-4.8 + 3.2 * i), faces[i], st, aim, 2.5 if st == "carried" else 0.0)
 	_aim(160.0, -18.0, 6.2, Vector3(0, 1.1, 0))
-	_caption("%s, %s (model review, low camera): front - three-quarter - side - back" % [PaviseModel.TITLES[v], state])
+	_caption("crossbow %s, %s (model review, low camera): front - three-quarter - side - back" % [carry, state])
 
 
 # ------------------------------------------------------------------ live (no --shot)
@@ -479,38 +430,20 @@ func _process(delta: float) -> void:
 	if shot_path != "":
 		return
 	_t += delta
-	var phase := int(_t / 2.5) % 3
+	var phase := int(_t / 2.5) % 4
 	for n in _view_nodes:
 		if n is PaviseModel:
 			var m := n as PaviseModel
 			match phase:
 				0:
 					m.pose_state("carried", 0.0, 2.5, _t)
-				1:
+				1, 3:
 					m.pose_state("planted", 0.0, 0.0, _t)
 				2:
 					m.pose_state("planted", clampf(fmod(_t, 2.5) / 1.2, 0.0, 1.0), 0.0, _t, fmod(_t, 2.5) > 0.8)
 
 
 # ------------------------------------------------------------------ screenshots
-
-func _views() -> Array[String]:
-	var out: Array[String] = []
-	for v in VARIANTS:
-		out.append("solo_" + v)
-		out.append("close_" + v)
-		for side in ["front", "back", "side"]:
-			out.append("pack_%s_%s" % [v, side])
-		for mode in AIM_MODES:
-			out.append("aim_%s_%s" % [mode, v])
-		out.append("arrows_" + v)
-		out.append("arrows_%s_close" % v)
-	for cue in CUES:
-		out.append("cues_" + cue)
-	out.append("lineup")
-	out.append("compare")
-	return out
-
 
 func _snap(out_path: String) -> Image:
 	for i in 6:
@@ -538,7 +471,8 @@ func _run_shots() -> void:
 	for i in 20:
 		await get_tree().process_frame
 	var base := shot_path.get_basename()
-	var views := _views()
+	var views: Array[String] = []
+	views.assign(VIEWS)
 	if only_view != "":
 		views.clear()
 		for v in only_view.split(","):
@@ -547,29 +481,16 @@ func _run_shots() -> void:
 	for view in views:
 		_place(view)
 		var img := await _snap("%s_%s.png" % [base, view])
-		var game_size := not view.begins_with("close") and not view.ends_with("close")
-		if game_size:
+		if not view.ends_with("close") and not view.begins_with("turn"):
 			var cr := _crop(img)
-			if view == "compare":
-				cr = _crop(img, 1100, 480)
-			elif view == "lineup":
-				cr = _crop(img, 1400, 360)
+			if view == "lineup":
+				cr = _crop(img, 1300, 380)
 			elif view.begins_with("aim"):
 				cr = _crop(img, 1000, 560)
+			elif view.ends_with("game"):
+				cr = _crop(img, 1000, 420)
 			cr.save_png("%s_%s_crop.png" % [base, view])
-			if view == "compare":
-				var gray := cr.duplicate() as Image
-				gray.convert(Image.FORMAT_RGBA8)
-				gray.adjust_bcs(1.0, 1.0, 0.0)
-				gray.save_png("%s_compare_gray.png" % base)
-				var both := Image.create(cr.get_width(), cr.get_height() * 2, false, Image.FORMAT_RGBA8)
-				var cr8 := cr.duplicate() as Image
-				cr8.convert(Image.FORMAT_RGBA8)
-				both.blit_rect(cr8, Rect2i(Vector2i.ZERO, cr8.get_size()), Vector2i.ZERO)
-				both.blit_rect(gray, Rect2i(Vector2i.ZERO, gray.get_size()), Vector2i(0, cr.get_height()))
-				both.save_png("%s_compare_both.png" % base)
-		if view.begins_with("solo") or view.begins_with("close") or view.ends_with("_front") or view == "compare":
-			sheet.append(img)
+		sheet.append(img)
 	if only_view == "" and not sheet.is_empty():
 		_save_grid(sheet, 4, shot_path, 1.0 / 4.0)
 	get_tree().quit()

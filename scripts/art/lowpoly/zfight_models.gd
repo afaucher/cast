@@ -67,12 +67,13 @@ static func models() -> Array[Dictionary]:
 	out.append({"name": "hero/rebar", "make": func() -> Node3D: return RebarModel.new(), "ground": true})
 	for kind: String in MonsterModels.KINDS + MonsterModels.DESIGN_KINDS:
 		out.append({"name": "monster/" + kind, "make": MonsterModels.make.bind(kind), "ground": true})
-	# the Pavise Crossbowman read test (lab only, docs/design/pavise-read-test.md): every variant in every shield state,
-	# and planted with arrows stuck in it and the glint cue on
-	for v: String in PaviseModel.VARIANTS:
+	# the Pavise Crossbowman look (lab only, docs/design/pavise-read-test.md): both crossbow carry styles in every shield
+	# state, reloading, and planted with arrows stuck in it
+	for c: String in PaviseModel.CARRY_STYLES:
 		for st: String in PaviseModel.STATES:
-			out.append({"name": "pavise/%s/%s" % [v, st], "make": _pavise.bind(v, st, false), "ground": true})
-		out.append({"name": "pavise/%s/arrows_cues" % v, "make": _pavise.bind(v, "planted", true), "ground": true})
+			out.append({"name": "pavise/%s/%s" % [c, st], "make": _pavise.bind(c, st, 1.0 if st == "planted" else 0.0, false), "ground": true})
+		out.append({"name": "pavise/%s/reloading" % c, "make": _pavise.bind(c, "planted", 0.0, false), "ground": true})
+		out.append({"name": "pavise/%s/arrows" % c, "make": _pavise.bind(c, "planted", 1.0, true), "ground": true})
 	out.append({"name": "chicken", "make": func() -> Node3D: return ChickenModel.new(), "ground": true})
 	for id: String in SpellBook.SPELLS:
 		out.append({"name": "component/" + id, "make": ComponentProps.make.bind(id, false), "ground": true})
@@ -161,14 +162,13 @@ static func _stack(kinds: Array, twists: Array) -> Array:
 	return items
 
 
-## A Pavise Crossbowman look (lab only) in one shield state (planted: aiming, locked); `extras`: 9 stuck arrows and the
-## glint cue on.
-static func _pavise(variant: String, state: String, extras: bool) -> Node3D:
-	var m := PaviseModel.new(variant)
-	m.pose_state(state, 1.0 if state == "planted" else 0.0, 0.0, 0.6, state == "planted")
-	if extras:
+## A Pavise Crossbowman look (lab only) with one crossbow carry style, in one shield state at `aim` (planted: 0 =
+## reloading, 1 = aiming, locked); `arrows`: 9 stuck in the front.
+static func _pavise(carry: String, state: String, aim: float, arrows: bool) -> Node3D:
+	var m := PaviseModel.new(carry)
+	m.pose_state(state, aim, 0.0, 0.6, aim >= 1.0)
+	if arrows:
 		m.set_stuck(9)
-		m.set_front_cue("glint")
 	return m
 
 
