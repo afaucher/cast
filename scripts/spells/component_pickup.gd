@@ -59,6 +59,32 @@ static func copy_at(id: String, amount: int, pos: Vector3, life: float, age: flo
 	return p
 
 
+# --- E (Usable, scripts/app/usable.gd): the candidate is Hero.swap_target() ---------------------------------------------
+# E swaps it into the held slot (was F; user, 2026-10-18). Online it is a request (Hero.swap_in_pickup).
+
+const PROMPT_ABOVE := 1.75   ## the use prompt floats this far above the pickup (above its own name label)
+
+
+func use_kind() -> String:
+	return "pickup"
+
+
+func use_score(_hero: Hero, _game: Node) -> float:
+	return Usable.PICKUP
+
+
+func use_prompt(_hero: Hero, _game: Node) -> String:
+	return "Swap in %s" % SpellBook.component_name(spell_id)
+
+
+func use_point(_hero: Hero, _game: Node) -> Vector3:
+	return global_position + Vector3(0.0, PROMPT_ABOVE, 0.0)
+
+
+func use_press(hero: Hero, _game: Node) -> bool:
+	return hero.swap_in_pickup()
+
+
 ## `pos` pulled onto real ground: itself if it is over a floor cell, else the nearest of a few
 ## candidates around it. Vector3.INF if none.
 static func _floor_spot(pos: Vector3) -> Vector3:

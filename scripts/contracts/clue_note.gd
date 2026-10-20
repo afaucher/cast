@@ -100,6 +100,31 @@ func verb() -> String:
 	return NoteCopy.verb_of(format)
 
 
+# --- E (Usable, scripts/app/usable.gd): the candidate is game.gd _note_target() ---------------------------------------
+# Reading is the game's slip (game.gd _toggle_note): LOCAL presentation, nothing is sent.
+
+func use_kind() -> String:
+	return "note"
+
+
+func use_score(_hero: Hero, _game: Node) -> float:
+	return Usable.NOTE
+
+
+## "Close" when this is the note whose slip is open, else verb().
+func use_prompt(_hero: Hero, game: Node) -> String:
+	return "Close" if bool(game.call("_note_is_open", self)) else verb()
+
+
+func use_point(_hero: Hero, _game: Node) -> Vector3:
+	return prompt_point()
+
+
+func use_press(_hero: Hero, game: Node) -> bool:
+	game.call("_toggle_note", self)
+	return true
+
+
 ## The note nearest `pos` within READ_RANGE (flat distance), or null.
 static func nearest(pos: Vector3, max_range: float = READ_RANGE) -> ClueNote:
 	if GameWorld.root == null:

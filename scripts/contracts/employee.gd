@@ -362,6 +362,29 @@ static func interact(hero: Actor) -> bool:
 	return e.request_wait(hero) if e.can_wait(hero) else e.request_follow(hero)
 
 
+# --- E (Usable, scripts/app/usable.gd): the candidate is interact_target(hero) ------------------------------------------
+
+func use_kind() -> String:
+	return "employee"
+
+
+## Usable while this machine simulates it or shows the host's (a client's E on the host's employee is a request: interact).
+func use_score(_hero: Hero, _game: Node) -> float:
+	return Usable.EMPLOYEE if Net.simulates(self) or Net.is_puppet(self) else -INF
+
+
+func use_prompt(hero: Hero, _game: Node) -> String:
+	return interact_verb(hero)
+
+
+func use_point(_hero: Hero, _game: Node) -> Vector3:
+	return prompt_point()
+
+
+func use_press(hero: Hero, _game: Node) -> bool:
+	return Employee.interact(hero)
+
+
 ## A voice order (VoiceOrders, on the host): "go" (to `point`), "follow" (`by`, the speaker's hero) or "attack". Says its
 ## line (say(): every screen shows it). Returns "took", "refused" (staff told to attack: the refusal is said) or "" (it
 ## can't: gone, or nothing to go to).

@@ -225,6 +225,30 @@ func use(hero: Actor) -> bool:
 	return request(true, hero)
 
 
+# --- E (Usable, scripts/app/usable.gd): the candidate is interact_target(hero) ------------------------------------------
+
+func use_kind() -> String:
+	return "door"
+
+
+func use_score(_hero: Hero, _game: Node) -> float:
+	return Usable.DOOR
+
+
+func use_prompt(_hero: Hero, _game: Node) -> String:
+	return use_verb()
+
+
+func use_point(_hero: Hero, _game: Node) -> Vector3:
+	return prompt_point()
+
+
+## E shuts it (opens a shut one): use(). The press is used even when the door would not move (a body stands in it).
+func use_press(hero: Hero, _game: Node) -> bool:
+	use(hero)   # (a client's is a request: the host decides)
+	return true
+
+
 ## Ask for a state: the host (or solo) decides at once; a client asks the host (obj.req "door"). True when decided or sent.
 func request(want_shut: bool, by: Node) -> bool:
 	if Net.owns(self):
