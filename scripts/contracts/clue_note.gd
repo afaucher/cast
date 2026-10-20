@@ -9,7 +9,7 @@ extends Node3D
 ##   GameWorld.spawn(note, pos)
 ##   ClueNote.nearest(hero.global_position)     # the note E would read, or null
 ##
-## The text, format and header are SPAWN data planned from the floor seed (SiteBuilder._plan_notes); the model,
+## The text, format and header are SPAWN data planned from the floor seed (NotePlanner.plan); the model,
 ## the glint and reading are LOCAL presentation on each machine.
 
 const GROUP := "clue_notes"

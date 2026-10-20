@@ -1,7 +1,7 @@
 # Notes
 
 Status: **built**, 2026-10-17. Code: `scripts/contracts/note_copy.gd` (all the copy),
-`note_facts.gd` (the `{slots}`), `site_builder.gd` `_plan_notes` (choice and placement),
+`note_facts.gd` (the `{slots}`), `planners/note_planner.gd` `NotePlanner.plan` (choice and placement),
 `clue_note.gd` (the world object), `scripts/art/lowpoly/props/note_models.gd` (the per-format models),
 `scripts/ui/forms/note_slip.gd` (the on-screen slip), `scripts/ui/dispatch_banner.gd` (the floor banner).
 Tests: `tests/test_notes.gd`.

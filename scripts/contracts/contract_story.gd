@@ -2,7 +2,7 @@ class_name ContractStory
 extends RefCounted
 ## "What happened": the inciting event and where it started (docs/design/contracts.md, Story).
 ## The origin room is a theme (e.g. "yoga studio") that names the floor-3 room holding the origin
-## hellgate. The notes and the dispatch floor banners are planned per floor (NoteCopy, SiteBuilder._plan_notes).
+## hellgate. The notes and the dispatch floor banners are planned per floor (NoteCopy, NotePlanner.plan).
 ## Pure data + a roller; the rest of the generator reads the Dictionary it returns.
 ##
 ## story = {
