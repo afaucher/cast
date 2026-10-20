@@ -16,7 +16,7 @@ const STEP := 320              # 20 ms chunks, like the mic
 const LEAD := 0.5              # seconds of silence before each clip
 const TAIL := 0.8              # and after
 const SPEED := 4.0             # audio seconds per wall second
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
+var SPELLS: Array = SpellBook.ids()   # (the game's castable spells: SpellBook is the one list)
 const DELIBERATE_GROUPS := ["clean", "rate", "sloppy", "hesitate"]
 ## Stress clips (fastest TTS rate, long hesitations) sit on the recognizer's edge:
 ## shifting the audio by 80 ms flips some of them (measured). Their MISSES use a

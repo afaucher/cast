@@ -20,7 +20,7 @@ const STEP := 320
 const LEAD := 0.5
 const TAIL := 0.9
 const SPEED := 4.0
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
+var SPELLS: Array = SpellBook.ids()   # (the game's castable spells: SpellBook is the one list)
 ## The words handed to the recognizer as hotwords in the measurement run (CAST_ORDERS_HOTWORDS=1).
 const HOT := ["everyone", "crew", "hench", "rebar", "wick", "gasket", "beatrice", "mabel", "elsie", "lionel", "pearl", "penny",
 	"molly", "bloom", "iris", "stan", "gary", "steve", "simon", "nigel", "brad", "todd", "gordon", "kevin", "craig", "keith", "go", "attack", "follow"]

@@ -11,7 +11,6 @@ const STEP := 320              # 20 ms chunks, like the mic
 const LEAD := 0.5
 const TAIL := 0.8
 const SPEED := 8.0
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
 const MODES := ["loose", "chaos"]
 
 var caster: VoiceCaster
@@ -38,7 +37,7 @@ func _ready() -> void:
 	caster.persist_settings = false
 	caster.voice_log.enabled = false
 	add_child(caster)
-	if not caster.start(PackedStringArray(SPELLS)):
+	if not caster.start(PackedStringArray(SpellBook.ids())):
 		push_error("caster.start failed: %s" % caster.status)
 		get_tree().quit(2)
 		return

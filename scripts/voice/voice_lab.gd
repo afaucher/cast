@@ -6,18 +6,16 @@ extends Control
 ##   godot --path . res://scenes/voice_lab.tscn      (or .\run.ps1, scene arg)
 ## Without a model it still works for typed input ("no model, typed input only").
 
-const SPELLS := {
-	"heal": {"label": "HEAL", "color": Color(0.35, 0.90, 0.50)},
-	"fireball": {"label": "FIREBALL", "color": Color(1.00, 0.55, 0.20)},
-	"armor": {"label": "ARMOR", "color": Color(0.45, 0.65, 1.00)},
-	"corn": {"label": "CORN", "color": Color(1.00, 0.88, 0.30)},
-	"tentacles": {"label": "TENTACLES", "color": Color(0.70, 0.40, 0.95)},
-	"teeth": {"label": "TEETH", "color": Color(0.96, 0.93, 0.80)},
-	"vines": {"label": "VINES", "color": Color(0.45, 0.78, 0.22)},
-	"damp": {"label": "DAMP", "color": Color(0.30, 0.82, 0.92)},
-	"coffee": {"label": "COFFEE", "color": Color(0.66, 0.43, 0.24)},
-	"chicken": {"label": "CHICKEN", "color": Color(0.94, 0.33, 0.27)},
-}
+## Every castable spell, its label and colour from SpellBook (the one list).
+var SPELLS := _spell_table()
+
+
+static func _spell_table() -> Dictionary:
+	var out := {}
+	for id in SpellBook.ids():
+		out[id] = {"label": SpellBook.spell_name(id).to_upper(), "color": SpellBook.color_of(id)}
+	return out
+
 const GLOW_SECONDS := 1.6
 const C_BG := Color(0.07, 0.08, 0.16)
 const C_TEXT := Color(0.95, 0.95, 1.0)

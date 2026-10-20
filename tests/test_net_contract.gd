@@ -131,8 +131,13 @@ func _check_declarations(paths: Array[String]) -> void:
 	var targets: Array[String] = []
 	for p in paths:
 		var src := FileAccess.get_file_as_string(p)
-		if p in NET_SCRIPTS or src.contains("func net_fields(") or _extends_actor(load(p)):
+		var actor := _extends_actor(load(p))
+		if p in NET_SCRIPTS or src.contains("func net_fields(") or actor:
 			targets.append(p)
+		# Every Actor class is held to its carriers (section 4) and the late-join table (section 7), or says why not: a new
+		# monster kind or world actor can't slip through unchecked (docs/design/refactor-plan.md, H1).
+		if actor and p != ACTOR:
+			check(REPLICATED.has(p) or NOT_REPLICATED.has(p), "%s is an Actor but not in REPLICATED (its carriers) or NOT_REPLICATED (why it never crosses the net)" % p)
 	for p in NET_SCRIPTS:
 		check(p in paths, "NET_SCRIPTS names a missing file: " + p)
 	check(targets.size() >= NET_SCRIPTS.size() + 5, "found the actor classes (%d targets)" % targets.size())
@@ -339,6 +344,12 @@ func _check_budget() -> void:
 
 
 # --- 3. Carriers (M2): nothing owned by a player goes unreplicated ---------------------------
+
+## Actor classes that never cross the net, and why (every other Actor class must be in REPLICATED).
+const NOT_REPLICATED := {
+	"res://scripts/heroes/training_dummy.gd": "the arena test scene's target; never on a contract floor",
+	"res://scripts/world/themes/decor_blocker.gd": "built on every machine from the floor plan; immovable, undamageable, no state changes",
+}
 
 ## Classes whose OWNER vars travel: script -> [the codec's field list, the event table, the fewest codec fields it should
 ## have]. Each monster kind is held to the monster tables (a kind that adds an OWNER var must add its carrier).

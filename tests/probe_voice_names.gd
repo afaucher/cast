@@ -14,7 +14,7 @@ const STEP := 320
 const LEAD := 0.5
 const TAIL := 0.9
 const SPEED := 4.0
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
+var SPELLS: Array = SpellBook.ids()   # (the game's castable spells: SpellBook is the one list)
 ## Name key -> {heard phrase: quality}: the measured spellings, from the first pass's misses (2026-10-19). Used only with
 ## CAST_PROBE_ALIASES=1 (pass 2), so pass 1 (raw) stays reproducible.
 const PROBE_ALIASES := {

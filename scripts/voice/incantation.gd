@@ -3,7 +3,7 @@ extends RefCounted
 ## Pure incantation parsing and power scoring. No audio, no engine nodes, so it
 ## is unit-testable: feed it speech-recognizer hypotheses and read back events.
 ##
-##   var inc := Incantation.new(PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]))
+##   var inc := Incantation.new(PackedStringArray(SpellBook.ids()))   # (no ids: every castable spell)
 ##   inc.vocabulary()                       # words to give the recognizer as hotwords
 ##   for ev in inc.feed("cast heel", false, t): ...   # streaming partial (or final=true)
 ##   for ev in inc.tick(t): ...             # call regularly so a lone trigger can time out
@@ -394,7 +394,9 @@ var _pending_name: Dictionary = {}   # a name that ended the last utterance: {wh
 var _last_order: Dictionary = {}     # "who|order" -> t of the last one fired
 
 
-func _init(spell_ids: PackedStringArray = PackedStringArray(["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]), overrides: Dictionary = {}) -> void:
+func _init(spell_ids: PackedStringArray = PackedStringArray(), overrides: Dictionary = {}) -> void:
+	if spell_ids.is_empty():
+		spell_ids = PackedStringArray(SpellBook.ids())
 	_cfg = TUNING.duplicate(true)
 	for k in overrides:
 		_cfg[k] = overrides[k]

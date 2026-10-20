@@ -3,7 +3,7 @@ extends TestCase
 ## strictness modes, trigger words, the accidental label, settings and the
 ## VoiceCaster typed path. No audio and no model needed.
 
-const SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
+var SPELLS: Array = SpellBook.ids()   # (the game's castable spells: SpellBook is the one list)
 const TMP_SETTINGS := "user://test_voice_settings.cfg"
 const TMP_LOG := "user://test_voice_log.csv"
 
@@ -426,8 +426,8 @@ func _test_tentacles() -> void:
 	eq(_inc().explain("CAST TENTACLE")[5]["kind"], "homophone", "tentacle is a homophone card")
 	eq(_inc().explain("CAST HEADACLES")[5]["kind"], "sound_alike", "headacles is a sound-alike card")
 	# The caster's own default list has all nine.
-	eq(VoiceCaster.DEFAULT_SPELLS.size(), 10, "ten default spells")
-	check(VoiceCaster.DEFAULT_SPELLS.has("tentacles"), "VoiceCaster default spells include tentacles")
+	eq(Array(VoiceCaster.default_spells()), Array(SpellBook.ids()), "the default spells are SpellBook's castable spells")
+	check(VoiceCaster.default_spells().has("tentacles"), "VoiceCaster default spells include tentacles")
 	check(not VoiceSettings.validate_trigger("tentacles")["ok"], "tentacles cannot be the trigger word")
 
 
@@ -499,7 +499,7 @@ func _test_teeth() -> void:
 	eq(_inc().explain("CAST TOOTH")[6]["kind"], "homophone", "tooth is a homophone card")
 	eq(_inc().explain("CAST OOTH")[6]["kind"], "sound_alike", "ooth is a sound-alike card")
 	eq(_inc().explain("CAST THESE")[6]["kind"], "", "these is not a teeth card")
-	check(VoiceCaster.DEFAULT_SPELLS.has("teeth"), "VoiceCaster default spells include teeth")
+	check(VoiceCaster.default_spells().has("teeth"), "VoiceCaster default spells include teeth")
 	check(not VoiceSettings.validate_trigger("teeth")["ok"], "teeth cannot be the trigger word")
 
 
@@ -546,7 +546,7 @@ func _test_vines_damp_coffee() -> void:
 	for id in ["vines", "damp", "coffee"]:
 		check(_inc().vocabulary().has(id), "vocab has " + id)
 		check(not VoiceSettings.validate_trigger(id)["ok"], id + " cannot be the trigger word")
-		check(VoiceCaster.DEFAULT_SPELLS.has(id), "VoiceCaster default spells include " + id)
+		check(VoiceCaster.default_spells().has(id), "VoiceCaster default spells include " + id)
 	var mentions: Array = _inc().config()["mention_spells"]
 	for id in ["vines", "damp", "coffee"]:
 		check(not mentions.has(id), id + " is not a mention spell")
@@ -686,7 +686,7 @@ func _test_panel_cards() -> void:
 	caster.persist_settings = false
 	caster.voice_log.enabled = false
 	add_child(caster)
-	caster.start(VoiceCaster.DEFAULT_SPELLS)
+	caster.start(VoiceCaster.default_spells())
 	var panel := VoiceDebugPanel.new()
 	panel.toggle_with_f1 = false
 	add_child(panel)

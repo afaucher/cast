@@ -52,7 +52,10 @@ signal strictness_changed(mode: String)
 ## "go", "attack", "follow". Typed lines too. last_order() has the detail (gap, at_start, accidental, typed).
 signal order_spoken(who: String, order: String, heard: String)
 
-const DEFAULT_SPELLS := ["heal", "fireball", "armor", "corn", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
+## The spells listened for when start() gets none: every castable spell (SpellBook is the one list).
+static func default_spells() -> PackedStringArray:
+	return PackedStringArray(SpellBook.ids())
+
 ## Keyword choices for the UI. Each was measured with TTS clips through the real
 ## model (tests/test_voice_triggers.gd prints the table). TRIGGER_NOTES flags
 ## options that misbehave; they stay selectable but the UI warns.
@@ -130,7 +133,7 @@ func _ready() -> void:
 ## Open the model (and the mic unless use_mic is false). Returns true when
 ## listening works. Always prepares the typed path (inject_text) first.
 func start(spell_ids: PackedStringArray) -> bool:
-	_spells = spell_ids if not spell_ids.is_empty() else PackedStringArray(DEFAULT_SPELLS)
+	_spells = spell_ids if not spell_ids.is_empty() else default_spells()
 	_apply_saved_settings()
 	_rebuild()
 	if _listener != null:
@@ -361,7 +364,7 @@ func _advance(frames: int, rate: int) -> void:
 
 
 func _spell_list() -> Array:
-	return Array(_spells) if not _spells.is_empty() else DEFAULT_SPELLS
+	return Array(_spells) if not _spells.is_empty() else Array(default_spells())
 
 
 func _apply_saved_settings() -> void:
@@ -380,13 +383,13 @@ func _apply_saved_settings() -> void:
 func _ensure_incantation() -> void:
 	if _inc == null:
 		if _spells.is_empty():
-			_spells = PackedStringArray(DEFAULT_SPELLS)
+			_spells = default_spells()
 		_apply_saved_settings()
 		_rebuild()
 
 
 func _rebuild() -> void:
-	_inc = Incantation.new(_spells if not _spells.is_empty() else PackedStringArray(DEFAULT_SPELLS), tuning)
+	_inc = Incantation.new(_spells if not _spells.is_empty() else default_spells(), tuning)
 	_inc.trigger_armed.connect(func(token: String) -> void: trigger_heard.emit(token))
 	_utt_events.clear()
 	_last_text = ""

@@ -329,8 +329,8 @@ func _component_and_charges() -> void:
 # --- The word ------------------------------------------------------------------------------------------------
 
 func _word() -> void:
-	check(VoiceCaster.DEFAULT_SPELLS.has("chicken"), "the recognizer listens for it")
-	var inc := Incantation.new(PackedStringArray(VoiceCaster.DEFAULT_SPELLS))
+	check(VoiceCaster.default_spells().has("chicken"), "the recognizer listens for it")
+	var inc := Incantation.new(VoiceCaster.default_spells())
 	check(inc.vocabulary().has("chicken"), "it is in the hotword vocabulary")
 	for text in ["cast chicken", "CAST CHICKENS", "okay cast chicken"]:
 		var ev := inc.feed(text, true, 10.0 + float(text.length()))
