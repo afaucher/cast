@@ -100,7 +100,7 @@ func setup() -> void:
 	near(ally.hp, ally.max_hp, 0.01, "corn: no damage before the delay (ally)")
 	near(mob.hp, mob.max_hp, 0.01, "corn: no damage before the delay (monster)")
 	await frames(30)
-	var dmg := SpellBook.corn_damage(1.0)
+	var dmg := CornSpell.corn_damage(1.0)
 	near(dmg, 60.0, 0.001)
 	near(ally.hp, ally.max_hp - dmg, 0.01, "corn hits heroes (friendly fire)")
 	near(mob.hp, mob.max_hp - dmg, 0.01, "corn hits monsters")
@@ -141,7 +141,7 @@ func setup() -> void:
 	await _clear()
 
 	# --- Corn power scaling.
-	check(SpellBook.corn_damage(0.3) < SpellBook.corn_damage(0.6) and SpellBook.corn_damage(0.6) < SpellBook.corn_damage(1.0), "corn damage monotonic")
+	check(CornSpell.corn_damage(0.3) < CornSpell.corn_damage(0.6) and CornSpell.corn_damage(0.6) < CornSpell.corn_damage(1.0), "corn damage monotonic")
 
 	# --- Fizzle is harmless.
 	caster = _hero(Vector3.ZERO)

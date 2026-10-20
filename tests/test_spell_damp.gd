@@ -47,7 +47,7 @@ func _numbers() -> void:
 	eq(SpellBook.component_name("damp"), "Soggy sponge")
 	near(SpellBook.cooldown_of("damp"), 10.0, 0.001, "cooldown 10 s")
 	check(SpellBook.color_of("damp").b > 0.85 and SpellBook.color_of("damp").r < 0.4, "water blue")
-	check(SpellBook.damp_radius(1.0) > SpellBook.tentacles_radius(1.0) and SpellBook.damp_radius(0.05) >= 4.0, "a WIDE area: wider than tentacles (%.2f)" % SpellBook.damp_radius(1.0))
+	check(SpellBook.damp_radius(1.0) > TentaclesSpell.tentacles_radius(1.0) and SpellBook.damp_radius(0.05) >= 4.0, "a WIDE area: wider than tentacles (%.2f)" % SpellBook.damp_radius(1.0))
 	near(SpellBook.damp_radius(1.0), 5.0, 0.001, "radius 4 + 1 * power")
 	near(SpellBook.DAMP_SOAK, 15.0, 0.001, "soaked for 15 s")
 	check(SpellBook.DAMP_PUDDLE_LIFE < Grime.LIFE, "the puddles dry before the 30 s grime marks fade")

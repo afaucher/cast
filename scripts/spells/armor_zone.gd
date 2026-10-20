@@ -27,7 +27,7 @@ var _next_pulse := 0.0
 func _ready() -> void:
 	if start_time < 0.0:
 		start_time = GameWorld.time
-	_end_time = start_time + SpellBook.armor_duration(power)
+	_end_time = start_time + ArmorSpell.armor_duration(power)
 	_build_visual()
 	_apply()
 
@@ -61,7 +61,7 @@ func time_left() -> float:
 
 ## Each hero's owner applies its own armor (Combat.modify_radius, layer 4): the zone runs on every machine.
 func _apply() -> void:
-	Combat.modify_radius(global_position, RADIUS, "armor", SpellBook.armor_multiplier(power), MODIFIER_DURATION, Actor.STAT_DAMAGE_TAKEN, team)
+	Combat.modify_radius(global_position, RADIUS, "armor", ArmorSpell.armor_multiplier(power), MODIFIER_DURATION, Actor.STAT_DAMAGE_TAKEN, team)
 
 
 func _expire() -> void:

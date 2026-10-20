@@ -84,7 +84,7 @@ func run_host() -> void:
 	print("[M4] corn: the three landings span %.1f ms of real time (each machine's clock error included)" % (spread * 1000.0))
 	check(spread < 0.05, "... and within %.0f ms of each other in real time (%.1f ms)" % [50.0, spread * 1000.0])
 	var r_b: Dictionary = reported(b, "corn1")
-	var dmg := SpellBook.corn_damage(1.0)
+	var dmg := CornSpell.corn_damage(1.0)
 	near(float(r_b["before"]) - float(r_b["after"]), dmg, 0.01, "B, standing in the blast, lost exactly one corn's damage (%.0f): it was hit once, on its own machine" % dmg)
 	eq(int(r_b["hits"]), 1, "B's hero took one hit")
 	await sleep(0.5)

@@ -76,7 +76,7 @@ func setup() -> void:
 	var in_dealt := inside.apply_damage(20.0)
 	var out_dealt := outside.apply_damage(20.0)
 	near(out_dealt, 20.0, 0.001, "no reduction outside")
-	near(in_dealt, 20.0 * SpellBook.armor_multiplier(1.0), 0.01, "reduced damage inside")
+	near(in_dealt, 20.0 * ArmorSpell.armor_multiplier(1.0), 0.01, "reduced damage inside")
 	check(in_dealt < out_dealt * 0.6, "armor roughly halves damage (%f vs %f)" % [in_dealt, out_dealt])
 	# Monsters inside the zone get nothing.
 	var mob := TrainingDummy.new()
@@ -89,11 +89,11 @@ func setup() -> void:
 	await frames(30)
 	check(not inside.has_modifier("armor"), "buff drops after leaving the zone")
 	# Power scaling and duration.
-	check(SpellBook.armor_multiplier(0.2) > SpellBook.armor_multiplier(0.6) and SpellBook.armor_multiplier(0.6) > SpellBook.armor_multiplier(1.0), "armor stronger with power")
-	near(SpellBook.armor_multiplier(1.0), 0.4, 0.001)
-	near(SpellBook.armor_multiplier(0.0), 0.75, 0.001)
-	near(SpellBook.armor_duration(1.0), 10.0, 0.001)
-	near(SpellBook.armor_duration(0.5), 7.5, 0.001)
+	check(ArmorSpell.armor_multiplier(0.2) > ArmorSpell.armor_multiplier(0.6) and ArmorSpell.armor_multiplier(0.6) > ArmorSpell.armor_multiplier(1.0), "armor stronger with power")
+	near(ArmorSpell.armor_multiplier(1.0), 0.4, 0.001)
+	near(ArmorSpell.armor_multiplier(0.0), 0.75, 0.001)
+	near(ArmorSpell.armor_duration(1.0), 10.0, 0.001)
+	near(ArmorSpell.armor_duration(0.5), 7.5, 0.001)
 	# Expiry (low power = 5 + 5*0.05 s).
 	for z in root.get_children():
 		if z is ArmorZone:
@@ -103,6 +103,6 @@ func setup() -> void:
 	SpellBook.cast("armor", weak_tank, 0.05, weak_tank.global_position)  # point at your own feet
 	await frames(30)
 	check(weak_tank.has_modifier("armor"), "weak armor applies")
-	await frames(int(SpellBook.armor_duration(0.05) * 60.0) + 40)
+	await frames(int(ArmorSpell.armor_duration(0.05) * 60.0) + 40)
 	check(not weak_tank.has_modifier("armor"), "armor expires with the zone")
 	finish()

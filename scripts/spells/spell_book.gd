@@ -68,18 +68,6 @@ const SPELLS := {
 # --- Targeting: every spell lands where the player aims, like the ranged bolt.
 const SPELL_RANGE := Hero.BOLT_RANGE  ## same reach as the ranged attack
 const ALLY_SNAP := 1.3                ## aim this close to a hero snaps onto them
-# --- Armor
-const ARMOR_MULT_WEAK := 0.75      ## damage multiplier at power ~0
-const ARMOR_MULT_STRONG := 0.4     ## damage multiplier at power 1
-const ARMOR_DURATION_BASE := 5.0
-const ARMOR_DURATION_POWER := 5.0
-# --- Corn
-# --- Tentacles
-const TENTACLES_RADIUS_BASE := 2.2
-const TENTACLES_RADIUS_POWER := 0.8
-const TENTACLES_SHOVE_BASE := 2.5
-const TENTACLES_SHOVE_POWER := 1.5
-const TENTACLES_DAMAGE := 6.0     ## monsters only, times power
 
 # --- Teeth
 const TEETH_RADIUS_BASE := 2.0
@@ -196,6 +184,9 @@ const FOLLOWS := ["coffee"]
 const DEFS := [
 	preload("res://scripts/spells/defs/heal.gd"),
 	preload("res://scripts/spells/defs/fireball.gd"),
+	preload("res://scripts/spells/defs/armor.gd"),
+	preload("res://scripts/spells/defs/corn.gd"),
+	preload("res://scripts/spells/defs/tentacles.gd"),
 ]
 static var _defs_by_id := _index_defs()
 
@@ -264,12 +255,6 @@ static func apply(caster: Actor, spec: Dictionary, start: float) -> Node:
 	if d != null:
 		return d.cast(caster, power, target, start, extra)
 	match id:
-		"armor":
-			return _cast_armor(caster, power, target, start)
-		"corn":
-			return _cast_corn(caster, power, target, start)
-		"tentacles":
-			return _cast_tentacles(caster, power, target, start)
 		"teeth":
 			Teeth.cast(caster, power, target)
 		"vines":
@@ -321,66 +306,6 @@ static func snap_hero(aim: Vector3) -> Actor:
 static func fizzle(caster: Actor) -> void:
 	if caster and is_instance_valid(caster):
 		Fx.fizzle_puff(caster.global_position)
-
-
-# --- Armor --------------------------------------------------------------------------------
-
-static func armor_multiplier(power: float) -> float:
-	return lerpf(ARMOR_MULT_WEAK, ARMOR_MULT_STRONG, clampf(power, 0.0, 1.0))
-
-
-static func armor_duration(power: float) -> float:
-	return ARMOR_DURATION_BASE + ARMOR_DURATION_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-static func _cast_armor(caster: Actor, power: float, pos: Vector3, start: float) -> ArmorZone:
-	var zone := ArmorZone.new()
-	zone.team = caster.team
-	zone.power = clampf(power, MIN_POWER, 1.0)
-	zone.start_time = start
-	GameWorld.spawn(zone, pos)
-	return zone
-
-
-# --- Corn ---------------------------------------------------------------------------------
-
-static func corn_damage(power: float) -> float:
-	return CornStrike.DAMAGE * clampf(power, MIN_POWER, 1.0)
-
-
-static func _cast_corn(caster: Actor, power: float, target: Vector3, start: float) -> CornStrike:
-	var strike := CornStrike.new()
-	strike.power = clampf(power, MIN_POWER, 1.0)
-	strike.source_team = caster.team
-	strike.caster = caster
-	strike.start_time = start
-	GameWorld.spawn(strike, target)
-	return strike
-
-
-# --- Tentacles -----------------------------------------------------------------------------
-
-static func tentacles_radius(power: float) -> float:
-	return TENTACLES_RADIUS_BASE + TENTACLES_RADIUS_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-## World units everyone in the radius is shoved (before each actor's shove_mult).
-static func tentacles_distance(power: float) -> float:
-	return TENTACLES_SHOVE_BASE + TENTACLES_SHOVE_POWER * clampf(power, MIN_POWER, 1.0)
-
-
-static func tentacles_damage(power: float) -> float:
-	return TENTACLES_DAMAGE * clampf(power, MIN_POWER, 1.0)
-
-
-static func _cast_tentacles(caster: Actor, power: float, target: Vector3, start: float) -> Tentacles:
-	var t := Tentacles.new()
-	t.power = clampf(power, MIN_POWER, 1.0)
-	t.source_team = caster.team
-	t.caster = caster
-	t.start_time = start
-	GameWorld.spawn(t, target)
-	return t
 
 
 # --- Teeth ---------------------------------------------------------------------------------

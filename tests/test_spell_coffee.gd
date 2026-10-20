@@ -59,7 +59,7 @@ func _numbers() -> void:
 	check(SpellBook.coffee_duration(0.2) < 6.0 and SpellBook.coffee_duration(0.2) > 4.0, "weaker casts are a bit shorter")
 	near(SpellBook.COFFEE_CRASH_MULT, 0.7, 0.0001, "crash -30%")
 	near(SpellBook.COFFEE_CRASH_TIME, 2.0, 0.0001, "for 2 s")
-	check(SpellBook.coffee_radius(1.0) < SpellBook.tentacles_radius(0.05), "a SMALL radius: smaller than tentacles (%.2f)" % SpellBook.coffee_radius(1.0))
+	check(SpellBook.coffee_radius(1.0) < TentaclesSpell.tentacles_radius(0.05), "a SMALL radius: smaller than tentacles (%.2f)" % SpellBook.coffee_radius(1.0))
 	near(SpellBook.coffee_radius(1.0), 2.0, 0.001, "radius 1.5 + 0.5 * power")
 	var c := Coffee.new()
 	var f: Dictionary = c.net_fields()

@@ -49,12 +49,12 @@ func setup() -> void:
 	eq(SpellBook.incantation("tentacles"), "CAST TENTACLES")
 	near(SpellBook.cooldown_of("tentacles"), 10.0, 0.001)
 	check(SpellBook.color_of("tentacles").b > 0.9 and SpellBook.color_of("tentacles").g < 0.3, "neon purple")
-	near(SpellBook.tentacles_radius(1.0), 3.0, 0.001, "radius 2.2 + 0.8 * power")
-	near(SpellBook.tentacles_distance(1.0), 4.0, 0.001, "distance 2.5 + 1.5 * power")
-	near(SpellBook.tentacles_damage(1.0), 6.0, 0.001, "damage 6 * power")
-	check(SpellBook.tentacles_radius(0.3) < SpellBook.tentacles_radius(0.6) and SpellBook.tentacles_radius(0.6) < SpellBook.tentacles_radius(1.0), "radius monotonic")
-	check(SpellBook.tentacles_distance(0.3) < SpellBook.tentacles_distance(0.6) and SpellBook.tentacles_distance(0.6) < SpellBook.tentacles_distance(1.0), "distance monotonic")
-	check(SpellBook.tentacles_damage(0.3) < SpellBook.tentacles_damage(0.6) and SpellBook.tentacles_damage(0.6) < SpellBook.tentacles_damage(1.0), "damage monotonic")
+	near(TentaclesSpell.tentacles_radius(1.0), 3.0, 0.001, "radius 2.2 + 0.8 * power")
+	near(TentaclesSpell.tentacles_distance(1.0), 4.0, 0.001, "distance 2.5 + 1.5 * power")
+	near(TentaclesSpell.tentacles_damage(1.0), 6.0, 0.001, "damage 6 * power")
+	check(TentaclesSpell.tentacles_radius(0.3) < TentaclesSpell.tentacles_radius(0.6) and TentaclesSpell.tentacles_radius(0.6) < TentaclesSpell.tentacles_radius(1.0), "radius monotonic")
+	check(TentaclesSpell.tentacles_distance(0.3) < TentaclesSpell.tentacles_distance(0.6) and TentaclesSpell.tentacles_distance(0.6) < TentaclesSpell.tentacles_distance(1.0), "distance monotonic")
+	check(TentaclesSpell.tentacles_damage(0.3) < TentaclesSpell.tentacles_damage(0.6) and TentaclesSpell.tentacles_damage(0.6) < TentaclesSpell.tentacles_damage(1.0), "damage monotonic")
 	check(SpellBook.find_in_text("cast tentacles") == "tentacles", "text lookup")
 
 	# --- Everyone is pushed outward from the aim point; nothing moves before the telegraph.
@@ -86,13 +86,13 @@ func setup() -> void:
 		var out: Vector3 = (before[a] - center).normalized()
 		var moved: Vector3 = a.global_position - before[a]
 		check(moved.normalized().dot(out) > 0.97, "directly away from the center (%s)" % a.display_name)
-		near(moved.length(), SpellBook.tentacles_distance(1.0), 0.45, "by about the spell distance (%s)" % a.display_name)
+		near(moved.length(), TentaclesSpell.tentacles_distance(1.0), 0.45, "by about the spell distance (%s)" % a.display_name)
 	for a in [far_hero, far_mon]:
 		near(a.global_position.distance_to(before[a]), 0.0, 0.0001, "outside the radius is untouched")
 	near(hero_a.hp, hero_a.max_hp, 0.001, "heroes take no damage")
 	near(hero_b.hp, hero_b.max_hp, 0.001, "heroes take no damage")
-	near(mon_a.hp, mon_a.max_hp - SpellBook.tentacles_damage(1.0), 0.001, "monsters take 6 * power")
-	near(mon_b.hp, mon_b.max_hp - SpellBook.tentacles_damage(1.0), 0.001, "monsters take 6 * power")
+	near(mon_a.hp, mon_a.max_hp - TentaclesSpell.tentacles_damage(1.0), 0.001, "monsters take 6 * power")
+	near(mon_b.hp, mon_b.max_hp - TentaclesSpell.tentacles_damage(1.0), 0.001, "monsters take 6 * power")
 	near(far_mon.hp, far_mon.max_hp, 0.001, "out of range monsters are not hurt")
 
 	# --- Immovable actors (Rebar) stay put but monsters still take the damage.

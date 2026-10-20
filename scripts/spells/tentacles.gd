@@ -26,7 +26,7 @@ func _ready() -> void:
 	if start_time < 0.0:
 		start_time = GameWorld.time
 	_fx = TentaclesFx.new()
-	_fx.radius = SpellBook.tentacles_radius(power)
+	_fx.radius = TentaclesSpell.tentacles_radius(power)
 	_fx.telegraph = TELEGRAPH
 	_fx.power = power
 	add_child(_fx)
@@ -54,9 +54,9 @@ func _physics_process(_delta: float) -> void:
 func _burst() -> void:
 	_burst_done = true
 	var src: Node = caster if is_instance_valid(caster) else null
-	var radius := SpellBook.tentacles_radius(power)
-	var dist := SpellBook.tentacles_distance(power)
-	var dmg := SpellBook.tentacles_damage(power)
+	var radius := TentaclesSpell.tentacles_radius(power)
+	var dist := TentaclesSpell.tentacles_distance(power)
+	var dmg := TentaclesSpell.tentacles_damage(power)
 	Grime.mark(Grime.CRACKS, global_position, radius)   # floor cracks that fade after 30 s
 	MonsterSenses.noise(global_position, MonsterSenses.NOISE_TENTACLES, "tentacles")   # (only the monsters this machine runs hear)
 	for a in GameWorld.actors_in_radius(global_position, radius):

@@ -217,7 +217,7 @@ func _no_shove_source_moves_a_rooted_actor() -> void:
 	check(free_mon.global_position.x > 3.0, "tentacles still shove a free actor")
 	near(rooted_mon.global_position.x, -1.5, 0.0001, "tentacles do not move a rooted monster")
 	near(rooted_hero.global_position.z, 1.6, 0.0001, "or a rooted hero")
-	near(rooted_mon.hp, rooted_mon.max_hp - SpellBook.tentacles_damage(1.0), 0.001, "(their damage is not a shove, so it still lands)")
+	near(rooted_mon.hp, rooted_mon.max_hp - TentaclesSpell.tentacles_damage(1.0), 0.001, "(their damage is not a shove, so it still lands)")
 
 	# The bowl (Rebar) and the spin (Gasket).
 	_fresh()
