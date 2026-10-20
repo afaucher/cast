@@ -138,9 +138,7 @@ static func spoken(text: String) -> String:
 				body = body.replace(lead + " and ", lead + ", and ")
 		elif _is_confirm(body):
 			mark = "!"
-			if body.begins_with("Copy, "):
-				var rest := body.trim_prefix("Copy, ")
-				body = "Copy! " + rest.substr(0, 1).to_upper() + rest.substr(1)
+			# ("Copy, ..." stays one read: "Copy!" alone is a few tokens, which Kokoro reads weakly; delivery study)
 			body = body.replace(" and asking for", "... and asking for")
 			body = body.replace("All fingers accounted", "All fingers... accounted")
 		elif body.begins_with("Some of "):
@@ -152,7 +150,26 @@ static func spoken(text: String) -> String:
 		elif not calls:
 			mark = "!" if i == 0 or i == sentences.size() - 1 else "..."   # a flat report: the headline and the sting
 		out.append(body.substr(0, 1).to_upper() + body.substr(1) + mark)
-	return " ".join(out)
+	return one_pass(out)
+
+
+## The line as ONE read (user, 2026-10-20: reel 11 of the delivery study). The TTS front end (sherpa) renders every
+## sentence on its own and drops "..." with the space after it, so the sentences are joined into one: the first break
+## is ";" (a single word like "Copy" takes ","), later ones ",", every "..." is ",", and only the line's last mark
+## stays. Words and order never change.
+static func one_pass(sentences: Array[String]) -> String:
+	var t := ""
+	for i in sentences.size():
+		var s: String = sentences[i].replace("... ", ", ")
+		var last := i == sentences.size() - 1
+		if not last:
+			var body := s.trim_suffix("...")
+			body = body.rstrip(".!?")
+			s = body + ("," if i > 0 or not body.contains(" ") else ";")
+		if i > 0 and s.length() > 1 and s.substr(1, 1) == s.substr(1, 1).to_lower() and not s.begins_with("I ") and not s.begins_with("I'"):
+			s = s.substr(0, 1).to_lower() + s.substr(1)
+		t += ("" if i == 0 else " ") + s
+	return t
 
 
 ## The text the voice may read: "(role)" dropped, "Mr." / "Mrs." / "Ms." / "Dr." as words, digits as words.

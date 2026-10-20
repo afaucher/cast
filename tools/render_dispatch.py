@@ -23,8 +23,14 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-SID = 2          # af_bella
+SID = 2          # af_bella (its slot in our voice table carries Heart's delivery; see voice_table)
+PROSODY_SID = 3  # af_heart: the delivery half of the voice (user, 2026-10-20: reel 11 of the delivery study)
 SPEED = 1.1
+# Keep the model's own pauses: sherpa's default 0.2 squeezes them to a fifth, the rushed feel (delivery study).
+SILENCE_SCALE = 1.0
+# voices.bin: voices x 510 length rows x 256 floats; [:128] of a row is timbre, [128:] is delivery (prosody).
+VOICE_ROWS = 510
+VOICE_DIM = 256
 RATE = 22050
 FMT = f"aformat=sample_rates={RATE}:channel_layouts=mono"
 
@@ -37,7 +43,10 @@ BED = 0.025
 TAIL = 0.16
 
 GRAPH = (
-    f"[0:a]aresample={RATE},{FMT},{VOICE}[v];"
+    # the read, its leading and trailing silence trimmed (the model's full pauses stay inside it), 50 ms either side
+    f"[0:a]aresample={RATE},{FMT},silenceremove=start_periods=1:start_threshold=-48dB,areverse,"
+    "silenceremove=start_periods=1:start_threshold=-48dB,areverse,adelay=50:all=1,apad=pad_dur=0.05,"
+    f"{VOICE}[v];"
     f"[1:a]{FMT},{BAND},volume={BED}[bed];"
     "[v][bed]amix=inputs=2:duration=first:normalize=0[vn];"
     # key down: a plastic switch, trimmed to its snap, a bit dulled
@@ -53,12 +62,30 @@ GRAPH = (
 )
 
 
-def tts(exe, mdir, text, path, threads):
+def voice_table(mdir, dst):
+    """The model's voices.bin with af_bella's delivery half swapped for af_heart's (pure Python, no numpy)."""
+    from array import array
+    v = array("f")
+    with open(os.path.join(mdir, "voices.bin"), "rb") as fh:
+        v.frombytes(fh.read())
+    per = VOICE_ROWS * VOICE_DIM
+    half = VOICE_DIM // 2
+    for r in range(VOICE_ROWS):
+        to = SID * per + r * VOICE_DIM + half
+        src = PROSODY_SID * per + r * VOICE_DIM + half
+        v[to:to + half] = v[src:src + half]
+    with open(dst, "wb") as fh:
+        v.tofile(fh)
+    return dst
+
+
+def tts(exe, mdir, text, path, threads, voices):
     cmd = [exe,
-           f"--kokoro-model={mdir}/model.onnx", f"--kokoro-voices={mdir}/voices.bin",
+           f"--kokoro-model={mdir}/model.onnx", f"--kokoro-voices={voices}",
            f"--kokoro-tokens={mdir}/tokens.txt", f"--kokoro-data-dir={mdir}/espeak-ng-data",
            f"--kokoro-lexicon={mdir}/lexicon-us-en.txt,{mdir}/lexicon-zh.txt",
-           f"--sid={SID}", f"--speed={SPEED}", f"--num-threads={threads}", f"--output-filename={path}", text]
+           f"--sid={SID}", f"--speed={SPEED}", f"--tts-silence-scale={SILENCE_SCALE}", f"--num-threads={threads}",
+           f"--output-filename={path}", text]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if not os.path.exists(path):
         raise RuntimeError("tts failed for %r: %s" % (text, r.stderr[-600:]))
@@ -127,10 +154,11 @@ def main():
     started = time.time()
     threads = max(1, (os.cpu_count() or 4) // max(1, a.jobs))
     with tempfile.TemporaryDirectory() as tmp:
+        voices = voice_table(a.model, os.path.join(tmp, "voices_cast.bin"))
         def work(item):
             idx, (text, keys) = item
             raw = os.path.join(tmp, "raw_%d.wav" % idx)
-            tts(a.tts_exe, a.model, text, raw, threads)
+            tts(a.tts_exe, a.model, text, raw, threads, voices)
             first = os.path.join(a.out, keys[0] + ".ogg")
             part = first + ".part"
             radio(a.ffmpeg, a.kenney, raw, part)

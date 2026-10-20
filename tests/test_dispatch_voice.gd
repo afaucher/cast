@@ -94,16 +94,17 @@ func _words(s: String) -> PackedStringArray:
 
 
 func _check_spoken() -> void:
-	eq(DispatchVoice.spoken("Got Mrs. Bloom. All fingers accounted for."), "Got Missus Bloom! All fingers... accounted for!", "Mrs. is Missus, the confirmation is lively")
-	eq(DispatchVoice.spoken("Copy, Mabel is out."), "Copy! Mabel is out!", "a confirmation")
-	eq(DispatchVoice.spoken("Copy, Pearl (valet) is out."), "Copy! Pearl is out!", "first name only, the role dropped")
+	# One read per line (2026-10-20): the sentences joined, ";" then ",", no "..." left, the last mark kept.
+	eq(DispatchVoice.spoken("Got Mrs. Bloom. All fingers accounted for."), "Got Missus Bloom; all fingers, accounted for!", "Mrs. is Missus, one read")
+	eq(DispatchVoice.spoken("Copy, Mabel is out."), "Copy, Mabel is out!", "a confirmation: one read, Copy kept with its comma")
+	eq(DispatchVoice.spoken("Copy, Pearl (valet) is out."), "Copy, Pearl is out!", "first name only, the role dropped")
 	eq(DispatchVoice.spoken("Nigel (Henchman 4) just walked past my desk."), "Nigel just walked past my desk!", "the henchman number is part of the role")
-	eq(DispatchVoice.spoken("Mr. Bloom (accounts) is topside and asking for a lawyer."), "Mister Bloom is topside... and asking for a lawyer!", "Mr. is Mister")
-	eq(DispatchVoice.spoken("Copy, Unit #4 is out."), "Copy! Unit number four is out!", "numbers are words")
+	eq(DispatchVoice.spoken("Mr. Bloom (accounts) is topside and asking for a lawyer."), "Mister Bloom is topside, and asking for a lawyer!", "Mr. is Mister, no ellipsis")
+	eq(DispatchVoice.spoken("Copy, Unit #4 is out."), "Copy, Unit number four is out!", "numbers are words")
 	eq(DispatchVoice.spoken("Headcount up by 3."), "Headcount up by three!", "a count as a word")
-	eq(DispatchVoice.spoken("Copy, 2 staff out."), "Copy! Two staff out!", "a count first in the line")
+	eq(DispatchVoice.spoken("Copy, 2 staff out."), "Copy, two staff out!", "a count first in the line")
 	eq(DispatchVoice.number_words(21), "twenty-one", "numbers up to 99 and beyond")
-	eq(DispatchVoice.spoken(NoteCopy.ORIGIN_SHUT), "The origin gate is shut! The site calms down... The invoice does not!", "the origin-gate line")
+	eq(DispatchVoice.spoken(NoteCopy.ORIGIN_SHUT), "The origin gate is shut; the site calms down, the invoice does not!", "the origin-gate line, as in reel 11")
 	for l in DispatchVoice.all_lines():
 		var text := str(l["text"])
 		var say := str(l["spoken"])
@@ -112,6 +113,9 @@ func _check_spoken() -> void:
 		check(not say.contains("(") and not say.contains("#") and not say.contains("Mr.") and not say.contains("Mrs."), "no role, number sign or title mark left: %s" % say)
 		check(not RegEx.create_from_string("\\d").search(say), "no digits left: %s" % say)
 		check(say.ends_with("!") or say.ends_with("?") or say.ends_with("."), "ends in a mark: %s" % say)
+		check(not say.contains("..."), "no ellipsis (sherpa drops it and runs the words together): %s" % say)
+		check(not say.substr(0, say.length() - 1).contains("!") and not say.substr(0, say.length() - 1).contains("?") and not say.substr(0, say.length() - 1).contains("."),
+			"one read: no sentence break inside the line (sherpa renders each sentence apart): %s" % say)
 		if str(l["kind"]) == "incident" or str(l["kind"]) == "floor2" or str(l["kind"]) == "floor3":
 			check(say.contains("!"), "calls to action are lively: %s" % say)
 
