@@ -69,3 +69,11 @@ static func component_soup() -> LowPoly.Soup:
 		ang += 0.55
 	s.merge(LowPoly.cylinder(0.04, 0.0, 0.13, 4, THORN, 810, 0.0), LowPoly.at(Vector3(0.14, 0.0, 0.1), Vector3(0, 0, -80)))   # a thorn
 	return s
+
+
+# --- On a copy (NetStatus) ---
+
+## The roots arrived from the owner: wrap the copy's legs once, when the root starts.
+static func show_remote_mods(a: Actor, had: bool) -> void:
+	if not had and a.has_modifier("vines"):
+		VineWrap.attach(a, a.modifier_left("vines"))

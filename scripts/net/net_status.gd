@@ -11,7 +11,8 @@ extends Node
 ## client -> host -> the other clients; the host speaks for its own actors. Changes are gathered and flushed once a physics
 ## frame. A modifier refreshed again and again (an armor zone renews it every 0.25 s) is announced only when its end moves
 ## by more than MOD_SLACK, and the copies keep each one GRACE past the announced end, so it does not blink.
-## On a copy: Actor.net_set_modifiers (the armor shield, the coffee steam via Coffee.show_remote, the vines' leg wraps),
+## On a copy: Actor.net_set_modifiers (the armor shield), then each spell def's show_remote_mods (the coffee steam via
+## Coffee.show_remote, the vines' leg wraps: SpellDef),
 ## Burning.show_remote (flames that deal nothing) and Wet.douse (drips; the soak keeps a copy from showing a new fire).
 
 const GRACE := 0.35
@@ -173,12 +174,12 @@ func apply_late_join(list: Array) -> void:
 func _show(a: Actor, kind: String, v: Variant) -> void:
 	match kind:
 		"mods":
-			var had_root := a.has_modifier("vines")
+			var had := {}   # spell id -> whether the copy had that spell's modifier before (SpellDef.show_remote_mods)
+			for d: GDScript in SpellBook.DEFS:
+				had[d.ID] = a.has_modifier(d.ID)
 			a.net_set_modifiers(v as Dictionary if v is Dictionary else {}, GRACE)
-			if not had_root and a.has_modifier("vines"):
-				VineWrap.attach(a, a.modifier_left("vines"))
-			if Coffee.is_hasted(a):
-				Coffee.show_remote(a)
+			for d: GDScript in SpellBook.DEFS:
+				d.show_remote_mods(a, bool(had[d.ID]))
 		"burn":
 			Burning.show_remote(a, float(v))
 		"soak":

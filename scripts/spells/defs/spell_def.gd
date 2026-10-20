@@ -22,6 +22,9 @@ extends RefCounted
 ##   static func cast_extra(caster, target) -> Dictionary
 ##       numbers fixed on the caster's machine at the moment of the cast and sent with it, so every machine runs the same
 ##       effect (the fireball's launch point, direction and reach).
+##   static func show_remote_mods(a, had) -> void
+##       on a copy (an actor another machine owns), after NetStatus applied the modifiers its owner announced: show this
+##       spell's status (the vines' leg wraps, the coffee steam). `had` is whether `a` had the modifier named ID before.
 
 
 static func cast(_caster: Actor, _power: float, _target: Vector3, _start: float, _extra: Dictionary) -> Node:
@@ -36,3 +39,7 @@ static func cast_extra(_caster: Actor, _target: Vector3) -> Dictionary:
 static func component_soup() -> LowPoly.Soup:
 	push_error("SpellDef.component_soup: a spell def must build its own component prop")
 	return null
+
+
+static func show_remote_mods(_a: Actor, _had: bool) -> void:
+	pass

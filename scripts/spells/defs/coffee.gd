@@ -61,3 +61,11 @@ static func component_soup() -> LowPoly.Soup:
 	s.merge(_bean(846, 1.35), LowPoly.at(Vector3(0.1, -0.04, 0.04), Vector3(-25, -20, -35)))
 	s.merge(_bean(850, 1.4), LowPoly.at(Vector3(0.0, 0.05, -0.1), Vector3(60, 10, 70)))
 	return s
+
+
+# --- On a copy (NetStatus) ---
+
+## The haste arrived from the owner: the copy twitches and steams too (Coffee.show_remote).
+static func show_remote_mods(a: Actor, _had: bool) -> void:
+	if Coffee.is_hasted(a):
+		Coffee.show_remote(a)
