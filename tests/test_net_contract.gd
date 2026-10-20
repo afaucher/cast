@@ -48,6 +48,7 @@ const NET_SCRIPTS := [
 	"res://scripts/spells/vines.gd",
 	"res://scripts/spells/vines_fx.gd",
 	"res://scripts/spells/wet.gd",
+	"res://scripts/world/lava/lava_field.gd",   # (the lava cave prototype's rules: --lava-cave, solo only)
 ]
 
 const ACTOR := "res://scripts/core/actor.gd"

@@ -94,6 +94,9 @@ extends Node3D
 ##   --hud-followers N   dev: N employees follow the player (one henchman fighting when N > 1), for the party HUD's list
 ##   --join-hold S       dev, online (M6): a player joining a crew on the job holds its "Clocking in..." form S seconds after
 ##                       building the floor before reporting ready (screenshots: --shot-at clockin)
+##   --lava-cave N       dev, solo only (PROTOTYPE, docs/design/lava-playtest.md): every floor is hand-authored lava cave N
+##                       (1-5, LavaCave) instead of the generated floor: rock islands and two-wide bridges over lava, archers on
+##                       isolated isles, a melee pack on the path, damp crusts the lava (LavaField). Ignored in a shared run.
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
@@ -413,6 +416,7 @@ func _parse_args() -> void:
 			"--party-followers": Hud.show_followers = nxt != "off"
 			"--hud-stage": opts["hud_stage"] = nxt
 			"--hud-followers": opts["hud_followers"] = int(nxt)
+			"--lava-cave": opts["lava_cave"] = clampi(int(nxt), 1, LavaCave.COUNT)
 
 
 # --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
@@ -645,12 +649,19 @@ func _heroes() -> Array[Hero]:
 # --- World --------------------------------------------------------------------------------------
 
 func _build_world() -> void:
-	map = DungeonGen.for_run(_run, _floor_n())   # (the job's elevator: every floor of a job uses the same style)
+	var lava := _lava_cave()
+	if lava > 0:
+		map = LavaCave.build_map(lava)   # (--lava-cave, solo prototype: the hand-authored cave instead of DungeonGen)
+	else:
+		map = DungeonGen.for_run(_run, _floor_n())   # (the job's elevator: every floor of a job uses the same style)
 	if opts.has("stage_ledge"):
 		_stage_plateau()
 	# Plan the site now: it writes each cell's floor / wall material (Cell.mat_id, FloorMaterials) before the terrain
 	# is built. _populate_site() spawns this plan once the crew has picked its spells.
-	_plan = SiteBuilder.plan(map, _run, _floor_n(), ContractParts.prop_catalog(_run.site_type))
+	if lava > 0:
+		_plan = LavaCave.plan(map, _floor_n())
+	else:
+		_plan = SiteBuilder.plan(map, _run, _floor_n(), ContractParts.prop_catalog(_run.site_type))
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)
@@ -663,6 +674,8 @@ func _build_world() -> void:
 	view.build(map)
 
 	DungeonLook.apply(self, map)
+	if lava > 0:
+		LavaLook.dress(self, map, view)
 
 	var exits := map.cells_with_tag("exit")
 	if not exits.is_empty():
@@ -842,6 +855,8 @@ func _free_cells_near(c: Vector2i, radius: int) -> Array[Vector2i]:
 ## monster packs (one per room but the start room, leaning toward the pest). Then the session starts the floor.
 func _populate_site() -> void:
 	_site = SiteBuilder.spawn(map, _run, _plan)
+	if _lava_cave() > 0:
+		LavaCave.spawn_monsters(_lava_cave(), _site)   # (the cave's archers on their isles and its melee pack)
 	var origin := _site.origin_gate != null
 	var small := _site.gates.size() - (1 if origin else 0)
 	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned)
@@ -916,6 +931,25 @@ func _dev_tour() -> void:
 			state["best"] = INF
 		controller.move_override = dir
 	get_tree().physics_frame.connect(step)
+
+
+## --lava-cave N: the cave layout to build, or 0. Solo only: a shared run never uses it (the prototype has no network shape:
+## docs/design/lava-playtest.md).
+func _lava_cave() -> int:
+	return int(opts.get("lava_cave", 0)) if not _shared and not _dev_released else 0
+
+
+## The lava's rules (LavaField), after the fog has read the map with its lava cells: from here the lava is void with a burn,
+## and damp crusts it.
+func _start_lava() -> void:
+	if _lava_cave() <= 0 or map == null:
+		return
+	var field := LavaField.new()
+	field.name = "LavaField"
+	GameWorld.root.add_child(field)
+	field.setup(map)
+	field.activate()
+	_log("lava cave %d: %s (%s)" % [_lava_cave(), LavaCave.layout(_lava_cave())["name"], LavaCave.layout(_lava_cave())["blurb"]], Color(1.0, 0.6, 0.3))
 
 
 ## Room fog (RoomFog + FogView; docs/design/exploration.md "Decisions: map information, fog and doors"): every machine draws
@@ -1172,6 +1206,7 @@ func _start() -> void:
 	_log("floor %d/%d  seed %d  %s  spells %s" % [_floor_n(), ContractRun.FLOOR_COUNT, _run.floor_seed(_floor_n()), _run.company, ", ".join(_spells)], Color(0.6, 0.9, 1.0))
 	_drop_near()
 	_setup_fog()
+	_start_lava()
 	if opts.has("tour"):
 		get_tree().create_timer(1.0).timeout.connect(_dev_tour)
 	if opts.has("hazard_demo"):

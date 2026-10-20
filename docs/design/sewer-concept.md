@@ -273,6 +273,10 @@ There is no new shape. The death roll's hold is a status the victim's owner appl
 
 # Part 2: the lava cave
 
+**Next step (2026-10-20): `lava-playtest.md`.** It has five cave layouts with the fight flow marked, and a playable solo
+prototype behind `--lava-cave N`. It also records the user's answers: two-wide bridges, archers on isles with no path,
+damp crust, and 15 damage plus a burn.
+
 ## Summary
 
 A **lava cave** is not a pool shape. The cave's floor drops to a **lava plane**, and everything you walk on is raised hex
