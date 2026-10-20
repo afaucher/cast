@@ -190,7 +190,8 @@ All the water today is **flat decor**: `blocks: false`, so you walk straight acr
 
 ## Where the options live
 
-- `scripts/art/lowpoly/pool_lab.gd` + `scenes/pool_lab.tscn`: the lab. It has four variants on the real terrain:
+- `scripts/art/lowpoly/pool_lab.gd` + `scenes/pool_lab.tscn` (removed in 04c4eb4, see docs/history/removed-code.md;
+  `git checkout 04c4eb4^ -- scripts/art/lowpoly/pool_lab.gd scenes/pool_lab.tscn` to run it again): the lab. It has four variants on the real terrain:
   `HexMapView` with midpoint walls from `HexMap.cut_walls()`, `FloorMaterials` and `DungeonLook` lighting. The crew
   stands in each one for scale.
 - `scripts/art/lowpoly/props/pool_props.gd`: lab-only models, preloaded with no `class_name`:

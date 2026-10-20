@@ -1,7 +1,8 @@
 # Speech latency: staggered recognizer streams vs. flushing at end of voice
 
-*Research note, 2026-10-17. The prototype bench lives in `tools/stt_stagger/`, and its raw
-CSVs and logs are in `tools/stt_stagger/results/`. The voice clips are local only.
+*Research note, 2026-10-17. The prototype bench lived in `tools/stt_stagger/`, and its raw
+CSVs and logs in `tools/stt_stagger/results/`; both were removed in 04c4eb4 (docs/history/removed-code.md:
+`git checkout 04c4eb4^ -- tools/stt_stagger` brings them back for the commands below). The voice clips are local only.
 **Status: the flush is built into the game.** See "8. As built". Sections 1–7 describe the
 pre-flush pipeline they measured.*
 
