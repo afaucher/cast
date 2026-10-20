@@ -1,7 +1,7 @@
 # Sewers and lava caves (concept)
 
-Status: **concept only** (2026-10-20). Nothing here is built into the game: no change to the site builder, DungeonGen,
-`game.gd`, the monsters or the net layer. Two lab scenes fake both environments on the game's real terrain drawing.
+Status: **phase 1 built** (2026-10-20): the sewer's solo slice behind the dev flag `--sewer N`, see "Phase 1 as built" at
+the end of part 1. Everything else here is still concept: the generator, the networking and the rest of the scope.
 
 **Round 2** ("Sewer round 2: connected water, staging, fights", after Part 1) answers the user's verdict on round 1.
 Where the two differ, round 2 replaces Part 1: the water as one connected body, the gator, grate bridges as dry
@@ -918,6 +918,98 @@ The refactor will split `game.gd` (H7), split `SiteBuilder` into per-feature pla
   layouts). It adds one hook to `game.gd` after wave 3.
 - Phase 3 (the generator) waits for waves 3-4 (H7 step 1, H8 and H3). That is the refactor plan's own advice: "Do this
   before lava and the sewer go into the generator."
+
+## Phase 1 as built (2026-10-20)
+
+The solo slice: option (b) as a dev flag, the five round-2 layouts built as whole floors with the bridges removed, the gator,
+the sump pump, the electrical panel and its live wire, and the decor kit. No generator, no networking.
+
+### Play it
+
+```
+.\run.ps1 --sewer 2 --spells damp,fireball --no-mic
+```
+
+- `--sewer N`: **1** L1 Reclamation run (bunker, concrete), **2** L2 The Y junction (lair, brick), **3** L1's layout in the
+  toxic look, staged for a lair (L3 as L1's theme variant), **4** L4 Storm-drain loop (bunker, concrete), **5** L5 The sewer
+  main (lair, brick). Every floor of the contract is that layout.
+- The flag starts the contract on **floor 2** (unless `--floor` says otherwise), so the crew rides the freight elevator down
+  and steps out onto the layout's dry landing deck. The landing is the exit: E there opens the elevator menu as usual, and
+  the next floor is the same layout again.
+- Solo only: ignored in a shared run, like `--lava-cave` (`GameDev._sewer()`).
+- Screenshots: `--sewer-demo overview|nip|wire` (with `--demo-after S`): the crew on the first room's deck and the camera
+  on the layout; the player stepping into the gator's territory; the crew by a panel, the player breaking it.
+
+**What to try:**
+1. **Wade.** Every channel is one body of water: 0.75x, soaked (a fireball fizzles on you, a fire goes out).
+2. **Walk up to the gator.** Inside 4.5 of its head it turns to watch you, eyes bright. Step inside 3.0 and stay 0.4 s:
+   it gapes (0.5 s, the orange pulse) and nips: 10 and a 1.6 shove away. It nips skeletons too: lead the pack past it.
+3. **Hit it** and it is riled for 8 s: its territory is 4.5 and it advances up to 2.0 toward you, once.
+4. **Shove it** (Rebar's fist, Gasket's spin, tentacles, a fireball's blast): it slides like any body, riled, and its first
+   nip goes to whoever is nearest where it lands. Shove it into the pack. Shove it out of the water into a dry room and it
+   walks home; shove it off a ledge into nothing and it dies, and you pay $6,300.
+5. **Kill it** and the invoice says Gator $6,300, to whoever landed the kill.
+6. **Corn in its water** (within 6 of it) holds it on the kernels for 4 s, no nips.
+7. **Wait 30-45 s** with nobody near it: it moves slowly to another bask spot. The lane that was safe isn't.
+8. **The electrical panel** ($250, any hit breaks it: an arrow, a swing, a blast). The cable drops into the water 0.6 s
+   later and shocks everyone in the water within 5 cells of where it lands: 18 (12 x1.5, waders are soaked) and a 0.6 s
+   daze, then 9 every 1.5 s for 6 s. Dry ground is safe. Shoot it when the skeletons are wading, not when Rebar is.
+9. **The sump pumps** are $3,500 each, and they stand right where the fight is.
+
+### How it is built
+
+| Piece | Where | Notes |
+|---|---|---|
+| The layouts | `scripts/world/sewer/sewer_layouts.gd` (`SewerLayouts`) | The lab's builder made game-ready: hex-blob rooms, halls cut as DungeonGen cuts them (narrow, wide, a 6.0 main), midpoint walls; wet cells sunk one level (wading depth). Each layout adds a dry landing room (radius 4) with a free-standing elevator (`ElevatorGeo.make_free`, door toward the camera) and a dry hall to the first sewer room. The water is a `HexMap.pools` record with `body: true` (Wading slows and soaks in it; PoolView skips it). `plan()` makes a minimal `SitePlan` (rooms, start, exit, the elevator, props, explosives, decor, notes, the employee) that `SiteBuilder.spawn` puts in the world. Props and explosives are placed against a wall and slid along it until their whole footprint is dry deck (`_dry_wall_spot`). Deterministic |
+| **Water up to a wall** (T1) | `scripts/world/hex_map_view.gd` `_add_pool_cell` / `_add_wall_part` | A cut cell may now have pool kites: its wall part is drawn as on any cut cell (its faces on the wall lines run down to the pool floor beside a pool kite), its pool kites as pool floor, the rest deck; a liner only between pool and deck kites. `HexMap.water_at` was already per kite, so wading reaches the wall. No change to normal floors (no generated cell has both masks). `test_wall_mesh` covers every wall mask with water on all its open kites and on one |
+| The look | `scripts/world/sewer/sewer_view.gd` (`SewerView`) | The lab's drawing, ported: the water as a fan per pool kite (flow streaks), foam on every water edge, a kerb on every rim, the channel bed and liner shader in place of the pool tiles, the look's floor and wall colours (a brick pattern for brick), the light. Three looks: concrete, brick, toxic. The live wire's flash on the water |
+| Fog | unchanged | RoomFog / FogView look A as on every floor (long-hall cuts on); the gator hides like any mover (group "sharks", a FogView dynamic group) |
+| **The gator** | `scripts/monsters/gator.gd` (`Gator extends Monster`), `MonsterDefs` "gator" (`billed`: $6,300) | Host-owned actor, team NEUTRAL, groups "gators", "sharks" (the priced water creatures: monsters shrug off its bites, archers don't practise on it, the bowl bills it, fog hides it) and `PricedProp.GROUP`; not "monsters". No pack, gate, model or pest row: never from the factory. Its home region (`Gator.region_of`: the water and the cells within 2) and bask spots are spawn data from the layout. States CALM / RILED / NIP / MOVE / DEAD / WATCH / HELD / CHUM ride `state` (3 bits). Its own pathing inside the region for relocations (a BFS over its walkable cells), `find_path` to walk home. Its speeds ignore the wading slow (2.4 water, 1.4 land; relocating 1.2 / 0.9). Fireproof in the water and for 15 s after; burning on land it runs for the water |
+| Its look | `Gator.model_for` (the lab's `SewerProps` "gator" at 1.3) | Toon material (`MonsterMaterial`: ink outline, amber rim), the eye slits its monster glow (`glow_gain` by state: half lit calm, bright watching, hot nipping), five pre-built bends x jaws shut / open chosen by its turning, a tail thrash when riled, a V wake and a ripple on the water. Z-fight clean (every variant in `ZFightModels`) |
+| The props | `PricedProp.TABLE` "sump_pump" ($3,500, HP 70) and "electrical_panel" ($250, HP 1), site "sewer" (no site's catalog has them) | Models: `PropModels` builds them from the lab's `pump` and `junction_box` |
+| The live wire | `scripts/world/sewer/live_wire.gd` (`LiveWire`), a child of each panel | On the panel's `broken` (billed to the breaker like any prop): the cable swings down (0.6 s) to the first water in front of the panel, then the shock: everyone standing in water within **5 hex cells** of the drop (`Combat.hits_in_radius`, then the hex distance and `water_at`): 12, x1.5 soaked, a 0.6 s daze (by the target's owner); then 6 (x1.5) every 1.5 s for 6 s; one use. Its damage is credited to the breaker (a gator it kills bills them) |
+| Decor | `RoomThemeDefs.DECOR` + `DecorModels`: outfall, pipe_bundle, grate, sluice, bars, tool_cart | The six from the scope, built from `SewerProps`; the sluice gates stand in the flooded doorways as decor (the plate raised, no door behaviour). In the z-fight registry with every other decor kind |
+| Staging | `scripts/app/dev/sewer_dev.gd` (`SewerDev.stage`) | Round 2's lists without rats, eels, gas pockets, steam or bridges: skeletons on the decks and one or two wading, archers on decks across the channels (L5: the main's far ledge), a brute, a goblin scout on a wide hall's ledge (L1, L4) or at his post (L5), one gator, one employee (Stan in the bunker, Gary / Keith / Nigel on pump duty in a lair), notes (the signs DO NOT DRINK, DO NOT FEED THE GATOR, LEVEL RISES WITHOUT WARNING, GATOR CROSSING; the feeding rota, the pump log, the aquarium complaint), the pumps, a panel in every layout, explosives on dry decks, the villain's tanks and lockers in the lair layouts. Their pest-kind monsters count toward the floor's pest objective |
+| The flag | `scripts/app/dev/game_dev.gd` (`GameDev`): `_parse_args` (SewerDev.parse), `_dev_floor`, `_spawn_near`, `_dev_on_floor_ready` | `game.gd` gained ONE hook, `_dev_floor()` (a call after the plan in `_build_world` and its no-op), where GameDev swaps in the layout's map and plan |
+| Corn | `scripts/spells/corn_strike.gd` | One line beside `Shark.corn_at`: `Gator.corn_at` (chum) |
+| Tests | `tests/test_sewer.gd` | Every layout: the same map every build, ONE body of water, every flooded hall joining two rooms' channels, water up to the walls, everything staged reachable from the landing, the employee and notes on dry floor, the gator's spots walkable inside its region, every panel with water to drop into. The gator: watch without nipping, the nip's timing, damage and shove, monsters nipped, one victim a nip, relocation (never leaving its region), shoves (settles riled inside its region, walks home from outside it), no way home (settles, never teleports), a 60 s run never stuck, chum, kill and bill once, the pit kill billed to the shover. The live wire: the bill, the drop's 0.6 s, 18 and a daze within 5 cells, both sides, a wader 7 cells away and the dry floor untouched, the pulses, one use |
+
+### Decisions made in the build
+
+- **The crew arrives on floor 2.** The flag defaults the contract to floor 2 so the elevator ride is the transition (option
+  (b)); `--floor 1` starts on the landing deck with the elevator shut.
+- **A shove riles the gator without the advance.** A hit riles it and it advances up to 2.0 toward the attacker; a shove
+  riles it and sends its first nip to the nearest body where it lands, but it does not walk back toward the shover (the
+  play "shove it into the pack" needs it to stay there). After an advance it rests where the advance ended.
+- **Its body is a circle.** Its collision is a 0.55 circle round its shoulders, its jaws 1.15 ahead (the head 0.9 ahead is
+  where its territory and watch are measured from); the 3.0 body is the look.
+- **A panel in every layout.** The doc puts one in L1 and L3; L2, L4 and L5 got one too (the pump post, the valve room,
+  the cistern's west wall), so the live wire can be tried on every layout.
+- **The shock reaches 5 hex cells** (`Hex.distance`) from the cell the cable lands in, only bodies standing in water, and
+  the pulses keep the x1.5 for the soaked.
+- **The gator shares the sharks' group** for the four places that treat a shark as priced water life (monsters ignore its
+  bites, the archers' practice, the bowl's bill, the fog), rather than editing each of them; it has its own "gators" group too.
+- **One look per layout** as in the lab (L1, L4 concrete; L2, L5 brick; L3 toxic) rather than only concrete: the looks
+  are data.
+
+### What phase 2 (networking) still needs
+
+- The gator: its MONSTER stream entry (it has no OWNER var beyond Monster's, so the monster carriers hold), `world.windup`
+  for the nip with each client resolving it on its own hero (`Monster.net_strike` calls its `_strike`), a client's shove as
+  a request (`Actor.shove` already routes a copy's), `world.die` and the host's Ledger line, `Gator.corn_at` on the host
+  only, the late-join keyframe (its `NetEvents.LATE_JOIN` entry is written), its spawn data (home region, bask spots,
+  seed) in the floor checksum, `test_net_gator` (three processes).
+- The live wire: the panel's break is an `obj.break`; every machine runs the drop, the shock and the pulses from the break's
+  shared moment (the code already applies each hit only where it resolves); `test_net_live_wire`.
+- The water body record and the layout in `NetFloor`'s checksum, and the flag allowed in a shared run.
+
+### Known limits
+
+- Water drawn per kite has no seams to hide: where a channel turns at a room's border the rim keeps a short diagonal kink.
+- The relocation's "within 14" is the walking length inside the region; on the biggest layouts some bask spots are out of
+  each other's reach, so it shuttles between the near ones.
+- The goblin scout on a ledge walks the ledge's middle; a 6.0 main's ledges are half rim cells, so in L5 he holds a post.
+- No footprints on land, no eels, rats, gas pockets or steam (the scope's cuts).
 
 ---
 

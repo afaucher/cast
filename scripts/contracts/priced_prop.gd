@@ -74,6 +74,10 @@ const TABLE := {
 	"gas_cylinders": {"name": "Gas cylinders", "price": 1800, "hp": 35.0, "radius": 0.5, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.15, 0.5)},
 	"propane_tank": {"name": "Propane tank", "price": 1200, "hp": 45.0, "radius": 0.6, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.8)},
 	"battery_pack": {"name": "Server battery pack", "price": 6500, "hp": 60.0, "radius": 0.52, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 0.7)},
+	# The sewer's props (docs/design/sewer-concept.md, phase 1: --sewer only). Site "sewer": no site's catalog has them. The
+	# electrical panel breaks to any hit (HP 1) and drops the live wire into the water (LiveWire).
+	"sump_pump": {"name": "Sump pump", "price": 3500, "hp": 70.0, "radius": 0.6, "site": "sewer", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.2, 0.85)},
+	"electrical_panel": {"name": "Electrical panel", "price": 250, "hp": 1.0, "radius": 0.35, "site": "sewer", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.7, 0.35)},
 }
 const HAZARD_SITE := "hazard"
 

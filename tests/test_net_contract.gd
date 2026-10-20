@@ -49,6 +49,7 @@ const NET_SCRIPTS := [
 	"res://scripts/spells/vines_fx.gd",
 	"res://scripts/spells/wet.gd",
 	"res://scripts/world/lava/lava_field.gd",   # (the lava cave prototype's rules: --lava-cave, solo only)
+	"res://scripts/world/sewer/live_wire.gd",   # (the sewer slice's live wire: --sewer, solo only for now)
 ]
 
 const ACTOR := "res://scripts/core/actor.gd"
@@ -365,6 +366,8 @@ var REPLICATED := {
 	# the pool shark and its imp gunner (docs/design/sharks.md): monster-format entries plus their own events
 	"res://scripts/monsters/shark.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/shark.gd"], 5],
 	"res://scripts/monsters/jockey.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/jockey.gd"], 5],
+	# the sewer gator (docs/design/sewer-concept.md; solo behind --sewer for now): a monster-format entry, the monster carriers
+	"res://scripts/monsters/gator.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/contracts/employee.gd": [NetWorldCodec.EMPLOYEE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/employee.gd"], 5],
 	"res://scripts/contracts/hellgate.gd": [NetWorldCodec.GATE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/hellgate.gd"], 5],
 	"res://scripts/contracts/priced_prop.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/priced_prop.gd"], 0],

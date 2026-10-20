@@ -1209,12 +1209,14 @@ func _add_wall_part(c: Vector2i, cell: HexMap.Cell, mask: int) -> void:
 		var open_k := d if here == 0 else posmod(d - 1, 6)
 		if n.dot(Hex.kite_corner(open_k)) < 0.0:
 			n = -n
+		# beside a pool kite (water up to the wall, the sewer) the face runs on down to the pool floor
+		var bottom_y := floor_y if (cell.pool_mask >> open_k) & 1 == 0 else cell.pool_level * LH - SEAM_DROP
 		# u is the distance from the hex center in side-texture repeats (one per SIZE, like every hex-edge face: the
 		# texture is one world unit wide and one level tall). It mirrors at the midpoint, so the neighbouring cell's
 		# half of the face continues it seamlessly, and the texture's corner glow lands on the hex centers, where
 		# wall corners are. (It was scaled by 0.5 here, which drew these faces at half the horizontal density of
 		# every other side: stretched 2x, with the corner glow in the middle of a face.)
-		_side_quad(side_b, center, mid, y - SEAM_DROP, floor_y, n, 0.0, Hex.INNER / Hex.SIZE, side_col, SEAM_DROP)
+		_side_quad(side_b, center, mid, y - SEAM_DROP, bottom_y, n, 0.0, Hex.INNER / Hex.SIZE, side_col, SEAM_DROP)
 
 
 ## Treads of a cut staircase over its open kites only (each kite clipped to each tread strip), with the outer faces
@@ -1311,11 +1313,18 @@ static func _strip_seg(a: Vector3, e: Vector3, axis: Vector3, u0: float, u1: flo
 
 ## A pool cell: its deck kites as a floor tile flush with the rim (a ring cell), its pool kites as the tiled pool floor,
 ## and the liner on every rim line through its center, from the deck down to the pool floor, facing the water.
+## WATER UP TO A WALL (the sewer, docs/design/sewer-concept.md "Phase 1 as built"): a cut cell may have pool kites too (a
+## channel running to the wall). Its wall kites are the wall part as on any cut cell (its faces on the wall lines reach
+## down to the pool floor beside a pool kite), its pool kites the pool floor, its other kites deck; a liner stands only
+## between a pool kite and a deck kite (never against the wall).
 func _add_pool_cell(c: Vector2i, cell: HexMap.Cell) -> void:
-	var pool := cell.pool_mask
-	var deck := HexMap.ALL_KITES & ~pool
+	var wall := cell.wall_mask
+	var pool := cell.pool_mask & ~wall
+	var deck := HexMap.ALL_KITES & ~pool & ~wall
 	if deck != 0:
 		_add_floor_part(c, cell, deck)
+	if wall != 0:
+		_add_wall_part(c, cell, wall)
 	var center := Hex.to_world(c)
 	var b: Batch = _batches[Surf.POOL]
 	b.mat = float(POOL_LOOK_INDEX.get(_pool_look(c), 0))
@@ -1337,6 +1346,8 @@ func _add_pool_cell(c: Vector2i, cell: HexMap.Cell) -> void:
 		var prev := (pool >> posmod(d - 1, 6)) & 1
 		if here == prev:
 			continue
+		if ((wall >> d) & 1) == 1 or ((wall >> posmod(d - 1, 6)) & 1) == 1:
+			continue   # (pool against the wall part: the wall's own face runs down to the pool floor there)
 		# spoke d separates kites d - 1 and d: the liner faces the pool kite
 		var mid := center + Hex.edge_mid(d)
 		var t := Hex.dir_vector(d)

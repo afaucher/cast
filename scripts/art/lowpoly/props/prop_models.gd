@@ -34,7 +34,13 @@ const HEIGHTS := {
 	"shark_tank": 1.6, "henchman_locker": 1.75, "evil_portrait": 2.0, "brazier": 1.15, "treadmill": 1.5,
 	# explosive props (ExplosiveProp, docs/design/hazards.md)
 	"oil_drum": 1.05, "gas_cylinders": 1.45, "propane_tank": 1.2, "battery_pack": 1.52,
+	# the sewer's (docs/design/sewer-concept.md, phase 1)
+	"sump_pump": 1.7, "electrical_panel": 1.8,
 }
+## The sewer's lab models (scripts/art/lowpoly/props/sewer_props.gd): the sump pump and the electrical panel are built there.
+const SewerProps := preload("res://scripts/art/lowpoly/props/sewer_props.gd")
+## Where the electrical panel's cable leaves the box (model space): LiveWire drops the live cable from here.
+const PANEL_CABLE_ROOT := Vector3(0.0, 1.05, 0.2)
 
 const HAZARD_YELLOW := Color(1.0, 0.8, 0.12)
 const DRUM_RED := Color(0.7, 0.15, 0.1)
@@ -94,6 +100,8 @@ static func build(kind: String) -> Node3D:
 		"gas_cylinders": _gas_cylinders(s)
 		"propane_tank": _propane_tank(s)
 		"battery_pack": _battery_pack(s)
+		"sump_pump": SewerProps._pump(s, Color(0.22, 0.4, 0.55))
+		"electrical_panel": SewerProps._junction_box(s, Vector3(0.15, -0.55, 0.9), false)
 		_:
 			box(s, Vector3(0.8, 0.8, 0.8), Vector3(0, 0.4, 0), GOLD)
 	var mi := MeshInstance3D.new()
@@ -131,6 +139,8 @@ static func palette(kind: String) -> Array[Color]:
 		"gas_cylinders": out = [CYL_GREEN, CYL_MAROON, CYL_BLUE, IRON_LT]
 		"propane_tank": out = [TANK_WHITE, IRON, Color(0.85, 0.2, 0.15), HAZARD_YELLOW]
 		"battery_pack": out = [OBSIDIAN, IRON, Color(1.0, 0.55, 0.12), Color(0.3, 1.0, 0.5)]
+		"sump_pump": out = [Color(0.22, 0.4, 0.55), IRON, Color(0.5, 0.27, 0.14), HAZARD_YELLOW]
+		"electrical_panel": out = [Color(0.55, 0.57, 0.55), IRON, HAZARD_YELLOW, Color(1.0, 0.95, 0.55)]
 		_: out = [GOLD, IRON]
 	return out
 

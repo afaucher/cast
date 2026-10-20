@@ -62,6 +62,11 @@ const DEFS := {
 	"jockey": {   ## the imp gunner riding a laser shark
 		"script": "res://scripts/monsters/jockey.gd",
 	},
+	"gator": {   ## the sewer gator (docs/design/sewer-concept.md): seed-built (--sewer for now), never in a pack or a gate, never the pest
+		"script": "res://scripts/monsters/gator.gd",
+		## user, 2026-10-20: "6300", killed and billed once like the shark
+		"billed": {"regular": {"price": 6300, "name": "Gator"}},
+	},
 }
 
 ## The hellgate roll walks its kinds in this order (a different order would spawn different kinds for the same roll).

@@ -251,6 +251,15 @@ const DECOR := {
 	"office_chair": {"place": "group", "orient": "face_target", "w": 0.65, "d": 0.65, "h": 1.0, "blocks": false, "weight": 0.4},
 	"rack_cab": {"place": "wall", "orient": "away_from_wall", "w": 0.95, "d": 0.85, "h": 2.0, "blocks": true, "weight": 1.0},
 	"crate_stack": {"place": "corner", "orient": "face_center", "w": 1.15, "d": 1.15, "h": 1.3, "blocks": true, "weight": 1.0},
+	# the sewer's decor kit (docs/design/sewer-concept.md, phase 1: the six that read most; SewerLayouts places them, no
+	# theme recipe uses them yet): an outfall pipe pouring into a channel, a pipe run on a wall, a floor grate, a sluice
+	# gate across a doorway (the plate raised over the water), iron bars across a culvert, a maintenance tool cart
+	"outfall": {"place": "wall", "orient": "away_from_wall", "w": 1.4, "d": 1.3, "h": 1.9, "blocks": false, "weight": 0.5},
+	"pipe_bundle": {"place": "wall", "orient": "away_from_wall", "w": 4.0, "d": 0.45, "h": 1.3, "blocks": false, "weight": 0.5},
+	"grate": {"place": "floor", "orient": "free", "w": 1.6, "d": 1.6, "h": 0.06, "blocks": false, "weight": 0.2},
+	"sluice": {"place": "wall", "orient": "away_from_wall", "w": 3.3, "d": 0.3, "h": 2.2, "blocks": false, "weight": 0.5},
+	"bars": {"place": "wall", "orient": "away_from_wall", "w": 2.8, "d": 0.2, "h": 1.3, "blocks": false, "weight": 0.3},
+	"tool_cart": {"place": "group", "orient": "face_target", "w": 0.85, "d": 0.5, "h": 0.95, "blocks": true, "weight": 0.5},
 }
 
 ## Decor kinds that read as stacks of boxes or crates. They join the "breakables" group and smash like mail packages

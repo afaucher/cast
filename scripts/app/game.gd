@@ -671,6 +671,7 @@ func _build_world() -> void:
 		_plan = LavaCave.plan(map, _floor_n())
 	else:
 		_plan = SiteBuilder.plan(map, _run, _floor_n(), PricedProp.catalog(_run.site_type))
+	_dev_floor()   # (dev hook: --sewer swaps in a hand-authored map and plan; GameDev)
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)
@@ -2884,4 +2885,9 @@ func _spawn_near() -> void:
 
 ## Dev hook (--stage-ledge): GameDev (scripts/app/dev/game_dev.gd) does it; nothing in play.
 func _stage_plateau() -> void:
+	pass
+
+
+## Dev hook (--sewer): GameDev replaces `map` and `_plan` with a hand-authored floor here; nothing in play.
+func _dev_floor() -> void:
 	pass
