@@ -661,7 +661,7 @@ func _build_world() -> void:
 	if lava > 0:
 		_plan = LavaCave.plan(map, _floor_n())
 	else:
-		_plan = SiteBuilder.plan(map, _run, _floor_n(), ContractParts.prop_catalog(_run.site_type))
+		_plan = SiteBuilder.plan(map, _run, _floor_n(), PricedProp.catalog(_run.site_type))
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)
@@ -1875,9 +1875,8 @@ func _build_contract_ui() -> void:
 	add_child(_use_prompt)
 	_tracker = ObjectiveTracker.new()
 	hud.add_overlay(_tracker)
-	_ticker = ContractParts.make_ticker()
-	if _ticker != null:
-		hud.add_overlay(_ticker)
+	_ticker = DamageTicker.new()
+	hud.add_overlay(_ticker)
 	_banner = DispatchBanner.new()
 	hud.add_overlay(_banner)
 	_note_slip = NoteSlip.new()
@@ -2669,8 +2668,6 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	if voice:
-		hud.set_mic_level(voice.get_level())
 	_update_note_slip()
 	_update_use_prompts()
 	_stats_timer -= delta

@@ -304,7 +304,7 @@ func _check_floors() -> void:
 		for f in range(1, 4):
 			var run := ContractRun.make(["prepper", "supervillain", "guru", "founder"][s % 4], s, 0.5)
 			var map := DungeonGen.for_run(run, f)
-			var p := SiteBuilder.plan(map, run, f, ContractParts.prop_catalog(run.site_type))
+			var p := SiteBuilder.plan(map, run, f, PricedProp.catalog(run.site_type))
 			worst_ms = maxf(worst_ms, float(SiteBuilder.last_plan_usec) / 1000.0)
 			var n := p.scouts.size()
 			total += n
@@ -329,8 +329,8 @@ func _check_floors() -> void:
 	check(worst_ms < 300.0, "the plan stays inside its time (%.1f ms)" % worst_ms)
 	# Deterministic.
 	var run2 := ContractRun.make("guru", 42, 0.5)
-	var a := SiteBuilder.plan(DungeonGen.for_run(run2, 2), run2, 2, ContractParts.prop_catalog(run2.site_type))
-	var b := SiteBuilder.plan(DungeonGen.for_run(run2, 2), run2, 2, ContractParts.prop_catalog(run2.site_type))
+	var a := SiteBuilder.plan(DungeonGen.for_run(run2, 2), run2, 2, PricedProp.catalog(run2.site_type))
+	var b := SiteBuilder.plan(DungeonGen.for_run(run2, 2), run2, 2, PricedProp.catalog(run2.site_type))
 	eq(str(a.scouts), str(b.scouts), "same seed, same scouts")
 	# Spawned: in the world, on his route, not a pack monster.
 	var run := ContractRun.make("prepper", 3, 0.5)

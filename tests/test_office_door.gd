@@ -127,7 +127,7 @@ func _plan_rules() -> void:
 	for sd in [1, 2, 3, 7, 11]:
 		var run := ContractRun.make("prepper", sd, 0.5)
 		var gm := DungeonGen.for_run(run, 1)
-		var gp := SiteBuilder.plan(gm, run, 1, ContractParts.prop_catalog(run.site_type))
+		var gp := SiteBuilder.plan(gm, run, 1, PricedProp.catalog(run.site_type))
 		var gd := Doorways.find(gm)
 		var chosen := DoorPlan.choose(gd, gp, run.floor_seed(1))
 		var allowed := gd.filter(func(dw: Dictionary) -> bool: return DoorPlan.allowed(dw, gp)).size()

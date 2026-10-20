@@ -148,7 +148,7 @@ func _check_floors() -> void:
 	for id in ClientArchetype.IDS:
 		for s in SEEDS.slice(0, 4):
 			var run := ContractRun.make(id, s, 0.5)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
 				var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -244,7 +244,7 @@ func _check_one_thought(run: ContractRun, plan: SitePlan, tag: String) -> void:
 func _check_seeded() -> void:
 	var run := ContractRun.make("guru", 42, 0.4)
 	var map := DungeonGen.generate(run.floor_seed(2))
-	var catalog := ContractParts.prop_catalog(run.site_type)
+	var catalog := PricedProp.catalog(run.site_type)
 	var a := SiteBuilder.plan(map, run, 2, catalog)
 	var b := SiteBuilder.plan(map, run, 2, catalog)
 	eq(str(a.notes), str(b.notes), "the same seed plans the same notes")

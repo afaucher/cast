@@ -246,7 +246,7 @@ func _check_blast() -> void:
 	var grunt := _monster("grunt", Vector3(-1.5, 0, 0.8))
 	grunt.max_hp = 500.0
 	grunt.hp = 500.0
-	var emp := ContractParts.spawn_employee(Hex.from_world(Vector3(0, 0, 2.2)), {"style": "staff", "name": "Pat"})
+	var emp := Employee.spawn(Hex.from_world(Vector3(0, 0, 2.2)), {"style": "staff", "name": "Pat"})
 	var far := _monster("grunt", Vector3(0, 0, -6.0))
 	await frames(3)
 	if emp != null:
@@ -383,7 +383,7 @@ func _check_placement() -> void:
 	for id in ClientArchetype.IDS:
 		for s in [3, 42]:
 			var run := ContractRun.make(id, s, 0.5)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
 				var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -441,7 +441,7 @@ func _check_placement() -> void:
 	var map: HexMap = null
 	for f in range(1, ContractRun.FLOOR_COUNT + 1):
 		map = DungeonGen.generate(run.floor_seed(f))
-		plan = SiteBuilder.plan(map, run, f, ContractParts.prop_catalog(run.site_type))
+		plan = SiteBuilder.plan(map, run, f, PricedProp.catalog(run.site_type))
 		if not plan.hazards.is_empty():
 			break
 	if not check(plan != null and not plan.hazards.is_empty(), "a lair floor with explosives"):

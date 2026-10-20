@@ -45,9 +45,6 @@ func setup() -> void:
 	hud.show_cooldown("heal", 3.2)
 	hud.set_trigger_word("pickle")
 	eq(hud.trigger_word, "pickle", "trigger word stored")
-	hud.set_mic_level(0.6)
-	hud.show_center("Exit reached", Color.WHITE, 0.5)
-	check(not hud._mic_bar.visible, "no mic meter during play")
 	check(not hud.console.visible, "the type box is hidden until Enter")
 	var enter := InputEventKey.new()
 	enter.keycode = KEY_ENTER

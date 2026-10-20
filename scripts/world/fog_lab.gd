@@ -63,7 +63,7 @@ static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> St
 func _build() -> void:
 	run = ContractRun.make(RUN_ARCHETYPE, seed_value, 0.5)
 	map = DungeonGen.for_run(run, 1)
-	plan = SiteBuilder.plan(map, run, 1, ContractParts.prop_catalog(run.site_type))
+	plan = SiteBuilder.plan(map, run, 1, PricedProp.catalog(run.site_type))
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)

@@ -87,7 +87,7 @@ func _check_generated() -> void:
 	for id in ClientArchetype.IDS:
 		for s in RUN_SEEDS:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.for_run(run, f)
 				var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -241,19 +241,19 @@ func _check_determinism() -> void:
 		for f in range(1, 4):
 			var a := DungeonGen.for_run(run, f)
 			var b := DungeonGen.for_run(run, f)
-			SiteBuilder.plan(a, run, f, ContractParts.prop_catalog(run.site_type))
-			SiteBuilder.plan(b, run, f, ContractParts.prop_catalog(run.site_type))
+			SiteBuilder.plan(a, run, f, PricedProp.catalog(run.site_type))
+			SiteBuilder.plan(b, run, f, PricedProp.catalog(run.site_type))
 			eq(NetFloor.map_text_of(a), NetFloor.map_text_of(b), "seed %d floor %d: the same pools every time" % [s, f])
 			seen += a.pools.size()
 			# planning twice on one map keeps its pool (no second carve)
 			var n := a.pools.size()
-			SiteBuilder.plan(a, run, f, ContractParts.prop_catalog(run.site_type))
+			SiteBuilder.plan(a, run, f, PricedProp.catalog(run.site_type))
 			eq(a.pools.size(), n, "seed %d floor %d: a second plan keeps the pools" % [s, f])
 	check(seen > 0, "the determinism seeds have pools (%d)" % seen)
 	# the checksum sees a pool: drop one cell's pool kites and the map text changes
 	var run2 := ContractBoard.run_for_seed(4)
 	var m := DungeonGen.for_run(run2, 1)
-	SiteBuilder.plan(m, run2, 1, ContractParts.prop_catalog(run2.site_type))
+	SiteBuilder.plan(m, run2, 1, PricedProp.catalog(run2.site_type))
 	if check(not m.pools.is_empty(), "seed 4 floor 1 has a pool"):
 		var before := NetFloor.map_text_of(m)
 		var rc: Vector2i = (m.pools[0]["ring"] as Array)[0]

@@ -141,7 +141,7 @@ func _on_console(text: String) -> void:
 
 
 func _on_player_died() -> void:
-	hud.show_center("You died\nF5 to restart", Color(1.0, 0.4, 0.35))
+	hud.show_message("You died. F5 to restart", Color(1.0, 0.4, 0.35))
 
 
 func _take_shot() -> void:

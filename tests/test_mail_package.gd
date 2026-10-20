@@ -407,7 +407,7 @@ func _check_placement() -> void:
 	for id in ClientArchetype.IDS:
 		for s in SEEDS:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
 				var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -428,7 +428,7 @@ func _check_placement() -> void:
 	eq(sizes_seen.size(), 3, "small, medium and long boxes all occur")
 	# deterministic: the same (contract, floor) plans the same spots; a different contract does not
 	var run2 := ContractRun.make("supervillain", 31, 0.7)
-	var catalog2 := ContractParts.prop_catalog(run2.site_type)
+	var catalog2 := PricedProp.catalog(run2.site_type)
 	for f in range(1, 4):
 		var a := SiteBuilder.plan(DungeonGen.generate(run2.floor_seed(f)), run2, f, catalog2)
 		var b := SiteBuilder.plan(DungeonGen.generate(run2.floor_seed(f)), run2, f, catalog2)

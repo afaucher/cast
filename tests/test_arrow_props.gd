@@ -141,7 +141,7 @@ func _check_melee() -> void:
 	_fresh()
 	var gasket := _kit_hero(Vector3(-1.2, 0, 0), "gasket")
 	var rack := _prop("wine_rack", Vector3(0.2, 0, 0))
-	var emp := ContractParts.spawn_employee(Hex.from_world(Vector3(-0.2, 0, 1.2)), {"style": "staff", "name": "Pat"})
+	var emp := Employee.spawn(Hex.from_world(Vector3(-0.2, 0, 1.2)), {"style": "staff", "name": "Pat"})
 	await frames(2)
 	var emp_hp := emp.hp if emp != null else 0.0
 	check(gasket.melee(Vector3.RIGHT), "the hammer swings")

@@ -39,7 +39,7 @@ func _build(s: int, tweak: Callable = Callable()) -> Dictionary:
 	world.name = "World"
 	add_child(world)
 	GameWorld.begin(map, world, run.floor_seed(1))
-	var plan := SiteBuilder.plan(map, run, 1, ContractParts.prop_catalog(run.site_type))
+	var plan := SiteBuilder.plan(map, run, 1, PricedProp.catalog(run.site_type))
 	var site := SiteBuilder.spawn(map, run, plan)
 	_last = {"map": map, "plan": plan, "run": run, "site": site}
 	NetFloor.assign_ids(world, {})

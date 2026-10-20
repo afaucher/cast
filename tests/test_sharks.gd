@@ -308,7 +308,7 @@ func _check_generated() -> void:
 	for id in ClientArchetype.IDS:
 		for s in RUN_SEEDS:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.for_run(run, f)
 				var plan := SiteBuilder.plan(map, run, f, catalog)

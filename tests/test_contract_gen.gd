@@ -77,7 +77,7 @@ func _check_contract(run: ContractRun) -> void:
 	eq(pest_sum, run.pest_pay, "%s pest pay splits exactly" % tag)
 	check(run.floor_gates[0] >= 1 and run.floor_gates[1] >= 1 and run.floor_gates[2] == 0, "%s small gates on floors 1-2 only" % tag)
 
-	var catalog := ContractParts.prop_catalog(run.site_type)
+	var catalog := PricedProp.catalog(run.site_type)
 	for f in range(1, ContractRun.FLOOR_COUNT + 1):
 		var map := DungeonGen.generate(run.floor_seed(f))
 		var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -150,7 +150,7 @@ func _plan_dump(p: SitePlan) -> String:
 
 func _check_plan_determinism() -> void:
 	var run := ContractRun.make("supervillain", 31, 0.7)
-	var catalog := ContractParts.prop_catalog(run.site_type)
+	var catalog := PricedProp.catalog(run.site_type)
 	for f in range(1, 4):
 		var map := DungeonGen.generate(run.floor_seed(f))
 		var a := SiteBuilder.plan(map, run, f, catalog)
@@ -171,7 +171,7 @@ func _check_every_archetype_generates() -> void:
 		check(run.contract_value > 0, "%s has a contract value" % id)
 		seen_sites[run.site_type] = true
 		var map := DungeonGen.generate(run.floor_seed(1))
-		var plan := SiteBuilder.plan(map, run, 1, ContractParts.prop_catalog(run.site_type))
+		var plan := SiteBuilder.plan(map, run, 1, PricedProp.catalog(run.site_type))
 		check(plan.gates.size() > 0 and plan.employees.size() > 0, "%s floor 1 has gates and employees" % id)
 	eq(seen_sites.size(), 2, "both bunker and lair contracts exist")
 	var pays := {}

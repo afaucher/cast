@@ -1037,7 +1037,7 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	rng.seed = run.floor_seed(p.floor_number) * 31 + p.floor_number
 	var gate_pest := "" if run.pest == "everything" else run.pest
 	for g in p.gates:
-		var gate := ContractParts.spawn_gate(g["cell"], {"difficulty": run.difficulty, "depth": p.floor_number, "origin": bool(g["origin"]), "pest": gate_pest})
+		var gate := Hellgate.spawn(g["cell"], {"difficulty": run.difficulty, "depth": p.floor_number, "origin": bool(g["origin"]), "pest": gate_pest})
 		if gate == null:
 			continue
 		site.gates.append(gate)
@@ -1049,7 +1049,7 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 		if beast != null:
 			site.beasts.append(beast)
 	for e in p.employees:
-		var emp := ContractParts.spawn_employee(e["cell"], {"style": str(e["style"]), "name": str(e["name"])})
+		var emp := Employee.spawn(e["cell"], {"style": str(e["style"]), "name": str(e["name"])})
 		if emp != null:
 			site.employees.append(emp)
 	for pr in p.props:
@@ -1057,11 +1057,11 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 		if pr.has("pos"):
 			opts["pos"] = pr["pos"]     # back to the wall, facing into the room
 			opts["yaw"] = pr["yaw"]
-		var prop := ContractParts.spawn_prop(pr["cell"], str(pr["kind"]), opts)
+		var prop := PricedProp.spawn(pr["cell"], str(pr["kind"]), opts)
 		if prop != null:
 			site.props.append(prop)
 	for hz in p.hazards:
-		var hazard := ContractParts.spawn_prop(hz["cell"], str(hz["kind"]), {"site": run.site_type, "pos": hz["pos"], "yaw": hz["yaw"]})
+		var hazard := PricedProp.spawn(hz["cell"], str(hz["kind"]), {"site": run.site_type, "pos": hz["pos"], "yaw": hz["yaw"]})
 		if hazard != null:
 			site.hazards.append(hazard)
 	site.decor = DecorProp.spawn_plan(p)
@@ -1377,7 +1377,7 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 
 ## Convenience for the game: plan + spawn in one call.
 static func build(map: HexMap, run: ContractRun, floor_n: int) -> Site:
-	var p := plan(map, run, floor_n, ContractParts.prop_catalog(run.site_type))
+	var p := plan(map, run, floor_n, PricedProp.catalog(run.site_type))
 	return spawn(map, run, p)
 
 

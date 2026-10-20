@@ -36,7 +36,7 @@ func _check_plans() -> void:
 	for id in ClientArchetype.IDS:
 		for s in SEEDS:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
 				var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -49,7 +49,7 @@ func _check_plans() -> void:
 					check(not plan.blocked.has(plan.start), tag + ": the start cell is not blocked")
 	var run2 := ContractRun.make("guru", 3, 0.5)
 	var map2 := DungeonGen.generate(run2.floor_seed(1))
-	var cat2 := ContractParts.prop_catalog(run2.site_type)
+	var cat2 := PricedProp.catalog(run2.site_type)
 	var a := SiteBuilder.plan(map2, run2, 1, cat2)
 	var b := SiteBuilder.plan(map2, run2, 1, cat2)
 	check(a.van == b.van and not a.van.is_empty(), "the van is deterministic on floor 1")

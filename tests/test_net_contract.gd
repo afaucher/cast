@@ -76,7 +76,6 @@ var RULES := [
 			"res://scripts/contracts/contract_session.gd": "restores the crew's HP between floors (setup, run by each hero's owner)",
 			"res://scripts/heroes/hero_kit.gd": "sets starting HP when a kit is applied (spawn)",
 			"res://scripts/app/game.gd": "--hurt dev flag",
-			"res://scripts/monsters/monster_fight.gd": "screenshot lab",
 			"res://scripts/spells/burning_lab.gd": "screenshot lab",
 			"res://scripts/art/lowpoly/props/decor_models.gd": "`anim.dead` is a decor animation, not an actor",
 		}],

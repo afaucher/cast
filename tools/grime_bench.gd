@@ -34,7 +34,7 @@ func _ready() -> void:
 	var run := ContractBoard.run_for_seed(board_seed)
 	_seed_value = run.floor_seed(floor_n)
 	_map = DungeonGen.generate(_seed_value)
-	_plan = SiteBuilder.plan(_map, run, floor_n, ContractParts.prop_catalog(run.site_type))
+	_plan = SiteBuilder.plan(_map, run, floor_n, PricedProp.catalog(run.site_type))
 	_scene = Node3D.new()
 	add_child(_scene)
 	var view := HexMapView.new()

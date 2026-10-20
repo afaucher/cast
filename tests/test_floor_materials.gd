@@ -22,7 +22,7 @@ func setup() -> void:
 	for id in ClientArchetype.IDS:
 		for s in SEEDS:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
 				var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -184,7 +184,7 @@ func _check_perf() -> void:
 func _check_view() -> void:
 	var run := ContractRun.make(ClientArchetype.IDS[0], 42, 0.4)
 	var map := DungeonGen.generate(run.floor_seed(1))
-	SiteBuilder.plan(map, run, 1, ContractParts.prop_catalog(run.site_type))
+	SiteBuilder.plan(map, run, 1, PricedProp.catalog(run.site_type))
 	var view := HexMapView.new()
 	add_child(view)
 	view.build(map)
@@ -205,7 +205,7 @@ func _check_view() -> void:
 	# the same map without materials: classic shader, the same number of surfaces (one draw call each). (The same planned
 	# terrain, its materials cleared: planning also carves the pool rooms' pools, which are terrain, not materials.)
 	var classic_map := DungeonGen.generate(run.floor_seed(1))
-	SiteBuilder.plan(classic_map, run, 1, ContractParts.prop_catalog(run.site_type))
+	SiteBuilder.plan(classic_map, run, 1, PricedProp.catalog(run.site_type))
 	for c: Vector2i in classic_map.cells:
 		classic_map.cells[c].mat_id = 0
 	var classic := HexMapView.new()

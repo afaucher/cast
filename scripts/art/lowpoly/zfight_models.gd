@@ -271,7 +271,7 @@ static func scan(parent: Node, only: String = "") -> Array[Dictionary]:
 static func scan_site(parent: Node, archetype: String, seed_value: int, floor_n: int) -> Array[Dictionary]:
 	var run := ContractRun.make(archetype, seed_value, 0.5)
 	var map := DungeonGen.generate(run.floor_seed(floor_n))
-	var plan := SiteBuilder.plan(map, run, floor_n, ContractParts.prop_catalog(run.site_type))
+	var plan := SiteBuilder.plan(map, run, floor_n, PricedProp.catalog(run.site_type))
 	var root := Node3D.new()
 	root.name = "ZFightSite"
 	parent.add_child(root)

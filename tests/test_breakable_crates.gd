@@ -261,7 +261,7 @@ func _check_spawned_floor() -> void:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
-				var plan := SiteBuilder.plan(map, run, f, ContractParts.prop_catalog(run.site_type))
+				var plan := SiteBuilder.plan(map, run, f, PricedProp.catalog(run.site_type))
 				var has := false
 				for dc in plan.decor:
 					if String(dc["kind"]) == "crate_stack":

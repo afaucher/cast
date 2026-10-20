@@ -37,7 +37,7 @@ func _build(s: int, f: int) -> Dictionary:
 	var map := DungeonGen.for_run(run, f)
 	new_world(map)
 	GameWorld.begin(map, world, run.floor_seed(f))
-	var plan := SiteBuilder.plan(map, run, f, ContractParts.prop_catalog(run.site_type))
+	var plan := SiteBuilder.plan(map, run, f, PricedProp.catalog(run.site_type))
 	SiteBuilder.spawn(map, run, plan)
 	var ids := NetFloor.assign_ids(world, {})
 	var sum := NetFloor.checksum(map, plan, run, world)

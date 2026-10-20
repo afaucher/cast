@@ -13,7 +13,7 @@ const FLOOR_MS := 900.0          ## building them all, clearance checks included
 func setup() -> void:
 	var run := ContractRun.make("guru", SEED, 0.8)
 	var map := DungeonGen.for_run(run, 2)
-	var plan := SiteBuilder.plan(map, run, 2, ContractParts.prop_catalog(run.site_type))
+	var plan := SiteBuilder.plan(map, run, 2, PricedProp.catalog(run.site_type))
 	var world := Node3D.new()
 	add_child(world)
 	GameWorld.begin(map, world, run.floor_seed(2))
@@ -41,7 +41,7 @@ func setup() -> void:
 	var first := site.beasts[0] as HellgateBeast
 	var rng_before := GameWorld.rng.state
 	var map2 := DungeonGen.for_run(run, 2)
-	var plan2 := SiteBuilder.plan(map2, run, 2, ContractParts.prop_catalog(run.site_type))
+	var plan2 := SiteBuilder.plan(map2, run, 2, PricedProp.catalog(run.site_type))
 	var again := HellgateBeast.for_gate(g0, map2, plan2, run.floor_seed(2))
 	eq(str(again.stats), str(first.stats), "a second build of the same gate's beast is the same (%s)" % str(first.stats))
 	eq(_mesh_sig(again), _mesh_sig(first), "... vertex for vertex")

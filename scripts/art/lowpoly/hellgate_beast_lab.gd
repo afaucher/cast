@@ -117,7 +117,7 @@ static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> St
 func _build_floor() -> void:
 	run = ContractRun.make(archetype, seed_value, float(_arg(OS.get_cmdline_user_args(), "--diff", "0.6")))
 	map = DungeonGen.for_run(run, floor_n)
-	plan = SiteBuilder.plan(map, run, floor_n, ContractParts.prop_catalog(run.site_type))
+	plan = SiteBuilder.plan(map, run, floor_n, PricedProp.catalog(run.site_type))
 	var world := Node3D.new()
 	world.name = "World"
 	add_child(world)
@@ -471,7 +471,7 @@ func _run_survey(range_text: String) -> void:
 		for fl in [1, 2, 3]:
 			var r := ContractRun.make("guru", sd, 0.8)
 			var m := DungeonGen.for_run(r, fl)
-			var pl := SiteBuilder.plan(m, r, fl, ContractParts.prop_catalog(r.site_type))
+			var pl := SiteBuilder.plan(m, r, fl, PricedProp.catalog(r.site_type))
 			var root := Node3D.new()
 			add_child(root)
 			GameWorld.begin(m, root, r.floor_seed(fl))

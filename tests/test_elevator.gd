@@ -80,7 +80,7 @@ func _check_generation(seeds: Dictionary) -> void:
 	var frees := 0
 	for s in range(1, 41):
 		var run := ContractBoard.run_for_seed(s)
-		var catalog := ContractParts.prop_catalog(run.site_type)
+		var catalog := PricedProp.catalog(run.site_type)
 		for f in range(1, ContractRun.FLOOR_COUNT + 1):
 			var tag := "seed %d floor %d (%s %s)" % [s, f, run.elevator_look, run.elevator_place]
 			var t0 := Time.get_ticks_usec()

@@ -40,7 +40,7 @@ func setup() -> void:
 	for id in ClientArchetype.IDS:
 		for s in SEEDS:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
-			var catalog := ContractParts.prop_catalog(run.site_type)
+			var catalog := PricedProp.catalog(run.site_type)
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				var map := DungeonGen.generate(run.floor_seed(f))
 				var plan := SiteBuilder.plan(map, run, f, catalog)
@@ -442,7 +442,7 @@ func _dump(p: SitePlan) -> String:
 func _check_determinism() -> void:
 	for id in ["supervillain", "guru"]:
 		var run := ContractRun.make(id, 31, 0.7)
-		var catalog := ContractParts.prop_catalog(run.site_type)
+		var catalog := PricedProp.catalog(run.site_type)
 		for f in range(1, 4):
 			var a := SiteBuilder.plan(DungeonGen.generate(run.floor_seed(f)), run, f, catalog)
 			var b := SiteBuilder.plan(DungeonGen.generate(run.floor_seed(f)), run, f, catalog)
@@ -455,7 +455,7 @@ func _check_determinism() -> void:
 	var seen := {}
 	for s in SEEDS:
 		var run2 := ContractRun.make("prepper", s, 0.5)
-		var p := SiteBuilder.plan(DungeonGen.generate(run2.floor_seed(1)), run2, 1, ContractParts.prop_catalog("bunker"))
+		var p := SiteBuilder.plan(DungeonGen.generate(run2.floor_seed(1)), run2, 1, PricedProp.catalog("bunker"))
 		for th in p.room_themes.values():
 			seen[th] = true
 	check(seen.size() >= 6, "floors use a good spread of the bunker themes (%d)" % seen.size())
@@ -465,14 +465,14 @@ func _check_determinism() -> void:
 func _check_fallback_map() -> void:
 	var run := ContractRun.make("prepper", 5, 0.5)
 	var map := DungeonGen._fallback()
-	var plan := SiteBuilder.plan(map, run, 1, ContractParts.prop_catalog("bunker"))
+	var plan := SiteBuilder.plan(map, run, 1, PricedProp.catalog("bunker"))
 	eq(plan.room_themes.size(), plan.rooms.size(), "the fallback map's room has a theme")
 	for rt: String in plan.rooms:
 		check(plan.theme_of(rt) != "", "%s has a theme on the fallback map" % rt)
 	# a plan with nothing in it (no rooms) does not crash either
 	var empty_map := HexMap.new()
 	empty_map.set_cell(Vector2i.ZERO, 0)
-	var empty_plan := SiteBuilder.plan(empty_map, run, 1, ContractParts.prop_catalog("bunker"))
+	var empty_plan := SiteBuilder.plan(empty_map, run, 1, PricedProp.catalog("bunker"))
 	eq(empty_plan.room_themes.size(), 0, "no rooms, no themes")
 
 
@@ -700,7 +700,7 @@ func _check_vignette_structure() -> void:
 	for s in SEEDS:
 		var run := ContractRun.make("prepper", s, 0.5)
 		for f in range(1, 4):
-			var plan2 := SiteBuilder.plan(DungeonGen.generate(run.floor_seed(f)), run, f, ContractParts.prop_catalog("bunker"))
+			var plan2 := SiteBuilder.plan(DungeonGen.generate(run.floor_seed(f)), run, f, PricedProp.catalog("bunker"))
 			for rt: String in plan2.rooms_with_theme("home_cinema"):
 				var proj := {}
 				var scr := {}

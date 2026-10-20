@@ -420,7 +420,7 @@ func _check_placement() -> void:
 	var worst_dot := 1.0
 	for spec: Array in [["prepper", 3], ["supervillain", 8], ["tech_founder", 21]]:
 		var run := ContractRun.make(str(spec[0]), int(spec[1]), 0.5)
-		var catalog := ContractParts.prop_catalog(run.site_type)
+		var catalog := PricedProp.catalog(run.site_type)
 		for f in range(1, ContractRun.FLOOR_COUNT + 1):
 			var m := DungeonGen.generate(run.floor_seed(f))
 			var p := SiteBuilder.plan(m, run, f, catalog)

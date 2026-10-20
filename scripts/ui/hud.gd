@@ -8,7 +8,7 @@ extends CanvasLayer
 ## Enter focuses it).
 ##
 ## Pure presentation: it reads Hero state each frame and is told about voice
-## events through show_cast / show_fizzle / show_unknown_spell / set_mic_level.
+## events through show_cast / show_fizzle / show_unknown_spell.
 
 signal console_submitted(text: String)
 
@@ -36,10 +36,6 @@ var _cards: Array[SpellCard] = []
 var _card_box: HBoxContainer
 var _toast: Label
 var _toast_tween: Tween
-var _center: Label
-var _center_tween: Tween
-var _mic_bar: HudBar
-var _mic_target := 0.0
 var _console_enabled := false
 
 
@@ -60,7 +56,6 @@ func _ready() -> void:
 	_root.add_child(party)
 	_build_cards()
 	_build_toasts()
-	_build_mic()
 
 
 ## Show this hero's HP and spell slots; the party frame lists the crew.
@@ -81,10 +76,6 @@ func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 		player.spell_cast.connect(_on_spell_cast)
 	if not player.component_collected.is_connected(_on_component_collected):
 		player.component_collected.connect(_on_component_collected)
-
-
-func _process(delta: float) -> void:
-	_mic_bar.set_value(lerpf(_mic_bar.value, _mic_target, clampf(18.0 * delta, 0.0, 1.0)), "")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -158,27 +149,6 @@ func show_cooldown(id: String, seconds_left: float) -> void:
 
 func show_message(text: String, color: Color = Color.WHITE) -> void:
 	_show_toast(text, color)
-
-
-func set_mic_level(v: float) -> void:
-	_mic_target = clampf(v, 0.0, 1.0)
-
-
-## Big center text: "You died", "Exit reached". hold <= 0 keeps it up.
-func show_center(text: String, color: Color = Color.WHITE, hold: float = 0.0) -> void:
-	if _center_tween:
-		_center_tween.kill()
-	_center.text = text
-	_center.modulate = color
-	_center.visible = true
-	_center.scale = Vector2(1.4, 1.4)
-	_center_tween = create_tween()
-	_center_tween.tween_property(_center, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	if hold > 0.0:
-		_center_tween.tween_interval(hold)
-		_center_tween.tween_property(_center, "modulate:a", 0.0, 0.5)
-		_center_tween.tween_callback(func() -> void: _center.visible = false)
-
 
 
 ## Add the typed-spell box (bottom right). It stays hidden until Enter shows and focuses it; submit, Esc or a click
@@ -256,41 +226,7 @@ func _build_toasts() -> void:
 	_style_label(_toast, 40)
 	_toast.modulate.a = 0.0
 	_root.add_child(_toast)
-	_center = Label.new()
-	_center.set_anchors_preset(Control.PRESET_CENTER)
-	_center.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_center.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_center.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_label(_center, 84)
-	_center.visible = false
-	_root.add_child(_center)
-	_center.resized.connect(func() -> void: _center.pivot_offset = _center.size * 0.5)
 	_toast.resized.connect(func() -> void: _toast.pivot_offset = _toast.size * 0.5)
-
-
-func _build_mic() -> void:
-	var lbl := Label.new()
-	lbl.text = "MIC"
-	_style_label(lbl, 14)
-	lbl.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	lbl.offset_left = -64
-	lbl.offset_top = -50
-	lbl.offset_right = -16
-	lbl.offset_bottom = -30
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lbl.visible = false   # the mic meter is hidden during play (user, 2026-10-18); Voice setup and F1 still show the mic
-	_root.add_child(lbl)
-	_mic_bar = HudBar.new()
-	_mic_bar.visible = false
-	_mic_bar.fill = Color(0.95, 0.75, 0.25)
-	_mic_bar.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_mic_bar.offset_left = -320
-	_mic_bar.offset_right = -70
-	_mic_bar.offset_top = -44
-	_mic_bar.offset_bottom = -32
-	_mic_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_mic_bar)
 
 
 func _show_toast(text: String, color: Color) -> void:
@@ -312,32 +248,6 @@ static func _style_label(l: Label, size: int) -> void:
 
 
 # --- Custom controls ------------------------------------------------------------------------
-
-## A flat HP-style bar with an optional centered text.
-class HudBar extends Control:
-	var value := 1.0
-	var fill := Color(0.3, 0.85, 0.5)
-	var text := ""
-
-	func set_value(v: float, label: String = "") -> void:
-		v = clampf(v, 0.0, 1.0)
-		if is_equal_approx(v, value) and label == text:
-			return
-		value = v
-		text = label
-		queue_redraw()
-
-	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.6))
-		draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * value, size.y)), fill)
-		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.4), false, 1.5)
-		if text != "":
-			var fs := int(size.y * 0.62)
-			var font := ThemeDB.fallback_font
-			var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-			draw_string_outline(font, Vector2((size.x - w) * 0.5, size.y * 0.5 + fs * 0.36), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.8))
-			draw_string(font, Vector2((size.x - w) * 0.5, size.y * 0.5 + fs * 0.36), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
-
 
 ## One spell slot: key, name, "say: CAST X", the component and its charges, a radial cooldown sweep.
 ## An empty slot is a dim dashed outline; the held slot is highlighted with a bright frame and tag.

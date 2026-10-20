@@ -22,7 +22,7 @@ func setup() -> void:
 		for fl in [1, 2, 3]:
 			var run := ContractRun.make("guru", sd, 0.8)
 			var map := DungeonGen.for_run(run, fl)
-			var plan := SiteBuilder.plan(map, run, fl, ContractParts.prop_catalog(run.site_type))
+			var plan := SiteBuilder.plan(map, run, fl, PricedProp.catalog(run.site_type))
 			var root := Node3D.new()
 			add_child(root)
 			GameWorld.begin(map, root, run.floor_seed(fl))
