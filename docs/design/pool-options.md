@@ -140,6 +140,9 @@ but every seam would need its coping, liner and foam suppressed and the copings 
 
 ## Shark (planned, not built)
 
+**Superseded by `sharks.md`** (2026-10-19): the three variants, the moat measured against the shark, the property
+question, the networking and the room layouts. The plan below is kept as the starting point it was.
+
 An environmental hazard that lives in a pool. The pools are wading depth, so it is a **land shark in a paddling pool**:
 a fin cruising the water, its back breaking the surface.
 - **Where:** one shark in some indoor pools (bunker), some specimen pools (science, "the specimen") and the moats (the
