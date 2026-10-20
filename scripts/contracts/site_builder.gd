@@ -51,7 +51,6 @@ extends RefCounted
 const START_CLEAR := 3
 const EXIT_CLEAR := 3
 const CORRIDOR_CLEAR := 2
-const GATE_START_CLEAR := 5
 const PROP_SPACING := 4
 const MAX_PROPS := 6
 const PEST_WEIGHT_MULT := 3.5
@@ -102,7 +101,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	for c in ElevatorGeo.keep_cells(p.elevator):
 		avoid[c] = true
 
-	_plan_gates(map, run, floor_n, p, rng, avoid, near_corr)
+	GatePlanner.plan(map, run, floor_n, p, rng, avoid, near_corr)
 	_plan_employees(map, run, floor_n, p, rng, avoid)
 	var theme_seed: int = run.floor_seed(floor_n)
 	var t0 := Time.get_ticks_usec()
@@ -267,78 +266,7 @@ static func _flat_spot(map: HexMap, p: SitePlan, tag: String, c: Vector2i, radiu
 	return true
 
 
-# --- gates ----------------------------------------------------------------------------------
-
-static func _plan_gates(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, rng: RandomNumberGenerator, avoid: Dictionary, near_corr: Dictionary) -> void:
-	var cand: Array[String] = []
-	for tag: String in p.rooms:
-		if tag != p.start_room and tag != p.exit_room:
-			cand.append(tag)
-	if cand.is_empty():
-		for tag: String in p.rooms:
-			if tag != p.start_room:
-				cand.append(tag)
-	if floor_n >= ContractRun.FLOOR_COUNT:
-		# The origin gate: the biggest eligible room (ties: farthest from the start); a room with no room
-		# for it is skipped for the next biggest.
-		var by_size: Array[String] = cand.duplicate()
-		by_size.sort_custom(func(a: String, b: String) -> bool:
-			var na: int = (p.rooms[a] as Array).size()
-			var nb: int = (p.rooms[b] as Array).size()
-			if na != nb:
-				return na > nb
-			var da := Hex.distance(p.centers[a], p.start)
-			var db := Hex.distance(p.centers[b], p.start)
-			return da > db or (da == db and int(a.trim_prefix("room:")) < int(b.trim_prefix("room:"))))
-		var spot := NO_SPOT
-		var pick := ""
-		for radius in [2, 1, 0]:
-			for tag in by_size:
-				spot = _gate_spot(map, p, tag, radius, avoid, near_corr, [])
-				if spot != NO_SPOT:
-					pick = tag
-					break
-			if spot != NO_SPOT and (radius < 2 or pick == by_size[0]):
-				break
-		p.origin_room = pick
-		if spot != NO_SPOT:
-			p.gates.append({"cell": spot, "origin": true, "room": pick})
-		return
-	var count: int = run.floor_gates[floor_n - 1]
-	var chosen: Array[String] = []
-	var taken: Array[Vector2i] = []
-	var first_pick := rng.randi_range(0, maxi(0, cand.size() - 1))
-	for i in count:
-		# Rooms in order of preference: the first gate goes to a random room, each next one to the room
-		# farthest from the gates already placed (a room repeats only once all are used).
-		var ordered: Array[String] = cand.duplicate()
-		if chosen.is_empty():
-			ordered = ordered.slice(first_pick) + ordered.slice(0, first_pick)
-		else:
-			var score: Dictionary = {}
-			for tag in cand:
-				var nearest := 1 << 20
-				for ch in chosen:
-					nearest = mini(nearest, Hex.distance(p.centers[tag], p.centers[ch]))
-				score[tag] = nearest - (1000 if chosen.has(tag) else 0)
-			ordered.sort_custom(func(a: String, b: String) -> bool:
-				return int(score[a]) > int(score[b]) or (int(score[a]) == int(score[b]) and int(a.trim_prefix("room:")) < int(b.trim_prefix("room:"))))
-		var spot := NO_SPOT
-		var pick := ""
-		for radius in [1, 0]:
-			for tag in ordered:
-				spot = _gate_spot(map, p, tag, radius, avoid, near_corr, taken)
-				if spot != NO_SPOT:
-					pick = tag
-					break
-			if spot != NO_SPOT:
-				break
-		if spot == NO_SPOT:
-			continue
-		chosen.append(pick)
-		taken.append(spot)
-		p.gates.append({"cell": spot, "origin": false, "room": pick})
-
+# --- shared consts and the timing probes --------------------------------------------------------
 
 const NO_SPOT := Vector2i(1 << 20, 1 << 20)
 const CAMERA_YAW := 45.0                ## a model facing this yaw faces the game camera (CameraRig.YAW_DEG)
@@ -351,32 +279,6 @@ static var last_door_usec := 0   ## the doors' planning and thresholds (not in l
 static var last_hazard_usec := 0
 ## Microseconds the last plan() spent choosing the pool sharks (SharkPlanner.plan; not in last_plan_usec, like the doors).
 static var last_shark_usec := 0
-
-
-## The flat spot nearest the room centre that keeps clear of the start/exit, corridors and `taken` gates.
-static func _gate_spot(map: HexMap, p: SitePlan, tag: String, radius: int, avoid: Dictionary, near_corr: Dictionary, taken: Array) -> Vector2i:
-	var center: Vector2i = p.centers[tag]
-	var cells: Array[Vector2i] = (p.rooms[tag] as Array[Vector2i]).duplicate()
-	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		var da := Hex.distance(a, center)
-		var db := Hex.distance(b, center)
-		return da < db or (da == db and _cell_less(a, b)))
-	for strict in [true, false]:
-		for c in cells:
-			if not _flat_spot(map, p, tag, c, radius):
-				continue
-			if avoid.has(c) or Hex.distance(c, p.start) < GATE_START_CLEAR:
-				continue
-			if strict and near_corr.has(c):
-				continue
-			var ok := true
-			for t: Vector2i in taken:
-				if Hex.distance(t, c) < 5:
-					ok = false
-					break
-			if ok:
-				return c
-	return NO_SPOT
 
 
 # --- employees ------------------------------------------------------------------------------
@@ -653,19 +555,7 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	site.pest = run.pest
 	var rng := RandomNumberGenerator.new()
 	rng.seed = run.floor_seed(p.floor_number) * 31 + p.floor_number
-	var gate_pest := "" if run.pest == "everything" else run.pest
-	for g in p.gates:
-		var gate := Hellgate.spawn(g["cell"], {"difficulty": run.difficulty, "depth": p.floor_number, "origin": bool(g["origin"]), "pest": gate_pest})
-		if gate == null:
-			continue
-		site.gates.append(gate)
-		if bool(g["origin"]):
-			site.origin_gate = gate
-		# the monster under the level round the gate's room (cosmetic: every machine builds it from the seed; it sinks away
-		# when its gate closes)
-		var beast := HellgateBeast.for_gate(gate, map, p, run.floor_seed(p.floor_number))
-		if beast != null:
-			site.beasts.append(beast)
+	GatePlanner.spawn(map, run, p, site)
 	for e in p.employees:
 		var emp := Employee.spawn(e["cell"], {"style": str(e["style"]), "name": str(e["name"])})
 		if emp != null:

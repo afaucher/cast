@@ -470,7 +470,7 @@ static func _plan_to_carve(map: HexMap, run: ContractRun, floor_n: int) -> Array
 		p.elevator["look"] = run.elevator_look
 	for c in ElevatorGeo.keep_cells(p.elevator):
 		avoid[c] = true
-	SiteBuilder._plan_gates(map, run, floor_n, p, rng, avoid, near_corr)
+	GatePlanner.plan(map, run, floor_n, p, rng, avoid, near_corr)
 	SiteBuilder._plan_employees(map, run, floor_n, p, rng, avoid)
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, run.floor_seed(floor_n))
 	var gate_zone := {}
