@@ -461,7 +461,7 @@ func _check_plan(map: HexMap, plan: SitePlan, tag: String) -> void:
 		var near_corridor := 99
 		for cc in corridor_cells:
 			near_corridor = mini(near_corridor, Hex.distance(c, cc))
-		check(near_corridor >= SiteBuilder.PACKAGE_DOOR_MIN and near_corridor <= SiteBuilder.PACKAGE_DOOR_MAX + 1,
+		check(near_corridor >= PackagePlanner.PACKAGE_DOOR_MIN and near_corridor <= PackagePlanner.PACKAGE_DOOR_MAX + 1,
 				"%s: package %s is %d cells from a corridor (2-7: near a door, not in it)" % [tag, c, near_corridor])
 		var by_wall := false
 		for d in Hex.DIRS:

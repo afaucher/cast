@@ -221,7 +221,7 @@ Spilled decorative contents (a few skulls, yogurt tubs with their lids, green pi
 flattened flaps shrink away so the spill is gone 30 s after the break, like other player-caused marks;
 a torn-paper grime mark (`Grime.PAPER`) fades on the same clock.
 
-- **Placement** (`SiteBuilder._plan_packages` → `SitePlan.packages`): a dedicated RNG seeded from the floor
+- **Placement** (`PackagePlanner.plan` → `SitePlan.packages`): a dedicated RNG seeded from the floor
   seed, so no prop, decor piece or pack moves. 4–6 spots a floor on open room floor, backed against a wall
   2–6 cells from the nearest corridor cell (near a door, never in the doorway or a corridor), outside the
   START / EXIT clear zones and hellgate zones, clear of every planned body (employees, notes, priced props,
