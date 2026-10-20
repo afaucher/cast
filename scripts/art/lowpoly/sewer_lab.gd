@@ -97,6 +97,7 @@ var fog_view: FogView
 var crew_at: Array[Vector3] = []
 var _contents: Array[Node3D] = []    ## things that move (the gator, rats): shown only in a space in view (fog case)
 var _props: Array[Node3D] = []       ## everything placed with _put (the fog shows the static ones in view or seen)
+var bridges: Array[Dictionary] = []  ## {node, length}: every grate bridge, checked by _check_bridges()
 
 
 func _ready() -> void:
@@ -116,6 +117,8 @@ func _ready() -> void:
 	call("_case_" + case_name)
 	if view_order.is_empty():
 		_view("game", GAME_SIZE, Vector3.ZERO)
+	if not bridges.is_empty():
+		_check_bridges()
 	if shot_path != "":
 		_run_shots()
 	else:
@@ -707,6 +710,51 @@ func _ledge(r: Vector2i) -> Vector3:
 	return Hex.to_world(r) + far * (lane_axis.dot(far) + 0.45)
 
 
+## A grate bridge over a channel at `at` (a point in the channel), spanning ACROSS the channel whose flow axis is `axis`:
+## the model's length runs along its local X, and a yaw of yaw_to(axis) turns its local Z onto the axis, so X spans from
+## bank to bank. (Round 1 added 90 degrees, which laid the bridge along the channel: no crossing.) Every bridge is recorded
+## for _check_bridges().
+func _bridge_over(at: Vector3, axis: Vector3, length: float, width: float) -> Node3D:
+	var yaw := yaw_to(Vector3(axis.x, 0, axis.z).normalized())
+	var b := _put(SewerProps.build("grate_bridge", {"length": length, "width": width}), Vector3(at.x, 0.0, at.z), yaw)
+	bridges.append({"node": b, "length": length})
+	return b
+
+
+## Every bridge must cross the water: its two ends on DRY floor (not a wet cell, not a pool kite, not a wall), on opposite
+## banks (the span between them passes over water). Prints one line per bridge; pushes an error on a failure.
+func _check_bridges() -> bool:
+	var ok := true
+	for i in bridges.size():
+		var rec: Dictionary = bridges[i]
+		var b: Node3D = rec["node"]
+		var half := float(rec["length"]) * 0.5 - 0.12
+		var x := b.global_transform.basis.x.normalized()
+		var p := b.global_position
+		var ends: Array[Vector3] = [p - x * half, p + x * half]
+		var dry := _dry_floor(ends[0]) and _dry_floor(ends[1])
+		var crosses := false
+		for k in range(1, 20):
+			if not _dry_floor(ends[0].lerp(ends[1], float(k) / 20.0)):
+				crosses = true
+		var good := dry and crosses
+		ok = ok and good
+		print("bridge %d at %s: ends on dry floor %s, spans water %s -> %s" % [i, Hex.from_world(p), dry, crosses, "OK" if good else "FAIL"])
+		if not good:
+			push_error("sewer lab: bridge %d does not cross the water" % i)
+	return ok
+
+
+## A dry floor point: a floor cell (not a wall or a wall part), not sunk, not over a pool kite.
+func _dry_floor(p: Vector3) -> bool:
+	var c := Hex.from_world(p)
+	if not map.has_cell(c) or map.cells[c].type == HexMap.Tile.WALL or wet.has(c):
+		return false
+	if map.wall_at(Vector3(p.x, 0.0, p.z)):
+		return false
+	return not map.water_at(Vector3(p.x, 0.0, p.z))
+
+
 func _gator(pos: Vector3, yaw: float, bend: float, jaw: float = 0.0) -> Node3D:
 	var gt := SewerProps.build("gator", {"bend": bend, "jaw": jaw})
 	_put(gt, Vector3(pos.x, FLOOR_Y + 0.16, pos.z), yaw)   # (up on its legs: the back and head ride out of the murk)
@@ -797,7 +845,7 @@ func _dress_rooms(L: Dictionary) -> void:
 	var head := Hex.to_world(b0 + Hex.DIRS[1] * 6)
 	_put(SewerProps.build("outfall", {"radius": 0.62, "drop": 1.3}), Vector3(head.x, FLOOR_Y + 0.36, head.z) - ax * 0.15, yaw_to(-ax))
 	var br := Hex.to_world(b0 + Hex.DIRS[1] * 2)
-	_put(SewerProps.build("grate_bridge", {"length": 4.2, "width": 1.3}), Vector3(br.x, 0.0, br.z), yaw_to(ax) + 90.0)
+	_bridge_over(br, ax, 4.2, 1.3)
 	var rats := SewerProps.build("rat_swarm", {"count": 9, "radius": 0.8, "seed": 4})
 	_put(rats, Hex.to_world(b0 + Hex.DIRS[0] * 3 + Hex.DIRS[5]), 0.0)
 	_contents.append(rats)
@@ -911,7 +959,7 @@ func _case_junction() -> void:
 	_put(SewerProps.build("outfall", {"radius": 0.6, "drop": 1.0}), Vector3(wall.x, 0.0, wall.z) + into * 0.1, yaw_to(into))
 	# a grate bridge across the DIRS[0] channel, pipe runs on the walls, a ladder and the light shaft at DIRS[3]
 	var br := Hex.to_world(j0 + Hex.DIRS[0] * 3)
-	_put(SewerProps.build("grate_bridge", {"length": 4.2, "width": 1.2}), Vector3(br.x, 0.0, br.z), yaw_to(Hex.dir_vector(0)) + 90.0)
+	_bridge_over(br, Hex.dir_vector(0), 4.2, 1.2)
 	var pw := Hex.to_world(j0 + Hex.DIRS[3] * 5 + Hex.DIRS[2] * 0)
 	_put(SewerProps.build("pipe_bundle", {"length": 3.5, "col": look["pipe"]}), Hex.to_world(j0 + Hex.DIRS[2] * 4 + Hex.DIRS[3] * 1) + Hex.dir_vector(5) * 0.0, yaw_to(-Hex.dir_vector(2)) )
 	var lad := Hex.to_world(j0 + Hex.DIRS[3] * 5)
