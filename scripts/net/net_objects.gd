@@ -549,25 +549,8 @@ func _host_request(from: int, data: Dictionary) -> void:
 		"collect", "swap":
 			if active:
 				_host_grant(from, int(data.get("id", 0)), what, int(data.get("want", 0)), at)
-		"follow", "wait":
-			if not active or hero == null:
-				return
-			var e := NetRegistry.node(int(data.get("id", 0))) as Employee
-			if e == null or e.dead:
-				return
-			# The asker is the hero's owner (seat_of(from)) and its screen found the employee within reach: trusted. Only
-			# the state is judged (Employee.can_follow / can_wait with reach_checked).
-			var p := hero.global_position if at == Vector3.INF else at
-			var d := GameWorld.flat_distance(e.global_position, p)
-			var was := e.state_name()
-			var granted := e.request_follow(hero, at, true) if what == "follow" else e.request_wait(hero, at, true)
-			employee_log.append({"what": what, "seat": seat, "id": int(data.get("id", 0)), "granted": granted, "d": d, "state": was})
-			if not granted:
-				# (a refused E: the employee's state had moved on by the time the host judged it; passive log only)
-				print("[Net] %s from seat %d refused: %s is %s, leader %s (%.2f from the client's spot)" % [what, seat,
-					e.display_name, e.state_name(), str(NetFloor.id_of(e.leader())) if e.leader() != null else "none", d])
 		_:
-			# A request about one object (a door's "door", ...): the object decides (net_request).
+			# A request about one object (a door's "door", an employee's "follow" / "wait"): the object decides (net_request).
 			var obj := NetRegistry.node(int(data.get("id", 0)))
 			if obj != null and obj.has_method("net_request"):
 				obj.call("net_request", what, data, from, self)

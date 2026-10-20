@@ -301,6 +301,29 @@ func request_follow(hero: Actor, at: Vector3 = Vector3.INF, reach_checked: bool 
 	return true
 
 
+## Host (the net-object contract's request, NetObjects): a client's E on this employee, `follow` or `wait`. The asker is the
+## hero's owner and its screen found the employee within reach: trusted. Only the state is judged (can_follow / can_wait
+## with reach_checked); requests are taken in order, so of two at once the first wins. Every one goes in
+## objects.employee_log; a refused one is printed (passive log only).
+func net_request(what: String, data: Dictionary, peer: int, objects: NetObjects) -> void:
+	if what != "follow" and what != "wait":
+		return
+	var hero := objects.hero_of(peer)
+	if not objects.active or hero == null or dead:
+		return
+	var at: Vector3 = data.get("at", hero.global_position)
+	var p := hero.global_position if at == Vector3.INF else at
+	var d := GameWorld.flat_distance(global_position, p)
+	var was := state_name()
+	var granted := request_follow(hero, at, true) if what == "follow" else request_wait(hero, at, true)
+	var seat := NetFloor.id_of(hero)
+	objects.employee_log.append({"what": what, "seat": seat, "id": int(data.get("id", 0)), "granted": granted, "d": d, "state": was})
+	if not granted:
+		# (a refused E: the employee's state had moved on by the time the host judged it)
+		print("[Net] %s from seat %d refused: %s is %s, leader %s (%.2f from the client's spot)" % [what, seat,
+			display_name, state_name(), str(NetFloor.id_of(leader())) if leader() != null else "none", d])
+
+
 func _controlled_by(hero: Actor) -> bool:
 	var ld := leader()
 	if ld == null:
