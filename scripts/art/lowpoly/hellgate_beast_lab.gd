@@ -7,7 +7,9 @@ extends Node3D
 ##
 ##   godot --path . --resolution 1920x1080 -- --scene res://scenes/hellgate_beast_lab.tscn [--style abyss]
 ##         [--seed 7] [--arch guru] [--floor 1] [--gate 0] [--shot <dir/prefix>] [--styles a,b] [--views game,wide]
-##         [--motion abyss] [--t 1.7] [--zfight] [--wired] [--diff 0.6]
+##         [--motion abyss] [--t 1.7] [--zfight] [--wired] [--diff 0.6] [--exit retract|whip] [--unchecked]
+##         [--gif <dir/prefix> --scenario exit|hurt [--secs 4] [--fps 15] [--size 24] [--center x,z]] [--survey 1-40]
+##         [--at x,y,z]
 ##
 ## --style    abyss | peek | none (interactive start style; abyss is the game's look, peek a lab-only option)
 ## --wired    keep the beasts SiteBuilder.spawn built (the game's path: watching their gates) instead of the lab's own
@@ -24,7 +26,16 @@ extends Node3D
 ## --perf     with --wired: the GPU / CPU render time (ms, 240 frames) at the default zoom on each gate of the floor, with
 ##            the floor's beasts and then without them
 ## --zfight   run ZFightCheck on every style (its own pieces, and against the real terrain) and print the findings
-## Interactive (no --shot): 1-2 pick a style, 0 none, C closes / reopens the gate (the beast sinks), Q / E zoom, WASD pan.
+## --exit     how the beasts leave when their gate closes: retract (down their own paths; the game's) or whip
+## --unchecked  build the limbs without the clearance pass (HellgateBeast.check_clearance off: the first wired version)
+## --gif      with --wired, run Godot with --fixed-fps <fps>: capture <secs> of the game camera on the room (960 wide PNGs
+##            <prefix>_0000.png ...; tools turn them into a GIF). Scenarios: exit (the gate closes 0.6 s in) or hurt (three
+##            hits, sustained fire, then the gate at 12 % HP)
+## --survey a-b  no window needed: every gate room of floors 1-3 of seeds a..b, built unchecked and checked, and the worst
+##            clearances (at rest and in the envelope) printed, with where the worst is
+## --at x,y,z   the "spot" view looks there instead of at the style's focus
+## Interactive (no --shot): 1-2 pick a style, 0 none, C closes the gate (wired) or makes the beast leave, H hits the gate,
+## X swaps the exit (retract / whip), Q / E zoom, WASD pan.
 
 const GAME_YAW := 45.0
 const GAME_PITCH := -56.0
@@ -48,15 +59,14 @@ var view: HexMapView
 var gate: Hellgate
 var room_tag := ""
 var room_cells: Array[Vector2i] = []
-var avoid: Array[Vector2] = []
+var obstacles: Array[Vector4] = []
+var exit_style := HellgateBeast.EXIT_STYLE
 var beast: HellgateBeast = null
 var camera: Camera3D
 var crew_center := Vector3.ZERO
 var room_center := Vector3.ZERO
 var _cam_target := Vector3.ZERO
 var _cam_size := GAME_SIZE
-var _closing := false
-var _close_k := 0.0
 
 
 func _ready() -> void:
@@ -69,6 +79,12 @@ func _ready() -> void:
 	shot_prefix = _arg(a, "--shot")
 	t_shot = float(_arg(a, "--t", "1.7"))
 	wired = a.has("--wired")
+	exit_style = _arg(a, "--exit", HellgateBeast.EXIT_STYLE)
+	if a.has("--unchecked"):
+		HellgateBeast.check_clearance = false
+	if a.has("--survey"):
+		_run_survey(_arg(a, "--survey", "1-20"))
+		return
 	_build_floor()
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -80,7 +96,10 @@ func _ready() -> void:
 	_set_style(style)
 	_cam_target = crew_center
 	_aim(GAME_SIZE, crew_center)
-	if a.has("--zfight"):
+	_set_exit(exit_style)
+	if a.has("--gif"):
+		_run_gif(a)
+	elif a.has("--zfight"):
 		_run_zfight()
 	elif a.has("--perf"):
 		_run_perf()
@@ -140,11 +159,7 @@ func _build_floor() -> void:
 	gate.model.set_active(true)
 	room_cells.assign(plan.rooms[room_tag])
 	room_center = Hex.to_world(plan.centers[room_tag], float(plan.base_levels[room_tag]))
-	for pr in plan.props:
-		if pr.has("pos"):
-			avoid.append(pr["pos"])
-	for d in plan.decor:
-		avoid.append(d["pos"])
+	obstacles = HellgateBeast.obstacles_of(plan, gate.global_position, gate.origin)
 	print("lab: seed %d %s floor %d  gate %s in %s (%s, %d cells)  %d gates" % [seed_value, archetype, floor_n,
 			str(Hex.from_world(gate.global_position)), room_tag, plan.theme_of(room_tag), room_cells.size(), site.gates.size()])
 
@@ -188,6 +203,13 @@ func _place_crew() -> void:
 	crew_center = sum / maxf(placed, 1) + Vector3(0, CameraRig.FOCUS_HEIGHT, 0)
 
 
+func _set_exit(e: String) -> void:
+	exit_style = e
+	for b: HellgateBeast in get_tree().get_nodes_in_group(HellgateBeast.GROUP):
+		b.exit_style = e
+	print("exit: ", e)
+
+
 func _set_style(s: String) -> void:
 	if wired:
 		return
@@ -199,9 +221,10 @@ func _set_style(s: String) -> void:
 		return
 	var t0 := Time.get_ticks_usec()
 	var seed_v := hash(Vector3i(Hex.from_world(gate.global_position).x, Hex.from_world(gate.global_position).y, run.floor_seed(floor_n)))
-	beast = HellgateBeast.make(s, map, room_cells, gate.global_position, gate.origin, seed_v, avoid)
+	beast = HellgateBeast.make(s, map, room_cells, gate.global_position, gate.origin, seed_v, obstacles)
 	add_child(beast)
 	beast.set_gate(gate.model)
+	beast.exit_style = exit_style
 	print("beast %s%s: %s  built in %.1f ms" % [s, " (origin)" if gate.origin else "", str(beast.stats), (Time.get_ticks_usec() - t0) / 1000.0])
 
 
@@ -225,7 +248,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_0:
 				_set_style("none")
 			KEY_C:
-				_closing = not _closing
+				if wired:
+					gate.die()
+				elif beast != null:
+					beast.leave()
+			KEY_H:
+				gate.apply_damage(gate.max_hp * 0.05, null)
+				if not wired and beast != null:
+					beast.hurt(0.05)
+			KEY_X:
+				_set_exit("whip" if exit_style == "retract" else "retract")
 			KEY_Q:
 				_cam_size = clampf(_cam_size * 1.1, 8.0, 48.0)
 			KEY_E:
@@ -246,9 +278,6 @@ func _process(delta: float) -> void:
 		mv += Vector3(1, 0, -1)
 	_cam_target += mv.normalized() * delta * 10.0 if mv != Vector3.ZERO else Vector3.ZERO
 	_aim(_cam_size, _cam_target)
-	_close_k = move_toward(_close_k, 1.0 if _closing else 0.0, delta * 0.6)
-	if beast != null:
-		beast.set_close(_close_k)
 
 
 # ------------------------------------------------------------------ shots
@@ -290,7 +319,11 @@ func _run_shots(a: PackedStringArray) -> void:
 					var focus := gate.global_position
 					if beast != null and beast.focus != Vector3.ZERO:
 						focus = beast.focus
-					_aim(10.0, focus)
+					var at := _arg(a, "--at")
+					if at != "":
+						var xyz := at.split(",")
+						focus = Vector3(float(xyz[0]), float(xyz[1]), float(xyz[2]))
+					_aim(7.0, focus)
 			await _snap("%s_%s_%s.png" % [shot_prefix, s, v])
 	for s: String in motion:
 		_set_style(s)
@@ -362,3 +395,135 @@ func _run_zfight() -> void:
 		for f in f_ter.slice(0, 6):
 			print("   ter  ", ZFightCheck.describe(f))
 	get_tree().quit()
+
+
+# ------------------------------------------------------------------ GIF frames
+
+func _run_gif(a: PackedStringArray) -> void:
+	shot_prefix = "gif"
+	var prefix := _arg(a, "--gif")
+	var scenario := _arg(a, "--scenario", "exit")
+	var secs := float(_arg(a, "--secs", "4"))
+	var fps := float(_arg(a, "--fps", "15"))
+	var size := float(_arg(a, "--size", str(GAME_SIZE)))
+	var look_at := room_center + Vector3(0, 0.8, 0)
+	var center := _arg(a, "--center")
+	if center != "":
+		var xz := center.split(",")
+		look_at = Vector3(float(xz[0]), look_at.y, float(xz[1]))
+	_aim(size, look_at)
+	for i in 20:
+		await get_tree().process_frame
+	var frames := int(secs * fps)
+	var cell := Hex.from_world(gate.global_position)
+	var hits: Array[Vector2] = []      # (time, share of max HP)
+	if scenario == "hurt":
+		hits.append_array([Vector2(0.5, 0.04), Vector2(1.1, 0.04), Vector2(1.6, 0.06)])
+		var at := 2.2
+		while at < 3.2:
+			hits.append(Vector2(at, 0.015))
+			at += 0.1
+		hits.append(Vector2(3.4, -0.12))   # (to 12 % HP)
+	for f in frames:
+		var now := float(f) / fps
+		if scenario == "exit" and absf(now - 0.6) < 0.5 / fps:
+			gate.die()
+		for h in hits:
+			if absf(now - h.x) < 0.5 / fps and is_instance_valid(gate) and not gate.dead:
+				var amount := gate.max_hp * h.y if h.y > 0.0 else maxf(gate.hp - gate.max_hp * -h.y, 0.0)
+				gate.apply_damage(amount, null)
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		img.resize(960, 540, Image.INTERPOLATE_LANCZOS)
+		img.save_png("%s_%04d.png" % [prefix, f])
+		await get_tree().process_frame
+	var b := _beast_at(cell)
+	var hp := "closed" if not is_instance_valid(gate) or gate.dead else "%.0f / %.0f" % [gate.hp, gate.max_hp]
+	print("gif: %d frames, gate %s, beast %s, flail %.2f" % [frames, hp, b.state() if b != null else "-", b.flail() if b != null else 0.0])
+	get_tree().quit()
+
+
+func _beast_at(cell: Vector2i) -> HellgateBeast:
+	for b: HellgateBeast in get_tree().get_nodes_in_group(HellgateBeast.GROUP):
+		if b.gate_cell == cell:
+			return b
+	return null
+
+
+# ------------------------------------------------------------------ the clearance survey
+
+## Every gate room of floors 1-3 of the seeds: the beasts built unchecked (the first wired version) and checked; the worst
+## clearances printed (rest: the tube as built; env: with every motion the shader can add).
+func _run_survey(range_text: String) -> void:
+	shot_prefix = "survey"
+	HellgateBeast.debug_fails = OS.get_cmdline_user_args().has("--debug")
+	BeastLimbs.debug_self = OS.get_cmdline_user_args().has("--debug")
+	var ab := range_text.split("-")
+	var worst := {"before_rest": [1.0e9, ""], "before_env": [1.0e9, ""], "after": [1.0e9, ""]}
+	var dropped := 0
+	var limbs := 0
+	var fails := {"level": 0, "self": 0, "limbs": 0}
+	var floors := 0
+	var worst_ms := 0.0
+	var sum_ms := 0.0
+	var t0 := Time.get_ticks_msec()
+	for sd in range(int(ab[0]), int(ab[ab.size() - 1]) + 1):
+		for fl in [1, 2, 3]:
+			var r := ContractRun.make("guru", sd, 0.8)
+			var m := DungeonGen.for_run(r, fl)
+			var pl := SiteBuilder.plan(m, r, fl, ContractParts.prop_catalog(r.site_type))
+			var root := Node3D.new()
+			add_child(root)
+			GameWorld.begin(m, root, r.floor_seed(fl))
+			var dummies: Array[Node3D] = []
+			for g in pl.gates:
+				var c: Vector2i = g["cell"]
+				var d := Node3D.new()
+				root.add_child(d)
+				d.global_position = Hex.to_world(c, float(m.get_cell(c).level))
+				dummies.append(d)
+			for checked in [false, true]:
+				HellgateBeast.check_clearance = checked
+				var built: Array[HellgateBeast] = []
+				var tb := Time.get_ticks_usec()
+				for d in dummies:
+					var b := HellgateBeast.for_gate(d, m, pl, r.floor_seed(fl))
+					if b != null:
+						built.append(b)
+				if checked:
+					var ms := (Time.get_ticks_usec() - tb) / 1000.0
+					floors += 1
+					sum_ms += ms
+					worst_ms = maxf(worst_ms, ms)
+				for b in built:
+					var tag := "seed %d floor %d gate %s" % [sd, fl, str(b.gate_cell)]
+					if checked:
+						var rep: Dictionary = b.clearance_report()
+						_keep(worst, "after", rep, tag)
+						dropped += int(b.stats["dropped"])
+						for key in fails:
+							fails[key] += int((b.stats["fails"] as Dictionary)[key])
+						limbs += int(b.stats["limbs"])
+					else:
+						BeastLimbs.rest_only = true
+						_keep(worst, "before_rest", b.clearance_report(), tag)
+						BeastLimbs.rest_only = false
+						_keep(worst, "before_env", b.clearance_report(), tag)
+				for b in built:
+					b.free()
+			GameWorld.end()
+			root.free()
+	HellgateBeast.check_clearance = true
+	for k in worst:
+		print("survey %s: worst %.3f at %s" % [k, float(worst[k][0]), str(worst[k][1])])
+	print("survey: %d limbs placed, %d dropped, %.1f s, re-roll causes %s" % [limbs, dropped, (Time.get_ticks_msec() - t0) / 1000.0, str(fails)])
+	print("survey: phases (ms, both builds) ", str(HellgateBeast.prof.keys()), " ", str(HellgateBeast.prof.values().map(func(v: int) -> int: return v / 1000)))
+	print("survey: checked build per floor avg %.0f ms, worst %.0f ms (%d floors)" % [sum_ms / maxf(floors, 1), worst_ms, floors])
+	get_tree().quit()
+
+
+static func _keep(worst: Dictionary, key: String, rep: Dictionary, tag: String) -> void:
+	if float(rep["worst"]) < float(worst[key][0]):
+		var at: Vector3 = rep.get("at", Vector3.ZERO)
+		worst[key] = [float(rep["worst"]), "%s (level %.3f self %.3f limbs %.3f) at %.2f,%.2f,%.2f" % [tag, float(rep["level"]),
+				float(rep["self"]), float(rep["limbs"]), at.x, at.y, at.z]]
