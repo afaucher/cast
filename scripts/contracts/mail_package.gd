@@ -261,6 +261,30 @@ func net_contacts() -> void:
 		_check_shove_contacts()
 
 
+# --- The net-object contract (NetObjects) -------------------------------------------------------------------------
+# No late-join rows: an opened box is a gone id (NetJoin), and its prize a pickup (replayed as one).
+
+## Host: the break goes to everyone as `obj.break {id, c, cr, cid}`, with what only the host rolled: the contents, the
+## crypto and the component.
+func net_link(objects: NetObjects, id: int) -> void:
+	objects.link(broken, _net_broken.bind(objects, id))
+
+
+func _net_broken(_pkg: MailPackage, _culprit: Node, rolled: String, objects: NetObjects, id: int) -> void:
+	objects.tell("obj.break", {"id": id, "c": rolled, "cr": crypto_amount, "cid": component_id})
+	objects.count("breaks")
+
+
+## Client: the host opened it (obj.break): it breaks here with the host's contents.
+func net_event(kind: String, data: Dictionary, objects: NetObjects) -> void:
+	if kind != "obj.break" or dead:
+		return
+	forced_contents = str(data.get("c", ""))
+	crypto_amount = int(data.get("cr", 0))
+	component_id = str(data.get("cid", ""))
+	objects.copy_broke(self)
+
+
 # --- Breaking ----------------------------------------------------------------------------
 
 func _on_death() -> void:

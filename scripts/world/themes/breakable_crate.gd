@@ -115,6 +115,25 @@ func net_contacts() -> void:
 		_check_shove_contacts()
 
 
+# --- The net-object contract (NetObjects) -------------------------------------------------------------------------
+# No late-join rows: one hit breaks a crate, and a broken one is a gone id (NetJoin).
+
+## Host: the break goes to everyone as `obj.break {id}`.
+func net_link(objects: NetObjects, id: int) -> void:
+	objects.link(broken, _net_broken.bind(objects, id))
+
+
+func _net_broken(_crate: BreakableCrate, _culprit: Node, objects: NetObjects, id: int) -> void:
+	objects.tell("obj.break", {"id": id})
+	objects.count("breaks")
+
+
+## Client: the host broke it (obj.break).
+func net_event(kind: String, _data: Dictionary, objects: NetObjects) -> void:
+	if kind == "obj.break" and not dead:
+		objects.copy_broke(self)
+
+
 # --- Breaking ----------------------------------------------------------------------------
 
 func _on_death() -> void:

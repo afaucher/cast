@@ -133,16 +133,6 @@ func begin(local: Hero) -> void:
 					_ticked.append(n)
 				if n.has_method("net_contacts"):
 					_contacts.append(n)
-		elif _session.hosting:
-			if n is BreakableCrate:
-				link((n as BreakableCrate).broken, _on_broken.bind(id))
-			elif n is MailPackage:
-				link((n as MailPackage).broken, _on_mail_broken.bind(id))
-		elif n is MailPackage:
-			_ticked.append(n)
-			_contacts.append(n)
-		elif n is BreakableCrate:
-			_contacts.append(n)
 	if local != null:
 		link(local.component_collected, func(_id: String, _n: int, _r: String) -> void: send_loadout())
 		link(local.component_swapped, func(_o: String, _n: String, _s: int) -> void: send_loadout())
@@ -352,11 +342,6 @@ func _on_ledger_line(line: Dictionary) -> void:
 		stats["ledger_out"] = int(stats["ledger_out"]) + 1
 
 
-func _on_broken(_obj: Node, _culprit: Node, id: int) -> void:
-	_send(0, "obj.break", {"id": id})
-	stats["breaks"] = int(stats["breaks"]) + 1
-
-
 ## A GameWorld.time on this machine as a time on the shared clock (host_time).
 func host_stamp(t: float) -> float:
 	return now() + (t - GameWorld.time)
@@ -365,11 +350,6 @@ func host_stamp(t: float) -> float:
 ## A time on the shared clock as this machine's GameWorld.time.
 func local_stamp(t: float) -> float:
 	return GameWorld.time + (t - now())
-
-
-func _on_mail_broken(pkg: MailPackage, _culprit: Node, contents: String, id: int) -> void:
-	_send(0, "obj.break", {"id": id, "c": contents, "cr": pkg.crypto_amount, "cid": pkg.component_id})
-	stats["breaks"] = int(stats["breaks"]) + 1
 
 
 # --- M6: a late joiner's share of the snapshot ------------------------------------------------------------------
@@ -510,8 +490,6 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 	if not active:
 		return
 	match kind:
-		"obj.break":
-			_client_break(data)
 		"obj.pickup":
 			_client_pickup(data)
 		"obj.pick":
@@ -697,29 +675,11 @@ func _apply_loadout(data: Dictionary) -> void:
 	stats["loadouts"] = int(stats["loadouts"]) + 1
 
 
-## Client: an obj.* event about one object (obj.door, obj.break, ...), to that object (net_event).
-func _object_event(kind: String, data: Dictionary) -> bool:
+## Client: an obj.* event about one object (obj.break, obj.hurt, obj.door, obj.fuse, ...), to that object (net_event).
+func _object_event(kind: String, data: Dictionary) -> void:
 	var obj := NetRegistry.node(int(data.get("id", 0)))
-	if obj == null or not obj.has_method("net_event"):
-		return false
-	obj.call("net_event", kind, data, self)
-	return true
-
-
-func _client_break(data: Dictionary) -> void:
-	if _object_event("obj.break", data):
-		return
-	var n := NetRegistry.node(int(data.get("id", 0))) as Actor
-	if n == null or n.dead:
-		return
-	if n is MailPackage:
-		var m := n as MailPackage
-		m.forced_contents = str(data.get("c", ""))
-		m.crypto_amount = int(data.get("cr", 0))
-		m.component_id = str(data.get("cid", ""))
-	_ticked.erase(n)
-	Net.remote_die(n)
-	stats["breaks"] = int(stats["breaks"]) + 1
+	if obj != null and obj.has_method("net_event"):
+		obj.call("net_event", kind, data, self)
 
 
 func _client_pickup(data: Dictionary) -> void:
