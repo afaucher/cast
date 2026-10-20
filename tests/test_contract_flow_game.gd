@@ -487,21 +487,23 @@ func _check_incapacitated() -> void:
 	await frames(8)
 	var player: Hero = g.get("player")
 	var allies: Array[Hero] = g.get("allies")
+	# Solo, the player is the only hero a person plays: down = crew down, with both AI allies still standing (2026-10-20,
+	# "Option A"; an AI can't take the elevator or revive anyone).
+	allies[0].apply_damage(99999.0)
+	await frames(3)
+	check(g.get("_ending") != true, "an AI ally down: the contract goes on")
 	player.apply_damage(99999.0)
 	await frames(3)
-	check(g.get("_invoice") == null, "the contract goes on while an ally is up")
-	for a in allies:
-		a.apply_damage(99999.0)
-	await frames(3)
-	check(g.get("_ending") == true, "all heroes down: the contract is ending")
+	check(g.get("_ending") == true, "the player down (an AI still up): the contract is ending")
+	check(not allies[1].dead, "(the other AI is still standing)")
 	await get_tree().create_timer(GAME.INCAP_DELAY + 0.5).timeout
 	var inv: InvoiceScreen = g.get("_invoice")
-	check(inv != null, "all heroes down ends the contract with the invoice")
+	check(inv != null, "the player down ends the contract with the invoice")
 	if inv != null:
 		eq(str(inv.inv["reason"]), ContractSession.END_INCAPACITATED, "the reason is 'crew incapacitated'")
 		eq(int(inv.inv["stars"]), 1, "one star")
-		eq(int(inv.inv["revival_fees"]), 3 * Ledger.REVIVAL_FEE, "all three heroes down: corporate bills 3 x $10,000")
-		eq((inv.inv["revivals"] as Array).size(), 3, "one revival row per hero, the player's included")
+		eq(int(inv.inv["revival_fees"]), 2 * Ledger.REVIVAL_FEE, "two heroes down: corporate bills 2 x $10,000")
+		eq((inv.inv["revivals"] as Array).size(), 2, "one revival row per downed hero, the player's included")
 		check(int(inv.inv["payout"]) < 0, "so the net payout is negative")
 		eq(int(inv.inv["payout"]), Ledger.payout(), "and it matches the Ledger")
 	g.queue_free()

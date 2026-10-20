@@ -644,6 +644,17 @@ func _heroes() -> Array[Hero]:
 	return out
 
 
+## The heroes people play: this machine's player and, in a crew, every seat a peer owns (not the AI's).
+func _human_heroes() -> Array[Hero]:
+	var out: Array[Hero] = [player]
+	if _crewed() and Session.seats != null:
+		for seat: int in heroes_by_seat:
+			var h: Hero = heroes_by_seat[seat]
+			if h != null and h != player and Session.seats.owner_of(seat) != 0:
+				out.append(h)
+	return out
+
+
 # --- World --------------------------------------------------------------------------------------
 
 func _build_world() -> void:
@@ -2474,8 +2485,10 @@ func _invoice_demo() -> void:
 ## All heroes down ends the contract (the invoice still pays what was earned). A downed player hands the
 ## camera to a living ally.
 func _check_crew() -> void:
+	# "Crew incapacitated" when every hero a PERSON plays is down: AI seats don't keep the contract alive (user, 2026-10-20,
+	# "Option A is fine for now"; solo: you down = crew down, since an AI ally can't take the elevator or revive you).
 	var any_alive := false
-	for h in _heroes():
+	for h in _human_heroes():
 		if not h.dead:
 			any_alive = true
 	if not any_alive:
