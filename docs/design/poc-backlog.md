@@ -287,3 +287,11 @@ hero, the host owns monsters, and cross-owner hits and shoves travel as messages
 - **P1** Contracts: objectives with pay (employees $10 each, disinfect a room $10k, hellgates $3k each), property-damage deductions, end-of-job invoice. See `contracts.md`.
 - Restock spell components at the van (floor 1 only); later.
 - **P2** Villain-lair site type (torture chamber, throne room, lab, moat, barracks). See `environment.md`.
+
+## 16. Gags and one-offs
+
+- **P3** A half-man, half-shark **employee** (user, 2026-10-20: "a half man half shark employee. It would be a good gag").
+  A rescuable staff member (suit and tie up top, shark below, or the other way round) who follows the crew like any
+  employee; candidates for the joke: he wades the sewer and moat channels happily, the shark lines up with his "family"
+  in a lair, his rescue line on the headset. Fits the supervillain lair (a failed experiment on the payroll). Not
+  designed; pick it up once the sharks and the sewer have settled.
