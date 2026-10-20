@@ -14,6 +14,7 @@ extends RefCounted
 ##   var found := await ZFightModels.scan(self)     # every model and stack: Array of findings (ZFightCheck) + "scene"
 
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
+const SharkModels := preload("res://scripts/art/lowpoly/props/shark_models.gd")
 const MenuBackdropScript := preload("res://scripts/ui/menu_backdrop.gd")
 
 const BIT_KINDS: Array[String] = ["skull", "tub", "lid", "pickle", "flap", "plank"]
@@ -69,6 +70,10 @@ static func models() -> Array[Dictionary]:
 		out.append({"name": "component/" + id, "make": ComponentProps.make.bind(id, false), "ground": true})
 	for kind: String in POOL_KINDS:
 		out.append({"name": "pool/" + kind, "make": PoolProps.build.bind(kind, {}), "ground": false})
+	# the sharks (docs/design/sharks.md, lab-only for now): the imp's own seat is checked here without it, the imp against
+	# the shark in STACKS (the swarmer model alone is monster/swarmer)
+	for v: String in SharkModels.VARIANTS:
+		out.append({"name": "shark/" + v, "make": _shark.bind(v), "ground": false})
 	for fmt: String in NoteCopy.FORMATS:
 		out.append({"name": "note/" + fmt, "make": NoteModels.build.bind(fmt, Color(0.5, 0.5, 0.55)), "ground": true})
 	return out
@@ -87,6 +92,7 @@ static func stacks() -> Array[Dictionary]:
 			out.append({"name": "package_stack/%s+%s/twist7" % [base, top], "make": _stack.bind([base, top], [0.0, 7.0]), "ground": true})
 		out.append({"name": "package_stack/%s+%s+small" % [base, base], "make": _stack.bind([base, base, "small"], [0.0, 0.0, 0.0]), "ground": true})
 	out.append({"name": "van_on_circle", "make": _van_on_circle, "ground": true})
+	out.append({"name": "shark_rider", "make": _shark_rider, "ground": false})
 	out.append({"name": "summoning_circle_on_rug", "make": _summoning_on_rug, "ground": true})
 	return out
 
@@ -140,6 +146,25 @@ static func _stack(kinds: Array, twists: Array) -> Array:
 		items.append(["box%d_%s" % [i, kinds[i]], holder])
 		lift += PackageModels.height_of(String(kinds[i]))
 	return items
+
+
+## A shark at rest; the imp variant without its rider (the rider is the swarmer model, checked on its own).
+static func _shark(variant: String) -> Node3D:
+	var s := SharkModels.build(variant)
+	var r := s.get_node_or_null("Body/Rider")
+	if r != null:
+		r.get_parent().remove_child(r)
+		r.free()
+	return s
+
+
+## The imp in its saddle against the shark it rides (the Body is at the identity at rest, so the rider's own transform
+## places it).
+static func _shark_rider() -> Array:
+	var s := SharkModels.build("imp")
+	var r := s.get_node("Body/Rider") as Node3D
+	r.get_parent().remove_child(r)
+	return [["shark", s], ["imp", r]]
 
 
 static func _van_on_circle() -> Array:
