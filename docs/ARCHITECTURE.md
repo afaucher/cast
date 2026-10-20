@@ -397,6 +397,23 @@ explosive props (`HazardPlanner.plan`, own dice, the same wall poses), scale the
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.
 
+## Look-dev labs
+
+A lab is a scene `scenes/<x>_lab.tscn` with a script `<x>_lab.gd` that renders a feature for screenshots, run as
+`godot --path . --resolution 1920x1080 -- --scene res://scenes/<x>_lab.tscn --shot <abs.png> [--view <name>]` (the
+usage goes in the script's header comment). A new 3D lab `extends LabBase` (`scripts/test_support/lab_base.gd`, `class_name
+LabBase extends Node3D`) and writes only what is its own:
+- `args` is the command line after `--`, parsed in `_init`; `shot_path` is `--shot` and `only_view` is `--view` ("" when
+  absent); `arg(args, "--flag", "default")` reads one flag, `args.has("--switch")` a switch.
+- `build_arena(reach, floor_r, wall_r, seed)` builds the slate room with the real terrain look and fills `map`;
+  `make_camera(far)` adds the orthographic `camera`; `aim(yaw, pitch, size, target, dist)` places it (the game's camera is
+  yaw 45, pitch -56, size 24).
+- `snap(path, settle, tail)` waits `settle` frames, grabs the viewport, saves the PNG and prints `shot <path> <result>`
+  (a lab with several views calls it once per view, then `finish()`); `shot_after(path, seconds)` is the whole single shot
+  (wait, snap, quit); `grab`, `save_shot`, `save_sheet(images, cols, shrink)` (the contact sheet at `shot_path`),
+  `wait_frames` and `wait_physics` are the pieces. A `Control` lab calls the statics `LabBase.arg` / `LabBase.grab_of`.
+- Keep the lab's own view list, poses and flags; verify with the header's command and look at the PNG.
+
 ## Tests
 
 `tests/test_*.gd` extend `TestCase` (`scripts/test_support/test_case.gd`): override `setup()`,

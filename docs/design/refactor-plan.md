@@ -14,6 +14,11 @@ Status: **in progress**. Done so far:
   and `use_press` on `Employee`, `ClueNote`, `OfficeDoor` and `ComponentPickup`, with thin adapters for the van and
   the elevator (`VanExitUse`, `ElevatorUse`). `game.gd` `use_target()` is a query over one candidate per kind; score
   bands keep the old order. `UseTarget` and the `_use_key` match are gone; requests and golden floors unchanged.
+- wave 6 (early): H9, `LabBase` (`scripts/test_support/lab_base.gd`). 19 look-dev lab scripts moved onto it with their
+  flags, output names and renders unchanged. Not yet moved: `pavise_lab`, `healer_lab`, `sewer_lab`,
+  `sewer2_lab`, `lava_lab` and `lava_layouts_lab` (edited by the lava / sewer session; `sewer2`, `lava` and
+  `lava_layouts` extend `sewer_lab`), plus `forms_lab` (a `Control`, its own `--lab-*` flags) and `voice_lab` (no
+  screenshots).
 
 Moved to later waves:
 - the factory's pack planner, to H3;
@@ -178,6 +183,9 @@ and next lava and the sewer. The interface is `plan(p, ctx)` with its own seeded
 - **Do this before lava and the sewer go into the generator.**
 
 ### H9: a lab base class
+Status: done for 19 lab scripts, see the top of this file. A lab `extends LabBase`; `docs/ARCHITECTURE.md` ("Look-dev labs")
+says how.
+
 `--shot`/`--shot-after`/camera/resolution/quit handling moves into one `LabBase`, used by the 25 labs (22 parse this
 themselves today). Low risk, and it shrinks every new lab.
 
