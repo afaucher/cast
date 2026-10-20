@@ -266,8 +266,6 @@ func _fight_slams_and_copies() -> void:
 	Net.release_copy(copy)
 
 
-## Your row shows DAZED: the party frame's badge (Hud.PARTY_LOOK clean / paper), or the old tag beside your name.
+## Your row shows DAZED (the party frame's badge on your portrait).
 func _hud_dazed(hud: Hud) -> bool:
-	if hud.party != null:
-		return not hud.party.views.is_empty() and bool(hud.party.views[0]["dazed"])
-	return hud._daze_tag.visible
+	return not hud.party.views.is_empty() and bool(hud.party.views[0]["dazed"])

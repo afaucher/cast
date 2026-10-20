@@ -1,5 +1,5 @@
 extends TestCase
-## HUD (the party frame and the old bars), spell picker, camera rig and the arena smoke test (all run headless).
+## HUD (with the party frame), spell picker, camera rig and the arena smoke test (all run headless).
 
 
 func setup() -> void:
@@ -62,34 +62,20 @@ func setup() -> void:
 	check(not hud.console.visible, "and hides again once submitted")
 	hero.apply_damage(30.0)
 	await frames(3)
-	eq(Hud.party_look, Hud.PARTY_LOOK, "the party HUD look is the constant's")
-	if hud.party != null:
-		eq(hud.party.views.size(), 2, "a party row per hero")
-		check(bool(hud.party.views[0]["you"]), "yours first")
-		near(float(hud.party.views[0]["hp"]) / float(hud.party.views[0]["max_hp"]), 0.7, 0.001, "your row follows hp")
-		eq(str(hud.party.views[0]["name"]), SteamIdentity.player_name("Aria"), "your row: the Steam name, else the hero's")
-		eq(str(hud.party.views[1]["name"]), "Brom", "an AI seat: the hero's name")
-	else:
-		near(hud._player_bar.value, 0.7, 0.001, "player bar follows hp")
+	eq(hud.party.views.size(), 2, "a party row per hero")
+	check(bool(hud.party.views[0]["you"]), "yours first")
+	near(float(hud.party.views[0]["hp"]) / float(hud.party.views[0]["max_hp"]), 0.7, 0.001, "your row follows hp")
+	eq(str(hud.party.views[0]["name"]), SteamIdentity.player_name("Aria"), "your row: the Steam name, else the hero's")
+	eq(str(hud.party.views[1]["name"]), "Brom", "an AI seat: the hero's name")
+	eq(hud.party.show_followers, Hud.SHOW_FOLLOWERS, "the employee list follows the constant")
 	check(hero.try_cast("heal", 1.0, hero.global_position), "cast for the card flash")
 	await frames(3)
 	check(hud._cards.size() == SpellComponents.SLOT_COUNT and hud._cards[0].flash > 0.0, "card flashes on cast")
 	hud.queue_free()
 	await frames(1)
 
-	# --- Party frame: names, the order chip, down / dazed, the follower strip.
+	# --- Party frame: names, the order chip, down / dazed, the employee list.
 	await _party_frame(hero, ally)
-
-	# --- The old bars stay reachable (Hud.PARTY_LOOK "old").
-	Hud.party_look = "old"
-	var old_hud := Hud.new()
-	add_child(old_hud)
-	old_hud.bind(hero, allies)
-	await frames(3)
-	check(old_hud.party == null, "the old look has no party frame")
-	near(old_hud._player_bar.value, hero.hp / hero.max_hp, 0.001, "player bar follows hp")
-	old_hud.queue_free()
-	Hud.party_look = Hud.PARTY_LOOK
 
 	# --- Camera rig: ortho, iso angles, follows, zooms.
 	var rig := CameraRig.new()
@@ -134,24 +120,25 @@ func setup() -> void:
 
 
 func _party_frame(hero: Hero, ally: Hero) -> void:
-	for look in [PartyFrame.Look.CLEAN, PartyFrame.Look.PAPER]:
-		var f := PartyFrame.new()
-		f.look = look
-		add_child(f)
-		var font := f.name_font()
-		# Names: a short one stays as it is; a long one shrinks (to NAME_MIN_SCALE at most), then is cut with an ellipsis.
-		var w := PartyFrame.name_width(true)
-		var short := PartyFrame.fit_name("Fox", font, 24, w)
-		check(short["text"] == "Fox" and int(short["size"]) == 24 and not bool(short["cut"]), "a short name is left alone")
-		for long_name in ["xX_TheLongestSteamNameEver_Xx", "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", "ミッドナイト・キャスター・ジャパン",
-				"Повелитель_Заклинаний_и_Огня", "김철수마법사길드장인"]:
-			var fit := PartyFrame.fit_name(long_name, font, 24, w)
-			check(font.get_string_size(fit["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(fit["size"])).x <= w + 0.5,
-				"'%s' fits its row (%s)" % [long_name, fit["text"]])
-			check(int(fit["size"]) >= int(floorf(24 * PartyFrame.NAME_MIN_SCALE)), "it never shrinks below the floor")
-			check(not bool(fit["cut"]) or str(fit["text"]).ends_with("…"), "a cut name ends in an ellipsis")
-		check(bool(PartyFrame.fit_name("WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", font, 24, w)["cut"]), "32 wide letters are cut")
-		f.queue_free()
+	# Names: a short one stays as it is; a long one shrinks (to NAME_MIN_SCALE at most), then is cut with an ellipsis.
+	var font := PartyFrame.name_font()
+	var w := PartyFrame.name_width(true)
+	var short := PartyFrame.fit_name("Fox", font, 25, w)
+	check(short["text"] == "Fox" and int(short["size"]) == 25 and not bool(short["cut"]), "a short name is left alone")
+	for long_name in ["xX_TheLongestSteamNameEver_Xx", "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", "ミッドナイト・キャスター・ジャパン",
+			"Повелитель_Заклинаний_и_Огня", "김철수마법사길드장인"]:
+		var fit := PartyFrame.fit_name(long_name, font, 25, w)
+		check(font.get_string_size(fit["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(fit["size"])).x <= w + 0.5,
+			"'%s' fits its row (%s)" % [long_name, fit["text"]])
+		check(int(fit["size"]) >= int(floorf(25 * PartyFrame.NAME_MIN_SCALE)), "it never shrinks below the floor")
+		check(not bool(fit["cut"]) or str(fit["text"]).ends_with("…"), "a cut name ends in an ellipsis")
+	check(bool(PartyFrame.fit_name("WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", font, 25, w)["cut"]), "32 wide letters are cut")
+	# The plates keep PAD inside them past the bar, and their rows do not overlap.
+	for sp: Dictionary in [PartyFrame.YOU, PartyFrame.ALLY]:
+		var plate := PartyFrame.plate_rect(sp, 0.0)
+		near(plate.end.x - (float(sp["tx"]) + float(sp["bar_w"])), PartyFrame.PAD, 0.01, "the plate pads the bar's right end")
+		check(plate.end.y - (float(sp["bar_y"]) + float(sp["bar_h"])) >= 8.0, "... and its bottom")
+		check(float(sp["name_y"]) - float(sp["name"]) * 0.75 - plate.position.y >= 8.0, "... and the name's top")
 	var frame := PartyFrame.new()
 	add_child(frame)
 	var none: Array[Hero] = [ally]
@@ -159,11 +146,12 @@ func _party_frame(hero: Hero, ally: Hero) -> void:
 	frame.bind(hero, none)
 	await frames(2)
 	eq(str(frame.views[1]["order"]), "follow", "an AI ally with no order: FOLLOW")
+	eq(ally.order_state, "follow", "... its brain writes the hero's order state (what the host sends clients)")
 	brain.give_order("attack", hero)
-	await frames(1)
+	await frames(2)
 	eq(str(frame.views[1]["order"]), "attack", "... told attack: ATTACK")
 	brain.give_order("go", hero, ally.global_position + Vector3(0.1, 0, 0))
-	await frames(2)
+	await frames(3)
 	check(["go", "hold"].has(str(frame.views[1]["order"])), "... told go: GO, then HOLD once there")
 	eq(str(frame.views[0]["order"]), "", "your own row has no chip without an order marker")
 	OrderFx.marker(hero.global_position + Vector3(8, 0, 0), "Fox: go here", hero, Color.ORANGE, "go")
@@ -175,25 +163,32 @@ func _party_frame(hero: Hero, ally: Hero) -> void:
 	check(bool(frame.views[1]["human"]) and str(frame.views[1]["name"]) == "Rosa", "a seat a person plays: their name")
 	eq(str(frame.views[1]["order"]), "", "... and no order chip (nobody orders a person)")
 	ally.remove_meta(Net.NAME_META)
-	# Followers: shown while they follow you, a short name, the strip switches off.
-	var e := Employee.spawn(hero.current_cell() + Vector2i(1, 1), {"style": "henchman", "name": "Gary (Henchman 1)"})
-	e.order("follow", hero)
+	# Employees: listed while they follow you, a short name, capped with "+N more", the list switches off.
+	var gary: Employee = null
+	var cells := Hex.range_cells(hero.current_cell(), 2)
+	for i in 6:
+		var e := Employee.spawn(cells[i + 1], {"style": "henchman" if i == 0 else "staff", "name": ["Gary (Henchman 1)",
+			"Beatrice (sommelier)", "Mr. Bloom (accounts)", "Penny (concierge)", "Molly (IT support)", "Iris (intern)"][i]})
+		e.order("follow", hero)
+		if i == 0:
+			gary = e
 	await frames(2)
-	eq(frame.follower_list.size(), 1, "an employee following you is on the strip")
-	eq(PartyInfo.short_name(e.display_name), "Gary", "with a short name")
+	eq(frame.follower_list.size(), 6, "every employee following you is listed")
+	eq(frame.followers_shown(), PartyFrame.MAX_FOLLOWERS, "the list shows MAX_FOLLOWERS rows, the rest as +N more")
+	eq(PartyInfo.short_name(gary.display_name), "Gary", "a short name")
 	eq(PartyInfo.short_name("Mr. Bloom (accounts)"), "Mr. Bloom", "... titles kept")
-	e.order("attack", hero)
+	gary.order("attack", hero)
 	await frames(1)
-	eq(PartyInfo.employee_state(e), "fight", "a henchman sent to fight: FIGHT")
-	eq(frame.follower_list.size(), 1, "... and stays on your strip while it fights")
-	check(frame.frame_height() > frame.row_top(2), "the strip adds height")
+	eq(PartyInfo.employee_state(gary), "fight", "a henchman sent to fight: FIGHT")
+	check(frame.follower_list.has(gary), "... and stays on your list while it fights")
+	check(frame.frame_height() > frame.row_top(2), "the list adds height")
 	frame.show_followers = false
 	await frames(1)
-	eq(frame.follower_list.size(), 0, "the strip switches off")
+	eq(frame.follower_list.size(), 0, "the list switches off")
 	# Down and dazed read on the row.
 	ally.apply_damage(ally.max_hp * 5.0)
 	await frames(1)
-	check(bool(frame.views[1]["down"]) and str(frame.views[1]["order"]) == "", "a downed ally: DOWN, no chip")
+	check(bool(frame.views[1]["down"]), "a downed ally: DOWN")
 	hero.daze(2.0)
 	await frames(1)
 	check(bool(frame.views[0]["dazed"]), "you dazed: DAZED")

@@ -1,7 +1,7 @@
 class_name Hud
 extends CanvasLayer
-## The in-game HUD, built in code: the party frame top left (PartyFrame: a portrait, name, HP and order chip per crew
-## member and the employees following you; PARTY_LOOK picks its look or the old HP bars), two spell
+## The in-game HUD, built in code: the party frame top left (PartyFrame: a portrait, name, HP bar and order chip per crew
+## member, and the employees following you), two spell
 ## cards (name, incantation, key, cooldown sweep, charges, an empty-slot look and a HELD
 ## highlight), toasts for casts / fizzles / pickups / out-of-component, a mic
 ## level meter, a big center message, and an optional typed-spell console (stand-in for voice;
@@ -17,19 +17,12 @@ const CARD_SIZE := Vector2(210, 104)
 const CARD_BOTTOM_GAP := 20.0     ## the spell cards sit this far above the screen bottom
 const TOAST_GAP := 12.0           ## the toast floats this far above the cards, so it never meets the dispatch banner at the top
 const TOAST_HEIGHT := 56.0
-const BAR_COLOR_PLAYER := Color(0.3, 0.85, 0.5)
-const BAR_COLOR_ALLY := Color(0.4, 0.7, 0.95)
 const COLOR_DANGER := Color(1.0, 0.45, 0.4)
 const COLOR_NEUTRAL := Color(0.8, 0.8, 0.85)
-const COLOR_DAZED := Color(1.0, 0.82, 0.3)
-## The top-left party HUD (2026-10-19 redesign, until the user picks): "clean" (PartyFrame, dark game HUD), "paper"
-## (PartyFrame as crew ID cards) or "old" (the name over a big HP bar and the allies' small bars).
-const PARTY_LOOK := "clean"
-## The party frame lists the employees following you under the crew (a bubble each, "+N" past PartyFrame.MAX_FOLLOWERS).
+## The party frame lists the employees following you under the crew (a row each, "+N more" past PartyFrame.MAX_FOLLOWERS).
 const SHOW_FOLLOWERS := true
 
-## What this run uses (the constants above; dev flags --party-hud / --party-followers override them for screenshots).
-static var party_look := PARTY_LOOK
+## What this run uses (the constant above; the dev flag --party-followers overrides it for screenshots).
 static var show_followers := SHOW_FOLLOWERS
 
 var player: Hero = null
@@ -38,13 +31,7 @@ var console: LineEdit = null
 var trigger_word := "cast"   ## spoken keyword shown on the cards ("say: PICKLE HEAL")
 
 var _root: Control
-var party: PartyFrame = null     ## the party frame (null with party_look "old")
-var _player_bar: HudBar
-var _player_name: Label
-var _daze_tag: Label              ## "DAZED" beside your name while your hero is dazed (the brute's slam)
-var _party: VBoxContainer         ## top-left column: the player's own bar first (bigger), the allies' bars under it
-var _ally_box: VBoxContainer
-var _ally_bars: Array[HudBar] = []
+var party: PartyFrame              ## top left: the crew (yours first, biggest) and the employees following you
 var _cards: Array[SpellCard] = []
 var _card_box: HBoxContainer
 var _toast: Label
@@ -67,28 +54,20 @@ func _ready() -> void:
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	if party_look == "old":
-		_build_player_panel()
-		_build_ally_panel()
-	else:
-		party = PartyFrame.new()
-		party.look = PartyFrame.Look.PAPER if party_look == "paper" else PartyFrame.Look.CLEAN
-		party.show_followers = show_followers
-		party.position = Vector2(16, 14)
-		_root.add_child(party)
+	party = PartyFrame.new()
+	party.show_followers = show_followers
+	party.position = Vector2(16, 14)
+	_root.add_child(party)
 	_build_cards()
 	_build_toasts()
 	_build_mic()
 
 
-## Show this hero's HP and spell slots; list the allies' mini bars.
+## Show this hero's HP and spell slots; the party frame lists the crew.
 func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 	player = new_player
 	allies = new_allies
-	if party != null:
-		party.bind(player, allies)
-	else:
-		_bind_old_bars()
+	party.bind(player, allies)
 	for c in _cards:
 		c.queue_free()
 	_cards.clear()
@@ -104,41 +83,7 @@ func bind(new_player: Hero, new_allies: Array[Hero]) -> void:
 		player.component_collected.connect(_on_component_collected)
 
 
-## PARTY_LOOK "old": your name over the big bar, a small bar per ally.
-func _bind_old_bars() -> void:
-	_player_name.text = SteamIdentity.player_name(player.display_name)   # the Steam name; the hero name without Steam
-	for b in _ally_bars:
-		b.get_parent().queue_free()
-	_ally_bars.clear()
-	for a in allies:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		var lbl := Label.new()
-		lbl.text = Net.label_of(a)   # the player's name for a seat a person plays
-		lbl.custom_minimum_size = Vector2(70, 0)
-		_style_label(lbl, 16)
-		row.add_child(lbl)
-		var bar := HudBar.new()
-		bar.custom_minimum_size = Vector2(150, 18)
-		bar.fill = BAR_COLOR_ALLY
-		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(bar)
-		_ally_box.add_child(row)
-		_ally_bars.append(bar)
-
-
 func _process(delta: float) -> void:
-	if party == null and player != null and is_instance_valid(player):
-		_player_bar.set_value(player.hp / player.max_hp, "%d / %d" % [int(ceilf(player.hp)), int(player.max_hp)])
-		var dazed := not player.dead and player.is_dazed()
-		_daze_tag.visible = dazed
-		if dazed:
-			_daze_tag.modulate.a = 0.75 + 0.25 * sin(GameWorld.time * 18.0)   # a quick throb while it lasts
-	for i in _ally_bars.size():
-		if i < allies.size() and is_instance_valid(allies[i]):
-			var a := allies[i]
-			_ally_bars[i].fill = BAR_COLOR_ALLY if not a.dead else Color(0.4, 0.4, 0.42)
-			_ally_bars[i].set_value(a.hp / a.max_hp, "DOWN" if a.dead else "%d / %d" % [int(ceilf(a.hp)), int(a.max_hp)])
 	_mic_bar.set_value(lerpf(_mic_bar.value, _mic_target, clampf(18.0 * delta, 0.0, 1.0)), "")
 
 
@@ -288,44 +233,6 @@ func _on_component_collected(id: String, amount: int, kind: String) -> void:
 
 
 # --- Building ----------------------------------------------------------------------------
-
-func _build_player_panel() -> void:
-	_party = VBoxContainer.new()
-	_party.position = Vector2(20, 16)
-	_party.add_theme_constant_override("separation", 10)
-	_party.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_party)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 2)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_party.add_child(box)
-	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 12)
-	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(name_row)
-	_player_name = Label.new()
-	_player_name.text = "Hero"
-	_style_label(_player_name, 20)
-	name_row.add_child(_player_name)
-	_daze_tag = Label.new()
-	_daze_tag.text = "DAZED"
-	_daze_tag.modulate = COLOR_DAZED
-	_style_label(_daze_tag, 20)
-	_daze_tag.visible = false
-	name_row.add_child(_daze_tag)
-	_player_bar = HudBar.new()
-	_player_bar.custom_minimum_size = Vector2(320, 26)
-	_player_bar.fill = BAR_COLOR_PLAYER
-	_player_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(_player_bar)
-
-
-func _build_ally_panel() -> void:
-	_ally_box = VBoxContainer.new()
-	_ally_box.add_theme_constant_override("separation", 6)
-	_ally_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_party.add_child(_ally_box)
-
 
 func _build_cards() -> void:
 	_card_box = HBoxContainer.new()

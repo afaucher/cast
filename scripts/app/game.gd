@@ -84,11 +84,10 @@ extends Node3D
 ##                       default), the pause overlay (with --pause-demo), the invoice, a late joiner's "Clocking in..." form, or
 ##                       `takeover`: every window --shot-after S (default 2) after a joiner took an AI's seat (M6)
 ##   --shot-floor N      dev, online: with --shot-at floor, take it on floor N (after the elevator) instead of the first
-##   --party-hud clean|paper|old  dev: the top-left party HUD's look for this run (default Hud.PARTY_LOOK)
-##   --party-followers on|off     dev: the party HUD's strip of employees following you (default Hud.SHOW_FOLLOWERS)
+##   --party-followers on|off  dev: the party HUD's list of employees following you (default Hud.SHOW_FOLLOWERS)
 ##   --hud-stage solo|crew|long|down|orders  dev: stage the party HUD for screenshots (HudStage: stand-in crewmates with
 ##                       stand-in avatars, long names, a downed and a dazed hero, mixed orders), timed for --shot-after
-##   --hud-followers N   dev: N employees follow the player (one henchman fighting when N > 1), for the party HUD's strip
+##   --hud-followers N   dev: N employees follow the player (one henchman fighting when N > 1), for the party HUD's list
 ##   --join-hold S       dev, online (M6): a player joining a crew on the job holds its "Clocking in..." form S seconds after
 ##                       building the floor before reporting ready (screenshots: --shot-at clockin)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
@@ -403,7 +402,6 @@ func _parse_args() -> void:
 			"--no-van-intro": opts["no_van_intro"] = true
 			"--van-intro": opts["van_intro"] = true
 			"--join-hold": opts["join_hold"] = float(nxt)
-			"--party-hud": Hud.party_look = nxt   # (before the HUD is built: clean | paper | old)
 			"--party-followers": Hud.show_followers = nxt != "off"
 			"--hud-stage": opts["hud_stage"] = nxt
 			"--hud-followers": opts["hud_followers"] = int(nxt)

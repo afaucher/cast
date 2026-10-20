@@ -10,10 +10,10 @@ extends RefCounted
 ##   human      a person plays the seat; `you` it is this machine's own hero
 ##   avatar     the player's Steam picture (Session.avatars, by the roster's steam_id), or null: the HUD then shows the
 ##              hero's headshot (Headshots, "hero:<kit>")
-##   order      the chip: "follow" / "go" / "hold" / "attack" for an AI hero whose AllyBrain runs here (the host, solo);
-##              for YOUR hero, "go" / "attack" while a crewmate's order marker stands (OrderFx.Marker) with `order_left`
-##              (1 -> 0 over its 12 s); "" otherwise: another person's hero (nobody orders a person), and an AI hero on a
-##              CLIENT (its AllyBrain runs on the host and the host does not send its order state; see the HUD report)
+##   order      the chip: "follow" / "go" / "hold" / "attack" for an AI hero (Hero.order_state: its AllyBrain writes it on
+##              the host, the host sends it to the clients, NetOrders ord.st); for YOUR hero, "go" / "attack" while a
+##              crewmate's order marker stands (OrderFx.Marker) with `order_left` (1 -> 0 over its 12 s); "" for another
+##              person's hero (nobody orders a person)
 ##   down, dazed, hp, max_hp, color, kit
 ##
 ## EMPLOYEES, `followers(you)`: the living employees following you (Employee.leader() == your hero), and a henchman of
@@ -61,10 +61,9 @@ static func order_of(hero: Hero, you: Hero, human: bool) -> Array:
 			return ["", 0.0]
 		var m := OrderFx.Marker.of(hero)
 		return [m.kind, m.left()] if m != null else ["", 0.0]
-	var brain := hero.get_node_or_null("AllyBrain") as AllyBrain
-	if brain == null or hero.dead:
-		return ["", 0.0]   # (a client: the host runs this AI and does not stream its order)
-	return [brain.order_state(), 0.0]
+	if hero.dead:
+		return ["", 0.0]
+	return [hero.order_state, 0.0]
 
 
 ## The employees to list under the crew: following `you`, plus `remembered` ones in a FIGHT (see the header). Sorted by

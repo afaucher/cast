@@ -110,6 +110,11 @@ var _react_at: Dictionary = {}    ## monster instance id -> when this ally may e
 var _rng := RandomNumberGenerator.new()
 
 
+func _exit_tree() -> void:
+	if hero != null and is_instance_valid(hero):
+		hero.order_state = ""   # (a person takes the seat: no AI order any more)
+
+
 func _ready() -> void:
 	hero = get_parent() as Hero
 	_rng.seed = GameWorld.rng.seed ^ hash(hero.display_name if hero != null else name)
@@ -134,6 +139,8 @@ func net_fields() -> Dictionary:
 
 func _physics_process(delta: float) -> void:
 	_track_leader()
+	if hero != null and hero.order_state != order_state():
+		hero.order_state = order_state()   # (the party HUD's chip; the host sends the change to the clients, NetOrders)
 	if hero == null or hero.dead or hero.is_helpless():
 		return
 	match order:
