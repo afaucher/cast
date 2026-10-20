@@ -202,12 +202,13 @@ const ORIGIN_SHUT := "The origin gate is shut. The site calms down. The invoice 
 ## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
 ## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No
 ## pay in the line (user, 2026-10-19: "trim all the mentions of {pay}"): every line can be voiced ahead of time
-## (DispatchVoice enumerates them). %s is the employee's display_name, %d how many rode out together.
+## (DispatchVoice enumerates them). %d is how many rode out together. No employee names, until the voice is right (user,
+## 2026-10-20: a clip per employee made the render slow); the banner and the HUD still name them elsewhere.
 const RESCUE_ONE: Array[String] = [
-	"Copy, %s is out.",
-	"%s just walked past my desk.",
-	"Got %s. All fingers accounted for.",
-	"%s is topside and asking for a lawyer.",
+	"Copy, one out.",
+	"Somebody just walked past my desk.",
+	"Got one. All fingers accounted for.",
+	"One more topside, asking for a lawyer.",
 ]
 const RESCUE_MANY: Array[String] = [
 	"Copy, %d staff out.",

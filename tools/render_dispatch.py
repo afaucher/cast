@@ -83,8 +83,10 @@ def main():
     ap.add_argument("--model", default=os.environ.get("CAST_KOKORO_MODEL", ""))
     ap.add_argument("--kenney", required=True)
     ap.add_argument("--ffmpeg", default=os.environ.get("CAST_FFMPEG", "") or shutil.which("ffmpeg") or "")
-    ap.add_argument("--jobs", type=int, default=int(os.environ.get("CAST_DISPATCH_JOBS", "4")))
+    # Parallel by default: half the logical CPUs as Kokoro processes, each with the CPUs left over as its own threads.
+    ap.add_argument("--jobs", type=int, default=int(os.environ.get("CAST_DISPATCH_JOBS", "0")) or max(1, (os.cpu_count() or 4) // 2))
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--prune", action="store_true", help="delete clips (and their .import) for lines the game no longer has")
     a = ap.parse_args()
     for what, val in (("--tts-exe / CAST_KOKORO_EXE", a.tts_exe), ("--model / CAST_KOKORO_MODEL", a.model),
                       ("ffmpeg (PATH or CAST_FFMPEG)", a.ffmpeg)):
@@ -100,6 +102,16 @@ def main():
     with open(a.lines, encoding="utf-8") as fh:
         lines = json.load(fh)
     os.makedirs(a.out, exist_ok=True)
+    if a.prune:
+        wanted = {ln["key"] + ".ogg" for ln in lines}
+        pruned = 0
+        for f in os.listdir(a.out):
+            if f.endswith(".ogg") and f not in wanted:
+                for g in (f, f + ".import"):
+                    if os.path.exists(os.path.join(a.out, g)):
+                        os.remove(os.path.join(a.out, g))
+                pruned += 1
+        print("pruned %d clips the game no longer uses" % pruned)
     todo = {}      # spoken text -> [keys still to write]
     skipped = 0
     for ln in lines:
@@ -108,8 +120,8 @@ def main():
             skipped += 1
             continue
         todo.setdefault(ln["spoken"], []).append(ln["key"])
-    print("%d lines, %d clips already there, %d to read (%d distinct texts)" % (
-        len(lines), skipped, sum(len(v) for v in todo.values()), len(todo)))
+    print("%d lines, %d clips already there, %d to read (%d distinct texts), %d jobs" % (
+        len(lines), skipped, sum(len(v) for v in todo.values()), len(todo), a.jobs))
     if not todo:
         return
     started = time.time()

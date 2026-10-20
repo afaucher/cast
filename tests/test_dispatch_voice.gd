@@ -65,11 +65,10 @@ func _check_lines() -> void:
 	for pest: String in ClientArchetype.PEST_NAMES:
 		check(texts.has(NoteCopy.fill(NoteCopy.DISPATCH[2][0], {"pest": ClientArchetype.pest_name(pest)})), "floor 2 pest line listed for %s" % pest)
 	check(texts.has(NoteCopy.ORIGIN_SHUT), "the origin-gate line is listed")
-	for nm in DispatchVoice.rescuable_names():
-		for t: String in NoteCopy.RESCUE_ONE:
-			check(texts.has(t % nm), "rescue line listed for %s: %s" % [nm, t])
-	check(DispatchVoice.rescuable_names().has("Mr. Bloom (accounts)") and DispatchVoice.rescuable_names().has("Nigel (Henchman 4)"), "the staff and the henchmen are covered")
-	eq(DispatchVoice.rescuable_names().size(), SiteBuilder.STAFF_NAMES.size() + SiteBuilder.HENCHMAN_NAMES.size(), "one name set: SiteBuilder's twenty")
+	for t: String in NoteCopy.RESCUE_ONE:
+		check(texts.has(t), "rescue line listed: %s" % t)
+		check(not t.contains("%"), "no employee name in a rescue line (2026-10-20): %s" % t)
+	eq(int(kinds["rescue_one"]), NoteCopy.RESCUE_ONE.size(), "one clip per rescue line, not one per employee")
 	for n in DispatchVoice.RESCUE_COUNTS:
 		for t: String in NoteCopy.RESCUE_MANY:
 			check(texts.has(t % n), "rescue line listed for %d riders: %s" % [n, t])

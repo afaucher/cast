@@ -36,6 +36,14 @@ if (-not (Test-Path $templates)) {
     Write-Host "Copy ..\bridge-to-friendship\build\deps\godot-data\Godot\export_templates\4.7.stable there." -ForegroundColor Yellow
     exit 1
 }
+# The dispatch voice is rendered, not committed: with Kokoro set up (CAST_KOKORO_EXE, CAST_KOKORO_MODEL; README) the build
+# renders any missing clips in parallel and drops stale ones; without it the radio calls stay text-only.
+if ($env:CAST_KOKORO_EXE -and $env:CAST_KOKORO_MODEL) {
+    & "$PSScriptRoot\tools\render_dispatch.ps1" -Prune
+    if ($LASTEXITCODE -ne 0) { Write-Host "WARNING: the dispatch voice did not render fully." -ForegroundColor Yellow }
+} elseif (@(Get-ChildItem "$PSScriptRoot\assets\audio\dispatch\*.ogg" -ErrorAction SilentlyContinue).Count -eq 0) {
+    Write-Host "WARNING: no dispatch voice clips (set CAST_KOKORO_EXE / CAST_KOKORO_MODEL; see README)." -ForegroundColor Yellow
+}
 # The sound cues are rendered, not committed (tools\render_sfx.ps1); without them the build runs but is silent.
 if (@(Get-ChildItem "$PSScriptRoot\assets\audio\sfx\*.wav" -ErrorAction SilentlyContinue).Count -eq 0) {
     Write-Host "WARNING: no sound cues in assets\audio\sfx (run .\tools\render_sfx.ps1): this build is silent." -ForegroundColor Yellow

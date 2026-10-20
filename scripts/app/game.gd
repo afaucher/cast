@@ -2255,7 +2255,7 @@ func _dispatch_rescue(riders: Array[Actor], pay: String) -> void:
 		return
 	var line: String
 	if riders.size() == 1:
-		line = NoteCopy.RESCUE_ONE[GameWorld.fx_rng.randi() % NoteCopy.RESCUE_ONE.size()] % riders[0].display_name
+		line = NoteCopy.RESCUE_ONE[GameWorld.fx_rng.randi() % NoteCopy.RESCUE_ONE.size()]
 	else:
 		line = NoteCopy.RESCUE_MANY[GameWorld.fx_rng.randi() % NoteCopy.RESCUE_MANY.size()] % riders.size()
 	_banner.show_line(line, 4.0)

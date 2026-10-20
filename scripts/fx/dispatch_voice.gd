@@ -27,7 +27,7 @@ const _ONES: Array[String] = ["zero", "one", "two", "three", "four", "five", "si
 const _TENS: Array[String] = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
 ## Sentences that call for action or confirm one end in "!".
 const _ACTION := ["Close ", "Closing ", "Find ", "Bring "]
-const _CONFIRM := ["Copy", "Got ", "Headcount "]
+const _CONFIRM := ["Copy", "Got ", "Headcount ", "One more "]
 const _CONFIRM_ANYWHERE := [" is out", " just walked past", " is topside", " staff out", " just came through",
 	"All fingers accounted"]
 
@@ -63,7 +63,7 @@ static func clear_overrides() -> void:
 # --- the lines -------------------------------------------------------------------------------------
 
 ## Every banner line the game can show, from the real constants (NoteCopy.DISPATCH, ClientArchetype events, NoteCopy.
-## ORIGIN_SHUT, NoteCopy.RESCUE_*, the employee name pools), deduplicated by text: [{"key", "text", "spoken", "kind"}].
+## ORIGIN_SHUT, NoteCopy.RESCUE_*; no employee names), deduplicated by text: [{"key", "text", "spoken", "kind"}].
 ## kind: "incident" (floor 1), "floor2", "floor3", "origin_shut", "rescue_one", "rescue_many".
 static func all_lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -85,23 +85,12 @@ static func all_lines() -> Array[Dictionary]:
 			for text in _fills(t, values):
 				_add(out, seen, text, kind)
 	_add(out, seen, NoteCopy.ORIGIN_SHUT, "origin_shut")
-	for nm in rescuable_names():
-		for t: String in NoteCopy.RESCUE_ONE:
-			_add(out, seen, t % nm, "rescue_one")
+	for t: String in NoteCopy.RESCUE_ONE:
+		_add(out, seen, t, "rescue_one")
 	for n in RESCUE_COUNTS:
 		for t: String in NoteCopy.RESCUE_MANY:
 			_add(out, seen, t % n, "rescue_many")
 	return out
-
-
-## Every display_name a rescued employee can have: SiteBuilder's pools, the one name set (a bare Employee.spawn draws from them too).
-static func rescuable_names() -> Array[String]:
-	var names: Array[String] = []
-	for pool: Array[String] in [SiteBuilder.STAFF_NAMES, SiteBuilder.HENCHMAN_NAMES]:
-		for n in pool:
-			if not names.has(n):
-				names.append(n)
-	return names
 
 
 static func _add(out: Array[Dictionary], seen: Dictionary, text: String, kind: String) -> void:
