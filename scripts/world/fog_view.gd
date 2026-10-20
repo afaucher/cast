@@ -18,7 +18,14 @@ extends Node3D
 ##
 ## DATA. Two small textures: CELLS (static, one texel per hex cell: the space ids of the cell (a wall cell: up to two spaces
 ## around it), its floor level, its nearest doorway) and DYN (one row of per-space display levels, animated, one row of
-## per-doorway smoke thinning and middle point). Only DYN changes, and only while a level is fading (FADE_TIME).
+## per-doorway smoke thinning and middle point, one static row of the cuts of long halls: axis and segments). Only DYN's
+## first two rows change, and only while a level is fading (FADE_TIME).
+##
+## CUTS (RoomFog, LONG HALLS; user, 2026-10-20: "Turn it on"): where a hall's segment meets the next one, the levels blend
+## across a feather about a hex wide on the floor and the walls (CUT_FEATHER each side of the cut's line), in every look,
+## not the hex-edge step: a hall in view runs into the dark as a corridor, not into a wall. Only cells of the two segments
+## (and walls beside them) take it; a cut keeps RoomFog.CUT_CLEAR steps from every real doorway, so it never draws over
+## one or its door.
 ##
 ## DECISION (user, 2026-10-19): the game draws look A only (game.gd _setup_fog, every machine, fed with every seat's hero,
 ## puppets too); B and C stay in the fog lab. Seen rooms show their furniture live (no last-known ghosts of monsters).
@@ -100,10 +107,14 @@ func setup(m: HexMap, f: RoomFog, camera: Camera3D) -> void:
 	_thin.resize(fog.doorways.size())
 	_build_cells()
 	var w := maxi(1, maxi(n, fog.doorways.size()))
-	_dyn_img = Image.create(w, 2, false, Image.FORMAT_RGBAF)
+	_dyn_img = Image.create(w, 3, false, Image.FORMAT_RGBAF)
 	for dw in fog.doorways:
 		var mid: Vector3 = dw["mid"]
 		_dyn_img.set_pixel(int(dw["id"]), 1, Color(0.0, mid.x, mid.z, 0.0))
+		if fog.is_cut(int(dw["id"])):
+			# a cut of a long hall: its axis (from its nearer segment to its farther) and the two segments (+1)
+			var ax: Vector3 = dw["axis"]
+			_dyn_img.set_pixel(int(dw["id"]), 2, Color(ax.x, ax.z, float(int(dw["ri"]) + 1), float(int(dw["hi"]) + 1)))
 	_dyn_tex = ImageTexture.create_from_image(_dyn_img)
 	if _shader == null:
 		_shader = Shader.new()
@@ -358,6 +369,13 @@ func _build_cells() -> void:
 			var top := cell.level + (cell.stair_rise if cell.type == HexMap.Tile.STAIRS else 0)
 			data[i + 2] = clampi(top + 64, 0, 254)
 		data[i + 3] = int(near_dw[c]) + 1 if near_dw.has(c) else 0
+		# a wall cell beside a cut of a long hall takes the cut too (its feather runs up the walls)
+		if cell.type == HexMap.Tile.WALL:
+			var best_d := 3
+			for n in Hex.ring(c, 1):
+				if near_dw.has(n) and fog.is_cut(int(near_dw[n])) and int(near_d[n]) < best_d:
+					best_d = int(near_d[n])
+					data[i + 3] = int(near_dw[n]) + 1
 	# Pits and other holes inside the floor take a neighbour's space (two passes).
 	for _pass in 2:
 		var copy := data.duplicate()
@@ -407,6 +425,8 @@ uniform vec3 void_col : source_color = vec3(0.075, 0.052, 0.042);
 const float SQ3 = 1.7320508;
 const float INNER = 0.8660254;
 const float LH = 0.5;
+const float CUT_FEATHER = 0.9;   // a cut's feather runs this far each side of its line (a hex is 1.73 across)
+const float CUT_REACH = 5.0;     // ... and this far along it from its middle (wider than any hall)
 
 void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
@@ -564,6 +584,33 @@ void fragment() {
 		float v_own = level_of(cd);
 		float v_nb = level_of(nd);
 		float v = mix(v_own, v_nb, 0.5 * (1.0 - smoothstep(0.0, 0.32, edge_dist)));
+		// LONG HALLS: across a cut between two segments of one hall, a soft feather about a hex wide (CUT_FEATHER each
+		// side of the cut's line) instead of the hex-edge step, on its floor and walls: the hall goes on into the dark.
+		int dwi = int(cd.a * 255.0 + 0.5);
+		if (dwi > 0) {
+			vec4 cut = texelFetch(dyn, ivec2(dwi - 1, 2), 0);
+			if (cut.b > 0.5) {
+				int ri = int(cut.b + 0.5);
+				int hi = int(cut.a + 0.5);
+				int sa = int(cd.r * 255.0 + 0.5);
+				int sb = int(cd.g * 255.0 + 0.5);
+				bool a_in = sa == ri || sa == hi;
+				bool b_in = sb == 0 || sb == ri || sb == hi;
+				if (a_in || (sb != 0 && (sb == ri || sb == hi))) {
+					vec2 rel = xz - texelFetch(dyn, ivec2(dwi - 1, 1), 0).gb;
+					float along = dot(rel, cut.rg);
+					float across = abs(dot(rel, vec2(-cut.g, cut.r)));
+					if (across < CUT_REACH) {
+						float vc = mix(space_level(ri), space_level(hi), smoothstep(-CUT_FEATHER, CUT_FEATHER, along));
+						float other = a_in ? 0.0 : space_level(sa);
+						if (!b_in) {
+							other = max(other, space_level(sb));
+						}
+						v = max(vc, other);
+					}
+				}
+			}
+		}
 
 		if (v >= 0.999) {
 			ALBEDO = src;
@@ -585,7 +632,6 @@ void fragment() {
 			float h = hash3(vec3(float(c.x), float(c.y), kite));
 			float facet = 0.82 + 0.18 * h + 0.10 * sin(TIME * (0.35 + 0.5 * h) + h * 6.2832);
 			// smoke thins near an open doorway with its other side in view
-			int dwi = int(cd.a * 255.0 + 0.5);
 			float thin = 0.0;
 			if (dwi > 0) {
 				vec4 dw = texelFetch(dyn, ivec2(dwi - 1, 1), 0);

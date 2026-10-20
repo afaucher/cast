@@ -156,3 +156,13 @@ Spells stay mainly about combat. These are small extras that cost little:
   stops for half a second first; a chasing brute smashes it (billed once). Seen rooms show their furniture live. A
   vantage two levels up sees into the next space through an open doorway, never through a shut door. Online the host
   decides every door (a client's walk-in or E is a request), and a late joiner gets every door's state.
+- **Long halls (2026-10-20, after the fog spaces audit, `fog-spaces-audit.md`):** a hall was one fog space however
+  long, so a hero seeing into a corridor saw all of it, up to 78 units round corners. Long halls are now **cut into
+  segments** of about 8 steps, never cut within 3 steps of a doorway or its door. The user: "Turn it on."
+  Walking down a long hall shows it about one segment ahead; the segment after that is next (silhouette), and a room at
+  the far end of a cut hall stays dark until the crew gets near. Where a segment in view meets one that is not, the fog
+  fades over about a hex (a soft edge across the hall, not a line), so the hall reads as going on into the dark, not as
+  a wall. Seeing across a cut counts like a doorway (in range and in sight of the hero) but never uses up a hop, so a
+  hero standing on a cut sees the same from either side (no flicker). It is local presentation like the rest of the
+  fog: every machine cuts the same segments from the map, puppets and late joiners included; the floor plan, the doors
+  and the checksum do not change.

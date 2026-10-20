@@ -4,12 +4,16 @@ How RoomFog / Doorways cut a floor into fog spaces, checked over fixed seeds. Fo
 "only from one side", `lava-playtest.md`). The question was whether the planner makes lobes of a multi-segment room
 and whether every dimension of a space makes sense as the edge of the player's view.
 
-- Test: `tests/test_fog_spaces.gd` (contract seeds 3, 7, 12, 26, 37, 42, floors 1-3, and lava caves 1-5; once as
-  merged and once with the hall-split prototype). It prints one `FOG SPACE` row per space, a `FOG VIS` line per floor
-  and a `FOG SUMMARY` / `FOG DIST` line per mode.
-- Maps: `scenes/fog_spaces_lab.tscn` (`--maps s3f1,s7f2,c1 --out <dir> [--split]`): each cell in its space's colour,
+**Status (2026-10-20):** the fix below, cutting long halls into segments, is **on in the game** (user: "Turn it on"); see
+"Long halls in the game" at the end. The tables first describe the floors as they were (halls whole).
+
+- Test: `tests/test_fog_spaces.gd` (contract seeds 3, 7, 12, 26, 37, 42, floors 1-3, and lava caves 1-5; once with
+  halls whole and once with long halls cut, as in the game). It prints one `FOG SPACE` row per space, a `FOG VIS` line
+  per floor, a `FOG SUMMARY` / `FOG DIST` line per mode and a `FOG CUTS` line.
+- Maps: `scenes/fog_spaces_lab.tscn` (`--maps s3f1,s7f2,c1 --out <dir> [--whole]`): each cell in its space's colour,
   white lines between spaces, dark lines at steps inside a space, white dots on untagged cells (the fill gave them a
-  space), yellow rings on doorways, cyan rings on the split prototype's segment doorways.
+  space), yellow rings on doorways, cyan rings on the cuts between segments of a long hall. `--game-shot` takes the
+  in-game screenshots (the lab's header has the command).
 
 ## Invariants (asserted, all hold)
 
@@ -96,7 +100,8 @@ Caves: rooms reach 7.4-11.3, walkways up to 16.4, coverage 84-100 %. The lava ca
 
 ## The fix: cut long halls into segments (runtime RoomFog only)
 
-Prototype: `RoomFog.split_long_halls` (static, **off by default**). After the doorway links are built, each hall whose
+(The prototype as audited; what went into the game differs a little, see "Long halls in the game" below.)
+Prototype: `RoomFog.split_long_halls` (static, off by default then). After the doorway links are built, each hall whose
 corridor-tagged cells are at least 16 steps long (`SEGMENT_STEPS` 8 x 2) is cut along its length into segments of
 about 8 steps: new spaces `hall:N.k`; the filled cells go to the nearest segment; each real doorway is re-pointed to
 the segment holding most of its mouth cells; consecutive segments get a doorless doorway (`split: true`) at the cut.
@@ -113,7 +118,7 @@ Spaces 296 -> 390. One-sided pairs stay at most 2.2 % per floor (seed 26 floor 1
 **Kind:** runtime only. It touches only `scripts/world/room_fog.gd`; `Doorways.find`, `SiteBuilder._plan_doors`, doors,
 the floor plan and the floor checksum are unchanged. **No generator change is needed**: rooms have no necks.
 
-Before and after maps (in the session scratchpad, `sewer/lava2/spaces/`): `spaces_s3f1` / `spaces_s3f1_split`,
+Before and after maps (in the session scratchpad, `sewer/lava2/spaces/`; file names as of the audit): `spaces_s3f1` / `spaces_s3f1_split`,
 `s7f2`, `s12f3`, `s37f3` and cave `c2` the same way; plus `s7f3`, `s12f1`, `s26f1`, `s37f1`, `s37f2`, `s42f2`, `c1`-`c5`
 as merged.
 
@@ -131,4 +136,47 @@ and is not proposed.
 - one-sided visibility <= 3 % of sampled pairs per floor (asserted).
 
 `test_fog_spaces` stays as a test over the fixed seeds: it asserts the invariants, the no-neck rule and the one-sided
-limit, and prints reach and coverage for review. If the split goes in, add an assertion that no hall's reach is over 26.
+limit, and prints reach and coverage for review. With the halls cut it also asserts that no hall's reach is over 26.
+
+## Long halls in the game (2026-10-20)
+
+The user: "Turn it on." `RoomFog.split_long_halls` is **on** (true); `--whole` in the fog spaces lab, or setting it false,
+gives the halls whole again. What changed from the prototype:
+
+- **Where the cuts go.** A hall of 16 or more walking steps gets `round((length + 1) / 8)` segments (at least 2). Each
+  cut sits at its even share of the length, moved up to 5 steps (or left out) so it is at least `CUT_CLEAR` (3) steps
+  from every real doorway's cells and door, at least `MIN_SEGMENT` (4) steps from the last cut, and never at the foot
+  of a drop (`DROP_LEVELS` 3 or more below the floor within 2 steps: from the top, the floor just under a drop is out
+  of sight). A segment is one connected piece (a branching hall's band can be two), and there is one cut per patch
+  where two pieces touch, with an axis from the nearer piece to the farther.
+- **Sight.** A cut is seen like a doorway (within DOOR_SIGHT and in line of sight from the hero's eyes; its middle or
+  any of its cells at eye height) but **costs no hop**. So the spaces reached are the same whichever side of a cut a
+  hero stands on: **no flicker** on a cut.
+- **Next.** The segment past a known one is next. A known room marks only the segment at its doorway (an uncut hall
+  still marks the room at its far end); a room at the far end of a cut hall stays dark until the crew gets near.
+- **Look.** FogView blends the two segments' levels over a feather about a hex wide (0.9 each side of the cut's line)
+  on the floor and the walls next to it, in every look, not the hex-edge step: the hall reads as going on into the
+  dark. Only cells of the two segments (and walls beside them) take it, and a cut keeps 3 steps from every doorway, so
+  it never draws over a doorway or a door.
+- **Every machine.** The cut is made from the map alone (deterministic), and the view from hero positions, so the
+  host, every client (puppets included) and a late joiner cut the same segments and have the same in view at once.
+  Nothing in the floor plan, the doors or the checksum changes.
+
+| cut halls (the game) | spaces | reach p50 | p90 | p95 | max | coverage p5 | min |
+|---|---|---|---|---|---|---|---|
+| rooms | 146 | 18.5 | 23.7 | 26.1 | 31.5 | 0.57 | 0.30 |
+| halls | 219 | 13.6 | 20.4 | 22.1 | 25.3 | 0.44 | 0.33 |
+
+Spaces 296 -> 365 over the 18 floors and 5 caves (69 cuts). One-sided visibility is at most 0.9 % per map, none of it
+across a cut (as before: corner doorways of big rooms). `FOG CUTS`: the nearest real doorway cell is 3 steps from a cut;
+no flicker at 125 spots on cuts; 40 walks down every cut hall, the next segment always shows and nothing 3 or more
+segments ahead is ever seen (up to 2 ahead: the one ahead in view, sometimes the one after it near a cut).
+
+Tests: `test_room_fog` sections 9-11 (a 96-step hall between two rooms and seed 3 floor 1's 83-step hall: segments,
+reveal ahead, no flicker, shared sight, host/client/late joiner), and `test_fog_spaces` (every seed: the cuts' places,
+no flicker, the walks, hall reach <= 26).
+
+Screenshots (session scratchpad, `sewer/lava2/spaces/on/`): seed 3 floor 1, the crew 37 steps down `hall:4` (83 steps,
+10 segments): `game_walk.png` (the game camera), `game_ahead.png` (the crew and the silhouette ahead), `game_cut.png`
+(close up on the cut where the hall in view meets the segment in silhouette), each with a `_whole` twin (the same
+spot, halls whole); `spaces_s3f1.png` / `spaces_s3f1_whole.png` (the floor's spaces).
