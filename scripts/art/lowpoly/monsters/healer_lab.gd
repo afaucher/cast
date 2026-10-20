@@ -17,18 +17,30 @@ extends Node3D
 ##   measure.txt                                    each model alone at the game camera: screen pixels covered, the
 ##                                                  bounding box in pixels (no floor, no bloom)
 ## --view <name> only that view (as above, without the derived images).
+## --set v2    round 2 (CoolerCarriers: the water cooler's four carriers, kind in temp / acolyte / waterboy / janitor):
+##   <kind>_alone.png (+ _crop)                     the carrier alone at the game camera (crop x3)
+##   <kind>_pack / _heal / _close                   as above; _heal is the pulse, _close is ortho size 9 with a grunt,
+##                                                  an archer, a brute and Wick
+##   weight.png                                     low angle, ortho 9: grunt, archer, the four carriers, brute
+##   weight_game.png (+ _gray)                      the same row at the game camera, named (plus the imp and the v1 cooler)
+##   sheet.png                                      weight, weight_game (colour over grey), the packs, greys and pulses
+##   measure.txt                                    as above, for the carriers next to the grunt, archer, brute and imp
 
 const HealerBlockouts := preload("res://scripts/art/lowpoly/monsters/healer_blockouts.gd")
+const CoolerCarriers := preload("res://scripts/art/lowpoly/monsters/cooler_carriers.gd")
 
 const GAME_YAW := 45.0
 const GAME_PITCH := -56.0
 const GAME_SIZE := 24.0
 const KINDS: Array[String] = ["cooler", "iv_nurse", "eye", "orderly"]
+const CARRIERS: Array[String] = ["temp", "acolyte", "waterboy", "janitor"]
 const BILE := HealerBlockouts.BILE
 const BILE_HOT := HealerBlockouts.BILE_HOT
 
 var out_dir := ""
 var only_view := ""
+var set_name := "v1"
+var kinds: Array[String] = KINDS
 var map: HexMap
 var terrain: HexMapView
 var camera: Camera3D
@@ -46,6 +58,9 @@ func _ready() -> void:
 	var a := OS.get_cmdline_user_args()
 	out_dir = _arg(a, "--shot")
 	only_view = _arg(a, "--view")
+	set_name = _arg(a, "--set", "v1")
+	if set_name == "v2":
+		kinds = CARRIERS
 	_build_world()
 	for h: String in ["wick", "gasket", "rebar"]:
 		var m: LowPolyModel
@@ -68,6 +83,10 @@ func _ready() -> void:
 		var hm := HealerBlockouts.build(k)
 		healers[k] = hm
 		add_child(hm)
+	for k in CARRIERS:
+		var cm := CoolerCarriers.build(k)
+		healers[k] = cm
+		add_child(cm)
 	fx = Node3D.new()
 	add_child(fx)
 	labels = Node3D.new()
@@ -87,7 +106,7 @@ func _ready() -> void:
 		DirAccess.make_dir_recursive_absolute(out_dir)
 		_run_shots()
 	else:
-		_place("lineup")
+		_place("weight" if set_name == "v2" else "lineup")
 
 
 static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
@@ -186,6 +205,9 @@ func _place_pack(kind: String) -> void:
 
 func _place_close(kind: String) -> void:
 	_park_all()
+	if kind in CARRIERS:
+		_place_row([mons["grunt_a"], mons["archer"], healers[kind], mons["brute"], heroes["wick"]], [-3.6, -1.8, 0.4, 2.9, 5.0], 9.0, 0.7)
+		return
 	var yaw := 160.0
 	var r := Vector3(cos(deg_to_rad(yaw)), 0.0, -sin(deg_to_rad(yaw)))
 	var toward := Vector3(sin(deg_to_rad(yaw)), 0.0, cos(deg_to_rad(yaw)))
@@ -197,6 +219,58 @@ func _place_close(kind: String) -> void:
 		n.position = r * float(e[1])
 		n.rotation = Vector3(0.0, atan2(-toward.x, -toward.z) + (0.6 if n == healers[kind] else 0.0), 0.0)
 	_aim(yaw, -18.0, 5.2, r * 1.3 + Vector3(0.0, 1.25, 0.0))
+
+
+## A low-angle row (yaw 160, pitch -18) at ortho `size`, facing the camera; the healers turned `turn` rad to show their prop.
+func _place_row(row: Array, xs: Array, size: float, turn: float) -> void:
+	var yaw := 160.0
+	var r := Vector3(cos(deg_to_rad(yaw)), 0.0, -sin(deg_to_rad(yaw)))
+	var toward := Vector3(sin(deg_to_rad(yaw)), 0.0, cos(deg_to_rad(yaw)))
+	var lo := 1e9
+	var hi := -1e9
+	for i in row.size():
+		var n: Node3D = row[i]
+		var x := float(xs[i])
+		lo = minf(lo, x)
+		hi = maxf(hi, x)
+		n.position = r * x
+		var is_healer := healers.values().has(n)
+		n.rotation = Vector3(0.0, atan2(-toward.x, -toward.z) + (turn if is_healer else 0.0), 0.0)
+	_aim(yaw, -18.0, size, r * (lo + hi) * 0.5 + Vector3(0.0, size * 0.12, 0.0))
+	for h: LowPolyModel in heroes.values():
+		h.apply_idle(0.6)
+
+
+## The carriers by weight: grunt, archer, the four carriers, brute.
+func _place_weight() -> void:
+	_park_all()
+	var row: Array = [mons["grunt_a"], mons["archer"]]
+	for k in CARRIERS:
+		row.append(healers[k])
+	row.append(mons["brute"])
+	_place_row(row, [-5.6, -3.9, -1.9, 0.0, 2.0, 4.1, 6.6], 9.0, 0.55)
+
+
+## The same row at the game camera, named on the floor (plus the imp and round 1's cooler).
+func _place_weight_game() -> void:
+	_park_all()
+	var row: Array = [["Grunt", mons["grunt_a"]], ["Archer", mons["archer"]], ["Office Temp", healers["temp"]],
+			["Wellness Acolyte", healers["acolyte"]], ["Water Boy", healers["waterboy"]], ["Night Janitor", healers["janitor"]],
+			["Brute", mons["brute"]], ["Imp", mons["swarm0"]], ["Cooler (round 1)", healers["cooler"]]]
+	var x := -12.0
+	for e: Array in row:
+		var n: Node3D = e[1]
+		_put(n, x, 0.0, -_fwd - _right * 0.5)
+		_label(String(e[0]), _right * x - _fwd * 1.8 + Vector3(0, 0.05, 0), Color(0.95, 0.92, 0.84), 22)
+		x += 3.0
+	_aim(GAME_YAW, GAME_PITCH, GAME_SIZE, Vector3(0.0, 0.8, 0.0))
+
+
+## One healer alone at the game camera, turned three-quarters.
+func _place_alone(kind: String) -> void:
+	_park_all()
+	_put(healers[kind], 0.0, 0.0, -_fwd - _right * 0.6)
+	_aim(GAME_YAW, GAME_PITCH, GAME_SIZE, Vector3(0.0, 0.8, 0.0))
 
 
 ## Everyone in a row at the game camera, named on the floor.
@@ -340,6 +414,9 @@ func _patient(m: MonsterModel, amount: String, h: float = 2.6) -> void:
 func _heal_fx(kind: String) -> void:
 	var hm: HealerBlockouts.HealerModel = healers[kind]
 	hm.pose_preview("heal", 1.0)
+	if kind in CARRIERS:
+		_pulse(hm, kind)
+		return
 	match kind:
 		"cooler":
 			# THE PULSE: three rising rings out to r 5 from the cooler, a faint disc, a splash over the jug; every monster
@@ -405,11 +482,39 @@ func _heal_fx(kind: String) -> void:
 			_label("CLEAR!", spot + Vector3(0, 0.6, 0) - _fwd * 1.3, BILE, 48)
 
 
+## Round 2's pulse (the Water Cooler's mechanic on every carrier): the rings run out to r 5 from the carrier's feet, a
+## splash over the jug (the acolyte's pour runs into its cup), every monster inside takes +15.
+func _pulse(hm: HealerBlockouts.HealerModel, kind: String) -> void:
+	var c := hm.global_position + Vector3(0, 0.04, 0)
+	_disc(c, 5.0, _glow_mat(BILE, 0.07, 0.8))
+	_ring(c, 5.0, 0.22, _glow_mat(BILE, 0.95, 2.5))
+	_ring(c + Vector3(0, 0.08, 0), 3.4, 0.16, _glow_mat(BILE, 0.70, 2.0))
+	_ring(c + Vector3(0, 0.16, 0), 1.8, 0.12, _glow_mat(BILE, 0.55, 1.8))
+	var from := hm.heal_from()
+	if kind == "acolyte":
+		var cup := (hm.get_part("cup") as Node3D).global_position + Vector3(0, 0.08, 0)
+		_line(from, cup, -0.05, 0.0, 8, 0.05)
+	else:
+		for i in 7:
+			var a := TAU * float(i) / 7.0
+			_ball(from + Vector3(cos(a) * 0.30, 0.35 + 0.10 * (i % 3), sin(a) * 0.30), 0.08, _glow_mat(BILE_HOT, 0.9, 3.0))
+	for slot: String in ["grunt_a", "grunt_b", "brute", "archer", "swarm0", "swarm2"]:
+		var m: MonsterModel = mons[slot]
+		if Vector2(m.global_position.x - c.x, m.global_position.z - c.z).length() <= 5.0:
+			_patient(m, "+15", 3.2 if slot == "brute" else 2.5)
+
+
 # --------------------------------------------------------------------------- views
 
 func _place(view: String) -> void:
 	if view == "lineup":
 		_place_lineup()
+		return
+	if view == "weight":
+		_place_weight()
+		return
+	if view == "weight_game":
+		_place_weight_game()
 		return
 	var parts := view.rsplit("_", true, 1)
 	var kind: String = parts[0]
@@ -422,10 +527,19 @@ func _place(view: String) -> void:
 			_heal_fx(kind)
 		"close":
 			_place_close(kind)
+		"alone":
+			_place_alone(kind)
 
 
 func _views() -> Array[String]:
 	var out: Array[String] = []
+	if set_name == "v2":
+		for k in CARRIERS:
+			for w: String in ["alone", "pack", "heal", "close"]:
+				out.append("%s_%s" % [k, w])
+		out.append("weight")
+		out.append("weight_game")
+		return out
 	for k in KINDS:
 		for w: String in ["pack", "heal", "close"]:
 			out.append("%s_%s" % [k, w])
@@ -443,6 +557,12 @@ func _snap() -> Image:
 func _save(img: Image, name_: String) -> void:
 	var p := out_dir.path_join(name_ + ".png")
 	print("shot ", p, " ", img.save_png(p))
+
+
+static func _resized(img: Image, w: int, h: int) -> Image:
+	var c := img.duplicate() as Image
+	c.resize(w, h, Image.INTERPOLATE_BILINEAR)
+	return c
 
 
 static func _gray(img: Image) -> Image:
@@ -494,6 +614,13 @@ func _run_shots() -> void:
 		if v == "lineup":
 			_save(_gray(img), "lineup_gray")
 			crops["lineup"] = _crop(img, Vector3(0, 1.0, 0) + _right * 0.2, Vector2i(1500, 330), 1)
+		if v.ends_with("_alone"):
+			_save(_crop(img, Vector3(0, 1.0, 0), Vector2i(640, 360), 3), v + "_crop")
+		if v == "weight":
+			crops["top"] = _resized(img, 1600, 900)
+		if v == "weight_game":
+			_save(_gray(img), "weight_game_gray")
+			crops["lineup"] = _crop(img, Vector3(0, 1.0, 0), Vector2i(1500, 330), 1)
 	_sheet(crops)
 	await _measure()
 	get_tree().quit()
@@ -509,19 +636,23 @@ func _sheet(crops: Dictionary) -> void:
 	var rows: Array[String] = []
 	for k in KINDS:
 		rows.append(k)
-	var h := line.get_height() * 2 + ch * 6
+	var top: Image = crops.get("top", null)
+	var top_h := top.get_height() if top != null else 0
+	var h := top_h + line.get_height() * 2 + ch * 6
 	var sheet := Image.create(w, h, false, Image.FORMAT_RGB8)
 	sheet.fill(Color(0.06, 0.05, 0.05))
-	sheet.blit_rect(line, Rect2i(Vector2i.ZERO, line.get_size()), Vector2i((w - line.get_width()) / 2, 0))
+	if top != null:
+		sheet.blit_rect(top, Rect2i(Vector2i.ZERO, top.get_size()), Vector2i((w - top.get_width()) / 2, 0))
+	sheet.blit_rect(line, Rect2i(Vector2i.ZERO, line.get_size()), Vector2i((w - line.get_width()) / 2, top_h))
 	var lg := _gray(line)
-	sheet.blit_rect(lg, Rect2i(Vector2i.ZERO, lg.get_size()), Vector2i((w - lg.get_width()) / 2, line.get_height()))
-	var y0 := line.get_height() * 2
+	sheet.blit_rect(lg, Rect2i(Vector2i.ZERO, lg.get_size()), Vector2i((w - lg.get_width()) / 2, top_h + line.get_height()))
+	var y0 := top_h + line.get_height() * 2
 	var order: Array[String] = []
-	for k in KINDS:
+	for k in kinds:
 		order.append(k + "_pack")
-	for k in KINDS:
+	for k in kinds:
 		order.append(k + "_pack_gray")
-	for k in KINDS:
+	for k in kinds:
 		order.append(k + "_heal")
 	for i in order.size():
 		var c := (crops[order[i]] as Image).duplicate() as Image
@@ -545,6 +676,10 @@ func _measure() -> void:
 			["imp (swarmer)", mons["swarm0"]], ["grunt", mons["grunt_a"]], ["archer", mons["archer"]], ["goblin", mons["goblin"]],
 			["brute", mons["brute"]], ["cooler", healers["cooler"]], ["iv_nurse", healers["iv_nurse"]], ["eye", healers["eye"]],
 			["orderly", healers["orderly"]]]
+	if set_name == "v2":
+		list = [["imp (swarmer)", mons["swarm0"]], ["grunt", mons["grunt_a"]], ["archer", mons["archer"]], ["brute", mons["brute"]],
+				["cooler (round 1)", healers["cooler"]], ["temp", healers["temp"]], ["acolyte", healers["acolyte"]],
+				["waterboy", healers["waterboy"]], ["janitor", healers["janitor"]]]
 	for e: Array in list:
 		_park_all()
 		var n: Node3D = e[1]

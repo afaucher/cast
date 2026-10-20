@@ -7,7 +7,13 @@ it. Everything here is **[proposal]**. Nothing is in the game: the four blockout
 - Blockouts: `scripts/art/lowpoly/monsters/healer_blockouts.gd` (`HealerBlockouts.build(kind)`, in `ZFightModels` as
   `healer/<kind>`). Not in `MonsterModels`, not a `Monster` kind, no `net_fields()`.
 - Lab: `scenes/healer_lab.tscn` (`healer_lab.gd`). It renders every read test below:
-  `godot --path . --resolution 1920x1080 -- --scene res://scenes/healer_lab.tscn --shot <dir>`.
+  `godot --path . --resolution 1920x1080 -- --scene res://scenes/healer_lab.tscn --shot <dir>` (round 2: add `--set v2`).
+
+**Status (the user, 2026-10-20):** "I like the water cooler idea. It is placed too high. But the monster doesn't look like
+a healer in any way. Their body looks very heavy compared to the other monsters, closer to the brute than anything.
+Alternatives?" and, on the eyeball, "looks great but doesn't read as a healer ... Useful model for the future tho with a
+different enemy type." So: **the Water Cooler's prop and its area pulse stay**; its carrier is redesigned in **§7
+(round 2)**; the Night Nurse is **parked as a future enemy, not a healer** (§3 B). §3-§6 are round 1, kept as the record.
 
 ## 1. What has to be true
 
@@ -59,8 +65,14 @@ Sizes are against the grunt (2.2 tall, 0.75 wide) and the brute (2.7 tall, 2.1 a
   `actors_in_radius` asks `Net.resolves(a)` (networking rule 3) and only the host's lands. Late joiner: nothing (a pulse
   is instantaneous; `NetEvents.LATE_JOIN`).
 
-### B. Night Nurse (multi-tether, floating) [blockout]
+### B. Night Nurse (multi-tether, floating) [blockout] **[parked: a future enemy, not a healer]**
 *"Occupational health is watching."* The hellgate's own monitor: a floating eyeball in a paper nurse's cap.
+
+> **Parked (2026-10-20).** The user liked the model but it does not read as a healer: the nurse does not come across on a
+> floating eye. The blockout stays in the lab (`HealerBlockouts.build("eye")`, `healer/eye` in ZFightModels) for a
+> different enemy. Ideas for it, without the cap: a **watcher / alarm** (it spots the crew and calls the room's monsters,
+> the goblin's "!" without the fireworks), a **laser sentry** (it hovers out of melee and sweeps a beam, the vines
+> pull-down still the answer), or a **hellgate scout** (it drifts ahead of a gate's wave and marks where it lands).
 
 - **Silhouette:** an orb 1.4 across floating at 2.45, the cap on top (3.5), five fleshy tendrils with glowing tips
   hanging to 1.0, a shadow disc on the floor. 1.8 grunts (3,560 px). It floats over the crowd, so nothing stands in
@@ -161,7 +173,7 @@ Renders (1920x1080, the game camera unless noted), in the session scratchpad `me
 - Not tested: the themed floors (carpet, marble, the pool deck) and a real fight's motion. The lab uses the plain room
   of `monster_lab`.
 
-## 5. Ranking and recommendation
+## 5. Ranking and recommendation (round 1; superseded by §7.3)
 
 1. **Water Cooler (A).** Best read (brute-sized, the beacon on top), the cleanest fiction (every site has one), the
    simplest networking (one event per pour, heals on the host), and it changes how a fight plays: it clumps its pack,
@@ -188,3 +200,86 @@ variant once the pull-down rule is settled. E is a guru-site reskin of A if you 
    ("Facilities", "Occupational Health").
 6. **The beacon:** should the healer's glow be on all the time (always findable), or dim and flare only while healing
    (a tell, but harder to find)? The renders keep it on.
+
+## 7. Round 2: who carries the Water Cooler
+
+**The brief (2026-10-20):** keep the cooler and the area pulse (§3 A), but lower the cooler (carried at chest or
+shoulder height, or set down and tended, never towering) and give it a carrier that reads as a healer or caretaker at a
+glance, with a support weight: grunt to archer, lean or soft, never brute-like. The water must still be the brightest
+thing in the pack.
+
+Blockouts: `scripts/art/lowpoly/monsters/cooler_carriers.gd` (`CoolerCarriers.build(kind)`, in ZFightModels as
+`carrier/<kind>`), lab only like round 1. **The glow is on the water only** (the jug, the pour, a filled cup); the eyes are
+the monsters' usual small ember (the acolyte's are closed); the kit box is plain. The pulse is unchanged: a 0.8 s tell, then
+rings to r 5 and +15 to every monster inside (§3 A's numbers and networking).
+
+### 7.1 The four carriers
+
+| | **Office Temp** (`temp`) | **Wellness Acolyte** (`acolyte`) | **Water Boy** (`waterboy`) | **Night Janitor** (`janitor`) |
+|---|---|---|---|---|
+| One line | *"I was told to keep everyone hydrated."* A skeleton intern on placement from the agency | *"Drink. Release. Return to work."* The guru client's staff | *"Water break!"* The sideline medic of the bunker's five-a-side | *"Somebody has to refill it."* The night shift, tending the cooler |
+| Body | the grunt's skeleton in a long, soft dusty-rose cardigan, shirt collar, round glasses, an orange lanyard and ID card, a pencil | a soft bell of mid-value linen robe, a terracotta sash, wooden beads, bald with small horns, eyes closed, a small smile | a goblin in a white team polo, an orange ball cap, a whistle on a cord, a towel over the shoulder, shorts and tall socks | a hunched grey ghoul in a drab coverall and flat cap, a rag in the back pocket |
+| The cooler | the jug **hugged to its chest** in both arms (1.2-1.8) | the jug **cradled in front** like a vessel, pouring into a paper cup in the other hand (1.1-1.6) | the whole **counter-top cooler on a hand truck** it wheels in front: cabinet, jug (top 1.5), a cup tube, a plain first aid box | the cooler **set down on a cart** beside its mop bucket (jug top 1.4), a sleeve of cups and a filled one; one hand on the tap, the mop in the other |
+| Healer cues | carrying with care, the lanyard, "harmless office" | the pour, the cup, the closed eyes, the calm | towel, whistle, first aid box, the cup tube: a sports medic | the cups, the tap; otherwise a cleaner |
+| Tell (0.8 s) | it tips the jug forward to pour | it tips the jug into the cup | it raises the whistle | it fills a cup at the tap |
+| Height | 2.2 | 1.85 | 1.7 to the cap | 1.9, hunched |
+| Pixels (game camera) | **1,568** (0.8 grunt) | **1,710** (0.9 grunt) | **2,483** (1.3 grunts, the truck included) | **2,744** (1.4 grunts, the cart included) |
+
+For weight: imp 686, archer 1,946, grunt 1,953, brute 6,129, and round 1's porter 6,092. All four carriers are grunt to
+archer weight in the body; the Water Boy and the Janitor are bigger on screen only because of their wheeled props, which are
+low and boxy, not a mass. None is brute-like.
+
+### 7.2 Read tests
+
+Renders (1920x1080, the game camera unless noted) in the session scratchpad `medic\v2\`:
+
+| File | What |
+|---|---|
+| `<kind>_alone.png`, `_alone_crop.png` | the carrier alone, three-quarters (crop x3, nearest) |
+| `<kind>_pack.png`, `_pack_crop.png` | the round 1 pack (two grunts, an archer, three imps, a brute) with the carrier at the back, the crew on the left |
+| `<kind>_pack_gray.png`, `_pack_crop_gray.png` | the same in greyscale |
+| `<kind>_heal.png`, `_heal_crop.png` | the pulse mocked: the rings, the splash (the acolyte's pour into its cup), +15 over every patient |
+| `<kind>_close.png` | low angle, **ortho size 9**: a grunt, an archer, the carrier, a brute and Wick |
+| `weight.png` | low angle, ortho 9: grunt, archer, the four carriers, brute |
+| `weight_game.png`, `_gray.png` | the same row at the game camera, named, with the imp and round 1's cooler |
+| `sheet.png` | the comparison sheet: weight, weight_game in colour over grey, the four packs, their greys, the four pulses |
+| `measure.txt` | the pixel table above |
+
+**What they show:**
+- **The water is the brightest saturated thing in every pack**, and now low: at chest or waist height it sits among the
+  pack instead of over it. It no longer clears the brute's horns, so behind a brute it can be partly hidden from some
+  angles; the pulse rings still give it away the moment it pours.
+- **In greyscale the jug is not the brightest value**: the bone grunts are as bright. Round 1's jug was alone at the top
+  of the frame; low down it competes. The read is colour plus bloom, not value. If that matters (colour-blind players),
+  raise the jug's glow gain or give it a soft halo; a value-only read would need a darker carrier and darker neighbours.
+- **Water Boy:** the clearest healer read of the four. The white polo, orange cap and towel say "team staff", and the
+  cooler on the hand truck is the only one that reads as a water cooler at the game camera (cabinet and jug together). The
+  goblin body is light; the truck gives it presence without bulk. Risk: it is a goblin next to the goblin scout; the
+  white polo and the truck separate them, and the scout's rockets do not appear here.
+- **Wellness Acolyte:** the kindest gesture and the softest, lightest shape. The pour into the cup is lovely in the
+  close-up but small at the game camera: what reads there is a pale robe with a glowing jug in front. The linen robe is
+  deliberately mid-value so the water wins; a saffron robe (tried first) out-shone the jug.
+- **Office Temp:** the hug reads at once (a figure clutching a glowing jug) and is funny, but the body is the thinnest
+  (0.8 grunt) and the skull is grunt bone: in grey it is "a small skeleton with a lamp".
+- **Night Janitor:** the cart and the set-down cooler read well, and "set down and tended" works, but the carrier reads
+  as a cleaner, not a healer. Also the biggest footprint.
+
+### 7.3 Ranking and recommendation
+
+1. **Water Boy** (recommended). Reads as a caretaker at a glance (towel, whistle, first aid box, cups), the cooler reads as
+   a water cooler, the water is the bright thing at waist height, and the body is goblin-light. The fiction lands too:
+   the monsters take a water break mid-fight, and the hand truck explains why it is slow (2.4) and why a shove (tentacles,
+   the bowl) is such a good answer: it tips the truck. "Kill the water boy!" is a good call-out.
+2. **Wellness Acolyte.** The best gesture and the guru client's own; the pour is the healer cue, but it is small at the
+   game camera. A strong choice for guru sites, or as the Water Boy's reskin there.
+3. **Office Temp.** Funniest, clear hug, but too slight and too bone-white next to the grunts.
+4. **Night Janitor.** "Set down and tended" reads, the healer does not.
+
+### 7.4 Questions for the user
+
+1. **Water Boy?** Or the Acolyte, or the Water Boy everywhere with the Acolyte on guru sites?
+2. **A goblin?** The Water Boy is a goblin like the scout. Keep it, or make it an imp-sized-up "intern" of another kind?
+3. **The greyscale read:** is colour plus bloom enough for the healer, or should the jug get a halo so it also wins on
+   value?
+4. **Does the hand truck tip over on a shove** (the cooler rolls away and the pulse stops until it is picked up)? A fun
+   counter, but a new host-arbitrated object.
