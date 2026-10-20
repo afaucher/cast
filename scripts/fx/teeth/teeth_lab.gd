@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Look-dev lab for the "teeth" spell effect (TeethFx): the three heroes and a few monsters stand on
 ## a slate hex patch (HexMapView + DungeonLook) and are all afflicted at once, with staggered grow times.
 ##
@@ -27,7 +27,6 @@ const SLOTS := {
 	"swarmer": [7.4, -0.4, 1.2],
 }
 
-var shot_path := ""
 var at_time := 0.6
 var view := "game"
 var grow_override := 0.0
@@ -37,8 +36,6 @@ var cam_yaw := GAME_YAW
 var cam_pitch := GAME_PITCH
 var cam_size := 0.0
 
-var map: HexMap
-var camera: Camera3D
 var victims := {}                       ## name -> Node3D
 var fxs: Array[TeethFx] = []
 var _loop := 0.0
@@ -47,7 +44,7 @@ var _orbit := 0.0
 
 func _ready() -> void:
 	_parse_args()
-	_build_world()
+	build_arena(22, 13, 18, 1)
 	victims["rebar"] = RebarModel.new()
 	victims["wick"] = WickModel.new()
 	victims["gasket"] = GasketModel.new()
@@ -56,11 +53,7 @@ func _ready() -> void:
 	victims["swarmer"] = MonsterModels.make("swarmer")
 	for k: String in victims:
 		add_child(victims[k])
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
+	make_camera()
 	_layout()
 	if shot_path != "":
 		for k: String in victims:
@@ -75,44 +68,20 @@ func _ready() -> void:
 
 
 func _parse_args() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	at_time = float(_arg(a, "--at", "0.6"))
-	view = _arg(a, "--view", "game")
-	grow_override = float(_arg(a, "--grow", "0"))
-	seed_arg = int(_arg(a, "--seed", "7"))
-	cancel_at = float(_arg(a, "--cancel", "-1"))
+	at_time = float(arg(args, "--at", "0.6"))
+	view = arg(args, "--view", "game")
+	grow_override = float(arg(args, "--grow", "0"))
+	seed_arg = int(arg(args, "--seed", "7"))
+	cancel_at = float(arg(args, "--cancel", "-1"))
 	if view == "close":
 		cam_yaw = 20.0
 		cam_pitch = -34.0
 		cam_size = 5.2
 	else:
 		cam_size = GAME_SIZE
-	cam_yaw = float(_arg(a, "--yaw", str(cam_yaw)))
-	cam_pitch = float(_arg(a, "--pitch", str(cam_pitch)))
-	cam_size = float(_arg(a, "--size", str(cam_size)))
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
-func _build_world() -> void:
-	map = HexMap.new()
-	for c in Hex.range_cells(Vector2i.ZERO, 22):
-		var d := Hex.distance(c, Vector2i.ZERO)
-		if d <= 13:
-			map.set_cell(c, 0).tag = "room:0"
-		elif d <= 18:
-			map.set_cell(c, 6, HexMap.Tile.WALL)
-	GameWorld.begin(map, self, 1)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
+	cam_yaw = float(arg(args, "--yaw", str(cam_yaw)))
+	cam_pitch = float(arg(args, "--pitch", str(cam_pitch)))
+	cam_size = float(arg(args, "--size", str(cam_size)))
 
 
 func _right() -> Vector3:
@@ -138,10 +107,7 @@ func _layout() -> void:
 	var tgt := right * 0.05 + Vector3(0.0, 1.2, 0.0)
 	if view == "close":
 		tgt = right * 0.05 + Vector3(0.0, 1.35, 0.0)
-	camera.size = cam_size
-	var pitch := deg_to_rad(cam_pitch)
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(cam_yaw, cam_pitch, cam_size, tgt)
 
 
 func _afflict_all(manual: bool) -> void:
@@ -183,9 +149,5 @@ func _run_shot() -> void:
 		for f in fxs:
 			if is_instance_valid(f):
 				f.advance(dt)
-	for i in 4:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", shot_path, " ", img.save_png(shot_path))
-	get_tree().quit()
+	await snap(shot_path, 4)
+	finish()

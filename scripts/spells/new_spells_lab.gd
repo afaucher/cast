@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Look-dev lab for Vines, Damp, Coffee and Chicken: the crew, a few monsters and an employee in the middle of a flat room,
 ## with the chosen spell cast on them by an invisible caster. Scene: scenes/new_spells_lab.tscn.
 ##
@@ -21,35 +21,21 @@ extends Node3D
 const GAME_YAW := 45.0
 const GAME_PITCH := -50.0
 
-var camera: Camera3D
 var _pitch := GAME_PITCH
 var _walker: Hero = null
 var _walk_t := 0.0
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	var spell := _arg(a, "--spell", "vines")
-	var shot := _arg(a, "--shot")
-	var after := float(_arg(a, "--shot-after", "1.2"))
-	var zoom := float(_arg(a, "--zoom", "7.5"))
-	_pitch = float(_arg(a, "--pitch", str(GAME_PITCH)))
-	var map := HexMap.new()
-	for c in Hex.range_cells(Vector2i.ZERO, 12):
-		map.set_cell(c, 0).tag = "room:0"
-	GameWorld.begin(map, self, 7)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
+	var spell := arg(args, "--spell", "vines")
+	var after := float(arg(args, "--shot-after", "1.2"))
+	var zoom := float(arg(args, "--zoom", "7.5"))
+	_pitch = float(arg(args, "--pitch", str(GAME_PITCH)))
+	build_arena(12, 12, 12, 7)
 	GrimeLayer.attach(self, map, null, 5)
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
-	if spell == "chicken" and (a.has("--closeup") or a.has("--pickup")):
-		await _chicken_still(a, shot, zoom)
+	make_camera()
+	if spell == "chicken" and (args.has("--closeup") or args.has("--pickup")):
+		await _chicken_still(args, zoom)
 		return
 	var caster := Hero.new()
 	caster.display_name = "Caster"
@@ -78,18 +64,12 @@ func _ready() -> void:
 		_aim(zoom, Vector3(0, 0.9, -0.3))
 	await get_tree().create_timer(0.3).timeout
 	SpellBook.cast(spell, caster, 1.0, target)
-	if shot != "":
-		await get_tree().create_timer(after).timeout
-		for i in 6:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
-		var img := get_viewport().get_texture().get_image()
-		print("shot ", shot, " ", img.save_png(shot))
-		get_tree().quit()
+	if shot_path != "":
+		shot_after(shot_path, after)
 
 
 func _physics_process(delta: float) -> void:
-	if _walker == null or not OS.get_cmdline_user_args().has("--walk"):
+	if _walker == null or not args.has("--walk"):
 		return
 	_walk_t += delta
 	_walker.move(Vector3(1.0 if fmod(_walk_t, 2.4) < 1.2 else -1.0, 0.0, 0.0), delta)
@@ -123,7 +103,7 @@ func _chicken_fight(caster: Hero) -> Vector3:
 
 
 ## Chicken stills: the model close up in a few poses beside an imp (--closeup), or the feather pickup (--pickup).
-func _chicken_still(a: PackedStringArray, shot: String, zoom: float) -> void:
+func _chicken_still(a: PackedStringArray, zoom: float) -> void:
 	if a.has("--closeup"):
 		# A row across the screen (the camera looks down yaw 45: screen right is world (1, 0, -1)), all three-quarter on.
 		var right := Vector3(1.0, 0.0, -1.0).normalized()
@@ -155,26 +135,9 @@ func _chicken_still(a: PackedStringArray, shot: String, zoom: float) -> void:
 		ComponentPickup.drop("coffee", 3, Vector3(2.0, 0.0, -0.6), 0.0)
 		ComponentPickup.drop("teeth", 3, Vector3(1.6, 0.0, 1.3), 0.0)
 		_aim(zoom if zoom != 7.5 else 4.0, Vector3(0.7, 0.5, 0.2))
-	if shot != "":
-		await get_tree().create_timer(float(_arg(a, "--shot-after", "1.0"))).timeout
-		for i in 6:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
-		var img := get_viewport().get_texture().get_image()
-		print("shot ", shot, " ", img.save_png(shot))
-		get_tree().quit()
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
+	if shot_path != "":
+		shot_after(shot_path, float(arg(a, "--shot-after", "1.0")))
 
 
 func _aim(size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(GAME_YAW)
-	var pitch := deg_to_rad(_pitch)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(GAME_YAW, _pitch, size, tgt)

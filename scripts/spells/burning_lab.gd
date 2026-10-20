@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Burning look-dev lab: the crew, a few monsters and an employee, all on fire, for screenshots. Scene:
 ## scenes/burning_lab.tscn.
 ##
@@ -10,27 +10,12 @@ extends Node3D
 const GAME_YAW := 45.0
 const GAME_PITCH := -50.0
 
-var camera: Camera3D
-
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	var shot := _arg(a, "--shot")
-	var after := float(_arg(a, "--shot-after", "1.5"))
-	var zoom := float(_arg(a, "--zoom", "7.5"))
-	var map := HexMap.new()
-	for c in Hex.range_cells(Vector2i.ZERO, 12):
-		map.set_cell(c, 0).tag = "room:0"
-	GameWorld.begin(map, self, 7)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
+	var after := float(arg(args, "--shot-after", "1.5"))
+	var zoom := float(arg(args, "--zoom", "7.5"))
+	build_arena(12, 12, 12, 7)
+	make_camera()
 	var caster := Hero.new()
 	caster.display_name = "Caster"
 	GameWorld.spawn(caster, Hex.to_world(Vector2i(-6, 6)))
@@ -46,27 +31,6 @@ func _ready() -> void:
 		m.set_physics_process(false)
 		m.hp = m.max_hp
 		Burning.ignite(m, caster, 10.0 if i != 4 else 9.0)
-	_aim(zoom, Vector3(0, 0.9, -0.3))
-	if shot != "":
-		await get_tree().create_timer(after).timeout
-		for i in 6:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
-		var img := get_viewport().get_texture().get_image()
-		print("shot ", shot, " ", img.save_png(shot))
-		get_tree().quit()
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
-func _aim(size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(GAME_YAW)
-	var pitch := deg_to_rad(GAME_PITCH)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(GAME_YAW, GAME_PITCH, zoom, Vector3(0, 0.9, -0.3))
+	if shot_path != "":
+		shot_after(shot_path, after)

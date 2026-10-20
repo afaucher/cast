@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Backdrop lab: the 3D menu backdrops on their own, with an optional mock menu panel for judging the
 ## composition. Scene: scenes/backdrop_lab.tscn. See docs/design/ui-theme-options.md ("As built").
 ##
@@ -28,12 +28,11 @@ var backdrop: Node3D
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	option = _arg(a, "--option", "garage")
+	option = arg(args, "--option", "garage")
 	if not OPTIONS.has(option):
 		push_warning("backdrop_lab: unknown --option %s, using garage" % option)
 		option = "garage"
-	opts = {"mood": _arg(a, "--mood", ""), "van": _arg(a, "--van", "real")}
+	opts = {"mood": arg(args, "--mood", ""), "van": arg(args, "--van", "real")}
 	if str(opts["mood"]) == "":
 		opts.erase("mood")
 	match option:
@@ -41,7 +40,7 @@ func _ready() -> void:
 			var garage := MenuBackdrop.new()
 			if opts.has("mood"):
 				garage.mood = str(opts["mood"])
-			garage.featured_hero = _arg(a, "--hero", "")
+			garage.featured_hero = arg(args, "--hero", "")
 			backdrop = garage
 		_:
 			var script: GDScript = load(STOREFRONT)
@@ -49,13 +48,12 @@ func _ready() -> void:
 			backdrop.call("setup", opts)
 	backdrop.name = "Backdrop"
 	add_child(backdrop)
-	if option == "garage" and a.has("--board"):
-		_real_board(ContractBoard.offers(int(_arg(a, "--board-seed", "7"))))
-	if not a.has("--clean") and not a.has("--board"):
+	if option == "garage" and args.has("--board"):
+		_real_board(ContractBoard.offers(int(arg(args, "--board-seed", "7"))))
+	if not args.has("--clean") and not args.has("--board"):
 		_overlay()
-	var shot := _arg(a, "--shot")
-	if shot != "":
-		_shot_later(shot, float(_arg(a, "--shot-after", "2")))
+	if shot_path != "":
+		_shot_later(shot_path, float(arg(args, "--shot-after", "2")))
 
 
 ## The real job board over the garage, wired as the game wires it (board.backdrop_behind).
@@ -68,24 +66,17 @@ func _real_board(offers: Array[ContractRun]) -> void:
 	layer.add_child(board)
 
 
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
 func _shot_later(path: String, after: float) -> void:
 	await get_tree().create_timer(after).timeout
-	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png(path)
+	var img := await grab(0)
+	img.save_png(path)
 	print("[backdrop_lab] %d draw calls, %d objects, %d primitives, %.0f fps" % [
 		int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)),
 		int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME)),
 		int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)),
 		Engine.get_frames_per_second()])
 	print("[backdrop_lab] screenshot saved: ", path)
-	get_tree().quit()
+	finish()
 
 
 ## The PROTOTYPE tag and a rough paper menu block on the left third, so the composition is judged with the

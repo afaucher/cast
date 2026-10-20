@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Monster awareness step 2 lab (docs/design/monster-awareness.md, "Step 2 as built"): the LIVE behaviours on a
 ## hand-built bit of bunker with the real terrain look (room A for the crew, a corridor, room B with a pack). Every view
 ## stages real actors (Monster kinds, PricedProp, a Hero) and lets the game logic run until the moment it shows.
@@ -21,32 +21,16 @@ const RADIUS := 7
 const WALL_HEIGHT := 3
 const VIEWS: Array[String] = ["goblin_light", "fireworks", "practice", "brawl"]
 
-var shot_path := ""
-var only_view := ""
-var map: HexMap
-var camera: Camera3D
 var stage: Node3D
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
 	MonsterSenses.restless_override = 1.0
 	CombatLog.enabled = false
 	_build_world()
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 300.0
-	add_child(camera)
+	make_camera(300.0)
 	camera.current = true
 	_run.call_deferred()
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	return a[i + 1] if i >= 0 and i + 1 < a.size() else fallback
 
 
 func _build_world() -> void:
@@ -92,11 +76,7 @@ func _new_stage() -> void:
 
 
 func _aim(size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(GAME_YAW)
-	var pitch := deg_to_rad(GAME_PITCH)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 80.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(GAME_YAW, GAME_PITCH, size, tgt, 80.0)
 
 
 func _wick(cell: Vector2i) -> Hero:
@@ -122,12 +102,7 @@ func _wait(cond: Callable, max_frames: int) -> bool:
 
 
 func _snap(view: String) -> void:
-	for i in 3:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var out := "%s_%s.png" % [shot_path.get_basename(), view]
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", out, " ", img.save_png(out))
+	await snap("%s_%s.png" % [shot_path.get_basename(), view], 3)
 
 
 func _run() -> void:
