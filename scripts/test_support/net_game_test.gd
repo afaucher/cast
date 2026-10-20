@@ -7,7 +7,7 @@ extends NetTest
 ## (a game with the test seams: no mic, scene changes recorded instead of done), the screens, the shared clock as the
 ## wall clock sees it (`truth()`: all the processes of a test share this machine's clock), and signing a license.
 
-const GAME_SCRIPT := preload("res://scripts/app/game.gd")
+const GAME_SCRIPT := preload("res://scripts/app/dev/game_dev.gd")   # (GameDev: the game plus its dev drivers, as scenes/game.tscn runs it)
 
 var game: Node3D = null
 ## Every scene the game asked for (the menu when the crew ends, "" for the job board), in order.
