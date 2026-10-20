@@ -110,6 +110,11 @@ var _react_at: Dictionary = {}    ## monster instance id -> when this ally may e
 var _rng := RandomNumberGenerator.new()
 
 
+func _exit_tree() -> void:
+	if hero != null and is_instance_valid(hero):
+		hero.order_state = ""   # (a person takes the seat: no AI order any more)
+
+
 func _ready() -> void:
 	hero = get_parent() as Hero
 	_rng.seed = GameWorld.rng.seed ^ hash(hero.display_name if hero != null else name)
@@ -134,6 +139,8 @@ func net_fields() -> Dictionary:
 
 func _physics_process(delta: float) -> void:
 	_track_leader()
+	if hero != null and hero.order_state != order_state():
+		hero.order_state = order_state()   # (the party HUD's chip; the host sends the change to the clients, NetOrders)
 	if hero == null or hero.dead or hero.is_helpless():
 		return
 	match order:
@@ -181,6 +188,17 @@ func give_order(kind: String, by: Hero, point: Vector3 = Vector3.INF) -> String:
 	order_by = by
 	var lines: Dictionary = BARKS.get(hero.kit_id, BARKS[""])
 	return str(lines.get(kind, ""))
+
+
+## What the ally is doing under orders, for the party HUD (read on the machine that runs this brain: the host, or solo):
+## "follow" (no order), "go" (on its way to the spot), "hold" (there, holding it) or "attack".
+func order_state() -> String:
+	match order:
+		"go":
+			return "hold" if _arrived else "go"
+		"attack":
+			return "attack"
+	return "follow"
 
 
 ## "go": walk to the spot, then hold it. On the way only what attacks the ally itself is fought; once there, whatever is

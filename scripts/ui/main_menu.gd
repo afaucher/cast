@@ -40,6 +40,10 @@ const LEFT_X := 58.0
 const CLIP_W := 600.0
 const CARD_W := 560.0
 const CARD_GAP := -16.0   ## (negative: the card lies over the clipboard's wooden bottom lip, not over the paper)
+## FORM 31 under the clipboard. Off (user, 2026-10-19: "remove the 'personnel file' for now, it is not useful enough for
+## the visual noise"): the clipboard takes the whole left third, a click on a hero still picks it, and Left / Right on the
+## menu step through the crew. PersonnelFile itself stays for later.
+const SHOW_FILE := false
 const ROW_H := 54.0
 
 signal screen_changed(screen_name: String)
@@ -105,7 +109,7 @@ func _ready() -> void:
 	var wanted := Boot.arg_value(args, "--menu-screen")
 	if wanted != "" and wanted != "main":
 		show_screen(wanted)
-	elif args.has("--menu-focus-file"):
+	elif args.has("--menu-focus-file") and card != null:
 		_grab.call_deferred(card.name_row)   # (dev: a screenshot of the personnel file's NAME line in focus)
 	else:
 		_focus_start.call_deferred()
@@ -131,6 +135,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if id != "":
 			pick_hero(id)
 			get_viewport().set_input_as_handled()
+		return
+	# Without the personnel file, keyboard and controller pick here: Left / Right on the menu step through the crew.
+	if card == null and screen == "main" and (event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right")):
+		if can_pick():
+			step_hero(-1 if event.is_action_pressed("ui_left") else 1)
+		get_viewport().set_input_as_handled()
 
 
 ## The pointer over a hero outlines it (every motion, even one a control under the pointer takes, so the outline never sticks).
@@ -211,7 +221,8 @@ func _load_pick(args: PackedStringArray) -> void:
 	var id := Session.local_character()
 	if backdrop != null:
 		backdrop.set_featured_hero(id)
-	card.show_hero(id)
+	if card != null:
+		card.show_hero(id)
 
 
 ## Esc on a sub-screen: void its form; its `back` then shows the main screen. False when there is nothing to void.
@@ -358,13 +369,15 @@ func _build_main() -> void:
 
 	# The left third: the work order on the clipboard, and under it the personnel file (FORM 31) of the picked hero. The
 	# card is built first: the clipboard gets the height the card leaves (both centred, 900 canvas units at 16:9).
-	card = PersonnelFile.new(CARD_W)
-	card.theme = FormTheme.theme()
-	card.step.connect(step_hero)
-	main_panel.add_child(card)
-	var card_h := card.get_combined_minimum_size().y
-	var clip_h := minf(838.0, 880.0 - CARD_GAP - card_h)
-	var top := -(clip_h + CARD_GAP + card_h) * 0.5
+	var card_h := 0.0
+	if SHOW_FILE:
+		card = PersonnelFile.new(CARD_W)
+		card.theme = FormTheme.theme()
+		card.step.connect(step_hero)
+		main_panel.add_child(card)
+		card_h = card.get_combined_minimum_size().y
+	var clip_h := minf(838.0, 880.0 - CARD_GAP - card_h) if card != null else 838.0
+	var top := -(clip_h + CARD_GAP + card_h) * 0.5 if card != null else -clip_h * 0.5
 	clipboard = FormClipboard.new(CLIP_W, clip_h, -1.2)
 	clipboard.anchor_left = 0.0
 	clipboard.anchor_right = 0.0
@@ -375,15 +388,16 @@ func _build_main() -> void:
 	clipboard.offset_top = top
 	clipboard.offset_bottom = top + clip_h
 	main_panel.add_child(clipboard)
-	main_panel.move_child(card, -1)   # (the card lies on top of the clipboard's foot)
-	card.anchor_left = 0.0
-	card.anchor_right = 0.0
-	card.anchor_top = 0.5
-	card.anchor_bottom = 0.5
-	card.offset_left = LEFT_X + (CLIP_W - CARD_W) * 0.5
-	card.offset_right = card.offset_left + CARD_W
-	card.offset_top = top + clip_h + CARD_GAP
-	card.offset_bottom = card.offset_top + card_h
+	if card != null:
+		main_panel.move_child(card, -1)   # (the card lies on top of the clipboard's foot)
+		card.anchor_left = 0.0
+		card.anchor_right = 0.0
+		card.anchor_top = 0.5
+		card.anchor_bottom = 0.5
+		card.offset_left = LEFT_X + (CLIP_W - CARD_W) * 0.5
+		card.offset_right = card.offset_left + CARD_W
+		card.offset_top = top + clip_h + CARD_GAP
+		card.offset_bottom = card.offset_top + card_h
 
 	var sheet := FormSheet.new("27-B", "Work order", "CAST  ·  " + TAGLINE, "Copy", "OFFICE", "white", 46)
 	clipboard.set_content(sheet)
@@ -454,9 +468,12 @@ func _build_main() -> void:
 	main_panel.add_child(keys)
 	_refresh_keys()
 
-	FormTheme.chain([start_button, join_button, voice_button, settings_button, quit_button, card.name_row])
-	card.name_row.focus_entered.connect(_refresh_keys)
-	card.name_row.focus_exited.connect(_refresh_keys)
+	if card != null:
+		FormTheme.chain([start_button, join_button, voice_button, settings_button, quit_button, card.name_row])
+		card.name_row.focus_entered.connect(_refresh_keys)
+		card.name_row.focus_exited.connect(_refresh_keys)
+	else:
+		FormTheme.chain([start_button, join_button, voice_button, settings_button, quit_button])
 	_refresh_info()
 
 
@@ -466,6 +483,8 @@ func _refresh_keys() -> void:
 		return
 	if card != null and card.name_row.has_focus():
 		keys.set_hints([["Left", "Right", "hero"], ["Up", "Down", "move"]])
+	elif card == null:
+		keys.set_hints([["Up", "Down", "move"], ["Left", "Right", "hero"], ["Enter", "sign"]])
 	else:
 		keys.set_hints([["Up", "Down", "move"], ["Enter", "sign"]])
 

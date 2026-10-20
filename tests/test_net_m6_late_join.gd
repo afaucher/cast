@@ -131,8 +131,8 @@ func run_host() -> void:
 	eq(str(r["license_on_form"]), "TENTACLES · TEETH", "c2's \"Clocking in...\" came back with its license typed in")
 	check(float(r["dt"]) >= 0.0 and float(r["dt"]) < 1.0, "it took the seat %.0f ms after reporting ready (limit 1 s)" % (float(r["dt"]) * 1000.0))
 	check(bool(r["saw_slip"]), "c2 showed \"Clocking in...\" while it built")
-	check(str(r["beasts"]).contains(":gone") and not str(r["beasts"]).contains(":sinking"),
-			"c2's closed gate's beast was gone on arrival, never sinking (%s)" % str(r["beasts"]))
+	check(str(r["beasts"]).contains(":gone") and not str(r["beasts"]).contains(":leaving"),
+			"c2's closed gate's beast was gone on arrival, never seen leaving (%s)" % str(r["beasts"]))
 	check((r["notice"] as Array).has("You take over Gasket's seat."), "c2's HUD says it took over Gasket's seat")
 	check(bool(r["armor_on_host"]), "c2 shows the host's armor (a status from before it came)")
 	check((r["pickups"] as Array).has(int(played["pickup"])), "c2 has the pickup on the floor (id %d)" % int(played["pickup"]))
@@ -300,7 +300,7 @@ func run_client() -> void:
 				var p := int(cmd["peer"])
 				await until(func() -> bool: return Session.seats.owner_of(3) == p and hero_at(3).kit_id == "wick", 10.0)
 				var h := hero_at(3)
-				await until(func() -> bool: return not beasts_text().contains(":sinking"), HellgateBeast.SINK_TIME + 1.0)
+				await until(func() -> bool: return not beasts_text().contains(":leaving"), 6.0)
 				report("seen", {"kit": h.kit_id, "label": Net.label_of(h), "hp": h.hp, "max": h.max_hp, "notice": (game.get("_seat_notices") as Array).duplicate(),
 					"slots": str(Array(h.spell_slots)), "charges": str(h._charges), "beasts": beasts_text()})
 			"ai_back":
@@ -401,7 +401,7 @@ func _late_joiner() -> void:
 				running = false
 
 
-## Every hellgate beast on this machine: "q,r:state" by gate cell, sorted (HellgateBeast.state(): out / sinking / gone).
+## Every hellgate beast on this machine: "q,r:state" by gate cell, sorted (HellgateBeast.state(): out / leaving / gone).
 func beasts_text() -> String:
 	var rows: Array[String] = []
 	for b in get_tree().get_nodes_in_group(HellgateBeast.GROUP):

@@ -88,6 +88,10 @@ extends Node3D
 ##                       default), the pause overlay (with --pause-demo), the invoice, a late joiner's "Clocking in..." form, or
 ##                       `takeover`: every window --shot-after S (default 2) after a joiner took an AI's seat (M6)
 ##   --shot-floor N      dev, online: with --shot-at floor, take it on floor N (after the elevator) instead of the first
+##   --party-followers on|off  dev: the party HUD's list of employees following you (default Hud.SHOW_FOLLOWERS)
+##   --hud-stage solo|crew|long|down|orders  dev: stage the party HUD for screenshots (HudStage: stand-in crewmates with
+##                       stand-in avatars, long names, a downed and a dazed hero, mixed orders), timed for --shot-after
+##   --hud-followers N   dev: N employees follow the player (one henchman fighting when N > 1), for the party HUD's list
 ##   --join-hold S       dev, online (M6): a player joining a crew on the job holds its "Clocking in..." form S seconds after
 ##                       building the floor before reporting ready (screenshots: --shot-at clockin)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
@@ -406,6 +410,9 @@ func _parse_args() -> void:
 			"--no-van-intro": opts["no_van_intro"] = true
 			"--van-intro": opts["van_intro"] = true
 			"--join-hold": opts["join_hold"] = float(nxt)
+			"--party-followers": Hud.show_followers = nxt != "off"
+			"--hud-stage": opts["hud_stage"] = nxt
+			"--hud-followers": opts["hud_followers"] = int(nxt)
 
 
 # --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
@@ -1225,6 +1232,8 @@ func _start() -> void:
 		get_tree().create_timer(1.0).timeout.connect(func() -> void:
 			Ledger.damage("Vintage 1787 wine barrel", 4000, player)
 			Ledger.damage("Zen fountain", 900, allies[0]))
+	if opts.has("hud_stage") or opts.has("hud_followers"):
+		HudStage.run(self, str(opts.get("hud_stage", "solo")), int(opts.get("hud_followers", 0)), float(opts.get("shot_after", 3.0)))
 	if opts.has("shot") and not _shared:
 		_take_shot_later(str(opts["shot"]), float(opts.get("shot_after", 3.0)))   # (a shared run starts its clock at the shared start)
 

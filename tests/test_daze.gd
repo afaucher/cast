@@ -160,7 +160,7 @@ func _voice_lands() -> void:
 	brute._strike()
 	check(gasket.is_dazed(), "Gasket is dazed")
 	await frames(2)
-	check(hud._daze_tag.visible, "the HUD shows DAZED for your own hero")
+	check(_hud_dazed(hud), "the HUD shows DAZED for your own hero")
 	check(gasket.is_showing_daze(), "stars over the dazed hero's head")
 	var hurt := gasket.hp
 	var casts := [0]
@@ -171,7 +171,7 @@ func _voice_lands() -> void:
 	check(gasket.is_dazed(), "... while the hero is still dazed")
 	check(gasket.hp > hurt, "the heal landed (%.1f -> %.1f)" % [hurt, gasket.hp])
 	await frames(_secs(BRUTE.DAZE_TIME))
-	check(not hud._daze_tag.visible, "the HUD tag goes away with the daze")
+	check(not _hud_dazed(hud), "the HUD tag goes away with the daze")
 	check(not gasket.is_showing_daze(), "... and so do the stars")
 	hud.queue_free()
 
@@ -264,3 +264,8 @@ func _fight_slams_and_copies() -> void:
 	await frames(_secs(0.65))
 	check(not copy.is_showing_daze(), "the stars go when the daze does")
 	Net.release_copy(copy)
+
+
+## Your row shows DAZED (the party frame's badge on your portrait).
+func _hud_dazed(hud: Hud) -> bool:
+	return not hud.party.views.is_empty() and bool(hud.party.views[0]["dazed"])

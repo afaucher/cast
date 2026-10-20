@@ -8,10 +8,20 @@ extends Node3D
 ## COSMETIC ONLY (networking.md: the "cosmetic" shape): no collision, no gameplay state, no net traffic. SiteBuilder.spawn
 ## builds it on every machine from the floor (the room's cells, a seed from the gate's cell and the floor seed), so co-op
 ## screens match; it never draws from GameWorld.rng (nor GameWorld.fx_rng: a seeded generator of its own, the same on every
-## machine). It WATCHES its gate (watch()): when the gate dies (closed on the host, Net.remote_die on a client, the
-## late-join snapshot's gone ids on a joiner) it sinks back into the dark over SINK_TIME and hides. A gate already dead or
-## gone on the beast's FIRST frame (a late joiner applies the snapshot while the world is frozen, before the floor starts)
-## means it is gone at once: a joiner never sees a closed gate's beast.
+## machine). It WATCHES its gate (watch()), on every machine from what that machine already has:
+##   - HURT: the gate's HP drops (the host's own, a client's replicated puppet HP): the limbs flinch back along their
+##     paths and flail, harder for a bigger hit, a little more under sustained fire, then settle; at low HP they writhe.
+##   - EXIT: the gate dies (closed on the host, Net.remote_die on a client, the late-join snapshot's gone ids on a
+##     joiner): every limb RETRACTS tip-first down its own path into the dark under the level (EXIT_STYLE "retract", the
+##     default) or WHIPS away (snap back, one lash, a fast drop: "whip"), the thinnest first and the biggest last, then
+##     the beast hides. A gate already dead or gone on the beast's FIRST frame (a late joiner applies the snapshot while
+##     the world is frozen, before the floor starts) means it is gone at once: a joiner never sees a closed gate's beast.
+## CLEARANCE (BeastLimbs): every limb's centreline, with an envelope covering everything the shader can do to it (the
+## sway, the low-HP writhe, the hurt flail, the beat's swell, the suckers and spines), keeps MARGIN clear of the level
+## (the terrain's columns, the room's props and decor, the gate), of itself and of every limb already placed on the
+## floor (every gate's beast). A limb that would touch is pushed out of the level, then re-rolled with the beast's own
+## seeded dice (shorter, thinner, a gentler hook, no spines) or dropped. The exits slide each vertex back along its own
+## centreline with a radius no bigger than what was already there, so they stay clear too.
 ##
 ## STYLES (make(style, ...)):
 ##   abyss   a few huge, thick wrapping tentacles: out from under the slab, up and along the walls, tips over the top.
@@ -33,7 +43,16 @@ extends Node3D
 
 const STYLES: Array[String] = ["abyss", "peek"]
 const GROUP := &"hellgate_beasts"
-const SINK_TIME := 2.6                         ## seconds the beast takes to sink away once its gate closed
+## How the beast leaves when its gate closes: "retract" (down its own paths) or "whip" (snap, lash, drop). The lab
+## overrides it per beast (exit_style).
+const EXIT_STYLE := "retract"
+const EXIT_STAGGER := 0.2                      ## seconds between one limb's exit and the next's (retract)
+const WHIP_STAGGER_K := 0.45                   ## the whip's stagger, as a share of the retract's
+const STILL_EXIT := 1.0                        ## seconds the still pieces (peek's eye and jaw) take, after the limbs
+const SWAY := 0.18                             ## a tip's sway at rest, x its lift
+const HURT_CAP := 1.8                          ## the flail stacks this high under sustained fire (it shows above 1 as time)
+const ATTEMPTS := 6                            ## re-rolls before a limb that would touch something is dropped
+const REGISTRY := &"hellgate_beast_limbs"      ## HexMap meta: every limb placed on the floor
 const VIEW := Vector3(0.3949, 0.8290, 0.3949)  ## towards the game camera, unit (yaw 45, pitch -56)
 const CAM := Vector3(0.7071, 0.0, 0.7071)      ## towards the game camera, flat
 const DOOR_CLEAR := 3                          ## hex cells kept clear of a room's doors
@@ -53,6 +72,11 @@ const Limb := BeastFlesh.Limb
 
 ## Microseconds the last for_gate() calls spent building (summed since reset_build_clock()): the floor's cost.
 static var build_usec := 0
+## Clearance checks on (the game). Off: the limbs are built where the placement puts them, unchecked (the lab's "before").
+static var check_clearance := true
+static var debug_fails := false
+## Microseconds per build phase (labs: where the time goes).
+static var prof := {}
 
 var style := "abyss"
 var origin := false
@@ -65,20 +89,35 @@ var stats: Dictionary = {}
 ## A point worth a close look (labs): the eye, the first tentacle's emergence.
 var focus := Vector3.ZERO
 
+## How it leaves: "retract" or "whip" (EXIT_STYLE unless a lab says otherwise).
+var exit_style := EXIT_STYLE
+
 var _t := 0.0
 var _frozen := false
-var _close := 0.0
 var _gate: Node = null                  ## the Hellgate it belongs to (watch())
 var _watching := false
 var _seen_frame := false                ## the first animated frame happened
-var _sinking := false
+var _exit_t := -1.0                     ## seconds since leave() (< 0: staying)
+var _exit_tentacles := 0.0              ## the last limb's exit delay
 var _gone := false
+var _last_hp := -1.0
+var _hurt := 0.0
+var _jerk := 0.0
+var _writhe := 0.0
+var _writhe_goal := 0.0
 var _rng := RandomNumberGenerator.new()
-var _flesh: ShaderMaterial              ## the flesh material: tentacles and every still piece
+var _flesh: ShaderMaterial              ## the tentacles' material (skeletal)
+var _still: ShaderMaterial = null       ## the still pieces' (peek's eye and jaw)
 var _map: HexMap
 var _cells: Array[Vector2i] = []
 var _gate_pos := Vector3.ZERO
-var _avoid: Array[Vector2] = []
+var _obstacles: Array[Vector4] = []
+var _level: BeastLimbs.Level
+var _paths: Array = []                  ## BeastLimbs.Path per placed limb
+var _infos: Array[Dictionary] = []
+var _rejects := 0                       ## limb tries that touched something (re-rolled)
+var _dropped := 0                       ## limbs given up
+var _fails := {"level": 0, "self": 0, "limbs": 0}   ## what the re-rolled tries touched
 var _rim: Array[Dictionary] = []
 var _runs: Array[Dictionary] = []
 var _taken: Array[Vector3] = []         ## run points already used by a tentacle
@@ -94,9 +133,9 @@ var _eye_target := Vector3.ZERO
 
 
 ## Build a style around `room_cells` (one room's cells, its cut border cells included). gate_pos: the gate's world
-## position. avoid: world X/Z of things standing against the walls (priced props, decor) that pieces keep off.
+## position. obstacles: things standing in the room the limbs keep clear of, as upright cylinders (x, z, radius, top y).
 static func make(style_id: String, map: HexMap, room_cells: Array[Vector2i], gate_pos: Vector3, is_origin: bool,
-		seed_value: int, avoid: Array[Vector2] = []) -> HellgateBeast:
+		seed_value: int, obstacles: Array[Vector4] = []) -> HellgateBeast:
 	var b := HellgateBeast.new()
 	b.style = style_id
 	b.origin = is_origin
@@ -105,7 +144,7 @@ static func make(style_id: String, map: HexMap, room_cells: Array[Vector2i], gat
 	b._map = map
 	b._cells = room_cells
 	b._gate_pos = gate_pos
-	b._avoid = avoid
+	b._obstacles = obstacles
 	b._rng.seed = seed_value
 	b._build()
 	return b
@@ -129,14 +168,8 @@ static func for_gate(gate: Node3D, map: HexMap, plan: SitePlan, floor_seed: int)
 		return null
 	var cells: Array[Vector2i] = []
 	cells.assign(plan.rooms[room])
-	var avoid: Array[Vector2] = []
-	for pr in plan.props:
-		if pr.has("pos"):
-			avoid.append(pr["pos"])
-	for d in plan.decor:
-		avoid.append(d["pos"])
 	var seed_value := hash(Vector3i(cell.x, cell.y, floor_seed))
-	var b := make("abyss", map, cells, gate.global_position, is_origin, seed_value, avoid)
+	var b := make("abyss", map, cells, gate.global_position, is_origin, seed_value, obstacles_of(plan, gate.global_position, is_origin))
 	build_usec += Time.get_ticks_usec() - t0
 	if int(b.stats.get("limbs", 0)) == 0:
 		b.free()
@@ -150,6 +183,31 @@ static func for_gate(gate: Node3D, map: HexMap, plan: SitePlan, floor_seed: int)
 
 static func reset_build_clock() -> void:
 	build_usec = 0
+
+
+## What stands in a gate's room for the limbs to keep clear of, as upright cylinders (x, z, radius, top y): the priced
+## props and the decor near the gate (from the plan: the same on every machine) and the gate itself.
+static func obstacles_of(plan: SitePlan, gate_pos: Vector3, is_origin: bool) -> Array[Vector4]:
+	var out: Array[Vector4] = []
+	var floor_y := gate_pos.y
+	var reach := 16.0
+	for pr in plan.props:
+		if not pr.has("pos"):
+			continue
+		var pos: Vector2 = pr["pos"]
+		if pos.distance_to(Vector2(gate_pos.x, gate_pos.z)) > reach:
+			continue
+		var foot: Vector2 = pr.get("foot", Vector2(1.2, 1.2))
+		out.append(Vector4(pos.x, pos.y, 0.5 * maxf(foot.x, foot.y) + 0.15, floor_y + 3.0))
+	for d in plan.decor:
+		var pos: Vector2 = d["pos"]
+		if pos.distance_to(Vector2(gate_pos.x, gate_pos.z)) > reach:
+			continue
+		var r := 0.5 * maxf(float(d.get("w", 1.0)), float(d.get("d", 1.0))) + 0.15
+		out.append(Vector4(pos.x, pos.y, r, floor_y + 3.0 + float(d.get("lift", 0.0))))
+	var k := HellgateModel.ORIGIN_SCALE if is_origin else 1.0
+	out.append(Vector4(gate_pos.x, gate_pos.z, HellgateModel.R * 1.5 * k, floor_y + 3.6 * k))
+	return out
 
 
 ## Follow a Hellgate: its model's clock (the beat) while it lives; sink away once it is dead or gone.
@@ -172,16 +230,16 @@ func freeze_at(seconds: float) -> void:
 	_animate()
 
 
-## 0 = out, 1 = sunk back into the dark (labs; the game's beast sinks by itself when its gate closes).
-func set_close(k: float) -> void:
-	_close = clampf(k, 0.0, 1.0)
-
-
-## "out", "sinking" or "gone" (tests and labs).
+## "out", "leaving" or "gone" (tests and labs).
 func state() -> String:
 	if _gone:
 		return "gone"
-	return "sinking" if _sinking else "out"
+	return "leaving" if _exit_t >= 0.0 else "out"
+
+
+## How hard it is flailing now (0 settled; tests and labs).
+func flail() -> float:
+	return _hurt
 
 
 # ------------------------------------------------------------------ the rim
@@ -360,24 +418,29 @@ func _spread(items: Array[Dictionary], count: int, min_gap: float, score: Callab
 func _build() -> void:
 	name = "HellgateBeast_" + style
 	_flesh = BeastFlesh.make(2.6 if origin else 2.3)
-	BeastFlesh.set_both(_flesh, "beat_rate", beat_rate)
-	BeastFlesh.set_both(_flesh, "fade_lo", CLIFF_Y - 4.2)
-	BeastFlesh.set_both(_flesh, "fade_hi", CLIFF_Y - 0.9)
+	_still = BeastFlesh.make(2.6 if origin else 2.3)
+	for m: ShaderMaterial in [_flesh, _still]:
+		BeastFlesh.set_both(m, "beat_rate", beat_rate)
+		BeastFlesh.set_both(m, "fade_lo", CLIFF_Y - 4.2)
+		BeastFlesh.set_both(m, "fade_hi", CLIFF_Y - 0.9)
+	_level = BeastLimbs.Level.new(_map)
+	for o in _obstacles:
+		_level.add_cylinder(Vector2(o.x, o.y), o.z, o.w)
 	_rim = rim(_map, _cells)
 	_make_runs()
 	match style:
 		"abyss":
 			BeastFlesh.set_both(_flesh, "sway_rate", 0.45)
-			BeastFlesh.set_both(_flesh, "wave_k", 0.35)
 			_build_abyss()
 		"peek":
 			BeastFlesh.set_both(_flesh, "sway_rate", 0.35)
-			BeastFlesh.set_both(_flesh, "wave_k", 0.3)
 			_build_peek()
+	_build_limbs()
 	if _static.tri_count() > 0:
-		_add_mesh("Flesh", _static.to_mesh(0.0), Transform3D.IDENTITY)
+		_add_mesh("Flesh", _static.to_mesh(0.0), Transform3D.IDENTITY, _still)
 	_animate()
-	stats = {"tris": _tris, "meshes": _count_meshes(self), "nodes": _count_nodes(self), "limbs": _limbs, "rim_edges": _rim.size()}
+	stats = {"tris": _tris, "meshes": _count_meshes(self), "nodes": _count_nodes(self), "limbs": _limbs, "rim_edges": _rim.size(),
+			"rejects": _rejects, "dropped": _dropped, "fails": _fails}
 
 
 func _add_mesh(node_name: String, mesh: ArrayMesh, xf: Transform3D, mat: Material = null) -> MeshInstance3D:
@@ -434,7 +497,7 @@ func _wrap_starts(min_ahead: float) -> Array[Dictionary]:
 			var fwd := total - cum[i]
 			var bwd := cum[i]
 			if bool(run["closed"]):
-				fwd = total * 0.8
+				fwd = total * 0.45      # (round a closed loop: never so far that it comes back to its own root)
 				bwd = 0.0
 			var dir := 1 if fwd >= bwd else -1
 			var ahead := maxf(fwd, bwd)
@@ -458,9 +521,65 @@ func _pick_wraps(count: int, min_ahead: float, gap: float, score: Callable) -> A
 	return _spread(cands, count, gap, score)
 
 
-## One long tentacle from a picked start: out from under the slab, along `along` of the run, tip over the wall.
-## r_base: its girth where it comes out; lift: how high the tip rears (1 = about a wall height).
-func _wrap(start: Dictionary, along: float, r_base: float, lift: float, opts: Dictionary = {}) -> MeshInstance3D:
+## One long tentacle from a picked start: out from under the slab, along `along` of the run, tip over the wall. Its
+## centreline is checked against the level, itself and every limb already on the floor (BeastLimbs); on a hit it is
+## re-rolled (shorter, thinner, a gentler hook, no spines: the beast's own seeded dice) up to ATTEMPTS times, then
+## dropped. r_base: its girth where it comes out; lift: how high the tip rears (1 = about a wall height). Returns
+## whether it was placed.
+func _wrap(start: Dictionary, along: float, r_base: float, lift: float, opts: Dictionary = {}) -> bool:
+	var hook := 0.4 if check_clearance else 1.0
+	var spines := float(opts.get("spines", 0.0)) > 0.0
+	for attempt in ATTEMPTS:
+		var tp := Time.get_ticks_usec()
+		var path := _wrap_path(start, along, r_base, lift, hook)
+		prof["path"] = int(prof.get("path", 0)) + Time.get_ticks_usec() - tp
+		if path == null:
+			return false
+		if spines:
+			_add_spines(path, float(opts.get("spines", 1.4)))
+		if not check_clearance:
+			_accept(path, start, r_base, opts)
+			return true
+		var tc := Time.get_ticks_usec()
+		var c := BeastLimbs.clearances(path, _level, _floor_paths())
+		prof["check"] = int(prof.get("check", 0)) + Time.get_ticks_usec() - tc
+		if float(c["worst"]) < BeastLimbs.MARGIN and not path.spines.is_empty():
+			path.spines.clear()
+			path.update_box()
+			c = BeastLimbs.clearances(path, _level, _floor_paths())
+		if float(c["worst"]) >= BeastLimbs.MARGIN:
+			_accept(path, start, r_base, opts)
+			return true
+		_rejects += 1
+		if debug_fails:
+			var at := BeastLimbs.worst_at
+			var best_i := 0
+			for i in path.size():
+				if path.pts[i].distance_to(at) < path.pts[best_i].distance_to(at):
+					best_i = i
+			print("  fail %s  s %.1f / %.1f (grip %.1f)  y %.2f  sdf %.3f env %.3f  free %.2f" % [str(c), best_i * BeastLimbs.STEP,
+					path.length(), path.grip_end, at.y, _level.sdf(at), path.env(best_i), path.free[best_i]])
+		for key in _fails:
+			if float(c[key]) < BeastLimbs.MARGIN:
+				_fails[key] += 1
+		# re-roll: what failed decides what gives
+		if float(c["self"]) < BeastLimbs.MARGIN:
+			# the tip folds into itself: first lose the hook, then rear less
+			if hook > 0.0:
+				hook = 0.0
+			else:
+				lift *= 0.8
+		if float(c["limbs"]) < BeastLimbs.MARGIN or float(c["level"]) < BeastLimbs.MARGIN:
+			along *= _rng.randf_range(0.7, 0.85)
+			lift *= _rng.randf_range(0.8, 1.05)
+		r_base *= 0.9
+		if along < 2.5:
+			break
+	_dropped += 1
+	return false
+
+
+func _wrap_path(start: Dictionary, along: float, r_base: float, lift: float, hook: float) -> BeastLimbs.Path:
 	var run: Dictionary = _runs[int(start["run"])]
 	var pts: Array[Vector3] = run["pts"]
 	var nrms: Array[Vector3] = run["nrms"]
@@ -470,19 +589,35 @@ func _wrap(start: Dictionary, along: float, r_base: float, lift: float, opts: Di
 	var idx: Array[int] = [int(start["i"])]
 	var dist := 0.0
 	var j: int = start["i"]
+	# (and short of any stretch a limb already placed on this floor lies along: tentacles never queue on one wall)
+	var occupied := _occupied_points() if check_clearance else PackedVector3Array()
+	var keep_off := r_base * BeastLimbs.ENV_K * 2.0 + 0.9
 	while dist < along:
 		var nj := j + dir
 		if closed:
 			nj = posmod(nj, n_pts - 1)
 		elif nj < 0 or nj >= n_pts:
 			break
+		var blocked := false
+		for q in occupied:
+			if Vector2(q.x - pts[nj].x, q.z - pts[nj].z).length() < keep_off and q.y > CLIFF_Y - 0.5:
+				blocked = true
+				break
+		if blocked:
+			break
 		dist += pts[nj].distance_to(pts[j])
 		idx.append(nj)
 		j = nj
-	if idx.size() < 3:
+	if idx.size() < 3 or dist < 2.0:
 		return null
-	for i in idx:
-		_taken.append(pts[i])
+	var k_env := BeastLimbs.ENV_K
+	var gap := BeastLimbs.MARGIN + 0.05     # clearance built in (the push-out takes care of the rest)
+	var lift_tip := 1.0
+	if not check_clearance:
+		# the unchecked placement is the one the first wired version shipped (lab: "before")
+		k_env = 1.0
+		gap = 0.05
+		lift_tip = 0.0
 	var i0 := idx[0]
 	var n0 := nrms[i0]
 	var t0 := (pts[idx[1]] - pts[i0]).normalized()
@@ -490,38 +625,44 @@ func _wrap(start: Dictionary, along: float, r_base: float, lift: float, opts: Di
 	var face := _back(n0) < 0.62          # the camera sees this stretch's cliff face: climb it; else lie on the top
 	var ctrl: Array[Vector3] = []
 	var rad: Array[float] = []
-	var sw: Array[float] = []
-	var grip := 0.03                      # sway where it grips (it breathes, it does not flap)
 	# It lives under the level: the root runs in the dark under the floor slab, presses along its underside and wraps
 	# round the slab's bottom edge (the game camera sees it come out from under the cliff), then climbs.
 	var r := r_base
 	var under := Vector3(0, CLIFF_Y - top0, 0)
-	ctrl.append(pts[i0] - n0 * 5.2 - t0 * 1.2 + under + Vector3(0, -2.2, 0))
-	ctrl.append(pts[i0] - n0 * 2.6 - t0 * 0.5 + under + Vector3(0, -r - 0.08, 0))
-	ctrl.append(pts[i0] - n0 * 0.45 + under + Vector3(0, -r * 0.95, 0))
-	ctrl.append(pts[i0] + n0 * (r * 1.05) + under + Vector3(0, -r * 0.15, 0))
+	# (the root drops away steeply under the slab rather than running far in under the room, where the roots of
+	# neighbouring limbs would converge)
+	if check_clearance:
+		ctrl.append(pts[i0] - n0 * 1.3 - t0 * 1.6 + under + Vector3(0, -3.8 - r, 0))
+		ctrl.append(pts[i0] - n0 * 1.4 - t0 * 0.6 + under + Vector3(0, -r * k_env - gap - 0.5, 0))
+	else:
+		ctrl.append(pts[i0] - n0 * 5.2 - t0 * 1.2 + under + Vector3(0, -2.2, 0))
+		ctrl.append(pts[i0] - n0 * 2.6 - t0 * 0.5 + under + Vector3(0, -r - 0.08, 0))
+	ctrl.append(pts[i0] - n0 * 0.45 + under + Vector3(0, -r * k_env - gap, 0))
+	ctrl.append(pts[i0] + n0 * (r * k_env + gap) + under + Vector3(0, -r * 0.3, 0))
 	rad.append_array([r * 1.1, r * 1.05, r, r * 0.98])
-	sw.append_array([0.0, 0.0, 0.0, grip])
 	if not face:
 		# behind the room: up the back of the wall and over its outer edge
-		ctrl.append(pts[i0] + n0 * (r + 0.08) + Vector3(0, -0.7, 0))
-		ctrl.append(pts[i0] + n0 * (r * 0.4) + Vector3(0, r * 0.55, 0))
+		ctrl.append(pts[i0] + n0 * (r * k_env + gap) + Vector3(0, -0.7, 0))
+		ctrl.append(pts[i0] + n0 * (r * k_env * 0.5) + Vector3(0, r * k_env + gap, 0))
 		rad.append_array([r * 0.96, r * 0.94])
-		sw.append_array([grip, grip])
 	var m := idx.size()
+	# (a thick limb follows the wall in wider steps and a gentler wave: it can't take a bend tighter than its girth)
+	var stride := 2 if r_base > 0.6 and check_clearance else 1
+	var wave := 0.32 * (clampf(0.6 / r_base, 0.35, 1.0) if check_clearance else 1.0)
 	for k in range(1, m):
+		if k % stride != 0 and k != m - 1:
+			continue
 		var f := float(k) / float(m - 1)
 		var p := pts[idx[k]]
 		var n := nrms[idx[k]]
 		var rk := lerpf(r_base * 0.92, r_base * 0.5, f)
 		if face:
-			var y := lerpf(CLIFF_Y + rk * 0.9, p.y - rk * 0.55, smoothstep(0.0, 1.0, f))
-			y += 0.32 * sin(f * PI * 3.0 + float(start["i"])) * (1.0 - f) * f * 3.0
-			ctrl.append(p + n * (rk + 0.05) + Vector3(0, y - p.y, 0))
+			var y := lerpf(CLIFF_Y + rk, p.y - rk * 0.6, smoothstep(0.0, 1.0, f))
+			y += wave * sin(f * PI * 3.0 + float(start["i"])) * (1.0 - f) * f * 3.0
+			ctrl.append(p + n * (rk * k_env + gap) + Vector3(0, y - p.y, 0))
 		else:
-			ctrl.append(p - n * 0.62 + Vector3(0, rk * 0.8, 0))
+			ctrl.append(p - n * 0.62 + Vector3(0, rk * k_env + gap, 0))
 		rad.append(rk)
-		sw.append(grip)
 	# over the top, rear up and hook back (never past the wall band into the room)
 	var je := idx[m - 1]
 	var pe := pts[je]
@@ -529,25 +670,93 @@ func _wrap(start: Dictionary, along: float, r_base: float, lift: float, opts: Di
 	var te := (pts[je] - pts[idx[m - 2]]).normalized()
 	var re := r_base * 0.45
 	var up := Vector3.UP * lift
+	var grip_idx := ctrl.size()
 	if face:
-		ctrl.append(pe + ne * 0.05 + te * 0.4 + Vector3(0, re * 0.9, 0))
-	ctrl.append(pe - ne * 0.8 + te * 0.6 + Vector3(0, re * 0.9 + 0.06, 0))
-	ctrl.append(pe - ne * 1.35 + te * 0.9 + up * 0.9)
-	ctrl.append(pe - ne * 1.25 + te * 1.2 + up * 1.8)
-	ctrl.append(pe - ne * 0.65 + te * 1.3 + up * 2.15)
-	ctrl.append(pe - ne * 0.25 + te * 1.0 + up * 1.85)
+		ctrl.append(pe + ne * 0.05 + te * 0.4 + Vector3(0, re * k_env + gap, 0))
+	ctrl.append(pe - ne * 0.8 + te * 0.6 + Vector3(0, re * k_env + gap + 0.05, 0))
+	var rise := Vector3(0, re * lift_tip, 0)
+	if check_clearance:
+		# (the free, moving part starts where it rears: the turn over the wall band stays still, so it can't fold)
+		grip_idx = ctrl.size() - 1
+		# rears up in a long diagonal along the wall: a thick limb can't turn straight up without folding into itself
+		ctrl.append(pe - ne * 1.25 + te * 1.4 + up * 0.7 + rise)
+		var r2 := pe - ne * 1.2 + te * 2.2 + up * 1.5 + rise
+		ctrl.append(r2)
+		# the tip carries on and curls only as far as `hook` says (hook 0: straight on, no hairpin at the end)
+		var h1 := r2 + te * 0.5 + up * 0.45 + ne * 0.3 * hook
+		ctrl.append(h1)
+		ctrl.append(h1 + te * (0.35 - 0.6 * hook) + up * (0.1 - 0.35 * hook) + ne * 0.3 * hook)
+	else:
+		ctrl.append(pe - ne * 1.35 + te * 0.9 + up * 0.9 + rise)
+		ctrl.append(pe - ne * 1.25 + te * 1.2 + up * 1.8 + rise)
+		ctrl.append(pe - ne * (1.25 - 0.6 * hook) + te * (1.2 + 0.1 * hook) + up * (1.8 + 0.35 * hook) + rise)
+		ctrl.append(pe - ne * (1.25 - 1.0 * hook) + te * (1.2 - 0.2 * hook) + up * (1.8 + 0.05 * hook) + rise)
 	var n_tip := ctrl.size() - rad.size()
 	for k in n_tip:
 		var f := float(k + 1) / float(n_tip)
 		rad.append(lerpf(re, 0.035, f))
-		sw.append(lerpf(0.05, 0.3 * lift, f))
-	var sm := BeastFlesh.smooth_path(ctrl, rad, sw, 0.36 if r_base > 0.4 else 0.3)
-	var mesh := BeastFlesh.path_tube(sm[0], sm[1], sm[2], _rng.randi(), int(opts.get("sides", 7)),
-			float(opts.get("suckers", 0.6)), float(opts.get("spines", 0.0)), _rng.randf() * TAU)
-	_limbs += 1
+	var path := BeastLimbs.from_ctrl(ctrl, rad, grip_idx, (SWAY if check_clearance else 0.3) * lift)
+	# the tip sways across itself (in and out over the wall band), never along itself (that would fold it)
+	var across := Vector3(-te.z, 0.0, te.x)
+	path.side = across.normalized() if across.length() > 0.01 else Vector3.RIGHT
+	if check_clearance:
+		var tp := Time.get_ticks_usec()
+		BeastLimbs.push_out(path, _level)
+		prof["push"] = int(prof.get("push", 0)) + Time.get_ticks_usec() - tp
+	return path
+
+
+## Obsidian spines along the back of the gripping stretch (BeastLimbs checks their tips).
+func _add_spines(path: BeastLimbs.Path, gap: float) -> void:
+	var total := path.length()
+	var at := total * 0.15
+	while at < total * 0.62:
+		var i := clampi(roundi(at / BeastLimbs.STEP), 0, path.size() - 1)
+		var r := path.radii[i]
+		var upv := path.ys[i] if path.ys[i].y >= 0.0 else -path.ys[i]
+		var d := (upv - path.ts[i] * 0.55).normalized()
+		path.spines.append({"i": i, "dir": d, "h": r * _rng.randf_range(1.1, 1.7), "r": r * 0.36})
+		at += gap * _rng.randf_range(0.8, 1.2)
+	path.update_box()
+
+
+## A placed limb: kept for the mesh (built once every limb is known) and registered on the floor.
+func _accept(path: BeastLimbs.Path, start: Dictionary, r_base: float, opts: Dictionary) -> void:
+	_paths.append(path)
+	var emerge := path.pts[mini(3, path.size() - 1)]
+	var weight := clampf(1.3 - Vector2(emerge.x - _gate_pos.x, emerge.z - _gate_pos.z).length() / 14.0, 0.45, 1.0)
+	_infos.append({"girth": r_base, "phase": _rng.randf() * TAU, "weight": weight, "sides": int(opts.get("sides", 7)),
+			"suckers": float(opts.get("suckers", 0.55)), "seed": _rng.randi()})
+	for i in path.size():
+		if i % 3 == 0:
+			_taken.append(path.pts[i])
+	_floor_registry().append({"path": path, "owner": get_instance_id()})
 	if focus == Vector3.ZERO:
-		focus = pts[i0] + Vector3(0, CLIFF_Y - top0, 0)
-	return _add_mesh("Tentacle%d" % _limbs, mesh, Transform3D.IDENTITY)
+		focus = path.pts[mini(3, path.size() - 1)]
+
+
+## Every limb's mesh, once all are placed: one skeleton texture for the beast, the bigger limbs leaving last.
+func _build_limbs() -> void:
+	if _paths.is_empty():
+		return
+	var order: Array[int] = []
+	for i in _paths.size():
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool: return float(_infos[a]["girth"]) < float(_infos[b]["girth"]))
+	for rank in order.size():
+		_infos[order[rank]]["delay"] = float(rank) * EXIT_STAGGER + _rng.randf_range(0.0, 0.08)
+	var tm := Time.get_ticks_usec()
+	var tex := BeastFlesh.skeleton(_paths, _infos)
+	BeastFlesh.set_both(_flesh, "skel", tex)
+	BeastFlesh.set_both(_flesh, "skeletal", true)
+	_exit_tentacles = 0.0
+	for k in _paths.size():
+		_exit_tentacles = maxf(_exit_tentacles, float(_infos[k]["delay"]))
+		var inf: Dictionary = _infos[k]
+		var mesh := BeastFlesh.path_tube(_paths[k], k, int(inf["seed"]), int(inf["sides"]), float(inf["suckers"]))
+		_limbs += 1
+		_add_mesh("Tentacle%d" % _limbs, mesh, Transform3D.IDENTITY)
+	prof["mesh"] = int(prof.get("mesh", 0)) + Time.get_ticks_usec() - tm
 
 
 ## Score for picking wrap starts: the sides first (their climb out from under the slab reads best), then behind.
@@ -556,15 +765,66 @@ static func _wrap_score(e: Dictionary) -> float:
 	return 0.6 + 0.8 * (1.0 - absf(b - 0.5) * 2.0) + 0.3 * b
 
 
+# ------------------------------------------------------------------ the floor's limbs
+
+## Every limb placed on this floor (every beast's), on the map: a beast keeps clear of its neighbours'.
+func _floor_registry() -> Array:
+	if not _map.has_meta(REGISTRY):
+		_map.set_meta(REGISTRY, [])
+	return _map.get_meta(REGISTRY)
+
+
+## Every third point of every limb already on the floor.
+func _occupied_points() -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for e: Dictionary in _floor_registry():
+		var p: BeastLimbs.Path = e["path"]
+		for i in range(0, p.size(), 3):
+			out.append(p.pts[i])
+	return out
+
+
+func _floor_paths() -> Array:
+	var out: Array = []
+	for e: Dictionary in _floor_registry():
+		out.append(e["path"])
+	return out
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and _map != null and _map.has_meta(REGISTRY):
+		var reg: Array = _map.get_meta(REGISTRY)
+		var me := get_instance_id()
+		for i in range(reg.size() - 1, -1, -1):
+			if int((reg[i] as Dictionary)["owner"]) == me:
+				reg.remove_at(i)
+
+
+## The worst clearances of this beast's limbs (level, self, against the floor's other limbs): {level, self, limbs, worst}.
+func clearance_report() -> Dictionary:
+	var out := {"level": 1.0e9, "self": 1.0e9, "limbs": 1.0e9, "worst": 1.0e9}
+	for p: BeastLimbs.Path in _paths:
+		var others: Array = []
+		for q in _floor_paths():
+			if q != p:
+				others.append(q)
+		var c := BeastLimbs.clearances(p, _level, others)
+		if float(c["worst"]) < float(out["worst"]):
+			out["at"] = BeastLimbs.worst_at
+		for key in ["level", "self", "limbs", "worst"]:
+			out[key] = minf(float(out[key]), float(c[key]))
+	return out
+
+
 # ------------------------------------------------------------------ A. abyss
 
 func _build_abyss() -> void:
-	var count := 7 if origin else 5
+	var count := 9 if origin else 5
 	var k := 1.3 if origin else 1.0
-	for st in _pick_wraps(count, 4.0, 4.5, _wrap_score):
+	for st in _pick_wraps(count, 4.0, 4.0 if origin else 4.5, _wrap_score):
 		var along := minf(float(st["ahead"]) - 0.6, _rng.randf_range(6.0, 9.5) * k)
 		var lift := lerpf(0.6, 1.25, float(st["back"])) * _rng.randf_range(0.9, 1.1)
-		_wrap(st, along, _rng.randf_range(0.8, 1.0) * k, lift, {"sides": 8, "suckers": 0.5, "spines": 1.4})
+		_wrap(st, along, _rng.randf_range(0.8, 1.0) * k, lift, {"sides": 8, "suckers": 0.65, "spines": 1.4})
 
 
 # ------------------------------------------------------------------ C. peek
@@ -610,6 +870,7 @@ func _build_eye(e: Dictionary, k: float) -> void:
 	_eye_root.name = "Eye"
 	_eye_root.position = c
 	add_child(_eye_root)
+	_level.add_cylinder(Vector2(c.x, c.z), re * 1.4, c.y + re * 1.4)
 	# socket: a ring of heavy dark lumps (brow, cheek) round the ball
 	var sock := Limb.new(_rng.randi())
 	for i in 9:
@@ -678,7 +939,7 @@ func _build_eye(e: Dictionary, k: float) -> void:
 
 
 func _child_mesh(parent: Node3D, node_name: String, lb: Limb) -> void:
-	var mi := _add_mesh(node_name, lb.to_mesh(0.0), Transform3D.IDENTITY)
+	var mi := _add_mesh(node_name, lb.to_mesh(0.0), Transform3D.IDENTITY, _still)
 	remove_child(mi)
 	parent.add_child(mi)
 
@@ -710,6 +971,7 @@ func _build_jaw(edges: Array[Dictionary], k: float) -> void:
 		base.y = CLIFF_Y - 1.4
 		var h := (top - base.y) * _rng.randf_range(0.9, 1.05)
 		var w := _rng.randf_range(0.42, 0.56) * k
+		_level.add_cylinder(Vector2(base.x, base.z) - Vector2(nrm.x, nrm.z) * 0.3, w + 0.35, top + 0.4)
 		var at := base
 		var dir := (Vector3.UP + nrm * 0.12).normalized()
 		for i in 3:
@@ -722,7 +984,7 @@ func _build_jaw(edges: Array[Dictionary], k: float) -> void:
 			dir = (dir - nrm * 0.18).normalized()       # curving back in towards the wall, like a closing jaw
 		# the gum they grow from, tucked under the cliff's foot
 		s.merge(LowPoly.boulder(Vector3(0.8, 0.5, 0.7) * k, 0, 0.15, GUM, _rng.randi(), 0.08), Transform3D(Basis(Vector3.UP, _rng.randf() * TAU), base + Vector3(0, 0.25, 0) - nrm * 0.3))
-	_add_mesh("Jaw", s.to_mesh(0.0), Transform3D.IDENTITY)
+	_add_mesh("Jaw", s.to_mesh(0.0), Transform3D.IDENTITY, _still)
 
 
 # ------------------------------------------------------------------ animation
@@ -737,39 +999,103 @@ func _process(delta: float) -> void:
 	var live := gate_model != null and is_instance_valid(gate_model)
 	if _watching:
 		var dead := not is_instance_valid(_gate) or bool(_gate.get("dead"))
-		if dead and not _sinking:
+		if dead and _exit_t < 0.0:
 			if not _seen_frame:
 				_vanish()      # dead before the floor even started (a late joiner): never shown
 				return
-			_sinking = true
+			leave()
 		live = live and not dead
+		if not dead:
+			_watch_hp(delta)
 	_t = gate_model._t if live else _t + delta
 	_seen_frame = true
-	if _sinking:
-		_close = minf(1.0, _close + delta / SINK_TIME)
-		if _close >= 1.0:
+	_settle(delta)
+	if _exit_t >= 0.0:
+		_exit_t += delta
+		if _exit_t >= exit_duration():
 			_vanish()
 			return
 	_animate()
 
 
+## Its gate was hit (the replicated HP dropped, on every machine): the limbs flinch back along their paths and flail,
+## harder for a bigger hit and a little more under sustained fire; at low HP they never settle.
+func _watch_hp(_delta: float) -> void:
+	var hp := float(_gate.get("hp"))
+	var max_hp := maxf(float(_gate.get("max_hp")), 1.0)
+	if _last_hp < 0.0:
+		_last_hp = hp
+	if hp < _last_hp - 0.001:
+		hurt((_last_hp - hp) / max_hp)
+	_last_hp = hp
+	_writhe_goal = 1.0 - smoothstep(0.12, 0.5, hp / max_hp)
+
+
+## A hit of `frac` of the gate's max HP (labs and tests may call it directly).
+func hurt(frac: float) -> void:
+	_hurt = minf(_hurt + 0.55 + frac * 8.0, HURT_CAP)
+	_jerk = minf(_jerk + 0.5 + frac * 6.0, 1.0)
+
+
+func _settle(delta: float) -> void:
+	_hurt = maxf(0.0, _hurt - delta * 0.85)
+	_jerk = maxf(0.0, _jerk - delta * 4.5)
+	_writhe = move_toward(_writhe, _writhe_goal, delta * 0.8)
+
+
+## Start the exit (its gate closed): every limb retracts down its own path (or whips away: `exit_style`), the smallest
+## first; the eye (peek) closes and goes last.
+func leave() -> void:
+	if _exit_t >= 0.0:
+		return
+	_exit_t = 0.0
+	_hurt = 0.0
+	_jerk = 0.0
+
+
+## Seconds from leave() until it is hidden.
+func exit_duration() -> float:
+	var whip := exit_style == "whip"
+	var t := _exit_tentacles * (WHIP_STAGGER_K if whip else 1.0) + (BeastFlesh.WHIP_TIME if whip else BeastFlesh.RETRACT_TIME)
+	if _eye_root != null or _static.tri_count() > 0:
+		t += STILL_EXIT
+	return t + 0.05
+
+
 func _vanish() -> void:
 	_gone = true
-	_sinking = true
-	_close = 1.0
+	_exit_t = maxf(_exit_t, exit_duration())
+	# fully withdrawn and hidden, whatever shows this node again later
+	_animate()
 	visible = false
+	for c in get_children():
+		if c is Node3D:
+			(c as Node3D).visible = false
 	set_process(false)
 
 
 func _animate() -> void:
+	var whip := exit_style == "whip"
 	BeastFlesh.set_both(_flesh, "t", _t)
-	BeastFlesh.set_both(_flesh, "sink", _close * _close)
-	_flesh.set_shader_parameter("glow_gain", 1.9 * (1.0 - _close))
+	BeastFlesh.set_both(_flesh, "exit_mode", 1 if whip else 0)
+	# (the delays in the skeleton are the retract's; the whip goes faster, so its stagger is compressed: delay_k)
+	BeastFlesh.set_both(_flesh, "exit_t", -1.0 if _exit_t < 0.0 else _exit_t)
+	BeastFlesh.set_both(_flesh, "delay_k", WHIP_STAGGER_K if whip else 1.0)
+	BeastFlesh.set_both(_flesh, "hurt", _hurt)
+	BeastFlesh.set_both(_flesh, "jerk", _jerk)
+	BeastFlesh.set_both(_flesh, "writhe", _writhe)
+	var still := 0.0
+	if _exit_t >= 0.0:
+		var t_still := _exit_t - (exit_duration() - STILL_EXIT - 0.05)
+		still = clampf(t_still / STILL_EXIT, 0.0, 1.0)
+	if _still != null:
+		BeastFlesh.set_both(_still, "t", _t)
+		BeastFlesh.set_both(_still, "sink", still * still)
 	if _eye_ball != null:
-		_animate_eye()
+		_animate_eye(1.0 if _exit_t >= 0.0 else 0.0)
 
 
-func _animate_eye() -> void:
+func _animate_eye(closing: float) -> void:
 	# it looks out at the camera's side of the room; the gaze drifts and glances towards the gate area
 	var glance := floorf(_t / 3.7)
 	var gh := fposmod(sin(glance * 12.9898) * 43758.5453, 1.0)
@@ -778,10 +1104,12 @@ func _animate_eye() -> void:
 	var local := _eye_root.transform.affine_inverse() * target
 	var dir := local.normalized()
 	dir = Vector3(dir.x * 0.35, dir.y * 0.12, 1.0).normalized()
-	_eye_ball.basis = _basis_look(dir)
+	# hurt: the eye darts about
+	dir.x += sin(_t * 23.0) * 0.12 * minf(_hurt, 1.0)
+	_eye_ball.basis = _basis_look(dir.normalized())
 	# blink: every ~5.3 s, 0.28 s long; the lids close over the ball. Open, they hood it (a narrowed, watching eye).
 	var bt := fposmod(_t + 1.1, 5.3)
 	var shut := sin(bt / 0.28 * PI) if bt < 0.28 else 0.0
-	shut = maxf(shut, _close)
-	_lid_top.basis = Basis(Vector3(1, 0, 0), lerpf(1.0, PI * 0.5, shut))
+	shut = maxf(shut, closing)
+	_lid_top.basis = Basis(Vector3(1, 0, 0), lerpf(1.0 - 0.3 * minf(_hurt, 1.0), PI * 0.5, shut))
 	_lid_bot.basis = Basis(Vector3(1, 0, 0), lerpf(-0.8, -PI * 0.5, shut))

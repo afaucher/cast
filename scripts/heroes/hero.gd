@@ -114,6 +114,9 @@ var _shield_bubble: MeshInstance3D
 var _swing_tween: Tween
 var _visual_yaw := 0.0
 var _draw_start := -1.0              ## GameWorld.time the bow draw began, or -1 when not drawing
+## An AI seat's voice order as the party HUD shows it: "follow", "go", "hold" or "attack" ("" for a hero a person plays).
+## Its AllyBrain writes it on the host (and solo); the host sends every change to the clients (NetOrders `ord.st`).
+var order_state := ""
 var _charge_ring: MeshInstance3D = null
 var _charge_mat: StandardMaterial3D = null
 var _ui_top := 1.95                  ## height of the figure's top (the bar, name, shield and daze stars float above it)
@@ -162,6 +165,7 @@ func net_fields() -> Dictionary:
 		# Slots, charges and the held spell show on other screens (the component in the hand).
 		"spell_slots": Net.OWNER, "held_slot": Net.OWNER, "_charges": Net.OWNER,
 		"_draw_start": Net.OWNER,         # other screens show the bow drawn
+		"order_state": Net.OWNER,         # an AI seat's order chip (the host owns the AI seats): ord.st
 		# The owner's own bookkeeping; the pickup it stands next to is only used by that machine.
 		"_ready_at": Net.PRIVATE, "swap_candidate": Net.PRIVATE,
 		# True only on the machine that drives this hero (remote copies stay false); it gates the
