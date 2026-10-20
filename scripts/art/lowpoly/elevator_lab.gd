@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Elevator options lab (docs/design/elevator-options.md): the two elevator LOOKS in the three PLACEMENTS on the real
 ## terrain (HexMapView with midpoint walls from HexMap.cut_walls(), FloorMaterials, DungeonLook's lights), with the
 ## crew for scale. Look-dev: the game builds the chosen styles itself (ElevatorGeo, ElevatorArrival); the lobby placement
@@ -35,14 +35,10 @@ const NORMAL := Vector3(0.8660254, 0, 0.5)           ## the back wall's normal, 
 const ELEV_YAW := 60.0                               ## local +Z = NORMAL
 const LOBBY_MID := Vector2i(-1, -1)
 
-var shot_path := ""
-var only_view := ""
 var look := "service"
 var place := "adjacent"
 var door_arg := NAN
 var with_crew := true
-var map: HexMap
-var camera: Camera3D
 var elevator: ElevatorModel
 var elev_pos := Vector3.ZERO
 var crew: Array[LowPolyModel] = []
@@ -50,20 +46,13 @@ var _t := 0.0
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
-	look = _arg(a, "--look", "service")
-	place = _arg(a, "--place", "adjacent")
-	if _arg(a, "--door") != "":
-		door_arg = float(_arg(a, "--door"))
-	with_crew = not a.has("--no-crew")
+	look = arg(args, "--look", "service")
+	place = arg(args, "--place", "adjacent")
+	if arg(args, "--door") != "":
+		door_arg = float(arg(args, "--door"))
+	with_crew = not args.has("--no-crew")
 	_build_world()
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 220.0
-	add_child(camera)
+	make_camera(220.0)
 	_place_elevator()
 	_dress()
 	if with_crew:
@@ -76,13 +65,6 @@ func _ready() -> void:
 		_run_shots()
 	else:
 		_prepare("game" if is_nan(door_arg) or door_arg > 0.5 else "closed")
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
 
 
 # --------------------------------------------------------------------------- terrain
@@ -272,20 +254,11 @@ func _prepare(view: String) -> void:
 		tgt = _w(Vector3(0, 1.3, 0.6 if place != "midfloor" else 0.2))
 	else:
 		tgt = _w(Vector3(0, 0.8, 0.9 if place != "midfloor" else 0.6))   # the camera follows the crew: centred on the car
-	_aim(GAME_YAW, GAME_PITCH, CLOSE_SIZE if close else GAME_SIZE, tgt)
-
-
-func _aim(yaw_deg: float, pitch_deg: float, size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(GAME_YAW, GAME_PITCH, CLOSE_SIZE if close else GAME_SIZE, tgt)
 
 
 func _run_shots() -> void:
-	for i in 10:
-		await get_tree().process_frame
+	await wait_frames(10)
 	var base := shot_path.get_basename()
 	var list: Array[String] = []
 	if only_view == "":
@@ -294,13 +267,10 @@ func _run_shots() -> void:
 		list.append(only_view)
 	for v in list:
 		_prepare(v)
-		for i in 6:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
 		var out := shot_path if only_view != "" else ("%s.png" % base if v == "game" else "%s_%s.png" % [base, v])
-		var img := get_viewport().get_texture().get_image()
-		print("shot ", out, " ", img.save_png(out), " ", img.get_size(), " tris ", elevator.triangle_count())
-	get_tree().quit()
+		var img := await grab()
+		save_shot(img, out, " %s tris %s" % [img.get_size(), elevator.triangle_count()])
+	finish()
 
 
 func _process(delta: float) -> void:

@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Monster look-dev lab: the real terrain look (HexMapView + DungeonLook) with the four faceted monsters
 ## (grunt, archer, brute, swarmer) and the three heroes (Wick, Gasket, Rebar) for scale. Scene:
 ## scenes/monster_lab.tscn. A separate lab from character_lab.gd so the hero labs stay untouched.
@@ -52,11 +52,7 @@ const GROUP := {
 	"row_windup": [150.0, -22.0, 7.5, 1.2, "windup", "monsters"],
 }
 
-var shot_path := ""
-var only_view := ""
 var only_kind := ""
-var map: HexMap
-var camera: Camera3D
 var wick: WickModel
 var gasket: GasketModel
 var rebar: RebarModel
@@ -68,7 +64,7 @@ var _cycle := 0.0
 
 func _ready() -> void:
 	_parse_args()
-	_build_world()
+	build_arena(26, 14, 20, 1)
 	wick = WickModel.new()
 	gasket = GasketModel.new()
 	rebar = RebarModel.new()
@@ -82,11 +78,7 @@ func _ready() -> void:
 		var m2 := MonsterModels.make("swarmer")
 		extra_swarmers.append(m2)
 		add_child(m2)
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
+	make_camera()
 	if shot_path != "":
 		for m: LowPolyModel in _all_models():
 			m.idle_enabled = false
@@ -97,33 +89,7 @@ func _ready() -> void:
 
 
 func _parse_args() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
-	only_kind = _arg(a, "--kind")
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
-func _build_world() -> void:
-	map = HexMap.new()
-	var origin := Vector2i.ZERO
-	for c in Hex.range_cells(origin, 26):
-		var d := Hex.distance(c, origin)
-		if d <= 14:
-			map.set_cell(c, 0).tag = "room:0"
-		elif d <= 20:
-			map.set_cell(c, 6, HexMap.Tile.WALL)
-	GameWorld.begin(map, self, 1)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
+	only_kind = arg(args, "--kind")
 
 
 func _heroes() -> Array[LowPolyModel]:
@@ -162,14 +128,6 @@ func _park_all() -> void:
 
 
 ## Camera aimed at `tgt` from yaw / pitch (degrees).
-func _aim(yaw_deg: float, pitch_deg: float, size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
-
-
 ## A close-up of one monster at the origin.
 func _place_close(kind: String, view: String) -> void:
 	_park_all()
@@ -178,7 +136,7 @@ func _place_close(kind: String, view: String) -> void:
 	var m: MonsterModel = monsters[kind]
 	m.global_position = Vector3.ZERO
 	m.rotation.y = 0.0
-	_aim(float(v[0]), float(v[1]), float(f[0]), Vector3(0.0, float(f[1]), 0.0))
+	aim(float(v[0]), float(v[1]), float(f[0]), Vector3(0.0, float(f[1]), 0.0))
 	_pose_monsters("rest")
 	m.pose_preview(String(v[2]), 1.0)
 
@@ -215,7 +173,7 @@ func _place_group(view: String) -> void:
 		_:
 			slots = _row_slots()
 			mid = right * -0.4
-	_aim(float(v[0]), float(v[1]), float(v[2]), mid + Vector3(0.0, float(v[3]), 0.0))
+	aim(float(v[0]), float(v[1]), float(v[2]), mid + Vector3(0.0, float(v[3]), 0.0))
 	var toward_cam := float(v[0]) * PI / 180.0 + PI    # facing the camera
 	for e: Array in slots:
 		var n: LowPolyModel = e[0]
@@ -241,7 +199,7 @@ func _process(delta: float) -> void:
 		var n: Node3D = e[0]
 		n.global_position = right * float(e[1]) + Vector3(0.0, 0.0, float(e[2]))
 	var tgt := right * -0.4 + Vector3(0.0, 1.1, 0.0)
-	_aim(yaw + 40.0, -24.0, 12.5, tgt)
+	aim(yaw + 40.0, -24.0, 12.5, tgt)
 	_cycle += delta
 	if _cycle > 4.0:
 		_cycle = 0.0
@@ -263,15 +221,6 @@ func _strike_all() -> void:
 
 # ------------------------------------------------------------------ screenshots
 
-func _snap(out_path: String) -> Image:
-	for i in 6:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", out_path, " ", img.save_png(out_path))
-	return img
-
-
 ## Save a centre crop of the three-heroes-plus-monsters area at x2 (nearest) so game-zoom pixels are inspectable.
 func _save_crop(img: Image, path: String) -> void:
 	var cw := 840
@@ -282,8 +231,7 @@ func _save_crop(img: Image, path: String) -> void:
 
 
 func _run_shots() -> void:
-	for i in 20:
-		await get_tree().process_frame
+	await wait_frames(20)
 	var base := shot_path.get_basename()
 	var sheet_imgs: Array[Image] = []
 	if only_view != "":
@@ -292,34 +240,21 @@ func _run_shots() -> void:
 			_place_close(kind, only_view)
 		else:
 			_place_group(only_view)
-		var img := await _snap(shot_path)
+		var img := await snap(shot_path)
 		if only_view.begins_with("game") or only_view == "fight":
 			_save_crop(img, "%s_crop.png" % base)
-		get_tree().quit()
+		finish()
 		return
 	for kind in KINDS:
 		for view in CLOSE_VIEWS:
 			_place_close(kind, view)
-			var img := await _snap("%s_%s_%s.png" % [base, kind, view])
+			var img := await snap("%s_%s_%s.png" % [base, kind, view])
 			if view in ["front", "three_quarter", "overhead", "windup"]:
 				sheet_imgs.append(img)
 	for view in GROUP_VIEWS:
 		_place_group(view)
-		var img := await _snap("%s_%s.png" % [base, view])
+		var img := await snap("%s_%s.png" % [base, view])
 		if view.begins_with("game") or view == "fight":
 			_save_crop(img, "%s_%s_crop.png" % [base, view])
-	_save_sheet(sheet_imgs, 4)
-	get_tree().quit()
-
-
-func _save_sheet(images: Array[Image], cols: int) -> void:
-	var rows := ceili(images.size() / float(cols))
-	var tw := images[0].get_width() / 3
-	var th := images[0].get_height() / 3
-	var sheet := Image.create(tw * cols, th * rows, false, Image.FORMAT_RGBA8)
-	for i in images.size():
-		var im := images[i].duplicate() as Image
-		im.convert(Image.FORMAT_RGBA8)
-		im.resize(tw, th, Image.INTERPOLATE_BILINEAR)
-		sheet.blit_rect(im, Rect2i(0, 0, tw, th), Vector2i((i % cols) * tw, (i / cols) * th))
-	print("sheet ", shot_path, " ", sheet.save_png(shot_path))
+	save_sheet(sheet_imgs, 4, 3)
+	finish()

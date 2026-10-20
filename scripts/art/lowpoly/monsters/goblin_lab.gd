@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Goblin scout look-dev lab (docs/design/goblin-scout.md): the real terrain look (HexMapView + DungeonLook) on a
 ## hand-built bit of bunker: room A, a three-wide corridor, room B with a pack in it, and a lineup room. The scout
 ## (GoblinModel), his fireworks (FireworksFx), the crew (Wick, Gasket, Rebar) and the live monsters for scale.
@@ -35,10 +35,6 @@ const MAIN_VIEWS: Array[String] = ["patrol_game", "patrol_close", "alert_game", 
 const TURN_VIEWS := {"front": 180.0, "three_quarter": 142.0, "side": 90.0, "back": 0.0}
 const POSES: Array[String] = ["patrol", "look", "alert", "light", "fuse_run", "throw", "cower", "rest"]
 
-var shot_path := ""
-var only_view := ""
-var map: HexMap
-var camera: Camera3D
 var goblin: GoblinModel
 var wick: WickModel
 var gasket: GasketModel
@@ -51,9 +47,6 @@ var _t := 0.0
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
 	_build_world()
 	goblin = GoblinModel.new()
 	wick = WickModel.new()
@@ -78,11 +71,7 @@ func _ready() -> void:
 	cone = _vision_cone()
 	cone.visible = false
 	add_child(cone)
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 300.0
-	add_child(camera)
+	make_camera(300.0)
 	for m in _models():
 		m.idle_enabled = false
 		m.apply_idle(0.6)
@@ -90,13 +79,6 @@ func _ready() -> void:
 		_run_shots()
 	else:
 		_place("lineup")
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
 
 
 # ------------------------------------------------------------------ the bit of bunker
@@ -231,11 +213,7 @@ func _face_point(m: Node3D, pos: Vector3, look_at_pos: Vector3) -> void:
 
 
 func _aim(yaw_deg: float, pitch_deg: float, size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 80.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(yaw_deg, pitch_deg, size, tgt, 80.0)
 
 
 func _rest_all() -> void:
@@ -390,18 +368,8 @@ func _process(delta: float) -> void:
 
 # ------------------------------------------------------------------ screenshots
 
-func _snap(out_path: String) -> Image:
-	for i in 6:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", out_path, " ", img.save_png(out_path))
-	return img
-
-
 func _run_shots() -> void:
-	for i in 20:
-		await get_tree().process_frame
+	await wait_frames(20)
 	var base := shot_path.get_basename()
 	if only_view != "":
 		if TURN_VIEWS.has(only_view):
@@ -410,26 +378,26 @@ func _run_shots() -> void:
 			_place_pose(only_view)
 		else:
 			_place(only_view)
-		await _snap(shot_path)
-		get_tree().quit()
+		await snap(shot_path)
+		finish()
 		return
 	var sheet: Array[Image] = []
 	for view in MAIN_VIEWS:
 		_place(view)
-		sheet.append(await _snap("%s_%s.png" % [base, view]))
+		sheet.append(await snap("%s_%s.png" % [base, view]))
 	var turns: Array[Image] = []
 	for view: String in TURN_VIEWS:
 		_place_turn(view)
-		turns.append(await _snap("%s_turn_%s.png" % [base, view]))
+		turns.append(await snap("%s_turn_%s.png" % [base, view]))
 	var strip := _save_grid(turns, 4, "%s_turnaround.png" % base, 0.5, 0.5)
 	sheet.append(strip)
 	var poses: Array[Image] = []
 	for pose in POSES:
 		_place_pose(pose)
-		poses.append(await _snap("%s_pose_%s.png" % [base, pose]))
+		poses.append(await snap("%s_pose_%s.png" % [base, pose]))
 	sheet.append(_save_grid(poses, 4, "%s_poses.png" % base, 0.5, 0.5))
 	_save_grid(sheet, 3, shot_path, 1.0, 1.0 / 3.0)
-	get_tree().quit()
+	finish()
 
 
 ## Lay images out in a grid: each is cropped to its middle `crop_w` of the width, then scaled by `k`.

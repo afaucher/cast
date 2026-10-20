@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Shark lab (docs/design/sharks.md): the three sharks (SharkModels: regular, laser, imp-ridden) in the game's REAL pools
 ## (PoolGeo shapes carved into a HexMap room, HexMapView's inset drawing, PoolView's water, coping and foam, DungeonLook
 ## and the theme's accent light), the laser's telegraph and beam, and the swim prototype (SharkSwim: continuous steering
@@ -41,10 +41,6 @@ const GAME_SIZE := 24.0
 const LH := Hex.LEVEL_HEIGHT
 
 var case_name := "indoor"
-var shot_path := ""
-var only_view := ""
-var map: HexMap
-var camera: Camera3D
 var views := {}                     ## name -> {size, at, yaw, pitch, setup: Callable}
 var view_order: Array[String] = []
 var sims: Array = []                ## [SharkSwim, shark Node3D, fin ripple, bow ripple]
@@ -55,19 +51,12 @@ var _pool_recs: Array = []
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	if a.has("--measure"):
+	if args.has("--measure"):
 		SharkMeasure.run()
-		get_tree().quit()
+		finish()
 		return
-	case_name = _arg(a, "--case", "indoor")
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 220.0
-	add_child(camera)
+	case_name = arg(args, "--case", "indoor")
+	make_camera(220.0)
 	call("_case_" + case_name)
 	if view_order.is_empty():
 		_view("game", GAME_SIZE, Vector3.ZERO)
@@ -75,13 +64,6 @@ func _ready() -> void:
 		_run_shots()
 	else:
 		_prepare(view_order[0])
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
 
 
 # --------------------------------------------------------------------------- the room and its pools
@@ -810,17 +792,11 @@ func _prepare(view_name: String) -> void:
 	var v: Dictionary = views[view_name]
 	if (v["setup"] as Callable).is_valid():
 		(v["setup"] as Callable).call()
-	var yaw := deg_to_rad(float(v["yaw"]))
-	var pitch := deg_to_rad(float(v["pitch"]))
-	camera.size = float(v["size"])
-	var tgt: Vector3 = v["at"]
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(float(v["yaw"]), float(v["pitch"]), float(v["size"]), v["at"])
 
 
 func _run_shots() -> void:
-	for i in 10:
-		await get_tree().process_frame
+	await wait_frames(10)
 	var base := shot_path.get_basename()
 	var list: Array[String] = []
 	if only_view == "":
@@ -829,10 +805,7 @@ func _run_shots() -> void:
 		list.append(only_view)
 	for v in list:
 		_prepare(v)
-		for i in 6:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
 		var out := shot_path if only_view != "" else ("%s.png" % base if v == "game" else "%s_%s.png" % [base, v])
-		var img := get_viewport().get_texture().get_image()
-		print("shot ", out, " ", img.save_png(out), " ", img.get_size())
-	get_tree().quit()
+		var img := await grab()
+		save_shot(img, out, " %s" % img.get_size())
+	finish()
