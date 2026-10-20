@@ -542,6 +542,16 @@ func _slot_point() -> Vector3:
 	return leader.global_position + Vector3(cos(angle), 0, sin(angle)) * formation_dist
 
 
+## True when the straight line from a to b (X/Z) crosses the void: a pit, or a lava cave's lava.
+static func _gap_between(map: HexMap, a: Vector3, b: Vector3) -> bool:
+	var flat := Vector2(b.x - a.x, b.z - a.z)
+	var n := maxi(1, int(flat.length() / 0.4))
+	for i in range(1, n):
+		if is_nan(map.ground_height(a.lerp(b, float(i) / float(n)))):
+			return true
+	return false
+
+
 ## `p` pulled onto a walkable floor cell near it (same level as the leader give or take one), so a formation
 ## slot or a side-step never points into a wall. Returns `p` when nothing is better.
 func _snap_walkable(p: Vector3) -> Vector3:
@@ -558,7 +568,9 @@ func _snap_walkable(p: Vector3) -> Vector3:
 		if cell == null or cell.type != HexMap.Tile.FLOOR or not map.is_walkable_cell(c) or absi(cell.level - base_level) > 1 or Shark.shark_water(c):
 			continue
 		var d := GameWorld.flat_distance(Hex.to_world(c), p)
-		if d < best_d:
+		if d < best_d and not _gap_between(map, leader.global_position, Hex.to_world(c)):
+			# (never a slot across a hole from the leader: a lava cave's parallel walkway two hexes over is the same level
+			# and three cells away, but the way there is the long way round, and the ally went to it)
 			best_d = d
 			best = c
 	if best_d == INF:
@@ -657,7 +669,11 @@ func _move_toward(goal: Vector3, delta: float) -> void:
 		_path_idx = 1
 		_repath_at = GameWorld.time + REPATH_INTERVAL
 	if _path.size() < 2:
-		hero.move(to.normalized(), delta)   # no path known: just push toward it
+		# No path known: push toward it, unless that walks into a drop it can't take (a pit, a lava cave's lava, a crust
+		# that melted under the path): then wait where it stands rather than grind against the edge.
+		var ahead := hero.global_position + to.normalized() * (hero.radius + 0.6)
+		if map.movement_check(hero.global_position, ahead) != HexMap.Move.BLOCKED or map.wall_at(ahead):
+			hero.move(to.normalized(), delta)
 		return
 	while _path_idx < _path.size() and GameWorld.flat_distance(hero.global_position, Hex.to_world(_path[_path_idx])) < WAYPOINT_REACHED:
 		_path_idx += 1

@@ -365,7 +365,15 @@ func move(dir: Vector3, delta: float) -> bool:
 	var step := dir * effective_speed() * delta
 	var from := global_position
 	var moved := false
-	for raw in [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]:
+	# The step, its two world-axis parts, then the step turned 30 to 75 degrees either way (shortened by the cosine):
+	# a drop or a ledge across the way slides the body along its edge the way a wall face does (clip_move), instead of
+	# stopping it dead. Before the turned tries, a key held a little off a bridge's line (WASD gives eight directions;
+	# a one-wide span runs at 60 degrees) walked the hero to the edge and stuck it there at the first seam where both
+	# axis parts led off the rock (lava cave playtest, 2026-10-20: "stuck in a seam ... between the hexes").
+	var tries: Array[Vector3] = [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]
+	for deg: float in [30.0, -30.0, 45.0, -45.0, 60.0, -60.0, 75.0, -75.0]:
+		tries.append(step.rotated(Vector3.UP, deg_to_rad(deg)) * maxf(cos(deg_to_rad(deg)), 0.35))
+	for raw in tries:
 		var attempt: Vector3 = raw
 		if map:
 			# walls (HexMap.clip_move): the body stops touching the face and slides along it
@@ -378,7 +386,13 @@ func move(dir: Vector3, delta: float) -> bool:
 		var probe: Vector3 = from + attempt + attempt.normalized() * radius * 0.5
 		if map and map.wall_at(probe):
 			probe = from + attempt   # the wall was already handled by clip_move: judge the height where the body goes
+		# A guard: the body's own spot must have ground too, not only the probe ahead (a body over the void can take no
+		# step at all: every move from it is blocked).
+		if map and is_nan(map.ground_height(from + attempt)):
+			continue
 		var mv := map.movement_check(from, probe) if map else HexMap.Move.OK
+		if map and mv == HexMap.Move.BLOCKED and is_nan(map.ground_height(from)) and not is_nan(map.ground_height(probe)):
+			mv = HexMap.Move.OK   # already stranded over the void (an old save of that corner, a crust gone): walk out
 		if mv == HexMap.Move.BLOCKED or (mv == HexMap.Move.CLIMB and not _climb_allowed()):
 			continue
 		climbing = mv == HexMap.Move.CLIMB

@@ -60,6 +60,7 @@ static func _causeway() -> Dictionary:
 			{"pts": [Vector2i(0, -4), Vector2i(9, -13)], "w": 1, "steps": [0, 1, 1, 0, 1, 2, 2, 1, 0, 0]},
 		],
 		"start": Vector2i(-1, 1), "exit": Vector2i(15, -15),
+		"join": [[0, 1]],
 		"archers": [Vector2i(6, -2), Vector2i(7, -2)],
 		"melee": [["grunt", Vector2i(11, -11)], ["grunt", Vector2i(12, -12)], ["grunt", Vector2i(11, -12)]],
 		"damp": [[Vector2i(6, -6), Vector2i(6, -3)], [Vector2i(4, -6), Vector2i(4, -8)]],
@@ -230,6 +231,27 @@ static func rock(id: int) -> Dictionary:
 				if c == HexMap.NO_CELL or (out.has(c) and str(out[c][0]) != "corridor"):
 					continue
 				out[c] = ["corridor", lv]
+	# Every bridge meets its chamber on the flat: the chamber's cells within 2 of the bridge's end are at the chamber's
+	# base (no rough bump, no crag), and so is the bridge's end row. RoomFog sees a doorway from afar by a sight line to
+	# 0.9 above its floor: a one-level bump at the mouth hid it from the bridge while the chamber, right at the doorway,
+	# still saw the bridge (the playtest's "only from one side").
+	var crags := {}
+	for cr: Array in L["crags"]:
+		crags[cr[0]] = true
+	for b: Dictionary in L["bridges"]:
+		var rows := bridge_rows(b)
+		for end_row: Array in [rows[0], rows[rows.size() - 1]]:
+			for e: Vector2i in end_row:
+				if e == HexMap.NO_CELL or not out.has(e):
+					continue
+				for ch: Array in L["chambers"]:
+					var centre: Vector2i = ch[1]
+					if Hex.distance(e, centre) > int(ch[2]) + 1:
+						continue
+					out[e] = [str(out[e][0]), int(ch[3])]
+					for n in Hex.range_cells(e, 2):
+						if out.has(n) and str(out[n][0]) == str(ch[0]) and not crags.has(n) and Hex.distance(n, centre) <= int(ch[2]):
+							out[n] = [str(ch[0]), int(ch[3])]
 	return out
 
 
@@ -317,16 +339,36 @@ static func build_map(id: int) -> HexMap:
 		cell.level = rng.randi_range(6, 9)
 		cell.tag = "rim"
 		cell.mat_id = FloorMaterials.pack(FloorMaterials.F_CARPET, FloorMaterials.W_STONE)   # (dim seams: LavaLook makes it near black)
+	for pair: Array in L.get("join", []):
+		_join(m, L["bridges"][int(pair[0])], L["bridges"][int(pair[1])])
 	m.get_cell(L["start"]).tag = "start"
 	m.get_cell(L["exit"]).tag = "exit"
 	return m
+
+
+## Parallel walkways side by side are ONE fog space (playtest 2026-10-20: "The two walkways next to each other should be
+## the same room"): halls are connected runs of corridor cells (Doorways.spaces), so the lava cells on the short line
+## between the two walkways' middles are tagged "corridor" too. They stay lava (LAVA_BED: lava_cells, LavaField); only
+## the fog joins the two halls into one. The line is taken at the middle, away from the chambers, so it makes no doorway.
+static func _join(m: HexMap, a: Dictionary, b: Dictionary) -> void:
+	var ra := bridge_rows(a)
+	var rb := bridge_rows(b)
+	var ca: Vector2i = ra[ra.size() / 2][0]
+	var best: Vector2i = rb[0][0]
+	for row: Array in rb:
+		if Hex.distance(ca, row[0]) < Hex.distance(ca, best):
+			best = row[0]
+	for c in Hex.line(ca, best):
+		var cell := m.get_cell(c)
+		if cell != null and cell.level == LAVA_BED:
+			cell.tag = "corridor"
 
 
 ## The lava cells of a built map (before LavaField makes them void).
 static func lava_cells(m: HexMap) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for c: Vector2i in m.cells:
-		if m.cells[c].tag == "lava":
+		if m.cells[c].level == LAVA_BED:   # (by level: a fog link's lava is tagged "corridor", see _join)
 			out.append(c)
 	out.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
 	return out

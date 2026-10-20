@@ -75,7 +75,62 @@ void fragment() {
 }
 """
 
+## Damp CRUST: lava cooled to dark rock (playtest 2026-10-20: "showing the crust as not glowing would read better").
+## Grey-black plates, faint darker cracks, lit like rock. `flicker` (0..1, the last seconds before it melts) brings the glow
+## back into the cracks, pulsing, until it gives way.
+const CRUST_SHADER := """
+shader_type spatial;
+render_mode cull_disabled;
+uniform vec4 rock : source_color = vec4(0.27, 0.26, 0.25, 1.0);
+uniform vec4 hot : source_color;
+uniform vec4 core : source_color;
+uniform float flicker = 0.0;
+varying vec3 wp;
+vec2 h22(vec2 p) {
+	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+	return fract(sin(p) * 43758.5453);
+}
+void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+void fragment() {
+	vec2 p = wp.xz * 1.5;
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	float f1 = 8.0;
+	float f2 = 8.0;
+	vec2 id = vec2(0.0);
+	for (int y = -1; y <= 1; y++) {
+		for (int x = -1; x <= 1; x++) {
+			vec2 g = vec2(float(x), float(y));
+			vec2 o = h22(i + g);
+			float dd = length(g + o - f);
+			if (dd < f1) { f2 = f1; f1 = dd; id = i + g; } else if (dd < f2) { f2 = dd; }
+		}
+	}
+	float width = 0.05 + 0.12 * flicker;
+	float crack = 1.0 - smoothstep(0.015, width, f2 - f1);
+	vec3 plate = rock.rgb * (0.75 + 0.5 * h22(id).x);
+	float pulse = flicker * (0.55 + 0.45 * sin(TIME * 18.0));
+	vec3 glowc = mix(hot.rgb, core.rgb, 0.4);
+	ALBEDO = mix(plate, plate * 0.35, crack * (1.0 - flicker));
+	EMISSION = glowc * crack * pulse * 3.0;
+	ROUGHNESS = 0.9;
+	SPECULAR = 0.15;
+}
+"""
+
 static var _shader: Shader
+static var _crust_shader: Shader
+
+
+static func crust_material() -> ShaderMaterial:
+	if _crust_shader == null:
+		_crust_shader = Shader.new()
+		_crust_shader.code = CRUST_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = _crust_shader
+	m.set_shader_parameter("hot", HOT)
+	m.set_shader_parameter("core", CORE)
+	return m
 
 
 static func lava_material(crust_k: float = CRUST_K, heat_k: float = 0.32) -> ShaderMaterial:

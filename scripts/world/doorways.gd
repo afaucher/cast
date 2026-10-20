@@ -119,10 +119,17 @@ static func find(map: HexMap, sp: Dictionary = {}) -> Array[Dictionary]:
 		if kind[tag] != "hall":
 			continue
 		for c: Vector2i in (sp["cells"][tag] as Array[Vector2i]):
+			# Only the hall's own corridor cells and the room's own room cells touch: a cell that merely took the nearest
+			# space (spaces' fill: the start and exit cells, a climb-only bit, a lava cave's lava) is no part of a doorway.
+			# (It was: two such filled cells touching made a doorway patch out in the open, its middle at THEIR height, so
+			# a lava cave's doorways sat on the lava bed, below the bridge, and line of sight to them failed from some
+			# spots and not others: the "I see the shortcut from here but not from there" fog.)
+			if map.cells[c].tag != "corridor":
+				continue
 			for d in Hex.DIRS:
 				var nb: Vector2i = c + d
 				var other: String = cell_space.get(nb, "")
-				if other == "" or kind.get(other, "") != "room":
+				if other == "" or kind.get(other, "") != "room" or map.cells[nb].tag != other:
 					continue
 				var key := other + "|" + tag
 				if not pairs.has(key):

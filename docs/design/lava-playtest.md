@@ -12,6 +12,68 @@ layouts and the playtest build.
 - "For the lava room cluster question - show me some layouts."
 - "Can we playtest what we have for lava?"
 
+## Playtest fixes (2026-10-20)
+
+The user played cave 1 as Gasket, with damp and fireball. What came up, what caused it, and the fix:
+
+1. **"Showing the crust as not glowing would read better."**
+   - The crust used the lava's own shader with the glow turned down. It is now dark, cooled grey rock with faint dark
+     cracks and no glow (`LavaLook.crust_material`).
+   - For its last 2 s the glow comes back into the cracks, pulsing, and the crust shakes.
+   - Ordinary lava keeps its glow.
+2. **"The AI walked on the lava and got stuck."** Three gaps let a body end up at or over the lava's edge:
+   - **A formation slot across the lava.** AllyBrain snapped its slot to the nearest walkable cell at the leader's level.
+     The goat path two hexes from the wide bridge qualified, but the way there is the long way round. A slot across a
+     hole from the leader no longer counts (`AllyBrain._gap_between`).
+   - **No path.** With no path to its goal, an ally pushed straight at it, grinding against the lava's edge. Now it waits
+     when the step ahead is a drop it can't take.
+   - **The safety net.** `LavaField._rescue_stranded` gives the lava rule to anything found standing over a lava cell:
+     a hero is put back on the nearest rock, a monster sinks.
+   - Monsters push at an edge they can't path past, as they do at any unreachable spot. `Actor.move` keeps them off the
+     lava.
+3. **"I walked on the single hex path and also got stuck in a seam ... I was between the hexes."**
+   - **Cause:** `Actor.move` tried the step and then only its two world-axis parts. WASD gives eight directions and the
+     spans run at 60 degrees, so a key held a little off a span's line walked the hero to the edge. At a seam where both
+     axis parts led off the rock, every try was blocked and the hero stood still.
+   - **Fix:** the step is now also tried turned 30-75 degrees either way. A drop slides the body along its edge the way a
+     wall face already did. `Actor.move` also never puts the body's own spot over the void.
+   - **On normal floors** this was the same at any pit or ledge edge; it now slides there too.
+4. **"The two walkways next to each other should be the same room ... only from one side."**
+   - **Cause of the one-sidedness:** `Doorways.find` built doorways from every cell of a space, including cells that
+     merely took the nearest space (the lava). So each bridge-end doorway sat out on the lava, its middle on the lava bed
+     2.5 below the bridge.
+     - RoomFog sees a doorway from afar with a sight line to 0.9 above its floor, so the rock's edge hid it from some
+       spots but not others.
+     - From the goat path you saw the bridge; from the bridge you didn't see the goat path.
+   - **Fix:** doorways are made from a hall's own corridor cells and a room's own room cells only.
+     - **On normal floors:** the only filled cells are the start and exit cells and climb-only bits, all at floor
+       height. A doorway there was never misplaced this way. `test_room_fog` and `test_office_door` pass unchanged.
+   - **The rule itself is still measured from the hero:** you see a space through a doorway you can see. From inside a
+     space you stand at its doorways; from outside you need a sight line to them. So a one-level bump at a doorway can
+     still make it one-sided. The cave keeps every bridge's mouth flat (the chamber within 2 hexes of a bridge's end is
+     at its base level). On normal floors features stay 3 cells from doors, but a corridor that terraces down to its
+     doorway could show it.
+   - **Parallel walkways are one fog space:** a layout's `join` ties the lava between two walkways into one hall, for the
+     fog only. Cave 1's bridge and goat path are now one space.
+5. **"Every time I cast damp, an effect appears at the origin as well."**
+   - **Cause:** `GameWorld.spawn` added a node to the world and only then moved it. Damp drew its telegraph ring in
+     `_ready`, which ran in between, so the ring was drawn at (0, 0, 0).
+   - **Not lava-specific:** it happened on every floor. Tentacles and vines had the same timing: their effects probe the
+     ground around them in `_ready`, at the origin.
+   - **Fix:** `GameWorld.spawn` places the node before it enters the tree.
+
+**Tests:**
+- `test_lava_cave`:
+  - **every span of every layout walked end to end,** about 800 walks, never over the lava. The steering: exactly; with
+    the best WASD key each frame; holding the closest key; and holding the second-closest key (which got stuck before
+    the fix). The starts: the span's start,
+    on every shared edge of two span cells, and beside both ends of each.
+  - **an AI ally following the leader:** over the wide bridge, onto a damp crust and back, and over the one-wide goat
+    path. Never over the lava, never hurt, keeps up.
+  - **fog both ways:** spots 4 hexes apart or less see each other's space both ways, every doorway is on its rock, and
+    cave 1's walkways are one space.
+- `test_spell_damp`: a damp cast at (12, 0, 6) puts nothing near the origin. It fails without the `GameWorld.spawn` fix.
+
 ## Playtest it
 
 ```
