@@ -5,6 +5,11 @@ Status: **in progress**. Done so far:
 - wave 1: D1, except `tools/theme_options/`;
 - wave 2: D2, except the beast's peek/whip, SignLine's pen and the factory planner; H1's single spell list; an Actor
   guard in test_net_contract.
+- wave 4b: H8 step 1. Each floor feature's planner and spawner moved verbatim from `SiteBuilder` into
+  `scripts/contracts/planners/` (`GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`,
+  `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`), each with `plan(...)` and
+  `spawn(...)` on the old parameters. `SiteBuilder.plan` / `spawn` are the explicit ordered call lists; golden floors
+  unchanged.
 
 Moved to later waves:
 - the factory's pack planner, to H3;
@@ -158,6 +163,9 @@ A `Usable` contract on the van, elevator, employee, note, door and pickup: `use_
 **Do this before the lava and sewer go into the generator**: those builds land in these files.
 
 ### H8: `SiteBuilder` planners as units
+Step 1 is done (wave 4b): the planners are their own files, with their old parameters, called in order by `SiteBuilder`.
+Still to do: one `plan(p, ctx)` interface, the ordered registry and the loops.
+
 Each feature becomes a planner script: gates, employees, props, hazards, notes, packages, packs, scouts, sharks, doors,
 and next lava and the sewer. The interface is `plan(p, ctx)` with its own seeded dice, and `spawn(site)`.
 - An ordered registry makes the spawn order, which is also the net-id order, explicit and tested.

@@ -107,7 +107,7 @@ of which dies before it arrives.
 
 ### 1.4 Why they face walls
 
-Nobody sets a monster's facing at spawn: `MonsterFactory.spawn` (`monster_factory.gd:26-39`), `SiteBuilder._place_kinds`
+Nobody sets a monster's facing at spawn: `MonsterFactory.spawn` (`monster_factory.gd:26-39`), `SiteBuilder._place_kinds` (now `PackPlanner._place_kinds`)
 (`site_builder.gd:1022-1062`) and `Hellgate._do_burst` (`hellgate.gd:400-424`) all leave it alone. So every monster
 keeps `Actor.facing = Vector3.FORWARD` (0, 0, -1) (`actor.gd:74`), and IDLE never turns.
 
@@ -122,7 +122,7 @@ lie. Gate spawns face their path, and then the wall if they give up.
 
 ### 1.5 Hellgate spawns vs. pre-placed packs
 
-- **Pre-placed packs** (`SiteBuilder._spawn_packs`, `site_builder.gd:951`) follow every rule above. Budgets grow with
+- **Pre-placed packs** (`SiteBuilder._spawn_packs`, `site_builder.gd:951`; now `PackPlanner.spawn`) follow every rule above. Budgets grow with
   the room index, the floor and difficulty, and with nearness to a gate (`_plan_packs`, `:821-829`). There's a density
   cap of 1 per 6 walkable cells (`room_cap`, `:1011`).
 - **Gate spawns** (`hellgate.gd:400-424`). The gate is dormant until a hero comes within `ACTIVATE_RANGE` 12 (`:50`) or

@@ -24,6 +24,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Monsters | `scripts/monsters/*`, `tests/test_monster*.gd` | monsters agent |
 | Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` (the game), `scripts/app/dev/game_dev.gd` (GameDev: the dev and screenshot drivers behind the `--` flags, the script the scene runs; new dev drivers go there) | lead |
 | Networking: authority kinds, the net contract test | `scripts/net/*`, `tests/test_net_contract.gd` | lead. Every owner adds `net_fields()` entries for its own vars |
+| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
 | Design docs | `docs/design/*` | design agent |
 
 ## Boot flow and the main menu
@@ -373,10 +374,10 @@ Zone layout (tuned so floors are not crowded): 6-9 rooms of radius 5-8 (`DEFAULT
 (8) apart in an area of radius `DEFAULT_SIZE` (36); tree-link corridors are four cells across (4.5 wide between the
 midpoint walls), extra loops, the climb shortcut and the one short chokepoint three (3.0); about half as many raised features per room, never
 within `FEATURE_CENTER_CLEAR` (2) of a room's center or `FEATURE_DOOR_CLEAR` (3) of a door. Generation takes
-about 130 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder` then puts at most 6 priced props on a floor
-(next to walls, 4+ apart, flush and square against the flat face: `ThemeCtx.wall_pose_at` marches to the face and
+about 130 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder`'s planners (`scripts/contracts/planners/`) then put at most 6 priced props on a floor (`PropPlanner`:
+next to walls, 4+ apart, flush and square against the flat face: `ThemeCtx.wall_pose_at` marches to the face and
 refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`) and at most 3
-explosive props (`HazardPlanner.plan`, own dice, the same wall poses), scales the monster pack budgets by 0.7 and caps a room at one monster per
+explosive props (`HazardPlanner.plan`, own dice, the same wall poses), scale the monster pack budgets by 0.7 (`PackPlanner`) and cap a room at one monster per
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.
 

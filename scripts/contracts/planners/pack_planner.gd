@@ -95,6 +95,3 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 			usable.erase(near[i])
 		placed.append(center)
 	return spawned
-
-
-## Convenience for the game: plan + spawn in one call.

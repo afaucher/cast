@@ -3,6 +3,12 @@ extends RefCounted
 ## Turns a generated floor (HexMap + DungeonGen tags) and a ContractRun into a site: the plan (pure
 ## data, plan()) and the spawned things (spawn()).
 ##
+## Each feature is a planner in scripts/contracts/planners/ (GatePlanner, EmployeePlanner, PropPlanner, HazardPlanner,
+## NotePlanner, PackagePlanner, PackPlanner, ScoutPlanner, SharkPlanner, DoorPlanner) with plan(...) and spawn(...).
+## SiteBuilder keeps the ORDER of both (plan(): the shared rng's draw order; spawn(): the net-id order), the van and the
+## elevator body, the shared helpers (_index_rooms, _area, _corridor_zone, _edge_cells, _corridor_distance, NO_SPOT, ...),
+## the shared names and clear zones, and the Site. A new environment adds a planner and one line in each.
+##
 ## Placement rules (docs/contracts-build.md):
 ##  - hellgates: floors 1-2 get small ones (ContractRun.floor_gates, spread over rooms other than the
 ##    start and exit rooms); floor 3 gets only the ORIGIN gate, in the origin room;
@@ -12,16 +18,16 @@ extends RefCounted
 ##  - ROOM THEMES (scripts/world/themes): every room gets a theme from the site's pool (the start room is the
 ##    "service entrance", the origin room gets the theme the story names), recorded as SitePlan.room_themes;
 ##    the themes (and the site type) then pick each cell's floor / wall MATERIAL, written to Cell.mat_id (FloorMaterials);
-##  - priced props: at most MAX_PROPS (6) a floor, one per room first (rooms in a shuffled order), the kind
+##  - priced props: at most PropPlanner.MAX_PROPS (6) a floor, one per room first (rooms in a shuffled order), the kind
 ##    picked by the room's theme (wine rack in the cellar, projector in the cinema, ...), only on cells next to
 ##    a wall on flat floor, never within 3 of the start or the exit, never within 2 cells of a corridor (so
-##    doors and corridors stay clear), at least PROP_SPACING (4) apart. Each stands BACK TO THE WALL facing into
-##    the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw. The
+##    doors and corridors stay clear), at least PropPlanner.PROP_SPACING (4) apart. Each stands BACK TO THE WALL facing
+##    into the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw. The
 ##    anchor cells next to a wall are cut by the midpoint wall (HexMap.cut_walls): the prop stands flush against the
 ##    flat face and no footprint reaches the wall side (ThemeCtx);
 ##  - explosive props (ExplosiveProp, docs/design/hazards.md): planned right after the priced props with their own dice, in
-##    the rooms whose theme has some (RoomThemeDefs "hazards"), on the same wall cells and poses, at most MAX_HAZARDS a floor,
-##    sometimes a chained pair: SitePlan.hazards (HazardPlanner);
+##    the rooms whose theme has some (RoomThemeDefs "hazards"), on the same wall cells and poses, at most
+##    HazardPlanner.MAX_HAZARDS a floor, sometimes a chained pair: SitePlan.hazards (HazardPlanner);
 ##  - standing spots (gates, employees, notes, monsters, the van) are FULL cells only (HexMap.is_walkable_cell);
 ##  - notes (ClueNote, docs/design/notes-rethink.md): two a floor, a story note and a hint slip in a side room, their
 ##    text from NoteCopy filled with this floor's facts (NoteFacts), plus the dispatch banner line: SitePlan.notes /
@@ -36,7 +42,7 @@ extends RefCounted
 ##    own dice (a dedicated RNG), so nothing else on the floor shifts: SitePlan.packages;
 ##  - monster packs: one per room except the start room, bigger on later floors and harder jobs, denser
 ##    near the gates (the pests spread outward), biased toward the contract's pest. Budgets are scaled by
-##    BUDGET_SCALE (0.7) and each room holds at most one monster per MonsterFactory.CELLS_PER_MONSTER
+##    PackPlanner.BUDGET_SCALE (0.7) and each room holds at most one monster per MonsterFactory.CELLS_PER_MONSTER
 ##    walkable cells, placed spread out.
 ##
 ##  - POOLS (PoolGeo, docs/design/pool-options.md "Built"): the indoor pool, science and shark moat rooms get an in-ground pool,
@@ -99,8 +105,10 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	for c in ElevatorGeo.keep_cells(p.elevator):
 		avoid[c] = true
 
-	GatePlanner.plan(map, run, floor_n, p, rng, avoid, near_corr)
-	EmployeePlanner.plan(map, run, floor_n, p, rng, avoid)
+	# The features, in this order (the floor plan, its dice and the checksum hang on it; tests/test_golden_floor.gd checks it).
+	# "shared rng" is `rng` above, so a planner on it moves everything after it; "own dice" is a generator of its own.
+	GatePlanner.plan(map, run, floor_n, p, rng, avoid, near_corr)       # dice: the shared rng, first
+	EmployeePlanner.plan(map, run, floor_n, p, rng, avoid)              # dice: the shared rng, after the gates
 	var theme_seed: int = run.floor_seed(floor_n)
 	var t0 := Time.get_ticks_usec()
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
@@ -109,32 +117,32 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
 	_elevator_body(p, ctx)
 	last_theme_usec = Time.get_ticks_usec() - t0
-	_plan_van(map, p, ctx, floor_n)
+	_plan_van(map, p, ctx, floor_n)                                     # no dice; before everything placed in the start room
 	t0 = Time.get_ticks_usec()
-	PropPlanner.plan(map, run, p, rng, avoid, near_corr, catalog, ctx)
+	PropPlanner.plan(map, run, p, rng, avoid, near_corr, catalog, ctx)  # dice: the shared rng, then ctx.rng (the poses)
 	var t_hz := Time.get_ticks_usec()
-	HazardPlanner.plan(map, run, floor_n, p, avoid, near_corr, ctx)
+	HazardPlanner.plan(map, run, floor_n, p, avoid, near_corr, ctx)     # own dice (lent to ctx for its poses)
 	last_hazard_usec = Time.get_ticks_usec() - t_hz
-	NotePlanner.plan(map, run, floor_n, p, ctx)
+	NotePlanner.plan(map, run, floor_n, p, ctx)                         # own dice; before the decor, which steers round them
 	last_theme_usec += Time.get_ticks_usec() - t0
 	t0 = Time.get_ticks_usec()
-	RoomThemes.plan_decor(ctx)
+	RoomThemes.plan_decor(ctx)                                          # dice: ctx.rng, after the props' poses
 	last_theme_usec += Time.get_ticks_usec() - t0
-	PackagePlanner.plan(map, run, floor_n, p, ctx)
-	PackPlanner.plan(run, floor_n, p)
-	_block_cells(p)
-	ScoutPlanner.plan(map, run, floor_n, p)
+	PackagePlanner.plan(map, run, floor_n, p, ctx)                      # own dice; after the decor (sees every body)
+	PackPlanner.plan(run, floor_n, p)                                   # no dice (the room budgets)
+	_block_cells(p)                                                     # after everything a monster may not stand on
+	ScoutPlanner.plan(map, run, floor_n, p)                             # own dice; after the packs (prefers pack rooms)
 	last_plan_usec = Time.get_ticks_usec() - t_start
 	# The look of the floor: every cell's floor / wall material from its room's theme (FloorMaterials). Not planning, so
 	# it is timed on its own (FloorMaterials.last_usec) and not counted in last_plan_usec.
 	FloorMaterials.assign(map, p, run.site_type)
 	# The office doors and their thresholds (after the materials: a threshold writes its cells' floor). Timed on its own.
 	var t_doors := Time.get_ticks_usec()
-	DoorPlanner.plan(map, run, floor_n, p)
+	DoorPlanner.plan(map, run, floor_n, p)                              # own dice (DoorPlan, from the floor seed)
 	last_door_usec = Time.get_ticks_usec() - t_doors
 	# The pool sharks (docs/design/sharks.md): after everything else, with dice of their own. Timed on its own.
 	var t_sharks := Time.get_ticks_usec()
-	SharkPlanner.plan(map, run, floor_n, p)
+	SharkPlanner.plan(map, run, floor_n, p)                             # own dice; last
 	last_shark_usec = Time.get_ticks_usec() - t_sharks
 	return p
 
@@ -399,22 +407,25 @@ class Site:
 	var pest_spawned := 0               ## pest-kind monsters placed by the packs (gate spawns come later)
 
 
+## Spawn a planned floor. SPAWN ORDER IS NET-ID ORDER: NetFloor numbers the actors in the order they are spawned here, and
+## every machine builds the floor from the seed, so this sequence is part of the network contract (and of the golden
+## floors). A new feature's actors go after the last actor (the sharks), so no earlier id moves.
 static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	var site := Site.new()
 	site.plan = p
 	site.pest = run.pest
-	var rng := RandomNumberGenerator.new()
+	var rng := RandomNumberGenerator.new()   # the packs' dice (PackPlanner.spawn is the only one that draws from it)
 	rng.seed = run.floor_seed(p.floor_number) * 31 + p.floor_number
-	GatePlanner.spawn(map, run, p, site)
+	GatePlanner.spawn(map, run, p, site)        # the gates, each with the (cosmetic) beast under its room
 	EmployeePlanner.spawn(p, site)
 	PropPlanner.spawn(run, p, site)
 	HazardPlanner.spawn(run, p, site)
-	site.decor = DecorProp.spawn_plan(p)
+	site.decor = DecorProp.spawn_plan(p)        # set dressing: not actors
 	NotePlanner.spawn(map, run, p, site)
-	PackagePlanner.spawn(p, site)
-	PackPlanner.spawn(map, run, p, site, rng)
+	PackagePlanner.spawn(p, site)               # every box of every stack
+	PackPlanner.spawn(map, run, p, site, rng)   # draws from `rng`
 	ScoutPlanner.spawn(map, p, site)
-	SharkPlanner.spawn(run, p, site)
+	SharkPlanner.spawn(run, p, site)            # the sharks and their imp gunners: the last actors
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
 	DoorPlanner.spawn(p, site)
@@ -452,6 +463,7 @@ static func room_cap(map: HexMap, room_cells: Array) -> int:
 	return maxi(2, walkable / MonsterFactory.CELLS_PER_MONSTER)
 
 
+## Convenience for the game: plan + spawn in one call.
 static func build(map: HexMap, run: ContractRun, floor_n: int) -> Site:
 	var p := plan(map, run, floor_n, PricedProp.catalog(run.site_type))
 	return spawn(map, run, p)
