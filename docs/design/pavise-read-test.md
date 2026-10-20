@@ -4,9 +4,14 @@ The user (2026-10-19): "The crossbowman - I like the idea of the bigger threat b
 read. Lets test it out." This tests the look of `combat-proposals.md` §2 (and touches §2.8). It is a lab only: no
 Monster kind, nothing in `MonsterModels`, no net code.
 
-- Models: `scripts/art/lowpoly/monsters/pavise_model.gd` (`PaviseModel`, four variants, five shield states, the aim, a
-  lock, stuck arrows, two front cues). They are in the z-fight registry (`ZFightModels`: `pavise/<v>/<state>` and
-  `pavise/<v>/arrows_cues`) with no findings over 1 cm2.
+- Model: `scripts/art/lowpoly/monsters/pavise_model.gd` (`PaviseModel`): the final look, two crossbow carry styles,
+  five shield states, the aim and lock, reloading, and stuck arrows. It is in the z-fight registry (`ZFightModels`:
+  `pavise/<carry>/<state>`, `/reloading` and `/arrows`) with no findings over 1 cm2.
+- `tests/test_pavise_model.gd` checks that the crossbow never passes through the pavise. It covers both carry styles,
+  every shield state, a walk cycle and the whole raise from reloading to aiming (21 steps). The check is
+  `PaviseModel.bow_shield_overlap()`: every vertex, edge midpoint and face centre of the stock, prod, string and bolt
+  is tested against the pavise's solid (the boards, paint and rim, less the notch above its saddle, plus the braces and
+  grip on the back).
 - Lab: `scenes/pavise_lab.tscn` (`pavise_lab.gd`) uses the game's terrain and light (`HexMapView` + `DungeonLook`) and
   the game camera (orthographic, yaw 45, pitch -56, size 24, 1920x1080). The "close" views are size 9 at the same
   angle.
@@ -14,7 +19,67 @@ Monster kind, nothing in `MonsterModels`, no net code.
   Each game-size view also writes a `_crop` file: the area round the pavise at 2x, nearest neighbour, so you see the
   game's own pixels.
 
-## The variants
+## Revision (2026-10-20): decided, and the final look
+
+The user, after the first pass below: "The crossbow man, generally very good. The at-rest crossbow penetrates the
+shield. We probably want either to the side or above. No floor arc. The shield should read okay. The shield should
+always block while carried. No searchlight version. No armoured one for now, maybe that style would be good for another
+enemy." Recorded in `combat-proposals.md` §2.0.
+
+- **Final look:** C's paint on A's build. The pavise has a crimson front with a bone border and a bone skull, and a raw
+  pale-wood back. The doc's flat top with its sight notch, iron rim, foot spike and prop leg stay. It is 15% wider than
+  the first pass: 1.24 x 1.87 world units. The notch now has an iron saddle the stock rests on. The skeleton wears a
+  crimson tabard. The bolt head is oversize and always glows.
+- **The shield blocks while carried as well as planted.** The arc and the test are the same; only the turn rate differs
+  (150°/s carried, 60°/s planted).
+- **No floor arc.** The front is the shield's own read (the painted front, the raw back), with arrows that stay stuck and
+  the blocked hit's spark and grey "0".
+- **Dropped:** D, the searchlight version, is not built. **Parked:** B, the armoured heavy, is "a style for a different
+  enemy later", not built. The first-pass code for A to D is in git history (`489ef45`).
+- **The crossbow clipping fixed.** The first pass reloaded with the bow held nose-down behind the shield, through the
+  boards. Now the crossbow never passes through the shield in any state, and the test checks it. Two placements:
+
+  | | (a) "side" | (b) "above" |
+  |---|---|---|
+  | Walking | Slung nose-down at the right hip, the prod along the body, outside the shield's edge | Shouldered: the stock on the right shoulder, nose forward and up over the shield's top |
+  | Reloading (planted) | Nose down at the right side, the foot in the stirrup, cranking | Laid over the top rim in the notch, nose up, the butt drawn back, cranking |
+  | Raising to aim | A long move: lifted nose-up outside the edge, swung level over the top, lowered into the notch (three steps, or the boards are in the way) | A short tilt: the nose comes down until the stock lies level on the saddle |
+  | Aiming | In the notch, the stock on the saddle, the prod and glowing bolt head in front of the boards | the same |
+  | Shoved off, dropped, broken | Held low in both hands (the same in both styles) | the same |
+
+### Recommended: (b) "above"
+
+- **The front stays marked in every state.** The glowing bolt head sits above and in front of the shield's top while it
+  walks, reloads and aims, so even a carried shield points somewhere. In (a) the bolt head hangs by the right foot, and
+  from the front three-quarter view the slung bow is hidden behind the boards.
+- **The aim reads as one motion.** Reloading over the rim to aiming is a short tilt down into the notch. In (a), going
+  from the hip to the notch without touching the shield takes a three-step swing round its edge, which is busier to
+  animate and reads less clearly in the 1.2 s aim.
+- **The shield keeps its silhouette.** Nothing hangs off its side. The cost is a busier top (the prod next to the
+  skull). At size 24 it still reads as "a skull and a crossbow over a red door".
+- (a) is fine if the user wants the cleanest top: the shield's top edge and the skull read alone while it walks.
+
+### The v2 renders
+
+In the session scratchpad, `pavise\v2\`:
+- `pavise_states_close.png`, `pavise_states_game.png` (+ `_crop`): walking, raising the bow, aiming (locked) and
+  reloading. Top row (a) side, bottom row (b) above.
+- `pavise_facings_close.png`, `pavise_facings_game.png` (+ `_crop`): walking, then aiming from the front, side and back,
+  in the same rows.
+- `pavise_exposed_close.png`: shoved off it, dropped and broken.
+- `pavise_aim_track_crop.png`, `pavise_aim_lock_crop.png`: the telegraph on Wick in a pack. A dashed floor line while it
+  tracks (0.8 s), then a solid one when it locks (0.4 s).
+- `pavise_arrows.png` (+ `_crop`), `pavise_arrows_close.png`: stuck arrows and a blocked hit.
+- `pavise_lineup.png` (+ `_crop`): scale against the crew and the monsters.
+- `pavise.png`: the contact sheet.
+
+The first pass's renders are in `pavise\`.
+
+---
+
+## First pass (superseded where the revision above differs)
+
+### The variants
 
 | | Look | How it tries to read |
 |---|---|---|
@@ -23,7 +88,7 @@ Monster kind, nothing in `MonsterModels`, no net code.
 | **C painted** | A's skeleton in a crimson tabard. The front is painted crimson with a bone border, a bone skull and a ridge. The back is raw pale wood. Pointed-arch top. The bolt head is twice the size and hot yellow, and glows all the time | Colour says which side you see; the bolt head reads at range |
 | **D lamp** (extra) | A security skeleton (peaked cap) behind a steel riot slab with a red-and-white base band and a searchlight. The lamp lights the floor in front. While aiming it turns red and narrows to a spot on its target | Light shows the facing; the telegraph is the light itself |
 
-## What reads at size 24, and what doesn't
+### What reads at size 24, and what doesn't
 
 - **The front reads, in every variant.** A planted pavise facing the camera reads as a flat rectangle with a skull over
   it. No other monster has that shape (`pack_*_front_crop`). **C reads best**: it is the only bright rectangle on the
@@ -55,7 +120,7 @@ Monster kind, nothing in `MonsterModels`, no net code.
 - **Stuck arrows read** (`arrows_*`). Wick's coloured fletchings make a bright bristle on the front even at 24, and
   they point back at the shooter. The blocked-hit spark plus the grey "0" (the chicken's style) also read at 24.
 
-## Is "the front blocks" legible from the fixed camera?
+### Is "the front blocks" legible from the fixed camera?
 
 **Half.** Facing the camera, yes: the painted front is clear. Facing away or side-on, no: from behind, the player sees
 a skeleton and nothing says "go round, it's open here", or "it's the shielded one". Fixes, tested in `cues_<cue>`
@@ -72,7 +137,7 @@ a skeleton and nothing says "go round, it's open here", or "it's the shielded on
 4. **Front ≠ back colour** (C): a bright painted front and a raw back. It helps any facing that shows a sliver of
    either face.
 
-## Recommendation
+### Recommendation
 
 **Variant C's paint on A's build, plus the floor arc and the solid lock line.**
 
@@ -102,7 +167,10 @@ a skeleton and nothing says "go round, it's open here", or "it's the shielded on
   skeleton, smaller than a brute". B's bulk would read as about 120 HP and invite melee, which is another argument
   against B for this role.
 
-## Questions for the user
+### Questions for the user
+
+All five are answered in the revision above: (1) C's paint, (2) no floor arc, (3) the carried shield blocks too, (4)
+no searchlight, (5) the armoured style is parked for another enemy.
 
 1. C's paint (a crimson front, a raw back) or the doc's dark planks with chevrons? C reads far better at 24, but it's
    louder, and close to the brute's reds.
@@ -113,7 +181,7 @@ a skeleton and nothing says "go round, it's open here", or "it's the shielded on
    proposals), or drop it?
 5. B as a later elite (a heavy arbalester), or not at all?
 
-## Renders
+### Renders (first pass)
 
 All in the session scratchpad, `pavise\` (`pavise_<view>.png` and `pavise_<view>_crop.png`). The main ones:
 

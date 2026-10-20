@@ -288,7 +288,22 @@ measured spellings as aliases (64% with neither, 79% with hotwords alone), not w
 ## 2. The shielded ranged unit: the Pavise crossbowman
 
 **The user's direction (2026-10-19):** "I like the idea of a shielded or protected unit from one angle. But it has to pose
-a threat at a distance." Everything below is **[proposal]**.
+a threat at a distance." Everything below is **[proposal]** except 2.0.
+
+### 2.0 Decided (user, 2026-10-20, after the read test: `pavise-read-test.md`). This replaces 2.1's colours where they differ.
+- The user: "The crossbow man, generally very good. The at-rest crossbow penetrates the shield. We probably want either
+  to the side or above. No floor arc. The shield should read okay. The shield should always block while carried. No
+  searchlight version. No armoured one for now, maybe that style would be good for another enemy."
+- **Look:** the read test's painted front on the doc's build. The pavise is a crimson front with a bone border and a bone
+  skull, and a raw pale-wood back, so the colour says which side you see. It is about 15% wider than 2.1's door (1.24 x
+  1.87 world units). The iron rim, sight notch, foot spike and prop leg stay. The skeleton wears a crimson tabard. The
+  bolt head is oversize and always glows. Model: `PaviseModel` (lab only).
+- **The crossbow never passes through the shield** in any state. Where it sits when it isn't aiming is in
+  `pavise-read-test.md` (revision); the recommendation there is "above".
+- **The shield blocks while carried as well as planted** (2.3 ADVANCE, 2.4). The arc and the test are the same. Only
+  the turn rate differs: 150°/s carried, 60°/s planted.
+- **No floor arc.** The shield's own read carries the front, with stuck arrows and the blocked hit's spark and grey "0".
+- **Not built:** the searchlight version. The armoured heavy is parked as a style for a different enemy later.
 
 ### 2.1 Look
 A skeleton (the grunt's body) behind a **pavise**: a door-sized standing shield of dark planks with an iron rim, painted
