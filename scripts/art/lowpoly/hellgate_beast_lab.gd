@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Hellgate beast lab: a REAL generated floor (DungeonGen.for_run, SiteBuilder plan + spawn, HexMapView, DungeonLook, the
 ## grime layer) with the crew standing in a hellgate's room and the monster under the level (HellgateBeast) built around
 ## that room. SiteBuilder.spawn already gives every gate its abyss beast (the game's); the lab prints what that cost and,
@@ -47,12 +47,10 @@ var archetype := "guru"
 var floor_n := 1
 var gate_index := 0
 var style := "abyss"
-var shot_prefix := ""
 var t_shot := 1.7
 var wired := false
 
 var run: ContractRun
-var map: HexMap
 var plan: SitePlan
 var site: SiteBuilder.Site
 var view: HexMapView
@@ -62,7 +60,6 @@ var room_cells: Array[Vector2i] = []
 var obstacles: Array[Vector4] = []
 var exit_style := HellgateBeast.EXIT_STYLE
 var beast: HellgateBeast = null
-var camera: Camera3D
 var crew_center := Vector3.ZERO
 var room_center := Vector3.ZERO
 var _cam_target := Vector3.ZERO
@@ -70,52 +67,39 @@ var _cam_size := GAME_SIZE
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	seed_value = int(_arg(a, "--seed", "7"))
-	archetype = _arg(a, "--arch", "guru")
-	floor_n = clampi(int(_arg(a, "--floor", "1")), 1, ContractRun.FLOOR_COUNT)
-	gate_index = int(_arg(a, "--gate", "0"))
-	style = _arg(a, "--style", "abyss")
-	shot_prefix = _arg(a, "--shot")
-	t_shot = float(_arg(a, "--t", "1.7"))
-	wired = a.has("--wired")
-	exit_style = _arg(a, "--exit", HellgateBeast.EXIT_STYLE)
-	if a.has("--unchecked"):
+	seed_value = int(arg(args, "--seed", "7"))
+	archetype = arg(args, "--arch", "guru")
+	floor_n = clampi(int(arg(args, "--floor", "1")), 1, ContractRun.FLOOR_COUNT)
+	gate_index = int(arg(args, "--gate", "0"))
+	style = arg(args, "--style", "abyss")
+	t_shot = float(arg(args, "--t", "1.7"))
+	wired = args.has("--wired")
+	exit_style = arg(args, "--exit", HellgateBeast.EXIT_STYLE)
+	if args.has("--unchecked"):
 		HellgateBeast.check_clearance = false
-	if a.has("--survey"):
-		_run_survey(_arg(a, "--survey", "1-20"))
+	if args.has("--survey"):
+		_run_survey(arg(args, "--survey", "1-20"))
 		return
 	_build_floor()
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 220.0
-	add_child(camera)
+	make_camera(220.0)
 	camera.make_current()
 	_place_crew()
 	_set_style(style)
 	_cam_target = crew_center
 	_aim(GAME_SIZE, crew_center)
 	_set_exit(exit_style)
-	if a.has("--gif"):
-		_run_gif(a)
-	elif a.has("--zfight"):
+	if args.has("--gif"):
+		_run_gif(args)
+	elif args.has("--zfight"):
 		_run_zfight()
-	elif a.has("--perf"):
+	elif args.has("--perf"):
 		_run_perf()
-	elif shot_prefix != "":
-		_run_shots(a)
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
+	elif shot_path != "":
+		_run_shots(args)
 
 
 func _build_floor() -> void:
-	run = ContractRun.make(archetype, seed_value, float(_arg(OS.get_cmdline_user_args(), "--diff", "0.6")))
+	run = ContractRun.make(archetype, seed_value, float(arg(args, "--diff", "0.6")))
 	map = DungeonGen.for_run(run, floor_n)
 	plan = SiteBuilder.plan(map, run, floor_n, PricedProp.catalog(run.site_type))
 	var world := Node3D.new()
@@ -229,15 +213,11 @@ func _set_style(s: String) -> void:
 
 
 func _aim(size: float, tgt: Vector3, yaw_deg: float = GAME_YAW, pitch_deg: float = GAME_PITCH) -> void:
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(yaw_deg, pitch_deg, size, tgt)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if shot_prefix != "":
+	if shot_path != "":
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match (event as InputEventKey).keycode:
@@ -265,7 +245,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	if shot_prefix != "":
+	if shot_path != "":
 		return
 	var mv := Vector3.ZERO
 	if Input.is_key_pressed(KEY_W):
@@ -282,14 +262,6 @@ func _process(delta: float) -> void:
 
 # ------------------------------------------------------------------ shots
 
-func _snap(path: String) -> void:
-	for i in 6:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", path, " ", img.save_png(path))
-
-
 func _freeze(t: float) -> void:
 	gate.model.freeze_at(t)
 	for b: HellgateBeast in get_tree().get_nodes_in_group(HellgateBeast.GROUP):
@@ -299,9 +271,9 @@ func _freeze(t: float) -> void:
 func _run_shots(a: PackedStringArray) -> void:
 	for i in 10:
 		await get_tree().process_frame
-	var styles: Array = Array(_arg(a, "--styles", ",".join(HellgateBeast.STYLES)).split(",", false))
-	var views: Array = Array(_arg(a, "--views", "game,wide").split(",", false))
-	var motion: Array = Array(_arg(a, "--motion", "").split(",", false))
+	var styles: Array = Array(arg(a, "--styles", ",".join(HellgateBeast.STYLES)).split(",", false))
+	var views: Array = Array(arg(a, "--views", "game,wide").split(",", false))
+	var motion: Array = Array(arg(a, "--motion", "").split(",", false))
 	for s: String in styles:
 		_set_style(s)
 		_freeze(t_shot)
@@ -319,20 +291,20 @@ func _run_shots(a: PackedStringArray) -> void:
 					var focus := gate.global_position
 					if beast != null and beast.focus != Vector3.ZERO:
 						focus = beast.focus
-					var at := _arg(a, "--at")
+					var at := arg(a, "--at")
 					if at != "":
 						var xyz := at.split(",")
 						focus = Vector3(float(xyz[0]), float(xyz[1]), float(xyz[2]))
 					_aim(7.0, focus)
-			await _snap("%s_%s_%s.png" % [shot_prefix, s, v])
+			await snap("%s_%s_%s.png" % [shot_path, s, v])
 	for s: String in motion:
 		_set_style(s)
 		_aim(GAME_SIZE, crew_center)
 		_freeze(t_shot)
-		await _snap("%s_%s_motion_a.png" % [shot_prefix, s])
+		await snap("%s_%s_motion_a.png" % [shot_path, s])
 		_freeze(t_shot + 1.6)
-		await _snap("%s_%s_motion_b.png" % [shot_prefix, s])
-	get_tree().quit()
+		await snap("%s_%s_motion_b.png" % [shot_path, s])
+	finish()
 
 
 # ------------------------------------------------------------------ render cost
@@ -352,7 +324,7 @@ func _measure(frames: int) -> Vector2:
 
 
 func _run_perf() -> void:
-	shot_prefix = "perf"     # (the interactive camera stands still)
+	shot_path = "perf"     # (the interactive camera stands still)
 	var with := Vector2.ZERO
 	var without := Vector2.ZERO
 	var spots: Array[Vector3] = []
@@ -369,7 +341,7 @@ func _run_perf() -> void:
 	with /= float(spots.size())
 	without /= float(spots.size())
 	print("perf: %d gates  with beasts gpu %.3f ms cpu %.3f ms  |  without gpu %.3f ms cpu %.3f ms" % [spots.size(), with.x, with.y, without.x, without.y])
-	get_tree().quit()
+	finish()
 
 
 # ------------------------------------------------------------------ z-fighting
@@ -394,20 +366,20 @@ func _run_zfight() -> void:
 			print("   own  ", ZFightCheck.describe(f))
 		for f in f_ter.slice(0, 6):
 			print("   ter  ", ZFightCheck.describe(f))
-	get_tree().quit()
+	finish()
 
 
 # ------------------------------------------------------------------ GIF frames
 
 func _run_gif(a: PackedStringArray) -> void:
-	shot_prefix = "gif"
-	var prefix := _arg(a, "--gif")
-	var scenario := _arg(a, "--scenario", "exit")
-	var secs := float(_arg(a, "--secs", "4"))
-	var fps := float(_arg(a, "--fps", "15"))
-	var size := float(_arg(a, "--size", str(GAME_SIZE)))
+	shot_path = "gif"
+	var prefix := arg(a, "--gif")
+	var scenario := arg(a, "--scenario", "exit")
+	var secs := float(arg(a, "--secs", "4"))
+	var fps := float(arg(a, "--fps", "15"))
+	var size := float(arg(a, "--size", str(GAME_SIZE)))
 	var look_at := room_center + Vector3(0, 0.8, 0)
-	var center := _arg(a, "--center")
+	var center := arg(a, "--center")
 	if center != "":
 		var xz := center.split(",")
 		look_at = Vector3(float(xz[0]), look_at.y, float(xz[1]))
@@ -440,7 +412,7 @@ func _run_gif(a: PackedStringArray) -> void:
 	var b := _beast_at(cell)
 	var hp := "closed" if not is_instance_valid(gate) or gate.dead else "%.0f / %.0f" % [gate.hp, gate.max_hp]
 	print("gif: %d frames, gate %s, beast %s, flail %.2f" % [frames, hp, b.state() if b != null else "-", b.flail() if b != null else 0.0])
-	get_tree().quit()
+	finish()
 
 
 func _beast_at(cell: Vector2i) -> HellgateBeast:
@@ -455,9 +427,9 @@ func _beast_at(cell: Vector2i) -> HellgateBeast:
 ## Every gate room of floors 1-3 of the seeds: the beasts built unchecked (the first wired version) and checked; the worst
 ## clearances printed (rest: the tube as built; env: with every motion the shader can add).
 func _run_survey(range_text: String) -> void:
-	shot_prefix = "survey"
-	HellgateBeast.debug_fails = OS.get_cmdline_user_args().has("--debug")
-	BeastLimbs.debug_self = OS.get_cmdline_user_args().has("--debug")
+	shot_path = "survey"
+	HellgateBeast.debug_fails = args.has("--debug")
+	BeastLimbs.debug_self = args.has("--debug")
 	var ab := range_text.split("-")
 	var worst := {"before_rest": [1.0e9, ""], "before_env": [1.0e9, ""], "after": [1.0e9, ""]}
 	var dropped := 0
@@ -519,7 +491,7 @@ func _run_survey(range_text: String) -> void:
 	print("survey: %d limbs placed, %d dropped, %.1f s, re-roll causes %s" % [limbs, dropped, (Time.get_ticks_msec() - t0) / 1000.0, str(fails)])
 	print("survey: phases (ms, both builds) ", str(HellgateBeast.prof.keys()), " ", str(HellgateBeast.prof.values().map(func(v: int) -> int: return v / 1000)))
 	print("survey: checked build per floor avg %.0f ms, worst %.0f ms (%d floors)" % [sum_ms / maxf(floors, 1), worst_ms, floors])
-	get_tree().quit()
+	finish()
 
 
 static func _keep(worst: Dictionary, key: String, rep: Dictionary, tag: String) -> void:

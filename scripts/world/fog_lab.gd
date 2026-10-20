@@ -1,4 +1,4 @@
-﻿extends Node3D
+﻿extends LabBase
 ## Room fog and office doors lab (docs/design/exploration.md, "Decisions: map information, fog and doors", 2026-10-19): a real generated contract floor
 ## (DungeonGen.for_run + SiteBuilder: rooms, halls, props, decor, notes, mail, gates, employees, packs) with an office door
 ## in every doorway that takes one, the crew, the game camera (CameraRig) and the fog (RoomFog + FogView). Nothing here is
@@ -19,7 +19,6 @@ const TRAIL_GAP := 14            ## the followers walk this many trail points be
 var seed_value := 7
 var shot_dir := ""
 var run: ContractRun
-var map: HexMap
 var plan: SitePlan
 var site: SiteBuilder.Site
 var fog: RoomFog
@@ -40,24 +39,18 @@ var _staging := false
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	seed_value = int(_arg(a, "--seed", "7"))
-	door_style = _arg(a, "--style", OfficeDoor.DEFAULT_STYLE)
-	shot_dir = _arg(a, "--shot")
+	seed_value = int(arg(args, "--seed", "7"))
+	door_style = arg(args, "--style", OfficeDoor.DEFAULT_STYLE)
+	shot_dir = shot_path
 	CombatLog.enabled = false
 	_build()
-	match _arg(a, "--look", "a"):
+	match arg(args, "--look", "a"):
 		"b":
 			fog_view.look = FogView.LOOK_BLUEPRINT
 		"c":
 			fog_view.look = FogView.LOOK_SMOKE
 	if shot_dir != "":
 		_shots.call_deferred()
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	return a[i + 1] if i >= 0 and i + 1 < a.size() else fallback
 
 
 func _build() -> void:
@@ -363,7 +356,7 @@ func cell_off(dw: Dictionary, dist: float, side: float = 0.0) -> Vector2i:
 
 func _shots() -> void:
 	DirAccess.make_dir_recursive_absolute(shot_dir)
-	var only := _arg(OS.get_cmdline_user_args(), "--only")
+	var only := arg(args, "--only")
 	for i in 10:
 		await get_tree().process_frame
 	if only == "" or only == "overview":
@@ -460,7 +453,7 @@ func _shots() -> void:
 ## The narrow doorway whose door faces the camera best from its room side (`bend`: the longest chord among those facing it
 ## well: a doorway at a bend in the room wall).
 func _facing_doorway(bend: bool) -> Dictionary:
-	var pick := _arg(OS.get_cmdline_user_args(), "--show")
+	var pick := arg(args, "--show")
 	if pick != "":
 		return fog.doorways[int(pick)]
 	var cam := Vector2(1, 1).normalized()   # (CameraRig.YAW_DEG 45: the camera sits toward +X +Z)
@@ -600,7 +593,7 @@ func _door_variants(dw: Dictionary) -> void:
 		h.face_point(dw["center"])
 	await _settle()
 	caption.visible = false
-	if _arg(OS.get_cmdline_user_args(), "--nofog") != "":
+	if arg(args, "--nofog") != "":
 		fog_view.enabled = false
 	var states := ["shut", "opening", "open", "smashed"]
 	var shots := {}
@@ -674,10 +667,7 @@ func _door_variants(dw: Dictionary) -> void:
 		print("shot ", out, " ", strip.save_png(out))
 
 func _grab() -> Image:
-	for i in 4:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	return get_viewport().get_texture().get_image()
+	return await grab(4)
 
 ## The pass's cost here: GPU frame time (RenderingServer's measure) over 120 frames, fog off and each look; the CPU side
 ## is FogView.stats.
@@ -761,13 +751,8 @@ func _overview(file: String) -> void:
 
 
 func _snap(file: String) -> void:
-	for i in 4:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	var out := shot_dir.path_join(file + ".png")
-	print("shot ", out, " ", img.save_png(out))
+	await snap(shot_dir.path_join(file + ".png"), 4)
 
 
 func finish_shots() -> void:
-	get_tree().quit()
+	finish()

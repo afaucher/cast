@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Fog SPACES lab (docs/design/fog-spaces-audit.md): top-down maps of how RoomFog / Doorways cut a floor into fog spaces.
 ## Look-dev only (no gameplay state). One run renders a list of maps:
 ##
@@ -21,40 +21,29 @@ extends Node3D
 ## space, a white dot on a cell the generator left untagged (it took the nearest space), a yellow ring on each doorway
 ## (cyan: a doorway between two segments of a cut hall), the space names, and a title.
 
-var camera: Camera3D
 var _holder: Node3D
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	var maps := _arg(a, "--maps", "s3f1").split(",")
-	var out := _arg(a, "--out", "user://")
-	RoomFog.split_long_halls = not a.has("--whole")
-	if a.has("--game-shot"):
+	var maps := arg(args, "--maps", "s3f1").split(",")
+	var out := arg(args, "--out", "user://")
+	RoomFog.split_long_halls = not args.has("--whole")
+	if args.has("--game-shot"):
 		var d := GameShot.new()
 		d.name = "FogGameShot"
 		d.out = out
-		d.whole = a.has("--whole")
-		d.share = float(_arg(a, "--walk-share", "0.45"))
+		d.whole = args.has("--whole")
+		d.share = float(arg(args, "--walk-share", "0.45"))
 		get_tree().root.add_child.call_deferred(d)
 		get_tree().change_scene_to_file.call_deferred("res://scenes/game.tscn")
 		return
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 400.0
-	add_child(camera)
+	make_camera(400.0)
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
 	env.environment.background_color = Color(0.06, 0.06, 0.07)
 	add_child(env)
-	_render_all(maps, out, not a.has("--whole"))
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String) -> String:
-	var i := a.find(key)
-	return a[i + 1] if i >= 0 and i + 1 < a.size() else fallback
+	_render_all(maps, out, not args.has("--whole"))
 
 
 func _render_all(maps: PackedStringArray, out: String, split: bool) -> void:
@@ -85,13 +74,8 @@ func _render_all(maps: PackedStringArray, out: String, split: bool) -> void:
 		camera.size = maxf(bounds.size.y + 6.0, (bounds.size.x + 6.0) * 9.0 / 16.0)
 		camera.global_position = Vector3(centre.x, 100.0, centre.y)
 		camera.rotation_degrees = Vector3(-90, 0, 0)
-		for i in 6:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
-		var path := "%s/spaces_%s%s.png" % [out, spec, "" if split else "_whole"]
-		var img := get_viewport().get_texture().get_image()
-		print("shot ", path, " ", img.save_png(path))
-	get_tree().quit()
+		await snap("%s/spaces_%s%s.png" % [out, spec, "" if split else "_whole"])
+	finish()
 
 
 static func space_color(s: int, hall: bool) -> Color:
