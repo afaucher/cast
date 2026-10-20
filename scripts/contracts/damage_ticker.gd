@@ -1,7 +1,8 @@
 class_name DamageTicker
 extends Control
 ## A live feed of property damage: every `damage` line the Ledger records shows up as
-## "-$1,200  Wine rack (Wick)" in red and cream, stacks under the newest-first, and fades away.
+## "-$1,200  Wine rack (Wick)" in red and cream, stacks under the newest-first, and fades away. The objective pay shows
+## here too, in green ("+$4,000  Hellgate closed"), instead of mid-screen text (user, 2026-10-20).
 ## Pure presentation: it only listens to Ledger.line_added.
 ##
 ## Agent A adds it to the HUD:   hud_root.add_child(DamageTicker.new())
@@ -12,6 +13,7 @@ const ROW_HEIGHT := 30.0
 const RED := Color(1.0, 0.38, 0.32)
 const CREAM := Color(0.97, 0.92, 0.78)
 const DIM := Color(0.8, 0.75, 0.62)
+const GREEN := Color(0.55, 1.0, 0.65)
 
 @export var max_rows := 6
 @export var hold_time := 4.5
@@ -62,16 +64,24 @@ func row_text(i: int) -> String:
 ## "-$1,200  Wine rack (Wick)" for a ledger damage line.
 static func format_line(line: Dictionary) -> String:
 	var who := String(line.get("who", ""))
-	var txt := "-%s  %s" % [PricedProp.money(int(line["amount"])), String(line["label"])]
+	var sign := "+" if String(line.get("kind", "")) == "earn" else "-"
+	var txt := "%s%s  %s" % [sign, PricedProp.money(int(line["amount"])), String(line["label"])]
 	if who != "":
 		txt += " (%s)" % who
 	return txt
 
 
 func _on_line(line: Dictionary) -> void:
-	if String(line.get("kind", "")) != "damage":
-		return
-	_add_row(line)
+	if String(line.get("kind", "")) == "damage" or shows_earning(line):
+		_add_row(line)
+
+
+## The pay for an objective (a hellgate, the pest, the origin gate) rides the ticker; per-employee and found money do not.
+static func shows_earning(line: Dictionary) -> bool:
+	if String(line.get("kind", "")) != "earn":
+		return false
+	var lbl := String(line.get("label", ""))
+	return lbl.begins_with("Hellgate") or lbl.begins_with("Pest") or lbl.begins_with("ORIGIN")
 
 
 func _add_row(line: Dictionary) -> void:
@@ -89,8 +99,10 @@ func _add_row(line: Dictionary) -> void:
 	rt.add_theme_color_override("font_outline_color", Color(0.08, 0.04, 0.03, 0.95))
 	rt.add_theme_constant_override("outline_size", 6)
 	rt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	var text := "[right][b][color=#%s]-%s[/color][/b]  [color=#%s]%s[/color]" % [
-			RED.to_html(false), PricedProp.money(int(line["amount"])), CREAM.to_html(false), String(line["label"])]
+	var earn := String(line.get("kind", "")) == "earn"
+	var text := "[right][b][color=#%s]%s%s[/color][/b]  [color=#%s]%s[/color]" % [
+			(GREEN if earn else RED).to_html(false), "+" if earn else "-", PricedProp.money(int(line["amount"])),
+			CREAM.to_html(false), String(line["label"])]
 	if who != "":
 		text += " [color=#%s](%s)[/color]" % [DIM.to_html(false), who]
 	text += "[/right]"

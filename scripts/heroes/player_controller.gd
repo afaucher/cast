@@ -94,7 +94,7 @@ func select_slot(i: int) -> bool:
 	if hero.select_slot(i):
 		return true
 	if hud:
-		hud.show_message("Slot %d is empty" % (i + 1), Hud.COLOR_NEUTRAL)
+		hud.flash_slot(i)   # (the empty card blinks; no "Slot 3 is empty" text: user, 2026-10-20)
 	return false
 
 

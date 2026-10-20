@@ -1348,9 +1348,7 @@ func _on_arrival_finished() -> void:
 func _announce_floor() -> void:
 	if opts.has("shot") and not opts.has("show_panel"):   # keep screenshots clear of the banner and the voice panel
 		debug_panel.visible = false
-	else:
-		hud.show_center("Floor %d of %d" % [_floor_n(), ContractRun.FLOOR_COUNT], Color(0.8, 0.9, 1.0), 2.0)
-	_story_banner()
+	_story_banner()   # (no "Floor 2 of 3" mid-screen: the work order shows the floor; user, 2026-10-20)
 
 
 ## Shared run: the other players' spells (the roster has them once they signed), so every machine's copy of a
@@ -1910,14 +1908,12 @@ func _on_gate_closed(gate: Actor) -> void:
 	if not _keeps_books():
 		# A client: the host closed it (world.die). Its bookkeeping and pay arrive from the host (obj.contract, obj.ledger).
 		if is_origin:
-			hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
 			_show_banner(NoteCopy.ORIGIN_SHUT, 6.0)
 		_log("%s closed" % ("ORIGIN gate" if is_origin else "hellgate"), Color(0.6, 1.0, 0.7))
 		return
 	var pay := _session.gate_closed(is_origin)
 	_publish_contract()
 	if is_origin:
-		hud.show_center("ORIGIN GATE CLOSED", Color(1.0, 0.85, 0.4), 2.2)
 		_show_banner(NoteCopy.ORIGIN_SHUT, 6.0)
 	_log("%s closed  +%s" % ["ORIGIN gate" if is_origin else "hellgate", ContractRun.money(pay)], Color(0.6, 1.0, 0.7))
 	_objective_t = 0.0   # re-check cleanliness now
@@ -1942,11 +1938,8 @@ func _on_contract_mirror(d: Dictionary) -> void:
 	_update_tracker()
 
 
-func _on_ledger_line(line: Dictionary) -> void:
-	if str(line["kind"]) == "earn":
-		var lbl := str(line["label"])
-		if lbl.begins_with("Hellgate") or lbl.begins_with("Pest") or lbl.begins_with("ORIGIN"):
-			hud.show_message("%s  +%s" % [lbl, ContractRun.money(int(line["amount"]))], Color(0.6, 1.0, 0.7))
+## (The objective pay shows in the ticker under the work order: DamageTicker.)
+func _on_ledger_line(_line: Dictionary) -> void:
 	_update_tracker()
 
 
@@ -1966,7 +1959,7 @@ func _check_objectives() -> void:
 	var paid := _session.check_clean(_pest_alive())
 	if paid > 0:
 		_publish_contract()
-		hud.show_center("FLOOR CLEAN", Color(0.6, 1.0, 0.8), 1.8)
+		_show_banner(NoteCopy.FLOOR_CLEAN, 3.5)
 		_log("floor clean: %s cleared  +%s" % [ClientArchetype.pest_name(_run.pest), ContractRun.money(paid)], Color(0.6, 1.0, 0.7))
 	_update_tracker()
 
@@ -2019,7 +2012,7 @@ func _on_actor_died(a: Actor) -> void:
 			_session.employee_lost(a.display_name, cause)
 			_publish_contract()
 		_log("%s was lost (%s)" % [a.display_name, cause], Color(1.0, 0.6, 0.4))
-		hud.show_message("%s lost (%s)" % [a.display_name, cause], Color(1.0, 0.55, 0.4))
+		_show_banner(NoteCopy.STAFF_LOST, 3.5)
 		_update_tracker()
 
 
@@ -2382,7 +2375,7 @@ func _on_exit_decided(choice: String, seat: int) -> void:
 	if who == "" and heroes_by_seat.has(seat):
 		who = Net.label_of(heroes_by_seat[seat])
 	var what := "takes the elevator down" if choice == "down" else "clocks the crew out"
-	hud.show_center("%s %s" % [who, what], Color(1.0, 0.9, 0.6), 2.0)
+	_show_banner(NoteCopy.EXIT_DOWN if choice == "down" else NoteCopy.EXIT_OUT, 3.0)
 	_log("exit: %s (seat %d) %s" % [who, seat, what], Color(1.0, 0.9, 0.6))
 	if choice == "down":
 		_descend_shared()
@@ -2621,7 +2614,7 @@ func _check_crew() -> void:
 		_player_down_noted = true
 		controller.enabled = false
 		_follow_living_ally()
-		hud.show_message("You are down. Your crew fights on.", Color(1.0, 0.6, 0.45))
+		_show_banner(NoteCopy.YOU_DOWN, 4.0)
 
 
 func _physics_process(delta: float) -> void:

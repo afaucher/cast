@@ -200,6 +200,13 @@ const DISPATCH := {
 const ORIGIN_SHUT := "The origin gate is shut. The site calms down. The invoice does not."
 ## The whole crew is down: dispatch on the headset, not a line of screen text (user, 2026-10-20).
 const WIPE := "Guys? You okay? I'm calling the medics."
+## More of what used to be screen text, now dispatch on the headset (user, 2026-10-20: "Fix the screen messages you
+## recommend switching to radio"). No names, like the rescue calls.
+const FLOOR_CLEAN := "Floor's clean. Nice work."
+const STAFF_LOST := "We lost one of the staff."
+const YOU_DOWN := "You're down. Sit tight, they'll get you up."
+const EXIT_DOWN := "Copy, heading down."
+const EXIT_OUT := "Copy, clocking you out."
 
 ## Dispatch calls in on the headset to confirm a rescue (user, 2026-10-19: "a headset call bubble ... control calling
 ## in confirming"), in the DispatchBanner rather than loose text on the screen. One line, dispatch's deadpan voice. No

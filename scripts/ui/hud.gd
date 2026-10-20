@@ -219,6 +219,12 @@ func enable_console() -> void:
 
 # --- Callbacks ---------------------------------------------------------------------------
 
+## Blink slot `i`'s card (an empty slot pressed: it flashes red instead of a line of text).
+func flash_slot(i: int) -> void:
+	if i >= 0 and i < _cards.size():
+		_cards[i].flash = 1.0
+
+
 func _on_spell_cast(id: String, _power: float) -> void:
 	for c in _cards:
 		if c.spell_id() == id:
@@ -435,6 +441,8 @@ class SpellCard extends Control:
 	## An empty slot: dim, a dashed outline, the key and a hint.
 	func _draw_empty(font: Font, rect: Rect2) -> void:
 		draw_rect(rect, Color(0.05, 0.05, 0.08, 0.55))
+		if flash > 0.0:
+			draw_rect(rect, Color(1.0, 0.35, 0.3, 0.4 * flash))
 		var edge := Color(1, 1, 1, 0.25)
 		var dash := 10.0
 		var x := 1.0

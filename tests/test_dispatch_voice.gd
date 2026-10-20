@@ -50,7 +50,7 @@ func _check_lines() -> void:
 		keys[key] = l["text"]
 		texts[l["text"]] = true
 		kinds[l["kind"]] = int(kinds.get(l["kind"], 0)) + 1
-	for kind: String in ["incident", "floor2", "floor3", "origin_shut", "wipe", "rescue_one", "rescue_many"]:
+	for kind: String in ["incident", "floor2", "floor3", "origin_shut", "wipe", "call", "rescue_one", "rescue_many"]:
 		check(int(kinds.get(kind, 0)) > 0, "lines of kind %s exist" % kind)
 	# every source is covered
 	var incidents := 0
@@ -65,6 +65,8 @@ func _check_lines() -> void:
 	for pest: String in ClientArchetype.PEST_NAMES:
 		check(texts.has(NoteCopy.fill(NoteCopy.DISPATCH[2][0], {"pest": ClientArchetype.pest_name(pest)})), "floor 2 pest line listed for %s" % pest)
 	check(texts.has(NoteCopy.ORIGIN_SHUT), "the origin-gate line is listed")
+	for t: String in [NoteCopy.WIPE, NoteCopy.FLOOR_CLEAN, NoteCopy.STAFF_LOST, NoteCopy.YOU_DOWN, NoteCopy.EXIT_DOWN, NoteCopy.EXIT_OUT]:
+		check(texts.has(t), "the call is listed: %s" % t)
 	for t: String in NoteCopy.RESCUE_ONE:
 		check(texts.has(t), "rescue line listed: %s" % t)
 		check(not t.contains("%"), "no employee name in a rescue line (2026-10-20): %s" % t)
