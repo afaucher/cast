@@ -339,6 +339,7 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		"spawns": _session.world.runtime_spawns(), "world": _session.world.keyframe(now), "waits": waits,
 		"scouts": _session.world.scout_states(),
 		"objects": _session.objects.late_join_state(), "status": _session.status.late_join_state(),
+		"orders": _session.orders.late_join_state(),
 		"ledger": {"lines": Ledger.lines.duplicate(true), "value": Ledger.contract_value, "floor": Ledger.floor_number},
 		"take": {"seat": seat, "character": character, "epoch": _session.seats.epoch_of(seat) + 1, "state": state},
 	}
@@ -523,6 +524,7 @@ func _apply(d: Dictionary) -> void:
 			emp._wait_spot = waits[k]
 	_session.objects.apply_late_join(d.get("objects", {}) as Dictionary)
 	_session.status.apply_late_join(d.get("status", []) as Array)
+	_session.orders.apply_late_join(d.get("orders", {}) as Dictionary)
 	var ledger := d.get("ledger", {}) as Dictionary
 	Ledger.mirror = true
 	Ledger.mirror_all(ledger.get("lines", []) as Array, int(ledger.get("value", 0)), int(ledger.get("floor", 1)))

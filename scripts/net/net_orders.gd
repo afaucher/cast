@@ -13,15 +13,22 @@ extends Node
 ## snapshot, the employee's state, leader and wait spot). Nothing here is gameplay state: a late joiner skips old barks and
 ## markers (cosmetic), and the orders themselves are the host's AI state (AllyBrain, PRIVATE) or the employee's keyframe.
 ## Solo (and a host alone) never comes here: VoiceOrders applies the order locally.
+##
+## THE AI'S ORDER STATE (the party HUD's chip): the AllyBrain runs on the host only, so the host watches each hero's
+## `order_state` (follow, go, hold, attack; "" once a person takes the seat) and sends every change to everyone:
+##   ord.st   host -> everyone {id, st}   reliable; a few per order (go -> hold on arrival, attack -> follow when it is over)
+## A late joiner gets the current states in its join.snapshot (`orders`, late_join_state / apply_late_join). The host forgets
+## what it sent whenever the crew is off a running floor, so every new floor starts by sending each AI seat's state.
 
 ## Every machine, after an order is applied (host) or announced (client): the ord.ok payload. Tests.
 signal shown(data: Dictionary)
 
-var stats := {"sent": 0, "applied": 0, "shown": 0}
+var stats := {"sent": 0, "applied": 0, "shown": 0, "states": 0}
 ## Host: every order applied, {seat, w, o, took, refused, marks} (tests, logs).
 var applied: Array = []
 
 var _session: NetSession = null
+var _sent: Dictionary = {}   ## host: hero net id -> the order state last sent
 
 
 func _ready() -> void:
@@ -58,6 +65,48 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 		_host_apply(data, from)
 	elif kind == "ord.ok" and not _session.hosting and from == 1:
 		_show(data)
+	elif kind == "ord.st" and not _session.hosting and from == 1:
+		_set_state(int(data.get("id", 0)), str(data.get("st", "")))
+
+
+## Host: send every hero's order state that changed since the last frame (ord.st).
+func _physics_process(_delta: float) -> void:
+	if _session == null or not _session.hosting or not live():
+		_sent.clear()
+		return
+	for seat in range(1, NetSession.MAX_CREW + 1):
+		var h := NetRegistry.hero(seat)
+		if h == null:
+			continue
+		var id := NetFloor.id_of(h)
+		if not _sent.has(id) or str(_sent[id]) != h.order_state:
+			_sent[id] = h.order_state
+			stats["states"] = int(stats["states"]) + 1
+			_session.send_event(0, "ord.st", {"id": id, "st": h.order_state})
+
+
+## Host: every hero's order state now, for a late joiner's snapshot (id -> state).
+func late_join_state() -> Dictionary:
+	var out := {}
+	for seat in range(1, NetSession.MAX_CREW + 1):
+		var h := NetRegistry.hero(seat)
+		if h != null:
+			out[NetFloor.id_of(h)] = h.order_state
+	return out
+
+
+## A late joiner: the host's order states from its snapshot.
+func apply_late_join(states: Dictionary) -> void:
+	for k: Variant in states:
+		_set_state(int(k), str(states[k]))
+
+
+## A client: the host says this hero's AI order state is `st` (the party HUD shows it).
+func _set_state(id: int, st: String) -> void:
+	var h := NetRegistry.node(id) as Hero
+	if h != null:
+		h.order_state = st
+		stats["states"] = int(stats["states"]) + 1
 
 
 ## Host: apply an order from the player in `from`'s seat and tell everyone.

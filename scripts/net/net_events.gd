@@ -17,6 +17,8 @@ const CARRIES := {
 	"_charges": "roster at the floor start (M1); pickups: obj.loadout from the owner (M3); casts: the cast event's charges left (NetCasts, M4); a joiner's license: seat.take / join.snapshot (M6)",
 	# Timed buffs and debuffs (armor, coffee, vines roots) are applied by the target's owner and shown from here.
 	"_modifiers": "st {k mods} from the owner when they change (NetStatus, M4): armor, coffee, the vines' root",
+	# An AI seat's order as the party HUD shows it (FOLLOW / GO / HOLD / ATTACK): only the host runs the AllyBrain.
+	"order_state": "ord.st {id, st} from the host on every change (NetOrders); a late joiner: join.snapshot `orders`",
 }
 
 ## Actor OWNER vars every host-owned class inherits, and why each is right on the other screens.
@@ -112,6 +114,8 @@ const WORLD_CARRIES := {
 ##                         (ok: the AI heroes' barks, the people it names for a marker). Cosmetic once applied: what an order
 ##                         changes is the host's AI state (AllyBrain, PRIVATE) or rides the employee's stream and keyframe
 ##                         (state, leader, dismissed, wait spot), so a late joiner needs no replay of it
+##   ord.st (reliable)     NetOrders: host -> everyone, an AI hero's order state changed {id, st} (follow, go, hold, attack;
+##                         "" when a person takes the seat): the party HUD's chip. Late join: join.snapshot `orders`
 const KIND_SEAT_AI := "seat.ai"
 const KIND_SEAT_TAKE := "seat.take"
 
@@ -124,7 +128,7 @@ const KIND_SEAT_TAKE := "seat.take"
 ##   handover  the heroes: the seat table, each seat's kit and player, its state (NetJoin heroes + SeatHandover.take)
 ## A new replicated class without an entry here fails the build: it would be wrong on a late joiner's screen.
 const LATE_JOIN := {
-	"res://scripts/heroes/hero.gd": "handover: kit, player name, owner and epoch per seat; position, HP, slots, charges, held slot (heroes); the joiner's own seat: SeatHandover.hero_state; statuses: replay",
+	"res://scripts/heroes/hero.gd": "handover: kit, player name, owner and epoch per seat; position, HP, slots, charges, held slot (heroes); the joiner's own seat: SeatHandover.hero_state; statuses: replay; the AI seats' order states: `orders` (NetOrders.late_join_state)",
 	"res://scripts/monsters/monster.gd": "keyframe (seed-built and runtime); gone ids; runtime spawns: replay of world.spawn; statuses: replay; wind-ups: skipped (under a second)",
 	"res://scripts/monsters/grunt.gd": "as monster.gd",
 	"res://scripts/monsters/archer.gd": "as monster.gd",

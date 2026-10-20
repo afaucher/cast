@@ -10,6 +10,8 @@ extends NetGameTest
 ## - The client says "Hench attack" beside the henchmen (a lair floor): they fight (FIGHT on the host, the state streams to
 ##   the client) and punch a monster.
 ## - The host says "Wick go": the client (a person playing Wick) is shown a marker naming the host; nothing is ordered.
+## - The party HUD's order chip (ord.st): the client sees the host's AI Rebar go FOLLOW -> GO -> HOLD -> FOLLOW, and on
+##   "Rebar attack" ATTACK -> FOLLOW once the fight is over, in that order (Hero.order_state on the client's copy).
 ## - Nothing tripped the OWNER-write guard on either machine.
 
 const PEERS := 2
@@ -18,7 +20,7 @@ const OFFER := 0
 
 
 func _init() -> void:
-	net_timeout = 85.0
+	net_timeout = 120.0
 
 
 func run_host() -> void:
@@ -38,6 +40,9 @@ func run_host() -> void:
 		return
 	eq(my_hero().display_name, "Gasket", "the host plays Gasket")
 	eq(hero_at(2).display_name, "Wick", "the client plays Wick")
+	command(c1, "chip", {"key": "chip0", "want": "follow"})
+	check(await wait_reports("chip0", 1, 10.0), "the client reports Rebar's chip")
+	eq(str(reported(c1, "chip0")), "follow", "the client shows the host's AI Rebar on FOLLOW (ord.st)")
 
 	# 1. "Rebar go" from the client.
 	var spot := _open_spot(rebar.global_position, 5.0)
@@ -52,6 +57,9 @@ func run_host() -> void:
 	var s1: Dictionary = reported(c1, "said1")
 	check(bool(s1["bark"]), "the client sees Rebar's bark")
 	check(bool(s1["waypoint"]), "the client (the speaker) sees its waypoint")
+	command(c1, "chip", {"key": "chip1", "want": "hold"})
+	check(await wait_reports("chip1", 1, 10.0), "the client reports Rebar's chip")
+	eq(str(reported(c1, "chip1")), "hold", "the client shows Rebar holding the spot")
 
 	# 2. "Rebar follow" from the client: Rebar follows the client's hero (not seat 1's).
 	command(c1, "say", {"text": "Rebar follow", "at": Vector3.INF})
@@ -93,6 +101,25 @@ func run_host() -> void:
 	check(await wait_reports("marker", 1, 10.0), "the client reports")
 	eq(str(reported(c1, "marker")), "host: go here", "the client is shown a marker naming the host")
 
+	# 5. "Rebar attack" from the client: ATTACK on the host's Rebar, then FOLLOW once nothing near is fighting; the client's
+	# copy shows each state in turn.
+	command(c1, "say", {"text": "Rebar attack", "at": Vector3.INF})
+	check(await until(func() -> bool: return brain.order == "attack", 5.0), "the host's Rebar takes the attack")
+	check(await until(func() -> bool: return brain.order == "", 30.0), "and goes back to following once the fight is over")
+	command(c1, "chip", {"key": "chip2", "want": "follow"})
+	check(await wait_reports("chip2", 1, 10.0), "the client reports Rebar's chip")
+	eq(str(reported(c1, "chip2")), "follow", "the client shows Rebar back on FOLLOW")
+	command(c1, "chips")
+	check(await wait_reports("chips", 1, 10.0), "the client reports every chip it showed")
+	var seen: Array = reported(c1, "chips")
+	var want := ["follow", "go", "hold", "follow", "attack", "follow"]
+	var k := 0
+	for st: Variant in seen:
+		if k < want.size() and str(st) == want[k]:
+			k += 1
+	eq(k, want.size(), "the client's chips ran FOLLOW, GO, HOLD, FOLLOW, ATTACK, FOLLOW in order (%s)" % str(seen))
+	check(int(Session.orders.stats["states"]) >= 5, "the host sent the changes as ord.st (%d)" % int(Session.orders.stats["states"]))
+
 	command(c1, "end")
 	check(await wait_reports("end", 1, 10.0), "the client is done")
 	eq(Net.guard_hits.size(), 0, "the OWNER-write guard never fired on the host")
@@ -106,6 +133,11 @@ func run_client() -> void:
 	if not await wait_sync():
 		return
 	report("ready", true)
+	var chips: Array = []   # every order state the client's copy of Rebar showed, in order
+	get_tree().physics_frame.connect(func() -> void:
+		var r := hero_at(3)
+		if r != null and (chips.is_empty() or str(chips.back()) != r.order_state):
+			chips.append(r.order_state))
 	var n := 0
 	var running := true
 	while running:
@@ -137,6 +169,12 @@ func run_client() -> void:
 				await until(func() -> bool: return not get_tree().get_nodes_in_group(OrderFx.Marker.GROUP).is_empty(), 6.0)
 				var ms := get_tree().get_nodes_in_group(OrderFx.Marker.GROUP)
 				report("marker", str(ms[0].call("text")) if not ms.is_empty() else "")
+			"chip":
+				var want := str(cmd.get("want", ""))
+				await until(func() -> bool: return hero_at(3) != null and hero_at(3).order_state == want, 8.0)
+				report(str(cmd["key"]), hero_at(3).order_state if hero_at(3) != null else "")
+			"chips":
+				report("chips", chips.duplicate())
 			"end":
 				report("end", Net.guard_hits.size())
 				running = false
