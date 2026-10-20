@@ -339,6 +339,62 @@ func net_fuse(start: float, end: float, by: Node) -> void:
 	_show_fuse()
 
 
+## Host: a prop's links (obj.hurt, obj.break), and the fuse: `obj.fuse {id, s, e, by}` when it lights (its start and end on
+## the shared clock, who set it off: every machine runs the blast itself at the end, a scheduled effect, and the break and
+## its bill follow as obj.break), `obj.out {id}` when a soak puts it out in time (at least DOUSE_LOCK before its end).
+func net_link(objects: NetObjects, id: int) -> void:
+	super(objects, id)
+	objects.link(lit, _net_lit.bind(objects, id))
+	objects.link(doused, _net_doused.bind(objects, id))
+
+
+func _net_lit(_prop: ExplosiveProp, culprit: Node, start: float, end: float, objects: NetObjects, id: int) -> void:
+	objects.tell("obj.fuse", {"id": id, "s": objects.host_stamp(start), "e": objects.host_stamp(end), "by": NetObjects.net_id(culprit)})
+	objects.count("fuses")
+
+
+func _net_doused(_prop: ExplosiveProp, objects: NetObjects, id: int) -> void:
+	objects.tell("obj.out", {"id": id})
+	objects.count("outs")
+
+
+## Client: the host lit the fuse (obj.fuse) or put it out (obj.out); a dent or the break as any prop's.
+func net_event(kind: String, data: Dictionary, objects: NetObjects) -> void:
+	match kind:
+		"obj.fuse":
+			_net_fuse_event(data, objects)
+		"obj.out":
+			if not dead:
+				net_douse()
+				objects.count("outs")
+		_:
+			super(kind, data, objects)
+
+
+func _net_fuse_event(data: Dictionary, objects: NetObjects) -> void:
+	if dead:
+		return
+	net_fuse(objects.local_stamp(float(data.get("s", objects.now()))), objects.local_stamp(float(data.get("e", objects.now()))),
+		NetRegistry.node(int(data.get("by", 0))))
+	objects.count("fuses")
+
+
+## Host: a prop's dent, and a fuse burning now for a late joiner, `fuses` [id, start, end, igniter] (an obj.fuse replay, so the
+## joiner runs the blast at the same moment).
+func late_join_state(objects: NetObjects, id: int) -> Dictionary:
+	var rows := super(objects, id)
+	if not dead and is_lit():
+		rows["fuses"] = [id, objects.host_stamp(fuse_start), objects.host_stamp(fuse_end), NetObjects.net_id(igniter())]
+	return rows
+
+
+func apply_late_join(section: String, row: Array, objects: NetObjects) -> void:
+	if section != "fuses":
+		super(section, row, objects)
+	elif row.size() >= 4:
+		_net_fuse_event({"id": row[0], "s": row[1], "e": row[2], "by": row[3]}, objects)
+
+
 ## The host put the fuse out.
 func net_douse() -> void:
 	if not is_lit() or _blasted:

@@ -134,17 +134,11 @@ func begin(local: Hero) -> void:
 				if n.has_method("net_contacts"):
 					_contacts.append(n)
 		elif _session.hosting:
-			if n is PricedProp:
-				link((n as PricedProp).damaged, _on_prop_hurt.bind(id))
-				link((n as PricedProp).broken, _on_broken.bind(id))
-				if n is ExplosiveProp:
-					link((n as ExplosiveProp).lit, _on_fuse.bind(id))
-					link((n as ExplosiveProp).doused, _on_douse.bind(id))
-			elif n is BreakableCrate:
+			if n is BreakableCrate:
 				link((n as BreakableCrate).broken, _on_broken.bind(id))
 			elif n is MailPackage:
 				link((n as MailPackage).broken, _on_mail_broken.bind(id))
-		elif n is PricedProp or n is MailPackage:
+		elif n is MailPackage:
 			_ticked.append(n)
 			_contacts.append(n)
 		elif n is BreakableCrate:
@@ -283,9 +277,9 @@ func request(node: Node, what: String, data: Dictionary = {}) -> bool:
 		return false
 	if what == "collect" or what == "swap":
 		var asked := float(_requested.get(id, -INF))
-		if _now() - asked < REQUEST_RETRY:
+		if now() - asked < REQUEST_RETRY:
 			return true   # already asked; the answer is on its way
-		_requested[id] = _now()
+		_requested[id] = now()
 	var d := data.duplicate()
 	d["what"] = what
 	d["id"] = id
@@ -358,46 +352,19 @@ func _on_ledger_line(line: Dictionary) -> void:
 		stats["ledger_out"] = int(stats["ledger_out"]) + 1
 
 
-func _on_prop_hurt(amount: float, _source: Node, id: int) -> void:
-	var p := NetRegistry.node(id) as PricedProp
-	if p != null and not p.dead and p.hp > 0.0:
-		_send(0, "obj.hurt", {"id": id, "hp": p.hp, "a": amount})
-
-
 func _on_broken(_obj: Node, _culprit: Node, id: int) -> void:
 	_send(0, "obj.break", {"id": id})
 	stats["breaks"] = int(stats["breaks"]) + 1
 
 
-## Host: an explosive prop's fuse was lit (ExplosiveProp.lit). Its start and end go out on the shared clock; every machine
-## runs the blast itself at the end (a scheduled effect), and the break and its bill follow as obj.break.
-func _on_fuse(_prop: ExplosiveProp, culprit: Node, start: float, end: float, id: int) -> void:
-	_send(0, "obj.fuse", {"id": id, "s": host_stamp(start), "e": host_stamp(end), "by": net_id(culprit)})
-	stats["fuses"] = int(stats["fuses"]) + 1
-
-
-## Host: a soak put a fuse out in time (ExplosiveProp.doused, at least DOUSE_LOCK before its end).
-func _on_douse(_prop: ExplosiveProp, id: int) -> void:
-	_send(0, "obj.out", {"id": id})
-	stats["outs"] = int(stats["outs"]) + 1
-
-
 ## A GameWorld.time on this machine as a time on the shared clock (host_time).
 func host_stamp(t: float) -> float:
-	return _now() + (t - GameWorld.time)
+	return now() + (t - GameWorld.time)
 
 
 ## A time on the shared clock as this machine's GameWorld.time.
 func local_stamp(t: float) -> float:
-	return GameWorld.time + (t - _now())
-
-
-func _client_fuse(data: Dictionary) -> void:
-	var p := NetRegistry.node(int(data.get("id", 0))) as ExplosiveProp
-	if p == null or p.dead:
-		return
-	p.net_fuse(local_stamp(float(data.get("s", _now()))), local_stamp(float(data.get("e", _now()))), NetRegistry.node(int(data.get("by", 0))))
-	stats["fuses"] = int(stats["fuses"]) + 1
+	return GameWorld.time + (t - now())
 
 
 func _on_mail_broken(pkg: MailPackage, _culprit: Node, contents: String, id: int) -> void:
@@ -421,8 +388,6 @@ func late_join_state() -> Dictionary:
 	var out := {"pickups": picks}
 	for section: String in LATE_JOIN_SECTIONS:
 		out[section] = []
-	var dents: Array = out["dents"]
-	var fuses: Array = out["fuses"]
 	for id in NetRegistry.ids():
 		var obj := NetRegistry.node(id)
 		if obj != null and obj.has_method("late_join_state"):
@@ -431,13 +396,6 @@ func late_join_state() -> Dictionary:
 				if not out.has(section):
 					out[section] = []
 				(out[section] as Array).append(rows[section])
-			continue
-		var prop := obj as PricedProp
-		if prop != null and not prop.dead and prop.hp < prop.max_hp - 0.001:
-			dents.append([id, prop.hp])
-		var e := prop as ExplosiveProp
-		if e != null and not e.dead and e.is_lit():
-			fuses.append([id, host_stamp(e.fuse_start), host_stamp(e.fuse_end), net_id(e.igniter())])
 	return out
 
 
@@ -455,15 +413,6 @@ func apply_late_join(d: Dictionary) -> void:
 			_pickups[id] = have
 			continue
 		_client_pickup({"id": id, "s": row[1], "n": row[2], "at": row[3], "l": row[4], "age": row[5]})
-	for e: Variant in d.get("dents", []) as Array:
-		var row := e as Array
-		var prop := NetRegistry.node(int(row[0])) as PricedProp if row != null and row.size() >= 2 else null
-		if prop != null and not prop.dead:
-			prop.hp = float(row[1])
-	for e: Variant in d.get("fuses", []) as Array:   # (an explosive prop's fuse burning right now: an obj.fuse replay)
-		var row := e as Array
-		if row != null and row.size() >= 4:
-			_client_fuse({"id": row[0], "s": row[1], "e": row[2], "by": row[3]})
 	for section: Variant in d:   # (the objects' own rows: each goes to its object, by id)
 		for e: Variant in d[section] as Array:
 			var row := e as Array
@@ -563,18 +512,6 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 	match kind:
 		"obj.break":
 			_client_break(data)
-		"obj.fuse":
-			_client_fuse(data)
-		"obj.out":
-			var e := NetRegistry.node(int(data.get("id", 0))) as ExplosiveProp
-			if e != null and not e.dead:
-				e.net_douse()
-				stats["outs"] = int(stats["outs"]) + 1
-		"obj.hurt":
-			var p := NetRegistry.node(int(data.get("id", 0))) as PricedProp
-			if p != null and not p.dead:
-				p.hp = float(data.get("hp", p.hp))
-				p._on_damaged(float(data.get("a", 0.0)), null)
 		"obj.pickup":
 			_client_pickup(data)
 		"obj.pick":
@@ -815,5 +752,6 @@ func _client_grant(data: Dictionary) -> void:
 	granted.emit(str(data.get("k", "")), spell, n)
 
 
-func _now() -> float:
+## The shared clock (host_time).
+func now() -> float:
 	return _session.host_time() if _session != null else 0.0

@@ -369,6 +369,49 @@ func net_contacts() -> void:
 		_check_shove_contacts()
 
 
+# --- The net-object contract (NetObjects) ---------------------------------------------------------------------------
+
+## Host: a dent goes to everyone as `obj.hurt {id, hp, a}`, the break as `obj.break {id}` (billed once, in the host's
+## Ledger: the bill goes out as obj.ledger).
+func net_link(objects: NetObjects, id: int) -> void:
+	objects.link(damaged, _net_hurt.bind(objects, id))
+	objects.link(broken, _net_broken.bind(objects, id))
+
+
+func _net_hurt(amount: float, _source: Node, objects: NetObjects, id: int) -> void:
+	if not dead and hp > 0.0:
+		objects.tell("obj.hurt", {"id": id, "hp": hp, "a": amount})
+
+
+func _net_broken(_prop: PricedProp, _culprit: Node, objects: NetObjects, id: int) -> void:
+	objects.tell("obj.break", {"id": id})
+	objects.count("breaks")
+
+
+## Client: the host's dent (obj.hurt: its HP and the wobble) or break (obj.break).
+func net_event(kind: String, data: Dictionary, objects: NetObjects) -> void:
+	if dead:
+		return
+	match kind:
+		"obj.hurt":
+			hp = float(data.get("hp", hp))
+			_on_damaged(float(data.get("a", 0.0)), null)
+		"obj.break":
+			objects.copy_broke(self)
+
+
+## Host: a dented prop for a late joiner, `dents` [id, hp] (an obj.hurt replay). A broken one is a gone id (NetJoin).
+func late_join_state(_objects: NetObjects, id: int) -> Dictionary:
+	if dead or hp >= max_hp - 0.001:
+		return {}
+	return {"dents": [id, hp]}
+
+
+func apply_late_join(section: String, row: Array, _objects: NetObjects) -> void:
+	if section == "dents" and row.size() >= 2 and not dead:
+		hp = float(row[1])
+
+
 # --- Breaking ------------------------------------------------------------------------------
 
 func _on_death() -> void:
