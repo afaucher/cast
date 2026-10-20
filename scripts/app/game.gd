@@ -132,9 +132,6 @@ const PLAYER_COLOR := Color(0.3, 0.55, 0.95)
 const SCREEN_LAYER := 60          ## full-screen screens (board, elevator, invoice) sit above the debug panel (50)
 const ELEVATOR_REARM_DIST := 2    ## --auto-elevator only: after "stay", walk this many cells off before it asks again
 const ELEVATOR_USE_DIST := 1      ## the player can press E at the elevator from this many cells of its landing (or in its car)
-const PROMPT_ABOVE_VAN := 2.7     ## the use prompt floats this far above the floor in front of the van's side door
-const PROMPT_ABOVE_ELEVATOR := 3.0
-const PROMPT_ABOVE_PICKUP := 1.75 ## above the pickup's own name label
 const NOTE_CLOSE_SLACK := 0.6      ## an open note's slip closes once its reader is this far past ClueNote.READ_RANGE
 const VAN_FLOOR := 1              ## the van parks on the top floor only; below it the crew arrives by elevator (ElevatorArrival)
 const VAN_USE_DIST := 2.8         ## the player can press E at the van from this far (world units) from its side door
@@ -1983,67 +1980,23 @@ func _player_at_van() -> bool:
 	return player != null and not player.dead and _near_van(player.global_position, VAN_USE_DIST)
 
 
-## What E would act on right now. UseTarget.kind: "van" (clock out), "elevator", "employee" (bring / tell to wait),
-## "note" (read it, or close the slip when it is the note already open), "door" (shut an office door, open a shut one) or
-## "pickup" (swap it in).
-## `verb` is the short caption for the use prompt and `pos` the world point it floats at. This is the ONE place that
-## decides the priority (the van exit, then the elevator, then the employee next to the hero, then a note, a door, a pickup), shared by the E press
-## (_use_key, press_use) and the prompt (_update_use_prompts), so the prompt can never promise something else.
+## What E would act on right now (Usable, scripts/app/usable.gd): the best of _use_candidates() by use_score, with its
+## kind, the prompt's verb and the point it floats at. This is the ONE query shared by the E press (_use_key, press_use)
+## and the prompt (_update_use_prompts), so the prompt can never promise something else.
 ## null when E would do nothing: no contract, a slip open, the contract ending, or nothing in reach.
-class UseTarget extends RefCounted:
-	var kind := ""
-	var verb := ""
-	var pos := Vector3.ZERO
-	var employee: Employee = null
-	var note: ClueNote = null
-	var door: OfficeDoor = null
-
-
-func use_target() -> UseTarget:
+func use_target() -> Usable.Target:
 	if _menu != null or _van_menu != null or _leaving or _ended or _ending or _session == null:
 		return null
 	if player == null or player.dead or _arrival_running():
 		return null   # (nothing to use while the crew is still arriving: the van's or the elevator's beat)
-	var t := UseTarget.new()
-	if _player_at_van():
-		var door := _van_door_pos()
-		t.kind = "van"
-		t.verb = "Clock out"
-		t.pos = Vector3(door.x, _floor_y(door.x, door.y) + PROMPT_ABOVE_VAN, door.y)
-	elif _player_at_elevator():
-		var ex := Hex.to_world(_exit_cell)
-		t.kind = "elevator"
-		t.verb = "Elevator"
-		t.pos = Vector3(ex.x, _floor_y(ex.x, ex.z) + PROMPT_ABOVE_ELEVATOR, ex.z)
-	else:
-		var e := Employee.interact_target(player)
-		if e != null and (Net.simulates(e) or Net.is_puppet(e)):   # (a client's E on the host's employee is a request: Employee.interact)
-			t.kind = "employee"
-			t.verb = e.interact_verb(player)
-			t.pos = e.prompt_point()
-			t.employee = e
-			return t
-		var n := _note_target()
-		if n == null:
-			var door := OfficeDoor.interact_target(player)   # an office door: E shuts an open one (opens a shut one)
-			if door != null:
-				t.kind = "door"
-				t.verb = door.use_verb()
-				t.pos = door.prompt_point()
-				t.door = door
-				return t
-			var pickup := player.swap_target()   # E swaps a dropped component into the held slot (was F; user, 2026-10-18)
-			if pickup == null:
-				return null
-			t.kind = "pickup"
-			t.verb = "Swap in %s" % SpellBook.component_name(pickup.spell_id)
-			t.pos = pickup.global_position + Vector3(0.0, PROMPT_ABOVE_PICKUP, 0.0)
-			return t
-		t.kind = "note"
-		t.verb = "Close" if n == _open_note and _note_slip != null and _note_slip.is_open() else n.verb()
-		t.pos = n.prompt_point()
-		t.note = n
-	return t
+	return Usable.pick(_use_candidates(), player, self)
+
+
+## One candidate per kind, each kind's own pick in reach (or null); Usable.pick ranks them (Usable's bands: the van, the
+## elevator, an employee, a note, a door, a pickup).
+func _use_candidates() -> Array:
+	return [VanExitUse.new(), ElevatorUse.new(), Employee.interact_target(player), _note_target(),
+		OfficeDoor.interact_target(player), player.swap_target()]
 
 
 ## The note E would act on: the open one while its reader is still near it, else the nearest in reach.
@@ -2055,34 +2008,20 @@ func _note_target() -> ClueNote:
 	return ClueNote.nearest(player.global_position)
 
 
+## True when `n` is the note whose slip is open (its E prompt says "Close").
+func _note_is_open(n: ClueNote) -> bool:
+	return n == _open_note and _note_slip != null and _note_slip.is_open()
+
+
 ## The ground height under world (x, z), falling back to the player's feet when there is no cell there.
 func _floor_y(x: float, z: float) -> float:
 	var h := map.ground_height(Vector3(x, 0.0, z)) if map != null else NAN
 	return player.global_position.y if is_nan(h) else h
 
 
-## E (the controller calls this first; true = the press is used). Acts on use_target(): the van and elevator open their
-## slips; an employee is dismissed or recruited (Employee.interact picks the same one). E never casts.
+## E (the controller calls this first; true = the press is used): use_press on use_target(). E never casts.
 func _use_key() -> bool:
-	var t := use_target()
-	if t == null:
-		return false
-	match t.kind:
-		"van":
-			_open_van_exit()
-			return true
-		"elevator":
-			_open_elevator()
-			return true
-		"note":
-			_toggle_note(t.note)
-			return true
-		"pickup":
-			return player.swap_in_pickup()
-		"door":
-			t.door.use(player)   # (a client's is a request: the host decides; OfficeDoor)
-			return true
-	return Employee.interact(player)
+	return Usable.press(use_target(), player, self)
 
 
 ## Point the use prompt: E at use_target(). Each frame.

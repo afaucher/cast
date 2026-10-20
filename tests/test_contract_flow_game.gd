@@ -262,7 +262,7 @@ func _check_van_exit() -> void:
 	GAME.reset_flow()
 
 
-## The use prompt floats over exactly what E acts on: the same UseTarget decides the prompt and the press. Van, elevator,
+## The use prompt floats over exactly what E acts on: the same use_target() decides the prompt and the press. Van, elevator,
 ## employee, nothing in range (hidden), and F's swap prompt over a pickup.
 func _check_use_prompt() -> void:
 	var g := _make_game({"contract": 1, "seed": 5})
@@ -324,7 +324,7 @@ func _check_use_prompt() -> void:
 	await frames(30)
 	t = g.call("use_target")
 	if check(t != null and t.kind == "employee", "next to an employee E targets them"):
-		check(t.employee == Employee.interact_target(player), "the same employee Employee.interact acts on")
+		check(t.node == Employee.interact_target(player), "the same employee Employee.interact acts on")
 		check(prompt.wanted and prompt.key == "E" and prompt.verb == t.verb, "the prompt shows the target's verb")
 		check(prompt.verb == "Bring %s" % emp.display_name, "[E] Bring <name> for a cowering employee")
 		check(prompt.global_position.y > emp.global_position.y + 1.0, "floating above the employee")

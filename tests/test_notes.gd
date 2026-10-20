@@ -302,7 +302,7 @@ func _check_game() -> void:
 		return
 	await frames(20)
 	var t: Object = g.call("use_target")
-	if check(t != null and t.kind == "note" and t.note == note, "next to a note E targets it"):
+	if check(t != null and t.kind == "note" and t.node == note, "next to a note E targets it"):
 		check(prompt.wanted and prompt.key == "E" and prompt.verb == t.verb and prompt.verb == note.verb(), "the prompt shows [E] %s" % note.verb())
 		check(prompt.verb == ("Listen" if note.format == "voicemail" else "Read"), "Read, or Listen for a voicemail")
 		check(not slip.is_open(), "walking up does not open it")
