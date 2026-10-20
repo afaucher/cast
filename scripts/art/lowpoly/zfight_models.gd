@@ -16,6 +16,7 @@ extends RefCounted
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
 const SharkModels := preload("res://scripts/art/lowpoly/props/shark_models.gd")
 const MenuBackdropScript := preload("res://scripts/ui/menu_backdrop.gd")
+const HealerBlockouts := preload("res://scripts/art/lowpoly/monsters/healer_blockouts.gd")
 
 const BIT_KINDS: Array[String] = ["skull", "tub", "lid", "pickle", "flap", "plank"]
 const POOL_KINDS: Array[String] = ["shark", "eel", "jellyfish", "specimen", "ladder", "catwalk", "gantry", "ripple", "steam",
@@ -74,6 +75,9 @@ static func models() -> Array[Dictionary]:
 	# the shark in STACKS (the swarmer model alone is monster/swarmer)
 	for v: String in SharkModels.VARIANTS:
 		out.append({"name": "shark/" + v, "make": _shark.bind(v), "ground": false})
+	# the enemy healer blockouts (docs/design/enemy-healer-options.md, healer_lab only)
+	for kind: String in HealerBlockouts.KINDS:
+		out.append({"name": "healer/" + kind, "make": HealerBlockouts.build.bind(kind), "ground": true})
 	for fmt: String in NoteCopy.FORMATS:
 		out.append({"name": "note/" + fmt, "make": NoteModels.build.bind(fmt, Color(0.5, 0.5, 0.55)), "ground": true})
 	return out

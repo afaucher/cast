@@ -407,6 +407,10 @@ weaker threat at range, and its door would hide most of a 0.9-tall imp. A bunker
 **The user's direction (2026-10-19):** "Maybe the enemies need a caster that can heal them, making a better early target."
 Everything below is **[proposal]**.
 
+> **2026-10-19, later:** "For the medic, imps are far too small. It won't read well." The imp body is out; four bigger
+> healers with read tests are in `enemy-healer-options.md` (recommended: the Water Cooler, an area pulse). The stats
+> and breaks below still describe the single-beam option (D there).
+
 ### 3.1 Look
 An imp (the swarmer's body and bat ears) in a **lab coat** several sizes too big, goggles pushed up, carrying a **glass
 jar of glowing green liquid** with a squeeze-bulb nozzle; the beam comes out of the nozzle.
