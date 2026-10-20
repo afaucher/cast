@@ -1,9 +1,17 @@
 class_name TeethSpell
 extends SpellDef
-## Teeth: too many teeth sprout out of everyone at the aim point, then pop (Teeth, scripts/spells/teeth.gd).
+## Teeth: too many teeth sprout out of everyone at the aim point, then pop (Teeth, scripts/spells/teeth.gd; design record:
+## docs/design/spells.md).
 
 const ID := "teeth"
 const FOLLOWS := false
+
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Teeth", "cooldown": 12.0, "color": Color(0.96, 0.93, 0.8),
+	"desc": "Too many teeth sprout out of EVERYONE at the aim point, then explode. Duck.", "word": "teeth",
+	"component": "Loose teeth", "available": true,
+}
 
 const TEETH_RADIUS_BASE := 2.0
 const TEETH_RADIUS_POWER := 0.6

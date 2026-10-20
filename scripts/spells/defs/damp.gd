@@ -1,10 +1,17 @@
 class_name DampSpell
 extends SpellDef
 ## Damp: a wide area gets soggy where you aim (Damp, a scheduled effect): fires go out, nobody can ignite for a while, and
-## shoves slide further on the puddles.
+## shoves slide further on the puddles; it leaves a wet floor. Design record: docs/design/spells.md.
 
 const ID := "damp"
 const FOLLOWS := false
+
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Damp", "cooldown": 10.0, "color": Color(0.30, 0.82, 0.92),
+	"desc": "A wide area gets soggy: fires go out, nobody can ignite for a while, and shoves slide further on the puddles.", "word": "damp",
+	"component": "Soggy sponge", "available": true,
+}
 
 const DAMP_RADIUS_BASE := 4.0      ## a WIDE area
 const DAMP_RADIUS_POWER := 1.0

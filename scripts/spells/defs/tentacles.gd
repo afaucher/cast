@@ -5,6 +5,13 @@ extends SpellDef
 const ID := "tentacles"
 const FOLLOWS := false
 
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Tentacles", "cooldown": 10.0, "color": Color(0.75, 0.2, 1.0),
+	"desc": "Neon tentacles burst from the floor where you aim and shove EVERYONE outward.", "word": "tentacles",
+	"component": "Neon ichor", "available": true,
+}
+
 const TENTACLES_RADIUS_BASE := 2.2
 const TENTACLES_RADIUS_POWER := 0.8
 const TENTACLES_SHOVE_BASE := 2.5

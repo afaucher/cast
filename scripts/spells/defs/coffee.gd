@@ -1,10 +1,17 @@
 class_name CoffeeSpell
 extends SpellDef
 ## Coffee: everyone in a small radius gets haste, then a crash (Coffee, scripts/spells/coffee.gd). A support spell: it
-## follows the teammate the aim snapped onto.
+## follows the teammate the aim snapped onto. Design record: docs/design/spells.md.
 
 const ID := "coffee"
 const FOLLOWS := true
+
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Coffee", "cooldown": 14.0, "color": Color(0.66, 0.43, 0.24),
+	"desc": "Everyone in a small radius gets +60% move and attack speed for six seconds, twitchy, then a crash. Monsters too.", "word": "coffee",
+	"component": "Coffee beans", "available": true,
+}
 
 const COFFEE_RADIUS_BASE := 1.5    ## a SMALL radius
 const COFFEE_RADIUS_POWER := 0.5

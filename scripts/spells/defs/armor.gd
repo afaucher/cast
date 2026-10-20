@@ -5,6 +5,13 @@ extends SpellDef
 const ID := "armor"
 const FOLLOWS := false
 
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Armor", "cooldown": 14.0, "color": Color(0.35, 0.6, 1.0),
+	"desc": "A shielding zone where you aim: allies inside take much less damage.", "word": "armor",
+	"component": "Hide plate", "available": true,
+}
+
 const ARMOR_MULT_WEAK := 0.75      ## damage multiplier at power ~0
 const ARMOR_MULT_STRONG := 0.4     ## damage multiplier at power 1
 const ARMOR_DURATION_BASE := 5.0

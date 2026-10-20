@@ -5,6 +5,13 @@ extends SpellDef
 const ID := "corn"
 const FOLLOWS := false
 
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Corn", "cooldown": 12.0, "color": Color(1.0, 0.9, 0.25),
+	"desc": "A giant corn cob falls from the sky. Hits EVERYONE. You were warned.", "word": "corn",
+	"component": "Corn kernel", "available": true,
+}
+
 
 static func corn_damage(power: float) -> float:
 	return CornStrike.DAMAGE * clampf(power, SpellBook.MIN_POWER, 1.0)

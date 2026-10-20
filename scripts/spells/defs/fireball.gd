@@ -6,6 +6,13 @@ extends SpellDef
 const ID := "fireball"
 const FOLLOWS := false
 
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Fireball", "cooldown": 5.0, "color": Color(1.0, 0.55, 0.15),
+	"desc": "A fireball that explodes where you aim (or on the first thing it hits). Monsters, the client's property and bystanders (never heroes).", "word": "fireball",
+	"component": "Ember horn", "available": true,
+}
+
 const FIREBALL_SPEED := 11.0
 const FIREBALL_DAMAGE := 40.0
 const FIREBALL_RADIUS_BASE := 1.4

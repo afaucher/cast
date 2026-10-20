@@ -1,69 +1,51 @@
 class_name SpellBook
 extends RefCounted
-## The spells: metadata for the UI/voice layer plus the static cast()
-## entry point. Each spell also names its material "component" (see SpellComponents) and may be
-## "available": false while its gameplay is still to come (none right now). Power is in (0, 1] (voice confidence) and scales the effect.
+## The spell registry: every spell is a def in scripts/spells/defs/ (a SpellDef: its row, tuning, cast, component prop,
+## remote status look and voice aliases), listed in DEFS, and SpellBook reads them. It holds the metadata for the UI/voice
+## layer plus the static cast() entry point. Each spell also names its material "component" (see SpellComponents) and may
+## be "available": false while its gameplay is still to come (none right now): that keeps a spell out of the picker, the
+## slots, the drop table and SpellBook.cast. Power is in (0, 1] (voice confidence) and scales the effect.
 ## The spoken trigger word ("cast", "pickle"...) is configurable and only used
 ## for display: see incantation(). Cooldowns are NOT enforced here; Hero.try_cast owns them.
 
-const SPELLS := {
-	"heal": {
-		"name": "Heal", "cooldown": 8.0, "color": Color(0.35, 0.95, 0.5),
-		"desc": "Heals every ally where you aim. Point at a friend, or at your feet.", "word": "heal",
-		"component": "Grave moss", "available": true,
-	},
-	"fireball": {
-		"name": "Fireball", "cooldown": 5.0, "color": Color(1.0, 0.55, 0.15),
-		"desc": "A fireball that explodes where you aim (or on the first thing it hits). Monsters, the client's property and bystanders (never heroes).", "word": "fireball",
-		"component": "Ember horn", "available": true,
-	},
-	"armor": {
-		"name": "Armor", "cooldown": 14.0, "color": Color(0.35, 0.6, 1.0),
-		"desc": "A shielding zone where you aim: allies inside take much less damage.", "word": "armor",
-		"component": "Hide plate", "available": true,
-	},
-	"corn": {
-		"name": "Corn", "cooldown": 12.0, "color": Color(1.0, 0.9, 0.25),
-		"desc": "A giant corn cob falls from the sky. Hits EVERYONE. You were warned.", "word": "corn",
-		"component": "Corn kernel", "available": true,
-	},
-	"tentacles": {
-		"name": "Tentacles", "cooldown": 10.0, "color": Color(0.75, 0.2, 1.0),
-		"desc": "Neon tentacles burst from the floor where you aim and shove EVERYONE outward.", "word": "tentacles",
-		"component": "Neon ichor", "available": true,
-	},
-	# Too many teeth on everyone at the aim point, then a pop (scripts/spells/teeth.gd, docs/design/spells.md).
-	# "available": false would keep a spell out of the picker, the slots, the drop table and SpellBook.cast.
-	"teeth": {
-		"name": "Teeth", "cooldown": 12.0, "color": Color(0.96, 0.93, 0.8),
-		"desc": "Too many teeth sprout out of EVERYONE at the aim point, then explode. Duck.", "word": "teeth",
-		"component": "Loose teeth", "available": true,
-	},
-	# Vines root everyone in the area (scripts/spells/vines.gd); damp soaks and puts out fire and leaves a wet floor
-	# (damp.gd); coffee is haste then a crash (coffee.gd). Design record: docs/design/spells.md.
-	"vines": {
-		"name": "Vines", "cooldown": 10.0, "color": Color(0.45, 0.78, 0.22),
-		"desc": "Thorny vines burst up and ROOT EVERYONE in the area for about two seconds: no walking, no shoving.", "word": "vines",
-		"component": "Seed pod", "available": true,
-	},
-	"damp": {
-		"name": "Damp", "cooldown": 10.0, "color": Color(0.30, 0.82, 0.92),
-		"desc": "A wide area gets soggy: fires go out, nobody can ignite for a while, and shoves slide further on the puddles.", "word": "damp",
-		"component": "Soggy sponge", "available": true,
-	},
-	"coffee": {
-		"name": "Coffee", "cooldown": 14.0, "color": Color(0.66, 0.43, 0.24),
-		"desc": "Everyone in a small radius gets +60% move and attack speed for six seconds, twitchy, then a crash. Monsters too.", "word": "coffee",
-		"component": "Coffee beans", "available": true,
-	},
-	# Four chickens scatter from the aim point and peck everything for nothing; a pecked monster chases its chicken
-	# (scripts/spells/chicken.gd; decided by the user 2026-10-18, docs/design/spells.md).
-	"chicken": {
-		"name": "Chicken", "cooldown": 14.0, "color": Color(0.94, 0.33, 0.27),
-		"desc": "Four chickens burst out where you aim and peck EVERYONE for zero. A pecked monster forgets you and chases its chicken, which does not last long.", "word": "chicken",
-		"component": "Chicken feather", "available": true,
-	},
-}
+## The spell defs, in spell order: the order of ids(), the picker, the voice and the tests. A new spell is a new def here.
+const DEFS := [
+	preload("res://scripts/spells/defs/heal.gd"),
+	preload("res://scripts/spells/defs/fireball.gd"),
+	preload("res://scripts/spells/defs/armor.gd"),
+	preload("res://scripts/spells/defs/corn.gd"),
+	preload("res://scripts/spells/defs/tentacles.gd"),
+	preload("res://scripts/spells/defs/teeth.gd"),
+	preload("res://scripts/spells/defs/vines.gd"),
+	preload("res://scripts/spells/defs/damp.gd"),
+	preload("res://scripts/spells/defs/coffee.gd"),
+	preload("res://scripts/spells/defs/chicken.gd"),
+]
+
+## spell id -> its def's ROW ({"name", "cooldown", "color", "desc", "word", "component", "available"}), in DEFS order.
+## Read-only, like the const table it was.
+static var SPELLS: Dictionary = _rows()
+static var _defs_by_id: Dictionary = _index_defs()
+
+
+static func _rows() -> Dictionary:
+	var out := {}
+	for d: GDScript in DEFS:
+		out[d.ID] = d.ROW
+	out.make_read_only()
+	return out
+
+
+static func _index_defs() -> Dictionary:
+	var out := {}
+	for d: GDScript in DEFS:
+		out[d.ID] = d
+	return out
+
+
+## The def script of spell `id` (a SpellDef), or null.
+static func def_of(id: String) -> GDScript:
+	return _defs_by_id.get(id) as GDScript
 
 # --- Targeting: every spell lands where the player aims, like the ranged bolt.
 const SPELL_RANGE := Hero.BOLT_RANGE  ## same reach as the ranged attack
@@ -139,34 +121,6 @@ static func find_in_text(text: String) -> String:
 		if t.contains(id) or squashed.contains(id):
 			return id
 	return ""
-
-
-## The spell defs (scripts/spells/defs/, SpellDef), in spell order.
-const DEFS := [
-	preload("res://scripts/spells/defs/heal.gd"),
-	preload("res://scripts/spells/defs/fireball.gd"),
-	preload("res://scripts/spells/defs/armor.gd"),
-	preload("res://scripts/spells/defs/corn.gd"),
-	preload("res://scripts/spells/defs/tentacles.gd"),
-	preload("res://scripts/spells/defs/teeth.gd"),
-	preload("res://scripts/spells/defs/vines.gd"),
-	preload("res://scripts/spells/defs/damp.gd"),
-	preload("res://scripts/spells/defs/coffee.gd"),
-	preload("res://scripts/spells/defs/chicken.gd"),
-]
-static var _defs_by_id := _index_defs()
-
-
-static func _index_defs() -> Dictionary:
-	var out := {}
-	for d: GDScript in DEFS:
-		out[d.ID] = d
-	return out
-
-
-## The def script of spell `id` (a SpellDef), or null.
-static func def_of(id: String) -> GDScript:
-	return _defs_by_id.get(id) as GDScript
 
 
 ## Cast spell `id` from `caster` toward world point `aim`. Returns false for an unknown

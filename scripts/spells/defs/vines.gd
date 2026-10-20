@@ -1,9 +1,17 @@
 class_name VinesSpell
 extends SpellDef
-## Vines: thorny vines burst up where you aim (Vines, a scheduled effect) and root everyone in the area.
+## Vines: thorny vines burst up where you aim (Vines, a scheduled effect) and root everyone in the area. Design record:
+## docs/design/spells.md.
 
 const ID := "vines"
 const FOLLOWS := false
+
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Vines", "cooldown": 10.0, "color": Color(0.45, 0.78, 0.22),
+	"desc": "Thorny vines burst up and ROOT EVERYONE in the area for about two seconds: no walking, no shoving.", "word": "vines",
+	"component": "Seed pod", "available": true,
+}
 
 const VINES_RADIUS_BASE := 2.4
 const VINES_RADIUS_POWER := 0.6

@@ -5,6 +5,13 @@ extends SpellDef
 const ID := "heal"
 const FOLLOWS := true
 
+## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
+const ROW := {
+	"name": "Heal", "cooldown": 8.0, "color": Color(0.35, 0.95, 0.5),
+	"desc": "Heals every ally where you aim. Point at a friend, or at your feet.", "word": "heal",
+	"component": "Grave moss", "available": true,
+}
+
 const HEAL_RADIUS := 3.0
 const HEAL_BASE := 35.0
 
