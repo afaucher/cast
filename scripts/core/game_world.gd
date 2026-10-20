@@ -52,8 +52,12 @@ func end() -> void:
 	root = null
 
 
-## Add any node (projectile, zone, effect) to the world.
+## Add any node (projectile, zone, effect) to the world. The node is placed BEFORE it enters the tree, so its _ready (and
+## the _ready of the children it adds there) already sees where it is: a damp's telegraph ring, the tentacles' and the
+## vines' ground probes used to read the world origin there (the stray damp ring at (0, 0, 0)).
 func spawn(node: Node3D, at: Vector3 = Vector3.INF) -> Node3D:
+	if at != Vector3.INF:
+		node.position = root.global_transform.affine_inverse() * at if root.is_inside_tree() else at
 	root.add_child(node)
 	if at != Vector3.INF:
 		node.global_position = at

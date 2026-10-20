@@ -14,10 +14,15 @@ extends Node3D
 ##
 ## DAMP CRUST (the user: "Damping lava sounds hilarious. Yes."): a damp cast's burst crusts every lava cell within
 ## CRUST_FRAC of its radius. A crust cell is walkable rock at LavaCave.CRUST_LEVEL (one step down from shore rock at 0, a
-## climb up to rock at 1, a wall below rock at 2+) for CRUST_LIFE seconds; over the last CRUST_WARN its cracks flare and it
-## shakes; then it melts back to lava. Whoever stands on it then gets the lava rule: a hero is pulled back to the
-## nearest rock (and burned), a monster sinks. The damp's own cell field is a pure function of its cast (Damp), and so is
-## the crust: the same on every machine from the cast's time.
+## climb up to rock at 1, a wall below rock at 2+) for CRUST_LIFE seconds. It looks like dark cooled rock, no glow
+## (LavaLook.crust_material; playtest 2026-10-20: "showing the crust as not glowing would read better"); over the last
+## CRUST_WARN the glow comes back into its cracks, pulsing, and it shakes; then it melts back to lava. Whoever stands on it
+## then gets the lava rule: a hero is pulled back to the nearest rock (and burned), a monster sinks. The damp's own cell
+## field is a pure function of its cast (Damp), and so is the crust: the same on every machine from the cast's time.
+##
+## NOBODY STANDS ON THE LAVA: Actor.move never puts a body over the void, AllyBrain never takes a formation slot across a
+## gap and waits at an edge it can't path past, and _rescue_stranded gives the lava rule to anything found over a lava
+## cell anyway (a crust gone from under it, say).
 
 const EXTRA_DAMAGE := 10.0      ## on top of the void pull's 5 (Actor.VOID_TICK_DAMAGE): 15
 const BURN_TIME := 6.0          ## Burning: 3 HP/s
@@ -94,6 +99,7 @@ func _physics_process(_delta: float) -> void:
 			continue
 		_seen[d.get_instance_id()] = true
 		_make_crust(d.global_position, SpellBook.damp_radius(d.power) * CRUST_FRAC, d.start_time + Damp.TELEGRAPH)
+	_rescue_stranded()
 	for cr in crusts.duplicate():
 		var left := float(cr["end"]) - t
 		var warn := clampf(1.0 - left / CRUST_WARN, 0.0, 1.0)
@@ -102,6 +108,31 @@ func _physics_process(_delta: float) -> void:
 		node.position = Vector3(sin(t * 47.0), 0.0, cos(t * 53.0)) * 0.025 * warn if warn > 0.0 else Vector3.ZERO
 		if left <= 0.0:
 			_melt(cr)
+
+
+## A safety net: nobody stands on the lava. An actor over a lava cell (void) that isn't already being shoved, pulled
+## back or falling (Actor.move keeps walkers off the void; this catches anything else) gets the lava rule: a hero is
+## put back on the nearest rock (and burned), anything else sinks. Each machine moves only what it resolves.
+func _rescue_stranded() -> void:
+	for a in GameWorld.actors():
+		if a.dead or a.is_shoved() or not Net.resolves(a) or a.shove_mult <= 0.0:
+			continue
+		var c := Hex.from_world(a.global_position)
+		if not lava.has(c) or map.has_cell(c):
+			continue
+		_into_lava(a)
+
+
+## Start the void rule on `a`, standing over the lava: a hero toward the nearest rock (where the pull will land it).
+func _into_lava(a: Actor) -> void:
+	var dir := Vector3.FORWARD
+	if a.team == GameWorld.TEAM_HEROES:
+		# PROTOTYPE: the void pull takes a hero back to its last safe cell, which may be a crust that is gone; point it at
+		# the nearest rock instead (Actor's own field, written on the hero's owner only).
+		var rock := _nearest_rock(a.global_position)
+		a._safe_cell = rock
+		dir = Hex.to_world(rock) - a.global_position
+	a.shove(dir, 0.3, self)   # (the shove steps over the void: Actor._enter_void runs the pit rule)
 
 
 ## Crust every lava cell within `radius` of `centre` (that is not crust already) until `born` + CRUST_LIFE.
@@ -121,8 +152,7 @@ func _make_crust(centre: Vector3, radius: float, born: float) -> void:
 	var node := Node3D.new()
 	node.name = "Crust"
 	add_child(node)
-	var mat := LavaLook.lava_material(0.97, 0.04)
-	mat.set_shader_parameter("glow", 1.6)
+	var mat := LavaLook.crust_material()   # (dark cooled rock; its cracks glow again as it is about to melt)
 	node.add_child(_crust_mesh(cells, mat))
 	crusts.append({"cells": cells, "end": born + CRUST_LIFE, "node": node, "mat": mat})
 	var steam: Array[Color] = [Color(0.92, 0.94, 0.96), Color(0.6, 0.6, 0.62)]
@@ -151,16 +181,8 @@ func _melt(cr: Dictionary) -> void:
 		if posmod(hash(c), 2) == 0:
 			Fx.burst(Hex.to_world(c) + Vector3(0, LavaCave.LAVA_Y + 0.2, 0), hot, 5, 2.0, 0.12, 0.6, 6.0, Vector3.UP, 50.0, true)
 	for a in victims:
-		if not Net.resolves(a):
-			continue
-		var dir := Vector3.FORWARD
-		if a.team == GameWorld.TEAM_HEROES:
-			# PROTOTYPE: the void pull takes a hero back to its last safe cell, which was this crust; point it at the
-			# nearest rock instead (Actor's own field, written on the hero's owner only).
-			var rock := _nearest_rock(a.global_position)
-			a._safe_cell = rock
-			dir = Hex.to_world(rock) - a.global_position
-		a.shove(dir, 0.3, self)   # (the shove steps off the gone crust: Actor._enter_void runs the pit rule)
+		if Net.resolves(a):
+			_into_lava(a)
 
 
 func _nearest_rock(p: Vector3) -> Vector2i:

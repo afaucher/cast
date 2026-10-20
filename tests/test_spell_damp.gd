@@ -36,6 +36,7 @@ func setup() -> void:
 	await _wet_floor()
 	await _wet_look()
 	await _grime_and_scheduling()
+	await _nothing_at_origin()
 	finish()
 
 
@@ -344,3 +345,32 @@ func _grime_and_scheduling() -> void:
 	h.spell_slots = ["damp", "heal"] as Array[String]
 	check(h.try_cast("damp", 1.0, Vector3.ZERO), "cast through the slots")
 	eq(h.charges_of("damp"), 4, "a charge is spent")
+
+
+# --- Nothing at the world origin ---------------------------------------------------------------------------------
+
+## A damp cast away from the origin draws nothing there (playtest 2026-10-20: "Every time I cast damp, an effect appears
+## at the origin as well"): its telegraph ring was drawn in _ready, before GameWorld.spawn had placed it.
+func _nothing_at_origin() -> void:
+	new_world(flat_map(14))
+	var caster := _hero(Vector3(14, 0, 4))
+	var d := Damp.new()
+	d.caster = caster
+	d.power = 1.0
+	GameWorld.spawn(d, Vector3(12, 0, 6))
+	var stray: Array[String] = []
+	for i in 40:
+		await get_tree().physics_frame
+		for n in _all_3d(world):
+			if (n as Node3D).global_position.length() < 2.0 and not stray.has(str(n.name)):
+				stray.append(str(n.name))
+	check(stray.is_empty(), "a damp cast at (12, 0, 6) puts nothing near the origin (%s)" % ", ".join(stray))
+
+
+func _all_3d(n: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	for c in n.get_children():
+		if c is Node3D:
+			out.append(c)
+		out.append_array(_all_3d(c))
+	return out
