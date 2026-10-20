@@ -297,6 +297,9 @@ hero, the host owns monsters, and cross-owner hits and shoves travel as messages
   downed hero and channels a revive (~3 s, exposed), the hero gets up with some HP, the revive is billed like today's
   end-of-job revival. Needs a networked revive (the reviver's machine requests, the host decides) and an AI rule for what
   allies do while a human is down.
+  Open first (user, 2026-10-20: "we would immediately have to answer how many revives you get and what happens when
+  you run out"): a revive budget (per floor, per contract, or priced per use on the invoice) and the rule once it is spent
+  (back to Option A: you stay down; or a costlier revive).
 
 ## 16. Gags and one-offs
 
