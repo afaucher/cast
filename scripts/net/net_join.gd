@@ -338,6 +338,7 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		"seats": _session.seats.table(), "kits": kits, "heroes": heroes, "gone": gone,
 		"spawns": _session.world.runtime_spawns(), "world": _session.world.keyframe(now), "waits": waits,
 		"scouts": _session.world.scout_states(),
+		"dismounts": _session.world.dismount_states(),   # (imp gunners already off their sharks)
 		"objects": _session.objects.late_join_state(), "status": _session.status.late_join_state(),
 		"orders": _session.orders.late_join_state(),
 		"ledger": {"lines": Ledger.lines.duplicate(true), "value": Ledger.contract_value, "floor": Ledger.floor_number},
@@ -517,6 +518,7 @@ func _apply(d: Dictionary) -> void:
 	_session.world.apply_spawns(d.get("spawns", []) as Array)
 	var keys := _session.world.apply_keyframe(d.get("world", PackedByteArray()) as PackedByteArray, float(d.get("at", _now())))
 	_session.world.apply_scouts(d.get("scouts", []) as Array)   # (goblin scouts: their phase and rack)
+	_session.world.apply_dismounts(d.get("dismounts", []) as Array)   # (the sharks' imp gunners knocked off)
 	var waits := d.get("waits", {}) as Dictionary
 	for k: Variant in waits:
 		var emp := NetRegistry.node(int(k)) as Employee

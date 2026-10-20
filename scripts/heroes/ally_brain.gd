@@ -462,7 +462,7 @@ func _swing(foe: Actor, dir: Vector3) -> void:
 
 ## A shot (arrow or bolt) at `foe` `dist` away: only down a lane with no prop before the target.
 func _shoot(foe: Actor, dir: Vector3, dist: float) -> void:
-	if prop_care and not _lane_clear(dir, dist, 0.3):
+	if prop_care and not _lane_clear(dir, dist, 0.3, foe):
 		_hold(foe)
 		return
 	hero.shoot(dir)
@@ -496,10 +496,12 @@ func _arc_clear(dir: Vector3, reach: float, arc_deg: float) -> bool:
 
 
 ## No priced prop within `width` (plus its radius) of the lane from this hero along `dir` for `length`.
-func _lane_clear(dir: Vector3, length: float, width: float) -> bool:
+func _lane_clear(dir: Vector3, length: float, width: float, foe: Actor = null) -> bool:
 	var from := Vector2(hero.global_position.x, hero.global_position.z)
 	var to := from + Vector2(dir.x, dir.z) * length
 	for p in GameWorld.props_in_radius(hero.global_position, length + 2.0):
+		if foe != null and p.has_method("is_mount_of") and p.call("is_mount_of", foe) and p.hp > p.max_hp * 0.25:
+			continue   # (a shot at an imp gunner passes its shark, unless a stray arrow could land the $12,600 kill)
 		var q := Vector2(p.global_position.x, p.global_position.z)
 		if Geometry2D.get_closest_point_to_segment(q, from, to).distance_to(q) <= width + p.radius + PROP_MARGIN:
 			return false
@@ -553,7 +555,7 @@ func _snap_walkable(p: Vector3) -> Vector3:
 	var best_d := INF
 	for c in Hex.range_cells(cell0, 3):
 		var cell := map.get_cell(c)
-		if cell == null or cell.type != HexMap.Tile.FLOOR or not map.is_walkable_cell(c) or absi(cell.level - base_level) > 1:
+		if cell == null or cell.type != HexMap.Tile.FLOOR or not map.is_walkable_cell(c) or absi(cell.level - base_level) > 1 or Shark.shark_water(c):
 			continue
 		var d := GameWorld.flat_distance(Hex.to_world(c), p)
 		if d < best_d:

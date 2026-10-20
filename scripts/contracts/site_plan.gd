@@ -88,13 +88,17 @@ var scouts: Array[Dictionary] = []
 ## Doorways.find (id, room, hall, axis, cell, band, the door line a / b and its middle `center`), plus `style`. Their
 ## doorways also have the tread-plate threshold floor (DoorFloors, in the cells' materials), so both are in the checksum.
 var doors: Array[Dictionary] = []
+## Pool sharks (docs/design/sharks.md "As built"; SiteBuilder._plan_sharks): {pool: index into HexMap.pools, variant:
+## "regular" | "laser" | "imp", start: Vector2 (X/Z: the head joint), heading: Vector2}. Their pools' records carry
+## `shark` (the variant) too, so PoolView builds no decorative fins there.
+var sharks: Array[Dictionary] = []
 
 
 ## Who may write each var (see Net). SiteBuilder.plan() builds all of it from (run, floor) on
 ## every machine, so it is fixed once planned.
 func net_fields() -> Dictionary:
 	return {
-		"doors": Net.SPAWN,
+		"doors": Net.SPAWN, "sharks": Net.SPAWN,
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "hazards": Net.SPAWN,

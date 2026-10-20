@@ -137,7 +137,7 @@ func _build_pool(rec: Dictionary) -> void:
 		gm.position = Vector3(gp.x, deck_y, gp.y)
 		gm.rotation_degrees.y = float(gantry["yaw"])
 	var path := PoolGeo.channel(rec)
-	if path.size() >= 3:
+	if path.size() >= 3 and str(rec.get("shark", "")) == "":   # (a pool with a real shark has no decorative fins)
 		# two fins patrolling the moat, half a lap apart (decoration until the shark is built)
 		for i in 2:
 			var fin := DecorModels.build("shark_fin", {"path": path, "phase": 0.5 * float(i), "speed": FIN_SPEED, "y": water_y})

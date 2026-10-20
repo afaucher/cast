@@ -152,7 +152,7 @@ func _check_hits() -> void:
 		if a.team == GameWorld.TEAM_MONSTERS:
 			Fx.attach_hit_feedback(a)
 			a.apply_damage(damage, source)
-		elif a is PricedProp:
+		elif a is PricedProp or a.is_in_group("sharks"):
 			a.apply_damage(damage * PROP_DAMAGE_MULT, source)   # rolls through the client's property
 		elif a.is_in_group("breakables"):
 			a.apply_damage(damage, source)                      # and through the client's mail

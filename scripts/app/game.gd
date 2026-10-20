@@ -50,6 +50,10 @@ extends Node3D
 ##                       the channel (screenshots; the log lists the floor's pools; the AI allies hold their spots).
 ##                       --focus pool_corner looks at the pool's corner farthest from the camera instead, --focus island_corner
 ##                       at a moat island's corner nearest the camera
+##   --to-shark [regular|laser|imp|lagoon|any]  dev: the crew on the deck by the floor's first pool shark of that variant (sharks
+##                       live from floor 2; the log lists them). --shark-demo bite|laser|knock|kill (with --demo-after S) then has
+##                       the shark bite the player at the rim, charge and fire its laser at the player, the player knock the imp
+##                       gunner off, or kill it (the bill)
 ##   --to-package        dev: put the crew two cells from the first mail package stack of the floor (zoom in with --zoom 10)
 ##   --to-employee       dev: put the crew 1.5 cells from the first employee (it latches on; E prompts "tell X to wait")
 ##   --press-e S         dev: press E (the controller's context key) S seconds in
@@ -205,6 +209,7 @@ var _emp_cause: Dictionary = {}     ## employee instance id -> last culprit name
 var _player_down_noted := false
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_hazards: Array[PricedProp] = []  ## --hazard-near (ExplosiveProp)
+var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
 var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 var _arrival: VanArrival = null     ## the work van and its arrival sequence (null when the start room had no room for it)
 
@@ -370,6 +375,7 @@ func _parse_args() -> void:
 			"--drop-near": opts["drop_near"] = nxt
 			"--hazard-near": opts["hazard_near"] = nxt
 			"--hazard-demo": opts["hazard_demo"] = nxt
+			"--shark-demo": opts["shark_demo"] = nxt
 			"--demo-after": opts["demo_after"] = float(nxt)
 			"--to-hazard": opts["to_hazard"] = nxt
 			"--slay-near": opts["slay_near"] = true
@@ -379,6 +385,8 @@ func _parse_args() -> void:
 			"--to-exit": opts["to_exit"] = true
 			"--to-corridor": opts["to_corridor"] = true
 			"--to-door": opts["to_door"] = int(nxt)
+			"--to-shark":
+				opts["to_shark"] = args[i + 1] if i + 1 < args.size() and not args[i + 1].begins_with("--") else "any"
 			"--to-pool":
 				opts["to_pool"] = args[i + 1] if i + 1 < args.size() and not args[i + 1].begins_with("--") else ""
 			"--to-package": opts["to_package"] = true
@@ -1168,6 +1176,8 @@ func _start() -> void:
 		get_tree().create_timer(1.0).timeout.connect(_dev_tour)
 	if opts.has("hazard_demo"):
 		_hazard_demo(str(opts["hazard_demo"]))
+	if opts.has("shark_demo"):
+		_shark_demo(str(opts["shark_demo"]))
 	if opts.get("focus", "") == "dev" and _dev_centroid() != Vector3.INF:
 		var marker := Node3D.new()
 		GameWorld.root.add_child(marker)
@@ -1242,7 +1252,7 @@ func _arrive_by_van() -> void:
 	for seat: int in [1, 3, 2]:
 		if heroes_by_seat.has(seat):
 			crew.append(heroes_by_seat[seat])
-	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
+	var moved_away := opts.has("to_shark") or opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_arrival = VanArrival.spawn(_site.plan.van, crew, play)
 	if _arrival == null:
@@ -1270,7 +1280,7 @@ func _arrive_by_elevator() -> void:
 				arriving.append(heroes_by_seat[seat])   # (a downed hero stayed behind on the floor above)
 		if _session.carried_down(player):
 			_follow_living_ally()   # a downed player watches the crew step out
-	var moved_away := opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
+	var moved_away := opts.has("to_shark") or opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_lift = ElevatorArrival.spawn(_site.plan.elevator, _floor_n(), arriving, _heroes(), play)
 	if _lift == null:
@@ -2985,6 +2995,8 @@ func _door_cells_dev(rec: Dictionary) -> Array[Vector2i]:
 func _dev_teleports() -> void:
 	if opts.has("to_hazard") and _to_hazard(str(opts["to_hazard"])):
 		return
+	if opts.has("to_shark") and _to_shark(str(opts["to_shark"])):
+		return
 	if opts.has("to_pool") and _to_pool(str(opts["to_pool"])):
 		return
 	if opts.has("to_theme") and _site != null:
@@ -3287,6 +3299,133 @@ func _to_hazard(want: String) -> bool:
 		_log("to-hazard: %s in %s" % [e.display_name, _site.plan.theme_of(str(_site.plan.hazards[_site.hazards.find(h)]["room"]))], Color(0.8, 0.8, 1.0))
 		return true
 	return false
+
+
+## Dev flag --to-shark [regular|laser|imp|lagoon|any] (screenshots): the crew on the deck beside the floor's first pool shark
+## of that variant (lagoon: the first in a lagoon), the camera on its pool, the AI allies holding their spots. Sharks live
+## from floor 2 (the log lists the floor's sharks).
+func _to_shark(want: String) -> bool:
+	if _site == null:
+		return false
+	for s in _site.sharks:
+		_log("shark: %s in %s (pool %d%s)" % [s.variant, str(s.pool_record().get("room", "")), s.pool_index,
+			", lagoon" if str(s.pool_record().get("shape", "")) == PoolGeo.LAGOON else ""], Color(0.6, 0.9, 1.0))
+	for s in _site.sharks:
+		var rec := s.pool_record()
+		if want == "lagoon":
+			if str(rec.get("shape", "")) != PoolGeo.LAGOON:
+				continue
+		elif want != "any" and want != "" and s.variant != want:
+			continue
+		# the rim nearest the camera: the crew stands on the deck there, the player closest
+		var c: Vector2 = rec["center"]
+		var ol: Array = rec["outline"]
+		var normals := PoolGeo.edge_normals(ol)
+		var best := 0
+		for i in normals.size():
+			if normals[i].dot(ThemeGeo.CAMERA_DIR) > normals[best].dot(ThemeGeo.CAMERA_DIR):
+				best = i
+		var a: Vector2 = ol[best]
+		var b: Vector2 = ol[(best + 1) % ol.size()]
+		var n: Vector2 = normals[best]
+		var t := (b - a).normalized()
+		var spots: Array[Vector2] = [(a + b) * 0.5 + n * 1.6, (a + b) * 0.5 + n * 2.6 + t * 2.2, (a + b) * 0.5 + n * 2.6 - t * 2.2]
+		if opts.get("shark_demo", "") == "laser":
+			spots[0] = (a + b) * 0.5 + n * 6.0
+		var list: Array[Hero] = []
+		for seat in range(1, NetSession.MAX_CREW + 1):
+			if heroes_by_seat.has(seat):
+				list.append(heroes_by_seat[seat])
+		var deck_lv := int(rec["deck_level"])
+		var room := str(rec["room"])
+		for i in list.size():
+			var p: Vector2 = spots[mini(i, spots.size() - 1)]
+			# onto the nearest dry floor of the pool's room at deck level (a spot past the room's wall would be void)
+			var wish := Vector3(p.x, 0.0, p.y)
+			var best_c := Hex.from_world(wish)
+			var best_d := INF
+			for cc in Hex.range_cells(Hex.from_world(wish), 4):
+				var cell := map.get_cell(cc)
+				if cell == null or not map.is_walkable_cell(cc) or map.is_pool_cell(cc) or cell.level != deck_lv or cell.tag != room:
+					continue
+				var dd := Hex.to_world(cc).distance_to(wish)
+				if dd < best_d:
+					best_d = dd
+					best_c = cc
+			if best_d < INF and best_d > 0.9:
+				var w := Hex.to_world(best_c)
+				p = Vector2(w.x, w.z)
+			list[i].global_position = Vector3(p.x, 0.0, p.y)
+			list[i].snap_to_ground()
+			list[i].facing = Vector3(-n.x, 0.0, -n.y)
+			var brain := list[i].get_node_or_null("AllyBrain")
+			if brain != null:
+				brain.set_physics_process(false)
+		var mk := Node3D.new()
+		GameWorld.root.add_child(mk)
+		var mid := c.lerp((a + b) * 0.5 + n * 2.0, 0.45)
+		mk.global_position = Vector3(mid.x, float(rec["deck_level"]) * Hex.LEVEL_HEIGHT, mid.y)
+		rig.target = mk
+		rig.snap()
+		_dev_sharks.append(s)
+		return true
+	return false
+
+
+## Dev flag --shark-demo bite|laser|knock|kill (with --to-shark; screenshots), after --demo-after seconds (1.0):
+##   bite   the player steps to the rim: the shark comes for it (its own senses)
+##   laser  the shark charges at the player (who stands 6 out on the deck) and fires
+##   knock  the player's shove (2.0) knocks the imp gunner off its shark
+##   kill   the player's hit kills the shark (the bill)
+func _shark_demo(stage: String) -> void:
+	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
+	if _dev_sharks.is_empty() or player == null:
+		return
+	var s: Shark = _dev_sharks[0]
+	if not is_instance_valid(s) or s.dead:
+		return
+	match stage:
+		"bite":
+			var p := Vector2(player.global_position.x, player.global_position.z)
+			var out := s.steer.out_of_water(p)
+			var q := p
+			for _i in 40:
+				if s.steer.rim(q) > -0.7:
+					break
+				q -= out * 0.1
+			player.global_position = Vector3(q.x, player.global_position.y, q.y)
+			player.snap_to_ground()
+		"laser":
+			if s.has_laser():
+				# the player steps onto the deck ahead of the shark's snout (in its nose cone), then it charges
+				var rec := s.pool_record()
+				var best := Vector3.INF
+				var best_d := INF
+				for d: float in [6.0, 5.0, 7.0, 4.5, 8.0]:
+					var want_at := s.global_position + s.facing * d
+					for cc in Hex.range_cells(Hex.from_world(want_at), 2):
+						var cell := map.get_cell(cc)
+						if cell == null or not map.is_walkable_cell(cc) or map.is_pool_cell(cc) or cell.level != int(rec["deck_level"]):
+							continue
+						var w := Hex.to_world(cc)
+						var to := w - s.global_position
+						to.y = 0.0
+						var off := rad_to_deg(Vector2(s.facing.x, s.facing.z).angle_to(Vector2(to.x, to.z)))
+						var score := absf(off) * 0.1 + absf(to.length() - 6.0)
+						if absf(off) < 30.0 and s.steer.rim(Vector2(w.x, w.z)) < -1.4 and score < best_d:
+							best_d = score
+							best = w
+					if best != Vector3.INF:
+						break
+				if best != Vector3.INF:
+					player.global_position = Vector3(best.x, player.global_position.y, best.z)
+					player.snap_to_ground()
+				s._begin_charge(player)
+		"knock":
+			if s.rider != null and is_instance_valid(s.rider):
+				s.rider.shove(s.rider.global_position - player.global_position, 2.0, player)
+		"kill":
+			s.apply_damage(s.hp + 1.0, player)
 
 
 ## Dev flag --hazard-demo fuse|chain|invoice (with --hazard-near or --to-hazard; screenshots): after --demo-after seconds (1.0)

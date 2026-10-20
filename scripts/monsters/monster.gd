@@ -1071,8 +1071,8 @@ func _on_damaged(_amount: float, source: Node) -> void:
 	_flash_t = FLASH_TIME
 	_update_bar()
 	var a := source as Actor
-	if a == null or a.team == team or a.dead:
-		return
+	if a == null or a.team == team or a.dead or a.is_in_group("sharks"):
+		return   # (a shark's bite or beam: the pool, not a foe to chase into it)
 	if _first_hit_at < 0.0 and a.team == GameWorld.TEAM_HEROES:
 		_first_hit_at = GameWorld.time
 		CombatLog.first_hit(self, a, state_name())

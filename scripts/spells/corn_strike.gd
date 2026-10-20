@@ -80,6 +80,7 @@ func _slam() -> void:
 	var src: Node = caster if is_instance_valid(caster) else null
 	Combat.explode(pos, RADIUS, SpellBook.corn_damage(power), team_arg, src, 1.0)   # (each machine: what it resolves)
 	MonsterSenses.noise(pos, MonsterSenses.NOISE_CORN, "corn")   # (each machine: only the monsters it runs hear)
+	Shark.corn_at(pos)   # (the kernels in a shark's water are chum: the host runs its sharks)
 	landed.emit(pos)
 	Fx.shake(1.0)
 	_telegraph.visible = false

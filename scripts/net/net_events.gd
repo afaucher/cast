@@ -45,6 +45,26 @@ const WORLD_CARRIES := {
 		"scout_phase": "world.scout {id, p, l} on every change (NetWorld, step 2)",
 		"loaded": "world.scout {id, p, l} on every change (NetWorld, step 2)",
 	},
+	# The pool shark (docs/design/sharks.md): a Monster-format entry; its bite is the monsters' wind-up, its laser two events.
+	"res://scripts/monsters/shark.gd": {
+		"dead": "world.die (NetWorld): the kill, shown belly-up on the beat the host stamped it; the bill is the host's Ledger",
+		"pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
+		"target": "world.windup names the bite's victim (each client resolves the bite on its own hero)",
+		"_windup_total": "world.windup {s, l}: the bite's wind-up and lunge; the look rides _telegraph",
+		"_windup_left": "world.windup {s, l}: the bite's wind-up and lunge; the look rides _telegraph",
+		"charge_victim": "world.charge {id, s, l, v} (NetWorld): the laser's victim the red line tracks; world.uncharge drops it",
+		"lock_origin": "world.lock {id, x, y, z, dx, dz, t} (NetWorld): the locked beam's origin",
+		"lock_dir": "world.lock {id, x, y, z, dx, dz, t} (NetWorld): the locked beam's direction",
+		"fire_at": "world.lock {t} (NetWorld): the shared moment it fires, on every machine's own clock",
+	},
+	# The imp gunner riding an imp laser shark: a swarmer that sits in the saddle until world.dismount.
+	"res://scripts/monsters/jockey.gd": {
+		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
+		"target": "world.windup names its victim (NetWorld, M4: each client resolves the strike against its own hero)",
+		"_windup_total": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
+		"_windup_left": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
+		"mounted": "world.dismount {id, h, x, y, z} (NetWorld): knocked off, or its shark died; never true again",
+	},
 	"res://scripts/contracts/employee.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
 		"_extracted": "world.extract (NetWorld)",
@@ -106,6 +126,9 @@ const WORLD_CARRIES := {
 ##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
 ##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
+##   world.charge / world.uncharge / world.lock / world.dismount (reliable)  host -> clients: a laser shark's charge (start,
+##                         length, victim) / dropped / its beam locked (origin, direction, the shared fire time: every machine
+##                         fires it then and applies what it resolves) / an imp gunner off its shark (how, where)
 ##   cast, act (reliable, M4)  NetCasts: a cast (lands LEAD later everywhere) / a hero's attack, owner -> host -> others
 ##   st (reliable, M4)     NetStatus: an actor's modifiers, fire or soak, owner -> host -> others
 ##   seat.take (reliable, M6)  host -> clients: a joiner took an AI's seat {seat, peer, character, epoch, state}
@@ -135,6 +158,8 @@ const LATE_JOIN := {
 	"res://scripts/monsters/brute.gd": "as monster.gd",
 	"res://scripts/monsters/swarmer.gd": "as monster.gd",
 	"res://scripts/monsters/goblin.gd": "as monster.gd (keyframe, gone ids); his phase and rack: replay of world.scout per scout in the snapshot (NetWorld.scout_states); a volley in the air: skipped (cosmetic)",
+	"res://scripts/monsters/shark.gd": "keyframe (seed-built: position, facing, HP, state); a killed one: gone ids (removed); a charge or a beam under way: skipped (under 1.5 s)",
+	"res://scripts/monsters/jockey.gd": "as monster.gd (keyframe, gone ids); off its shark: replay of world.dismount per gunner in the snapshot (NetWorld.dismount_states)",
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",
