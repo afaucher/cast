@@ -749,7 +749,8 @@ func _case_lunge() -> void:
 			hit_t[0] = self_ref._t
 		if hit_t[0] > 0.0:
 			var k := clampf((self_ref._t - hit_t[0]) / 0.25, 0.0, 1.0)
-			wick.position = wick_at - _edge_n3(rec, edge) * 0.55 * sin(k * PI * 0.5)
+			# the bite knocks the victim back onto the deck (decided: a 1.5 shove away from the pool)
+			wick.position = wick_at + _edge_n3(rec, edge) * 1.5 * sin(k * PI * 0.5)
 	_view("game", 11.0, Vector3(c.x + 0.5, 0, c.y + 1.0))
 
 

@@ -1,6 +1,7 @@
 # Sharks
 
-Status: **design only** (2026-10-19). Nothing in the game changed. There are new lab-only models and a lab scene:
+Status: **design only** (2026-10-19), with the user's decisions of the same day folded in (property, moat, rider,
+bite: see "Decided"). Nothing in the game changed. There are new lab-only models and a lab scene:
 - `scripts/art/lowpoly/props/shark_models.gd`: the three sharks.
 - `scenes/shark_lab.tscn`, `scripts/art/lowpoly/shark_lab.gd`: the sharks in the real pools.
 - `shark_swim.gd`: the steering prototype.
@@ -13,26 +14,30 @@ The user's brief (2026-10-19): three variants (a regular shark, a shark with a l
 ridden by an imp), smooth movement, the pool shapes and the moat, the attack style, whether sharks are priced property,
 and pool-compatible room layouts.
 
-## Decisions needed
+## Decided (user, 2026-10-19)
 
-1. **What a shark is, as property.** Recommended: **the client's shark**. You can't kill it, only drive it off. Each
-   drive-off bills the culprit a flat fee: $1,500, or $2,500 for a laser shark. Dents are free (the money rule). The imp
-   rider is an ordinary monster: fair game, free to kill, and it counts as an imp. The alternatives are a killable
-   monster, a hazard that takes no damage at all, and per-hit billing ("Property, hazard or monster").
-2. **The moat.** Recommended: **keep the one-row ring**, with the regular shark as a patrol hazard. It circles one way
-   and bites sideways as it passes ("the drive-by snap"). Laser sharks go where they can turn: two-row shark pools and
-   a new three-row "lagoon". The exception is the throne island, where the imp swings the laser. A shark in the moat
-   room's fallback pool needs a two-row pool: 4 of the 9 fallbacks today are; the other 5 keep the decorative fins.
-3. **The imp is the gunner.** It swings the head laser up to 90 degrees off the snout and gives the shark an imp's
-   eyes. It doesn't steer or throw. A 1.0 shove knocks it off, 24 HP kills it, and a knocked-off imp wades out and fights
-   on foot. Without it the laser locks forward again.
-4. **The laser is one straight, locked shot.** It has the pavise's language: a red line that tracks for 0.8 s, then
-   locks for 0.4 s. It stops at the first body, prop or wall. It does 22 damage, sets nothing on fire, and does set
-   explosives off. There is no sweep.
-5. **Where each variant lives.** The bunker gets the regular shark only. The lair gets all three: lasers from floor 2,
-   the imp from floor 3 and on the throne island. Floor 1 keeps the decorative fins.
-6. **The bite pulls you in.** 18 damage and a 1.5 shove toward the middle of the water, so a hero on the rim ends up
-   wading (slow and soaked). Confirm this, or make it a push back onto the deck.
+1. **Property: "kill and bill once."** The shark can be killed. Killing it bills its full price once, to whoever landed
+   the kill: **$12,000 for a regular shark, $18,000 for a laser shark** (why: "Property, hazard or monster"). Hits that
+   don't kill it are free (the money rule). It never counts toward "Exterminate". The imp rider is an ordinary monster:
+   free to kill, and it counts as an imp.
+2. **Moat: "keep the one-row ring for a circling regular shark."** Sharks go in the moat room's fallback pool **only
+   when it is two rows wide** (4 of the 9 fallbacks today; the other 5 keep the decorative fins). The **three-row lagoon
+   is a new layout** (layout 7).
+3. **Imp rider: "gunner, as you proposed."** It swings the laser up to 90 degrees off the snout and gives the shark an
+   imp's sight. It has 24 HP, a 1.0 shove knocks it off, and it can't climb back on. A knocked-off imp wades out and
+   fights on foot; without it the laser locks forward again.
+4. **Bite: "push back onto the deck,** not a pull into the water." 18 damage and a shove **away from the pool**: a hero
+   at the rim is knocked back onto the deck, and a wader is knocked toward the nearest rim. The lunge and the moat's
+   sideways bite both push outward.
+
+## Still open
+
+1. **The laser is one straight, locked shot** (proposed). It has the pavise's language: a red line that tracks for
+   0.8 s, then locks for 0.4 s. It stops at the first body, prop or wall. It does 22 damage, sets nothing on fire, and
+   does set explosives off. There is no sweep.
+2. **Where each variant lives** (proposed). The bunker gets the regular shark only. The lair gets all three: lasers from
+   floor 2, the imp from floor 3 and on the throne island. Floor 1 keeps the decorative fins.
+3. The other open questions at the end of this doc.
 
 ## The three variants
 
@@ -64,7 +69,7 @@ the session scratchpad's `sharks\` folder (see "Lab").
 | **At range** | nothing | only down its nose: it must turn to face you, at about 50 degrees a second while aiming, and you can walk round the pool faster than that | anything the imp sees, up to 90 degrees off the snout |
 | **At the rim** | the bite (and the drive-by snap in a ring) | the same bite | the same bite; a hero at the rim can also shove the imp off |
 
-### The rider (decided here, simple)
+### The rider (decided, user 2026-10-19: "gunner, as you proposed")
 - **The imp aims.** It swings the emitter on its swivel, up to 90 degrees either side of the snout (it sits behind the
   emitter, so it can't swing it backward), and pulls the trigger. It also gives the shark an imp's sight: all round 9,
   a front cone of 15, line of sight. A riderless laser shark only notices what is in the water, within 1.2 of the rim,
@@ -76,8 +81,8 @@ the session scratchpad's `sharks\` folder (see "Lab").
 - **Killed separately:** 24 HP (an imp has 12). That is two tap arrows, one drawn arrow (28), a fireball or corn. It
   falls in and is gone. It counts as an imp kill.
 - **What is left:** a riderless laser shark. The emitter springs back along the snout.
-- **Hopping out onto land:** only when knocked off, or when its shark is driven off. It jumps to the nearest rim
-  rather than sink, and fights on foot.
+- **Hopping out onto land:** only when knocked off, or when its shark is killed. It jumps to the nearest rim and
+  fights on foot.
 
 ## Smooth movement
 
@@ -116,6 +121,8 @@ edges. It never steps cell to cell: hex cells play no part in its movement at al
   - **Wind-up 0.6 s**: the fin dips 0.12, the bow wave swells and the monsters' orange pulse runs over it.
   - It then goes 9 u/s along its heading for up to 2.5. The head may go up to 0.7 over the rim, its belly lifted onto
     the coping, while the body stays in the water.
+  - The bite lands at the end of the lunge and **knocks the victim back onto the deck** (decided: a 1.5 shove away from
+    the pool), so the victim ends up out of reach rather than in the water.
   - Then it **slides back down its own trail** (0.45 s: sharks don't reverse, the water takes it back) and swims on.
 
 **On clients.** The shark is a host-owned mover, interpolated like the monsters (`NetWorld`):
@@ -134,7 +141,7 @@ GIFs (about 4-5 s each, 20 fps):
 | `swim_lagoon.gif` | the laser shark patrolling and turning round in the 3-row lagoon |
 | `swim_moat.gif` | circling a 1-row moat ring |
 | `swim_moat2.gif` | circling a 2-row ring |
-| `lunge.gif` | hunt, wind-up, the lunge onto the rim at Wick (who is pulled), the slide back |
+| `lunge.gif` | hunt, wind-up, the lunge onto the rim at Wick (knocked back onto the deck), the slide back |
 | `laser_fire.gif` | the imp shark turns, tracks Wick, locks, fires; Wick walks partly out of the locked line |
 
 ### Pool shapes against a 2.4-long shark
@@ -190,8 +197,9 @@ off at R 2.2-2.85, wider than the shark's own turn. So it can:
 - circle the island one way at a steady speed (`swim_moat.gif`), which is very readable: you see the fin coming;
 - bite **sideways as it passes**: the drive-by snap. A 0.5 s tell: the body curls toward the rim and the fin leans out.
   Then the head whips 50 degrees toward the rim and the snout reaches about 0.2 past it. It bites what is within 1.2 of
-  the rim on that side: 14 damage and a 1.2 pull into the channel, every 3 s at most. Waders in the channel are bitten
-  head-on as it reaches them.
+  the rim on that side: 14 damage and a 1.2 shove **away from the channel** (back onto the outer deck, or onto the
+  island), every 3 s at most. Waders in the channel are bitten head-on as it reaches them and knocked toward the
+  nearer rim.
 - A riderless laser shark in a ring fires only along the six straight runs of the channel. Those are six fixed lanes
   that leave the ring at its corners, "lighthouse lanes". An imp-ridden one swings its emitter, so it works there as a
   turret on rails.
@@ -209,16 +217,16 @@ off at R 2.2-2.85, wider than the shark's own turn. So it can:
 The 2-row ring fits only 8 rooms: its smallest outline is 10.4 x 9.0 and its water 62 or more, against a 30 % budget.
 The lagoon fits in exactly the rooms a ring fits in.
 
-**Recommendation: A, plus the lagoon as its own layout.**
-- Keep the ring as the moat. It is the user's chosen look, placement is unchanged, and a one-way patrol with a
-  drive-by snap is a clean "cross behind the fin" hazard. Crossing the channel is one wading step (1.5 at 3.4 u/s,
-  under half a second).
-- Put a shark in a moat room's **fallback pool only when it is two rows wide** (A2). The single-row fallbacks keep the
-  decorative fins.
-- Laser sharks go where they can turn: two-row shark pools and the new **lagoon** (layout 7: the same rooms a ring fits
-  in, so it can be rolled instead of the ring).
+**Decided (user, 2026-10-19): "keep the one-row ring for a circling regular shark"; sharks in fallback pools only when
+the pool is two rows wide; the three-row lagoon is a new layout.** That is A2 plus the lagoon:
+- The ring stays the moat. Placement is unchanged, and a one-way patrol with a drive-by snap is a clean "cross behind
+  the fin" hazard. Crossing the channel is one wading step (1.5 at 3.4 u/s, under half a second).
+- A moat room's **fallback pool gets a shark only when it is two rows wide** (4 of 9 today). The single-row fallbacks
+  keep the decorative fins (the room still gets its water, so placement stays 33 of 44).
+- Laser sharks go where they can turn: two-row shark pools and the new **lagoon** (layout 7: it fits in the same rooms a
+  ring fits in, so it can be rolled instead of the ring).
 - The **throne island** (layout 5) keeps the ring and gives it the imp turret.
-- No widening: B costs a second ring geometry to gain lunges in 8 rooms.
+- No widening: B would cost a second ring geometry to gain lunges in 8 rooms.
 
 ## Attack style per variant
 
@@ -237,10 +245,11 @@ Heroes: Wick 85 HP, Gasket 120, Rebar 160.
 
 | | Regular | Laser | Imp-ridden laser |
 |---|---|---|---|
-| Nerve (its HP) | 120 | 120 | 120, plus the imp's 24 |
+| HP | 150 | 150 | 150, plus the imp's 24 |
+| Price when killed | $12,000 | $18,000 | $18,000 (the imp is free) |
 | Cruise / hunt | 1.6 / 2.8 | 1.4 / 2.4 | 1.4 / 2.4 |
-| **Bite** | **wind-up 0.6 s** (fin dip, bow wave, orange pulse), then a lunge of up to 2.5 at 9 u/s. The head reaches 0.7 over the rim, so it bites up to about **1.2 onto the deck**. **18**, and a **1.5 pull toward the middle of the water**. One hit per hero per lunge. Cooldown 3 s. | the same, cooldown 4 s, and never while charging | the same as the laser |
-| Drive-by snap (1-row ring only) | 0.5 s tell, 14, pull 1.2, cooldown 3 s | the same | the same |
+| **Bite** | **wind-up 0.6 s** (fin dip, bow wave, orange pulse), then a lunge of up to 2.5 at 9 u/s. The head reaches 0.7 over the rim, so it bites up to about **1.2 onto the deck**. **18**, and a **1.5 shove away from the pool** (back onto the deck; a wader toward the nearer rim). One hit per hero per lunge. Cooldown 3 s. | the same, cooldown 4 s, and never while charging | the same as the laser |
+| Drive-by snap (1-row ring only) | 0.5 s tell, 14, a 1.2 shove away from the channel, cooldown 3 s | the same | the same |
 | **Laser** | none | **charge 1.2 s**: the red line tracks the target for 0.8 s, then **locks** for 0.4 s (solid and bright, a reticle on the deck). It fires only within 10 degrees of its nose; it turns to aim at about 50 degrees a second, drifting at 0.45 u/s. Beam **22**, range **20**. **Cooldown 7 s.** | the same charge and beam; the imp swings the emitter up to 90 degrees off the snout (tracking at 180 degrees a second), so it aims without turning. **Cooldown 6 s.** |
 | Targets | anything (heroes, monsters, employees, chickens) in the water or within 1.2 of the rim; not a downed hero | + anyone in its nose cone within 16, in sight | + anyone the imp sees (9 all round, 15 in its cone) |
 
@@ -271,44 +280,67 @@ Renders: `laser_aim.png` (tracking), `laser_lock.png`, `laser_fire.png`, `laser_
 
 ## Property, hazard or monster
 
-| | How it plays | Ledger and invoice | Spells | "Exterminate" | AI allies |
-|---|---|---|---|---|---|
-| **(a) A monster you can kill** (HP 120) | The simplest to build (a Monster), and the hazard goes away for good once it dies. It is cheap to solve: three fireballs. | nothing; a lost employee as usual | normal damage | it would count for "everything" | fight it like any monster, under the restraint baseline |
-| **(b) A hazard you can't hurt** | It only takes distractions: corn, chicken, tentacles. Damage that does nothing reads as a bug, and against a laser the only answers are cover and its rider. | nothing | most do nothing | no | ignore it |
-| **(c) Priced property, every hit billed** | A strong gag ("Please do not hit the shark"). Per-hit bills are a new billing rule (the money rule bills breaks only). Corn on a grunt beside the pool bills too, and the invoice fills with $250 lines. | a line per hit (or one summed line) | all bill | no | never target it |
-| (c') Property you can kill, billed in full (say $25,000) | The money rule unchanged: dents free, the kill billed. A permanent fix at the price of most of a contract (the bill is capped at the contract's value). | one line | normal | no | never target it |
-| **(d) Recommended: the client's shark (b + c) and a free imp** | It can't die ("irreplaceable"). **Nerve 120**: at 0 it **sinks** for 20 s (gone from the surface, harmless) and resurfaces at full. Dents are free (the money rule). **Each drive-off bills the last damager a flat fee**: $1,500, or $2,500 for a laser shark ("laser recalibration"). Driving it off is the deliberate big play (hazards.md: "every big play is also a money call"). The imp is a monster: free to kill. | "Shark (driven off) — $1,500 — Wick", once per sink. What the shark breaks is billed to "the shark". | see below | the shark never counts; the imp counts as an imp ("Exterminate imps" and "everything") | see below |
+**Decided (user, 2026-10-19): "kill and bill once."** The options that were weighed:
 
-**Spells and attacks under (d):**
+| | How it plays | Ledger and invoice | "Exterminate" |
+|---|---|---|---|
+| (a) A monster you can kill, no bill | The simplest, and the hazard goes away for good once it dies: cheap to solve. | nothing | it would count for "everything" |
+| (b) A hazard you can't hurt | Only distractions work. Damage that does nothing reads as a bug. | nothing | no |
+| (c) Priced property, every hit billed | A strong gag, but per-hit bills are a new billing rule, and collateral fills the invoice with small lines. | a line per hit | no |
+| **(c') Chosen: priced property you can kill, billed once in full** | The money rule unchanged: hits are free, the kill is billed. A permanent fix at a real price. | one line, to the killer | no |
+| (d) Drive it off for a flat fee (my earlier recommendation) | It can't die; each sink bills a small fee. | a line per sink | no |
+
+### As decided
+- **HP 150** for both sharks: a little over the brute's 140. It is a deliberate kill, not collateral: one corn (60)
+  or a fireball (40) at a grunt beside the pool can't do it alone. It takes three corns, four fireballs, or about six
+  drawn arrows.
+- **Hits are free.** Only the kill bills, exactly once, the full price, to **whoever landed the kill** (the last
+  damage source, `PricedProp`'s rule, including `blamed()` for an explosive's blast).
+- **Prices: regular $12,000, laser $18,000.** Why:
+  - Both are below the doomsday console ($20,000), so the shark is never the lair's dearest property, and above
+    everything a stray blast usually takes out (the explosives and most priced props are $300-$9,000).
+  - $12,000 is more than a whole contract's pest objective pays (`PEST_PAY` $10,000 in total), so killing it is a money
+    call the crew makes on purpose, never a free solve. Like every bill, it is capped at the contract's value.
+  - The laser shark is the shark plus its rig, priced like the server battery pack ($6,500, rounded down): the rig is
+    the expensive part of the threat, and the price says so.
+  - The imp rider is free: it is a monster.
+- **Death.** The shark rolls belly-up, its fin flops over, and it floats for the rest of the floor (a corpse, not an
+  obstacle; the pool is safe). Its rider jumps to the nearest rim and fights on foot.
+- **Ledger:** "Shark (irreplaceable) — $12,000 — Wick" (or "Laser shark — $18,000"). A monster that kills it (an
+  archer's arrow, a brute's slam, a blast an archer set off) bills "demons", as for any prop. Whatever the shark breaks
+  (the laser hitting a prop) is billed to "the shark".
+- **"Exterminate": never.** It is the client's property, not a pest, and counting it would make "Exterminate
+  everything" a $12,000-$18,000 objective that pays less than the bill. I see no strong reason to count it. The imp
+  counts as an imp ("Exterminate imps" and "everything").
+
+**Spells and attacks** (all ordinary damage to its HP; a kill bills its killer):
 
 | Spell or attack | Effect on the shark |
 |---|---|
-| **Fireball** | 40 to nerve; no fire (it is always soaked) |
-| **Corn** | 60 to nerve, and it is **chum**: the shark turns to the kernels in the water for 4 s (no bite, no beam). The joke play is "cast corn in the pool". It can also bill, if it finishes the nerve. |
+| **Fireball** | 40; no fire (it is always soaked) |
+| **Corn** | 60, and it is **chum**: the shark turns to the kernels in the water for 4 s (no bite, no beam). The joke play is "cast corn in the pool", with the bill if the corn finishes it. |
 | **Tentacles** | the shove can't move it out of the water, so it is **held** 1.5 s (no bite, no beam); it knocks the imp off |
-| **Teeth** | 25 x power to nerve; the shark with too many teeth is the gag |
+| **Teeth** | 25 x power; the shark with too many teeth is the gag |
 | **Vines** | they root it 2 s like anyone (the pool has a floor). A rooted shark still bites what is in reach and fires along its nose; the imp still swings the emitter. This changes `pool-options.md`'s "cannot root it". |
 | **Damp** | nothing (it is wet) |
 | **Coffee** (an accident) | +60 % speed and attack rate for 6 s; the laser's charge drops to 0.75 s |
 | **Chicken** | a chicken that wades in is eaten (a feather burst) after a 2 s chase |
 | **Heal, armor** | nothing |
-| Weapons, the bowl, explosive blasts | dent its nerve |
+| Weapons, the bowl, explosive blasts | ordinary damage |
 | Brute daze | holds it 0.6 s and knocks the imp off |
 
-**AI allies:**
-- They **never target the shark**. It is TEAM_NEUTRAL like a prop (`prop_care`), and an "attack" order doesn't change
-  that.
-- They **avoid its water while it is up**: pool cells cost more in their paths while the pool's shark is not sunk.
-  They don't idle within 1.2 of its rim.
+**AI allies: yes, they avoid hitting it.** Killing it is a $12,000 decision, so it is the players' to make:
+- They **never target the shark**. It is TEAM_NEUTRAL and billable, so `prop_care` treats it exactly like a priced
+  prop: never a target, kept out of their arcs, spins, bowls and arrow lanes. An "attack" order doesn't change that.
+- They **avoid its water while it is alive**: pool cells cost more in their paths. They don't idle within 1.2 of its
+  rim.
 - They may shoot the **imp** once it is in the fight (aiming counts), under the restraint baseline. Their
-  "prop in the lane" check must skip the imp's own mount, or Wick's AI would never shoot it.
+  "prop in the lane" check skips the imp's own mount, or Wick's AI would never shoot it. Below a quarter of its HP the
+  shark counts in the lane check again, so a stray AI arrow never lands the $18,000 kill.
 - Stepping out of a locked red line is a follow-up, shared with the pavise.
 
-**Why (d):**
-- It keeps the money rule's shape: dents free, one bill for the big event.
-- It keeps the "irreplaceable" gag literal.
-- Every spell has a legible answer, and the crew gets three real choices: route round it, distract it (corn, chicken),
-  or pay to sink it for 20 s. Against the laser there are also cover, body-blocks and shooting the imp.
+**The crew's choices:** route round it, distract it (corn, chicken), hold it (tentacles, vines), take cover and
+body-block against the laser, shoot the imp, or pay to remove it for good.
 
 ## Networking shape
 
@@ -317,7 +349,8 @@ Renders: `laser_aim.png` (tracking), `laser_lock.png`, `laser_fire.png`, `laser_
   wind-up event, puppet and `net_strike`.
 - Team `TEAM_NEUTRAL`. Group "sharks", **not** "monsters", so it doesn't count as a pest and monster or AI-ally
   targeting skips it.
-- Moves are clipped to its pool record. Its HP is its nerve. Billing is the host's Ledger, like `PricedProp`.
+- Moves are clipped to its pool record. It dies like a monster (`die()`, `world.die`), and its death bills its price
+  on the host's Ledger once, like `PricedProp._on_death` (only where `Net.owns` it: a client's copy never bills).
 
 The imp is a `Jockey` (a swarmer subclass, kind "swarmer" so it counts as an imp). It is an ordinary host-owned
 monster that is drawn in the saddle while mounted.
@@ -326,10 +359,10 @@ monster that is drawn in the saddle while mounted.
 
 | Kind | Shark | Jockey (on top of Swarmer's) |
 |---|---|---|
-| SPAWN | `variant`, `pool_index` (its `HexMap.pools` record), nerve max, speeds, bite and laser numbers, drive-off price, sink time | `mount_id` (its shark's net id) |
-| OWNER (streamed, MONSTER entry) | position, velocity, `facing`, `hp` (nerve), `state` (3 bits: CRUISE 0, HUNT 1, BITE 2, RECOIL 3, SUNK 4, CHARGE 5, HELD 6, CHUM 7), `_telegraph` (bite wind-up or laser charge, 0..1), `strikes` (bites and shots: a change plays them on puppets) | the usual monster fields |
-| OWNER (events) | `target`, `_windup_total` / `_left` (`world.windup`); `lock_origin`, `lock_dir`, `fire_at` (new `world.lock`) | `mounted` (new `world.dismount {id, how}`) |
-| PRIVATE | steering (loop sign, carrot, omega, speed ramp, turn side, reverse timer), senses and scan timers, the chum or chicken target, cooldowns, the hunt spot, the last damager (for the bill) | |
+| SPAWN | `variant`, `pool_index` (its `HexMap.pools` record), `max_hp`, `price`, speeds, bite and laser numbers | `mount_id` (its shark's net id) |
+| OWNER (streamed, MONSTER entry) | position, velocity, `facing`, `hp`, `state` (3 bits: CRUISE 0, HUNT 1, BITE 2, RECOIL 3, DEAD 4 as for monsters, CHARGE 5, HELD 6, CHUM 7), `_telegraph` (bite wind-up or laser charge, 0..1), `strikes` (bites and shots: a change plays them on puppets) | the usual monster fields |
+| OWNER (events) | `dead` (`world.die`); `target`, `_windup_total` / `_left` (`world.windup`); `lock_origin`, `lock_dir`, `fire_at` (new `world.lock`); `billed` (the host's Ledger line, mirrored as `obj.ledger`) | `mounted` (new `world.dismount {id, how}`) |
+| PRIVATE | steering (loop sign, carrot, omega, speed ramp, turn side, reverse timer), senses and scan timers, the chum or chicken target, cooldowns, the hunt spot, the last damager (the culprit the kill bills) | |
 | LOCAL | the trail and the bending chain, the bank, the fin dip, the wake and ripples, the emitter's swivel while tracking (aimed at the victim as this screen shows it), the lens glow, the aim line | the saddle pose while mounted |
 
 **Carriers.**
@@ -338,19 +371,21 @@ monster that is drawn in the saddle while mounted.
 - Events, in `NetEvents.WORLD_CARRIES` for `shark.gd`:
   - target, `_windup_*`: `world.windup`;
   - `lock_*`: `world.lock`;
-  - `dead`: "never set: a shark sinks, it doesn't die";
+  - `dead`: `world.die`, shown on the beat the host stamped it (belly-up on every screen);
+  - `billed`: the host's Ledger line (`obj.ledger`; a client's Ledger mirrors it);
   - `_modifiers`: `st` (vines, coffee).
 - For `jockey.gd`, `mounted` is carried by `world.dismount`.
 
 **Late join (`NetEvents.LATE_JOIN`).**
-- Shark: a keyframe (position, facing, nerve, state; a sunk shark shows sunk). Wind-ups and charges are skipped (under
-  1.5 s).
+- Shark: a keyframe (position, facing, HP, state); a dead one is a **gone id**, shown dead (floating belly-up). Its bill
+  is already in the host's Ledger the joiner mirrors. Wind-ups and charges are skipped (under 1.5 s).
 - Jockey: as monster.gd (keyframe, gone ids). A dismounted one is a replay of `world.dismount` in the snapshot.
 
 **The bite** uses the existing path. `world.windup {id, s, l = 0.6, v}` goes out at the wind-up. The lunge is just
 streamed motion. Each client resolves the bite on **its own hero** when its render time reaches s + l
-(`Monster.net_strike` → `Shark._strike`): `Combat.melee_arc` from the puppet's head. The pull-in is a `shove` applied
-by the victim's owner (rule: a hero's owner applies shoves on it). The host resolves monsters, employees, AI heroes and
+(`Monster.net_strike` → `Shark._strike`): `Combat.melee_arc` from the puppet's head. The push back onto the deck is a
+`shove` away from the pool (along the nearest rim's outward normal), applied by the victim's owner (rule: a hero's owner
+applies shoves on it). The host resolves monsters, employees, AI heroes and
 chickens.
 
 **The laser beam** (a scheduled effect with an explicit lock):
@@ -367,9 +402,12 @@ The lock gives 0.4 s of notice, double `NetCasts.LEAD` (0.2), so on any link in 
 before the screen's render time reaches t. A separate lock event is needed because the imp's swivel angle isn't in the
 stream. The riderless one could fire from the puppet's facing, but one rule for both is simpler.
 
-**Hits on the shark.** A client's hit or shove on it is a request (`Net.route_hit`, `Net.route_shove`). The host
-applies the nerve damage, clips shoves to the water, sinks it at 0 and bills the drive-off. The sink rides `state` and
-the bill is the host's Ledger (a client mirrors it).
+**Hits on the shark.** A client's hit or shove on it is a request (`Net.route_hit`, `Net.route_shove`), "the attacker
+decides" as for any host-owned actor. The host applies the damage once and clips shoves to the water. At 0 HP the host
+kills it (`die()`, `world.die` to everyone) and bills its price once to the culprit it recorded: the hero whose request
+landed the kill, even when that hero is a client's. The client's flash plays at once (`net_flash`), the death when
+`world.die` arrives. Two clients' killing blows in the same tick are two requests; the host applies them in order, so
+the first one kills and bills and the second finds it dead.
 
 **Flagged (not quite an existing shape):**
 1. **An actor riding an actor.** No actor rides another today. While mounted, a client ignores the jockey's stream
@@ -381,7 +419,8 @@ the bill is the host's Ledger (a client mirrors it).
 3. **A Monster subclass outside the "monsters" group, on the neutral team.** Check the places that assume
    `Monster == pest` (the pest count, `AllyBrain`'s targeting, `Combat`'s team masks).
 4. **`world.lock`** is a new event kind in `NetWorld`, and needs a two-peer test: a client dodges a locked beam on its
-   own screen and takes nothing; a client hero shielded by a host prop takes nothing; one drive-off bill.
+   own screen and takes nothing; a client hero shielded by a host prop takes nothing; a client's kill bills that
+   client's hero exactly once, and both invoices match.
 
 ## Pool-compatible room layouts
 
@@ -404,8 +443,8 @@ corridor, `C` crew start side, `x` cover (prop or decor), `$` priced prop, `S` s
 - **Cover and sight lines:** no laser here.
 - **Crossing:** walk round on the deck (always possible), or wade straight across (two seconds of 3.4 u/s, soaked)
   when the fin is at the far end.
-- **Placement:** as built (`needs_center`). The marble statue ($8,000) and the propane tank stay on the walls, out of
-  the pull-in's path.
+- **Placement:** as built (`needs_center`). The marble statue ($8,000) and the propane tank stay on the walls, well
+  back from the rim: a hero knocked back onto the deck by a bite slides about 1.5, and a slide into a prop dents it.
 
 ```
  # # # # # # # # # #
@@ -564,7 +603,8 @@ D C = = . . . x . . . . #      = = the pier
 - **What happens:** breaking the tank (billed as usual) spills its water as a flooded patch (pool-options option D,
   about 20 s, a scheduled effect) and drops out a **land shark**. It flops for 8 s, snapping at anything within 1.0
   (10 damage). It wriggles toward the room's pool if one is within 8 and becomes that pool's shark (+1), else it lies
-  gasping, harmless, until the floor ends ("please put the shark back" is a joke, not an objective).
+  gasping, harmless, until the floor ends ("please put the shark back" is a joke, not an objective). It can be killed
+  like any shark (its own HP and the regular shark's $12,000 bill, on top of the tank's $7,000).
 - **Placement:** nothing new (the tank is placed today). The flop is a runtime spawn (`world.spawn`, kind "shark",
   variant "flop") from the host's break.
 - It is listed as a layout because it gives the shark tank a reason to exist. Build it last.
@@ -596,8 +636,8 @@ godot --path . --resolution 960x540 --write-movie <dir>/f.png --fixed-fps 20 --q
 
 ## Open questions
 
-1. Prices: $1,500 / $2,500 per drive-off, and nerve 120? Should a laser shark's drive-off cost more than its rig?
-2. Should corn's hit dent the shark (and so risk the bill), or should corn be pure chum?
+1. The numbers for "kill and bill once": HP 150 and $12,000 / $18,000 (proposed above)?
+2. Should corn's hit damage the shark (and so risk the bill if it finishes it), or should corn be pure chum?
 3. Can the crew knock the laser rig itself off (a priced "shark-mounted laser"), turning a laser shark into a regular
    one?
 4. Is a shark in the bunker on-brand (a billionaire's pet), or is it lair-only?
