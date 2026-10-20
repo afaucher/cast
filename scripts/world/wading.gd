@@ -49,7 +49,7 @@ static func tick() -> void:
 	if map == null or map.pools.is_empty() or GameWorld.root == null or not GameWorld.root.is_inside_tree():
 		return
 	for a in GameWorld.actors():
-		if a is DecorBlocker or a.is_in_group("breakables"):
+		if a is DecorBlocker or a.is_in_group("breakables") or a.is_in_group("sharks"):   # (a shark is always wet: no ripple, no soak)
 			continue
 		var wet := is_wading(a)
 		var was := a.has_meta(META_IN)

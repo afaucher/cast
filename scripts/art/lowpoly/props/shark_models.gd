@@ -1,7 +1,8 @@
 extends RefCounted
 ## The three pool sharks (docs/design/sharks.md): the regular shark, the laser shark (a laser emitter strapped to its head)
 ## and the laser shark ridden by an imp (the swarmer, seated behind the emitter, one claw on the rein strap and one on the
-## trigger grip). Lab-only for now (scenes/shark_lab.tscn); nothing in the game builds them. Same kit as PoolProps and
+## trigger grip). The game's Shark draws them through SharkBody (the imp variant without its rider: the game's gunner is a
+## Jockey, drawn in the saddle); the lab (scenes/shark_lab.tscn) builds them whole. Same kit as PoolProps and
 ## PropModels: LowPoly soup, MonsterMaterial (toon bands, amber rim, ink outline, vertex alpha 0.5 = the monster glow:
 ## the eyes, the lens, the antenna tip). No class_name (users preload it).
 ##
@@ -58,7 +59,9 @@ static func g(c: Color) -> Color:
 
 
 ## A shark of `variant` at rest (the segments lined up). Node tree: Shark > Head (+ Emitter > Lens), Body (+ Rider), Tail.
-static func build(variant: String = "regular") -> Node3D:
+## `with_rider` false: the imp variant's saddle and free grips without the imp (the game's rider is its own monster,
+## a Jockey, drawn in the saddle while mounted).
+static func build(variant: String = "regular", with_rider: bool = true) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Shark"
 	root.set_meta("variant", variant)
@@ -72,7 +75,7 @@ static func build(variant: String = "regular") -> Node3D:
 		em.position = EMITTER_AT
 		var lens := _part(em, "Lens", _lens_soup())
 		lens.position = LENS_AT - EMITTER_AT
-	if variant == "imp":
+	if variant == "imp" and with_rider:
 		body.add_child(rider())
 	return root
 

@@ -59,8 +59,13 @@ const LEG_FOOT := Vector2(0.42, 1.75)   ## a gantry leg's footprint: across the 
 ## in the way in about two rooms in five) gets a SHARK POOL instead: a convex pool (the indoor pool's shapes) in the
 ## moat's look, its fins circling half a row inside the rim.
 const MOAT_POOL := "moat_pool"
+## The LAGOON (docs/design/sharks.md layout 7): a three-row convex pool in the moat's look (every cell within one step of
+## a row of 1-4 cells: 7-16 basin cells, 6.0 wide), where a laser shark has room to circle and aim. Rolled instead of the
+## ring in LAGOON_ODDS of the moat rooms from floor 2 (it fits in the rooms a ring fits in); its record has `shape` "lagoon".
+const LAGOON := "lagoon"
+const LAGOON_ODDS := 0.5
 ## The first size tried is one of the look's this-many biggest.
-const VARIETY := {"pool": 3, "specimen": 2, "moat": 2, "moat_pool": 3}
+const VARIETY := {"pool": 3, "specimen": 2, "moat": 2, "moat_pool": 3, "lagoon": 2}
 const ROW := 1.5 * Hex.SIZE        ## between two neighbouring parallel midpoint lines: a moat is one row wide
 ## Moat outlines: lattice hexagons by their side lengths (walked along DIRS[i + rot]), biggest first. The island is the
 ## same hexagon one ROW in (every side one shorter).
@@ -114,6 +119,9 @@ static func variants(look: String) -> Array:
 		return _variants[look]
 	if look == LOOK_MOAT:
 		_variants[look] = _moat_variants()
+		return _variants[look]
+	if look == LAGOON:
+		_variants[look] = _lagoon_variants()
 		return _variants[look]
 	var out: Array = []
 	var seen := {}
@@ -204,6 +212,31 @@ static func _build_variant(basin: Array[Vector2i], axis: int, look: String) -> D
 		v["legs"] = [l1, l2] as Array[Vector2i]
 		v["mid"] = mid
 	return v
+
+
+## The lagoons: every cell within one step of a row of k cells (k = 4: 5+6+5, 3: 4+5+4, 2: 3+4+3, 1: the 7-cell hexagon),
+## every orientation, checked convex like the pools' shapes. Biggest first.
+static func _lagoon_variants() -> Array:
+	var out: Array = []
+	var seen := {}
+	for k in [4, 3, 2, 1]:
+		var base := {}
+		for i in k:
+			for c in Hex.range_cells(Vector2i(i, 0), 1):
+				base[c] = true
+		for rot in 6:
+			var basin: Array[Vector2i] = []
+			for c: Vector2i in base:
+				basin.append(rotate(c, rot))
+			basin.sort_custom(_cell_less)
+			var key := str(_normalized(basin))
+			if seen.has(key):
+				continue
+			seen[key] = true
+			var v := _build_variant(basin, rot % 3, MOAT_POOL)
+			if not v.is_empty():
+				out.append(v)
+	return out
 
 
 ## The moat rings: every rotation of every MOAT_SIDES hexagon, anchored on its first corner (a water cell), biggest first.
@@ -382,11 +415,25 @@ static func carve(map: HexMap, plan: SitePlan, avoid: Dictionary, near_corr: Dic
 			continue
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed_value * 31 + int(tag.trim_prefix("room:")) * 7919 + 17
-		var pick := _choose(map, plan, tag, look, avoid, near_corr, gate_zone, rng)
+		var pick := {}
+		var shape := ""
+		if look == LOOK_MOAT and plan.floor_number >= 2:   # (floor 1 has no sharks: its moats keep their rings and fins)
+			# the lagoon (docs/design/sharks.md layout 7), rolled instead of the ring in LAGOON_ODDS of the moat rooms on its
+			# own dice (the ring's and the fallback's rolls stay as they were)
+			var lr := RandomNumberGenerator.new()
+			lr.seed = seed_value * 53 + int(tag.trim_prefix("room:")) * 6007 + 29
+			if lr.randf() < LAGOON_ODDS:
+				pick = _choose(map, plan, tag, LAGOON, avoid, near_corr, gate_zone, lr)
+				if not pick.is_empty():
+					shape = LAGOON
+		if pick.is_empty():
+			pick = _choose(map, plan, tag, look, avoid, near_corr, gate_zone, rng)
 		if pick.is_empty() and look == LOOK_MOAT:
 			pick = _choose(map, plan, tag, MOAT_POOL, avoid, near_corr, gate_zone, rng)   # no ring fits: a shark pool
 		if not pick.is_empty():
 			_apply(map, tag, look, int(plan.base_levels[tag]), pick["variant"], pick["anchor"])
+			if shape != "":
+				map.pools[map.pools.size() - 1]["shape"] = shape
 
 
 ## The pool of a room ({} when it has none).

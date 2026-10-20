@@ -152,6 +152,73 @@ static func slam(pos: Vector3, radius: float, damage: float, edge_mult: float, s
 	return hit
 
 
+## A shark's bite (docs/design/sharks.md): everyone (all teams) within `reach` of `at` (the snout) and at most `max_dy`
+## above or below it, but `skip` (the shark, its rider), takes `damage` and is shoved `shove` along `away.call(actor)`
+## (the shark's "out of the water": back onto the deck). Applied only where the hit resolves (the victim's machine for a
+## hero, the shark's for the rest). Returns the actors hit.
+static func bite(attacker: Actor, at: Vector3, reach: float, damage: float, shove: float, away: Callable, skip: Array = [], max_dy: float = 1.2) -> Array[Actor]:
+	var hit: Array[Actor] = []
+	for a in GameWorld.actors_in_radius(at, reach):
+		if a == attacker or skip.has(a) or a.is_in_group(PricedProp.GROUP) or a.is_in_group("breakables"):
+			continue
+		if absf(a.global_position.y - at.y) > max_dy or not Net.resolves_hit(a, attacker):
+			continue
+		a.apply_damage(damage, attacker)
+		if shove > 0.0 and not a.dead:
+			a.shove(away.call(a), shove, attacker)
+		hit.append(a)
+	return hit
+
+
+## A beam (the laser shark's, docs/design/sharks.md): a straight horizontal line from `from` along `dir` (X/Z) for up to
+## `reach`. It stops at the first thing it meets: a wall or anything taller than the beam (HexMap.line_of_sight's ground
+## test), a set-piece solid, a shut door (HexMap.blocker_contact), or a body (any living actor within its radius plus
+## `half_width` of the line, standing low enough to be crossed: a hero, a monster, an employee, a chicken, a priced or
+## explosive prop, a crate, mail). That first body takes `damage` from `source`, applied where the hit resolves (the
+## victim's machine for a hero, `source`'s for the rest), so every machine may run the beam and each applies its own.
+## `skip`: actors the beam passes (the shark, its rider). Returns {end: Vector3 (where it stopped), hit: Actor or null,
+## applied: bool}.
+static func beam(source: Actor, from: Vector3, dir: Vector3, reach: float, damage: float, half_width: float = 0.25, skip: Array = []) -> Dictionary:
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.0001 else Vector3.FORWARD
+	var map := GameWorld.map
+	var stop := reach
+	if map != null:
+		var step := 0.1
+		var d := step
+		while d < reach:
+			var p := from + dir * d
+			var g := map.ground_height(p)
+			if (not is_nan(g) and g > p.y) or map.solid_at(p):
+				stop = maxf(0.0, d - step)
+				break
+			d += step
+		var door := map.blocker_contact(from, from + dir * stop)
+		if door != Vector3.INF:
+			stop = minf(stop, GameWorld.flat_distance(from, door))
+	var first: Actor = null
+	var first_t := stop
+	for a in GameWorld.actors():
+		if a == source or skip.has(a):
+			continue
+		var to := a.global_position - from
+		var t := to.x * dir.x + to.z * dir.z
+		if t < 0.0 or t > first_t:
+			continue
+		var lateral := absf(to.x * dir.z - to.z * dir.x)
+		if lateral > a.radius + half_width:
+			continue
+		if a.global_position.y > from.y + 0.2 or a.global_position.y < from.y - 1.8:
+			continue   # (stands above the beam, or too far below it)
+		first = a
+		first_t = t
+	var applied := false
+	if first != null and Net.resolves_hit(first, source):
+		first.apply_damage(damage, source)
+		applied = true
+	return {"end": from + dir * first_t, "hit": first, "applied": applied}
+
+
 ## A peck (the Chicken spell): a hit for nothing on `target`, applied where the hit resolves (Net.resolves_hit: the chicken's
 ## machine, the host, for everything but a hero, whose own machine decides; a peck does nothing to a hero, so nothing needs
 ## to travel), through the target's peck verb (Actor.peck). True if this machine applied it.

@@ -1,11 +1,92 @@
 # Sharks
 
-Status: **design only** (2026-10-19), with the user's decisions of the same day folded in (property, moat, rider,
-bite: see "Decided"). Nothing in the game changed. There are new lab-only models and a lab scene:
-- `scripts/art/lowpoly/props/shark_models.gd`: the three sharks.
+Status: **built** (2026-10-19; user: "Let's reduce that billing by 30% and build it"). See "As built" just below for
+what is in the game and where; the rest of this page is the design it was built from, with the decisions folded in.
+The lab is still there:
+- `scripts/art/lowpoly/props/shark_models.gd`: the three sharks (now the game's models too).
 - `scenes/shark_lab.tscn`, `scripts/art/lowpoly/shark_lab.gd`: the sharks in the real pools.
-- `shark_swim.gd`: the steering prototype.
+- `shark_swim.gd`: the steering prototype (the game's steering is `SharkSteer`).
 - `shark_measure.gd`: the tables below.
+
+## As built (2026-10-19)
+
+**Code:**
+- `scripts/monsters/shark.gd` `Shark`: the actor (extends Monster, kind "shark"). It is team NEUTRAL, in group
+  "sharks" and `PricedProp.GROUP`, not "monsters".
+- `shark_steer.gd` `SharkSteer`: the host's steering in the water polygon.
+- `shark_body.gd` `SharkBody`: the bending body, bank, fin, wake and bow wave. It is drawn on every screen from what
+  that screen shows.
+- `jockey.gd` `Jockey`: the imp gunner, a swarmer.
+- `scripts/fx/shark_laser_fx.gd`: the red line, the reticle, the beam and the scorch.
+- `Combat.bite` and `Combat.beam`.
+- Placement: `SiteBuilder._plan_sharks` / `_spawn_sharks`, `SitePlan.sharks`, the lagoon in `PoolGeo`, and `rec.shark`
+  (fins off).
+- Net: `world.charge`, `world.uncharge`, `world.lock` and `world.dismount` in `NetWorld`; `dismounts` in the late-join
+  snapshot; the `NetEvents` carriers.
+- Dev flags: `--to-shark [regular|laser|imp|lagoon|any]` and `--shark-demo bite|laser|knock|kill`.
+- Tests: `tests/test_sharks.gd` and `tests/test_net_sharks.gd` (three processes, `off` and `coast`).
+
+**What the user decided, and what is built as default:**
+- **Decided and built:**
+  - kill and bill once to the killer;
+  - prices **$8,400 / $12,600** (the design's less 30 %);
+  - 150 HP;
+  - never toward "Exterminate";
+  - AI allies avoid hitting it;
+  - the bite pushes back onto the deck;
+  - the one-row ring keeps a circling regular shark;
+  - sharks only in fallback pools two rows wide;
+  - the lagoon layout;
+  - the imp gunner.
+- **Proposal, built as default** (still open for the user):
+  - the laser as one straight locked shot that stops at the first body;
+  - where each variant appears (bunker regular only; lair lasers from floor 2; the imp from floor 3; floor 1 keeps
+    decorative fins);
+  - the numbers and the open questions at the end. Corn is chum and damage; the laser rig can't be knocked off.
+- **Not built (next):**
+  - the throne island (layout 5);
+  - the twin pools (layout 6);
+  - the shark-tank release (layout 8);
+  - the "test pool" variant of the science room (layout 2).
+
+**What changed from the design while building:**
+- **The bite lands round the jaws.** It hits within 1.25 of a point 0.5 ahead of the head joint, not only at the snout
+  tip. In a one-row moat channel the shark can't turn to face the rim, so this is how the "drive-by snap" lands. There
+  is no separate snap state: a ring shark's lunge is short and sideways. It lunges once the victim is within 35 degrees
+  of its nose (not 25), which a channel allows.
+- **The aim.** While charging, a laser shark swings its body round at 75 degrees a second (`AIM_TURN`), not 50. At 50
+  it missed a hero standing still in its nose cone. A riderless one fires along its snout unless that is within 12
+  degrees of the victim.
+- **No orange pulse while charging.** The laser's one telegraph is its red line. The bite keeps the monsters' pulse.
+- **The lagoon is rolled from floor 2 only** (`LAGOON_ODDS` 0.5 of the moat rooms where it fits). Floor 1 has no
+  sharks, so its moats keep their rings and decorative fins. `test_room_themes`' synthetic moat (floor 1) is still a
+  ring.
+- **Imp odds:** a floor-3 moat pool or lagoon is regular 20 %, laser 35 %, imp 45 %. On floor 2 it is 50 % regular,
+  50 % laser. 35 % of the bunker's two-row indoor pools get a regular shark (`SiteBuilder.SHARK_*`).
+- **Spells:**
+  - **Corn:** `Shark.corn_at` from `CornStrike._slam`, so the kernels in its water are chum for 4 s, as well as corn's
+    damage.
+  - **Fireball:** it is fireproof (`Burning.set_fireproof`: always wet), and `Wading` skips it (no ripple, no soak
+    churn). A fireball's blast damages it, as designed.
+  - **Tentacles, the bowl, a blast:** any shove of 1.0+ holds it for 1.5 s; no shove moves it.
+  - **Vines** root it. **Coffee** speeds it, shortens its cooldowns and its charge. A **chicken** that pecks it is
+    hunted and eaten. **Damp, heal and armor** do nothing.
+- **AI allies:**
+  - Sharks are in `PricedProp.GROUP`, so the existing prop care keeps them out of the allies' swings, spins, bowls and
+    arrow lanes. Allies only ever target TEAM_MONSTERS, an "attack" order included.
+  - A shot at an imp gunner passes its own mount while the mount is above a quarter of its HP (`AllyBrain._lane_clear`).
+  - Formation slots skip a living shark's water (`Shark.shark_water`). Paths through the water are not re-costed.
+- **Monsters:**
+  - A monster hurt by a shark doesn't chase it (`Monster._on_damaged`).
+  - Archers never practise on it.
+  - The bite and the death make noise (`MonsterSenses`).
+- **Fog:** "sharks" is a dynamic fog group (`FogView.DYNAMIC_GROUPS`), so a shark is hidden unless seen. Its laser
+  effects hide with it.
+- **Sound:** no new cue, so the mic-leak probe isn't needed. The charge plays the fuse's sizzle (`fuse`, already
+  probed) and the beam the `fireball` burst.
+- **Late join:** a killed shark is a gone id. Existing screens keep the belly-up corpse; the joiner's is removed.
+- **Timing:** shark placement is timed on its own (`SiteBuilder.last_shark_usec`, printed by `test_room_themes` beside
+  the doors). It is about 0.1 ms a floor, 1 ms at worst.
 
 This builds on `pool-options.md`: its "Built", "Moat [built]" and "Shark (planned, not built)" sections. Where the two
 differ, this doc replaces the planned section.
@@ -17,7 +98,8 @@ and pool-compatible room layouts.
 ## Decided (user, 2026-10-19)
 
 1. **Property: "kill and bill once."** The shark can be killed. Killing it bills its full price once, to whoever landed
-   the kill: **$12,000 for a regular shark, $18,000 for a laser shark** (why: "Property, hazard or monster"). Hits that
+   the kill: **$8,400 for a regular shark, $12,600 for a laser shark** (the design's $12,000 / $18,000 less 30 %: user,
+   "Let's reduce that billing by 30%"; why these: "Property, hazard or monster"). Hits that
    don't kill it are free (the money rule). It never counts toward "Exterminate". The imp rider is an ordinary monster:
    free to kill, and it counts as an imp.
 2. **Moat: "keep the one-row ring for a circling regular shark."** Sharks go in the moat room's fallback pool **only
@@ -30,14 +112,14 @@ and pool-compatible room layouts.
    at the rim is knocked back onto the deck, and a wader is knocked toward the nearest rim. The lunge and the moat's
    sideways bite both push outward.
 
-## Still open
+## Still open (each built as the default proposal below)
 
-1. **The laser is one straight, locked shot** (proposed). It has the pavise's language: a red line that tracks for
+1. **The laser is one straight, locked shot** (proposal, built as default). It has the pavise's language: a red line that tracks for
    0.8 s, then locks for 0.4 s. It stops at the first body, prop or wall. It does 22 damage, sets nothing on fire, and
    does set explosives off. There is no sweep.
-2. **Where each variant lives** (proposed). The bunker gets the regular shark only. The lair gets all three: lasers from
+2. **Where each variant lives** (proposal, built as default; the throne island is not built yet). The bunker gets the regular shark only. The lair gets all three: lasers from
    floor 2, the imp from floor 3 and on the throne island. Floor 1 keeps the decorative fins.
-3. The other open questions at the end of this doc.
+3. The other open questions at the end of this doc (proposals, built as default where they touch the game).
 
 ## The three variants
 
@@ -246,7 +328,7 @@ Heroes: Wick 85 HP, Gasket 120, Rebar 160.
 | | Regular | Laser | Imp-ridden laser |
 |---|---|---|---|
 | HP | 150 | 150 | 150, plus the imp's 24 |
-| Price when killed | $12,000 | $18,000 | $18,000 (the imp is free) |
+| Price when killed | $8,400 | $12,600 | $12,600 (the imp is free) |
 | Cruise / hunt | 1.6 / 2.8 | 1.4 / 2.4 | 1.4 / 2.4 |
 | **Bite** | **wind-up 0.6 s** (fin dip, bow wave, orange pulse), then a lunge of up to 2.5 at 9 u/s. The head reaches 0.7 over the rim, so it bites up to about **1.2 onto the deck**. **18**, and a **1.5 shove away from the pool** (back onto the deck; a wader toward the nearer rim). One hit per hero per lunge. Cooldown 3 s. | the same, cooldown 4 s, and never while charging | the same as the laser |
 | Drive-by snap (1-row ring only) | 0.5 s tell, 14, a 1.2 shove away from the channel, cooldown 3 s | the same | the same |
@@ -296,21 +378,21 @@ Renders: `laser_aim.png` (tracking), `laser_lock.png`, `laser_fire.png`, `laser_
   drawn arrows.
 - **Hits are free.** Only the kill bills, exactly once, the full price, to **whoever landed the kill** (the last
   damage source, `PricedProp`'s rule, including `blamed()` for an explosive's blast).
-- **Prices: regular $12,000, laser $18,000.** Why:
-  - Both are below the doomsday console ($20,000), so the shark is never the lair's dearest property, and above
-    everything a stray blast usually takes out (the explosives and most priced props are $300-$9,000).
-  - $12,000 is more than a whole contract's pest objective pays (`PEST_PAY` $10,000 in total), so killing it is a money
-    call the crew makes on purpose, never a free solve. Like every bill, it is capped at the contract's value.
-  - The laser shark is the shark plus its rig, priced like the server battery pack ($6,500, rounded down): the rig is
-    the expensive part of the threat, and the price says so.
+- **Prices: regular $8,400, laser $12,600** (user, 2026-10-19: the design's $12,000 / $18,000 less 30 %). Why:
+  - Both are below the doomsday console ($20,000) and the gold toilet ($15,000), so the shark is never the client's
+    dearest property, and both are above most of what a stray blast takes out (the explosives and most priced props are
+    $300-$9,000).
+  - $8,400 is most of what a whole contract's pest objective pays (`PEST_PAY` $10,000 in total), so killing it is a
+    money call the crew makes on purpose, never a free solve. Like every bill, it is capped at the contract's value.
+  - The laser shark's $4,200 over the regular one is its rig: the expensive part of the threat, and the price says so.
   - The imp rider is free: it is a monster.
 - **Death.** The shark rolls belly-up, its fin flops over, and it floats for the rest of the floor (a corpse, not an
   obstacle; the pool is safe). Its rider jumps to the nearest rim and fights on foot.
-- **Ledger:** "Shark (irreplaceable) — $12,000 — Wick" (or "Laser shark — $18,000"). A monster that kills it (an
+- **Ledger:** "Shark — $8,400 — Wick" (or "Laser shark — $12,600"), worded like any prop's line (its display name). A monster that kills it (an
   archer's arrow, a brute's slam, a blast an archer set off) bills "demons", as for any prop. Whatever the shark breaks
   (the laser hitting a prop) is billed to "the shark".
 - **"Exterminate": never.** It is the client's property, not a pest, and counting it would make "Exterminate
-  everything" a $12,000-$18,000 objective that pays less than the bill. I see no strong reason to count it. The imp
+  everything" a $8,400-$12,600 objective that pays less than the bill. I see no strong reason to count it. The imp
   counts as an imp ("Exterminate imps" and "everything").
 
 **Spells and attacks** (all ordinary damage to its HP; a kill bills its killer):
@@ -329,14 +411,14 @@ Renders: `laser_aim.png` (tracking), `laser_lock.png`, `laser_fire.png`, `laser_
 | Weapons, the bowl, explosive blasts | ordinary damage |
 | Brute daze | holds it 0.6 s and knocks the imp off |
 
-**AI allies: yes, they avoid hitting it.** Killing it is a $12,000 decision, so it is the players' to make:
+**AI allies: yes, they avoid hitting it.** Killing it is a $8,400 decision, so it is the players' to make:
 - They **never target the shark**. It is TEAM_NEUTRAL and billable, so `prop_care` treats it exactly like a priced
   prop: never a target, kept out of their arcs, spins, bowls and arrow lanes. An "attack" order doesn't change that.
 - They **avoid its water while it is alive**: pool cells cost more in their paths. They don't idle within 1.2 of its
   rim.
 - They may shoot the **imp** once it is in the fight (aiming counts), under the restraint baseline. Their
   "prop in the lane" check skips the imp's own mount, or Wick's AI would never shoot it. Below a quarter of its HP the
-  shark counts in the lane check again, so a stray AI arrow never lands the $18,000 kill.
+  shark counts in the lane check again, so a stray AI arrow never lands the $12,600 kill.
 - Stepping out of a locked red line is a follow-up, shared with the pavise.
 
 **The crew's choices:** route round it, distract it (corn, chicken), hold it (tentacles, vines), take cover and
@@ -604,7 +686,7 @@ D C = = . . . x . . . . #      = = the pier
   about 20 s, a scheduled effect) and drops out a **land shark**. It flops for 8 s, snapping at anything within 1.0
   (10 damage). It wriggles toward the room's pool if one is within 8 and becomes that pool's shark (+1), else it lies
   gasping, harmless, until the floor ends ("please put the shark back" is a joke, not an objective). It can be killed
-  like any shark (its own HP and the regular shark's $12,000 bill, on top of the tank's $7,000).
+  like any shark (its own HP and the regular shark's $8,400 bill, on top of the tank's $7,000).
 - **Placement:** nothing new (the tank is placed today). The flop is a runtime spawn (`world.spawn`, kind "shark",
   variant "flop") from the host's break.
 - It is listed as a layout because it gives the shark tank a reason to exist. Build it last.
@@ -636,7 +718,7 @@ godot --path . --resolution 960x540 --write-movie <dir>/f.png --fixed-fps 20 --q
 
 ## Open questions
 
-1. The numbers for "kill and bill once": HP 150 and $12,000 / $18,000 (proposed above)?
+1. The numbers for "kill and bill once": HP 150 and $8,400 / $12,600 (proposed above)?
 2. Should corn's hit damage the shark (and so risk the bill if it finishes it), or should corn be pure chum?
 3. Can the crew knock the laser rig itself off (a priced "shark-mounted laser"), turning a laser shark into a regular
    one?

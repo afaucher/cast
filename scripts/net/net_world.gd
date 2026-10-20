@@ -214,6 +214,12 @@ func _track(id: int, n: Actor, kind: int) -> void:
 			_link(Signal(n, "scout_phase_changed"), _on_scout.bind(id))
 			_link(Signal(n, "fireworks_launched"), _on_fireworks.bind(id))
 			_link(Signal(n, "fireworks_dud"), _on_dud)
+		if n.has_signal("beam_locked"):
+			_link(Signal(n, "charge_begun"), _on_charge.bind(id))
+			_link(Signal(n, "charge_dropped"), _on_uncharge.bind(id))
+			_link(Signal(n, "beam_locked"), _on_lock.bind(id))
+		if n.has_signal("dismounted"):
+			_link(Signal(n, "dismounted"), _on_dismount.bind(id))
 
 
 func _show(id: int, n: Actor, kind: int) -> void:
@@ -609,6 +615,57 @@ func _on_unwind(id: int) -> void:
 	stats["unwinds"] = int(stats["unwinds"]) + 1
 
 
+## Host: a laser shark began charging at its victim (docs/design/sharks.md): every screen draws the red line tracking the
+## victim as it shows them.
+func _on_charge(length: float, id: int) -> void:
+	var s := NetRegistry.node(id)
+	var v: Variant = s.get("charge_victim") if s != null else null
+	_send("world.charge", {"id": id, "s": _now(), "l": length, "v": NetFloor.id_of(v) if v != null and is_instance_valid(v) else 0})
+	stats["charges"] = int(stats.get("charges", 0)) + 1
+
+
+func _on_uncharge(id: int) -> void:
+	_send("world.uncharge", {"id": id})
+
+
+## Host: the beam's line is locked: its origin, direction and the moment it fires on the shared clock. Every machine fires
+## it then on its own clock and applies what it resolves (the victim decides its own hero).
+func _on_lock(origin: Vector3, dir: Vector3, fire_at: float, id: int) -> void:
+	_send("world.lock", {"id": id, "x": origin.x, "y": origin.y, "z": origin.z, "dx": dir.x, "dz": dir.z,
+		"t": _now() + (fire_at - GameWorld.time)})
+	stats["locks"] = int(stats.get("locks", 0)) + 1
+
+
+## Host: an imp gunner left its shark (knocked off, or its shark died): where it landed.
+func _on_dismount(how: String, id: int) -> void:
+	var n := NetRegistry.node(id) as Node3D
+	var p := n.global_position if n != null else Vector3.ZERO
+	_send("world.dismount", {"id": id, "h": how, "x": p.x, "y": p.y, "z": p.z})
+	stats["dismounts"] = int(stats.get("dismounts", 0)) + 1
+
+
+## Host: every dismounted, living imp gunner, for a late joiner: [[id, how, x, y, z]] (its position then rides the keyframe).
+func dismount_states() -> Array:
+	var out: Array = []
+	for id: int in _tracks:
+		var tr: Track = _tracks[id]
+		if is_instance_valid(tr.node) and not tr.node.dead and tr.node.has_method("net_dismount") and not bool(tr.node.get("mounted")):
+			var p := tr.node.global_position
+			out.append([id, "knocked", p.x, p.y, p.z])
+	return out
+
+
+## The late joiner: the gunners already off their sharks (dismount_states).
+func apply_dismounts(list: Array) -> void:
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 5:
+			continue
+		var n := NetRegistry.node(int(row[0]))
+		if n != null and n.has_method("net_dismount") and not (n as Actor).dead:
+			n.call("net_dismount", str(row[1]), Vector3(float(row[2]), float(row[3]), float(row[4])))
+
+
 func _send(kind: String, data: Dictionary) -> void:
 	if _session == null or not _session.online() or _session.roster.size() < 2:
 		return
@@ -694,6 +751,27 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 			var at := Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0)))
 			FireworksFx.launch(at, start, int(data.get("f", 1)), Vector3(float(data.get("dx", 0.0)), 0.0, float(data.get("dz", 0.0))))
 			stats["fireworks"] = int(stats.get("fireworks", 0)) + 1
+		"world.charge":
+			var sk := NetRegistry.node(int(data.get("id", 0)))
+			if sk != null and sk.has_method("net_charge") and not (sk as Actor).dead:
+				sk.call("net_charge", NetRegistry.node(int(data.get("v", 0))) as Actor)
+			stats["charges"] = int(stats.get("charges", 0)) + 1
+		"world.uncharge":
+			var sk := NetRegistry.node(int(data.get("id", 0)))
+			if sk != null and sk.has_method("net_uncharge") and not (sk as Actor).dead:
+				sk.call("net_uncharge")
+		"world.lock":
+			var sk := NetRegistry.node(int(data.get("id", 0)))
+			if sk != null and sk.has_method("net_lock") and not (sk as Actor).dead:
+				var at := GameWorld.time + (float(data.get("t", _now())) - _now())   # (the shared moment, on this clock)
+				sk.call("net_lock", Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))),
+					Vector3(float(data.get("dx", 0.0)), 0.0, float(data.get("dz", 1.0))), at)
+			stats["locks"] = int(stats.get("locks", 0)) + 1
+		"world.dismount":
+			var jk := NetRegistry.node(int(data.get("id", 0)))
+			if jk != null and jk.has_method("net_dismount") and not (jk as Actor).dead:
+				jk.call("net_dismount", str(data.get("h", "knocked")), Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))))
+			stats["dismounts"] = int(stats.get("dismounts", 0)) + 1
 		"world.dud":
 			Fx.fizzle_puff(Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))))
 

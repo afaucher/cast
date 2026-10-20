@@ -129,6 +129,11 @@ them (a dented prop is free; a break bills its full price to whoever landed it).
 - **Awareness:** monsters see further in front than behind, hear spells and fights, and a hit wakes the ones nearby.
   The longer a floor takes (from 2 minutes, fully by 6), the more restless they get: skeletons patrol, imps roam,
   idle archers take practice shots at the client's cheaper props, and brutes start shoving matches.
+- **Pool sharks** (from floor 2, `docs/design/sharks.md`) swim the indoor pools, moats and lagoons. They are the
+  client's property, not monsters: a shark bites whatever stands at its rim and throws it back onto the deck. A
+  **laser shark** draws a red line at you, locks it and fires one beam; walk out of the line. An **imp gunner** riding
+  one swings the laser round; shoot it or shove it off. You can kill a shark, but the client bills the kill ($8,400, or
+  $12,600 for a laser shark). Corn in the water distracts it.
 - **The goblin scout** patrols the halls. If he sees you he lights a rack of fireworks that brings every monster nearby
   (and wakes a hellgate that's ready to spawn). Kill him before the fuse, or soak the rack with damp.
 

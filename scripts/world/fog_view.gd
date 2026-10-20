@@ -40,7 +40,7 @@ const LOOK_NAMES := ["A black void", "B blueprint", "C smoke"]
 const UPDATE_EVERY := 0.1          ## seconds between RoomFog updates
 const FADE_TIME := 0.35            ## a space's look fades between states over this long
 const THIN_CELLS := 4              ## a doorway thins the smoke this many cells deep
-const DYNAMIC_GROUPS := ["monsters", "employees", "component_pickups", "chickens"]
+const DYNAMIC_GROUPS := ["monsters", "employees", "component_pickups", "chickens", "sharks"]
 const LEVELS := [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0]   ## display level per RoomFog state
 
 var fog: RoomFog

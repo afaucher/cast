@@ -35,6 +35,7 @@ const NET_SCRIPTS := [
 	"res://scripts/heroes/arrow_shot.gd",
 	"res://scripts/heroes/bowl_boulder.gd",
 	"res://scripts/heroes/ally_brain.gd",
+	"res://scripts/monsters/shark_steer.gd",
 	"res://scripts/heroes/player_controller.gd",
 	"res://scripts/spells/armor_zone.gd",
 	"res://scripts/spells/burning.gd",
@@ -350,6 +351,9 @@ var REPLICATED := {
 	"res://scripts/monsters/brute.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/monsters/swarmer.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/monsters/goblin.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/goblin.gd"], 5],
+	# the pool shark and its imp gunner (docs/design/sharks.md): monster-format entries plus their own events
+	"res://scripts/monsters/shark.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/shark.gd"], 5],
+	"res://scripts/monsters/jockey.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/jockey.gd"], 5],
 	"res://scripts/contracts/employee.gd": [NetWorldCodec.EMPLOYEE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/employee.gd"], 5],
 	"res://scripts/contracts/hellgate.gd": [NetWorldCodec.GATE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/hellgate.gd"], 5],
 	"res://scripts/contracts/priced_prop.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/priced_prop.gd"], 0],
