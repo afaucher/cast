@@ -5,7 +5,8 @@ Status: **concept only** (2026-10-20). Nothing here is built into the game: no c
 
 **Round 2** ("Sewer round 2: connected water, staging, fights", after Part 1) answers the user's verdict on round 1.
 Where the two differ, round 2 replaces Part 1: the water as one connected body, the gator, grate bridges as dry
-crossings, and the eel's reach.
+crossings, and the eel's reach. The user's answers to round 2, then "Scope and how a sewer fits a floor" (the options
+for fitting a sewer into a floor, the build scope and its phases), follow round 2.
 
 **The user's words:**
 - 2026-10-19: "For water monsters - I am wondering if a sewer theme makes sense for some rooms. Like they would be
@@ -325,7 +326,7 @@ layer.
    or a staged thing gets a grate bridge, so every doorway is reachable dry inside the room. Getting **between** rooms
    stays wet down a narrow hall, or dry along a wide hall's ledge.
 
-### The bridge: a dry crossing (proposal)
+### The bridge: a dry crossing (proposal; decided 2026-10-20: "Omit the bridges for now")
 
 Round 1 drew the grate bridge as decor you wade through. The user's note ("so it doesn't provide crossing") reads it as
 a crossing, which is also what makes ledges and decks worth fighting for. Proposal:
@@ -358,7 +359,8 @@ a crossing, which is also what makes ledges and decks worth fighting for. Propos
   downstream, so cast corn upstream of it.
 - **Fireball:** 40. In the water it can't catch fire (soaked). On land, after 15 s dry it can burn, and a burning gator
   makes straight for the water and doesn't nip (proposal, question 10).
-- **Tentacles, the bowl, blasts:** a shove of 1.0+ **holds** it 1.2 s and doesn't move it, as for the shark (question 4).
+- **Tentacles, the bowl, blasts:** decided 2026-10-20, "gators can be shoved": a shove moves it like any body (see
+  "Shoved gators" under "Decided" below). This replaces the proposal to hold it in place like the shark.
 - **Vines** root it 2 s. **Coffee** speeds it. **Damp** soaks it.
 - A **chicken** in its territory is eaten.
 
@@ -383,7 +385,7 @@ a crossing, which is also what makes ledges and decks worth fighting for. Propos
 |---|---|---|
 | Movement | clipped to its pool record (convex outline), steered by SharkSteer | ordinary walking (`find_path`, `movement_check`) restricted to its **home region**, a SPAWN cell set from the seed that goes in the checksum. It swims with the per-body distance field (round 1) and walks on land like a monster |
 | Speed | always water speed | picked each step by `HexMap.water_at` under it. The same pure function runs on every machine; only the host moves it |
-| Shoves | held, clipped to the water | held (no clipping needed, since it isn't moved) |
+| Shoves | held, clipped to the water | **moved** like any body (decided); shoved out of its home region it walks back |
 | States (3 bits) | CRUISE, HUNT, BITE, RECOIL, DEAD, CHARGE, HELD, CHUM | CALM 0, RILED 1, NIP 2, MOVE 3, DEAD 4, WATCH 5, HELD 6, CHUM 7 |
 | PRIVATE | steering, scans | the territory scan, the relocation timer and target spot, the victim pick |
 | SPAWN | variant, pool index | home region index, bask spot list, price |
@@ -399,7 +401,7 @@ There is no new shape: it is an owned actor with one new piece of spawn data, th
 | Skeletons (grunt) | the pack's body: decks and walkways near bridges, one or two wading as a patrol (the existing skeleton patrol) | They path the shortest way, so they **wade** (0.75x, soaked) and walk through the gator's lanes. Don't teach them to avoid water |
 | Archers | **dry decks and ledges with a channel between them and the room's main doorway**, or a main's far ledge | The crew has to wade (slowly) or take the bridge, a chokepoint the archer covers. Archers flee inside 3.5, so a dry deck with its back to a wall pins them |
 | Brute | a wide deck or a filter island | Its slam (radius 2, shove 1.0) knocks waders along the channel. On an island it is the "shove it off into the gator's lane" target |
-| Rats (the imp swarm's cousin) | decks by outfalls and grates; rafts of them along the walls | Proposal: a sewer **reskin of the swarmer pack**: the same numbers, named "rats", swimming at 0.6x. Fire scatters them; corn distracts them (they eat it) |
+| ~~Rats~~ (omitted, decided 2026-10-20) | decks by outfalls and grates; rafts of them along the walls | Proposal: a sewer **reskin of the swarmer pack**: the same numbers, named "rats", swimming at 0.6x. Fire scatters them; corn distracts them (they eat it) |
 | Goblin scout | a hall's ledge (his corridor route runs along it) | On the ledge he is out of the water and sees down the whole hall |
 | Eels | channels, a sump, or escaped from the aquarium | Their shock reaches waders within 6 **along the water** (no longer "the whole body": the whole cluster is one body now) |
 | Gator | one a cluster, two in a cluster of four rooms | its home sump, a flooded narrow hall, or basking on a deck |
@@ -434,9 +436,10 @@ There is no new shape: it is an owned actor with one new piece of spawn data, th
 - voicemail: the plumber who will not come back.
 
 **Hazards:**
-- **Live wire + water** (§4.1, the electrical panel): the shock runs **8 cells along the connected water** from where
-  the cable lands. A shut sluice stops it, so sluices are the breakers. 12 damage (18 on soaked waders) and a 0.6 s daze,
-  both sides. Bridges and decks are safe. The reach is a BFS over wet cells, precomputed per panel as spawn data.
+- **Live wire + water** (§4.1, the electrical panel): 12 damage (18 on soaked waders) and a 0.6 s daze, both sides; dry
+  ground is safe. **Decided 2026-10-20 ("lets just have it distance based"):** it hits everyone in the water within N
+  cells of where the cable lands (proposed N = 5). This replaces the round-2 proposal of 8 cells along the water,
+  stopped by a shut sluice.
 - **Steam valves** (§4.4) on pipe runs: in a hall or a main, the steam wall vents **across** it (one hex wide, wall to
   wall). It blocks sight and passage for 3 s.
 - **Sewer gas pocket** (new): bubbles on a sump. Any fire sets it off (a fireball, a burning actor, a blast): a 1.0 s
@@ -658,6 +661,8 @@ godot --path . --resolution 1920x1080 -- --scene res://scenes/sewer2_lab.tscn --
 - `scripts/art/lowpoly/sewer2_lab.gd` extends the round-1 lab.
   - Layout cases (views `game`, sometimes `game2`, and `plan`): `reclaim`, `junction`, `aquarium`, `loop`, `main`.
   - Fight cases (views `game` and `close`): `fight_shove`, `fight_wire`, `fight_ledge`.
+  - Transition cases ("Scope and how a sewer fits a floor"): `trans_stair` (views `game`, `fog`), `trans_elevator`. The
+    lab builds them with levels and STAIRS cells (`_make_map_levels`).
 - The actors are static models: the heroes, `MonsterModels`, `EmployeeModel`, `NoteModels`, `PropModels`,
   `DecorModels`, `PoolProps` and `SewerProps`.
 - New lab-only `SewerProps` kinds: `pump`, `junction_box` (with its cable, hanging or dropped), `gas`, `tool_cart`,
@@ -678,6 +683,8 @@ In `...\scratchpad\sewer\sewer2\`:
 | `fight_wire.png`, `fight_wire_close.png` | L3: the panel is shot; the shock runs 8 cells along the channel; Gasket dry on the bridge |
 | `fight_ledge.png`, `fight_ledge_close.png` | L5: archers on the far ledge, a steam wall across the main, corn as chum |
 | `bridge_fix_rooms.png`, `bridge_fix_junction.png` | the round-1 cases with the bridge fixed |
+| `trans_stair.png`, `trans_stair_fog.png` | "Scope": option (a), the service stair down six levels into the first sewer room; the same in fog look A from the room above |
+| `trans_elevator.png` | "Scope": option (b), the freight elevator opening onto a dry landing deck on a sewer floor |
 
 ### Questions for the user (round 2)
 
@@ -697,6 +704,220 @@ In `...\scratchpad\sewer\sewer2\`:
 9. **Employees prefer dry routes** when following (water costs x3 in their paths)?
 10. **A gator on land dries out after 15 s and can be set on fire** (it then runs for the water), or is it always
     fireproof like the shark?
+
+### Decided (user, 2026-10-20: answers to round 2)
+
+| Question | The user | What it means |
+|---|---|---|
+| 1. Bridges | "Omit the bridges for now." | **No grate bridges in the build.** A deck cut off by a channel is reached by wading (the rim is a one-level step, walkable anywhere). Round 1's rule that "a dry walkway joins every doorway" becomes "**every doorway is reachable; dry where the layout allows**". The lab's bridges stay as look-dev, and `_check_bridges` stays for any bridge that comes back. |
+| 2. Gator price | "6300" | **$6,300**, killed and billed once, to the killer. |
+| 4. Shoving a gator | "gators can be shoved." | A shove **moves the gator like any body**. It is not anchored the way the shark is. The crew can push a gator into a monster pack, and it nips whatever is in its territory there, the crew included. See "Shoved gators" below. |
+| 5. Live wire | "lets just have it distance based" | The shock reaches the water cells within **N cells of the cable's end, by distance** (proposed N = 5, about 8.7 units), and hits everyone standing in water there. There is **no sluice rule** and no flood fill. |
+| 7. Rats | "Omit for now because it is either a new monster or environment decoration." | **No rats.** Sewer packs use the existing kinds, the imp swarm included, unchanged. |
+| 8. Which layouts first | "You decide" | **L1, then L2, then L4, then L5** (below). |
+
+Still open: 3 (the gator's numbers), 6 (whether the gas pocket bills), 9 (employees prefer dry routes) and 10 (whether
+a gator on land can burn). Each keeps its proposal as the default until answered.
+
+**The layout order, and why.** Each layout adds one new shape to the generator, so each step tests one thing:
+1. **L1 Reclamation run:** a **chain** of rooms, which is what a path through DungeonGen's spanning tree already gives.
+   It proves channel to hall to room continuity, a sump, a ledged wide hall and a room at the end (the pump room's
+   drain).
+2. **L2 The Y junction:** a room with **three doorways**, so the channel splits into a Y over a sump. Without bridges
+   its wedges are islands you wade between, which tests the "no bridges" decision hardest.
+3. **L4 Storm-drain loop:** a **cycle** in the cluster. That needs one of DungeonGen's extra loop links to fall inside
+   the cluster, so its rooms and the gator's route round the ring are built from the generator's loops.
+4. **L5 The sewer main:** a **new hall width** (6.0, the middle row wet) that DungeonGen doesn't make today.
+
+L3 (the aquarium overflow) is L1's chain with a different source and a ring channel. It comes with L1 as a theme
+variant, not as a step of its own.
+
+**Shoved gators** (the decision, worked through):
+- **The shove:** `Actor.shove` as for any body: its slide, a wall slam (8 damage, billed to nobody: hits are free), and
+  a shove into a priced prop or an explosive as for anyone. A client's shove is a request (`Net.route_shove`); the host
+  moves it and streams it.
+- **It riles the gator.** A shove counts as a hit: its territory grows to 4.5 for 8 s and the first nip goes to the
+  nearest body where it lands. That is the play: shove it into the pack and it bites the pack. It is also the risk.
+- **The risk of a shove onto the crew:**
+  - A short shove (Rebar's fist, 1.6) or one at a bad angle leaves it inside the crew's 3.0, riled, so it nips a
+    hero.
+  - A brute's slam (shove 1.0 in radius 2) and an explosive's blast move it too, so the pack and the room can push a
+    gator onto the crew.
+  - AI allies already treat it as a priced prop: they keep it out of their spins, bowls and shoves (`prop_care`).
+  - Nothing stops a player doing it, and that is the joke.
+- **Getting home:** its **home region** is the cluster's wet cells plus the dry cells within 2 of water.
+  - Shoved out of it (through a doorway into a dry room, or down a dry hall), it switches to MOVE.
+  - It paths back (`find_path`, land speed 1.4) to its nearest bask spot, with its territory at 2.0 and nipping only
+    what touches it.
+  - Shoved within the region (onto another deck, into another channel), it stays and settles there. That spot is its
+    new resting spot until the next relocation.
+- **Stuck on land:** if no path home exists (a platform it can't climb down from, an island of dry floor), it **settles
+  where it is**. That spot becomes a temporary bask spot, and it tries again at each relocation (30-45 s). It never
+  teleports: a client would see it jump.
+- **Into a pit or off a high edge:** the void rule. It falls and dies, and the kill **bills $6,300 to whoever shoved
+  it**. That is `PricedProp`'s culprit rule and the same as killing it any other way. It is a money call, and the
+  doc's warning line for the user.
+- **Size:** M on top of the gator actor: the riled-on-shove rule, the out-of-region return, the stuck fallback, the
+  void bill, and their tests (shove it out of a doorway and it walks home; shove it onto a platform and it settles;
+  shove it into a pit and the shover is billed once).
+
+---
+
+## Scope and how a sewer fits a floor
+
+The user, 2026-10-20: "lets look at the scope before we build it. And how would sewers fit into a level, do we need a
+transition? Is that transition mid-level or right at the elevator?"
+
+Two mock-ups at the game camera, in `...\scratchpad\sewer\sewer2\`:
+- `trans_stair.png`, `trans_stair_fog.png`: option (a)'s service stair, then the same view in fog look A from the
+  stair head;
+- `trans_elevator.png`: option (b), the elevator opening onto a sewer floor.
+
+### How a sewer fits a floor: the options
+
+What exists today:
+- **A floor** is 6-9 DungeonGen rooms on a spanning tree with 1-2 loops.
+- **Heights:** each room has a base level (0-8), and the links between rooms step with terraces and **STAIRS cells**
+  (rise up to 4, chained).
+- **Floor 1** has the van. Floors 2 and 3 start in the elevator. The elevator is the exit on every floor, and its room
+  stays clear of packs.
+- **Transitions** need nothing new: a STAIRS link is already a transition, and a drop of up to 3 levels is already a
+  one-way edge (`exploration.md`).
+
+| | (a) **A cluster mid-floor, down a service stair** (recommended) | (b) **The whole floor is the service level** | (c) **The sewer is the route between two halves** | (d) **A one-way drop in** (a variant, added to a or c) |
+|---|---|---|---|---|
+| **What it is** | 2-4 of the floor's rooms form the cluster, at one base level **4-6 levels below** the room they hang off | every room of the floor is a sewer room; the elevator opens onto a dry landing deck in the first one | the cluster sits on the start-to-exit path, so the crew has to cross it | a broken drain grate or a collapsed floor in a dry room drops 3 levels into a channel |
+| **The transition** | a **service stair**: the link into the cluster is a narrow dry hall of STAIRS cells (two flights of 2-3 levels). At its head stands an office door styled as a **service door** (hazard stripes, a "SERVICE LEVEL" stencil), at its foot the first sewer room's dry deck. The stair is never wet | **none on the floor**: the elevator ride is the transition. The sign-in sheet's row says "Service level" | two service stairs, one down and one back up | the drop itself, with a dangling grate and water pouring down |
+| **One-way?** | **two-way**: walk down, walk back up | the elevator as usual | two-way | **one-way**: you can't climb 3 levels. It is a shortcut **in**, and the stair is still the way out |
+| **Fog look A** (`trans_stair_fog.png`) | the stair is its own hall space. From the room above, the stair is in view through the open door and the sewer room below is **next**, a dark silhouette with its channel traced. Step onto the stair and the room comes into view through the doorway at the bottom. **The service door is the threshold**, and from the room above the drop in height is what says "down" | an ordinary floor's fog, every space a sewer space | as (a), both ends | the drop's room is next from the edge; you see where you'll land before you jump |
+| **Objectives** | gates, packs and employees are planned across the whole floor as now, so **a gate or staff may be down there**. That makes going down a money call, and leaving it a choice. The elevator, its landing and the van are never in the cluster | everything is wet: every gate, every pack, the origin gate on floor 3 in a cistern. Every fight is a sewer fight, fire is weak all floor, and there are 2-3 gators | **the escort is the challenge**: staff from the far half have to be brought through the water, at 0.75x, past the gator | as (a) |
+| **Dispatch line** (new; each needs a rendered clip) | at floor start: "There's a service level under this floor, down the maintenance stairs. It floods." | at arrival: "This floor's the service level. Everything down here is wet." | at floor start: "The only way to the elevator is through the service tunnels." | none (the drop is found, not announced) |
+| **Sites and clients** | prepper's bunker (water reclamation), supervillain's lair (the lair's sewer), tech founder (cooling culverts); floors 2-3 | the prepper's "sublevel B" or the lair's lower level, as a rare floor style | bunker wings joined by a utility tunnel; lair | any of a's sites |
+| **Generator cost** | the cluster choice, one stair link, flattening the cluster's own links | a whole-floor builder; the lava prototype shows the hand-authored version | as (a), plus the cluster has to be a cut vertex of the tree (only one way through) | a 3-level edge between a dry room and the cluster: a placement rule |
+| **Risk** | none new | monotony: the sewer is special because it is under a dry floor; and every escort is wet | a forced wade every time on those floors; escorts get hard | a crew can split, one player jumping in alone |
+
+**Recommendation: (a), a cluster mid-floor down a service stair, on floors 2-3. Not at the elevator.**
+- **Why mid-floor:**
+  - The sewer reads as a place **under** the client's property that you choose to go into. The contrast with the dry
+    floor above is the point.
+  - The elevator room stays as it is: dry, no pack, the landing clear. Drop-offs at the elevator (within 2.5) stay
+    quick, and nobody has to escort staff through the water to get out.
+- **Why a stair, not a hatch:**
+  - It is two-way. Nobody gets stuck downstairs, and the crew can retreat up it.
+  - It is terrain the generator already makes (STAIRS cells).
+  - A narrow stair is a natural chokepoint to fight from.
+- **Placement:** the cluster hangs off the floor by **one** stair link in most floors, as a wing holding a gate or staff
+  (the money call). Variant (c), the cluster on the only path, comes later, once escorting through water has been
+  played.
+- **(d), the drop-in,** is a cheap later addition to (a): one placement rule.
+- **(b) is the first playable slice**, not the shipping form. A hand-authored whole floor behind a dev flag needs no
+  generator, exactly like `--lava-cave N`.
+  - The elevator lands on a dry deck in the first room (`trans_elevator.png`).
+  - Once (a) is in the generator, (b) can stay as a rare "service level" floor style if the playtest likes it.
+
+### Build scope
+
+S is under a day of agent work, M a few days, L a week or more. "Slice" marks what the first playable version keeps.
+
+**Terrain and drawing**
+
+| # | Piece | Size | Slice |
+|---|---|---|---|
+| T1 | **Water up to a wall** in `HexMap`/`HexMapView`: a cut cell with both wall kites and pool kites (today `_add_pool_cell` returns before the wall part), `water_at` true on its pool kites, and `test_wall_mesh` over the mixed masks | M | **cut**. The lab just sinks a wet cut cell and draws the water over it. The cost is a one-kite notch where a rim meets a wall, and `water_at` false on those half-cells (nobody standing against the wall counts as wading). Fine for a playtest |
+| T2 | **Water bodies:** non-convex water as cells; body records `{id, cells, surface, flow, look}`; a `SewerView` that draws the water per kite, the foam, the kerbs and the flow (the lab's `_build_water`, about 120 lines) | M | **keep** (as the lab's drawing, ported) |
+| T3 | The channel bed and liner shader and the three looks (brick, concrete, toxic) from the lab | S | keep one look (concrete) |
+| T4 | The checksum: body records, home regions and bask spots in `NetFloor.map_text_of` | S | cut (solo slice) |
+
+**Generator**
+
+| # | Piece | Size | Slice |
+|---|---|---|---|
+| G1 | **Cluster choice in DungeonGen**: 2-4 rooms on tree links, floors 2-3, never the start or exit room. They share one base level 4-6 below the room they hang off. Their own links are flattened (no terraces), and the link in becomes a **service stair** (STAIRS events on a narrow link). Its own seeded rng, so floors without a cluster are byte-identical (the golden-floor test) | L | cut (hand-authored) |
+| G2 | **SewerGeo:** routing each room's channel by the grammar (straight, bent, along the wall, a Y, a source, a culvert); flooding halls by width; sumps; the 45 % water cap; the **one-body assertion** | M | cut (the five lab layouts, hand-authored) |
+| G3 | **Doors:** sluice gates on flooded narrow halls (the office door's behaviour, the sluice's look); the service door at the stair head (an office-door style) | S | keep the sluice look only |
+| G4 | **Staging rules** in the planners: dry-only placement (exists); explosives never wet or on a rim; archers on decks across water; the gator's bask spots and home region; panels within 2.5 of water | M | hand-placed |
+
+**Actors**
+
+| # | Piece | Size | Slice |
+|---|---|---|---|
+| A1 | **The gator:** a `Monster` subclass; land and water movement in its home region; watch, territory, nip; riled; relocation; billing ($6,300 once, never toward Exterminate); fog group; AI allies' prop care | L | **keep** (solo: no net) |
+| A2 | **Shoved gators:** riled on a shove, walking home when shoved out of its region, the stuck fallback, the void bill | M | keep |
+| A3 | **The gator's look:** the lab model as a game model (triangle budget, z-fight registry), a bending body (SharkBody's follow-the-leader), a wake in water and footprints on land, the tells (eye glow, gape) | M | keep (no footprints) |
+| A4 | **The gator's net shape:** a MONSTER stream entry, `world.windup` for the nip, `world.die`, the Ledger line, shoves as requests, late join (keyframe; a dead one is a gone id), `NetEvents` carriers, a 3-process test | M | cut (solo) |
+| A5 | Eels as actors (a shock within 6 along the water) | M | cut (later) |
+
+**Props and hazards**
+
+| # | Piece | Size | Slice |
+|---|---|---|---|
+| P1 | **Sump pump**, priced $3,500 (the lab model) | S | keep |
+| P2 | **Electrical panel** ($250) and the **live wire**: a host-arbitrated box; the drop (0.6 s); the shock to waders within N cells of the cable's end (12, x1.5 soaked, a 0.6 s daze), both sides, a scheduled effect each owner applies; one use | M | keep (solo) |
+| P3 | **Steam valve** across a hall or main: needs the dynamic line-of-sight blocker `combat-proposals.md` §4.4 asks for | M-L | cut |
+| P4 | **Gas pocket** (fire sets it off: a 3.0 flash) | S-M | cut |
+| P5 | The **decor kit** into the game: outfall, pipe bundle, grate, sluice, springer, wall ladder, bars, duck, tool cart (DecorModels entries, the z-fight registry) | S-M | keep the six that read most: outfall, pipe bundle, grate, sluice, bars, tool cart |
+
+**Content and tests**
+
+| # | Piece | Size | Slice |
+|---|---|---|---|
+| C1 | Sewer room themes (cistern, outfall room, junction, pump room, aquarium overflow) as `RoomThemeDefs` rows with their props, decor and looks | S-M | cut (hand-placed) |
+| C2 | **Dispatch lines** (3-4) in `NoteCopy`, rendered clips (`tools/render_dispatch.ps1`) | S | one line |
+| C3 | Notes ("DO NOT DRINK", "GATOR CROSSING", the feeding rota, the pump log) and the new staff names | S | the two signs |
+| X1 | `test_sewer_geo`: one body, every flooded hall meets a channel at both ends, doors, the water cap, many seeds, the timing (`last_sewer_usec`) | M | cut |
+| X2 | `test_gator`: territory, nip, relocation, shove and return home, stuck, the void bill, billed once | M | keep |
+| X3 | `test_live_wire`: the distance reach, both sides, dry ground safe | S | keep |
+| X4 | `test_net_gator`, `test_net_live_wire` (3 processes, `off` and `coast`) | M | cut |
+| D1 | **`--sewer N`**: the five lab layouts (bridges removed) built as whole floors, solo only, ignored in a shared run, like `--lava-cave N` | M | **this is the slice** |
+
+**Phases**
+1. **Slice, solo, behind `--sewer N`** (about 2 weeks of agent work; M-L):
+   - D1, T2, T3 (concrete), G3 (the sluice look), A1-A3, P1, P2, P5 (the six), C2-C3 (a line, two signs), X2, X3.
+   - The question it answers: is wading plus a territorial gator plus a live wire fun?
+   - It needs no generator and no net, and touches `game.gd` in one hook (as the lava cave does).
+2. **Networked** (M): A4, P2's net half, X4, T4.
+   - The gator becomes a host-owned actor that late joiners get.
+   - Its shove is a request. It plays in a crew, still on the hand-authored floors.
+3. **In the generator** (L, after the refactor's waves 3-4):
+   - G1, G2, G4, T1, C1, X1, and the dispatch lines.
+   - Option (a) with a service stair, floors 2-3.
+4. **Later** (each S-M): the steam valve (P3, with the line-of-sight blocker), the gas pocket (P4), eels (A5), variant
+   (c), variant (d), and (b) as a rare floor style.
+
+**What the slice can skip and still be honest:**
+- T1's wall-meets-water cell (a visual notch);
+- the checksum and net (solo);
+- the generator (hand-authored);
+- steam, gas and eels;
+- every theme but one look.
+
+What it cannot skip:
+- the gator's territory, nip and shove behaviour;
+- the live wire;
+- the water drawn connected through rooms and halls. That is the point the user made, and the playtest has to show it.
+
+### Coordination with the refactor (`docs/design/refactor-plan.md`)
+
+The refactor will split `game.gd` (H7), split `SiteBuilder` into per-feature planners (H8) and add `MonsterDef` units
+(H3). The sewer is written against that structure:
+
+| Sewer piece | Lands in | Notes |
+|---|---|---|
+| `--sewer N` and its floor hook | **`scripts/app/dev/`** (H7 step 1) and a `FloorStart` hook, the same shape as `_lava_cave()` | wait for wave 3 (H7 step 1) to land first; everything else in the slice is new files |
+| Cluster choice and the service stair | **DungeonGen**, not a planner: heights and STAIRS links are made before `SiteBuilder` runs. A `sewer` option on `DungeonGen.generate` picks the cluster after the base levels, with its own seeded rng | outside the planner registry; the golden-floor test must stay byte-identical with the option off |
+| Channels, flooding, bodies (G2) | **`SewerPlanner`** (H8), run where `PoolGeo.carve` runs today (right after the themes, before props): `plan(p, ctx)` writes the wet cells, the body records and the sluice flags into the plan; `spawn` draws `SewerView` | a planner that changes terrain, like the pool carve today; register it before the props planner |
+| The gator | **`GatorPlanner`** (H8, next to `SharkPlanner`): the home region, bask spots and the spawn | spawn order (= net-id order) after sharks, in the ordered registry |
+| The gator kind | **`MonsterDef` "gator"** (H3): script `gator.gd`, the model builder, the triangle budget, `pack_role` = special (seed-built: never in a pack and never from a gate), no pest name or ticket, `planner` = GatorPlanner, and a **price** field for billed property | the shark should get the same `price` field; both are property, not pests |
+| Pump, panel | the props planner's `TABLE` rows now; they become **prop defs** when H4 (wave 7) lands. The panel's blast-free hazard data lives with its def | the panel is a host-arbitrated object; if H5 lands first it implements that interface |
+| Live wire, sluice styling | the **hazards planner** (placement: walls within 2.5 of water) and the **doors planner** (a `style` on flooded narrow halls) | |
+| Sewer themes | `RoomThemeDefs` rows (H4 moves floors and walls into the theme row) | |
+| The lab | `sewer2_lab.gd` moves onto `LabBase` (H9) with the other labs | |
+
+**Order:**
+- Phase 1 (the slice) can start now in new files (the gator, `SewerView`, the panel and live wire, the hand-authored
+  layouts). It adds one hook to `game.gd` after wave 3.
+- Phase 3 (the generator) waits for waves 3-4 (H7 step 1, H8 and H3). That is the refactor plan's own advice: "Do this
+  before lava and the sewer go into the generator."
 
 ---
 

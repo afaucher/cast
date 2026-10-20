@@ -23,6 +23,10 @@ extends "res://scripts/art/lowpoly/sewer_lab.gd"
 ##   fight_shove    L2: a skeleton pack wades the junction; Rebar punches one into the gator's territory, the gator nips it
 ##   fight_wire     L3: the junction box is hit, the cable drops into the channel, the shock runs along the water
 ##   fight_ledge    L5: archers on the far ledge of the main; the steam vent walls one off, corn floats as the gator's chum
+## --case (transitions, "Scope and how a sewer fits a floor": views game, and fog for the stair)
+##   trans_stair    option (a): a dry room four levels up, a service door, a narrow hall with two flights of stairs down
+##                  into a sewer room; view fog = room fog look A from the top of the stair
+##   trans_elevator option (b): the whole floor is the service level; the freight elevator opens onto a dry landing deck
 ##
 ## Every grate bridge is checked to span the channel (both ends on dry floor on opposite banks): see _check_bridges().
 
@@ -1416,3 +1420,199 @@ func _case_fight_ledge() -> void:
 	_mode(false)
 	_view("game", GAME_SIZE, _w(mn[8]) + Vector3(0, 0, 1.2))
 	_view("close", 13.0, _w(mn[7] + D[2]) + Vector3(0, 0, 0.5))
+
+
+# --------------------------------------------------------------------------- transitions (how a sewer fits a floor)
+
+var levels := {}     ## Vector2i -> floor level (the transition cases; default 0)
+var stair_of := {}   ## Vector2i -> [dir it climbs toward, rise]: STAIRS cells
+
+
+## _make_map with levels and stairs: every cell at levels[c] (0 by default), STAIRS where stair_of says, and each wall
+## WALL_LEVEL above the highest floor (a stair's top) next to it, so a raised room keeps full-height walls.
+func _make_map_levels() -> void:
+	map = HexMap.new()
+	var room_mat := FloorMaterials.pack(FloorMaterials.F_FLAGSTONE, FloorMaterials.W_STONE)
+	var corr_mat := FloorMaterials.pack(FloorMaterials.F_CORR_STONE, FloorMaterials.W_STONE)
+	for c: Vector2i in _cells:
+		var cell := map.set_cell(c, int(levels.get(c, 0)))
+		cell.tag = str(_cells[c])
+		cell.mat_id = corr_mat if cell.tag == "corridor" else room_mat
+		if stair_of.has(c):
+			cell.type = HexMap.Tile.STAIRS
+			cell.stair_dir = int(stair_of[c][0])
+			cell.stair_rise = int(stair_of[c][1])
+	for c: Vector2i in _cells:
+		for nb in Hex.neighbors(c):
+			if _cells.has(nb) or map.has_cell(nb):
+				continue
+			var top := 0
+			for n2 in Hex.neighbors(nb):
+				if _cells.has(n2):
+					top = maxi(top, int(levels.get(n2, 0)) + (int(stair_of[n2][1]) if stair_of.has(n2) else 0))
+			map.set_cell(nb, top + WALL_LEVEL, HexMap.Tile.WALL).mat_id = room_mat
+	map.cut_walls()
+
+
+## Give a hall's cells the level of the nearest route cell (so a stair hall's cut cells follow its flights).
+func _hall_levels(hall_id: String, route: Array[Vector2i], route_levels: Array) -> void:
+	for c: Vector2i in hall_cells[hall_id]:
+		var best := 999
+		var lv := 0
+		for i in route.size():
+			var d := Hex.distance(c, route[i])
+			if d < best:
+				best = d
+				lv = int(route_levels[i])
+		levels[c] = lv
+
+
+func _lv(c: Vector2i, off: Vector3 = Vector3.ZERO) -> Vector3:
+	var p := _w(c) + off
+	p.y = float(levels.get(c, 0)) * LH
+	return p
+
+
+## Option (a): a dry bunker room (U, four levels up) -> a service door -> a narrow stair hall, two flights of 2 levels
+## down -> the sewer's first room (S, the intake: an outfall, a channel that bends through and on down a flooded hall).
+func _build_trans_stair() -> Dictionary:
+	_begin("concrete")
+	var D := Hex.DIRS
+	var u0 := Vector2i(0, 0)
+	var s0 := u0 + D[1] * 15
+	var t0 := s0 + D[1] * 14
+	_room(u0, 4, "room:0")
+	_room(s0, 5, "room:1")
+	_room(t0, 3, "room:2")
+	for c in Hex.range_cells(u0, 4):
+		levels[c] = 6
+	var st := _hall2("stair", u0 + D[1] * 4, 1, 6, 0)
+	var rl := [6, 6, 3, 3, 0, 0, 0]
+	stair_of[st[2]] = [4, 3]
+	stair_of[st[4]] = [4, 3]
+	_hall2("on", s0 + D[1] * 5, 1, 6, 0)
+	_hall_levels("stair", st, rl)
+	_make_map_levels()
+	_wet_line(s0 + D[3] * 5, s0)
+	_wet_line(s0, s0 + D[1] * 5)
+	_flood(Hex.range_cells(s0, 1))
+	_flood_hall("on")
+	_wet_line(t0 - D[1] * 3, t0 + D[1] * 3)
+	_flow([s0 + D[3] * 5, s0, t0 + D[1] * 3])
+	_finish()
+	# the dry room above: the server room's racks, a desk; at the stair head the service door, open, and a notice
+	for spec: Array in [["rack_cab", 2, -1.2, 0.45], ["rack_cab", 2, 0.0, 0.45], ["desk", 3, 0.0, 0.7]]:
+		var n := _put_wall(DecorModels.build(str(spec[0])), u0, 4, int(spec[1]), float(spec[2]), float(spec[3]))
+		n.position.y = 3.0
+	var ax := Hex.dir_vector(1)
+	var door_p := _w(u0 + D[1] * 4) + ax * Hex.INNER
+	var door := OfficeDoorModel.make("double", 3.0, float(WALL_LEVEL) * LH)
+	add_child(door)
+	door.position = Vector3(door_p.x, 3.0, door_p.z)
+	door.rotation_degrees.y = yaw_to(ax)
+	door.set_open(1.0, 1.0)
+	_put(NoteModels.build("sign"), _lv(u0 + D[1] * 3 + D[5]) + Vector3(0, 0, 0.2), yaw_to(Hex.dir_vector(4)))
+	_put(DecorModels.build("wet_floor_sign"), _lv(st[1]) + Vector3(0.0, 0, 0.5), 20.0)
+	# the sewer room below
+	_outfall_at(s0 + D[3] * 5, 0, 0.6, 1.0)
+	_put_wall(SewerProps.build("pipe_bundle", {"length": 5.0, "col": look["pipe"]}), s0, 5, 2, 0.5, 0.0)
+	_put(SewerProps.build("grate", {"size": 1.4}), _w(s0) + Vector3(0, FLOOR_Y + 0.01, 0), 15.0)
+	_shaft(_w(s0) + Vector3(0.3, FLOOR_Y, -0.2), 0.8)
+	_put_wall(SewerProps.build("pump"), s0, 5, 1, 1.0, 0.6)
+	return {"u0": u0, "s0": s0, "st": st}
+
+
+func _case_trans_stair() -> void:
+	var L := _build_trans_stair()
+	var D := Hex.DIRS
+	var u0: Vector2i = L["u0"]
+	var s0: Vector2i = L["s0"]
+	var st: Array[Vector2i] = L["st"]
+	var ax := Hex.dir_vector(1)
+	_hero("gasket", _lv(st[1]), ax)
+	_hero("wick", _lv(st[3]), ax)
+	var reb := _hero("rebar", _lv(s0 + D[4] * 3 + D[5]), ax)
+	_gator2(_w(s0, Vector3(0.2, 0, 0.1)), yaw_to(Hex.dir_vector(3)), 25.0)
+	_mon("grunt", _w(s0 + D[2] * 3), Hex.dir_vector(4))
+	_mon("grunt", _w(s0 + D[2] * 2 + D[3]), Hex.dir_vector(4))
+	_mon("archer", _w(s0 + D[1] * 2 + D[2] * 2), Hex.dir_vector(4))
+	_employee("staff", 1, _lv(u0 + D[3] * 2), Hex.dir_vector(0), "cower")
+	_mode(false)
+	var self_ref := self
+	var no_fog := func() -> void:
+		self_ref._show_caption("Option (a): the transition is a service stair. A service door at the head of a narrow hall, two flights\ndown (6 levels), and the first sewer room at the bottom. Two-way: walk down, walk back up.")
+	var with_fog := func() -> void:
+		reb.visible = false   # (the crew is all upstairs for this view)
+		self_ref._fog_from([self_ref._lv(u0 + D[3] * 2), self_ref._lv(u0 + D[4] * 2 + D[3])])
+		self_ref._show_caption("Fog look A from the stair head: the stair hall is in view, the sewer room below is NEXT (a silhouette,\nits channel traced), the hall beyond unknown. The service door is the threshold; height shows the room below.")
+	_view("game", GAME_SIZE, (_w(u0) + _w(s0)) * 0.5 + Hex.dir_vector(1) * 2.0 + Vector3(0, 0, 1.0), GAME_YAW, GAME_PITCH, no_fog)
+	_view("fog", GAME_SIZE, (_w(u0) + _w(s0)) * 0.5 + Hex.dir_vector(1) * 2.0 + Vector3(0, 0, 1.0), GAME_YAW, GAME_PITCH, with_fog)
+
+
+## Room fog look A as the game draws it, from these viewers; things that move hide where nobody sees.
+func _fog_from(viewers: Array) -> void:
+	if fog_view == null:
+		fog = RoomFog.build(map)
+		fog_view = FogView.new()
+		fog_view.name = "Fog"
+		add_child(fog_view)
+		fog_view.setup(map, fog, camera)
+		fog_view.track_static(_static_nodes())
+	fog_view.viewers = viewers
+	fog_view.refresh_now(true)
+	for n: Node3D in _contents:
+		n.visible = fog.shows_contents(n.global_position)
+	print("fog states: ", fog.tags, " ", fog.state)
+
+
+func _show_caption(text: String) -> void:
+	if caption == null:
+		_caption(text)
+	else:
+		caption.text = text
+
+
+## Option (b): the whole floor is the service level. The freight elevator stands on a dry landing deck in the first
+## sewer room; the channel crosses the room and runs on down flooded halls both ways.
+func _case_trans_elevator() -> void:
+	_begin("concrete")
+	var D := Hex.DIRS
+	var r0 := Vector2i(0, 0)
+	var w0 := r0 + D[4] * 13
+	var e0 := r0 + D[1] * 13
+	_room(r0, 6, "room:0")
+	_room(w0, 3, "room:1")
+	_room(e0, 3, "room:2")
+	_hall2("w", r0 + D[4] * 6, 4, 4, 0)
+	_hall2("e", r0 + D[1] * 6, 1, 4, 0)
+	_make_map()
+	_wet_line(w0 + D[4] * 3, e0 + D[1] * 3)
+	_flood_hall("w")
+	_flood_hall("e")
+	_flood(Hex.range_cells(r0 + D[5], 1))
+	_flow([w0 + D[4] * 3, e0 + D[1] * 3])
+	_finish()
+	var ev := ElevatorModel.new("service", "column")
+	add_child(ev)
+	ev.position = _w(r0 + D[2] * 3 + D[3])
+	ev.rotation_degrees.y = yaw_to(Hex.dir_vector(5))
+	ev.set_door_open(1.0)
+	ev.set_indicator(0.5)
+	_hero("rebar", _w(r0 + D[2] + D[3], Vector3(0.0, 0, 0.3)), Hex.dir_vector(5))
+	_hero("wick", _w(r0 + D[2] * 2, Vector3(0.2, 0, 0.2)), Hex.dir_vector(5))
+	_hero("gasket", _w(r0 + D[3] * 2 + D[2], Vector3(0, 0, 0.3)), Hex.dir_vector(5))
+	_put(NoteModels.build("sign"), _w(r0 + D[2] * 2 + D[1] * 2), yaw_to(Hex.dir_vector(5)))
+	_put(DecorModels.build("wet_floor_sign"), _w(r0 + D[3] * 3), 10.0)
+	_put_wall(SewerProps.build("pump"), r0, 6, 2, -1.5, 0.6)
+	_put_wall(SewerProps.build("pipe_bundle", {"length": 5.0, "col": look["pipe"]}), r0, 6, 2, 1.5, 0.0)
+	_put_wall(SewerProps.build("junction_box", {"drop": Vector3(0.2, -1.25, 2.4)}), r0, 6, 1, 1.0, 0.0)
+	_put(SewerProps.build("grate", {"size": 1.4}), _w(r0 + D[5]) + Vector3(0, FLOOR_Y + 0.01, 0), 0.0)
+	_gator2(_w(r0 + D[5], Vector3(0.2, 0, 0.3)), yaw_to(Hex.dir_vector(0)), 30.0)
+	_mon("grunt", _w(r0 + D[5] * 3 + D[0]), Hex.dir_vector(2))
+	_mon("grunt", _w(r0 + D[0] * 3 + D[5]), Hex.dir_vector(3))
+	_mon("archer", _w(r0 + D[5] * 4 + D[4] * 2), Hex.dir_vector(2))
+	_bars_at(w0 + D[4] * 3, 4)
+	_bars_at(e0 + D[1] * 3, 1)
+	_caption("Option (b): the whole floor is the service level. The freight elevator opens onto a dry landing deck in the\nfirst sewer room; everything past the deck is wet. No transition: the elevator ride is the transition.")
+	_mode(false)
+	_view("game", GAME_SIZE, _w(r0) + Vector3(0, 0, 1.5))
