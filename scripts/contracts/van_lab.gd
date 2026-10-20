@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Work-van lab: the real terrain look (HexMapView + DungeonLook) with the crew's van arriving over its summoning
 ## circle, Wick, Gasket and Rebar stepping out beside it. Scene: scenes/van_lab.tscn.
 ##
@@ -18,7 +18,6 @@ extends Node3D
 const GAME_YAW := 45.0
 const GAME_PITCH := -56.0
 
-var shot_path := ""
 var view := "game"
 var at_t := NAN
 var cam_yaw := NAN
@@ -27,8 +26,6 @@ var cam_size := NAN
 var van_yaw := 135.0
 var with_crew := true
 var door_override := NAN
-var map: HexMap
-var camera: Camera3D
 var arrival: VanArrival
 var crew: Array[Hero] = []
 var _plan: Dictionary = {}
@@ -37,56 +34,28 @@ var _cycle := 0.0
 
 func _ready() -> void:
 	_parse_args()
-	_build_world()
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
+	build_arena(20, 11, 16, 3)
+	make_camera()
 	_spawn_crew()
 	_start()
 	_set_view()
 
 
 func _parse_args() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	view = _arg(a, "--view", "game")
-	if _arg(a, "--t") != "":
-		at_t = float(_arg(a, "--t"))
-	if _arg(a, "--yaw") != "":
-		cam_yaw = float(_arg(a, "--yaw"))
-	if _arg(a, "--pitch") != "":
-		cam_pitch = float(_arg(a, "--pitch"))
-	if _arg(a, "--size") != "":
-		cam_size = float(_arg(a, "--size"))
-	if _arg(a, "--van-yaw") != "":
-		van_yaw = float(_arg(a, "--van-yaw"))
-	with_crew = not a.has("--no-crew")
-	if _arg(a, "--door") != "":
-		door_override = float(_arg(a, "--door"))
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
-func _build_world() -> void:
-	map = HexMap.new()
-	for c in Hex.range_cells(Vector2i.ZERO, 20):
-		var d := Hex.distance(c, Vector2i.ZERO)
-		if d <= 11:
-			map.set_cell(c, 0).tag = "room:0"
-		elif d <= 16:
-			map.set_cell(c, 6, HexMap.Tile.WALL)
-	GameWorld.begin(map, self, 3)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
+	view = arg(args, "--view", "game")
+	if arg(args, "--t") != "":
+		at_t = float(arg(args, "--t"))
+	if arg(args, "--yaw") != "":
+		cam_yaw = float(arg(args, "--yaw"))
+	if arg(args, "--pitch") != "":
+		cam_pitch = float(arg(args, "--pitch"))
+	if arg(args, "--size") != "":
+		cam_size = float(arg(args, "--size"))
+	if arg(args, "--van-yaw") != "":
+		van_yaw = float(arg(args, "--van-yaw"))
+	with_crew = not args.has("--no-crew")
+	if arg(args, "--door") != "":
+		door_override = float(arg(args, "--door"))
 
 
 func _make_plan() -> Dictionary:
@@ -117,14 +86,6 @@ func _start() -> void:
 		arrival.van.set_door_open(door_override)
 	if shot_path != "":
 		_run_shot()
-
-
-func _aim(yaw_deg: float, pitch_deg: float, size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
 
 
 func _set_view() -> void:
@@ -162,7 +123,7 @@ func _set_view() -> void:
 		pitch = cam_pitch
 	if not is_nan(cam_size):
 		size = cam_size
-	_aim(yaw, pitch, size, tgt)
+	aim(yaw, pitch, size, tgt)
 
 
 func _run_shot() -> void:
@@ -173,10 +134,9 @@ func _run_shot() -> void:
 		while arrival.time < at_t:
 			await get_tree().process_frame
 		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", shot_path, " ", img.save_png(shot_path), " at arrival time ", arrival.time)
-	get_tree().quit()
+	var img := await grab(0)
+	save_shot(img, shot_path, " at arrival time " + str(arrival.time))
+	finish()
 
 
 func _process(delta: float) -> void:

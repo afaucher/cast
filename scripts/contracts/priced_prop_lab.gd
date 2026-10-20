@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Priced-prop lab: the real terrain look (HexMapView + DungeonLook) with both prop catalogs on
 ## slate hexes (luxury bunker row in front, villain lair row behind), two heroes so price tags fade
 ## in, a gold toilet mid-break with debris, and the live DamageTicker. Scene: scenes/prop_lab.tscn.
@@ -19,14 +19,10 @@ const GAME_PITCH := -56.0
 const GAME_SIZE := 24.0
 const SPACING := 2.45
 
-var shot_path := ""
-var only_view := ""
 var only_prop := ""
 var cam_yaw := NAN
 var cam_pitch := NAN
 var cam_size := NAN
-var map: HexMap
-var camera: Camera3D
 var wick: Hero
 var gasket: Hero
 var demo: PricedProp
@@ -39,12 +35,8 @@ var _u_center := 0.0       ## where the rows' middle lies along the screen-right
 
 func _ready() -> void:
 	_parse_args()
-	_build_world()
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
+	build_arena(26, 14, 20, 3)
+	make_camera()
 	Ledger.begin_contract(60000)
 	var layer := CanvasLayer.new()
 	layer.layer = 10
@@ -64,39 +56,13 @@ func _ready() -> void:
 
 
 func _parse_args() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
-	only_prop = _arg(a, "--prop")
-	if _arg(a, "--yaw") != "":
-		cam_yaw = float(_arg(a, "--yaw"))
-	if _arg(a, "--pitch") != "":
-		cam_pitch = float(_arg(a, "--pitch"))
-	if _arg(a, "--size") != "":
-		cam_size = float(_arg(a, "--size"))
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
-func _build_world() -> void:
-	map = HexMap.new()
-	var origin := Vector2i.ZERO
-	for c in Hex.range_cells(origin, 26):
-		var d := Hex.distance(c, origin)
-		if d <= 14:
-			map.set_cell(c, 0).tag = "room:0"
-		elif d <= 20:
-			map.set_cell(c, 6, HexMap.Tile.WALL)
-	GameWorld.begin(map, self, 3)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
+	only_prop = arg(args, "--prop")
+	if arg(args, "--yaw") != "":
+		cam_yaw = float(arg(args, "--yaw"))
+	if arg(args, "--pitch") != "":
+		cam_pitch = float(arg(args, "--pitch"))
+	if arg(args, "--size") != "":
+		cam_size = float(arg(args, "--size"))
 
 
 ## World position at screen-right offset x and away-from-camera offset z (for the game yaw).
@@ -168,11 +134,7 @@ func _break_demo() -> void:
 
 func _aim(yaw_deg: float, pitch_deg: float, size: float, tgt: Vector3) -> void:
 	_yaw = yaw_deg
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
+	aim(yaw_deg, pitch_deg, size, tgt)
 
 
 func _set_view(view: String) -> void:
@@ -195,38 +157,25 @@ func _set_view(view: String) -> void:
 
 # ------------------------------------------------------------------ screenshots
 
-func _snap(out_path: String, settle_frames: int = 8) -> void:
-	for i in settle_frames:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", out_path, " ", img.save_png(out_path))
-
-
-func _wait_physics(n: int) -> void:
-	for i in n:
-		await get_tree().physics_frame
-
-
 func _run_shots() -> void:
-	await _wait_physics(30)
+	await wait_physics(30)
 	var base := shot_path.get_basename()
 	if only_view == "prop":
 		_set_view("prop")
-		await _snap(shot_path, 30)
-		get_tree().quit()
+		await snap(shot_path, 30)
+		finish()
 		return
 	var views: Array[String] = ["game", "close", "bunker", "lair"]
 	if only_view != "":
 		views = [only_view]
 	# Let the hero tags fade in, then break the demo toilet and catch the debris in the air.
-	await _wait_physics(40)
+	await wait_physics(40)
 	_break_demo()
-	await _wait_physics(14)
+	await wait_physics(14)
 	for v in views:
 		_set_view(v)
-		await _snap(shot_path if only_view != "" else "%s_%s.png" % [base, v], 2)
-	get_tree().quit()
+		await snap(shot_path if only_view != "" else "%s_%s.png" % [base, v], 2)
+	finish()
 
 
 func _process(delta: float) -> void:

@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Hellgate look-dev lab: a normal gate and the big origin gate set into slate hexes (HexMapView +
 ## DungeonLook), with the three heroes for scale and a few monsters spawned by the gates. Scene:
 ## scenes/hellgate_lab.tscn.
@@ -23,10 +23,6 @@ const GAME_SIZE := 24.0
 
 const VIEWS: Array[String] = ["game", "close", "side", "origin", "flare", "phase", "closing", "fight"]
 
-var shot_path := ""
-var only_view := ""
-var map: HexMap
-var camera: Camera3D
 var gate: Hellgate
 var origin_gate: Hellgate
 var wick: WickModel
@@ -37,15 +33,8 @@ var _t := 0.0
 
 
 func _ready() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
-	_build_world()
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
+	build_arena(22, 15, 20, 1)
+	make_camera()
 	gate = Hellgate.spawn(Vector2i(-6, 3), {"difficulty": 0.6, "depth": 2})
 	origin_gate = Hellgate.spawn(Vector2i(5, -3), {"difficulty": 0.8, "depth": 3, "origin": true})
 	if shot_path != "":
@@ -62,29 +51,7 @@ func _ready() -> void:
 		GameWorld.spawn(hero, Hex.to_world(Vector2i(0, 0)))
 		var m := WickModel.new()
 		hero.add_child(m)
-		_aim(GAME_YAW, GAME_PITCH, GAME_SIZE, Vector3(0, 0.6, 0))
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
-func _build_world() -> void:
-	map = HexMap.new()
-	for c in Hex.range_cells(Vector2i.ZERO, 22):
-		var d := Hex.distance(c, Vector2i.ZERO)
-		if d <= 15:
-			map.set_cell(c, 0).tag = "room:0"
-		elif d <= 20:
-			map.set_cell(c, 6, HexMap.Tile.WALL)
-	GameWorld.begin(map, self, 1)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
+		aim(GAME_YAW, GAME_PITCH, GAME_SIZE, Vector3(0, 0.6, 0))
 
 
 func _place_heroes() -> void:
@@ -101,14 +68,6 @@ func _place_heroes() -> void:
 		m.rotation.y = deg_to_rad(GAME_YAW + 180.0)
 
 
-func _aim(yaw_deg: float, pitch_deg: float, size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
-
-
 func _process(delta: float) -> void:
 	if shot_path != "" or hero == null:
 		return
@@ -116,15 +75,6 @@ func _process(delta: float) -> void:
 	var p := Hex.to_world(Vector2i(-3, 2)) + Vector3(cos(_t * 0.5), 0, sin(_t * 0.5)) * 7.0
 	hero.global_position = p
 	hero.facing = Vector3(-sin(_t * 0.5), 0, cos(_t * 0.5))
-
-
-func _snap(path: String) -> Image:
-	for i in 8:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", path, " ", img.save_png(path))
-	return img
 
 
 func _clear_monsters() -> void:
@@ -145,25 +95,25 @@ func _prepare(view: String) -> void:
 		"game":
 			_burst(gate, 4)
 			_burst(origin_gate, 6)
-			_aim(GAME_YAW, GAME_PITCH, GAME_SIZE, mid + Vector3(0, 0.5, 0))
+			aim(GAME_YAW, GAME_PITCH, GAME_SIZE, mid + Vector3(0, 0.5, 0))
 		"fight":
 			gate.activate()
 			origin_gate.activate()
 			_burst(gate, 5)
 			_burst(origin_gate, 6)
-			_aim(GAME_YAW, GAME_PITCH, GAME_SIZE, mid + Vector3(0, 0.5, 0))
+			aim(GAME_YAW, GAME_PITCH, GAME_SIZE, mid + Vector3(0, 0.5, 0))
 		"close":
-			_aim(GAME_YAW, -42.0, 7.5, gp + Vector3(0, 0.9, 0))
+			aim(GAME_YAW, -42.0, 7.5, gp + Vector3(0, 0.9, 0))
 		"side":
-			_aim(160.0, -18.0, 7.5, gp + Vector3(0, 1.0, 0))
+			aim(160.0, -18.0, 7.5, gp + Vector3(0, 1.0, 0))
 		"origin":
-			_aim(GAME_YAW, -50.0, 15.0, op + Vector3(0, 1.4, 0))
+			aim(GAME_YAW, -50.0, 15.0, op + Vector3(0, 1.4, 0))
 		"flare":
 			gate.activate()
 			gate.model.set_flare(1.0)
 			gate.model.pulse(0.6)
 			gate.model.freeze_at(1.7)
-			_aim(GAME_YAW, -42.0, 7.5, gp + Vector3(0, 0.9, 0))
+			aim(GAME_YAW, -42.0, 7.5, gp + Vector3(0, 0.9, 0))
 		"phase":
 			origin_gate.activate()
 			origin_gate.model.set_phase(1)
@@ -171,10 +121,10 @@ func _prepare(view: String) -> void:
 			origin_gate.model.freeze_at(1.7)
 			origin_gate.model._shove_t = 0.8
 			origin_gate.model._animate(0.0)
-			_aim(GAME_YAW, -50.0, 17.0, op + Vector3(0, 1.0, 0))
+			aim(GAME_YAW, -50.0, 17.0, op + Vector3(0, 1.0, 0))
 		"closing":
 			gate.model.freeze_at(1.7, 0.42)
-			_aim(GAME_YAW, -42.0, 7.5, gp + Vector3(0, 0.9, 0))
+			aim(GAME_YAW, -42.0, 7.5, gp + Vector3(0, 0.9, 0))
 
 
 func _burst(g: Hellgate, n: int) -> void:
@@ -199,10 +149,10 @@ func _run_shots() -> void:
 		for i in 4:
 			await get_tree().physics_frame
 		var out := shot_path if only_view != "" else "%s_%s.png" % [base, v]
-		await _snap(out)
+		await snap(out, 8)
 		if v == "closing":
 			gate.model._closing = false
 			gate.model._close_t = 0.0
 			gate.model._close_k = 0.0
-	get_tree().quit()
+	finish()
 

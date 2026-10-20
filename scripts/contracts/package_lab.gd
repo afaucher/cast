@@ -1,4 +1,4 @@
-extends Node3D
+extends LabBase
 ## Mail-package lab: the real terrain look (HexMapView + DungeonLook) with the three box sizes, stacks of 2 and
 ## 3, and one broken box per kind of contents (skulls, yogurt, pickles, a spell component, crypto cash) with its
 ## spill on the floor, plus Wick for scale. Scene: scenes/package_lab.tscn.
@@ -20,14 +20,10 @@ const ROW_INTACT := -2.4
 const ROW_BROKEN := 2.2
 const CONTENTS: Array[String] = ["skulls", "yogurt", "pickles", "component", "crypto"]
 
-var shot_path := ""
-var only_view := ""
 var only_kind := "medium"
 var cam_yaw := NAN
 var cam_pitch := NAN
 var cam_size := NAN
-var map: HexMap
-var camera: Camera3D
 var wick: Hero
 var intact: Array[MailPackage] = []
 var broken: Array[MailPackage] = []
@@ -37,12 +33,8 @@ var _u_center := 0.0
 
 func _ready() -> void:
 	_parse_args()
-	_build_world()
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.near = 0.1
-	camera.far = 200.0
-	add_child(camera)
+	build_arena(20, 11, 16, 3)
+	make_camera()
 	Ledger.begin_contract(60000)
 	if only_view == "box":
 		intact.append(MailPackage.spawn(Vector2.ZERO, {"size": only_kind, "yaw": 20.0, "seed": 4}))
@@ -51,43 +43,17 @@ func _ready() -> void:
 	if shot_path != "":
 		_run_shots()
 	else:
-		_aim(GAME_YAW, GAME_PITCH, 12.0, _row_pos(_u_center, 0.0) + Vector3(0, 0.4, 0))
+		aim(GAME_YAW, GAME_PITCH, 12.0, _row_pos(_u_center, 0.0) + Vector3(0, 0.4, 0))
 
 
 func _parse_args() -> void:
-	var a := OS.get_cmdline_user_args()
-	shot_path = _arg(a, "--shot")
-	only_view = _arg(a, "--view")
-	only_kind = _arg(a, "--size-kind", "medium")
-	if _arg(a, "--yaw") != "":
-		cam_yaw = float(_arg(a, "--yaw"))
-	if _arg(a, "--pitch") != "":
-		cam_pitch = float(_arg(a, "--pitch"))
-	if _arg(a, "--size") != "":
-		cam_size = float(_arg(a, "--size"))
-
-
-static func _arg(a: PackedStringArray, key: String, fallback: String = "") -> String:
-	var i := a.find(key)
-	if i >= 0 and i + 1 < a.size():
-		return a[i + 1]
-	return fallback
-
-
-func _build_world() -> void:
-	map = HexMap.new()
-	var origin := Vector2i.ZERO
-	for c in Hex.range_cells(origin, 20):
-		var d := Hex.distance(c, origin)
-		if d <= 11:
-			map.set_cell(c, 0).tag = "room:0"
-		elif d <= 16:
-			map.set_cell(c, 6, HexMap.Tile.WALL)
-	GameWorld.begin(map, self, 3)
-	var terrain := HexMapView.new()
-	add_child(terrain)
-	terrain.build(map)
-	DungeonLook.apply(self, map)
+	only_kind = arg(args, "--size-kind", "medium")
+	if arg(args, "--yaw") != "":
+		cam_yaw = float(arg(args, "--yaw"))
+	if arg(args, "--pitch") != "":
+		cam_pitch = float(arg(args, "--pitch"))
+	if arg(args, "--size") != "":
+		cam_size = float(arg(args, "--size"))
 
 
 ## World position at screen-right offset x and away-from-camera offset z (for the game yaw).
@@ -146,50 +112,29 @@ func _break(list: Array[MailPackage], only: Array[String] = []) -> void:
 			m.apply_damage(1.0, wick)
 
 
-func _aim(yaw_deg: float, pitch_deg: float, size: float, tgt: Vector3) -> void:
-	var yaw := deg_to_rad(yaw_deg)
-	var pitch := deg_to_rad(pitch_deg)
-	camera.size = size
-	camera.global_position = tgt + Vector3(sin(yaw) * cos(-pitch), sin(-pitch), cos(yaw) * cos(-pitch)) * 60.0
-	camera.look_at(tgt, Vector3.UP)
-
-
 func _set_view(view: String) -> void:
 	match view:
 		"game":
-			_aim(GAME_YAW, GAME_PITCH, 15.0, _row_pos(0.0, 0.0) + Vector3(0, 0.3, 0))
+			aim(GAME_YAW, GAME_PITCH, 15.0, _row_pos(0.0, 0.0) + Vector3(0, 0.3, 0))
 		"close":
-			_aim(GAME_YAW, GAME_PITCH, 7.5, _row_pos(0.6, ROW_INTACT) + Vector3(0, 0.5, 0))
+			aim(GAME_YAW, GAME_PITCH, 7.5, _row_pos(0.6, ROW_INTACT) + Vector3(0, 0.5, 0))
 		"spills":
-			_aim(GAME_YAW, GAME_PITCH, 8.0, _row_pos(0.4, ROW_BROKEN) + Vector3(0, 0.2, 0))
+			aim(GAME_YAW, GAME_PITCH, 8.0, _row_pos(0.4, ROW_BROKEN) + Vector3(0, 0.2, 0))
 		"box":
 			var yaw := cam_yaw if not is_nan(cam_yaw) else GAME_YAW
 			var pitch := cam_pitch if not is_nan(cam_pitch) else GAME_PITCH
 			var size := cam_size if not is_nan(cam_size) else 2.6
-			_aim(yaw, pitch, size, Vector3(0, 0.3, 0))
+			aim(yaw, pitch, size, Vector3(0, 0.3, 0))
 
 
 # ------------------------------------------------------------------ screenshots
 
-func _snap(out_path: String, settle_frames: int = 8) -> void:
-	for i in settle_frames:
-		await get_tree().process_frame
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	print("shot ", out_path, " ", img.save_png(out_path))
-
-
-func _wait_physics(n: int) -> void:
-	for i in n:
-		await get_tree().physics_frame
-
-
 func _run_shots() -> void:
-	await _wait_physics(20)
+	await wait_physics(20)
 	if only_view == "box":
 		_set_view("box")
-		await _snap(shot_path, 20)
-		get_tree().quit()
+		await snap(shot_path, 20)
+		finish()
 		return
 	var base := shot_path.get_basename()
 	var views: Array[String] = ["game", "close", "spills"]
@@ -198,13 +143,13 @@ func _run_shots() -> void:
 	# Decorative spills first so they have time to settle; the prize boxes last, caught mid-pop.
 	var decorative: Array[String] = ["skulls", "yogurt", "pickles"]
 	_break(broken, decorative)
-	await _wait_physics(110)
+	await wait_physics(110)
 	_break(broken)
-	await _wait_physics(12)
+	await wait_physics(12)
 	for v in views:
 		_set_view(v)
-		await _snap(shot_path if only_view != "" else "%s_%s.png" % [base, v], 2)
-	get_tree().quit()
+		await snap(shot_path if only_view != "" else "%s_%s.png" % [base, v], 2)
+	finish()
 
 
 func _process(delta: float) -> void:

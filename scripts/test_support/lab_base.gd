@@ -47,6 +47,12 @@ func wait_frames(n: int) -> void:
 		await get_tree().process_frame
 
 
+## Wait `n` physics frames.
+func wait_physics(n: int) -> void:
+	for i in n:
+		await get_tree().physics_frame
+
+
 ## Wait `settle` frames, then the frame after the draw, and return what the root viewport shows.
 func grab(settle: int = 6) -> Image:
 	return await grab_of(self, settle)
@@ -63,6 +69,21 @@ static func grab_of(node: Node, settle: int = 6) -> Image:
 ## Save `img` as a PNG and print "shot <path> <result>" (`tail` is appended: extra facts about the shot).
 func save_shot(img: Image, path: String, tail: String = "") -> void:
 	print("shot ", path, " ", img.save_png(path), tail)
+
+
+## A contact sheet of `images` (the views of one run), `cols` across, each shrunk to 1/`shrink` of its size, saved
+## as `shot_path` (the file `--shot` names; the views themselves go to <base>_<view>.png).
+func save_sheet(images: Array[Image], cols: int, shrink: int) -> void:
+	var rows := ceili(images.size() / float(cols))
+	var tw := images[0].get_width() / shrink
+	var th := images[0].get_height() / shrink
+	var sheet := Image.create(tw * cols, th * rows, false, Image.FORMAT_RGBA8)
+	for i in images.size():
+		var im := images[i].duplicate() as Image
+		im.convert(Image.FORMAT_RGBA8)
+		im.resize(tw, th, Image.INTERPOLATE_BILINEAR)
+		sheet.blit_rect(im, Rect2i(0, 0, tw, th), Vector2i((i % cols) * tw, (i / cols) * th))
+	print("sheet ", shot_path, " ", sheet.save_png(shot_path))
 
 
 ## Settle, grab, save and print one screenshot; returns the image (for crops and contact sheets).
