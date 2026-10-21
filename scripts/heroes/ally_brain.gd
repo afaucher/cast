@@ -17,6 +17,15 @@ extends Node
 ## an ally standing in the leader's path steps out of the lane (or falls behind it in a one-wide hall)
 ## instead of blocking. None of this applies while there is something to fight.
 ##
+## NO PACING (user playtest, 2026-10-21: "Rebar on the host is vibrating violently"): the formation rules must never argue.
+## A hero that does not make room itself (a person's: the leader, or in a crew another player's hero, a puppet on the host)
+## standing near the slot used to start a loop: settled at the slot, personal space walked the ally out past FOLLOW_SLACK,
+## the slot called it straight back into the crowd, and again, about four 180-degree turns a second for as long as that
+## player stood there. So the slot is taken on a cell outside such a hero's personal space (`_snap_walkable` roomy), and
+## personal space never steps the ally out past the slack. Likewise beside a walking leader: an ally that has stepped out
+## of the lane waits there rather than cutting back across it toward its slot (out and back in, every other frame, was
+## the same shake), and it keeps to the side it chose while it steps out.
+##
 ## RESTRAINT (combat-variety-research.md A1, combat-proposals.md 1.0 / 1.4; the default, with no order): the ally follows
 ## and supports, it never leads. It only joins a fight already started (a monster ALERT, or chasing / attacking anyone but
 ## another monster; a hellgate once the crew has dented it), REACT_MIN..MAX seconds after it first sees that monster in
@@ -42,7 +51,8 @@ const FORMATION_HEX_MIN := 2.5      ## formation distance range, in hexes from t
 const FORMATION_HEX_MAX := 3.5
 const FOLLOW_SLACK := 1.6      ## start walking back to the slot when this far from it (world units) ...
 const SLOT_REACHED := 0.6      ## ... and stop when this close
-const PERSONAL_SPACE := 2.4    ## an idle ally backs off from a hero closer than this (world units)
+const PERSONAL_SPACE := 2.4    ## an idle ally backs off from a hero closer than this (world units) ...
+const SPACE_SLACK_MARGIN := 0.15   ## ... but stays this far inside FOLLOW_SLACK of its slot while it does (NO PACING)
 const BLOCK_AHEAD := 3.4       ## an ally this far ahead of a moving leader, inside the lane, is "in the way"
 const BLOCK_LANE := 1.25       ## half-width of the leader's lane
 const HEADING_MIN_STEP := 0.012   ## the leader moved at least this far this frame: it is walking
@@ -115,6 +125,8 @@ var _quiet_since := -1.0          ## "attack": nothing near has been fighting si
 var _foe: Actor = null            ## the monster it is fighting (kept while it stays a fair pick)
 var _react_at: Dictionary = {}    ## monster instance id -> when this ally may engage it (the reaction delay)
 var _rng := RandomNumberGenerator.new()
+var _clear_side := 0.0            ## stepping out of the leader's lane to this side (+1 / -1 across its heading), 0 when not
+var _roomy_cell := Vector2i(1 << 20, 1 << 20)   ## the formation slot's cell last frame (kept while a crowd moves; NO PACING)
 
 
 func _exit_tree() -> void:
@@ -141,6 +153,7 @@ func net_fields() -> Dictionary:
 		"order": Net.PRIVATE, "order_point": Net.PRIVATE, "order_by": Net.PRIVATE, "_arrived": Net.PRIVATE,
 		"_quiet_since": Net.PRIVATE, "_foe": Net.PRIVATE, "_react_at": Net.PRIVATE,
 		"_rng": Net.PRIVATE,      # the reaction delays: a generator seeded from the floor, rolled on the host only
+		"_clear_side": Net.PRIVATE, "_roomy_cell": Net.PRIVATE,
 	}
 
 
@@ -578,37 +591,87 @@ static func _gap_between(map: HexMap, a: Vector3, b: Vector3) -> bool:
 
 
 ## `p` pulled onto a walkable floor cell near it (same level as the leader give or take one), so a formation
-## slot or a side-step never points into a wall. Returns `p` when nothing is better.
-func _snap_walkable(p: Vector3) -> Vector3:
+## slot or a side-step never points into a wall. Returns `p` when nothing is better. `roomy` (the formation slot): the
+## nearest such cell outside the personal space of every hero that does not make room itself (`_holds_ground`) when there
+## is one, so the slot and personal space never pull the ally two ways (NO PACING in the header).
+func _snap_walkable(p: Vector3, roomy: bool = false) -> Vector3:
 	var map: HexMap = GameWorld.map
 	if map == null or leader == null:
 		return p
 	var base := map.get_cell(leader.current_cell())
 	var base_level: int = base.level if base != null else 0
-	var cell0 := Hex.from_world(p)
-	var best := Vector2i(1 << 20, 1 << 20)
+	var crowd: Array[Vector3] = []
+	if roomy:
+		crowd = _ground_holders()
+	var none := Vector2i(1 << 20, 1 << 20)
+	var best := none        # the nearest cell
 	var best_d := INF
-	for c in Hex.range_cells(cell0, 3):
+	var best_crowded := false
+	var roomy_c := none     # the nearest cell out of the crowd's personal space
+	var roomy_d := INF
+	var keep_d := INF       # the roomy cell taken last frame, while it still is one
+	for c in Hex.range_cells(Hex.from_world(p), 3):
 		var cell := map.get_cell(c)
 		if cell == null or cell.type != HexMap.Tile.FLOOR or not map.is_walkable_cell(c) or absi(cell.level - base_level) > 1 or Shark.shark_water(c):
 			continue
-		var d := GameWorld.flat_distance(Hex.to_world(c), p)
-		if d < best_d and not _gap_between(map, leader.global_position, Hex.to_world(c)):
-			# (never a slot across a hole from the leader: a lava cave's parallel walkway two hexes over is the same level
-			# and three cells away, but the way there is the long way round, and the ally went to it)
+		var w := Hex.to_world(c)
+		var d := GameWorld.flat_distance(w, p)
+		var crowded := false
+		for q in crowd:
+			if GameWorld.flat_distance(w, q) < PERSONAL_SPACE:
+				crowded = true
+				break
+		var wanted := d < best_d or (roomy and not crowded and (d < roomy_d or c == _roomy_cell))
+		if not wanted or _gap_between(map, leader.global_position, w):
+			continue   # (never a slot across a hole from the leader: a lava cave's parallel walkway two hexes over is the same
+			# level and three cells away, but the way there is the long way round, and the ally went to it)
+		if d < best_d:
 			best_d = d
 			best = c
+			best_crowded = crowded
+		if roomy and not crowded:
+			if d < roomy_d:
+				roomy_d = d
+				roomy_c = c
+			if c == _roomy_cell:
+				keep_d = d
 	if best_d == INF:
 		return p
-	var lv := map.ground_level(Hex.to_world(best))
-	return Hex.to_world(best, 0.0 if is_nan(lv) else lv)
+	var pick := best
+	if roomy and best_crowded and roomy_d < INF:
+		# The nearest cell is crowded: the nearest roomy one, or the roomy one it already took while that is still about as
+		# near (a hex of slack), so a hero walking past does not flip the slot from one side of them to the other.
+		pick = _roomy_cell if keep_d <= roomy_d + HEX_STEP else roomy_c
+	if roomy:
+		_roomy_cell = pick
+	var lv := map.ground_level(Hex.to_world(pick))
+	return Hex.to_world(pick, 0.0 if is_nan(lv) else lv)
+
+
+## Where the heroes that do not make room themselves stand (not this ally): the people's, that is the leader and, in a
+## crew, the other players' heroes (puppets on the host). An AI ally steps out of the way on its own.
+func _ground_holders() -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for h in GameWorld.team_actors(hero.team):
+		if h != hero and not h.dead and _holds_ground(h):
+			out.append(h.global_position)
+	return out
+
+
+static func _holds_ground(h: Actor) -> bool:
+	return h.get_node_or_null("AllyBrain") == null
 
 
 ## True when this ally stands in the lane the leader is walking into.
 func _in_leader_path() -> bool:
+	return _in_lane(hero.global_position)
+
+
+## True when `pos` is in the lane the leader is walking into.
+func _in_lane(pos: Vector3) -> bool:
 	if not _leader_walking():
 		return false
-	var rel := hero.global_position - leader.global_position
+	var rel := pos - leader.global_position
 	rel.y = 0.0
 	var along := rel.dot(_heading)
 	if along < -0.2 or along > BLOCK_AHEAD:
@@ -624,6 +687,8 @@ func _clear_spot() -> Vector3:
 	var perp := Vector3(-_heading.z, 0, _heading.x)
 	var lat := rel.dot(perp)
 	var side := 1.0 if lat > 0.0 or (lat == 0.0 and formation_angle >= PI) else -1.0
+	if _clear_side != 0.0:
+		side = _clear_side   # (the side it already chose: the leader turning a little must not send it back across)
 	for s: float in [side, -side]:
 		var want: Vector3 = leader.global_position + _heading * along + perp * s * (BLOCK_LANE + 1.0)
 		var spot := _snap_walkable(want)
@@ -631,6 +696,7 @@ func _clear_spot() -> Vector3:
 		off.y = 0.0
 		var off_lane := (off - _heading * off.dot(_heading)).length()
 		if off_lane >= BLOCK_LANE * 0.9:
+			_clear_side = s
 			return spot
 	# A one-wide hall: fall behind the leader, slipping through it (heroes do not shove each other while passing).
 	hero.pass_through_until = GameWorld.time + 0.4
@@ -644,7 +710,8 @@ func _follow(delta: float) -> void:
 		_following = true
 		_move_toward(_clear_spot(), delta)
 		return
-	var slot := _snap_walkable(_slot_point())
+	_clear_side = 0.0
+	var slot := _snap_walkable(_slot_point(), true)
 	var d_slot := GameWorld.flat_distance(hero.global_position, slot)
 	if d_slot > FOLLOW_SLACK:
 		_following = true
@@ -652,13 +719,19 @@ func _follow(delta: float) -> void:
 		if d_slot < SLOT_REACHED:
 			_following = false
 		else:
+			var to := slot - hero.global_position
+			to.y = 0.0
+			to = to.normalized()
+			if _in_lane(hero.global_position + to * hero.effective_speed() * delta) or _in_lane(hero.global_position + to * PROBE_STEP):
+				return   # just out of the walking leader's lane: wait beside it rather than cut back across it to the slot
 			_move_toward(slot, delta)
 			return
-	_keep_personal_space(delta)
+	_keep_personal_space(delta, slot)
 
 
-## Idle and settled: step away from any hero that is crowding us.
-func _keep_personal_space(delta: float) -> void:
+## Idle and settled: step away from any hero that is crowding us, but never so far from `slot` that the slot calls the
+## ally back (that walk back into the crowd and out again was the pacing: NO PACING in the header).
+func _keep_personal_space(delta: float, slot: Vector3) -> void:
 	var away := Vector3.ZERO
 	for h in GameWorld.team_actors(hero.team):
 		if h == hero or h.dead:
@@ -669,7 +742,9 @@ func _keep_personal_space(delta: float) -> void:
 		if len < PERSONAL_SPACE:
 			away += (d / len if len > 0.001 else Vector3.RIGHT) * (PERSONAL_SPACE - len)
 	if away.length() > 0.05:
-		hero.move(away.normalized(), delta)
+		var next := hero.global_position + away.normalized() * hero.effective_speed() * delta
+		if GameWorld.flat_distance(next, slot) <= FOLLOW_SLACK - SPACE_SLACK_MARGIN:
+			hero.move(away.normalized(), delta)
 
 
 func _has_los(foe: Actor) -> bool:
