@@ -340,6 +340,10 @@ a crossing, which is also what makes ledges and decks worth fighting for. Propos
 
 ### The gator (decided 2026-10-20; numbers proposed)
 
+Its look: the playtest found the model a "stiff point"; the diagnosis, the three rebuilds, the user's pick (V3 Mugger, a
+rigid-part rig with a swim S-wave, a walk, breathing, head tracking and the gape, decided 2026-10-20) and the build are in
+`gator-look.md` (renders in `gator_look/`).
+
 | | Proposal | Why |
 |---|---|---|
 | **Property** | kill and bill once, to the killer, like the shark. **$6,300**; HP 150; never toward "Exterminate"; AI allies never target it | It is smaller than a regular shark ($8,400) and has no rig. It leaves the water, so a stray blast is more likely to finish it, and a lower price keeps that from wrecking an invoice. 150 HP keeps the kill deliberate, as for the shark |
@@ -940,9 +944,10 @@ the sump pump, the electrical panel and its live wire, and the decor kit. No gen
   and steps out onto the layout's dry landing deck. The landing is the exit: E there opens the elevator menu as usual, and
   the next floor is the same layout again.
 - Solo only: ignored in a shared run, like `--lava-cave` (`GameDev._sewer()`).
-- Screenshots: `--sewer-demo overview|nip|wire|sluice[:n]|outfall[:n]` (with `--demo-after S`): the crew on the first
-  room's deck and the camera on the layout; the player stepping into the gator's territory; the crew by a panel, the
-  player breaking it; the player wading through a sluice doorway; the camera on an outfall.
+- Screenshots: `--sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n]` (with `--demo-after S`): the crew on the
+  first room's deck and the camera on the layout; the gator relocating at once with the camera on it (it swims, climbs
+  out and walks); the player stepping into the gator's territory; the crew by a panel, the player breaking it; the player
+  wading through a sluice doorway; the camera on an outfall.
 
 **What to try:**
 1. **Wade.** Every channel is one body of water: 0.75x, soaked (a fireball fizzles on you, a fire goes out).
@@ -969,7 +974,7 @@ the sump pump, the electrical panel and its live wire, and the decor kit. No gen
 | The look | `scripts/world/sewer/sewer_view.gd` (`SewerView`) | The lab's drawing, ported: the water as a fan per pool kite (flow streaks), foam on every water edge, a kerb on every rim, the channel bed and liner shader in place of the pool tiles, the look's floor and wall colours (a brick pattern for brick), the light. Three looks: concrete, brick, toxic. The live wire's flash on the water |
 | Fog | unchanged | RoomFog / FogView look A as on every floor (long-hall cuts on); the gator hides like any mover (group "sharks", a FogView dynamic group) |
 | **The gator** | `scripts/monsters/gator.gd` (`Gator extends Monster`), `MonsterDefs` "gator" (`billed`: $6,300) | Host-owned actor, team NEUTRAL, groups "gators", "sharks" (the priced water creatures: monsters shrug off its bites, archers don't practise on it, the bowl bills it, fog hides it) and `PricedProp.GROUP`; not "monsters". No pack, gate, model or pest row: never from the factory. Its home region (`Gator.region_of`: the water and the cells within 2) and bask spots are spawn data from the layout. States CALM / RILED / NIP / MOVE / DEAD / WATCH / HELD / CHUM ride `state` (3 bits). Its own pathing inside the region for relocations (a BFS over its walkable cells), `find_path` to walk home. Its speeds ignore the wading slow (2.4 water, 1.4 land; relocating 1.2 / 0.9). Fireproof in the water and for 15 s after; burning on land it runs for the water |
-| Its look | `Gator.model_for` (the lab's `SewerProps` "gator" at 1.3) | Toon material (`MonsterMaterial`: ink outline, amber rim), the eye slits its monster glow (`glow_gain` by state: half lit calm, bright watching, hot nipping), five pre-built bends x jaws shut / open chosen by its turning, a tail thrash when riled, a V wake and a ripple on the water. Z-fight clean (every variant in `ZFightModels`) |
+| Its look | `GatorModel` at 1.3 (V3 Mugger, `gator-look.md`; it replaced the lab's `SewerProps` "gator", 2026-10-20) | Toon material (`MonsterMaterial`: ink outline, amber rim), the ember eyes its monster glow (`glow_gain` by state: half lit calm, bright watching, hot nipping). A rigid-part rig posed every frame (`Gator._pose_rig`): the curl from its turning, the swim S-wave, the high walk on land, a breath, the head tracking what it watches, the jaws through the wind-up and the gape, a tail thrash when riled; a V wake and a ripple on the water. Z-fight clean (its poses in `ZFightModels`) |
 | The props | `PricedProp.TABLE` "sump_pump" ($3,500, HP 70) and "electrical_panel" ($250, HP 1), site "sewer" (no site's catalog has them) | Models: `PropModels` builds them from the lab's `pump` and `junction_box` |
 | The live wire | `scripts/world/sewer/live_wire.gd` (`LiveWire`), a child of each panel | On the panel's `broken` (billed to the breaker like any prop): the cable swings down (0.6 s) to the first water in front of the panel, then the shock: everyone standing in water within **5 hex cells** of the drop (`Combat.hits_in_radius`, then the hex distance and `water_at`): 12, x1.5 soaked, a 0.6 s daze (by the target's owner); then 6 (x1.5) every 1.5 s for 6 s; one use. Its damage is credited to the breaker (a gator it kills bills them) |
 | Decor | `RoomThemeDefs.DECOR` + `DecorModels`: outfall, pipe_bundle, grate, sluice, bars, tool_cart | The six from the scope, built from `SewerProps`; the sluice gates stand in the flooded doorways as decor (no door behaviour). Since the playtest fixes below, the gate is wound up overhead (style "roof") and the outfall pours a stream that reads as falling water. In the z-fight registry with every other decor kind |

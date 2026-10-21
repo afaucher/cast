@@ -32,9 +32,13 @@ extends Monster
 ## and doesn't nip.
 ## States ride the stream's 3 bits: CALM 0, RILED 1, NIP 2, MOVE 3, DEAD 4, WATCH 5, HELD 6, CHUM 7.
 ##
-## LOOK (LOCAL, every screen): the lab's gator (SewerProps "gator") at GATOR_SCALE, toon material (MonsterMaterial: ink
-## outline, amber rim), its eye slits the monster glow (glow_gain by state), the body bending as it turns (five pre-built
-## bends, jaws shut / open), a V wake and a ripple on the water when it swims.
+## LOOK (LOCAL, every screen; docs/design/gator-look.md, the user's pick 2026-10-20): GatorModel ("Mugger": knobbed, mossy,
+## scarred, ember eyes) at GATOR_SCALE, a rigid-part rig posed every frame, toon material (MonsterMaterial: ink outline,
+## amber rim), its eyes the monster glow (glow_gain by state). Cosmetic motion from what every machine sees (state, facing,
+## the wind-up, its speed, the water): the body curls as it turns; an S-wave down the tail (lazy at rest, swimming in the
+## water, a thrash when riled); the high walk on land (legs in diagonal pairs, the trunk and tail swaying); legs folded and
+## the head up in the water; a breath; the head tracking the nearest body it watches; the jaws parting through the nip's
+## wind-up to the gape and snapping shut; chewing on chum; an idle jaw twitch (GameWorld.fx_rng); a V wake and a ripple.
 ##
 ## PHASE 2 (networking) still needs: the MONSTER stream entry (its state rides `state`, its wind-up `world.windup`; a client
 ## puppets it from NetWorld like the shark), the shove as a request (Net.route_shove: Actor.shove already routes a copy's),
@@ -42,7 +46,6 @@ extends Monster
 ## its spawn data (home region, bask spots, seed) in the floor checksum, Gator.corn_at on the host only, and a 3-process
 ## test (test_net_gator).
 
-const SewerProps := preload("res://scripts/art/lowpoly/props/sewer_props.gd")
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
 
 const CALM := 0
@@ -92,8 +95,10 @@ const SNOUT := 1.15                ## its jaws
 const CHUM_T := 4.0
 const CHUM_RADIUS := 6.0
 const DRY_BURN_T := 15.0
-const GATOR_SCALE := 1.3           ## the lab model (2.3 long) at 1.3: about 3.0 snout to tail
-const BENDS: Array[float] = [-44.0, -22.0, 0.0, 22.0, 44.0]
+const GATOR_SCALE := 1.3           ## GatorModel (2.3 long) at 1.3: about 3.0 snout to tail
+const BENDS: Array[float] = [-44.0, -22.0, 0.0, 22.0, 44.0]   ## the curl's range (the last) and the z-fight registry's poses
+const GAIT_PER_UNIT := 1.35        ## walk cycles per unit walked (the look: a stride of about 0.44 at GATOR_SCALE)
+const HEAD_TURN := 35.0            ## degrees the head turns toward what it watches (the look)
 const WATER_LIFT := 0.02           ## in the water: its eyes, its back and the ridge of scutes break the surface, the rest is in the murk
 
 # --- spawn data (SewerDev, from the layout) ----------------------------------------------------------------------------
@@ -132,9 +137,17 @@ var nips := 0                      ## nips landed (tests, the log)
 
 # --- the look ----------------------------------------------------------------------------------------------------------
 var body: Node3D = null            ## the model's pivot (turned to face +Z forward)
-var _variants: Array[Node3D] = []  ## BENDS x [shut, open]
-var _shown_variant := -1
+var rig: GatorModel = null          ## the rig (GatorModel), posed every frame
 var _skin: ShaderMaterial = null
+var _swim_k := 0.0                 ## 0 on land .. 1 swimming (legs folded, head up)
+var _walk_k := 0.0                 ## how much of the walk cycle shows
+var _gait := 0.0                   ## the walk cycle, 0..1
+var _wave_amp := 0.0               ## the S-wave's swing (degrees at the tail tip)
+var _wave_phase := 0.0
+var _head_yaw := 0.0
+var _head_pitch := 0.0
+var _jaw_k := 0.0
+var _twitch_at := 0.0              ## the next idle jaw twitch (GameWorld.time)
 var _bend := 0.0
 var _prev_yaw := 0.0
 var _float_y := 0.0
@@ -144,8 +157,6 @@ var _ripple: Node3D = null
 var _dead_k := 0.0
 var _speed_seen := 0.0
 var _last_pos := Vector3.ZERO
-
-static var _mesh_cache: Dictionary = {}
 
 
 ## A gator standing at X/Z `at`, facing `face`, home in `region`, its bask `spots` (the first is where it starts resting).
@@ -245,7 +256,9 @@ func net_fields() -> Dictionary:
 		"_prog_from": Net.PRIVATE, "_lunge_left": Net.PRIVATE, "_lunge_dir": Net.PRIVATE, "_chum_until": Net.PRIVATE,
 		"_chum_at": Net.PRIVATE, "_dry_since": Net.PRIVATE, "_fireproof": Net.PRIVATE, "_last_by": Net.PRIVATE,
 		"nips": Net.PRIVATE,
-		"body": Net.LOCAL, "_variants": Net.LOCAL, "_shown_variant": Net.LOCAL, "_skin": Net.LOCAL, "_bend": Net.LOCAL,
+		"body": Net.LOCAL, "rig": Net.LOCAL, "_skin": Net.LOCAL, "_bend": Net.LOCAL, "_swim_k": Net.LOCAL,
+		"_walk_k": Net.LOCAL, "_gait": Net.LOCAL, "_wave_amp": Net.LOCAL, "_wave_phase": Net.LOCAL, "_head_yaw": Net.LOCAL,
+		"_head_pitch": Net.LOCAL, "_jaw_k": Net.LOCAL, "_twitch_at": Net.LOCAL,
 		"_prev_yaw": Net.LOCAL, "_float_y": Net.LOCAL, "_wake": Net.LOCAL, "_wake_mat": Net.LOCAL, "_ripple": Net.LOCAL,
 		"_dead_k": Net.LOCAL, "_speed_seen": Net.LOCAL, "_last_pos": Net.LOCAL,
 	})
@@ -959,48 +972,25 @@ func _build_visual(root: Node3D) -> void:
 	body.name = "GatorBody"
 	body.rotation.y = PI   # (the model's snout is +Z; Monster turns _visual for a -Z front)
 	root.add_child(body)
-	for bi in BENDS.size():
-		for jaw: float in [0.0, 1.0]:
-			var m := model_for(BENDS[bi], jaw)
-			m.scale = Vector3.ONE * GATOR_SCALE
-			m.visible = false
-			body.add_child(m)
-			_variants.append(m)
-	# one material for every variant (the eye glow by state, the wind-up pulse, the hit flash)
-	_skin = MonsterMaterial.make(2.0)
+	rig = GatorModel.new()
+	rig.scale = Vector3.ONE * GATOR_SCALE
+	body.add_child(rig)
+	# the rig's one material (the eye glow by state, the wind-up pulse, the hit flash)
+	_skin = rig.material
 	_skin.set_shader_parameter("glow_gain", 1.0)
-	for m in _variants:
-		var mi := m.get_node_or_null("Body") as MeshInstance3D
-		if mi != null:
-			mi.material_override = _skin
-	_show_variant(BENDS.size() / 2 * 2)
+	_twitch_at = GameWorld.time + GameWorld.fx_rng.randf_range(2.0, 8.0)
+	_wave_phase = GameWorld.fx_rng.randf()
 	_build_wake()
 
 
-## The gator model at one bend and jaw (SewerProps "gator"), its mesh cached per process.
-static func model_for(bend: float, jaw: float) -> Node3D:
-	var key := "%d|%d" % [roundi(bend), roundi(jaw * 10.0)]
-	if not _mesh_cache.has(key):
-		var built := SewerProps.build("gator", {"bend": bend, "jaw": jaw})
-		var mi := built.get_node("Body") as MeshInstance3D
-		_mesh_cache[key] = mi.mesh
-		built.free()
-	var root := Node3D.new()
-	root.name = "Model"
-	var body_mi := MeshInstance3D.new()
-	body_mi.name = "Body"
-	body_mi.mesh = _mesh_cache[key]
-	root.add_child(body_mi)
-	return root
-
-
-func _show_variant(i: int) -> void:
-	if i == _shown_variant or i < 0 or i >= _variants.size():
-		return
-	if _shown_variant >= 0:
-		_variants[_shown_variant].visible = false
-	_variants[i].visible = true
-	_shown_variant = i
+## The gator model posed at one bend and jaw, unscaled (the z-fight registry's poses).
+static func model_for(bend: float, jaw: float, pose: Dictionary = {}) -> Node3D:
+	var m := GatorModel.new()
+	m.set_pose(pose)
+	m.bend = bend
+	m.jaw = jaw
+	m.apply()
+	return m
 
 
 ## The V wake (two foam arms trailing back from the snout) and a ripple ring round the head, on the water's surface.
@@ -1050,25 +1040,16 @@ func _apply_tint(color: Color, k: float) -> void:
 		_skin.set_shader_parameter("tint_k", k)
 
 
-## The pose (Monster._update_visual calls it every frame): the bend from its turning, the jaws, the eye glow by state,
-## standing up in the water, the wake.
+## The pose (Monster._update_visual calls it every frame): the rig (_pose_rig), the eye glow by state, standing up in the
+## water, the wake.
 func _pose(delta: float, _moving: bool) -> void:
 	if body == null or dead:
 		return
-	var yaw := atan2(facing.x, facing.z)
-	var rate := wrapf(yaw - _prev_yaw, -PI, PI) / maxf(delta, 0.001)
-	_prev_yaw = yaw
-	var want := clampf(rad_to_deg(rate) * 0.45, -BENDS[BENDS.size() - 1], BENDS[BENDS.size() - 1])
-	if state == RILED and int(GameWorld.time * 3.0) % 2 == 0:
-		want = clampf(want + 30.0 * sin(GameWorld.time * 14.0), -44.0, 44.0)   # the tail thrash
-	_bend = lerpf(_bend, want, clampf(5.0 * delta, 0.0, 1.0))
-	var best := 0
-	for i in BENDS.size():
-		if absf(BENDS[i] - _bend) < absf(BENDS[best] - _bend):
-			best = i
-	var open := state == NIP and (_telegraph > 0.3 or _lunge_left > 0.0)
-	_show_variant(best * 2 + (1 if open else 0))
 	var wet := in_water()
+	var moved := GameWorld.flat_distance(global_position, _last_pos) / maxf(delta, 0.001)
+	_last_pos = global_position
+	_speed_seen = lerpf(_speed_seen, moved, clampf(6.0 * delta, 0.0, 1.0))
+	_pose_rig(delta, wet)
 	_float_y = lerpf(_float_y, WATER_LIFT if wet else 0.0, clampf(6.0 * delta, 0.0, 1.0))
 	body.position.y = _float_y
 	# eyes: half lit at rest, bright when it watches, hot when it nips
@@ -1080,9 +1061,6 @@ func _pose(delta: float, _moving: bool) -> void:
 	if _skin != null:
 		_skin.set_shader_parameter("glow_gain", glow)
 	# the wake: on the water, as strong as it is fast
-	var moved := GameWorld.flat_distance(global_position, _last_pos) / maxf(delta, 0.001)
-	_last_pos = global_position
-	_speed_seen = lerpf(_speed_seen, moved, clampf(6.0 * delta, 0.0, 1.0))
 	var surface := SewerLayouts.SURFACE_Y - global_position.y - _float_y + 0.012
 	if _wake != null:
 		_wake.visible = wet
@@ -1093,6 +1071,77 @@ func _pose(delta: float, _moving: bool) -> void:
 		_ripple.position = Vector3(0.0, surface, HEAD)
 		var k := 1.0 + 0.08 * sin(GameWorld.time * 3.5)
 		_ripple.scale = Vector3(k, 1.0, k)
+
+
+## The rig's motion (cosmetic, LOCAL): from its turning, state, wind-up, speed and the water, the same on every machine.
+func _pose_rig(delta: float, wet: bool) -> void:
+	if rig == null:
+		return
+	var t := GameWorld.time
+	# the curl as it turns
+	var yaw := atan2(facing.x, facing.z)
+	var rate := wrapf(yaw - _prev_yaw, -PI, PI) / maxf(delta, 0.001)
+	_prev_yaw = yaw
+	var max_bend := BENDS[BENDS.size() - 1]
+	_bend = lerpf(_bend, clampf(rad_to_deg(rate) * 0.45, -max_bend, max_bend), clampf(5.0 * delta, 0.0, 1.0))
+	# swimming or walking
+	_swim_k = move_toward(_swim_k, 1.0 if wet else 0.0, 3.0 * delta)
+	var walking := not wet and _speed_seen > 0.25
+	_walk_k = move_toward(_walk_k, 1.0 if walking else 0.0, 4.0 * delta)
+	_gait = fposmod(_gait + delta * _speed_seen * GAIT_PER_UNIT, 1.0)
+	# the S-wave: lazy at rest, swimming with the speed in the water, a thrash in bursts when riled
+	var speed_k := clampf(_speed_seen / WATER_SPEED, 0.0, 1.0)
+	var amp := 16.0
+	var cycles := 0.12
+	if wet:
+		amp = lerpf(16.0, 32.0, speed_k)
+		cycles = 0.12 + 0.5 * _speed_seen
+	elif walking:
+		amp = 6.0
+	if state == RILED and int(t * 3.0) % 2 == 0:
+		amp = 40.0
+		cycles = 2.5
+	_wave_amp = lerpf(_wave_amp, amp, clampf(4.0 * delta, 0.0, 1.0))
+	_wave_phase = fposmod(_wave_phase + cycles * delta, 1.0)
+	# the head: tracking the nearest body it watches, up when it watches, up through the wind-up, down to chum
+	var want_yaw := 0.0
+	var want_pitch := 1.5 * sin(t * 0.7)
+	if state in [WATCH, RILED, NIP]:
+		var a := _nearest_watched()
+		if a != null:
+			var local := rig.global_transform.affine_inverse() * a.global_position
+			want_yaw = clampf(rad_to_deg(atan2(local.x, local.z)), -HEAD_TURN, HEAD_TURN)
+		want_pitch = 6.0
+	match state:
+		NIP: want_pitch = 6.0 + 10.0 * _telegraph
+		CHUM: want_pitch = -8.0
+		HELD: want_pitch = -5.0
+	_head_yaw = lerpf(_head_yaw, want_yaw, clampf(6.0 * delta, 0.0, 1.0))
+	_head_pitch = lerpf(_head_pitch, want_pitch, clampf(6.0 * delta, 0.0, 1.0))
+	# the jaws: parting through the wind-up to the gape, snapping shut; chewing on chum; an idle twitch now and then
+	var want_jaw := 0.0
+	if state == NIP:
+		want_jaw = 1.0 if _lunge_left > 0.0 else clampf((_telegraph - 0.15) / 0.7, 0.0, 1.0)
+	elif state == CHUM:
+		want_jaw = 0.3 * (0.5 + 0.5 * sin(t * TAU * 2.0))
+	elif t >= _twitch_at:
+		var tw := (t - _twitch_at) / 0.35
+		if tw >= 1.0:
+			_twitch_at = t + GameWorld.fx_rng.randf_range(6.0, 10.0)
+		else:
+			want_jaw = 0.18 * sin(PI * tw)
+	_jaw_k = lerpf(_jaw_k, want_jaw, clampf((18.0 if want_jaw < _jaw_k else 10.0) * delta, 0.0, 1.0))
+	rig.bend = _bend
+	rig.wave = _wave_amp
+	rig.phase = _wave_phase
+	rig.gait = _gait
+	rig.walk_k = _walk_k
+	rig.swim_k = _swim_k
+	rig.head_yaw = _head_yaw
+	rig.head_pitch = _head_pitch
+	rig.jaw = _jaw_k
+	rig.breath = 0.5 + 0.5 * sin(t * TAU * (0.15 if state == HELD else 0.25) + float(spawn_seed % 97))
+	rig.apply()
 
 
 func net_show(new_facing: Vector3, _is_climbing: bool, new_hp: float, new_state: int, telegraph: float, strike_count: int) -> void:

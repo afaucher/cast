@@ -9,8 +9,8 @@ extends "res://scripts/app/game.gd"
 ##   --to-gate --to-theme --to-corridor --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
 ##   --shark-demo --monster-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
-## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|nip|wire|sluice[:n]|outfall[:n] (the sewer slice,
-## solo only: scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built").
+## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer
+## slice, solo only: scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built").
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -969,8 +969,9 @@ func _stage_plateau() -> void:
 		map.get_cell(n).level = base + 5
 
 
-## --sewer-demo overview|nip|wire|sluice[:n]|outfall[:n] (screenshots), after --demo-after seconds (1.0):
+## --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (screenshots), after --demo-after seconds (1.0):
 ##   overview  the crew on the first sewer room's deck, the camera on the layout's middle; the staged monsters hold still
+##   gator     the crew on the landing, the gator relocating at once with the camera on it (it swims and walks)
 ##   nip       the player steps into the gator's territory in front of it: it watches, gapes (the wind-up) and nips
 ##   wire      the crew dry by the first electrical panel, Rebar and two held skeletons wading near where its cable lands;
 ##             the player breaks the panel: the cable drops into the water and the shock runs through it
@@ -991,6 +992,20 @@ func _sewer_demo(stage: String) -> void:
 		"overview":
 			_teleport_crew(_sewer_layout["crew_at"])
 			_sewer_focus(Vector3(_sewer_layout["view"].x, 0.0, _sewer_layout["view"].y))
+		"gator":
+			# the crew back on the landing, the gator set to relocate now, the camera riding it: it swims, climbs out and
+			# walks to its next bask spot (the look: docs/design/gator-look.md; pick the moment with --shot-after)
+			var gators: Array = _sewer_staged.get("gators", [])
+			if gators.is_empty():
+				return
+			_teleport_crew(_sewer_layout["landing"])
+			var g: Gator = gators[0]
+			for m: Monster in (_sewer_staged.get("monsters", []) as Array):
+				if is_instance_valid(m) and GameWorld.flat_distance(m.global_position, g.global_position) < Gator.RELOCATE_CLEAR + 3.0:
+					m.queue_free()   # (nobody near it, or it stays put; the picture only)
+			g._relocate_at = GameWorld.time + 0.2
+			rig.target = g
+			rig.snap()
 		"nip":
 			await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
 			var gators: Array = _sewer_staged.get("gators", [])

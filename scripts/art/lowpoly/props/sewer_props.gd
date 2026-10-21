@@ -1,14 +1,14 @@
 extends RefCounted
 ## Sewer models (docs/design/sewer-concept.md): look-dev for the sewer labs (scenes/sewer_lab.tscn, sewer2_lab.tscn), and
-## since the sewer slice (phase 1, "Phase 1 as built") partly the game's: the gator (Gator, scripts/monsters/gator.gd), the
-## sump pump and the electrical panel (PropModels), and the decor kit outfall, pipe_bundle, grate, sluice, bars and tool_cart
+## since the sewer slice (phase 1, "Phase 1 as built") partly the game's: the sump pump and the electrical panel (PropModels), and the decor kit outfall, pipe_bundle, grate, sluice, bars and tool_cart
 ## (DecorModels) are built from here and checked by the z-fight registry (ZFightModels); the rest stays lab-only. Same kit as PoolProps (LowPoly soup, MonsterMaterial: ink outline, amber rim,
 ## vertex alpha 0.5 = an emissive face), origin at the base centre, FRONT = +Z. No class_name (the lab preloads it).
 ##
 ##   const SewerProps := preload("res://scripts/art/lowpoly/props/sewer_props.gd")
 ##   add_child(SewerProps.build("gator", {"bend": 40.0}))
 ##
-## Kinds: gator (bend: degrees the spine curls left, jaw: 0..1 open), salamander (the lava lab: the gator's body, crusted black
+## Kinds: gator (bend: degrees the spine curls left, jaw: 0..1 open; the OLD gator, kept for the salamander, the old sewer labs
+##        and the gator lab's comparison: the game's is GatorModel, docs/design/gator-look.md), salamander (the lava lab: the gator's body, crusted black
 ##        with glowing cracks and a frill; bend, jaw, crack), rat, rat_swarm (count, radius, seed), outfall
 ##        (radius, drop: a pipe mouth in a wall pouring into the channel), pipe_bundle (length, col), grate (size),
 ##        grate_bridge (length, width), sluice (width, open, style: roof|skip|plate), springer (height, col: a brick

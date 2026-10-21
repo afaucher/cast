@@ -89,10 +89,14 @@ static func models() -> Array[Dictionary]:
 	# the shark in STACKS (the swarmer model alone is monster/swarmer)
 	for v: String in SharkModels.VARIANTS:
 		out.append({"name": "shark/" + v, "make": _shark.bind(v), "ground": false})
-	# the sewer gator (docs/design/sewer-concept.md, phase 1): every bend, jaws shut and open; it walks on land too
+	# the sewer gator (GatorModel, docs/design/gator-look.md): a rigid-part rig, checked at every bend with the jaws shut and
+	# open, mid-stride on land and swimming (the S-wave, the legs folded)
 	for bend: float in Gator.BENDS:
 		for jaw: float in [0.0, 1.0]:
 			out.append({"name": "gator/bend%d/jaw%d" % [roundi(bend), roundi(jaw)], "make": Gator.model_for.bind(bend, jaw), "ground": true})
+	for g: float in [0.15, 0.65]:
+		out.append({"name": "gator/walk%d" % roundi(g * 100.0), "make": Gator.model_for.bind(0.0, 0.0, {"gait": g}), "ground": true})
+	out.append({"name": "gator/swim", "make": Gator.model_for.bind(20.0, 0.0, {"swim": true, "wave": 32.0, "phase": 0.3}), "ground": false})
 	# the enemy healer blockouts (docs/design/enemy-healer-options.md, healer_lab only)
 	for kind: String in HealerBlockouts.KINDS:
 		out.append({"name": "healer/" + kind, "make": HealerBlockouts.build.bind(kind), "ground": true})
