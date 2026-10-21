@@ -74,6 +74,17 @@ func setup() -> void:
 		check(not names.has(p.display_name), "%s: unique display name" % kind)
 		names[p.display_name] = true
 	check(PricedProp.spawn(Vector2i.ZERO, "no_such_prop") == null, "unknown kind spawns nothing")
+	# --- Every row carries its look: a height, a builder in PropModels, a palette (and a valid extra, if any).
+	for kind: String in PricedProp.TABLE:
+		var row: Dictionary = PricedProp.TABLE[kind]
+		check(float(row.get("height", 0.0)) > 0.0, "%s has a model height" % kind)
+		check(PropModels.builder(String(row.get("model", ""))).is_valid(), "%s names a PropModels builder (%s)" % [kind, row.get("model", "")])
+		var pal: Array = row.get("palette", [])
+		check(not pal.is_empty() and pal.all(func(c: Variant) -> bool: return c is Color), "%s has a palette of colours" % kind)
+		if row.has("extra"):
+			check(PropModels.builder(String(row["extra"])).is_valid(), "%s: its extra is a PropModels builder" % kind)
+	eq(PropModels.height("no_such_prop"), 1.5, "an unknown kind's height is the default")
+	eq(PropModels.palette("no_such_prop"), [PropModels.GOLD, PropModels.IRON] as Array[Color], "an unknown kind's palette is the default")
 	eq(PricedProp.money(4000), "$4,000", "money format")
 	eq(PricedProp.money(20000), "$20,000", "money format 20k")
 	eq(PricedProp.money(300), "$300", "money format 300")

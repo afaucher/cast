@@ -49,35 +49,62 @@ const GROUP := "priced_props"           ## arrows and bolts find props here (Gam
 ## "orient" = away_from_wall (faces into the room along the wall's normal), face_center (toward the room's centre)
 ## or face_entrance (toward the room's main door); "foot" = the footprint (lateral x forward, world units).
 ## The front of every model is +Z, so a prop at yaw 0 faces +Z.
+## The look (PropModels): "height" (the model's top: tag and fx placement), "model" (the PropModels builder, a static
+## func(s: LowPoly.Soup) that adds the merged mesh), "palette" (the colours its shards are painted with) and optionally
+## "extra" (a PropModels static func() -> Node3D added beside the body, e.g. the brazier's embers).
+## Adding a prop is one row here plus its builder in PropModels (tests/test_priced_prop.gd checks every row).
 const TABLE := {
-	"wine_rack": {"name": "Wine rack", "price": 1200, "hp": 45.0, "radius": 0.7, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.6)},
-	"wine_barrel": {"name": "Vintage 1787 wine barrel", "price": 4000, "hp": 85.0, "radius": 0.68, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.35, 1.25)},
-	"marble_statue": {"name": "Marble statue", "price": 8000, "hp": 110.0, "radius": 0.58, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
-	"gold_toilet": {"name": "Gold toilet", "price": 15000, "hp": 130.0, "radius": 0.55, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.05, 1.05)},
-	"projector": {"name": "Home-cinema projector", "price": 2500, "hp": 35.0, "radius": 0.5, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.9, 0.9)},
-	"zen_fountain": {"name": "Zen fountain", "price": 900, "hp": 55.0, "radius": 0.72, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.7, 1.7)},
-	"server_rack": {"name": "Server rack", "price": 3000, "hp": 70.0, "radius": 0.5, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.9, 0.8)},
-	"crystal_lamp": {"name": "Crystal lamp", "price": 600, "hp": 25.0, "radius": 0.5, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
-	"treadmill": {"name": "Smart treadmill", "price": 2800, "hp": 75.0, "radius": 0.55, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 1.9)},
-	"doomsday_console": {"name": "Doomsday console", "price": 20000, "hp": 140.0, "radius": 0.78, "site": "lair", "place": "wall", "orient": "face_entrance", "foot": Vector2(1.5, 1.0)},
-	"torture_rack": {"name": "Torture rack", "price": 1500, "hp": 80.0, "radius": 0.75, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 0.9)},
-	"specimen_vat": {"name": "Specimen vat", "price": 5000, "hp": 45.0, "radius": 0.68, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.5, 1.5)},
-	"villain_throne": {"name": "Villain throne", "price": 9000, "hp": 100.0, "radius": 0.7, "site": "lair", "place": "wall", "orient": "face_entrance", "foot": Vector2(1.1, 1.2)},
-	"shark_tank": {"name": "Shark tank", "price": 7000, "hp": 60.0, "radius": 0.78, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 1.0)},
-	"henchman_locker": {"name": "Henchman locker", "price": 300, "hp": 70.0, "radius": 0.62, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.3, 0.6)},
-	"evil_portrait": {"name": "Evil portrait", "price": 2000, "hp": 30.0, "radius": 0.55, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.1, 1.0)},
-	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1)},
+	"wine_rack": {"name": "Wine rack", "price": 1200, "hp": 45.0, "radius": 0.7, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.6),
+		"height": 1.7, "model": "_wine_rack", "palette": [PropModels.WOOD, PropModels.WOOD_DK, PropModels.BOTTLE_GREEN, PropModels.BOTTLE_RED]},
+	"wine_barrel": {"name": "Vintage 1787 wine barrel", "price": 4000, "hp": 85.0, "radius": 0.68, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.35, 1.25),
+		"height": 1.25, "model": "_wine_barrel", "palette": [PropModels.WOOD, PropModels.WOOD_DK, PropModels.GOLD, PropModels.BOTTLE_RED]},
+	"marble_statue": {"name": "Marble statue", "price": 8000, "hp": 110.0, "radius": 0.58, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1),
+		"height": 2.2, "model": "_marble_statue", "palette": [PropModels.MARBLE, PropModels.MARBLE_DK, PropModels.GOLD]},
+	"gold_toilet": {"name": "Gold toilet", "price": 15000, "hp": 130.0, "radius": 0.55, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.05, 1.05),
+		"height": 1.35, "model": "_gold_toilet", "palette": [PropModels.GOLD, PropModels.GOLD_DK, Color(1.0, 0.92, 0.55), PropModels.VELVET]},
+	"projector": {"name": "Home-cinema projector", "price": 2500, "hp": 35.0, "radius": 0.5, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.9, 0.9),
+		"height": 1.35, "model": "_projector", "palette": [PropModels.IRON, PropModels.IRON_LT, Color(0.5, 0.85, 1.0), PropModels.WOOD_DK]},
+	"zen_fountain": {"name": "Zen fountain", "price": 900, "hp": 55.0, "radius": 0.72, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.7, 1.7),
+		"height": 1.15, "model": "_zen_fountain", "palette": [PropModels.STONE, Color(0.35, 0.36, 0.4), Color(0.4, 0.85, 0.85)]},
+	"server_rack": {"name": "Server rack", "price": 3000, "hp": 70.0, "radius": 0.5, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.9, 0.8),
+		"height": 1.95, "model": "_server_rack", "palette": [PropModels.IRON, PropModels.IRON_LT, Color(0.3, 1.0, 0.5), Color(1.0, 0.6, 0.2)]},
+	"crystal_lamp": {"name": "Crystal lamp", "price": 600, "hp": 25.0, "radius": 0.5, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1),
+		"height": 1.45, "model": "_crystal_lamp", "palette": [Color(0.85, 0.55, 1.0), Color(1.0, 0.7, 0.95), PropModels.GOLD, Color(0.6, 0.35, 0.9)]},
+	"treadmill": {"name": "Smart treadmill", "price": 2800, "hp": 75.0, "radius": 0.55, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 1.9),
+		"height": 1.5, "model": "_treadmill", "palette": [PropModels.IRON, PropModels.IRON_LT, PropModels.VELVET, Color(0.3, 0.9, 1.0)]},
+	"doomsday_console": {"name": "Doomsday console", "price": 20000, "hp": 140.0, "radius": 0.78, "site": "lair", "place": "wall", "orient": "face_entrance", "foot": Vector2(1.5, 1.0),
+		"height": 1.75, "model": "_doomsday_console", "palette": [PropModels.IRON, PropModels.IRON_LT, Color(1.0, 0.2, 0.15), Color(0.95, 0.8, 0.2)]},
+	"torture_rack": {"name": "Torture rack", "price": 1500, "hp": 80.0, "radius": 0.75, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 0.9),
+		"height": 0.95, "model": "_torture_rack", "palette": [PropModels.WOOD_DK, PropModels.WOOD, PropModels.IRON, Color(0.7, 0.62, 0.45)]},
+	"specimen_vat": {"name": "Specimen vat", "price": 5000, "hp": 45.0, "radius": 0.68, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.5, 1.5),
+		"height": 2.0, "model": "_specimen_vat", "palette": [PropModels.IRON, Color(0.3, 1.0, 0.55), Color(0.2, 0.55, 0.4), Color(0.45, 0.2, 0.6)]},
+	"villain_throne": {"name": "Villain throne", "price": 9000, "hp": 100.0, "radius": 0.7, "site": "lair", "place": "wall", "orient": "face_entrance", "foot": Vector2(1.1, 1.2),
+		"height": 2.35, "model": "_villain_throne", "palette": [PropModels.OBSIDIAN, PropModels.VELVET, PropModels.GOLD, Color(0.9, 0.88, 0.8)]},
+	"shark_tank": {"name": "Shark tank", "price": 7000, "hp": 60.0, "radius": 0.78, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 1.0),
+		"height": 1.6, "model": "_shark_tank", "palette": [PropModels.IRON, Color(0.3, 0.8, 0.95), Color(0.2, 0.55, 0.7), Color(0.6, 0.65, 0.72)]},
+	"henchman_locker": {"name": "Henchman locker", "price": 300, "hp": 70.0, "radius": 0.62, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.3, 0.6),
+		"height": 1.75, "model": "_henchman_locker", "palette": [Color(0.38, 0.42, 0.5), PropModels.IRON, Color(0.85, 0.2, 0.15)]},
+	"evil_portrait": {"name": "Evil portrait", "price": 2000, "hp": 30.0, "radius": 0.55, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.1, 1.0),
+		"height": 2.0, "model": "_evil_portrait", "palette": [PropModels.GOLD, PropModels.GOLD_DK, Color(0.45, 0.07, 0.1), PropModels.OBSIDIAN]},
+	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1),
+		"height": 1.15, "model": "_brazier", "extra": "_embers", "palette": [PropModels.IRON, PropModels.IRON_LT, Color(1.0, 0.55, 0.12)]},
 	# Explosive props (ExplosiveProp: a fuse, then a blast; docs/design/hazards.md). Site "hazard": never in a site's
 	# catalog; the room themes place them (RoomThemeDefs "hazards", HazardPlanner.plan). The blast numbers are
 	# ExplosiveProp.BLAST.
-	"oil_drum": {"name": "Oil drum", "price": 800, "hp": 40.0, "radius": 0.45, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 0.85)},
-	"gas_cylinders": {"name": "Gas cylinders", "price": 1800, "hp": 35.0, "radius": 0.5, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.15, 0.5)},
-	"propane_tank": {"name": "Propane tank", "price": 1200, "hp": 45.0, "radius": 0.6, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.8)},
-	"battery_pack": {"name": "Server battery pack", "price": 6500, "hp": 60.0, "radius": 0.52, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 0.7)},
+	"oil_drum": {"name": "Oil drum", "price": 800, "hp": 40.0, "radius": 0.45, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 0.85),
+		"height": 1.05, "model": "_oil_drum", "palette": [PropModels.DRUM_RED, PropModels.DRUM_RED_DK, PropModels.IRON, PropModels.HAZARD_YELLOW]},
+	"gas_cylinders": {"name": "Gas cylinders", "price": 1800, "hp": 35.0, "radius": 0.5, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.15, 0.5),
+		"height": 1.45, "model": "_gas_cylinders", "palette": [PropModels.CYL_GREEN, PropModels.CYL_MAROON, PropModels.CYL_BLUE, PropModels.IRON_LT]},
+	"propane_tank": {"name": "Propane tank", "price": 1200, "hp": 45.0, "radius": 0.6, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.8),
+		"height": 1.2, "model": "_propane_tank", "palette": [PropModels.TANK_WHITE, PropModels.IRON, Color(0.85, 0.2, 0.15), PropModels.HAZARD_YELLOW]},
+	"battery_pack": {"name": "Server battery pack", "price": 6500, "hp": 60.0, "radius": 0.52, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 0.7),
+		"height": 1.52, "model": "_battery_pack", "palette": [PropModels.OBSIDIAN, PropModels.IRON, Color(1.0, 0.55, 0.12), Color(0.3, 1.0, 0.5)]},
 	# The sewer's props (docs/design/sewer-concept.md, phase 1: --sewer only). Site "sewer": no site's catalog has them. The
 	# electrical panel breaks to any hit (HP 1) and drops the live wire into the water (LiveWire).
-	"sump_pump": {"name": "Sump pump", "price": 3500, "hp": 70.0, "radius": 0.6, "site": "sewer", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.2, 0.85)},
-	"electrical_panel": {"name": "Electrical panel", "price": 250, "hp": 1.0, "radius": 0.35, "site": "sewer", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.7, 0.35)},
+	"sump_pump": {"name": "Sump pump", "price": 3500, "hp": 70.0, "radius": 0.6, "site": "sewer", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.2, 0.85),
+		"height": 1.7, "model": "_sump_pump", "palette": [Color(0.22, 0.4, 0.55), PropModels.IRON, Color(0.5, 0.27, 0.14), PropModels.HAZARD_YELLOW]},
+	"electrical_panel": {"name": "Electrical panel", "price": 250, "hp": 1.0, "radius": 0.35, "site": "sewer", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.7, 0.35),
+		"height": 1.8, "model": "_electrical_panel", "palette": [Color(0.55, 0.57, 0.55), PropModels.IRON, PropModels.HAZARD_YELLOW, Color(1.0, 0.95, 0.55)]},
 }
 const HAZARD_SITE := "hazard"
 

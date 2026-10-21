@@ -8,6 +8,10 @@ extends RefCounted
 ## Every model is one merged mesh ("Body"), origin at the base centre, front = +Z (PricedProp turns
 ## it toward the iso camera). height(kind) is the model's top, for tag and fx placement.
 ##
+## Each kind's row in PricedProp.TABLE names its look: "height", "model" (the builder below, a static
+## func(s: LowPoly.Soup)), "palette", the optional "extra" (a static func() -> Node3D added beside the body) and, for an
+## explosive, "fuse_point". build(), palette(), height() and fuse_point() read the row; a new prop adds its builder here.
+##
 ##   var node := PropModels.build("gold_toilet")     # Node3D with a MeshInstance3D "Body"
 ##   PropModels.palette("gold_toilet")                # colours for debris shards
 ##   PropModels.rubble("gold_toilet")                 # the small broken remnant
@@ -27,16 +31,6 @@ const BOTTLE_RED := Color(0.42, 0.08, 0.12)
 const CREAM := Color(0.96, 0.90, 0.74)
 const OBSIDIAN := Color(0.12, 0.10, 0.15)
 
-const HEIGHTS := {
-	"wine_rack": 1.7, "wine_barrel": 1.25, "marble_statue": 2.2, "gold_toilet": 1.35,
-	"projector": 1.35, "zen_fountain": 1.15, "server_rack": 1.95, "crystal_lamp": 1.45,
-	"doomsday_console": 1.75, "torture_rack": 0.95, "specimen_vat": 2.0, "villain_throne": 2.35,
-	"shark_tank": 1.6, "henchman_locker": 1.75, "evil_portrait": 2.0, "brazier": 1.15, "treadmill": 1.5,
-	# explosive props (ExplosiveProp, docs/design/hazards.md)
-	"oil_drum": 1.05, "gas_cylinders": 1.45, "propane_tank": 1.2, "battery_pack": 1.52,
-	# the sewer's (docs/design/sewer-concept.md, phase 1)
-	"sump_pump": 1.7, "electrical_panel": 1.8,
-}
 ## The sewer's lab models (scripts/art/lowpoly/props/sewer_props.gd): the sump pump and the electrical panel are built there.
 const SewerProps := preload("res://scripts/art/lowpoly/props/sewer_props.gd")
 ## Where the electrical panel's cable leaves the box (model space): LiveWire drops the live cable from here.
@@ -58,8 +52,18 @@ const FUSE_POINTS := {
 static var _seed := 1
 
 
+## The kind's row in PricedProp.TABLE (empty for an unknown kind).
+static func row(kind: String) -> Dictionary:
+	return PricedProp.TABLE.get(kind, {})
+
+
+## Every prop kind with a model, in table order.
+static func kinds() -> Array:
+	return PricedProp.TABLE.keys()
+
+
 static func height(kind: String) -> float:
-	return float(HEIGHTS.get(kind, 1.5))
+	return float(row(kind).get("height", 1.5))
 
 
 ## The glow convention of MonsterMaterial: alpha 0.5 = emissive face.
@@ -78,70 +82,30 @@ static func build(kind: String) -> Node3D:
 	root.name = "Model"
 	var s := LowPoly.Soup.new(7, 0.06)
 	_seed = int(kind.hash() % 9973)
-	match kind:
-		"wine_rack": _wine_rack(s)
-		"wine_barrel": _wine_barrel(s)
-		"marble_statue": _marble_statue(s)
-		"gold_toilet": _gold_toilet(s)
-		"projector": _projector(s)
-		"zen_fountain": _zen_fountain(s)
-		"server_rack": _server_rack(s)
-		"crystal_lamp": _crystal_lamp(s)
-		"treadmill": _treadmill(s)
-		"doomsday_console": _doomsday_console(s)
-		"torture_rack": _torture_rack(s)
-		"specimen_vat": _specimen_vat(s)
-		"villain_throne": _villain_throne(s)
-		"shark_tank": _shark_tank(s)
-		"henchman_locker": _henchman_locker(s)
-		"evil_portrait": _evil_portrait(s)
-		"brazier": _brazier(s)
-		"oil_drum": _oil_drum(s)
-		"gas_cylinders": _gas_cylinders(s)
-		"propane_tank": _propane_tank(s)
-		"battery_pack": _battery_pack(s)
-		"sump_pump": SewerProps._pump(s, Color(0.22, 0.4, 0.55))
-		"electrical_panel": SewerProps._junction_box(s, Vector3(0.15, -0.55, 0.9), false)
-		_:
-			box(s, Vector3(0.8, 0.8, 0.8), Vector3(0, 0.4, 0), GOLD)
+	var r := row(kind)
+	if r.has("model"):
+		builder(String(r["model"])).call(s)
+	else:
+		box(s, Vector3(0.8, 0.8, 0.8), Vector3(0, 0.4, 0), GOLD)
 	var mi := MeshInstance3D.new()
 	mi.name = "Body"
 	mi.mesh = s.to_mesh()
 	mi.material_override = material()
 	root.add_child(mi)
-	if kind == "brazier":
-		root.add_child(_embers())
+	if r.has("extra"):
+		root.add_child(builder(String(r["extra"])).call())
 	return root
+
+
+## A builder named in a TABLE row ("model", "extra"): a static func of this script.
+static func builder(method: String) -> Callable:
+	return Callable(PropModels, method)
 
 
 ## Colours a broken prop's shards are painted with.
 static func palette(kind: String) -> Array[Color]:
 	var out: Array[Color] = []
-	match kind:
-		"wine_rack": out = [WOOD, WOOD_DK, BOTTLE_GREEN, BOTTLE_RED]
-		"wine_barrel": out = [WOOD, WOOD_DK, GOLD, BOTTLE_RED]
-		"marble_statue": out = [MARBLE, MARBLE_DK, GOLD]
-		"gold_toilet": out = [GOLD, GOLD_DK, Color(1.0, 0.92, 0.55), VELVET]
-		"projector": out = [IRON, IRON_LT, Color(0.5, 0.85, 1.0), WOOD_DK]
-		"zen_fountain": out = [STONE, Color(0.35, 0.36, 0.4), Color(0.4, 0.85, 0.85)]
-		"server_rack": out = [IRON, IRON_LT, Color(0.3, 1.0, 0.5), Color(1.0, 0.6, 0.2)]
-		"crystal_lamp": out = [Color(0.85, 0.55, 1.0), Color(1.0, 0.7, 0.95), GOLD, Color(0.6, 0.35, 0.9)]
-		"treadmill": out = [IRON, IRON_LT, VELVET, Color(0.3, 0.9, 1.0)]
-		"doomsday_console": out = [IRON, IRON_LT, Color(1.0, 0.2, 0.15), Color(0.95, 0.8, 0.2)]
-		"torture_rack": out = [WOOD_DK, WOOD, IRON, Color(0.7, 0.62, 0.45)]
-		"specimen_vat": out = [IRON, Color(0.3, 1.0, 0.55), Color(0.2, 0.55, 0.4), Color(0.45, 0.2, 0.6)]
-		"villain_throne": out = [OBSIDIAN, VELVET, GOLD, Color(0.9, 0.88, 0.8)]
-		"shark_tank": out = [IRON, Color(0.3, 0.8, 0.95), Color(0.2, 0.55, 0.7), Color(0.6, 0.65, 0.72)]
-		"henchman_locker": out = [Color(0.38, 0.42, 0.5), IRON, Color(0.85, 0.2, 0.15)]
-		"evil_portrait": out = [GOLD, GOLD_DK, Color(0.45, 0.07, 0.1), OBSIDIAN]
-		"brazier": out = [IRON, IRON_LT, Color(1.0, 0.55, 0.12)]
-		"oil_drum": out = [DRUM_RED, DRUM_RED_DK, IRON, HAZARD_YELLOW]
-		"gas_cylinders": out = [CYL_GREEN, CYL_MAROON, CYL_BLUE, IRON_LT]
-		"propane_tank": out = [TANK_WHITE, IRON, Color(0.85, 0.2, 0.15), HAZARD_YELLOW]
-		"battery_pack": out = [OBSIDIAN, IRON, Color(1.0, 0.55, 0.12), Color(0.3, 1.0, 0.5)]
-		"sump_pump": out = [Color(0.22, 0.4, 0.55), IRON, Color(0.5, 0.27, 0.14), HAZARD_YELLOW]
-		"electrical_panel": out = [Color(0.55, 0.57, 0.55), IRON, HAZARD_YELLOW, Color(1.0, 0.95, 0.55)]
-		_: out = [GOLD, IRON]
+	out.assign(row(kind).get("palette", [GOLD, IRON]))
 	return out
 
 
@@ -723,3 +687,13 @@ static func _battery_pack(s: LowPoly.Soup) -> void:
 	cyl(s, 0.05, 0.05, 0.08, 6, Vector3(-0.28, 1.46, 0.18), Color(0.1, 0.1, 0.12))
 	rod(s, Vector3(0.28, 1.5, 0.18), Vector3(0.2, 1.47, -0.3), 0.025, 0.025, 4, Color(0.85, 0.15, 0.12))
 	rod(s, Vector3(-0.28, 1.5, 0.18), Vector3(-0.2, 1.47, -0.3), 0.025, 0.025, 4, Color(0.1, 0.1, 0.12))
+
+
+# ------------------------------------------------------------------ the sewer's (built by SewerProps)
+
+static func _sump_pump(s: LowPoly.Soup) -> void:
+	SewerProps._pump(s, Color(0.22, 0.4, 0.55))
+
+
+static func _electrical_panel(s: LowPoly.Soup) -> void:
+	SewerProps._junction_box(s, Vector3(0.15, -0.55, 0.9), false)

@@ -35,7 +35,7 @@ static func models() -> Array[Dictionary]:
 		if kind == "neon_sign":
 			params = {"text": "EVIL", "color": Color(1, 0.2, 0.15)}
 		out.append({"name": "decor/" + kind, "make": DecorModels.build.bind(kind, params), "ground": true})
-	for kind: String in PropModels.HEIGHTS.keys():
+	for kind: String in PropModels.kinds():
 		out.append({"name": "prop/" + kind, "make": PropModels.build.bind(kind), "ground": true})
 		out.append({"name": "prop_rubble/" + kind, "make": PropModels.rubble.bind(kind), "ground": true})
 	for kind: String in PackageModels.KINDS:

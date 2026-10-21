@@ -107,7 +107,7 @@ func _check_catalog() -> void:
 		check(e.blast_radius >= 2.5 and e.blast_damage >= 35.0, "%s: a big blast (%.1f, %.0f)" % [k, e.blast_radius, e.blast_damage])
 		var body := e.get_node_or_null("Model/Body") as MeshInstance3D
 		check(body != null and body.mesh != null and body.mesh.get_surface_count() > 0, "%s has a model" % k)
-		check(PropModels.HEIGHTS.has(k), "%s is in the z-fight registry (PropModels.HEIGHTS)" % k)
+		check(PropModels.kinds().has(k), "%s is in the z-fight registry (PropModels.kinds)" % k)
 	eq(Ledger.lines.size(), 0, "placing them costs nothing")
 
 
