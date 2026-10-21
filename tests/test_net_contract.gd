@@ -22,6 +22,10 @@ extends TestCase
 ## 7. Late-join coverage (M6): every replicated class (REPLICATED, and every class NetEvents.WORLD_CARRIES names) declares in
 ##    NetEvents.LATE_JOIN how a player who joins a running floor gets its state (keyframe, gone ids, an event replay, the
 ##    seat handover). A new replicated class without an entry would be wrong on a late joiner's screen.
+## 8. Units (refactor-plan.md H5): every runtime actor (NetWorldCodec.RUNTIME_ACTORS) is in REPLICATED with its own field list
+##    and implements what NetWorld calls (net_read, net_write, net_tick, static make_shown); every host-arbitrated object
+##    (a script with net_link) implements the rest of the net-object contract NetObjects calls (net_event) and is held to its
+##    carriers, and one that is not an Actor says where its net id goes (net_order, NetFloor).
 
 ## Gameplay scripts that aren't Actors but hold state that matters in co-op. A new one goes here.
 const NET_SCRIPTS := [
@@ -114,7 +118,7 @@ const LINT_CLEAN := [
 
 
 func setup() -> void:
-	for p: String in NetWorldCodec.RUNTIME_ACTORS:   # (a runtime actor's carriers: its own codec field list)
+	for p: String in NetWorldCodec.RUNTIME_ACTORS:   # (a runtime actor's carriers: its own codec field list, section 8)
 		REPLICATED[p] = [NetWorldCodec.RUNTIME_ACTORS[p]["fields"], NetEvents.WORLD_CARRIES.get(p, {}), 5]
 	var scripts := _all_scripts("res://scripts/")
 	_check_declarations(scripts)
@@ -125,6 +129,7 @@ func setup() -> void:
 	_check_area_loops(scripts)
 	_check_area_samples()
 	_check_late_join()
+	_check_units(scripts)
 	finish()
 
 
@@ -458,3 +463,45 @@ func _check_late_join() -> void:
 	eq(_late_join_gaps(["a.gd"], {"a.gd": "somehow"}).size(), 1, "an entry that names no way is flagged")
 	eq(_late_join_gaps(["a.gd"], {"a.gd": "gone ids", "z.gd": "replay"}).size(), 1, "a stale entry is flagged")
 	eq(_late_join_gaps(["a.gd"], {"a.gd": "replay of obj.x"}).size(), 0, "a covered class is clean")
+
+
+# --- 8. Units (H5): runtime actors and host-arbitrated objects --------------------------------------------------------
+
+func _methods(script: Script) -> Dictionary:
+	var out := {}
+	var sc := script
+	while sc != null:
+		for m: Dictionary in sc.get_script_method_list():
+			out[str(m["name"])] = true
+		sc = sc.get_base_script()
+	return out
+
+
+func _check_units(paths: Array[String]) -> void:
+	var kinds := {}
+	for p: String in NetWorldCodec.RUNTIME_ACTORS:
+		var e: Dictionary = NetWorldCodec.RUNTIME_ACTORS[p]
+		var script := load(p) as GDScript
+		if not check(script != null, "RUNTIME_ACTORS names a missing script: " + p):
+			continue
+		check(_extends_actor(script), p + ": a runtime actor is an Actor")
+		var have := _methods(script)
+		for m in ["net_read", "net_write", "net_tick", "make_shown"]:
+			check(have.has(m), "%s: a runtime actor implements %s (NetWorld calls it)" % [p, m])
+		var kind := str(e.get("kind", ""))
+		check(kind != "" and not kinds.has(kind), "%s: its world.spawn kind `%s` is set and unique" % [p, kind])
+		kinds[kind] = true
+		check(NetWorldCodec.runtime_script(kind) == script, "%s: a world.spawn row of kind `%s` builds it" % [p, kind])
+		check(str(e.get("group", "")) != "", p + ": its query group is named")
+	var objects := 0
+	for p in paths:
+		if not FileAccess.get_file_as_string(p).contains("func net_link("):
+			continue
+		objects += 1
+		var script := load(p) as GDScript
+		var have := _methods(script)
+		check(have.has("net_event"), "%s: a net object (net_link) implements net_event (a client applies the host's obj.* events)" % p)
+		check(REPLICATED.has(p), "%s: a net object is in REPLICATED (its carriers)" % p)
+		if not _extends_actor(script):
+			check(have.has("net_order"), "%s: a net object that is not an Actor says where its net id goes (net_order)" % p)
+	check(objects >= 5, "found the host-arbitrated objects (%d scripts with net_link)" % objects)
