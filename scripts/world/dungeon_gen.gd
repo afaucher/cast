@@ -109,8 +109,8 @@ static func _attempt(s: int, params: Dictionary) -> HexMap:
 
 
 ## Floor `floor_n` of a contract: its floor seed and the job's elevator placement (every floor of a job alike), and a sewer
-## cluster when the floor rolls one (SewerCluster.seed_for). `shared`: a crew's run, which gets none until the sewer is
-## networked (SewerCluster.NETWORKED).
+## cluster when the floor rolls one (SewerCluster.seed_for). `shared`: a crew's run, which rolls the same cluster as a
+## solo run since the sewer is networked (SewerCluster.NETWORKED, sewer phase 2).
 static func for_run(run: ContractRun, floor_n: int, shared: bool = false) -> HexMap:
 	var params := {"elevator": run.elevator_place}
 	var sewer := SewerCluster.seed_for(run, floor_n, shared)

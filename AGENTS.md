@@ -36,7 +36,10 @@ replayed on its puppet everywhere (`act`), and every effect runs on every machin
 RESOLVES: a hero's hits by its owner (the victim decides), anything else's hits by the attacker's machine
 (`Net.resolves_hit`, `Combat.resolves`; a client's hit or shove on the host's actor becomes a request), statuses (modifiers,
 fires, soaks, heals, coffee) by the target's owner (`Net.resolves`), which announces them (`Session.status`). A monster's
-wind-up is an event and each client resolves the strike on its own hero (`world.windup`, `Monster.net_strike`). A debug
+wind-up is an event and each client resolves the strike on its own hero (`world.windup`, `Monster.net_strike`). Crew floors
+have sewer clusters (`docs/design/sewer-concept.md`, "Phase 2 as built"): a priced prop's `obj.break` carries its shared
+moment and culprit (`PricedProp.broke_at`: the live wire runs from it, and a late joiner catches up from it), and an actor's own
+spawn data goes in the floor checksum (`net_spawn_text`: the gator's home region). A debug
 guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). M7 (polish) is
 built locally; the two-PC Steam sign-off is `docs/design/steam-playtest-checklist.md`. Steam's overlay invites ask first in a
 job (`Session.invite_received` -> "Leave this job and join?"), "Invite crew" is on the job board and the pause form

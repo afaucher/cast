@@ -228,6 +228,11 @@ Use this in every spec and review that adds content:
 5. Could its motion be a function of `(params, start time)` rather than streamed?
 6. What is cosmetic, and what is gameplay?
 7. What does a player who joins mid-floor see?
+   - An effect that runs from a host-arbitrated object's moment (the live wire from its panel's break) takes that moment from
+     the object's event on the shared clock (`obj.break {t, by}`: `PricedProp.broke_at`), never from when the event arrived,
+     and a late joiner catches up from it without replaying what is past (`breaks`, `PricedProp.break_synced`).
+   - Spawn data that is not in the map, the plan or the spawn table's position (a gator's home region, bask spots and seed)
+     goes in the floor checksum through the actor's `net_spawn_text()` (`NetFloor.spawn_text_of`).
 8. Which two-peer scenario will cover it, once those exist?
 9. If it is a host-arbitrated object, it implements the net-object contract on its own class (`NetObjects`' header has the
    full list; nothing in `scripts/net/` names the class):

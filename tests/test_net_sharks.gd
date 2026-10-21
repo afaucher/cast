@@ -1,6 +1,7 @@
 extends NetGameTest
 ## Pool sharks online (docs/design/sharks.md "As built", "Networking"), three processes, `off` and `coast`. Floor 3 of the
-## seed-16 job (offer 3) holds a regular shark in its moat ring and an imp-ridden laser shark in a two-row shark pool.
+## seed-170 job (offer 1) holds a regular shark and an imp-ridden laser shark. (It was floor 3 of the seed-16 job, offer 3,
+## until crew floors got sewer clusters, sewer phase 2: that floor now has a cluster and one shark.)
 ## The host and c1 play it; c2 joins later, on the job.
 ## - THE BITE, THE VICTIM DECIDES: c1's hero stands at the regular shark's rim; the host's shark hunts it and bites once:
 ##   c1's own machine resolves it from the wind-up event (one strike, BITE_DAMAGE, its hero pushed back onto the deck, out
@@ -16,8 +17,8 @@ extends NetGameTest
 ## - nothing tripped the OWNER-write guard on any machine.
 
 const PEERS := 3
-const SEED := 16
-const CONTRACT := 2
+const SEED := 170
+const CONTRACT := 0
 const FLOOR := 3
 const JOINER_SPELLS := ["tentacles", "teeth"]
 

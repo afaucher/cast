@@ -383,10 +383,10 @@ after the themes are dealt): basin cells one level down and ring cells cut along
 (`Cell.pool_mask` / `pool_level`, `HexMap.pools`, `HexMap.water_at`). `HexMapView` draws them in its inset mode and
 `PoolView` (`scripts/world/pool_view.gd`) adds the water, coping and dressing; `Wading` (`scripts/world/wading.gd`) slows
 and soaks whoever stands in the water. See `docs/design/pool-options.md`, "Built". A cut cell may hold pool kites too
-(water up to a wall: the sewer slice, `--sewer N`, `SewerLayouts` / `SewerView` / `Gator` / `LiveWire`, dev and solo only;
-`docs/design/sewer-concept.md`, "Phase 1 as built").
-**Sewer clusters (phase 3, solo runs):** `SewerCluster.seed_for(run, floor, shared)` rolls one on floors 2-3 (`RATE`, its own
-dice; never while `shared` until `SewerCluster.NETWORKED`), and `DungeonGen`'s `"sewer"` option cuts it: a wing of 2-4 rooms
+(water up to a wall: the sewer slice, `--sewer N`, `SewerLayouts` / `SewerView` / `Gator` / `LiveWire`, a dev flag, solo or
+every window of a crew; `docs/design/sewer-concept.md`, "Phase 1 as built" and "Phase 2 as built").
+**Sewer clusters (phase 3; crews too since phase 2):** `SewerCluster.seed_for(run, floor, shared)` rolls one on floors 2-3
+(`RATE`, its own dice; the same in a shared run since `SewerCluster.NETWORKED`), and `DungeonGen`'s `"sewer"` option cuts it: a wing of 2-4 rooms
 lowered to one level, its own links flat, a service stair of STAIRS cells down into it, no features in it, never the start or
 exit room; the record is `HexMap.sewer`. Any failure builds the attempt without the option, so a floor without a cluster is
 byte-identical to before. In `SiteBuilder.plan`, `SewerPlanner.plan` floods it FIRST (before the gates: wet cells one level
@@ -396,7 +396,11 @@ outfall, culvert bars and the stair sign, `SewerPlanner.materials` its halls' st
 doorways, `GatorPlanner` its gators and `SewerPlanner.plan_pack` its goo imp pack (`MonsterFactory.spawn_sewer_pack`; spawned
 after the sharks, gators first; `SewerPlanner.spawn` then draws the water,
 `SewerView.dress_body` over HexMapView's CHANNEL surface, and attaches the live wires). `tests/test_sewer_gen.gd`;
-`docs/design/sewer-concept.md`, "Phase 3 as built".
+`docs/design/sewer-concept.md`, "Phase 3 as built". Online ("Phase 2 as built"): `HexMap.sewer` and each gator's spawn data
+(`net_spawn_text`) are in the floor checksum; the gator is a host-owned monster in the world stream (its nip a `world.windup`
+each client resolves on its own hero); the panel's `obj.break` carries the break's shared moment and culprit
+(`PricedProp.broke_at`), from which every machine's `LiveWire` runs the shock, the panel deciding the hits;
+`tests/test_net_gator.gd`, `test_net_live_wire.gd`, `test_net_sewer_floor.gd`.
 
 Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
 To keep that clean:

@@ -9,11 +9,15 @@ extends Node3D
 ## breaker trips: one use. Dry ground is safe, and so is water farther than REACH_CELLS from the drop. The shock's damage is
 ## credited to whoever broke the panel (a gator it kills bills them).
 ##
-## Networking shape (phase 2): the panel is a host-arbitrated object (its break is obj.break with the culprit); the drop and
-## the shock are a SCHEDULED EFFECT from the break's shared moment: every machine runs the cable, the shock and the pulses on
-## its own clock and applies each hit only where it resolves (Combat.hits_in_radius: the victim's owner for a hero, the
-## culprit's machine for the rest; the daze by the target's owner, Net.resolves). Nothing else travels. Here the break time
-## is this machine's (solo).
+## Networking (sewer phase 2, "Phase 2 as built"): the panel is a host-arbitrated object; a client's hit on it is a request
+## and the host breaks it and bills it once. Its break is `obj.break {id, t, by}` (PricedProp: the moment on the shared clock
+## and the culprit), and the drop and the shock are a SCHEDULED EFFECT from that moment (the panel's broke_at): every machine
+## runs the cable, the shock and the pulses on its own clock and applies each hit only where it resolves, decided by the
+## panel (Combat.hits_in_radius with the panel as the decider: a hero by its owner, everything else by the host, as an
+## explosive prop's blast; the daze by the target's owner, Net.resolves). The damage is credited to the breaker on every
+## machine. The arcs reach everyone in the water on every screen (the look). A late joiner gets a broken panel by its gone id
+## and then its `breaks` row (PricedProp.break_synced): the wire takes the host's moment and skips the shocks already past,
+## so a dead wire lies dark in the water and a live one pulses on at the same beats. Nothing else travels.
 ##
 ##   var w := LiveWire.attach(panel, drop_point, sewer_view)   # a child of the panel: the fog hides it with the panel
 
@@ -64,6 +68,7 @@ static func attach(p: PricedProp, drop: Vector3, sewer_view: SewerView = null) -
 	w.view = sewer_view
 	p.add_child(w)
 	p.broken.connect(w._on_broken)
+	p.break_synced.connect(w._on_synced)
 	return w
 
 
@@ -105,13 +110,37 @@ func is_live() -> bool:
 	return broke_at >= 0.0 and GameWorld.time - broke_at < DROP_T + PULSE_FOR + 0.05
 
 
-func _on_broken(_p: PricedProp, culprit: Node) -> void:
+## The panel broke: the cable drops from the break's moment (the panel's broke_at: on a copy, the host's, from obj.break).
+func _on_broken(p: PricedProp, culprit: Node) -> void:
 	if broke_at >= 0.0:
 		return
-	broke_at = GameWorld.time
+	broke_at = p.broke_at if p != null and p.broke_at >= 0.0 else GameWorld.time
 	_culprit = weakref(culprit) if culprit != null else null
 	set_physics_process(true)
 	Sfx.play_at("fuse", global_position + Vector3.UP * 1.2)
+
+
+## A late joiner: the host's break moment and culprit arrived after the panel was shown broken. Run from that moment, and
+## count the shocks already past as fired (they hit nobody here: they happened before this machine was on the floor).
+func _on_synced(p: PricedProp) -> void:
+	broke_at = p.broke_at
+	var by := p.last_culprit()
+	_culprit = weakref(by) if by != null else null
+	shocks = maxi(shocks, due_shocks())
+	var live := is_live()
+	set_physics_process(live)
+	_pose_cable(clampf((GameWorld.time - broke_at) / DROP_T, 0.0, 1.0))
+
+
+## How many shocks (the first and the pulses) are due by now since the break.
+func due_shocks() -> int:
+	if broke_at < 0.0:
+		return 0
+	var t := GameWorld.time - broke_at
+	if t < DROP_T:
+		return 0
+	var due := 1 + int(floorf((t - DROP_T) / PULSE_EVERY + 0.0001))
+	return mini(due, 1 + int(floorf(PULSE_FOR / PULSE_EVERY + 0.0001)))
 
 
 func _physics_process(_delta: float) -> void:
@@ -122,9 +151,8 @@ func _physics_process(_delta: float) -> void:
 	if t < DROP_T:
 		return
 	# the shock when it lands, then a pulse every PULSE_EVERY until PULSE_FOR is up
-	var due := 1 + int(floorf((t - DROP_T) / PULSE_EVERY + 0.0001))
-	var last := 1 + int(floorf(PULSE_FOR / PULSE_EVERY + 0.0001))
-	while shocks < mini(due, last):
+	var due := due_shocks()
+	while shocks < due:
 		_shock(shocks == 0)
 	if t >= DROP_T + PULSE_FOR + 0.05:
 		set_physics_process(false)
@@ -132,20 +160,33 @@ func _physics_process(_delta: float) -> void:
 			_end_glow.visible = false   # the breaker trips: the cable is dead
 
 
-## Who a shock reaches: every body standing in water within REACH_CELLS hex cells of the drop (not props, boxes or gates).
+## Who a shock hits on THIS machine: every body standing in water within REACH_CELLS hex cells of the drop (not props,
+## boxes or gates) that this machine resolves, the panel deciding (Combat.hits_in_radius: a hero by its owner, the rest by
+## the host). Offline: all of them.
 func victims() -> Array[Actor]:
 	var out: Array[Actor] = []
-	var map := GameWorld.map
-	if map == null:
-		return out
-	var src := _culprit.get_ref() as Node if _culprit != null else null
-	for a in Combat.hits_in_radius(drop_point, float(REACH_CELLS + 1) * Hex.SQRT3, src):
-		if a is PricedProp or a.is_in_group("breakables") or a is Hellgate or a is DecorBlocker or a.is_airborne():
-			continue
-		if Hex.distance(a.current_cell(), drop_cell) > REACH_CELLS or not map.water_at(a.global_position):
-			continue
-		out.append(a)
+	for a in Combat.hits_in_radius(drop_point, float(REACH_CELLS + 1) * Hex.SQRT3, panel):
+		if _reaches(a):
+			out.append(a)
 	return out
+
+
+## Everyone a shock reaches, whoever resolves them (the arcs on every screen).
+func reached() -> Array[Actor]:
+	var out: Array[Actor] = []
+	for a in GameWorld.actors_in_radius(drop_point, float(REACH_CELLS + 1) * Hex.SQRT3):
+		if _reaches(a):
+			out.append(a)
+	return out
+
+
+func _reaches(a: Actor) -> bool:
+	var map := GameWorld.map
+	if map == null or a == null or a.dead:
+		return false
+	if a is PricedProp or a.is_in_group("breakables") or a is Hellgate or a is DecorBlocker or a.is_airborne():
+		return false
+	return Hex.distance(a.current_cell(), drop_cell) <= REACH_CELLS and map.water_at(a.global_position)
 
 
 func _shock(first: bool) -> void:
@@ -245,7 +286,7 @@ func _shock_fx(first: bool) -> void:
 	var y := drop_point.y + HexMap.WATER_DEPTH + 0.05
 	var from := Vector3(drop_point.x, y, drop_point.z)
 	var targets: Array[Vector3] = []
-	for a in last_hits:
+	for a in reached():
 		if is_instance_valid(a):
 			targets.append(Vector3(a.global_position.x, a.global_position.y + 0.6, a.global_position.z))
 	var map := GameWorld.map

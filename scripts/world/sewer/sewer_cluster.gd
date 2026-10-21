@@ -9,12 +9,13 @@ extends RefCounted
 ## stair; the rest of the floor stays normal. A floor rolls RATE on dice of its own (seed_for), so a floor that rolls none,
 ## or whose rooms have no wing that fits, is byte for byte the floor it always was (DungeonGen builds it without the option).
 ##
-## THE NETWORK SWITCH: the gator and the live wire have no network shape yet (phase 2), so a SHARED run never gets a cluster
-## (NETWORKED false: crew floors, and their checksum, stay exactly as before). Phase 2 flips NETWORKED once the gator streams,
-## the panel's break is an obj event and map.sewer is in NetFloor's checksum.
+## THE NETWORK SWITCH (sewer phase 2, "Phase 2 as built"): the gator streams (its nip, shove and death go through the net
+## layer), the panel's break is an obj.break with its shared moment that every machine's LiveWire runs from, and map.sewer and
+## each gator's spawn data are in NetFloor's checksum, so a SHARED run rolls clusters too: every machine builds the same one
+## from the seed (the same dice as solo, so a crew floor is the floor a solo run of that seed gets).
 
-## Phase 2 sets this true: then a shared run rolls clusters too (every machine builds the same one from the seed).
-const NETWORKED := false
+## True since phase 2: a shared run rolls clusters like a solo one. False would keep crew floors without one.
+const NETWORKED := true
 ## The share of eligible floors that roll a cluster (before the wing check, which some floors fail: see the doc for the
 ## measured share of floors 2-3 that end up with one).
 const RATE := 0.5
@@ -31,12 +32,13 @@ const DROP_MAX := 5
 const FLIGHT_MAX := 3            ## the most levels one STAIRS cell of the service stair climbs
 const MIN_LEVEL := 1
 
-## Dev (--sewer-floor, SewerDev.parse): every floor of a solo job gets a cluster if any wing fits, whatever the site, floor or
-## roll. Never in a shared run.
+## Dev (--sewer-floor, SewerDev.parse): every floor of a job gets a cluster if any wing fits, whatever the site, floor or
+## roll. In a crew every window needs the flag (run.ps1 -Crew passes it to all); the load barrier's checksum sends out one
+## that built a different floor.
 static var force := false
 
 
-## The cluster's own seed for floor `floor_n` of `run` (0: no cluster). A shared run never gets one until NETWORKED.
+## The cluster's own seed for floor `floor_n` of `run` (0: no cluster). A shared run gets the same as a solo one (NETWORKED).
 static func seed_for(run: ContractRun, floor_n: int, shared: bool) -> int:
 	if run == null or (shared and not NETWORKED):
 		return 0

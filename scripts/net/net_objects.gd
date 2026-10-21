@@ -83,7 +83,7 @@ const REACH_SLACK := 0.5       ## a claimed position may be this much beyond the
 const REQUEST_RETRY := 0.8     ## a client asks again for a pickup after this long without an answer
 ## A late joiner's snapshot (late_join_state): the objects' sections in the order they go on the wire (each is there, empty
 ## or not). A section an object names that is not here is added after these.
-const LATE_JOIN_SECTIONS := ["pickups", "dents", "fuses", "doors"]
+const LATE_JOIN_SECTIONS := ["pickups", "dents", "fuses", "doors", "breaks"]
 ## RUNTIME OBJECTS (above): obj.new's kind -> the class a client builds its copy from (test_net_contract holds each to the
 ## contract).
 const RUNTIME_OBJECTS := {

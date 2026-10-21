@@ -8,7 +8,7 @@ extends MonsterTestBase
 ##   - every doorway of the floor is reachable from the start (wading where it must);
 ##   - the gator starts in the water inside its home region, its bask spots are in the region; the panel drops its cable into
 ##     the water; flooded narrow doorways get a sluice, never an office door;
-##   - a SHARED run never gets one (SewerCluster.NETWORKED is false): its floor is the floor DungeonGen builds without the option;
+##   - a SHARED run gets the same cluster (SewerCluster.NETWORKED, sewer phase 2): the same map text, the record in it;
 ##   - a floor without a cluster is byte for byte the floor it always was (the NetFloor map and plan texts);
 ##   - the timing: generation and the sewer's planning stay cheap.
 ## It also prints the share of floors 2-3 with a cluster and the first seeds with one on floor 2 (for the doc and playtests).
@@ -223,12 +223,14 @@ func _check_unchanged(run: ContractRun, f: int, map: HexMap, plan: SitePlan) -> 
 	check(str(a["map"]) == str(b["map"]) and str(a["plan"]) == str(b["plan"]), "seed %d floor %d: without a cluster the floor is unchanged" % [run.seed, f])
 
 
-## The same floor in a shared run: no cluster, and exactly the floor without the option.
+## The same floor in a shared run (sewer phase 2): the same cluster, so every machine of a crew builds the solo floor of the
+## seed; the cluster's record is in the checksum's map text.
 func _check_shared(run: ContractRun, f: int, tag: String) -> void:
 	var shared := DungeonGen.for_run(run, f, true)
-	check(shared.sewer.is_empty(), "%s: a shared run gets no cluster" % tag)
-	var ref := DungeonGen.generate(run.floor_seed(f), {"elevator": run.elevator_place})
-	eq(NetFloor.map_text_of(shared), NetFloor.map_text_of(ref), "%s: the shared run's floor is the floor without the option" % tag)
+	var solo := DungeonGen.for_run(run, f)
+	check(not shared.sewer.is_empty(), "%s: a shared run gets the cluster too" % tag)
+	eq(NetFloor.map_text_of(shared), NetFloor.map_text_of(solo), "%s: the shared run's floor is the solo floor" % tag)
+	check(NetFloor.map_text_of(shared).contains("\nsewer="), "%s: the cluster's record is in the map checksum" % tag)
 
 
 ## Spawned: the gators are in the world after the sharks, with live wires on the panels and the water drawn.
@@ -265,7 +267,7 @@ func _check_spawned(run: ContractRun, f: int, tag: String) -> void:
 		check(g.in_region(g.current_cell()), "%s: the gator stands in its region" % tag)
 
 
-## --sewer-floor: a forced cluster on most floors, any site, and still never in a shared run.
+## --sewer-floor: a forced cluster on most floors, any site, a shared run alike (every window of a crew has the flag).
 func _check_force() -> void:
 	SewerCluster.force = true
 	var got := 0
@@ -274,6 +276,6 @@ func _check_force() -> void:
 		var map := DungeonGen.for_run(run, 2)
 		if not map.sewer.is_empty():
 			got += 1
-		check(DungeonGen.for_run(run, 2, true).sewer.is_empty(), "seed %d: forced, a shared run still gets none" % s)
+		eq(DungeonGen.for_run(run, 2, true).sewer.is_empty(), map.sewer.is_empty(), "seed %d: forced, a shared run gets the same" % s)
 	SewerCluster.force = false
 	check(got >= 9, "--sewer-floor forces a cluster on most floors (%d of 12)" % got)

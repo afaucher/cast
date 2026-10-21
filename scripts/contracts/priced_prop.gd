@@ -31,6 +31,10 @@ extends Actor
 
 ## The prop broke: the Ledger line has been recorded.
 signal broken(prop: PricedProp, culprit: Node)
+## A copy learned its break's moment and culprit only after it was shown broken (a late joiner: the gone ids break it first,
+## then the snapshot's `breaks` row): whatever runs from the break (a LiveWire) catches up from `broke_at` without replaying
+## what is past. Only a prop something listens on for this sends the row.
+signal break_synced(prop: PricedProp)
 
 const DEFAULT_YAW := 15.0              ## turns the +Z front toward the iso camera (yaw 45) with a three-quarter view
 const TAG_RANGE := 3.0                 ## a hero this close (centre to centre) shows the price tag
@@ -117,12 +121,14 @@ var kind := ""
 var price := 0
 var site := ""
 var broke := false
+var broke_at := -1.0               ## GameWorld.time it broke (-1: whole); a copy: the host's moment on this clock (obj.break {t})
 var rubble_enabled := true
 var tag_label: Label3D = null
 
 var _model: Node3D = null
 var _rubble: Node3D = null
 var _last_source: WeakRef = null
+var _break_by: WeakRef = null      ## a copy: who broke it, as the host said (obj.break {by})
 var _tag_target := false
 var _tag_tick := 0
 var _contacts := {}               ## shoved actors already counted against this prop
@@ -246,6 +252,8 @@ func net_fields() -> Dictionary:
 	f.merge({
 		"kind": Net.SPAWN, "price": Net.SPAWN, "site": Net.SPAWN, "rubble_enabled": Net.SPAWN,
 		"broke": Net.OWNER,
+		"broke_at": Net.OWNER,          # obj.break {t}: the break's moment on the shared clock (a LiveWire runs from it)
+		"_break_by": Net.OWNER,         # obj.break {by}: the culprit, so a copy's scheduled effects credit the same breaker
 		"_last_source": Net.PRIVATE,    # the culprit goes into the Ledger line, written on the host
 		"_contacts": Net.PRIVATE,       # shoved actors already counted against this prop
 		# The price tag fades in near each screen's own heroes.
@@ -306,7 +314,7 @@ func facing_vector() -> Vector2:
 
 func last_culprit() -> Node:
 	if _last_source == null:
-		return null
+		return _break_by.get_ref() as Node if _break_by != null else null   # (a copy: the host's word, obj.break {by})
 	return _last_source.get_ref() as Node
 
 
@@ -403,8 +411,8 @@ func net_contacts() -> void:
 
 # --- The net-object contract (NetObjects) ---------------------------------------------------------------------------
 
-## Host: a dent goes to everyone as `obj.hurt {id, hp, a}`, the break as `obj.break {id}` (billed once, in the host's
-## Ledger: the bill goes out as obj.ledger).
+## Host: a dent goes to everyone as `obj.hurt {id, hp, a}`, the break as `obj.break {id, t, by}` (its moment on the shared
+## clock and who broke it; billed once, in the host's Ledger: the bill goes out as obj.ledger).
 func net_link(objects: NetObjects, id: int) -> void:
 	objects.link(damaged, _net_hurt.bind(objects, id))
 	objects.link(broken, _net_broken.bind(objects, id))
@@ -415,8 +423,8 @@ func _net_hurt(amount: float, _source: Node, objects: NetObjects, id: int) -> vo
 		objects.tell("obj.hurt", {"id": id, "hp": hp, "a": amount})
 
 
-func _net_broken(_prop: PricedProp, _culprit: Node, objects: NetObjects, id: int) -> void:
-	objects.tell("obj.break", {"id": id})
+func _net_broken(_prop: PricedProp, culprit: Node, objects: NetObjects, id: int) -> void:
+	objects.tell("obj.break", {"id": id, "t": objects.host_stamp(broke_at), "by": NetObjects.net_id(culprit)})
 	objects.count("breaks")
 
 
@@ -429,25 +437,45 @@ func net_event(kind: String, data: Dictionary, objects: NetObjects) -> void:
 			hp = float(data.get("hp", hp))
 			_on_damaged(float(data.get("a", 0.0)), null)
 		"obj.break":
+			_net_break_moment(data, objects)
 			objects.copy_broke(self)
 
 
-## Host: a dented prop for a late joiner, `dents` [id, hp] (an obj.hurt replay). A broken one is a gone id (NetJoin).
-func late_join_state(_objects: NetObjects, id: int) -> Dictionary:
-	if dead or hp >= max_hp - 0.001:
+## A copy: the host's break moment and culprit (obj.break {t, by}, or a late joiner's `breaks` row) on this machine.
+func _net_break_moment(data: Dictionary, objects: NetObjects) -> void:
+	if data.has("t"):
+		broke_at = objects.local_stamp(float(data["t"]))
+	var by := NetRegistry.node(int(data.get("by", 0)))
+	_break_by = weakref(by) if by != null else null
+
+
+## Host: a dented prop for a late joiner, `dents` [id, hp] (an obj.hurt replay). A broken one is a gone id (NetJoin); one
+## whose break something runs from (break_synced has a listener: an electrical panel's LiveWire) also sends `breaks`
+## [id, t, by] (its moment on the shared clock and the culprit), so the joiner catches up from the same moment.
+func late_join_state(objects: NetObjects, id: int) -> Dictionary:
+	if dead:
+		if broke_at >= 0.0 and not break_synced.get_connections().is_empty():
+			return {"breaks": [id, objects.host_stamp(broke_at), NetObjects.net_id(last_culprit())]}
+		return {}
+	if hp >= max_hp - 0.001:
 		return {}
 	return {"dents": [id, hp]}
 
 
-func apply_late_join(section: String, row: Array, _objects: NetObjects) -> void:
+func apply_late_join(section: String, row: Array, objects: NetObjects) -> void:
 	if section == "dents" and row.size() >= 2 and not dead:
 		hp = float(row[1])
+	elif section == "breaks" and row.size() >= 3:
+		_net_break_moment({"t": row[1], "by": row[2]}, objects)
+		break_synced.emit(self)
 
 
 # --- Breaking ------------------------------------------------------------------------------
 
 func _on_death() -> void:
 	broke = true
+	if broke_at < 0.0:
+		broke_at = GameWorld.time   # (a copy got the host's moment from obj.break first)
 	var culprit := last_culprit()
 	Ledger.damage(display_name, price, culprit)   # (online the host bills it; a client's Ledger mirrors the host's)
 	broken.emit(self, culprit)

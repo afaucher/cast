@@ -10,7 +10,7 @@ extends Monster
 ## PricedProp.GROUP (the crew's swings, arrows and bolts hit it; the AI allies' prop care keeps it out of their swings).
 ## Never "monsters": never a pest, never in a pack or a gate (it has no "pack" or "gate" row), monsters never target it.
 ##
-## BEHAVIOUR (the host's; solo for now):
+## BEHAVIOUR (the host's; a client shows the host's gator as a puppet, see NETWORKING below):
 ##   CALM    resting at its spot (eyes half lit). Every 30-45 s (rolled from its spawn seed), calm and with nobody within 6,
 ##           it RELOCATES: MOVE slowly (1.2 water / 0.9 land) to another bask spot within 14 (path, inside its region)
 ##   WATCH   anything within WATCH_R (4.5) of its head: it turns to track it, eyes bright
@@ -40,11 +40,17 @@ extends Monster
 ## the head up in the water; a breath; the head tracking the nearest body it watches; the jaws parting through the nip's
 ## wind-up to the gape and snapping shut; chewing on chum; an idle jaw twitch (GameWorld.fx_rng); a V wake and a ripple.
 ##
-## PHASE 2 (networking) still needs: the MONSTER stream entry (its state rides `state`, its wind-up `world.windup`; a client
-## puppets it from NetWorld like the shark), the shove as a request (Net.route_shove: Actor.shove already routes a copy's),
-## world.die and the host's Ledger line, the late-join keyframe (a dead one is a gone id; NetEvents.LATE_JOIN names it),
-## its spawn data (home region, bask spots, seed) in the floor checksum, Gator.corn_at on the host only, and a 3-process
-## test (test_net_gator).
+## NETWORKING (sewer phase 2, docs/design/sewer-concept.md "Phase 2 as built"): a host-owned actor in the world stream, like
+## the shark. Its MONSTER entry carries its position, facing, HP, state (the 3 bits above), the wind-up (_telegraph) and its
+## strikes; it has no OWNER var beyond Monster's. The nip's wind-up is `world.windup {id, s, l, v}` with l = NIP_WINDUP +
+## LUNGE_T (the wind-up and the longest lunge), and each client resolves the bite on its own hero when its screen reaches
+## that moment (Monster.net_strike -> _strike: the jaws where the puppet shows them, after the host's lunge); the host
+## resolves monsters, employees, chickens and the AI heroes. A client's hit or shove on it is a request (Net.route_hit /
+## Actor.shove on a copy -> Net.route_shove), so the riling, the slide, the walk home and the void bill are the host's; its
+## death is `world.die` and its bill the host's Ledger line (every client's Ledger mirrors it). Corn's chum (corn_at) runs
+## on the host only (Net.simulates). A late joiner gets it in the keyframe (a dead one is a gone id). Its spawn data (home
+## region, bask spots, seed, price) is in the floor checksum (net_spawn_text, NetFloor.spawn_text_of). The rig's motion is
+## LOCAL and driven from what a puppet has: its shown position (speed), facing, state, the wind-up and the water.
 
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
 
@@ -75,6 +81,7 @@ const DWELL := 0.4
 const NIP_WINDUP := 0.5
 const NIP_LUNGE := 1.0
 const LUNGE_SPEED := 9.0
+const LUNGE_T := NIP_LUNGE / LUNGE_SPEED   ## the longest lunge: world.windup's length is the wind-up plus this
 const NIP_REACH := 1.4
 const NIP_DAMAGE := 10.0
 const NIP_SHOVE := 1.6
@@ -263,6 +270,14 @@ func net_fields() -> Dictionary:
 		"_dead_k": Net.LOCAL, "_speed_seen": Net.LOCAL, "_last_pos": Net.LOCAL,
 	})
 	return f
+
+
+## Its spawn data for the floor checksum (NetFloor.spawn_text_of): the home region, the bask spots, the relocation seed and
+## the price. Every machine builds them from the seed; one different cell or spot is a different floor.
+func net_spawn_text() -> String:
+	var cells: Array = home_cells.keys()
+	cells.sort()
+	return "region=%s|spots=%s|seed=%d|price=%d" % [NetFloor.canon(cells), NetFloor.canon(bask_spots), spawn_seed, price]
 
 
 # --- queries (tests, the AI allies, the log) -----------------------------------------------------------------------------
@@ -524,7 +539,7 @@ func _begin_nip(v: Actor) -> void:
 	_windup_left = NIP_WINDUP
 	_telegraph = 0.0
 	_lunge_left = 0.0
-	windup_begun.emit(NIP_WINDUP)
+	windup_begun.emit(NIP_WINDUP + LUNGE_T)   # (online, world.windup: a client's bite lands after the host's lunge)
 
 
 func _tick_nip(delta: float) -> void:
@@ -562,9 +577,10 @@ func _tick_nip(delta: float) -> void:
 		_lunge_left = reach
 
 
-## The bite on its one victim (every machine runs its strike on what it resolves; solo: here).
+## The bite on its one victim. The host runs it at the end of its lunge; a client runs it on the puppet when its screen
+## reaches the wind-up's moment (Monster.net_strike sets `target` to the host's victim), and Combat.bite applies it only
+## where it resolves: on a client, its own hero. The bookkeeping after it is the host's (a puppet's state is streamed).
 func _strike() -> void:
-	_telegraph = 0.0
 	var v := _victim.get_ref() as Actor if _victim != null else null
 	if v == null and target != null and is_instance_valid(target):
 		v = target   # (a puppet's strike from the wind-up event: Monster.net_strike sets `target`)
@@ -579,9 +595,12 @@ func _strike() -> void:
 			d.y = 0.0
 			return d if d.length() > 0.05 else Vector3(facing.x, 0.0, facing.z)
 		var hit := Combat.bite(self, at, NIP_REACH, NIP_DAMAGE, NIP_SHOVE, away, skip, 1.3)
-		if not hit.is_empty():
+		if not hit.is_empty() and Net.simulates(self):
 			nips += 1
 		_inside.erase(v.get_instance_id())
+	if not Net.simulates(self):
+		return   # (a puppet: its state, strikes and wind-up come with the host's stream)
+	_telegraph = 0.0
 	strikes += 1
 	_strike_t = 1.0
 	_nip_ready = GameWorld.time + scaled_cooldown(NIP_COOLDOWN)
@@ -1073,7 +1092,9 @@ func _pose(delta: float, _moving: bool) -> void:
 		_ripple.scale = Vector3(k, 1.0, k)
 
 
-## The rig's motion (cosmetic, LOCAL): from its turning, state, wind-up, speed and the water, the same on every machine.
+## The rig's motion (cosmetic, LOCAL): from its turning, state, wind-up, speed and the water, the same on every machine. It
+## reads only what a puppet has too (its shown position and facing, the streamed state and _telegraph, SPAWN data), never
+## the host's AI state, so a client's gator swims, walks, thrashes and gapes as the host's does.
 func _pose_rig(delta: float, wet: bool) -> void:
 	if rig == null:
 		return
@@ -1121,7 +1142,7 @@ func _pose_rig(delta: float, wet: bool) -> void:
 	# the jaws: parting through the wind-up to the gape, snapping shut; chewing on chum; an idle twitch now and then
 	var want_jaw := 0.0
 	if state == NIP:
-		want_jaw = 1.0 if _lunge_left > 0.0 else clampf((_telegraph - 0.15) / 0.7, 0.0, 1.0)
+		want_jaw = clampf((_telegraph - 0.15) / 0.7, 0.0, 1.0)   # (the streamed wind-up: wide open through the lunge too)
 	elif state == CHUM:
 		want_jaw = 0.3 * (0.5 + 0.5 * sin(t * TAU * 2.0))
 	elif t >= _twitch_at:

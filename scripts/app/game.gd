@@ -662,8 +662,8 @@ func _build_world() -> void:
 	if lava > 0:
 		map = LavaCave.build_map(lava)   # (--lava-cave, solo prototype: the hand-authored cave instead of DungeonGen)
 	else:
-		# (the job's elevator: every floor of a job uses the same style; a shared run gets no sewer cluster until the sewer
-		# is networked: SewerCluster.NETWORKED)
+		# (the job's elevator: every floor of a job uses the same style; a shared run rolls the same sewer cluster as a solo
+		# one: SewerCluster.NETWORKED)
 		map = DungeonGen.for_run(_run, _floor_n(), _shared)
 	if opts.has("stage_ledge"):
 		_stage_plateau()

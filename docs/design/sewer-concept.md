@@ -944,7 +944,7 @@ the sump pump, the electrical panel and its live wire, and the decor kit. No gen
 - The flag starts the contract on **floor 2** (unless `--floor` says otherwise), so the crew rides the freight elevator down
   and steps out onto the layout's dry landing deck. The landing is the exit: E there opens the elevator menu as usual, and
   the next floor is the same layout again.
-- Solo only: ignored in a shared run, like `--lava-cave` (`GameDev._sewer()`).
+- Solo only in phase 1; since phase 2 a crew too, every window with the same flag ("Phase 2 as built").
 - Screenshots: `--sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n]` (with `--demo-after S`): the crew on the
   first room's deck and the camera on the layout; the gator relocating at once with the camera on it (it swims, climbs
   out and walks); the player stepping into the gator's territory; the crew by a panel, the player breaking it; the player
@@ -1003,6 +1003,8 @@ the sump pump, the electrical panel and its live wire, and the decor kit. No gen
   are data.
 
 ### What phase 2 (networking) still needs
+
+All of it is built: "Phase 2 as built" (2026-10-21), after Phase 3.
 
 - The gator: its MONSTER stream entry (it has no OWNER var beyond Monster's, so the monster carriers hold), `world.windup`
   for the nip with each client resolving it on its own hero (`Monster.net_strike` calls its `_strike`), a client's shove as
@@ -1066,7 +1068,7 @@ game camera, before and after, in `sewer_fixes/`; `sheet.png` shows them all:
 
 The user's decide-now answers: phase 3 next, sewer before lava, and a **cluster of 2-4 rooms on some lair and bunker floors
 (floors 2-3), reached by a service stair; the rest of the floor stays normal**. Option (a) of "How a sewer fits a floor".
-Solo runs only: a shared run never gets a cluster until phase 2 (below).
+Solo runs only when built: a shared run got no cluster until phase 2 ("Phase 2 as built": now it gets the same one).
 
 ### Play it
 
@@ -1139,7 +1141,87 @@ props, gators and goo imps). The other 18 are byte for byte as recorded.
 "What phase 2 still needs"); the panel's break is an `obj` event that every machine's `LiveWire` runs from; **`HexMap.sewer`
 is in `NetFloor.map_text_of`** (the water is already there as cells and the body record; the gators' spawn data and the
 record are not); a 3-process test builds a sewer floor on every machine with the same checksum. `game.gd` already passes
-`_shared` to `DungeonGen.for_run`, so nothing else changes.
+`_shared` to `DungeonGen.for_run`, so nothing else changes. **Done: "Phase 2 as built" below.**
+
+## Phase 2 as built (2026-10-21)
+
+The user said yes to starting it (2026-10-21). A crew's floors 2-3 now roll sewer clusters exactly as a solo run of the same
+seed does, and `--sewer N` works in a crew. There is no new networking shape: the gator is an owned actor (the host's, like
+the shark), the panel a host-arbitrated object, and the live wire a scheduled effect from the panel's break.
+
+### Play it (a crew on one PC)
+
+```
+.\run.ps1 -Crew 2 --seed 7 --net-wait 2 --contract 1 --floor 2 --spells damp,fireball   # a natural cluster: floor 2 of board 7, offer 2 (two gators)
+.\run.ps1 -Crew 2 --sewer 2 --spells damp,fireball                                     # the L2 layout as every floor, in a crew
+.\run.ps1 -Crew 2 --sewer-floor --spells damp,fireball                                 # a forced cluster on every floor
+```
+
+Extra args go to every window (run.ps1), and every window must have the same sewer flags: each builds the floor from the seed
+before the load barrier, and the barrier's checksum sends out a window that built a different one ("Desync: different
+floor"). `--to-sewer` still only moves the crew in a solo run (it would move heroes other machines own). Add `-Link coast` for
+a coast-to-coast link, `-JoinLate 25` for a third window that joins on the job.
+
+What to try with two windows: stand in front of a gator in one window (it nips that hero, decided on that window); shove it
+from the other (it slides on both); kill it from the client (the invoice on both says Gator $6,300, to the client's hero,
+once); wade the client's hero near the panel and shoot it from the host (both windows see the cable drop at the same moment;
+each hero is shocked by its own window).
+
+### How it is built
+
+| Piece | Where | Notes |
+|---|---|---|
+| The switch | `SewerCluster.NETWORKED` = true | `seed_for(run, floor, shared)` rolls the same dice shared or solo, so a crew floor is the solo floor of that seed. `--sewer-floor` (`SewerCluster.force`) applies in a crew too (every window with the flag) |
+| `--sewer N` in a crew | `GameDev._sewer()` | No longer gated on `_shared`. Every window builds the layout (`_dev_floor`) and stages it (`SewerDev.stage` from `_spawn_near`, before the barrier), so the staged monsters, gator and wires get their net ids in build order on every machine |
+| The checksum | `NetFloor.map_text_of`, `spawn_text_of` | The map text gains a `sewer=` line with the whole `HexMap.sewer` record (rooms, stair, halls, sumps, the gators' and the goo pack's spawn data) on a floor that has one; the water body was already in `pools=`. Each spawn line gains the actor's own spawn data when it has a `net_spawn_text()`: the gator's home region, bask spots, relocation seed and price (this covers the `--sewer` layouts, which have no `HexMap.sewer`). A floor without a cluster or a gator has exactly its old text |
+| The gator's stream | `NetWorld` (unchanged), `Gator` | A `Monster`, so `NetWorld` streams it as a MONSTER entry: position, facing, HP, state (its 3 bits: CALM, RILED, NIP, MOVE, DEAD, WATCH, HELD, CHUM), `_telegraph` and its strikes. No OWNER var beyond Monster's, so the monster carriers hold (`test_net_contract`). A client's copy is a puppet (`Net.make_puppet`) |
+| The nip | `Gator._begin_nip`, `_strike` | The wind-up is `world.windup {id, s, l, v}` with `l = NIP_WINDUP + LUNGE_T` (0.5 s and the longest lunge, 1.0 at 9 units/s): a client resolves the bite when its screen reaches that moment, after the host's lunge has streamed, with the jaws where its puppet shows them (`Monster.net_strike` -> `_strike`; `Combat.bite` applies it only to what that machine resolves: its own hero). The host resolves monsters, employees, chickens and the AI heroes. On a puppet `_strike` stops after the bite: its state, strikes and cooldown come with the stream |
+| Shoves and hits | `Actor.shove` / `apply_damage` on a copy | Requests (`Net.route_shove`, `Net.route_hit`): the host's `Gator.shove` riles it and slides it, its `_on_damaged` riles it and starts the advance; the walk home, the stuck fallback and the void bill are the host's AI |
+| Death and the bill | `Gator._on_death` (unchanged) | `world.die`; the host's `Ledger.damage` once, to the culprit; every client's Ledger mirrors it (`obj.ledger`) |
+| Corn | `Gator.corn_at` (unchanged) | Runs where `Net.simulates` the gator: the host. The corn itself lands on every machine (a scheduled effect) |
+| Relocation, riling | `Gator` PRIVATE state | The host's AI; the stream shows where it goes and its state |
+| The look | `Gator._pose_rig` | LOCAL and driven only by what a puppet has: its shown position (the speed, so the swim or the walk), its facing (the curl), the streamed state (watch, the riled thrash, chum, held) and `_telegraph` (the jaws: they no longer read the host-only lunge timer) |
+| Late join | `NetEvents.LATE_JOIN` | The keyframe (position, facing, HP, state); a dead gator is a gone id (removed); a nip under way is skipped |
+| The panel's break | `PricedProp` (`broke_at`, `_break_by`, `break_synced`) | `obj.break {id, t, by}`: the break's moment on the shared clock and the culprit (any priced prop; two OWNER vars with their carriers). A copy sets them before it is shown broken, so its `LiveWire` runs from the host's moment and credits the breaker |
+| The live wire | `LiveWire` | A scheduled effect from the panel's `broke_at` on every machine: the drop (0.6 s), the shock and the pulses at the same beats. Hits are decided with the panel as the decider (`Combat.hits_in_radius(drop, r, panel)`): a hero by its owner, everything else by the host, like an explosive's blast. Before, the culprit decided, so when a client broke the panel nobody resolved the monsters in the water. The damage is credited to the breaker on every machine; the daze is applied by the target's owner. The arcs reach everyone in the water on every screen (`reached()`, the look) |
+| The wire's late join | `PricedProp.late_join_state` `breaks` row, `LiveWire._on_synced` | A broken panel is a gone id, so the joiner breaks it first (the wire would start now); the `breaks` row [id, t, by] then gives the host's moment and the culprit, and the wire counts the shocks already past as fired: a dead wire lies dark in the water, a live one pulses on at the host's beats. Only a prop whose break something runs from (`break_synced` has a listener) sends the row |
+| Pumps, drums, sluices, the goo pack | unchanged | Pumps and the drum are priced / explosive props (host-arbitrated, billed once); the sluices are decor (in the plan's checksum); the goo imps are networked monsters (`goo-imp.md`) |
+
+### Tests
+
+- `tests/test_net_gator.gd` (three processes, `off` and `coast`; floor 2 of board 7, offer 2: two gators): c1's hero in
+  front of a gator is nipped once, resolved by c1 (10, shoved away), and the host shows c1's HP; c1's shove slides the host's
+  gator and c1's puppet shows it where it landed; a late joiner sees both gators where the host has them; c1 kills one: billed
+  once ($6,300 to c1's hero) and every Ledger is the host's; the OWNER-write guard never fires.
+- `tests/test_net_live_wire.gd` (three processes, `off` and `coast`; `--sewer 1` in the crew): c1 breaks the panel (a
+  request, $250 to c1's hero, once); c1's wading hero takes 18 and a daze, then four pulses of 9, by its own machine; a
+  host-owned monster and the AI hero wading in reach are hit by the host once per shock, credited to c1's hero; the cable
+  drops and the first shock fires at the same shared moment on both; a late joiner (in the water, in reach) sees the dead
+  wire from the host's moment with every shock past and takes nothing; the guard never fires.
+- `tests/test_net_sewer_floor.gd` (three processes, `off` and `coast`; the same floor as the gator test): every checksum part
+  matches, with the same rooms, gators (their spawn data), live wires and goo imp pack on every machine; the gators and the goo
+  imps are puppets; c1 smashes a sump pump (billed once, every Ledger the host's).
+- `tests/test_sewer_gen.gd`: a shared run now gets the same cluster (the same map text, with the record in it); `--sewer-floor`
+  forces the same in a crew.
+
+### Fixtures that changed
+
+- **Golden floors** (`tests/golden/floors.json`): the 12 floors with a cluster (1/3, 2/2, 3/2, 5/2, 5/3, 6/2, 6/3, 7/2, 7/3,
+  8/2, 9/2, 10/3) changed their `map`, `spawn` and `all` hashes only, because the checksum's text now covers `HexMap.sewer` and
+  each gator's spawn data. The floors themselves are unchanged: with the old checksum text all 30 golden floors still match
+  (checked before re-recording), and their `plan` and `run` hashes, ids, cells and actors are as recorded. The other 18 are
+  byte for byte as recorded.
+- **`test_net_sharks`** moved from floor 3 of board 16, offer 3, to floor 3 of board 170, offer 1: the old floor now rolls a
+  four-room cluster in a crew (the shark pools moved and one shark is left). Board 170's floor 3 has a regular and an imp
+  laser shark and no cluster.
+
+### Known limits
+
+- The nip's moment on a client is the wind-up plus the longest lunge (0.61 s), so a short lunge lands up to 0.1 s later on a
+  client than on the host; the bite still lands only if the client's hero is within reach of the jaws its screen shows.
+- A late joiner who arrives while the wire still pulses runs the remaining pulses from the host's moment (they hit its hero if
+  it wades in reach); `test_net_live_wire` covers the dead wire, not this case.
+- The `--sewer N` and `--sewer-floor` flags must be the same in every window; a window without them is sent out at the barrier.
 
 ---
 

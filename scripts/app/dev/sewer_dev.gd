@@ -1,8 +1,9 @@
 class_name SewerDev
 extends RefCounted
 ## The sewer slice's dev driver (docs/design/sewer-concept.md, "Phase 1 as built"): `--sewer N` builds sewer layout N
-## (SewerLayouts: 1, 2, 4, 5; 3 = L1 in the toxic look) as every floor of the contract, solo only (ignored in a shared run,
-## like --lava-cave). GameDev (scripts/app/dev/game_dev.gd) calls it from the game's dev hooks:
+## (SewerLayouts: 1, 2, 4, 5; 3 = L1 in the toxic look) as every floor of the contract. In a crew (sewer phase 2, "Phase 2
+## as built") every window needs the same flag (run.ps1 -Crew passes it to all): each builds the layout and stages it from
+## the seed before the load barrier, whose checksum covers the map, the plan and the gator's spawn data. GameDev (scripts/app/dev/game_dev.gd) calls it from the game's dev hooks:
 ##   _dev_floor     the layout's map and plan in place of the generated floor (game.gd's one hook for it)
 ##   (deferred)     SewerView dresses the terrain: the water, foam, kerbs, the look and its light
 ##   _spawn_near    stage(): the layout's monsters, its goblin scout, the gator, the live wires on the panels
@@ -13,7 +14,7 @@ extends RefCounted
 ## Flags: --sewer N, --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (with --demo-after S, default 1.0).
 ##
 ## PHASE 3 (the generator, "Phase 3 as built"): --sewer-floor forces a sewer cluster (SewerCluster.force) on every floor of a
-## solo job where any wing of rooms fits, whatever the site, the floor or the roll (never in a shared run), and starts the
+## job where any wing of rooms fits, whatever the site, the floor or the roll (a crew: every window with the flag), and starts the
 ## contract on floor 2 unless --floor says otherwise; --to-sewer [head|foot] puts the crew at the head of the service stair
 ## (or at its foot, in the first sewer room) once the floor is ready (GameDev._sewer_floor_ready).
 

@@ -29,6 +29,9 @@ const _ACTOR_WORLD := {
 	"_modifiers": "st {k mods} from the host when they change (NetStatus, M4): vines roots, coffee on monsters",
 }
 const _FIXED := "fixed: it never moves, turns or climbs (built from the floor plan on every machine)"
+## A priced prop's break moment and culprit (sewer phase 2: an electrical panel's LiveWire runs from them on every machine).
+const _BREAK_AT := "obj.break {t} (PricedProp.net_link / net_event): the break's moment on the shared clock; a late joiner: `breaks`"
+const _BREAK_BY := "obj.break {by} (PricedProp.net_link / net_event): who broke it; a late joiner: `breaks`"
 
 ## Host-owned classes (M3): script -> {OWNER var -> its carrier}. Their snapshot fields are in NetWorldCodec (a runtime
 ## actor's in RUNTIME_ACTORS). A host-arbitrated object's obj.* events are its own (the net-object contract, NetObjects: its
@@ -96,10 +99,12 @@ const WORLD_CARRIES := {
 	},
 	"res://scripts/contracts/priced_prop.gd": {
 		"hp": "obj.hurt (NetObjects): a dent", "dead": "obj.break (NetObjects)", "broke": "obj.break (NetObjects)",
+		"broke_at": _BREAK_AT, "_break_by": _BREAK_BY,
 		"pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": "never set on a prop", "facing": _FIXED, "climbing": _FIXED,
 	},
 	"res://scripts/contracts/explosive_prop.gd": {
 		"hp": "obj.hurt (NetObjects): a dent", "dead": "obj.break (NetObjects)", "broke": "obj.break (NetObjects)",
+		"broke_at": _BREAK_AT, "_break_by": _BREAK_BY,
 		"pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": "never set on a prop", "facing": _FIXED, "climbing": _FIXED,
 		"fuse_start": "obj.fuse {s} (NetObjects): the host lit it; obj.out puts it out",
 		"fuse_end": "obj.fuse {e} (NetObjects): every machine runs the blast at this moment on its own clock",
@@ -144,7 +149,7 @@ const WORLD_CARRIES := {
 ##   seat.ai (reliable)    host -> clients: a seat went back to the AI as its original character
 ##   world.* (reliable)    host -> clients (NetWorld): spawn (monsters and runtime actors: chickens), die, say, extract, phase, shove
 ##   obj.* (reliable)      NetObjects: req / loadout (client -> host; M4: req hit on any host-owned actor, shove, mod);
-##                         break, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
+##                         break {id, t, by}, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
 ##                         shove / mod passed on to the owner of a player's hero (host -> clients); fuse / out (an
 ##                         explosive prop's fuse lit, with its start, end and igniter / put out by a soak); new (a runtime
 ##                         object the host made: a goo imp's ball or patch, NetObjects.RUNTIME_OBJECTS) / goo (a patch lit or washed)
@@ -188,12 +193,12 @@ const LATE_JOIN := {
 	"res://scripts/monsters/goblin.gd": "as monster.gd (keyframe, gone ids); his phase and rack: replay of world.scout per scout in the snapshot (NetWorld.scout_states); a volley in the air: skipped (cosmetic)",
 	"res://scripts/monsters/shark.gd": "keyframe (seed-built: position, facing, HP, state); a killed one: gone ids (removed); a charge or a beam under way: skipped (under 1.5 s)",
 	"res://scripts/monsters/jockey.gd": "as monster.gd (keyframe, gone ids); off its shark: replay of world.dismount per gunner in the snapshot (NetWorld.dismount_states)",
-	"res://scripts/monsters/gator.gd": "keyframe (seed-built: position, facing, HP, state), as the shark; a killed one: gone ids (removed); a nip under way: skipped (under a second). Phase 1 is solo (--sewer): phase 2 wires it",
+	"res://scripts/monsters/gator.gd": "keyframe (seed-built: position, facing, HP, state), as the shark; a killed one: gone ids (removed); a nip under way: skipped (under a second); its relocation and riling: the host's AI (PRIVATE), the keyframe and the stream show where it goes",
 	"res://scripts/monsters/pavise.gd": "as monster.gd (keyframe, gone ids); its shield: replay of world.shield per pavise in the snapshot (NetWorld.shield_states); an aim or a bolt under way: skipped (under 1.5 s); stuck arrows: cosmetic, skipped",
 	"res://scripts/monsters/water_boy.gd": "as monster.gd (keyframe, gone ids); a pour under way: skipped (a wind-up, under a second)",
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
-	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt",
+	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt; a broken one something runs from (an electrical panel's LiveWire): replay of its break moment and culprit, `breaks` (PricedProp.break_synced: the wire skips the shocks already past)",
 	"res://scripts/contracts/explosive_prop.gd": "gone ids (blown or broken: shown broken); a dent: replay of obj.hurt; a fuse burning now: replay of obj.fuse (its start, end and igniter), so the joiner runs the blast at the same moment",
 	"res://scripts/world/themes/breakable_crate.gd": "gone ids (broken)",
 	"res://scripts/contracts/mail_package.gd": "gone ids (opened: removed; its prize is a pickup, replayed)",

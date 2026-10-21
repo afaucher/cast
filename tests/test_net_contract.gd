@@ -53,7 +53,7 @@ const NET_SCRIPTS := [
 	"res://scripts/spells/vines_fx.gd",
 	"res://scripts/spells/wet.gd",
 	"res://scripts/world/lava/lava_field.gd",   # (the lava cave prototype's rules: --lava-cave, solo only)
-	"res://scripts/world/sewer/live_wire.gd",   # (the sewer slice's live wire: --sewer, solo only for now)
+	"res://scripts/world/sewer/live_wire.gd",   # (the sewer's live wire: a scheduled effect from its panel's obj.break, sewer phase 2)
 	"res://scripts/monsters/goo_ball.gd",       # (the goo imp's ball and patch: runtime objects the host announces, NetObjects)
 	"res://scripts/monsters/goo_patch.gd",
 ]
@@ -375,7 +375,7 @@ var REPLICATED := {
 	# the pool shark and its imp gunner (docs/design/sharks.md): monster-format entries plus their own events
 	"res://scripts/monsters/shark.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/shark.gd"], 5],
 	"res://scripts/monsters/jockey.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/jockey.gd"], 5],
-	# the sewer gator (docs/design/sewer-concept.md; solo behind --sewer for now): a monster-format entry, the monster carriers
+	# the sewer gator (docs/design/sewer-concept.md, "Phase 2 as built"): a monster-format entry, the monster carriers
 	"res://scripts/monsters/gator.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	# the Pavise Crossbowman (its shield and bolt: their own events) and the Water Boy (a plain monster: its pour is a wind-up)
 	"res://scripts/monsters/pavise.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/pavise.gd"], 5],

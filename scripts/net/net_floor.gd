@@ -6,9 +6,10 @@ extends RefCounted
 ## - ids: every seed-built actor gets a net id in BUILD order (the order the scene tree holds them, which is the
 ##   order SiteBuilder.spawn created them). Heroes get theirs from their seat (1-3). Ids start at ID_BASE for
 ##   everything else, so M3's runtime spawns can take 10000 and up. The ids are kept in NetRegistry (id -> node).
-## - the CHECKSUM: a hash of the map (every cell, the midpoint-wall masks, the materials), the site plan (every
-##   SitePlan field: rooms, themes, materials, notes, props, decor, the van), the contract, and the SPAWN TABLE
-##   (id, kind, name, team, cell and position of every actor). Each machine computes it after building and the
+## - the CHECKSUM: a hash of the map (every cell, the midpoint-wall masks, the materials, the pool and water-body records,
+##   the sewer cluster's record), the site plan (every SitePlan field: rooms, themes, materials, notes, props, decor, the
+##   van), the contract, and the SPAWN TABLE (id, kind, name, team, cell and position of every actor, and an actor's own
+##   spawn data when it has more: net_spawn_text). Each machine computes it after building and the
 ##   host compares them; one different cell is a different hash. The parts are kept apart so a mismatch can
 ##   say WHAT differs.
 ## - copies: on a client every host-owned actor becomes a non-acting copy (Net.make_copy).
@@ -162,6 +163,10 @@ static func map_text_of(map: HexMap) -> String:
 	lines.append("no_stand=%s" % canon(stand))
 	# the in-ground pools (PoolGeo): their records; the cells carry their pool kites below
 	lines.append("pools=%s" % canon(map.pools))
+	# the sewer cluster (DungeonGen's "sewer" option, its planners): rooms, stair, halls, sumps, the gators' and the goo pack's
+	# spawn data. Only a floor with one has the line, so every other floor's text (and hash) is as it always was.
+	if not map.sewer.is_empty():
+		lines.append("sewer=%s" % canon(map.sewer))
 	for c: Vector2i in keys:
 		var cell: HexMap.Cell = map.cells[c]
 		lines.append("%d,%d:%d,%d,%d,%d,%s,%d,%d,%d,%d,%d" % [c.x, c.y, cell.level, cell.type, cell.stair_dir, cell.stair_rise,
@@ -169,7 +174,8 @@ static func map_text_of(map: HexMap) -> String:
 	return "\n".join(lines)
 
 
-## One line per actor: id, kind (its script), name, team, cell, position, max hp.
+## One line per actor: id, kind (its script), name, team, cell, position, max hp, and the spawn data of an actor that has
+## more than that (net_spawn_text(): the gator's home region, bask spots and seed).
 static func spawn_text_of(root: Node) -> String:
 	var lines := PackedStringArray()
 	for a in actors_under(root):
@@ -177,7 +183,10 @@ static func spawn_text_of(root: Node) -> String:
 		var kind := script.resource_path.get_file() if script != null else a.get_class()
 		var p := a.global_position
 		var cell := Hex.from_world(p)
-		lines.append("%d|%s|%s|%d|%d,%d|%.2f,%.2f,%.2f|%.1f" % [id_of(a), kind, a.display_name, a.team, cell.x, cell.y, p.x, p.y, p.z, a.max_hp])
+		var line := "%d|%s|%s|%d|%d,%d|%.2f,%.2f,%.2f|%.1f" % [id_of(a), kind, a.display_name, a.team, cell.x, cell.y, p.x, p.y, p.z, a.max_hp]
+		if a.has_method("net_spawn_text"):
+			line += "|" + str(a.call("net_spawn_text"))
+		lines.append(line)
 	return "\n".join(lines)
 
 

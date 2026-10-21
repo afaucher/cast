@@ -9,9 +9,9 @@ extends "res://scripts/app/game.gd"
 ##   --to-gate --to-theme --to-corridor --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
 ##   --shark-demo --monster-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
-## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer slice,
-## solo only: scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built"); --sewer-floor --to-sewer
-## head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built").
+## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer slice:
+## scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built"; --sewer N in a crew too since "Phase 2 as
+## built"); --sewer-floor --to-sewer head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built").
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -26,9 +26,11 @@ func _parse_args() -> void:
 	SewerDev.parse(OS.get_cmdline_user_args(), opts)
 
 
-## --sewer N: the sewer layout to build, or 0. Solo only: a shared run never uses it (phase 1 has no network shape).
+## --sewer N: the sewer layout to build, or 0. In a crew (sewer phase 2) every window needs the same flag (run.ps1 -Crew
+## passes it to all): each builds the layout and its staging from the seed, and the load barrier's checksum sends out a
+## window that built a different floor.
 func _sewer() -> int:
-	return int(opts.get("sewer", 0)) if not _shared and not _dev_released else 0
+	return int(opts.get("sewer", 0)) if not _dev_released else 0
 
 
 ## The game's floor hook: --sewer swaps the generated floor for the layout's map and plan (before the world is built).
