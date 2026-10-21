@@ -406,6 +406,9 @@ There is no new shape: it is an owned actor with one new piece of spawn data, th
 | Eels | channels, a sump, or escaped from the aquarium | Their shock reaches waders within 6 **along the water** (no longer "the whole body": the whole cluster is one body now) |
 | Gator | one a cluster, two in a cluster of four rooms | its home sump, a flooded narrow hall, or basking on a deck |
 
+A ranged sewer pest that lobs goo from the walkways, the **goo imp**, is proposed in `goo-imp.md` (look-dev only; the
+user picked the Gloop look, 2026-10-20).
+
 **Priced props and decor:**
 
 | Fits a sewer | Kind | Status |
