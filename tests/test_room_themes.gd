@@ -94,6 +94,10 @@ func _check_tables() -> void:
 		if def.is_empty():
 			continue
 		check(String(def["name"]) != "", "%s has a name" % id)
+		check(String(def.get("note_word", "")) != "", "%s has the word notes call it" % id)
+		check(def.get("floor_mat") is int, "%s names its floor material" % id)
+		if def.has("pool_look"):
+			check([PoolGeo.LOOK_POOL, PoolGeo.LOOK_SPECIMEN, PoolGeo.LOOK_MOAT].has(def["pool_look"]), "%s: its pool look is a real one" % id)
 		var light: Dictionary = def["light"]
 		check(light.has("color") and float(light["energy"]) > 0.0, "%s has an accent light" % id)
 		var site: String = def["site"]

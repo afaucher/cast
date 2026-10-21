@@ -60,11 +60,16 @@ const ORIGIN_KEYWORDS := {
 ##        explosive props it may hold, ExplosiveProp: HazardPlanner.plan; none = a room without them),
 ##        recipe (ops run in order while the room's decor budget lasts), light (the accent light),
 ##        needs_center (true: its centrepiece wants the middle of the room, so it is not dealt to the exit room or to a
-##        room with a hellgate in the middle), avoid_exit (not dealt to the exit room: the elevator sits in its middle)}.
-## Recipe ops are implemented in ThemeVignettes.
+##        room with a hellgate in the middle), avoid_exit (not dealt to the exit room: the elevator sits in its middle),
+##        note_word (the room as a note names it: "the {staff_room}" -> "the spa"; NoteFacts. Notes are in the floor plan,
+##        so a changed word changes the floor), floor_mat (its floor material, FloorMaterials.F_*), wall_mat (its own
+##        walls, FloorMaterials.W_*; none = the site's), pool_look (a pool carved into the room, PoolGeo.LOOK_*; none = no
+##        pool)}.
+## Recipe ops are implemented in ThemeVignettes. A new theme is one row here (and its id in POOLS), plus any new ops.
 const THEMES := {
 	"wine_cellar": {
 		"name": "Wine cellar", "site": "bunker", "min_cells": 70,
+		"note_word": "wine cellar", "floor_mat": FloorMaterials.F_WOOD, "wall_mat": FloorMaterials.W_PANELLING,
 		"priced": ["wine_rack", "wine_barrel"],
 		"recipe": [
 			{"op": "sign", "text": "WINE", "color": Color(1.0, 0.18, 0.32)},
@@ -76,6 +81,7 @@ const THEMES := {
 	},
 	"home_cinema": {
 		"name": "Home cinema", "site": "bunker", "min_cells": 100,
+		"note_word": "home cinema", "floor_mat": FloorMaterials.F_CARPET, "wall_mat": FloorMaterials.W_PANELLING,
 		"priced": ["projector"],
 		"recipe": [
 			{"op": "sign", "text": "FILM", "color": Color(1.0, 0.3, 0.3)},
@@ -86,6 +92,7 @@ const THEMES := {
 	},
 	"spa": {
 		"name": "Wellness spa", "site": "bunker", "min_cells": 90,
+		"note_word": "spa", "floor_mat": FloorMaterials.F_TILE,
 		"priced": ["zen_fountain", "crystal_lamp"],
 		"hazards": ["propane_tank"],              ## the sauna heater's gas
 		"recipe": [
@@ -97,6 +104,7 @@ const THEMES := {
 	},
 	"gym": {
 		"name": "Gym", "site": "bunker", "min_cells": 60,
+		"note_word": "gym", "floor_mat": FloorMaterials.F_RUBBER,
 		"priced": ["treadmill"],
 		"recipe": [
 			{"op": "sign", "text": "GYM", "color": Color(0.35, 0.9, 1.0)},
@@ -107,6 +115,7 @@ const THEMES := {
 	},
 	"server_room": {
 		"name": "Server room", "site": "bunker", "min_cells": 60,
+		"note_word": "server room", "floor_mat": FloorMaterials.F_DIAMOND,
 		"priced": ["server_rack"],
 		"hazards": ["battery_pack"],              ## the UPS
 		"recipe": [
@@ -117,6 +126,7 @@ const THEMES := {
 	},
 	"panic_room": {
 		"name": "Panic room", "site": "bunker", "min_cells": 60,
+		"note_word": "panic room", "floor_mat": FloorMaterials.F_DIAMOND_DARK,
 		"priced": ["gold_toilet"],
 		"hazards": ["gas_cylinders", "battery_pack"],   ## the air supply and the backup power
 		"recipe": [
@@ -129,6 +139,7 @@ const THEMES := {
 	"pool": {
 		## an in-ground pool (PoolGeo, carved by SiteBuilder before the decor) with loungers along its long sides
 		"name": "Indoor pool", "site": "bunker", "min_cells": 100, "needs_center": true,
+		"note_word": "pool room", "floor_mat": FloorMaterials.F_POOL_TILE, "pool_look": PoolGeo.LOOK_POOL,
 		"priced": ["marble_statue"],
 		"hazards": ["propane_tank"],              ## the pool heater
 		"recipe": [
@@ -139,6 +150,7 @@ const THEMES := {
 	},
 	"torture_chamber": {
 		"name": "Torture chamber", "site": "lair", "min_cells": 60,
+		"note_word": "torture chamber", "floor_mat": FloorMaterials.F_FLAGSTONE,
 		"priced": ["torture_rack", "brazier"],
 		"hazards": ["oil_drum"],                  ## lamp oil for the braziers
 		"recipe": [
@@ -149,6 +161,7 @@ const THEMES := {
 	},
 	"throne_room": {
 		"name": "Throne room", "site": "lair", "min_cells": 80,
+		"note_word": "throne room", "floor_mat": FloorMaterials.F_MARBLE, "wall_mat": FloorMaterials.W_MARBLE,
 		"priced": ["villain_throne", "doomsday_console", "evil_portrait"],
 		"recipe": [
 			{"op": "sign", "text": "EVIL", "color": Color(1.0, 0.2, 0.15), "dead": [3]},
@@ -158,6 +171,7 @@ const THEMES := {
 	},
 	"lab": {
 		"name": "Lab / vat room", "site": "lair", "min_cells": 60,
+		"note_word": "lab", "floor_mat": FloorMaterials.F_LAB_TILE,
 		"priced": ["specimen_vat"],
 		"hazards": ["gas_cylinders"],             ## lab gas
 		"recipe": [
@@ -170,6 +184,7 @@ const THEMES := {
 	},
 	"barracks": {
 		"name": "Henchmen barracks", "site": "lair", "min_cells": 60,
+		"note_word": "barracks", "floor_mat": FloorMaterials.F_CONCRETE,
 		"priced": ["henchman_locker"],
 		"hazards": ["oil_drum"],                  ## the generator's fuel
 		"recipe": [
@@ -182,6 +197,7 @@ const THEMES := {
 		## a ring of wading water round an island (PoolGeo, LOOK_MOAT: real terrain, carved by SiteBuilder before the decor)
 		## with two shark fins patrolling it, its bridge pulled back onto the deck and a fin hazard sign
 		"name": "Shark moat", "site": "lair", "min_cells": 80, "avoid_exit": true, "needs_center": true,
+		"note_word": "shark moat", "floor_mat": FloorMaterials.F_FLAGSTONE, "pool_look": PoolGeo.LOOK_MOAT,
 		"priced": ["shark_tank"],
 		"recipe": [
 			{"op": "moat"},
@@ -192,6 +208,7 @@ const THEMES := {
 		## a green specimen pool (PoolGeo, the gantry with its dangling cage over it), the SCIENCE sign, specimen tanks, a lab
 		## bench, a console, pipes and shelves
 		"name": "Science", "site": "lair", "min_cells": 80, "needs_center": true,
+		"note_word": "science room", "floor_mat": FloorMaterials.F_LAB_TILE, "pool_look": PoolGeo.LOOK_SPECIMEN,
 		"priced": ["specimen_vat", "doomsday_console"],
 		"hazards": ["gas_cylinders", "oil_drum"], ## lab gas, and drums of whatever is in the pool
 		"recipe": [
@@ -207,6 +224,7 @@ const THEMES := {
 	},
 	"service_entrance": {
 		"name": "Service entrance", "site": "any", "min_cells": 0,
+		"note_word": "service entrance", "floor_mat": FloorMaterials.F_CONCRETE,
 		"priced": [],
 		"recipe": [
 			{"op": "hazard"},

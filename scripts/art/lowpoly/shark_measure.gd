@@ -423,8 +423,8 @@ static func _placement() -> void:
 					var key := "%s %d%s" % [rec["look"], (rec["basin"] as Array).size() if (rec["hole"] as Array).is_empty() else -1, "" if not (rec["hole"] as Array).is_empty() else (" 2-row" if float(rec["half_wid"]) > 2.0 else " 1-row")]
 					sizes[key] = int(sizes.get(key, 0)) + 1
 				for tag: String in p.room_themes:
-					if PoolGeo.THEME_LOOK.has(String(p.room_themes[tag])):
-						var lk: String = PoolGeo.THEME_LOOK[String(p.room_themes[tag])]
+					if PoolGeo.look_of(String(p.room_themes[tag])) != "":
+						var lk := PoolGeo.look_of(String(p.room_themes[tag]))
 						pool_rooms[lk] = int(pool_rooms.get(lk, 0)) + 1
 					if String(p.room_themes[tag]) != "moat":
 						continue

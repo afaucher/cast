@@ -11,13 +11,11 @@ extends RefCounted
 ## props. Keys starting with "_" are the planner's bookkeeping (which room / cell a fact points at), for tests.
 ## Pure: no randomness. Choices are deterministic (room order), so every machine fills the same text.
 
-## A room theme as a note names it ("the {staff_room}" -> "the wine cellar").
-const ROOM_WORDS := {
-	"wine_cellar": "wine cellar", "home_cinema": "home cinema", "spa": "spa", "gym": "gym",
-	"server_room": "server room", "panic_room": "panic room", "pool": "pool room",
-	"torture_chamber": "torture chamber", "throne_room": "throne room", "lab": "lab", "barracks": "barracks",
-	"moat": "shark moat", "science": "science room", "service_entrance": "service entrance",
-}
+## A room theme as a note names it ("the {staff_room}" -> "the wine cellar"): its row's "note_word" (RoomThemeDefs.THEMES),
+## else its name in lower case; "back room" for a room without a theme.
+static func theme_word(theme: String) -> String:
+	var fallback := RoomThemeDefs.theme_name(theme).to_lower() if theme != "" else "back room"
+	return str(RoomThemeDefs.theme(theme).get("note_word", fallback))
 
 
 static func from_plan(plan: SitePlan, run: ContractRun) -> Dictionary:
@@ -92,8 +90,7 @@ static func staff_name(full: String) -> String:
 static func room_word(plan: SitePlan, run: ContractRun, tag: String) -> String:
 	if tag != "" and tag == plan.origin_room and str(run.story.get("origin", "")) != "":
 		return str(run.story["origin"])
-	var theme := plan.theme_of(tag)
-	return str(ROOM_WORDS.get(theme, RoomThemeDefs.theme_name(theme).to_lower() if theme != "" else "back room"))
+	return theme_word(plan.theme_of(tag))
 
 
 ## The room as a note names it. When another room on the floor reads the same, a landmark is added:

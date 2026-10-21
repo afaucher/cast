@@ -40,9 +40,9 @@ func _all_lines() -> Array:
 
 func _build_longest() -> void:
 	var rooms: Array[String] = []
-	for k: String in NoteFacts.ROOM_WORDS:
+	for k: String in RoomThemeDefs.THEMES:
 		if k != RoomThemeDefs.SERVICE:   # the start room: no staff, gate or prop is ever placed there
-			rooms.append(str(NoteFacts.ROOM_WORDS[k]) + " by the entrance")
+			rooms.append(NoteFacts.theme_word(k) + " by the entrance")
 	for id in ClientArchetype.IDS:
 		for ev: Dictionary in ClientArchetype.get_data(id)["events"]:
 			rooms.append(str(ev["origin"]))

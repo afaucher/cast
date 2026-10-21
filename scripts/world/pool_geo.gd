@@ -24,7 +24,7 @@ extends RefCounted
 ## are ring cells (deck and pool kites).
 ##
 ## Placement (carve(), from SiteBuilder.plan right after the room themes are dealt, before the theme planner sees the
-## room): each room whose theme has a pool (THEME_LOOK) gets a shape of a size rolled among the look's biggest few (the
+## room): each room whose theme has a pool (look_of) gets a shape of a size rolled among the look's biggest few (the
 ## next smaller one when none fits, bigger ones last), placed nearest the room's centre:
 ##   - the basin and ring cells: the room's own flat floor at its base level, full cells (no wall kites, no set piece),
 ##     not near the start / exit / elevator (the planner's `avoid`: START_CLEAR, EXIT_CLEAR, ElevatorGeo.keep_cells), not
@@ -45,7 +45,7 @@ extends RefCounted
 const LOOK_POOL := "pool"          ## the indoor pool: blue water, white tile, stone coping, a chrome ladder
 const LOOK_SPECIMEN := "specimen"  ## science: green water, dark tile with glowing grout, steel coping, the gantry
 const LOOK_MOAT := "moat"          ## the shark moat: a ring of murky water round an island, stone blocks and coping, fins
-const THEME_LOOK := {"pool": LOOK_POOL, "science": LOOK_SPECIMEN, "moat": LOOK_MOAT}
+## (Which themes have a pool, and which look, is their RoomThemeDefs.THEMES row's "pool_look": look_of().)
 const DROP := 1                    ## pool floor levels below the deck: one step, so you wade in and out anywhere
 const MAX_SHARE := 0.3
 const EMPLOYEE_CLEAR := 2
@@ -398,7 +398,12 @@ static func area(poly: PackedVector2Array) -> float:
 
 # --- placement ------------------------------------------------------------------------------------------------------
 
-## Carve a pool into every room whose theme has one (plan.room_themes; THEME_LOOK). Rooms that already have one (a plan
+## The pool look of a room theme ("pool_look" in its RoomThemeDefs.THEMES row), "" for a theme without a pool.
+static func look_of(theme_id: String) -> String:
+	return String(RoomThemeDefs.theme(theme_id).get("pool_look", ""))
+
+
+## Carve a pool into every room whose theme has one (plan.room_themes; look_of). Rooms that already have one (a plan
 ## made twice from one map) keep it. `avoid`: cells near the start, the exit and the elevator; `near_corr`: cells near a
 ## corridor. Writes the cells, HexMap.pools and (a specimen pool's gantry legs) HexMap.solids / no_stand.
 static func carve(map: HexMap, plan: SitePlan, avoid: Dictionary, near_corr: Dictionary, seed_value: int) -> void:
@@ -409,7 +414,7 @@ static func carve(map: HexMap, plan: SitePlan, avoid: Dictionary, near_corr: Dic
 		for c in Hex.range_cells(g["cell"], ORIGIN_GATE_CLEAR if bool(g["origin"]) else GATE_CLEAR):
 			gate_zone[c] = true
 	for tag: String in tags:
-		var look: String = THEME_LOOK.get(String(plan.room_themes[tag]), "")
+		var look := look_of(String(plan.room_themes[tag]))
 		if look == "" or not plan.rooms.has(tag) or not pool_of_room(map, tag).is_empty():
 			continue
 		var rng := RandomNumberGenerator.new()

@@ -93,11 +93,11 @@ func _check_generated() -> void:
 				var plan := SiteBuilder.plan(map, run, f, catalog)
 				var tag := "%s/%d floor %d" % [id, s, f]
 				for rt: String in plan.room_themes:
-					if PoolGeo.THEME_LOOK.has(plan.theme_of(rt)):
+					if PoolGeo.look_of(plan.theme_of(rt)) != "":
 						_pool_rooms += 1
 				for rec in map.pools:
 					_pools += 1
-					eq(str(rec["look"]), String(PoolGeo.THEME_LOOK[plan.theme_of(str(rec["room"]))]), "%s: the pool's look is its room's" % tag)
+					eq(str(rec["look"]), PoolGeo.look_of(plan.theme_of(str(rec["room"]))), "%s: the pool's look is its room's" % tag)
 					_check_pool(map, plan, rec, tag)
 					worst_center = maxf(worst_center, (rec["center"] as Vector2).distance_to(ThemeGeo.world(plan.centers[str(rec["room"])])))
 				# props, decor, notes and mail keep to dry floor

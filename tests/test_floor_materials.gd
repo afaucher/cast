@@ -40,13 +40,13 @@ func setup() -> void:
 func _check_tables() -> void:
 	check(RoomThemeDefs.THEMES.size() >= 13, "the room theme table is there")
 	for theme: String in RoomThemeDefs.THEMES:
-		check(FloorMaterials.THEME_FLOOR.has(theme), "theme %s has a floor material" % theme)
+		check(RoomThemeDefs.theme(theme).has("floor_mat"), "theme %s has a floor material" % theme)
 		var fid := FloorMaterials.floor_for_theme(theme)
 		check(fid > 0 and fid < FloorMaterials.FLOORS.size(), "theme %s: floor id %d is a real material (not the classic slate)" % [theme, fid])
 		var wid := FloorMaterials.wall_for_theme(theme, str((RoomThemeDefs.THEMES[theme] as Dictionary)["site"]).replace("any", "bunker"))
 		check(wid > 0 and wid < FloorMaterials.WALLS.size(), "theme %s: wall id %d is a real material" % [theme, wid])
-	for theme: String in FloorMaterials.THEME_FLOOR:
-		check(RoomThemeDefs.has_theme(theme), "FloorMaterials names a real theme: %s" % theme)
+	eq(FloorMaterials.floor_for_theme(""), FloorMaterials.F_SLATE, "no theme: the classic slate")
+	eq(FloorMaterials.floor_for_theme("no_such_theme"), FloorMaterials.F_SLATE, "an unknown theme: the classic slate")
 	eq(FloorMaterials.wall_for_theme("home_cinema", "bunker"), FloorMaterials.W_PANELLING, "the cinema is panelled")
 	eq(FloorMaterials.wall_for_theme("wine_cellar", "bunker"), FloorMaterials.W_PANELLING, "the wine cellar is panelled")
 	eq(FloorMaterials.wall_for_theme("throne_room", "lair"), FloorMaterials.W_MARBLE, "the throne room is marble")

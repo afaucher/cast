@@ -69,30 +69,8 @@ const WALLS: Array[Dictionary] = [
 	{"name": "marble", "pat": Pat.MARBLE_WALL, "base": Color(0.27, 0.26, 0.30), "alt": Color(0.88, 0.82, 0.70), "scale": 1.7, "rough": 0.3, "spec": 0.5, "seam": 0.2},
 ]
 
-## Every room theme's floor (RoomThemeDefs.THEMES; tests/test_floor_materials.gd checks none is missing).
-const THEME_FLOOR := {
-	"service_entrance": F_CONCRETE,
-	"home_cinema": F_CARPET,
-	"spa": F_TILE,
-	"pool": F_POOL_TILE,
-	"wine_cellar": F_WOOD,
-	"throne_room": F_MARBLE,
-	"gym": F_RUBBER,
-	"server_room": F_DIAMOND,
-	"panic_room": F_DIAMOND_DARK,
-	"lab": F_LAB_TILE,
-	"barracks": F_CONCRETE,
-	"torture_chamber": F_FLAGSTONE,
-	"moat": F_FLAGSTONE,
-	"science": F_LAB_TILE,
-}
-
-## The luxury themes dress their own walls; every other room has its site's wall.
-const THEME_WALL := {
-	"home_cinema": W_PANELLING,
-	"wine_cellar": W_PANELLING,
-	"throne_room": W_MARBLE,
-}
+## Every room theme names its floor in its row (RoomThemeDefs.THEMES "floor_mat"; tests/test_floor_materials.gd checks
+## none is missing). The luxury themes dress their own walls ("wall_mat"); every other room has its site's wall.
 
 ## Site type -> its corridor floor (neutral, so the rooms stand out) and its wall.
 const SITE_CORRIDOR := {"bunker": F_CORR_CONCRETE, "lair": F_CORR_STONE}
@@ -118,12 +96,12 @@ static func wall_of(mat_id: int) -> int:
 
 ## The floor material of a room theme ("" or unknown: the classic slate).
 static func floor_for_theme(theme_id: String) -> int:
-	return int(THEME_FLOOR.get(theme_id, F_SLATE))
+	return int(RoomThemeDefs.theme(theme_id).get("floor_mat", F_SLATE))
 
 
-## The wall material of a room theme on a site.
+## The wall material of a room theme on a site (its own walls, else the site's).
 static func wall_for_theme(theme_id: String, site_type: String) -> int:
-	return int(THEME_WALL.get(theme_id, SITE_WALL.get(site_type, W_CONCRETE)))
+	return int(RoomThemeDefs.theme(theme_id).get("wall_mat", SITE_WALL.get(site_type, W_CONCRETE)))
 
 
 static func corridor_floor(site_type: String) -> int:
