@@ -2,7 +2,7 @@ class_name LavaCave
 extends RefCounted
 ## LAVA CAVE PROTOTYPE (docs/design/lava-playtest.md; concept: docs/design/sewer-concept.md part 2). Hand-authored cave
 ## layouts built as a whole floor, for the dev flag `--lava-cave <1-5>` (game.gd) and the lava lab. NOT in the normal
-## floor generator: DungeonGen and SiteBuilder never call it.
+## floor generator: DungeonGen and SiteBuilder never call it (the generator's caves are CaveGen's; both run on LavaField).
 ##
 ## A cave is a lava plane with raised hex ROCK on it:
 ##   - CHAMBERS ("room:N"): rough blobs of rock at a base level, a level up here and there, CRAGS (+2, +3) for cover and
@@ -343,6 +343,20 @@ static func build_map(id: int) -> HexMap:
 		_join(m, L["bridges"][int(pair[0])], L["bridges"][int(pair[1])])
 	m.get_cell(L["start"]).tag = "start"
 	m.get_cell(L["exit"]).tag = "exit"
+	# the cave's record and lava set, as a generated cave has them (HexMap.cave / lava: LavaField, Actor's lava rule, the look,
+	# the checksum)
+	var lv_list := lava_cells(m)
+	for c in lv_list:
+		m.lava[c] = true
+	var rocks: Array[Vector2i] = []
+	for c: Vector2i in rk:
+		rocks.append(c)
+	rocks.sort_custom(HexMap._cell_less)
+	var tags: Array[String] = []
+	for ch: Array in L["chambers"]:
+		tags.append(str(ch[0]))
+	m.cave = {"pattern": "layout %d" % id, "level": 0, "crust_level": CRUST_LEVEL, "bed": LAVA_BED, "lava_y": LAVA_Y,
+		"rooms": tags, "rock": rocks, "lava": lv_list}
 	return m
 
 

@@ -8,7 +8,12 @@ extends RefCounted
 ##   - a glow SKIRT lapping up every rock face over the lava, EMBERS rising, and warm LIGHTS over the lava (farthest-point
 ##     picks), with DungeonLook's downlights dimmed to a warm glow.
 ##
-##   LavaLook.dress(parent, map, terrain)       # after HexMapView.build and DungeonLook.apply, before the lava turns void
+##   LavaLook.dress(parent, map, terrain)       # the prototype (--lava-cave: the whole floor is the cave): after HexMapView.build
+##                                              # and DungeonLook.apply, before the lava turns void
+##   LavaLook.dress_cave(parent, map, look)     # a generated cave (LavaPlanner.spawn): only the cave's lava, glow, embers and
+##                                              # lights, in the look's colours (RoomThemeDefs "lava"); the floor around is
+##                                              # untouched (its rock is basalt by material, LavaPlanner.materials, and its
+##                                              # cliffs tinted by HexMapView)
 
 const LIGHTS := 10
 const SKIRT_H := 0.75
@@ -133,16 +138,16 @@ static func crust_material() -> ShaderMaterial:
 	return m
 
 
-static func lava_material(crust_k: float = CRUST_K, heat_k: float = 0.32) -> ShaderMaterial:
+static func lava_material(crust_k: float = CRUST_K, heat_k: float = 0.32, look: Dictionary = {}) -> ShaderMaterial:
 	if _shader == null:
 		_shader = Shader.new()
 		_shader.code = LAVA_SHADER
 	var m := ShaderMaterial.new()
 	m.shader = _shader
-	m.set_shader_parameter("crust", CRUST)
-	m.set_shader_parameter("hot", HOT)
-	m.set_shader_parameter("core", CORE)
-	m.set_shader_parameter("glow", GLOW)
+	m.set_shader_parameter("crust", look.get("crust", CRUST))
+	m.set_shader_parameter("hot", look.get("hot", HOT))
+	m.set_shader_parameter("core", look.get("core", CORE))
+	m.set_shader_parameter("glow", float(look.get("glow", GLOW)))
 	m.set_shader_parameter("crust_k", crust_k)
 	m.set_shader_parameter("heat_k", heat_k)
 	return m
@@ -232,7 +237,24 @@ static func relight(parent: Node3D) -> void:
 					(l as OmniLight3D).light_energy *= 0.35
 
 
-static func _build_lava(holder: Node3D, map: HexMap, cells: Array[Vector2i]) -> void:
+## A generated cave's look (see the header): the lava over HexMap.cave's lava cells at its surface, the glow skirt up the rock,
+## embers and `look["lights"]` warm lights over the lava. Cosmetic: built on every machine from the map, its own seeded dice.
+## Returns the holder.
+static func dress_cave(parent: Node, map: HexMap, look: Dictionary) -> Node3D:
+	var holder := Node3D.new()
+	holder.name = "LavaCave"
+	parent.add_child(holder)
+	var cells: Array[Vector2i] = []
+	for c: Vector2i in (map.cave.get("lava", []) as Array):
+		cells.append(c)
+	var y := float(map.cave.get("lava_y", LavaCave.LAVA_Y))
+	_build_lava(holder, map, cells, y, look)
+	_build_embers(holder, cells, y, look.get("ember", EMBER))
+	_build_lights(holder, cells, y, int(look.get("lights", LIGHTS)), look.get("light", LIGHT), float(look.get("light_energy", LIGHT_E)))
+	return holder
+
+
+static func _build_lava(holder: Node3D, map: HexMap, cells: Array[Vector2i], lava_y: float = LavaCave.LAVA_Y, look: Dictionary = {}) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var skirt := SurfaceTool.new()
@@ -242,7 +264,7 @@ static func _build_lava(holder: Node3D, map: HexMap, cells: Array[Vector2i]) -> 
 		lava_set[c] = true
 	for c in cells:
 		var w := Hex.to_world(c)
-		var ctr := Vector3(w.x, LavaCave.LAVA_Y, w.z)
+		var ctr := Vector3(w.x, lava_y, w.z)
 		for i in 6:
 			st.set_normal(Vector3.UP)
 			st.add_vertex(ctr)
@@ -252,14 +274,15 @@ static func _build_lava(holder: Node3D, map: HexMap, cells: Array[Vector2i]) -> 
 			var nb: Vector2i = c + Hex.DIRS[d]
 			if lava_set.has(nb) or not map.has_cell(nb):
 				continue
-			var top := minf(LavaCave.LAVA_Y + SKIRT_H, float(map.cells[nb].level) * Hex.LEVEL_HEIGHT)
-			if top <= LavaCave.LAVA_Y:
+			var top := minf(lava_y + SKIRT_H, float(map.cells[nb].level) * Hex.LEVEL_HEIGHT)
+			if top <= lava_y:
 				continue
 			var e0 := ctr + Hex.kite_corner(posmod(d - 1, 6))
 			var e1 := ctr + Hex.kite_corner(d)
 			var inn := -Hex.dir_vector(d) * 0.03
-			var c0 := Color(HOT.r, HOT.g, HOT.b, 0.9)
-			var c1 := Color(HOT.r, HOT.g, HOT.b, 0.0)
+			var hot: Color = look.get("hot", HOT)
+			var c0 := Color(hot.r, hot.g, hot.b, 0.9)
+			var c1 := Color(hot.r, hot.g, hot.b, 0.0)
 			for v: Array in [[e0 + inn, c0], [e1 + inn, c0], [Vector3(e1.x, top, e1.z) + inn, c1],
 					[e0 + inn, c0], [Vector3(e1.x, top, e1.z) + inn, c1], [Vector3(e0.x, top, e0.z) + inn, c1]]:
 				skirt.set_color(v[1])
@@ -268,7 +291,7 @@ static func _build_lava(holder: Node3D, map: HexMap, cells: Array[Vector2i]) -> 
 	var mi := MeshInstance3D.new()
 	mi.name = "LavaSurface"
 	mi.mesh = st.commit()
-	mi.material_override = lava_material()
+	mi.material_override = lava_material(CRUST_K, 0.32, look)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	holder.add_child(mi)
 	var sm := StandardMaterial3D.new()
@@ -285,7 +308,7 @@ static func _build_lava(holder: Node3D, map: HexMap, cells: Array[Vector2i]) -> 
 	holder.add_child(smi)
 
 
-static func _build_embers(holder: Node3D, cells: Array[Vector2i]) -> void:
+static func _build_embers(holder: Node3D, cells: Array[Vector2i], lava_y: float = LavaCave.LAVA_Y, ember: Color = EMBER) -> void:
 	if cells.is_empty():
 		return
 	var es := LowPoly.Soup.new(5, 0.0)
@@ -293,8 +316,8 @@ static func _build_embers(holder: Node3D, cells: Array[Vector2i]) -> void:
 	r.seed = 77
 	for i in mini(160, cells.size()):
 		var c: Vector2i = cells[r.randi_range(0, cells.size() - 1)]
-		var p := Hex.to_world(c) + Vector3(r.randf_range(-0.8, 0.8), LavaCave.LAVA_Y + r.randf_range(0.3, 3.2), r.randf_range(-0.8, 0.8))
-		PropModels.box(es, Vector3.ONE * r.randf_range(0.03, 0.06), p, PropModels.glow(EMBER), Vector3(r.randf() * 90.0, r.randf() * 90.0, 0))
+		var p := Hex.to_world(c) + Vector3(r.randf_range(-0.8, 0.8), lava_y + r.randf_range(0.3, 3.2), r.randf_range(-0.8, 0.8))
+		PropModels.box(es, Vector3.ONE * r.randf_range(0.03, 0.06), p, PropModels.glow(ember), Vector3(r.randf() * 90.0, r.randf() * 90.0, 0))
 	var mi := MeshInstance3D.new()
 	mi.name = "Embers"
 	mi.mesh = es.to_mesh()
@@ -306,11 +329,12 @@ static func _build_embers(holder: Node3D, cells: Array[Vector2i]) -> void:
 
 
 ## Warm unshadowed omnis over the lava, spread by farthest-point picks (LIGHTS of them).
-static func _build_lights(holder: Node3D, cells: Array[Vector2i]) -> void:
-	if cells.is_empty():
+static func _build_lights(holder: Node3D, cells: Array[Vector2i], lava_y: float = LavaCave.LAVA_Y, count: int = LIGHTS,
+		col: Color = LIGHT, energy: float = LIGHT_E) -> void:
+	if cells.is_empty() or count <= 0:
 		return
 	var picks: Array[Vector2i] = [cells[cells.size() / 2]]
-	while picks.size() < mini(LIGHTS, cells.size()):
+	while picks.size() < mini(count, cells.size()):
 		var best := cells[0]
 		var best_d := -1
 		for c in cells:
@@ -323,10 +347,11 @@ static func _build_lights(holder: Node3D, cells: Array[Vector2i]) -> void:
 		picks.append(best)
 	for pk in picks:
 		var l := OmniLight3D.new()
-		l.light_color = LIGHT
-		l.light_energy = LIGHT_E
+		l.name = "LavaLight"
+		l.light_color = col
+		l.light_energy = energy
 		l.omni_range = 7.5
 		l.omni_attenuation = 1.4
 		l.shadow_enabled = false
 		holder.add_child(l)
-		l.position = Hex.to_world(pk) + Vector3(0, LavaCave.LAVA_Y + 2.2, 0)
+		l.position = Hex.to_world(pk) + Vector3(0, lava_y + 2.2, 0)

@@ -167,7 +167,15 @@ static func map_text_of(map: HexMap) -> String:
 	# spawn data. Only a floor with one has the line, so every other floor's text (and hash) is as it always was.
 	if not map.sewer.is_empty():
 		lines.append("sewer=%s" % canon(map.sewer))
+	# a lava cave (DungeonGen's "cave" option, LavaPlanner; the --lava-cave prototype): its record, with every lava cell, its
+	# rock, its isles and the archers' spawn data. Its lava cells leave the map at run time (LavaField.activate) and a damp's
+	# crust comes and goes over them, so the cell lines below skip them: the text is the same before and after, and while a
+	# crust lasts. Only a floor with a cave has the line.
+	if not map.cave.is_empty():
+		lines.append("cave=%s" % canon(map.cave))
 	for c: Vector2i in keys:
+		if map.lava.has(c):
+			continue
 		var cell: HexMap.Cell = map.cells[c]
 		lines.append("%d,%d:%d,%d,%d,%d,%s,%d,%d,%d,%d,%d" % [c.x, c.y, cell.level, cell.type, cell.stair_dir, cell.stair_rise,
 			cell.tag, cell.wall_mask, cell.wall_top, cell.mat_id, cell.pool_mask, cell.pool_level])

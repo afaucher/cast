@@ -47,12 +47,17 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, rng: 
 	var chosen: Array[String] = []
 	var taken: Array[Vector2i] = []
 	var first_pick := rng.randi_range(0, maxi(0, cand.size() - 1))
+	# A GATE lava cave (LavaSite, LavaPlanner.gate_room): the first gate leaks into its far chamber.
+	var forced := LavaPlanner.gate_room(map)
 	for i in count:
 		# Rooms in order of preference: the first gate goes to a random room, each next one to the room
 		# farthest from the gates already placed (a room repeats only once all are used).
 		var ordered: Array[String] = cand.duplicate()
 		if chosen.is_empty():
 			ordered = ordered.slice(first_pick) + ordered.slice(0, first_pick)
+			if forced != "" and ordered.has(forced):
+				ordered.erase(forced)
+				ordered.push_front(forced)
 		else:
 			var score: Dictionary = {}
 			for tag in cand:

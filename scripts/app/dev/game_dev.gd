@@ -11,7 +11,8 @@ extends "res://scripts/app/game.gd"
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
 ## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer slice:
 ## scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built"; --sewer N in a crew too since "Phase 2 as
-## built"); --sewer-floor --to-sewer head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built").
+## built"); --sewer-floor --to-sewer head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built"); and (LavaDev.parse)
+## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md).
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -24,6 +25,7 @@ var _sewer_staged: Dictionary = {}       ## ... what SewerDev.stage put on it (g
 func _parse_args() -> void:
 	super()
 	SewerDev.parse(OS.get_cmdline_user_args(), opts)
+	LavaDev.parse(OS.get_cmdline_user_args(), opts)
 
 
 ## --sewer N: the sewer layout to build, or 0. In a crew (sewer phase 2) every window needs the same flag (run.ps1 -Crew
@@ -63,6 +65,18 @@ func _sewer_floor_ready() -> void:
 			_teleport_crew(st["door"] if to == "foot" else up)
 
 
+## A generated floor's lava cave (LavaDev): --to-lava puts the crew there (solo), --lava-perf measures its lights.
+func _lava_floor_ready() -> void:
+	if map == null or map.cave.is_empty() or _lava_cave() > 0:
+		return
+	if opts.has("to_lava") and not _shared:
+		var at := LavaDev.spot(map, str(opts["to_lava"]))
+		if at != HexMap.NO_CELL:
+			_teleport_crew(at)
+	if opts.has("lava_perf"):
+		LavaDev.perf.call_deferred(self, map)
+
+
 ## The sewer's look over the terrain HexMapView just built: the water, foam, kerbs, the channel and the light.
 func _dress_sewer() -> void:
 	if not is_inside_tree() or map == null or _sewer_layout.is_empty():
@@ -89,6 +103,7 @@ func _sewer_populate() -> void:
 
 func _dev_on_floor_ready() -> void:
 	_sewer_floor_ready()
+	_lava_floor_ready()
 	if _sewer() > 0 and opts.has("sewer_demo"):
 		_sewer_demo(str(opts["sewer_demo"]))
 	if opts.has("tour"):

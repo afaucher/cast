@@ -54,6 +54,10 @@ extends RefCounted
 ##    the rest keep to its dry decks; its rooms take the "sewer" theme, HazardPlanner.plan_sewer hangs the electrical panel and
 ##    the sump pumps by its water, GatorPlanner places its gators (spawned after the sharks) and SewerPlanner.plan_pack its goo
 ##    imp pack (spawned after the gators), DoorPlanner puts sluices on its flooded narrow halls. Nothing of it on a floor without a cluster: those floors are exactly as before;
+##  - a LAVA CAVE (DungeonGen's "cave" option, HexMap.cave; docs/design/lava-playtest.md "As built"): GatePlanner puts the
+##    floor's first hellgate in a GATE cave's far chamber, its chambers take the "lava" theme (its look: hellfire with a gate in
+##    it, else magma), DoorPlanner leaves its doorways open, LavaPlanner places its archers on the isles and keeps its packs at
+##    the bridgeheads, and spawns them last with the cave's look and rules (LavaField). Nothing of it on a floor without one;
 ##  - the ELEVATOR (SitePlan.elevator: HexMap.elevator plus the job's look): its car, doorway and landing
 ##    (ElevatorGeo.keep_cells) are avoided and blocked like the exit zone, and it is a body in its room's ThemeCtx.
 ##
@@ -121,6 +125,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	var t0 := Time.get_ticks_usec()
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
 	SewerPlanner.theme(map, p)                                          # no dice; the cluster's rooms are sewer rooms
+	LavaPlanner.theme(map, p)                                           # no dice; a cave's chambers are lava rooms, its look
 	# the in-ground pools of the pool / science / moat rooms: terrain, carved before anything is placed in those rooms
 	PoolGeo.carve(map, p, avoid, near_corr, theme_seed * 613 + floor_n * 7 + 1)
 	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
@@ -148,6 +153,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	# it is timed on its own (FloorMaterials.last_usec) and not counted in last_plan_usec.
 	FloorMaterials.assign(map, p, run.site_type)
 	SewerPlanner.materials(map, p)                                      # the cluster's halls and walls
+	LavaPlanner.materials(map, p)                                       # a cave's rock, lava and rim: basalt
 	# The office doors and their thresholds (after the materials: a threshold writes its cells' floor). Timed on its own.
 	var t_doors := Time.get_ticks_usec()
 	DoorPlanner.plan(map, run, floor_n, p)                              # own dice (DoorPlan, from the floor seed)
@@ -160,6 +166,9 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	GatorPlanner.plan(map, run, floor_n, p)
 	SewerPlanner.plan_pack(map, floor_n, p)                             # its goo imp pack: after the gators (their zones)
 	last_sewer_usec = SewerPlanner.last_usec + GatorPlanner.last_usec
+	# A lava cave's archers on its isles and its packs at the bridgeheads: no dice (the cave's record); last.
+	LavaPlanner.plan(map, run, floor_n, p)
+	last_lava_usec = LavaPlanner.last_usec
 	return p
 
 
@@ -305,6 +314,8 @@ static var last_hazard_usec := 0
 static var last_shark_usec := 0
 ## Microseconds the last plan() spent on a sewer cluster (SewerPlanner, GatorPlanner; not in last_plan_usec; 0 without one).
 static var last_sewer_usec := 0
+## Microseconds the last plan() spent on a lava cave's spawn data and packs (LavaPlanner.plan; 0 without one).
+static var last_lava_usec := 0
 
 
 # --- wall cells (the priced props and the explosive props) ------------------------------------
@@ -428,6 +439,9 @@ class Site:
 	var gators: Array[Gator] = []       ## a sewer cluster's gators (not monsters: the client's property), in plan order
 	var wires: Array[LiveWire] = []     ## the live wires on its electrical panels
 	var sewer_view: SewerView = null    ## its water's look
+	var lava_archers: Array[Monster] = []   ## a lava cave's archers on its isles (also in `monsters`), in plan order
+	var lava_look: Node3D = null        ## its lava's look (LavaLook.dress_cave)
+	var lava_field: LavaField = null    ## its rules (activated by the game once the fog has read the map)
 
 
 ## Spawn a planned floor. SPAWN ORDER IS NET-ID ORDER: NetFloor numbers the actors in the order they are spawned here, and
@@ -450,7 +464,8 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	ScoutPlanner.spawn(map, p, site)
 	SharkPlanner.spawn(run, p, site)            # the sharks and their imp gunners
 	GatorPlanner.spawn(map, p, site)            # a sewer cluster's gators
-	SewerPlanner.spawn(map, run, p, site)       # its goo imp pack (the last actors), its water's look, the live wires
+	SewerPlanner.spawn(map, run, p, site)       # its goo imp pack, its water's look, the live wires
+	LavaPlanner.spawn(map, run, p, site)        # a lava cave's archers (the last actors), its look and its rules
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
 	DoorPlanner.spawn(p, site)

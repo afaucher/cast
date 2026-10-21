@@ -62,6 +62,13 @@ const FALL_DAMAGE_PER_LEVEL := 6.0
 const FALL_STAGGER := 0.4
 const VOID_FALL_TIME := 0.7       ## non-heroes fall this long into a pit, then die
 const VOID_TICK_DAMAGE := 5.0     ## heroes pulled back from a pit take this
+## LAVA (a lava cave's lava cells, HexMap.lava: void with a bite; docs/design/lava-playtest.md, the user's "Keep 15 + burn"):
+## a hero is pulled back to its last safe spot with LAVA_DAMAGE and Burning for LAVA_BURN seconds (a soaked hero does not
+## ignite); anything else SINKS (LAVA_SINK_TIME) and dies.
+const LAVA_DAMAGE := 15.0
+const LAVA_BURN := 6.0
+const LAVA_SINK_TIME := 0.9
+const SAFE_SEARCH := 12           ## rings searched for solid ground when the last safe cell is gone (a crust that melted)
 const PULL_TIME := 0.3
 
 # --- Daze (the brute's direct slam) --------------------------------------------------------
@@ -97,6 +104,7 @@ var _vy := 0.0
 var _fall_from_y := 0.0
 var _void_fall := false
 var _void_t := 0.0
+var _void_lava := false           ## the fall is into lava: a sink, not a tumble
 var _pull := false
 var _pull_t := 0.0
 var _pull_from := Vector3.ZERO
@@ -128,7 +136,7 @@ func net_fields() -> Dictionary:
 		"_forced": Net.PRIVATE, "_hooked": Net.PRIVATE, "_slide_dir": Net.PRIVATE,
 		"_slide_dist": Net.PRIVATE, "_slide_dur": Net.PRIVATE, "_slide_t": Net.PRIVATE,
 		"_coast": Net.PRIVATE, "_airborne": Net.PRIVATE, "_vy": Net.PRIVATE,
-		"_fall_from_y": Net.PRIVATE, "_void_fall": Net.PRIVATE, "_void_t": Net.PRIVATE,
+		"_fall_from_y": Net.PRIVATE, "_void_fall": Net.PRIVATE, "_void_t": Net.PRIVATE, "_void_lava": Net.PRIVATE,
 		"_pull": Net.PRIVATE, "_pull_t": Net.PRIVATE, "_pull_from": Net.PRIVATE,
 		"_pull_to": Net.PRIVATE, "_src_team": Net.PRIVATE, "_src_ref": Net.PRIVATE,
 		"_stagger_until": Net.PRIVATE, "_safe_cell": Net.PRIVATE, "_walk_at": Net.PRIVATE,
@@ -456,6 +464,33 @@ func shove(dir: Vector3, distance: float, source: Node = null) -> void:
 	shoved.emit(dir, d)
 
 
+## THE GROUND UNDER THIS ACTOR IS GONE: a verb, like shove (a damp crust over a lava cave's lava melted under it, LavaField;
+## anything that takes terrain away at run time). The void rule from where it stands: a hero is pulled back to its last safe
+## spot (never a crust: _note_safe skips them) and, over lava, takes the lava's bite; anything else falls in (into lava: it
+## sinks) and dies. Applied only by the machine that RESOLVES the actor (Net.resolves: its owner, which runs the motion
+## everyone sees); a copy ignores it. Does nothing while there is still ground under it.
+func lose_ground(source: Node = null) -> void:
+	if dead or Net.is_copy(self) or not is_inside_tree() or _void_fall or _pull:
+		return
+	var map: HexMap = GameWorld.map
+	if map == null or not is_nan(map.ground_height(global_position)):
+		return
+	var a := source as Actor
+	_src_team = a.team if a != null else -1
+	_src_ref = weakref(source) if source != null else null
+	_slide_dir = Vector3.ZERO
+	_slide_dist = 0.0
+	_slide_t = _slide_dur
+	_coast = Vector3.ZERO
+	climbing = false
+	_forced = true
+	if not _hooked:
+		_hooked = true
+		get_tree().physics_frame.connect(_forced_tick)
+	_on_interrupted()
+	_enter_void(global_position, global_position)
+
+
 ## True while forced motion is in progress (sliding, airborne from a shove, falling into a
 ## pit, being pulled back).
 func is_shoved() -> bool:
@@ -523,18 +558,42 @@ func _note_safe() -> void:
 	if _airborne or GameWorld.map == null:
 		return
 	var c := Hex.from_world(global_position)
-	if GameWorld.map.is_walkable_cell(c):
+	if GameWorld.map.is_walkable_cell(c) and not GameWorld.map.is_crust(c):   # (a crust melts: never a safe spot)
 		_safe_cell = c
 
 
+## Where a pull back from the void lands: the last safe cell, or (when it is gone or there never was one: a body that only
+## ever stood on a crust) the nearest solid ground that is not a crust.
 func _safe_position() -> Vector3:
 	var map: HexMap = GameWorld.map
-	if map == null or not map.is_walkable_cell(_safe_cell):
+	if map == null:
 		return global_position
-	var p := Hex.to_world(_safe_cell)
+	var cell := _safe_cell
+	if not map.is_walkable_cell(cell) or map.is_crust(cell):
+		cell = _nearest_safe_cell(map)
+		if cell == HexMap.NO_CELL:
+			return global_position
+		_safe_cell = cell
+	var p := Hex.to_world(cell)
 	var g := map.ground_height(p)
 	p.y = global_position.y if is_nan(g) else g
 	return p
+
+
+func _nearest_safe_cell(map: HexMap) -> Vector2i:
+	var here := Hex.from_world(global_position)
+	for r in range(0, SAFE_SEARCH + 1):
+		var best := HexMap.NO_CELL
+		var best_d := INF
+		for c in Hex.ring(here, r):
+			if map.is_walkable_cell(c) and not map.is_crust(c):
+				var d := Hex.to_world(c).distance_squared_to(Vector3(global_position.x, 0.0, global_position.z))
+				if d < best_d or (d == best_d and HexMap._cell_less(c, best)):
+					best_d = d
+					best = c
+		if best != HexMap.NO_CELL:
+			return best
+	return HexMap.NO_CELL
 
 
 ## Damage from forced movement, honouring friendly-fire protection.
@@ -560,6 +619,7 @@ func _end_forced(notify: bool) -> void:
 	_vy = 0.0
 	_pull = false
 	_void_fall = false
+	_void_lava = false
 	if _hooked:
 		_hooked = false
 		var tree := get_tree()
@@ -662,8 +722,13 @@ func _slam() -> void:
 	shove_impact.emit("slam", global_position, dealt)
 
 
+## Over the void (a pit, or a lava cave's lava: HexMap.lava, the lava kind of void). A hero is pulled back to its last safe
+## spot (a pit: VOID_TICK_DAMAGE; lava: LAVA_DAMAGE and Burning for LAVA_BURN, which a soak refuses); anything else falls in
+## (lava: sinks) and dies. shove_impact says which: "void" or "lava".
 func _enter_void(from: Vector3, over: Vector3) -> void:
 	_airborne = false
+	var map: HexMap = GameWorld.map
+	var lava := map != null and (map.is_lava(Hex.from_world(over)) or map.is_lava(Hex.from_world(from)))
 	if team == GameWorld.TEAM_HEROES:
 		_slide_t = _slide_dur
 		_coast = Vector3.ZERO
@@ -672,14 +737,17 @@ func _enter_void(from: Vector3, over: Vector3) -> void:
 		_pull_from = from
 		_pull_to = _safe_position()
 		global_position = from
-		var dealt := _forced_damage(VOID_TICK_DAMAGE)
-		shove_impact.emit("void", from, dealt)
+		var dealt := _forced_damage(LAVA_DAMAGE if lava else VOID_TICK_DAMAGE)
+		if lava and not dead:
+			Burning.ignite(self, _src_ref.get_ref() as Node if _src_ref != null else null, LAVA_BURN)
+		shove_impact.emit("lava" if lava else "void", from, dealt)
 	else:
 		global_position = over
 		_void_fall = true
+		_void_lava = lava
 		_void_t = 0.0
 		_vy = -1.0
-		shove_impact.emit("void", over, 0.0)
+		shove_impact.emit("lava" if lava else "void", over, 0.0)
 
 
 func _tick_pull(delta: float) -> void:
@@ -697,6 +765,16 @@ func _tick_pull(delta: float) -> void:
 
 func _tick_void(delta: float) -> void:
 	_void_t += delta
+	if _void_lava:
+		# a sink: down into the lava, upright and slowing, no tumble
+		var ks := clampf(_void_t / LAVA_SINK_TIME, 0.0, 1.0)
+		global_position.y -= (1.6 * (1.0 - ks) + 0.4) * delta
+		rotation.z = sin(_void_t * 9.0) * 0.12 * (1.0 - ks)
+		scale = Vector3.ONE * lerpf(1.0, 0.6, ks)
+		if ks >= 1.0:
+			_end_forced(false)
+			die()
+		return
 	_vy -= SHOVE_GRAVITY * 0.8 * delta
 	global_position.y += _vy * delta
 	rotation.x += 5.0 * delta

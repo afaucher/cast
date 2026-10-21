@@ -16,6 +16,7 @@ extends RefCounted
 
 const SERVICE := "service_entrance"     ## the start room's theme
 const SEWER := "sewer"                  ## a sewer cluster's rooms (SewerPlanner.theme; never dealt from a site's POOLS)
+const LAVA := "lava"                    ## a lava cave's chambers (LavaPlanner.theme; never dealt from a site's POOLS)
 
 const POOLS := {
 	"bunker": ["wine_cellar", "home_cinema", "spa", "gym", "server_room", "panic_room", "pool"],
@@ -247,6 +248,26 @@ const THEMES := {
 			{"op": "wet_floor"},
 		],
 		"light": {"color": Color(0.78, 0.92, 0.5), "energy": 5.5, "range": 9.5, "flicker": 0.1},
+	},
+	# A lava cave's chambers (docs/design/lava-playtest.md, "As built"). Not in POOLS: only LavaPlanner.theme gives it, to the
+	# cave CaveGen cut. Rock only: no priced props (a chamber has no walls to stand them on), no decor recipe. "lava" is the
+	# look, by whether a hellgate leaks into the cave (LavaPlanner): the lava's colours (crust, hot, core), the glow, the
+	# embers, the warm lights over the lava (how many: "lights", the measured budget), the rock's floor material and the
+	# cliff tint. The name and the note word are PROPOSALS awaiting the user's review of the text (2026-10-21).
+	"lava": {
+		"name": "Magma chamber", "site": "any", "min_cells": 0,
+		"note_word": "magma chamber", "floor_mat": FloorMaterials.F_BASALT, "wall_mat": FloorMaterials.W_BASALT,
+		"priced": [],
+		"recipe": [],
+		"light": {"color": Color(1.0, 0.48, 0.18), "energy": 4.5, "range": 9.0, "flicker": 0.2},
+		"lava": {
+			"magma": {"crust": Color(0.09, 0.06, 0.05), "hot": Color(1.0, 0.36, 0.05), "core": Color(1.0, 0.82, 0.3),
+				"glow": 2.4, "ember": Color(1.0, 0.55, 0.15), "light": Color(1.0, 0.45, 0.15), "lights": 4, "light_energy": 1.6,
+				"floor_mat": FloorMaterials.F_BASALT, "cliff": Color(0.42, 0.36, 0.33)},
+			"hellfire": {"crust": Color(0.1, 0.03, 0.04), "hot": Color(1.0, 0.16, 0.08), "core": Color(1.0, 0.55, 0.35),
+				"glow": 2.6, "ember": Color(0.75, 0.35, 1.0), "light": Color(1.0, 0.25, 0.2), "lights": 4, "light_energy": 1.7,
+				"floor_mat": FloorMaterials.F_BASALT_HELL, "cliff": Color(0.5, 0.3, 0.3)},
+		},
 	},
 }
 

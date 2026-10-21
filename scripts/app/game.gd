@@ -97,9 +97,10 @@ extends Node3D
 ##   --hud-followers N   dev: N employees follow the player (one henchman fighting when N > 1), for the party HUD's list
 ##   --join-hold S       dev, online (M6): a player joining a crew on the job holds its "Clocking in..." form S seconds after
 ##                       building the floor before reporting ready (screenshots: --shot-at clockin)
-##   --lava-cave N       dev, solo only (PROTOTYPE, docs/design/lava-playtest.md): every floor is hand-authored lava cave N
+##   --lava-cave N       dev (PROTOTYPE, docs/design/lava-playtest.md): every floor is hand-authored lava cave N
 ##                       (1-5, LavaCave) instead of the generated floor: rock islands and two-wide bridges over lava, archers on
-##                       isolated isles, a melee pack on the path, damp crusts the lava (LavaField). Ignored in a shared run.
+##                       isolated isles, a melee pack on the path, damp crusts the lava (LavaField). In a crew: every window.
+##   --lava-floor, --lava-pattern P, --to-lava entry|far|isle, --lava-perf   dev: a generated lava cave (LavaDev, scripts/app/dev)
 ## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
@@ -893,23 +894,31 @@ func _populate_site() -> void:
 	_log("doors: %d (%s)" % [_site.doors.size(), ", ".join(_site.doors.map(func(d: OfficeDoor) -> String: return "%d" % d.doorway_id))], Color(0.8, 0.8, 1.0))
 
 
-## --lava-cave N: the cave layout to build, or 0. Solo only: a shared run never uses it (the prototype has no network shape:
-## docs/design/lava-playtest.md).
+## --lava-cave N: the cave layout to build, or 0. In a crew every window needs the same flag (run.ps1 -Crew passes it to all):
+## each builds the layout from the seed, and the barrier's checksum (the cave's record) sends out one that built another.
 func _lava_cave() -> int:
-	return int(opts.get("lava_cave", 0)) if not _shared and not _dev_released else 0
+	return int(opts.get("lava_cave", 0)) if not _dev_released else 0
 
 
-## The lava's rules (LavaField), after the fog has read the map with its lava cells: from here the lava is void with a burn,
-## and damp crusts it.
+## A lava cave's rules (LavaField: a generated cave's, made by LavaPlanner.spawn, or the --lava-cave prototype's), after the
+## fog has read the map with its lava cells: from here the lava is void with its bite, and damp crusts it. Every machine.
 func _start_lava() -> void:
-	if _lava_cave() <= 0 or map == null:
+	if map == null or map.cave.is_empty() or GameWorld.root == null:
 		return
-	var field := LavaField.new()
-	field.name = "LavaField"
-	GameWorld.root.add_child(field)
-	field.setup(map)
+	var field := LavaField.of_world()
+	if field == null:
+		field = LavaField.new()
+		field.name = "LavaField"
+		GameWorld.root.add_child(field)
+		field.setup(map)
 	field.activate()
-	_log("lava cave %d: %s (%s)" % [_lava_cave(), LavaCave.layout(_lava_cave())["name"], LavaCave.layout(_lava_cave())["blurb"]], Color(1.0, 0.6, 0.3))
+	if _lava_cave() > 0:
+		_log("lava cave %d: %s (%s)" % [_lava_cave(), LavaCave.layout(_lava_cave())["name"], LavaCave.layout(_lava_cave())["blurb"]], Color(1.0, 0.6, 0.3))
+	else:
+		_log("lava cave: %s, %s look, chambers %s (entry %s), %d isles, %d archers%s" % [map.cave["pattern"], map.cave.get("look", "magma"),
+			", ".join(map.cave["rooms"]), (map.cave["entry"] as Dictionary)["room"], (map.cave["isles"] as Array).size(),
+			(map.cave.get("archers", []) as Array).size(), " (a hellgate in %s)" % map.cave["far"] if bool(map.cave.get("gate", false)) else ""],
+			Color(1.0, 0.6, 0.3))
 
 
 ## Room fog (RoomFog + FogView; docs/design/exploration.md "Decisions: map information, fog and doors"): every machine draws
@@ -1473,7 +1482,11 @@ func _on_seat_to_player(seat: int, peer: int, character: String) -> void:
 func _on_join_ready(peer: int) -> void:
 	if not Net.is_host() or _leaving or _ended or _session == null or not _floor_begun:
 		return
-	Session.join.admit(peer, {"contract": _session.mirror_state()})
+	var extra := {"contract": _session.mirror_state()}
+	var lava := LavaField.of_world()
+	if lava != null:
+		extra["lava"] = lava.late_join_state()   # (a lava cave's live crusts: the joiner computes the same cells from them)
+	Session.join.admit(peer, extra)
 
 
 ## A joiner: the host said what the crew is doing (wait), sent us onto a floor (go), or the board came; or we signed.
@@ -1642,6 +1655,9 @@ func _on_join_snapshot(d: Dictionary) -> void:
 	if not _joining or _session == null:
 		return
 	_session.apply_mirror(d.get("contract", {}) as Dictionary)
+	var lava := LavaField.of_world()
+	if lava != null:
+		lava.apply_late_join(d.get("lava", []) as Array)
 	var own := int((d.get("take", {}) as Dictionary).get("seat", 0))
 	var kits := d.get("kits", {}) as Dictionary
 	for k: Variant in kits:
