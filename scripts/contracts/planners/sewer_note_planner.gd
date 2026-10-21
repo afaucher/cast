@@ -10,7 +10,9 @@ extends RefCounted
 ## anchor where a note fits (ThemeCtx.fits, like NotePlanner), at least APART from every other note and STAIR_CLEAR from the
 ## stair's foot (where SewerPlanner.dress puts its sign):
 ##   crossing  GATOR CROSSING, where a flooded hall's water meets a room (the cluster's first hall, else none)
-##   rota      the gator's feeding rota, by the water in the stair's room (the first room the crew sees)
+##   rota      the gator's feeding rota, by the water in the stair's room (the first room the crew sees). No line yet (the
+##             user, 2026-10-21, rejected the drafts): NoteCopy.SEWER["rota"] is empty, so none is placed
+## A kind without a line places nothing.
 ##   pump      the pump log, beside a sump pump (HazardPlanner.plan_sewer: the room farthest from the stair; none without one)
 ##   drink     DO NOT DRINK by the outfall (the source), only where the stair's sign is not already the DO NOT DRINK one
 ## The line of each kind is picked on the cluster's own dice (its seed), so it is the same on every machine.

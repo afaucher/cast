@@ -1156,7 +1156,7 @@ Close-ups of a rim corner, concrete (board 7, offer 2, floor 2) and brick (seed 
   head door is an ordinary office door (no "SERVICE LEVEL" stencil style yet). **Done: "Polish as built" (narrow, the service door).**
 - A sewer floor is otherwise a different floor from its seed's old one (the exit cannot be in the cluster, its loops to the
   rest are not cut), though most rooms and links come out the same.
-- No dispatch line for the service level yet (each needs a rendered radio clip, `tools/render_dispatch.ps1`). **Drafted: "Polish as built" (text pending review, no clips yet).**
+- No dispatch line for the service level yet (each needs a rendered radio clip, `tools/render_dispatch.ps1`). **Done: "Polish as built" (dispatch's sewer calls).**
 - Gates and staff may land in the cluster (as the doc wanted: going down is a money call); the gator keeps 5-6 cells from
   them, so with staff in every sump it starts mid-hall.
 - Influencer floors (low fit per the client table) can roll a cluster like any bunker.
@@ -1263,35 +1263,39 @@ z-fighting are separate tracks.
 ```
 
 On seed 5 floor 2, walk down the stair to hear the service level call. Stand near the gator for the gator call, then kill it
-for the bill call. Wade near the panel and shoot it for the wire call. The crossing sign, the rota and the pump log stand on
-the decks by the water.
+for the bill call. Wade near the panel and shoot it for the wire call. The crossing sign and the pump log stand on the decks
+by the water.
 
 ### How it is built
 
 | Piece | Where | Notes |
 |---|---|---|
 | Narrow service stair | `DungeonGen` `_carve` | The stair link is always narrow: one lane, 3.0 between its walls. The main dice draw the chokepoint roll as before, so the floor around it moves no more than the cluster already moves it. A cluster whose narrow stair fails is built without the cluster, like any other failure. Over contract seeds 1-40, 26 of 80 floors 2-3 have a cluster (27 before): 9/2 lost its cluster |
-| SERVICE LEVEL door | `DoorPlanner.service_head`, `OfficeDoorModel` style `"service"` | The office door at the stair's head, in the room above. It swings, smashes and is networked like the double door. Its look: plant green steel leaves, hazard-striped kick bands and header, and the stencil "SERVICE" / "LEVEL" across the leaves on both faces. The stripes use fixed soup seeds, so building it never moves PropModels' seed counter. **Provisional:** it is placed on every stair head, including the 9 of 26 whose head is in the start or elevator room, where `DoorPlan` puts no door. Whether it may override that rule is an open question |
+| SERVICE LEVEL door | `DoorPlanner.service_head`, `OfficeDoorModel` style `"service"` | The office door at the stair's head, in the room above. It swings, smashes and is networked like the double door. Its look: plant green steel leaves, hazard-striped kick bands and header, and the stencil "SERVICE" / "LEVEL" across the leaves on both faces. The stripes use fixed soup seeds, so building it never moves PropModels' seed counter. It is placed on every stair head, including the 9 of 26 whose head is in the start or elevator room, where `DoorPlan` puts no door (the user, 2026-10-21: yes) |
 | Dispatch's sewer calls | `SewerCalls` (`scripts/world/sewer/sewer_calls.gd`), `NoteCopy.SEWER_CALLS`, `DispatchVoice.all_lines` (kind "sewer") | Each call at most once per floor, on the banner (`game.gd`: `SewerCalls.attach` after the floor is set up). The service level call fires when a hero first stands in a cluster room. The gator call fires when a gator is within 11 of this machine's hero and the fog shows it. The bill call fires when a gator dies. The wire calls fire on a wire's first shock: one if a hero is in reach, the other if not, and only within 2 s of the shock, so a late joiner hears nothing about an old wire. A call waits while the banner holds another line and is dropped after 12 s. **Cosmetic and local**: each machine reacts to what it already receives (hero positions, `world.die`, the panel's `obj.break` moment), like the staff-lost call. Nothing is sent |
-| Sewer notes (C3) | `SewerNotePlanner` (in `SiteBuilder.plan` after `NotePlanner`, before the decor), `NoteCopy.SEWER`, `NoteFacts` `{sewer_room}` | One note of each kind on a dry deck within 2 cells of the water. Each keeps 4 from every other note and 5 from the stair's doorway, where the stair-foot sign stays. The kinds: a GATOR CROSSING sign where the first flooded hall meets a room, the feeding rota in the stair's room, the pump log beside a sump pump, and DO NOT DRINK by the outfall (not in a bunker, whose stair sign already says it). The line is picked on the cluster's dice. `{sewer_room}` is the sewer theme row's note word, filled only on a cluster floor. Over seeds 1-40: crossing 25, rota 25, pump 25, drink 8 |
+| Sewer notes (C3) | `SewerNotePlanner` (in `SiteBuilder.plan` after `NotePlanner`, before the decor), `NoteCopy.SEWER`, `NoteFacts` `{sewer_room}` | One note of each kind on a dry deck within 2 cells of the water. Each keeps 4 from every other note and 5 from the stair's doorway, where the stair-foot sign stays. The kinds: a GATOR CROSSING sign where the first flooded hall meets a room, the feeding rota in the stair's room (no line yet, so none is placed), the pump log beside a sump pump, and DO NOT DRINK by the outfall (not in a bunker, whose stair sign already says it). A kind with several lines picks one on the cluster's dice. `{sewer_room}` is the sewer theme row's note word, filled only on a cluster floor. Over seeds 1-40: crossing 25, pump 25, drink 8 |
 
-### Text pending review
+### The text (the user's review, 2026-10-21)
 
-The user (2026-10-21): "Stop, review all of the text with me before using it." Every line below is a draft in the code,
-marked in its comments. No dispatch clips are rendered (`tools/render_dispatch.ps1` waits for the answers).
+The user (2026-10-21): "Stop, review all of the text with me before using it." Then their answers:
 
-1. Dispatch, a hero first goes down the stair: "You're on the service level. Everything down there is wet, including the wiring."
-2. Dispatch, a gator in view: "That's the client's gator. It's insured, and it bites."
-3. Dispatch, a gator dies: "Gator's down. The client will want that itemized."
-4. Dispatch, a wire's first shock with no hero in reach: "Somebody broke the panel. The water's live, so stay on the decks."
-5. Dispatch, the same with a hero in reach: "That was the panel. Get out of the water."
-6. Sign "Caution" (crossing): "GATOR CROSSING. The gator has right of way. The gator has always had right of way." / "GATOR CROSSING. Do not make eye contact. Do not make any contact."
-7. Memo "Feeding Rota": "Gator feeding, {sewer_room}: Mondays, {staff}. Thursdays, also {staff}. Feed from the deck, not from the water." / "The gator eats at six. Whoever is on the rota stands on the deck. Last week's rota stood in the water."
-8. Report "Pump Log": "Sump pump, {sewer_room}: running. Water level: rising anyway. Cause: unknown. Smell: known." / "Pump 2 tripped the panel again. Reset it standing in the water. Do not reset it standing in the water."
-9. Sign, client's sign header (drink): "NON-POTABLE WATER. DO NOT DRINK. Do not fill the coffee machine from here either, {staff}." / "DO NOT DRINK. It is not reclaimed. It is not anything. It is just down here."
-10. `{sewer_room}` = the sewer theme row's note word, "service level" (the row is unchanged).
-11. The door stencil: "SERVICE" / "LEVEL".
-12. Already shipped, unchanged: the stair-foot sign, "RECLAIMED WATER: DO NOT DRINK. It is reclaimed." (bunker) and "DO NOT FEED THE GATOR" (lair).
+| # | Where | Text | The user |
+|---|---|---|---|
+| 1 | Dispatch: a hero first goes down the stair | "You're on the service level. Everything down there is wet, including the wiring." | as drafted ("leave them as is for now") |
+| 2 | Dispatch: a gator in view | "That's the client's gator. It's expensive and it bites." | changed from "It's insured, and it bites": "insured" "extends the fiction too far" |
+| 3 | Dispatch: a gator dies | "Gator's down. The client will want that itemized." | as drafted |
+| 4 | Dispatch: a wire's first shock, no hero in reach | "Somebody broke the panel. The water's live, so stay on the decks." | as drafted |
+| 5 | Dispatch: the same, a hero in reach | "That was the panel. Get out of the water." | as drafted |
+| 6 | Sign "Caution" where a flooded hall meets a room | "GATOR CROSSING. Do not make eye contact. Do not make any contact." | this one only (the other draft dropped) |
+| 7 | Memo "Feeding Rota" in the stair's room | none | both drafts rejected, no new line yet: **open**. `NoteCopy.SEWER["rota"]` is empty, so no rota is placed; the planner places one again once it has a line |
+| 8 | Report "Pump Log" beside a sump pump | "Pump 2 tripped the panel again. Reset it standing in the water. Do not reset it standing in the water." | this one only |
+| 9 | Sign (the client's sign header) by the outfall, not in a bunker | "NON-POTABLE WATER. DO NOT DRINK. Do not fill the coffee machine from here either, {staff}." | this one only |
+| 10 | The service door's stencil | "SERVICE" / "LEVEL" | kept |
+| - | The service door in the start and elevator rooms | (placement) | yes: on every stair head |
+
+`{sewer_room}` (the sewer theme row's note word, "service level") stays a slot NoteFacts fills on a cluster floor; no line
+uses it now. Unchanged and already shipped: the stair-foot sign, "RECLAIMED WATER: DO NOT DRINK. It is reclaimed." (bunker)
+and "DO NOT FEED THE GATOR" (lair). The five calls are rendered by `tools/render_dispatch.ps1` like every dispatch line.
 
 ### Tests
 
@@ -1307,7 +1311,7 @@ marked in its comments. No dispatch clips are rendered (`tools/render_dispatch.p
   - exactly one service door, at the stair's head in the room above;
   - head and foot are reachable from the start;
   - every sewer note is on a cluster room's dry floor, by the water, apart from the other notes, and filled;
-  - most clusters have the crossing sign and the rota;
+  - most clusters have the crossing sign, and no rota is placed while it has no line;
   - a floor without a cluster has no service door and no sewer notes.
 - `test_dispatch_voice`: the "sewer" kind, every call listed once, and the spoken text of calls 1 and 5.
 - `test_notes`: the `NoteCopy.SEWER` lines pass the length, slot and format checks.
@@ -1318,8 +1322,7 @@ The other 18 are byte for byte as recorded.
 
 ### Open questions
 
-- The text above (items 1-11).
-- Should the service door override the no-door rule in the start and elevator rooms (provisional: yes)?
+- The feeding rota's line (item 7): the user rejected both drafts (2026-10-21) and has not picked one yet.
 
 ---
 

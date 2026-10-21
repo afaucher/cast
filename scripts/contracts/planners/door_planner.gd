@@ -12,7 +12,7 @@ extends RefCounted
 ## The SERVICE STAIR's head (the narrow stair down into the cluster, docs/design/sewer-concept.md "Polish as built") always
 ## gets a door in the "service" style (OfficeDoorModel.SERVICE: hazard stripes and a SERVICE LEVEL stencil), even in the start
 ## or the elevator room, where DoorPlan puts none: it marks the way down. Only its look differs from any office door.
-## (Provisional, 2026-10-21: whether it may override the start / elevator room rule is an open question for the user.)
+## (The user, 2026-10-21: yes, on every stair head, the start and elevator rooms included.)
 static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> void:
 	var sp := Doorways.spaces(map)
 	var dws := Doorways.find(map, sp)

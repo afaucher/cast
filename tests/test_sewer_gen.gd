@@ -69,7 +69,10 @@ func setup() -> void:
 	print("[sewer gen] cluster sizes %s; %d flooded narrow halls, %d loops inside a cluster; %d goo imp packs" % [str(sizes), narrow, loops, packs])
 	print("[sewer gen] sewer notes %s" % str(sewer_notes))
 	check(int(sewer_notes.get("crossing", 0)) * 4 >= clusters * 3, "most clusters have a GATOR CROSSING sign (%d of %d)" % [int(sewer_notes.get("crossing", 0)), clusters])
-	check(int(sewer_notes.get("rota", 0)) * 4 >= clusters * 3, "most clusters have the feeding rota (%d of %d)" % [int(sewer_notes.get("rota", 0)), clusters])
+	if (NoteCopy.SEWER["rota"] as Array).is_empty():
+		eq(int(sewer_notes.get("rota", 0)), 0, "no feeding rota while it has no line (the user, 2026-10-21)")
+	else:
+		check(int(sewer_notes.get("rota", 0)) * 4 >= clusters * 3, "most clusters have the feeding rota (%d of %d)" % [int(sewer_notes.get("rota", 0)), clusters])
 	check(int(sewer_notes.get("pump", 0)) >= 1 and int(sewer_notes.get("drink", 0)) >= 1, "pump logs and DO NOT DRINK signs are placed (%s)" % str(sewer_notes))
 	check(packs * 4 >= clusters * 3, "most clusters have a goo imp pack (%d of %d)" % [packs, clusters])
 	check(panels * 3 >= clusters * 2, "most clusters have an electrical panel (%d of %d)" % [panels, clusters])
@@ -226,7 +229,7 @@ func _check_service_stair(map: HexMap, plan: SitePlan, tag: String) -> void:
 
 
 ## The sewer's notes (SewerNotePlanner): each on a dry deck by the water in a cluster room, apart from every other note, its
-## text filled, the GATOR CROSSING sign and the feeding rota on most clusters (counted in setup).
+## text filled, the GATOR CROSSING sign on most clusters and no rota while it has no line (counted in setup).
 func _check_sewer_notes(map: HexMap, plan: SitePlan, tag: String) -> void:
 	var rooms: Array = map.sewer["rooms"]
 	for nt in plan.notes:

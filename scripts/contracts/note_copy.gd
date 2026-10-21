@@ -169,23 +169,18 @@ const HINTS := {
 ## A sewer cluster's paperwork (docs/design/sewer-concept.md C3, "Polish as built"; SewerNotePlanner), from before the
 ## outbreak like every note: by kind, one line of each kind a cluster, on the dry decks by the water. {sewer_room} is the
 ## sewer theme row's note word (NoteFacts, only on a floor with a cluster). The stair foot's own sign is SewerPlanner.SIGNS.
-## TEXT PENDING THE USER'S REVIEW (2026-10-21): every line and header below is a draft.
+## The user picked the text (2026-10-21): one line for each kind. The rota has none yet: both drafts were rejected, so
+## "rota" is [] and SewerNotePlanner places no rota note until the user picks one.
 const SEWER := {
 	"crossing": [   # on a deck where a flooded hall meets a room
-		{"f": "sign", "h": "Caution", "t": "GATOR CROSSING. The gator has right of way. The gator has always had right of way."},
 		{"f": "sign", "h": "Caution", "t": "GATOR CROSSING. Do not make eye contact. Do not make any contact."},
 	],
-	"rota": [       # by the water in the stair's room
-		{"f": "memo", "h": "Feeding Rota", "t": "Gator feeding, {sewer_room}: Mondays, {staff}. Thursdays, also {staff}. Feed from the deck, not from the water."},
-		{"f": "memo", "h": "Feeding Rota", "t": "The gator eats at six. Whoever is on the rota stands on the deck. Last week's rota stood in the water."},
-	],
+	"rota": [],     # by the water in the stair's room (open: no line picked yet)
 	"pump": [       # beside a sump pump
-		{"f": "report", "h": "Pump Log", "t": "Sump pump, {sewer_room}: running. Water level: rising anyway. Cause: unknown. Smell: known."},
 		{"f": "report", "h": "Pump Log", "t": "Pump 2 tripped the panel again. Reset it standing in the water. Do not reset it standing in the water."},
 	],
 	"drink": [      # by the outfall, where the stair's sign is not already the DO NOT DRINK one
 		{"f": "sign", "t": "NON-POTABLE WATER. DO NOT DRINK. Do not fill the coffee machine from here either, {staff}."},
-		{"f": "sign", "t": "DO NOT DRINK. It is not reclaimed. It is not anything. It is just down here."},
 	],
 }
 
@@ -233,9 +228,9 @@ const EXIT_OUT := "Copy, clocking you out."
 
 ## The sewer's calls (docs/design/sewer-concept.md, "Polish as built"; user, 2026-10-21: "the service level, the gator, the
 ## live wire"): each one at most once a floor, on the machine that sees it happen (SewerCalls). No names; one read each.
-## TEXT PENDING THE USER'S REVIEW (2026-10-21: "review all of the text with me before using it"): drafts; no clips rendered.
+## Reviewed by the user (2026-10-21). The gator call says "expensive": "insured" "extends the fiction too far".
 const SEWER_DOWN := "You're on the service level. Everything down there is wet, including the wiring."   ## a hero goes down the service stair
-const GATOR_SEEN := "That's the client's gator. It's insured, and it bites."                              ## a gator comes into view
+const GATOR_SEEN := "That's the client's gator. It's expensive and it bites."                             ## a gator comes into view
 const GATOR_BILLED := "Gator's down. The client will want that itemized."                                ## a gator dies (billed to its killer)
 const WIRE_LIVE := "Somebody broke the panel. The water's live, so stay on the decks."                   ## a panel's cable hits the water
 const WIRE_SHOCK := "That was the panel. Get out of the water."                                          ## ... and shocks a hero

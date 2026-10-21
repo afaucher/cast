@@ -37,7 +37,7 @@ const SIGN := Color(0.35, 1.0, 0.55)
 const BRASS := Color(0.95, 0.78, 0.36)
 const PLANT := Color(0.33, 0.41, 0.37)    ## the service door's paint
 const STENCIL := Color(0.96, 0.86, 0.42)  ## its stencil
-const STENCIL_WORDS: Array[String] = ["SERVICE", "LEVEL"]   ## TEXT PENDING THE USER'S REVIEW (2026-10-21): a draft
+const STENCIL_WORDS: Array[String] = ["SERVICE", "LEVEL"]   ## (kept by the user, 2026-10-21)
 
 const POST := 0.14               ## jamb post width (along the line)
 const DEPTH := 0.32              ## frame depth (across the line)
