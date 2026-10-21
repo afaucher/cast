@@ -1,35 +1,39 @@
 class_name LavaField
 extends Node3D
-## The lava cave's rules (PROTOTYPE, docs/design/lava-playtest.md): solo play behind the dev flag `--lava-cave`, never
-## built online (game.gd only makes one when the run is not shared). It declares its fields like any gameplay class and
-## applies every verb only where this machine resolves the actor, so it would not break co-op; but it has no network
-## shape of its own yet (the crust is terrain that changes on a schedule: see the doc).
+## A lava cave's RULES (docs/design/lava-playtest.md, "As built"): one per floor with a cave (HexMap.cave: a generated cave,
+## LavaPlanner, or the `--lava-cave` prototype's LavaCave), on every machine, solo and crewed.
 ##
-## LAVA = VOID WITH A BURN. Once the floor runs, activate() removes the lava cells from the map, so lava is the void-pit
-## rule the game already has (Actor._enter_void): walking can't step into it; a shoved HERO is pulled back to the last
-## cell it stood on (5 damage) and a shoved MONSTER falls in and dies. LavaField adds the lava's bite to the hero's pull:
-## EXTRA_DAMAGE more (15 in all; the user, 2026-10-20: "That mild damage sounds fine") and Burning for BURN_TIME (unless
-## soaked: a damp first protects you from the burn, not the damage). Fog: RoomFog and FogView are built while the lava
-## cells still exist, so the lava keeps the fog space of the rock nearest it.
+## LAVA IS VOID WITH A BITE. activate() takes the cave's lava cells (HexMap.lava) out of the map (HexMap.remove_cell), so the
+## game's void rule applies (Actor._enter_void), and Actor knows the lava kind of void: a hero shoved in is pulled back to its
+## last safe spot with Actor.LAVA_DAMAGE and Burning (unless soaked), anything else sinks and dies. All of that runs on the
+## actor's owner, like any shove. Fog: RoomFog and FogView are built while the lava cells are still in the map (game.gd calls
+## activate() after the fog), so the lava keeps the fog space of the rock nearest it.
 ##
-## DAMP CRUST (the user: "Damping lava sounds hilarious. Yes."): a damp cast's burst crusts every lava cell within
-## CRUST_FRAC of its radius. A crust cell is walkable rock at LavaCave.CRUST_LEVEL (one step down from shore rock at 0, a
-## climb up to rock at 1, a wall below rock at 2+) for CRUST_LIFE seconds. It looks like dark cooled rock, no glow
-## (LavaLook.crust_material; playtest 2026-10-20: "showing the crust as not glowing would read better"); over the last
-## CRUST_WARN the glow comes back into its cracks, pulsing, and it shakes; then it melts back to lava. Whoever stands on it
-## then gets the lava rule: a hero is pulled back to the nearest rock (and burned), a monster sinks. The damp's own cell
-## field is a pure function of its cast (Damp), and so is the crust: the same on every machine from the cast's time.
+## DAMP CRUST: TERRAIN THAT CHANGES ON A SCHEDULE. Every damp cast (Damp, a scheduled effect: its position, power and the
+## shared start time are the same on every machine) is a crust SOURCE from the moment its drizzle lands (start + TELEGRAPH)
+## for CRUST_LIFE seconds: the lava cells within CRUST_FRAC of its radius (CaveGen.crust_cells, never one a rim wall cuts).
+## A lava cell is crust while any source covering it lasts; it is put back into the map at the cave's crust level (one under
+## the cave's rock: walkable from rock at the cave's level, a climb to rock one higher), tagged HexMap.CRUST_TAG. Which cells
+## are crust is a pure function of the sources and the shared clock (GameWorld.time), so every machine changes its map at the
+## same shared moment with no message; the map's path, movement and wall queries read the cells as they are (no cache but
+## the wall faces', which set_cell / remove_cell keep right), and the fog keeps each cell's space from the build.
+##   - It looks like cooled rock (LavaLook.crust_material); over its last CRUST_WARN seconds the cracks glow and it shakes.
+##   - When cells melt, whoever stands on one loses the ground under it (Actor.lose_ground, a verb): applied by the machine that
+##     RESOLVES the actor (Net.resolves), so a client's hero is pulled back by its own machine, a monster sinks on the host.
+##   - A late joiner gets the live sources (late_join_state / apply_late_join, the game's part of the join snapshot) and so
+##     the same cells.
 ##
-## NOBODY STANDS ON THE LAVA: Actor.move never puts a body over the void, AllyBrain never takes a formation slot across a
-## gap and waits at an edge it can't path past, and _rescue_stranded gives the lava rule to anything found over a lava
-## cell anyway (a crust gone from under it, say).
+## NOBODY STANDS ON THE LAVA: Actor.move never puts a body over the void, AllyBrain never takes a formation slot across a gap,
+## and _rescue_stranded gives the lava rule to anything this machine resolves that is found over a lava cell anyway.
+## Cosmetic: a splash where a puppet (another machine's actor) goes into the lava; the owner's own splash is Fx's.
+## Sounds (Sfx, cosmetic, every screen from what it already has; audio-plan.md "Sewers and lava"): "lava_crust" as a crust
+## forms, "lava_crack" as its warning starts, "lava_sizzle" when anything lands in the lava (the owner's shove_impact "lava",
+## or a puppet seen going in), and the bubbling bed "lava_bubble" near the ear (_bed).
 
-const EXTRA_DAMAGE := 10.0      ## on top of the void pull's 5 (Actor.VOID_TICK_DAMAGE): 15
-const BURN_TIME := 6.0          ## Burning: 3 HP/s
 const CRUST_LIFE := 8.0
 const CRUST_WARN := 2.0
 const CRUST_FRAC := 0.9         ## of the damp's radius
-const CRUST_TAG := "lava_crust"
+const CRUST_TAG := HexMap.CRUST_TAG
 ## The bubbling bed (Sfx "lava_bubble", cosmetic): a 4 s play every BED_EVERY s (jittered), alternating between the lava
 ## cell nearest the ear and the nearest one at least BED_SPREAD from it, both within BED_REACH. Two emitters at most.
 const BED_EVERY := 1.7
@@ -38,38 +42,47 @@ const BED_SPREAD := 4.0
 
 var map: HexMap = null
 var lava: Dictionary = {}                ## Vector2i -> true: the cave's lava cells (void once active)
+var crustable: Dictionary = {}           ## the lava cells a crust may cover (not cut by a rim wall)
+var crust_level := -1
 var active := false
-var crusts: Array[Dictionary] = []       ## [{cells: Array[Vector2i], end: float, node: Node3D, mat: ShaderMaterial, at: Vector3}]
-var _seen: Dictionary = {}               ## damp instance id -> true (its crust is made)
-var _hooked: Dictionary = {}             ## actor instance id -> true (its shove_impact is connected)
+var crusts: Array[Dictionary] = []       ## the live sources: {x, z, r, born, end, cells: Dictionary}
+var _cell_end: Dictionary = {}           ## crust cell -> when it melts
+var _looks: Array[Dictionary] = []       ## {end, node, mat, warned}: one slab mesh per melt time
+var _seen: Dictionary = {}               ## damp instance id -> true (its source is made)
+var _splashed: Dictionary = {}           ## actor instance id -> true (a puppet's splash is drawn)
+var _hooked: Dictionary = {}             ## actor instance id -> true (its shove_impact is heard: the sizzle)
 var _bed_at := 0.0                       ## the bed's next play (GameWorld.time)
 var _bed_n := 0                          ## plays so far (which of the two spots is next)
 
 
-## Who writes each var (see Net). The lava set is from the seed; the crusts follow from the damp casts on every machine.
+## Who writes each var (see Net). The lava set is from the seed; the crust follows on every machine from the damp casts and
+## the shared clock (a late joiner from the host's sources), so all of it is computed locally.
 func net_fields() -> Dictionary:
 	return {
-		"map": Net.LOCAL, "lava": Net.SPAWN, "active": Net.LOCAL, "crusts": Net.LOCAL, "_seen": Net.LOCAL, "_hooked": Net.LOCAL,
-		"_bed_at": Net.LOCAL, "_bed_n": Net.LOCAL,
+		"map": Net.LOCAL, "lava": Net.SPAWN, "crustable": Net.LOCAL, "crust_level": Net.SPAWN, "active": Net.LOCAL,
+		"crusts": Net.LOCAL, "_cell_end": Net.LOCAL, "_looks": Net.LOCAL, "_seen": Net.LOCAL, "_splashed": Net.LOCAL,
+		"_hooked": Net.LOCAL, "_bed_at": Net.LOCAL, "_bed_n": Net.LOCAL,
 	}
 
 
-## Take the cave's map (its lava cells still in it) and listen to every actor's shoves.
+## Take the cave's map (its lava cells still in it).
 func setup(m: HexMap) -> void:
 	map = m
-	for c in LavaCave.lava_cells(m):
-		lava[c] = true
+	lava = m.lava
+	crust_level = int(m.cave.get("crust_level", -1))
+	for c: Vector2i in lava:
+		var cell: HexMap.Cell = m.get_cell(c)
+		if cell == null or cell.wall_mask != 0:
+			continue
+		var whole := true
+		for nn in Hex.neighbors(c):
+			whole = whole and m.has_cell(nn)
+		if whole:
+			crustable[c] = true
 	for a in GameWorld.actors():
 		_hook(a)
 	if not GameWorld.actor_spawned.is_connected(_hook):
 		GameWorld.actor_spawned.connect(_hook)
-
-
-## The lava becomes void: from here a shove into it is the pit rule.
-func activate() -> void:
-	for c: Vector2i in lava:
-		map.cells.erase(c)
-	active = true
 
 
 func _exit_tree() -> void:
@@ -81,21 +94,30 @@ func _hook(a: Actor) -> void:
 	if a == null or _hooked.has(a.get_instance_id()):
 		return
 	_hooked[a.get_instance_id()] = true
-	a.shove_impact.connect(_on_impact.bind(a))
+	a.shove_impact.connect(_on_impact)
 
 
-## A shove ended in the lava (the void rule ran): the hero's owner adds the lava's bite; everyone sees the splash.
-func _on_impact(kind: String, pos: Vector3, _amount: float, a: Actor) -> void:
-	if kind != "void" or not active:
-		return
-	var at := Vector3(pos.x, LavaCave.LAVA_Y + 0.1, pos.z)
-	var hot: Array[Color] = [LavaLook.HOT, LavaLook.CORE, Color(1.0, 0.25, 0.05)]
-	Fx.burst(at, hot, 26, 4.5, 0.14, 0.8, 7.0, Vector3.UP, 55.0, true)
-	Sfx.play_at("lava_sizzle", at)
-	if a.team == GameWorld.TEAM_HEROES and Net.resolves(a) and not a.dead:
-		a.apply_damage(EXTRA_DAMAGE, self)
-		Burning.ignite(a, self, BURN_TIME)
-		Fx.number(a.global_position + Vector3(0, 2.6 + a.radius, 0), "LAVA!", LavaLook.HOT.lightened(0.2), 0.9)
+## Something went into the lava on this machine (its owner ran the lava rule: Actor._enter_void): the sizzle. Fx draws the
+## splash and the hero's "LAVA!".
+func _on_impact(kind: String, pos: Vector3, _amount: float) -> void:
+	if kind == "lava" and active:
+		Sfx.play_at("lava_sizzle", Vector3(pos.x, float(map.cave.get("lava_y", -1.0)) + 0.1, pos.z))
+
+
+## The lava becomes void: from here a shove into it is the lava rule.
+func activate() -> void:
+	var keys: Array = lava.keys()
+	keys.sort_custom(HexMap._cell_less)
+	for c: Vector2i in keys:
+		map.remove_cell(c)
+	active = true
+
+
+## The field of this floor, or null (the game makes one when the map has a cave).
+static func of_world() -> LavaField:
+	if GameWorld.root == null:
+		return null
+	return GameWorld.root.get_node_or_null("LavaField") as LavaField
 
 
 func _physics_process(_delta: float) -> void:
@@ -107,33 +129,12 @@ func _physics_process(_delta: float) -> void:
 		if d == null or _seen.has(d.get_instance_id()) or d.start_time < 0.0 or t < d.start_time + Damp.TELEGRAPH:
 			continue
 		_seen[d.get_instance_id()] = true
-		_make_crust(d.global_position, DampSpell.damp_radius(d.power) * CRUST_FRAC, d.start_time + Damp.TELEGRAPH)
+		add_source(d.global_position, DampSpell.damp_radius(d.power) * CRUST_FRAC, d.start_time + Damp.TELEGRAPH)
+	_update(t)
 	_rescue_stranded()
+	_splash_puppets()
+	_animate(t)
 	_bed(t)
-	for cr in crusts.duplicate():
-		var left := float(cr["end"]) - t
-		var warn := clampf(1.0 - left / CRUST_WARN, 0.0, 1.0)
-		if warn > 0.0 and not cr.has("cracking"):
-			cr["cracking"] = true
-			Sfx.play_at("lava_crack", cr["at"])
-		(cr["mat"] as ShaderMaterial).set_shader_parameter("flicker", warn)
-		var node := cr["node"] as Node3D
-		node.position = Vector3(sin(t * 47.0), 0.0, cos(t * 53.0)) * 0.025 * warn if warn > 0.0 else Vector3.ZERO
-		if left <= 0.0:
-			_melt(cr)
-
-
-## A safety net: nobody stands on the lava. An actor over a lava cell (void) that isn't already being shoved, pulled
-## back or falling (Actor.move keeps walkers off the void; this catches anything else) gets the lava rule: a hero is
-## put back on the nearest rock (and burned), anything else sinks. Each machine moves only what it resolves.
-func _rescue_stranded() -> void:
-	for a in GameWorld.actors():
-		if a.dead or a.is_shoved() or not Net.resolves(a) or a.shove_mult <= 0.0:
-			continue
-		var c := Hex.from_world(a.global_position)
-		if not lava.has(c) or map.has_cell(c):
-			continue
-		_into_lava(a)
 
 
 ## The bubbling bed (cosmetic, every screen; Sfx "lava_bubble", ducked while the player speaks): every BED_EVERY s a play
@@ -145,6 +146,7 @@ func _bed(t: float) -> void:
 	var ear := Sfx.ear()
 	if ear == Vector3.INF:
 		return
+	var y := float(map.cave.get("lava_y", -1.0)) + 0.2
 	var spots: Array[Vector3] = []
 	for _k in 2:
 		var best := Vector3.INF
@@ -159,99 +161,173 @@ func _bed(t: float) -> void:
 				best = p
 		if best == Vector3.INF:
 			break
-		spots.append(Vector3(best.x, LavaCave.LAVA_Y + 0.2, best.z))
+		spots.append(Vector3(best.x, y, best.z))
 	if spots.is_empty():
 		return
 	_bed_n += 1
 	Sfx.play_at("lava_bubble", spots[_bed_n % spots.size()])
 
 
-## Start the void rule on `a`, standing over the lava: a hero toward the nearest rock (where the pull will land it).
-func _into_lava(a: Actor) -> void:
-	var dir := Vector3.FORWARD
-	if a.team == GameWorld.TEAM_HEROES:
-		# PROTOTYPE: the void pull takes a hero back to its last safe cell, which may be a crust that is gone; point it at
-		# the nearest rock instead (Actor's own field, written on the hero's owner only).
-		var rock := _nearest_rock(a.global_position)
-		a._safe_cell = rock
-		dir = Hex.to_world(rock) - a.global_position
-	a.shove(dir, 0.3, self)   # (the shove steps over the void: Actor._enter_void runs the pit rule)
-
-
-## Crust every lava cell within `radius` of `centre` (that is not crust already) until `born` + CRUST_LIFE.
-func _make_crust(centre: Vector3, radius: float, born: float) -> void:
-	var cells: Array[Vector2i] = []
-	for c: Vector2i in lava:
-		if map.has_cell(c):
-			continue   # (crust already)
-		if GameWorld.flat_distance(Hex.to_world(c), centre) <= radius:
-			cells.append(c)
+## A crust source: lava within `radius` of `centre` crusts from `born` for CRUST_LIFE (shared time). The same source twice
+## (a cast and a late joiner's row for it) counts once.
+func add_source(centre: Vector3, radius: float, born: float) -> void:
+	for s in crusts:
+		if absf(float(s["born"]) - born) < 0.001 and Vector2(float(s["x"]) - centre.x, float(s["z"]) - centre.z).length() < 0.05:
+			return
+	var cells := CaveGen.crust_cells(centre, radius, crustable, func(_c: Vector2i) -> bool: return true)
 	if cells.is_empty():
 		return
-	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
-	for c in cells:
-		var cell := map.set_cell(c, LavaCave.CRUST_LEVEL)
-		cell.tag = CRUST_TAG
-	var node := Node3D.new()
-	node.name = "Crust"
-	add_child(node)
-	var mat := LavaLook.crust_material()   # (dark cooled rock; its cracks glow again as it is about to melt)
-	node.add_child(_crust_mesh(cells, mat))
-	var at := Vector3(centre.x, LavaCave.LAVA_Y + 0.3, centre.z)
-	crusts.append({"cells": cells, "end": born + CRUST_LIFE, "node": node, "mat": mat, "at": at})
-	Sfx.play_at("lava_crust", at)
-	var steam: Array[Color] = [Color(0.92, 0.94, 0.96), Color(0.6, 0.6, 0.62)]
-	for c in cells:
-		if posmod(hash(c), 3) == 0:
-			Fx.burst(Hex.to_world(c) + Vector3(0, LavaCave.LAVA_Y + 0.6, 0), steam, 6, 1.2, 0.25, 1.2, -1.0, Vector3.UP, 40.0, false)
+	crusts.append({"x": centre.x, "z": centre.z, "r": radius, "born": born, "end": born + CRUST_LIFE, "cells": cells})
 
 
-## The crust melts: its cells go back to lava; whoever stands on one gets the lava rule (a hero is pulled back to the
-## nearest rock and burned, a monster sinks). Each machine moves only what it resolves.
-func _melt(cr: Dictionary) -> void:
-	crusts.erase(cr)
-	var cells: Array[Vector2i] = cr["cells"]
-	var on := {}
-	for c in cells:
-		on[c] = true
-	var victims: Array[Actor] = []
+## Bring the map in line with the sources at shared time t: crust where a source lasts, lava where none does.
+func _update(t: float) -> void:
+	var want := {}
+	for s in crusts:
+		if t < float(s["born"]) or t >= float(s["end"]):
+			continue
+		for c: Vector2i in (s["cells"] as Dictionary):
+			want[c] = maxf(float(want.get(c, 0.0)), float(s["end"]))
+	for i in range(crusts.size() - 1, -1, -1):
+		if t >= float(crusts[i]["end"]):
+			crusts.remove_at(i)
+	var changed := false
+	var made: Array[Vector2i] = []
+	for c: Vector2i in want:
+		if not _cell_end.has(c):
+			var cell := map.set_cell(c, crust_level)
+			cell.tag = CRUST_TAG
+			made.append(c)
+			changed = true
+		elif float(_cell_end[c]) != float(want[c]):
+			changed = true
+		_cell_end[c] = want[c]
+	var melted: Array[Vector2i] = []
+	for c: Vector2i in _cell_end.keys():
+		if not want.has(c):
+			_cell_end.erase(c)
+			melted.append(c)
+	if melted.is_empty() and not changed:
+		return
+	if not melted.is_empty():
+		var gone := {}
+		for c in melted:
+			gone[c] = true
+		var victims: Array[Actor] = []
+		for a in GameWorld.actors():
+			if not a.dead and gone.has(Hex.from_world(a.global_position)):
+				victims.append(a)
+		melted.sort_custom(HexMap._cell_less)
+		for c in melted:
+			map.remove_cell(c)
+		_melt_fx(melted)
+		for a in victims:
+			if Net.resolves(a):
+				a.lose_ground(self)
+	if not made.is_empty():
+		_form_fx(made)
+	_rebuild_looks()
+
+
+## A safety net: nobody stands on the lava. An actor this machine resolves found over a lava cell (void), not already being
+## shoved, pulled back or falling, loses the ground under it (a hero back on rock, anything else sinks).
+func _rescue_stranded() -> void:
 	for a in GameWorld.actors():
-		if not a.dead and on.has(Hex.from_world(a.global_position)):
-			victims.append(a)
+		if a.dead or a.is_shoved() or not Net.resolves(a):
+			continue
+		var c := Hex.from_world(a.global_position)
+		if not lava.has(c) or map.has_cell(c):
+			continue
+		a.lose_ground(self)
+
+
+## Cosmetic, on every machine: a splash where another machine's actor (a puppet) goes into the lava. The owner's own is Fx's.
+func _splash_puppets() -> void:
+	for a in GameWorld.actors():
+		if Net.resolves(a) or not is_instance_valid(a):
+			continue
+		var id := a.get_instance_id()
+		var c := Hex.from_world(a.global_position)
+		var over := lava.has(c) and not map.has_cell(c)
+		if over and not _splashed.has(id):
+			_splashed[id] = true
+			_splash(Vector3(a.global_position.x, float(map.cave.get("lava_y", -1.0)), a.global_position.z))
+		elif not over:
+			_splashed.erase(id)
+
+
+func _splash(at: Vector3) -> void:
+	var hot: Array[Color] = [LavaLook.HOT, LavaLook.CORE, Color(1.0, 0.25, 0.05)]
+	Fx.burst(at + Vector3.UP * 0.1, hot, 22, 4.0, 0.14, 0.8, 7.0, Vector3.UP, 55.0, true)
+	Sfx.play_at("lava_sizzle", at)
+
+
+# --- the look -------------------------------------------------------------------------------------------------------
+
+func _form_fx(cells: Array[Vector2i]) -> void:
+	var steam: Array[Color] = [Color(0.92, 0.94, 0.96), Color(0.6, 0.6, 0.62)]
+	var y := float(map.cave.get("lava_y", -1.0))
+	var sum := Vector3.ZERO
 	for c in cells:
-		map.cells.erase(c)
-	(cr["node"] as Node3D).queue_free()
+		sum += Hex.to_world(c)
+		if posmod(hash(c), 3) == 0:
+			Fx.burst(Hex.to_world(c) + Vector3(0, y + 0.6, 0), steam, 6, 1.2, 0.25, 1.2, -1.0, Vector3.UP, 40.0, false)
+	Sfx.play_at("lava_crust", sum / float(cells.size()) + Vector3(0, y + 0.3, 0))
+
+
+func _melt_fx(cells: Array[Vector2i]) -> void:
 	var hot: Array[Color] = [LavaLook.HOT, LavaLook.CORE]
+	var y := float(map.cave.get("lava_y", -1.0))
 	for c in cells:
 		if posmod(hash(c), 2) == 0:
-			Fx.burst(Hex.to_world(c) + Vector3(0, LavaCave.LAVA_Y + 0.2, 0), hot, 5, 2.0, 0.12, 0.6, 6.0, Vector3.UP, 50.0, true)
-	for a in victims:
-		if Net.resolves(a):
-			_into_lava(a)
+			Fx.burst(Hex.to_world(c) + Vector3(0, y + 0.2, 0), hot, 5, 2.0, 0.12, 0.6, 6.0, Vector3.UP, 50.0, true)
 
 
-func _nearest_rock(p: Vector3) -> Vector2i:
-	var here := Hex.from_world(p)
-	for r in range(1, 12):
-		var best := HexMap.NO_CELL
-		var best_d := INF
-		for c in Hex.ring(here, r):
-			if map.is_walkable_cell(c) and map.cells[c].tag != CRUST_TAG:
-				var d := Hex.to_world(c).distance_squared_to(p)
-				if d < best_d:
-					best_d = d
-					best = c
-		if best != HexMap.NO_CELL:
-			return best
-	return here
+## One slab mesh per melt time over the crust cells (rebuilt when the crust changes: a cast, a melt).
+func _rebuild_looks() -> void:
+	for lk in _looks:
+		(lk["node"] as Node3D).queue_free()
+	_looks.clear()
+	var by_end := {}
+	for c: Vector2i in _cell_end:
+		var e := float(_cell_end[c])
+		if not by_end.has(e):
+			by_end[e] = [] as Array[Vector2i]
+		(by_end[e] as Array[Vector2i]).append(c)
+	var ends: Array = by_end.keys()
+	ends.sort()
+	for e: float in ends:
+		var cells: Array[Vector2i] = by_end[e]
+		cells.sort_custom(HexMap._cell_less)
+		var node := Node3D.new()
+		node.name = "Crust"
+		add_child(node)
+		var mat := LavaLook.crust_material()   # (dark cooled rock; its cracks glow again as it is about to melt)
+		node.add_child(_crust_mesh(cells, mat))
+		var mid := Vector3.ZERO
+		for c in cells:
+			mid += Hex.to_world(c, float(crust_level))
+		_looks.append({"end": e, "node": node, "mat": mat, "warned": false, "at": mid / float(cells.size())})
+
+
+func _animate(t: float) -> void:
+	for lk in _looks:
+		var left := float(lk["end"]) - t
+		var warn := clampf(1.0 - left / CRUST_WARN, 0.0, 1.0)
+		(lk["mat"] as ShaderMaterial).set_shader_parameter("flicker", warn)
+		var node := lk["node"] as Node3D
+		node.position = Vector3(sin(t * 47.0), 0.0, cos(t * 53.0)) * 0.025 * warn if warn > 0.0 else Vector3.ZERO
+		if warn > 0.0 and not bool(lk["warned"]):
+			lk["warned"] = true
+			Sfx.play_at("lava_crack", lk["at"])
 
 
 ## A slab of crust over each cell: a dark top at the crust's height and sides down into the lava.
 func _crust_mesh(cells: Array[Vector2i], mat: ShaderMaterial) -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var y := float(LavaCave.CRUST_LEVEL) * Hex.LEVEL_HEIGHT
-	var bot := LavaCave.LAVA_Y - 0.15
+	var y := float(crust_level) * Hex.LEVEL_HEIGHT
+	var bot := float(map.cave.get("lava_y", -1.0)) - 0.15
 	for c in cells:
 		var w := Hex.to_world(c)
 		var top := Vector3(w.x, y, w.z)
@@ -273,3 +349,22 @@ func _crust_mesh(cells: Array[Vector2i], mat: ShaderMaterial) -> MeshInstance3D:
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
+
+
+# --- late join --------------------------------------------------------------------------------------------------------
+
+## Host: the live crust sources for a late joiner's snapshot (the game sends them with its part): [[x, z, r, born], ...].
+func late_join_state() -> Array:
+	var out: Array = []
+	for s in crusts:
+		if float(s["end"]) > GameWorld.time:
+			out.append([float(s["x"]), float(s["z"]), float(s["r"]), float(s["born"])])
+	return out
+
+
+## The late joiner: the host's sources; the crust comes from them as on every other machine.
+func apply_late_join(rows: Array) -> void:
+	for row: Variant in rows:
+		var r := row as Array
+		if r != null and r.size() >= 4:
+			add_source(Vector3(float(r[0]), 0.0, float(r[1])), float(r[2]), float(r[3]))

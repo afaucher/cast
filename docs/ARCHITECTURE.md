@@ -24,7 +24,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Monsters | `scripts/monsters/*`, `tests/test_monster*.gd` | monsters agent |
 | Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` (the game), `scripts/app/dev/game_dev.gd` (GameDev: the dev and screenshot drivers behind the `--` flags, the script the scene runs; new dev drivers go there) | lead |
 | Networking: authority kinds, the net contract test | `scripts/net/*`, `tests/test_net_contract.gd` | lead. Every owner adds `net_fields()` entries for its own vars |
-| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`, and a sewer cluster's `SewerPlanner` and `GatorPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
+| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`, a sewer cluster's `SewerPlanner` and `GatorPlanner`, and a lava cave's `LavaPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
 | Design docs | `docs/design/*` | design agent |
 
 ## Boot flow and the main menu
@@ -343,6 +343,11 @@ training dummy check before steering or attacking (voice casts still work). Terr
 - drops of up to 3 levels are free; a higher ledge is fine too: the actor falls under gravity and takes 6 damage
   per level beyond 3 on landing (+ stagger);
 - void: heroes are pulled back to the last cell they stood on (5 damage); everyone else falls in and dies;
+- LAVA (a lava cave's lava cells, `HexMap.lava`: the lava kind of void, `shove_impact` "lava"): heroes are pulled back to
+  their last safe cell (never a damp crust) with 15 damage and 6 s of Burning (a soaked hero does not ignite); everyone
+  else sinks and dies (`Actor.LAVA_*`);
+- `Actor.lose_ground(source)` is the verb for terrain taken away under a body (a crust melting, `LavaField`): the void rule
+  from where it stands, applied by the machine that resolves the actor (a copy ignores it);
 - a shove caused by a hero (`source` team) never takes a hero below 1 HP (slam, fall or pit).
 Monsters cancel a wind-up when shoved and re-home where they land (no leash-heal). Signals: `shoved`, `shove_impact`.
 Built on it: every melee hit nudges (hero 0.7, monster 0.35, brute slam 1.0: `Combat.melee_arc(..., shove)`),
@@ -404,6 +409,24 @@ after the sharks, gators first; `SewerPlanner.spawn` then draws the water,
 each client resolves on its own hero); the panel's `obj.break` carries the break's shared moment and culprit
 (`PricedProp.broke_at`), from which every machine's `LiveWire` runs the shock, the panel deciding the hits;
 `tests/test_net_gator.gd`, `test_net_live_wire.gd`, `test_net_sewer_floor.gd`.
+**Lava caves (solo and crews):** `LavaSite.seed_for(run, floor, shared)` rolls one (a supervillain's floors 2-3; floor 2 of any
+other client but the founder, then with a hellgate in it), and `DungeonGen`'s `"cave"` option runs `CaveGen`
+(`scripts/world/lava/cave_gen.gd`): a wing of 2-3 rooms at one level becomes rock chambers over a lava plane, joined by
+two-wide bridges (three wide at the bridgeheads) and the pattern's one-wide spans (causeway, fork, ring, gauntlet), with
+archer isles a damp crust always reaches and a tall rim; the record is `HexMap.cave` and the lava cells `HexMap.lava`
+(tagged "lava", at the lava bed while the floor is built and planned). A cave and a sewer cluster never share a floor
+(`for_run` asks for a cave only on a floor that rolled no cluster; `generate` tries a cluster first, then the cave, then plain). In `SiteBuilder`: `GatePlanner` puts the first gate of a
+hellgate cave in its far chamber, `LavaPlanner.theme` gives its chambers the "lava" theme row and picks the look (hellfire
+with a gate in it, else magma), `LavaPlanner.materials` makes it basalt, `DoorPlanner` leaves its doorways open,
+`LavaPlanner.plan` puts the archers on the isles and keeps the packs at the bridgeheads, and `LavaPlanner.spawn` spawns the
+archers last, dresses it (`LavaLook.dress_cave`: lava, glow, embers, ten lights) and makes its `LavaField`, which the game
+activates after the fog (`_start_lava`: the lava cells leave the map). RUNTIME TERRAIN: a damp's crust puts lava cells back
+into the map at the crust level for 8 s on every machine at the same shared moment (a pure function of the damp casts and
+the clock: `LavaField`; `HexMap.remove_cell` / `set_cell` keep the wall-face cache right; pathing, movement and fog read the
+map as it is). `NetFloor`'s map text has a `cave=` line and skips the lava cells, so the checksum is the same before and
+after activation and while a crust lasts; a late joiner gets the live crust sources in the game's part of the join snapshot.
+`tests/test_lava_gen.gd`, `test_net_lava.gd`, `test_lava_cave.gd`; `docs/design/lava-playtest.md`, "As built: caves on real
+floors". The hand-authored prototype caves (`--lava-cave N`, `LavaCave`) run on the same `LavaField` and lava rule.
 
 Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
 To keep that clean:
@@ -448,6 +471,9 @@ Each kind declares itself in one table row; the modules that need a fact read it
   theme's fields changes golden floors. A new recipe op is a function in `ThemeVignettes` and one entry in
   `ThemeVignettes.OPS` (`test_room_themes` checks every op has one). Story origins stay three keyed copies of the same
   text (`ClientArchetype` events, `NoteCopy.STORY` "event", `RoomThemeDefs.ORIGIN_THEMES`), each checked by a test.
+  A theme dealt only by a planner (the sewer's "sewer", a lava cave's "lava") is not in `POOLS`; the "lava" row also holds its
+  LOOKS (`"lava"`: magma, hellfire: the lava's colours, embers, lights and how many, the rock's floor material, the cliff
+  tint), read by `LavaPlanner`, `LavaLook.dress_cave` and `HexMapView`.
 
 ## Look-dev labs
 

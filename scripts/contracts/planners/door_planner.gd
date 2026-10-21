@@ -25,6 +25,8 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> vo
 	for id in ids:
 		if sluiced.has(id):
 			continue
+		if LavaPlanner.doorway(map, dws[id]):
+			continue   # (a lava cave's doorways are openings: LavaPlanner)
 		var dw: Dictionary = dws[id]
 		var rec := {"style": OfficeDoorModel.SERVICE if id == head else OfficeDoor.DEFAULT_STYLE}
 		for k in ["id", "room", "hall", "axis", "cell", "band", "a", "b", "center", "door_cells", "mouth_cells", "door_ok"]:

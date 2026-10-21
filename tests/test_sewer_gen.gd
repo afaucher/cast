@@ -46,7 +46,8 @@ func setup() -> void:
 			if f >= 2:
 				eligible += 1
 			if map.sewer.is_empty():
-				_check_unchanged(run, f, map, plan)
+				if map.cave.is_empty():
+					_check_unchanged(run, f, map, plan)   # (a floor with a lava cave instead: test_lava_gen's)
 				continue
 			clusters += 1
 			for e in plan.props:

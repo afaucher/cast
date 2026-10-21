@@ -82,6 +82,16 @@ var pools: Array[Dictionary] = []   ## the in-ground pools (PoolGeo records: roo
 ## ends, source, flows, gators}. {} on a floor without one. Spawn data, solo only for now: phase 2 puts it in NetFloor's
 ## checksum (its water already is, as cells and the body record in pools).
 var sewer: Dictionary = {}
+## The floor's LAVA CAVE (DungeonGen's "cave" option, CaveGen and LavaPlanner; the `--lava-cave` prototype's LavaCave too;
+## docs/design/lava-playtest.md "As built"): {seed, pattern, level, rooms, bridges, spans, isles, rock, crust_level, ...}. {}
+## on a floor without one. Spawn data, in NetFloor's checksum.
+var cave: Dictionary = {}
+## The cave's LAVA cells (Vector2i -> true; spawn data). They are in `cells` (at the lava bed, tagged "lava") while the floor
+## is built, planned, drawn and its fog read, then LavaField.activate() takes them out (remove_cell) on every machine: lava is
+## void, with the lava rule (Actor._enter_void). A damp crust puts some back for a while (CRUST_TAG cells, LavaField: terrain
+## that changes on a schedule every machine computes from the shared cast).
+var lava: Dictionary = {}
+const CRUST_TAG := "lava_crust"
 ## DYNAMIC BLOCKERS (shut doors, docs/design/exploration.md "Decisions: map information, fog and doors"): key -> [a: Vector2,
 ## b: Vector2, top: float]. A segment in world X/Z that is SOLID while it is set (user, 2026-10-19: a shut door is solid):
 ## line_of_sight treats it as a wall face up to world height `top`; bodies stop against it like a wall face (_gather adds it
@@ -99,7 +109,7 @@ var _solid_box := Rect2()        ## the bounding box of every solid
 func net_fields() -> Dictionary:
 	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "solids": Net.SPAWN, "no_stand": Net.SPAWN,
 		"elevator": Net.SPAWN, "pools": Net.SPAWN, "sewer": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL,
-		"blockers": Net.LOCAL}
+		"blockers": Net.LOCAL, "cave": Net.SPAWN, "lava": Net.SPAWN}
 
 
 func set_cell(c: Vector2i, level: int, type: int = Tile.FLOOR) -> Cell:
@@ -122,6 +132,24 @@ func set_stairs(c: Vector2i, level: int, dir: int, rise: int) -> Cell:
 
 func get_cell(c: Vector2i) -> Cell:
 	return cells.get(c)
+
+
+## Take cell c out of the map (it becomes void), keeping the wall-face cache right: runtime terrain (a lava cave's lava
+## going void, a damp crust melting) goes through here, never cells.erase.
+func remove_cell(c: Vector2i) -> void:
+	if cells.erase(c):
+		_touch(c)
+
+
+## Is c one of the lava cave's lava cells (void, or a crust while one lasts)?
+func is_lava(c: Vector2i) -> bool:
+	return lava.has(c)
+
+
+## Is c a damp crust over the lava right now (walkable for a while: never a safe spot to be pulled back to)?
+func is_crust(c: Vector2i) -> bool:
+	var cell: Cell = cells.get(c)
+	return cell != null and cell.tag == CRUST_TAG
 
 
 func has_cell(c: Vector2i) -> bool:

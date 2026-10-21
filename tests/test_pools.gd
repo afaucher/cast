@@ -117,7 +117,9 @@ func _check_generated() -> void:
 				for pk in plan.packages:
 					check(not map.is_pool_cell(pk["cell"]), "%s: a mail stack stands on dry floor" % tag)
 	check(_pool_rooms > 20, "the floors have pool rooms to check (%d)" % _pool_rooms)
-	check(float(_pools) >= 0.85 * float(_pool_rooms), "most pool rooms get their pool (%d of %d)" % [_pools, _pool_rooms])
+	# (0.82, was 0.85: a lava cave takes 2-3 rooms of some floors 2-3 since 2026-10-21, so their hellgates crowd the rooms left,
+	# and a pool room with a gate in its middle gets no pool. Measured 109 of 127 before, 106 of 125 with the caves.)
+	check(float(_pools) >= 0.82 * float(_pool_rooms), "most pool rooms get their pool (%d of %d)" % [_pools, _pool_rooms])
 	check(worst_center <= PoolGeo.MAX_CENTER_DIST + 0.01, "pools stand near their room's middle (worst %.1f)" % worst_center)
 
 

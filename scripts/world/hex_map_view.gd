@@ -67,6 +67,10 @@ var _crates: Dictionary = {}     ## Vector2i -> true for floor cells drawn as cr
 var _pits: Dictionary = {}       ## void cells that are enclosed pits
 var _use_mats := false           ## some cell has a Cell.mat_id (FloorMaterials): floor / wall surfaces use the material shader
 var _pool_looks: Dictionary = {}  ## pool cell -> its pool's look (filled on first use per build)
+## A lava cave's rock (HexMap.cave "rock"): never drawn as crates (raised rock is rock), its cliffs tinted with the cave's
+## look (HexMap.cave "cliff", LavaPlanner).
+var _cave_rock: Dictionary = {}
+var _cave_cliff := Color.WHITE
 
 
 class Batch:
@@ -118,7 +122,13 @@ func build(map: HexMap) -> void:
 	_batches.clear()
 	_pool_looks.clear()
 	pool_view = null
+	_cave_rock.clear()
+	for c: Vector2i in (map.cave.get("rock", []) as Array):
+		_cave_rock[c] = true
+	_cave_cliff = map.cave.get("cliff", Color(0.42, 0.36, 0.33)) as Color
 	_crates = _find_crates(map)
+	for c: Vector2i in _cave_rock:
+		_crates.erase(c)
 	_pits = _find_pits(map)
 	_use_mats = false
 	for c in map.cells:
@@ -834,6 +844,8 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 	var side_col := _shade(cell.level) if not is_crate else _scaled(Color.WHITE, 0.95)
 	if is_wall:
 		side_col = Color(0.9, 0.9, 0.9)
+	elif _cave_rock.has(c):
+		side_col = _cave_cliff   # (a lava cave's rock: dark basalt cliffs)
 	for j in 6:
 		var nb := c + Hex.DIRS[_edge_dir(j)]
 		var bottom := _bottom_level(nb)

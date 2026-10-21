@@ -32,12 +32,15 @@ const F_DIAMOND_DARK := 10
 const F_LAB_TILE := 11
 const F_CORR_CONCRETE := 12
 const F_CORR_STONE := 13
+const F_BASALT := 14          ## a lava cave's rock (the "lava" theme; LavaPlanner.materials)
+const F_BASALT_HELL := 15     ## ... where a hellgate leaks into it (the hellfire look)
 
 # Wall ids (bits 8-15 of mat_id).
 const W_CONCRETE := 1
 const W_STONE := 2
 const W_PANELLING := 3
 const W_MARBLE := 4
+const W_BASALT := 5           ## a lava cave's rim
 
 const WALL_OFFSET := 16     ## shader table index of wall id 0; floors use their own id
 const TABLE_SIZE := 32
@@ -59,6 +62,8 @@ const FLOORS: Array[Dictionary] = [
 	{"name": "lab tile", "pat": Pat.TILE, "base": Color(0.40, 0.50, 0.47), "alt": Color(0.62, 0.72, 0.68), "scale": 0.55, "rough": 0.3, "spec": 0.5, "seam": 1.0},
 	{"name": "corridor concrete", "pat": Pat.CONCRETE, "base": Color(0.27, 0.285, 0.31), "alt": Color(0.10, 0.10, 0.12), "scale": 3.4, "rough": 0.9, "spec": 0.1, "seam": 1.0},
 	{"name": "corridor stone", "pat": Pat.FLAGSTONE, "base": Color(0.26, 0.27, 0.32), "alt": Color(0.09, 0.09, 0.11), "scale": 1.5, "rough": 0.88, "spec": 0.12, "seam": 1.0},
+	{"name": "basalt", "pat": Pat.FLAGSTONE, "base": Color(0.21, 0.19, 0.18), "alt": Color(0.06, 0.05, 0.05), "scale": 1.2, "rough": 0.9, "spec": 0.12, "seam": 1.0},
+	{"name": "basalt (hellfire)", "pat": Pat.FLAGSTONE, "base": Color(0.27, 0.13, 0.11), "alt": Color(0.08, 0.03, 0.03), "scale": 1.2, "rough": 0.9, "spec": 0.12, "seam": 1.0},
 ]
 
 const WALLS: Array[Dictionary] = [
@@ -67,6 +72,7 @@ const WALLS: Array[Dictionary] = [
 	{"name": "rough stone blocks", "pat": Pat.ASHLAR, "base": Color(0.30, 0.28, 0.30), "alt": Color(0.07, 0.065, 0.075), "scale": 1.0, "rough": 0.9, "spec": 0.1, "seam": 0.2},
 	{"name": "wood panelling", "pat": Pat.PANELLING, "base": Color(0.42, 0.23, 0.12), "alt": Color(0.07, 0.035, 0.02), "scale": 1.0, "rough": 0.6, "spec": 0.25, "seam": 0.2},
 	{"name": "marble", "pat": Pat.MARBLE_WALL, "base": Color(0.27, 0.26, 0.30), "alt": Color(0.88, 0.82, 0.70), "scale": 1.7, "rough": 0.3, "spec": 0.5, "seam": 0.2},
+	{"name": "basalt", "pat": Pat.ASHLAR, "base": Color(0.13, 0.115, 0.11), "alt": Color(0.04, 0.035, 0.035), "scale": 1.3, "rough": 0.92, "spec": 0.08, "seam": 0.2},
 ]
 
 ## Every room theme names its floor in its row (RoomThemeDefs.THEMES "floor_mat"; tests/test_floor_materials.gd checks
