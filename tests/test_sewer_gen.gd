@@ -271,8 +271,9 @@ func _check_spawned(run: ContractRun, f: int, tag: String) -> void:
 ## --sewer-floor: a forced cluster on most floors, any site, a shared run alike (every window of a crew has the flag).
 ## The body's water as SewerView draws it (the user's playtest, 2026-10-21, "What happened to this water"): the foam runs only
 ## along the water's own edge (the far side of every foam strip is dry floor or a wall, never more of the body's water: a
-## shared kite edge both sides of which drew foam and a kerb, when two cells' corner keys split far from the origin), and
-## every kerb stands on a deck over the water, none under it.
+## shared kite edge both sides of which drew foam and a kerb, when two cells' corner keys split far from the origin), every
+## kerb stands on a deck over the water, none under it, and every kerb face is wound to face its normal ("z fighting on the
+## water edge": strips and corner fans wound either way, lit and dark, overlapping at the rim's corners).
 func _check_water_drawing(map: HexMap, body: Dictionary, rec: Dictionary, tag: String) -> void:
 	var only := {}
 	for c: Vector2i in (body["basin"] as Array) + (body["ring"] as Array):
@@ -312,6 +313,15 @@ func _check_water_drawing(map: HexMap, body: Dictionary, rec: Dictionary, tag: S
 			if kn[i].y > 0.9 and kv[i].y < surface_y:
 				low += 1
 		eq(low, 0, "%s: no kerb top lies under the water" % tag)
+		# every kerb face is wound front side out (Godot: (c - a) x (b - a) along its normal): a double-sided back face is
+		# lit from below, and the strips and corner fans overlap flush at the rim's corners, so a mix of the two fought there
+		var back := 0
+		for t in kv.size() / 3:
+			var a := kv[t * 3]
+			var n := (kv[t * 3 + 2] - a).cross(kv[t * 3 + 1] - a)
+			if n.length_squared() > 1e-10 and n.dot(kn[t * 3]) <= 0.0:
+				back += 1
+		eq(back, 0, "%s: every kerb face is wound to face its normal" % tag)
 	v.free()
 
 

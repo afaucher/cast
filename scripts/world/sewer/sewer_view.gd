@@ -501,7 +501,7 @@ func build_water(map: HexMap, only: Dictionary = {}, surface_y: float = SewerLay
 		var b1 := b - o * 0.04
 		_quad(kst, Vector3(a1.x, top, a1.y), Vector3(b1.x, top, b1.y), Vector3(b2.x, top, b2.y), Vector3(a2.x, top, a2.y), [kc, kc, kc, kc])
 		var dk := kc.darkened(0.25)
-		_quad(kst, Vector3(a1.x, top, a1.y), Vector3(b1.x, top, b1.y), Vector3(b1.x, floor_y + 0.2, b1.y), Vector3(a1.x, floor_y + 0.2, a1.y), [dk, dk, dk, dk])
+		_quad(kst, Vector3(a1.x, top, a1.y), Vector3(b1.x, top, b1.y), Vector3(b1.x, floor_y + 0.2, b1.y), Vector3(a1.x, floor_y + 0.2, a1.y), [dk, dk, dk, dk], Vector3(n.x, 0.0, n.y))
 		n_kerb += 1
 		for v: Vector2 in [a, b]:
 			var vk := _key(v)
@@ -547,11 +547,17 @@ func build_water(map: HexMap, only: Dictionary = {}, surface_y: float = SewerLay
 		add_child(kerb)
 
 
-func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, cols: Array) -> void:
+## A quad a b c d (in order round it) facing `face` (its normal is the side of `face`): wound so that side is its FRONT
+## (Godot's front faces are clockwise, (c - a) x (b - a) along the normal), whatever order the corners come in. The kerb
+## is double-sided, and a double-sided back face is lit with its normal flipped, from below: dark. Kerb strips and corner
+## fans wound either way overlapped flush at the rim's corners, lit and dark, and fought (the user's playtest, 2026-10-21,
+## "z fighting on the water edge").
+func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, cols: Array, face: Vector3 = Vector3.UP) -> void:
 	var nrm := (b - a).cross(c - a).normalized()
-	if nrm.y < 0.0:
+	if nrm.dot(face) < 0.0:
 		nrm = -nrm
-	for idx: int in [0, 1, 2, 0, 2, 3]:
+	var order := PackedInt32Array([0, 1, 2, 0, 2, 3] if (c - a).cross(b - a).dot(nrm) > 0.0 else [0, 2, 1, 0, 3, 2])
+	for idx: int in order:
 		st.set_color(cols[idx])
 		st.set_normal(nrm)
 		st.add_vertex([a, b, c, d][idx])
