@@ -290,5 +290,12 @@ climb in it, under an archer tower.
 | 3. Damp crust | "Whole radius, 8 s" | Unchanged from the playtest. |
 | 4. Lava damage | "Keep 15 + burn" | Unchanged: pulled back to the last safe spot, 15 damage and a burn. |
 
-Still open: 5 (which caves become the generator's patterns). Lava goes into the generator after the sewer (sewer-concept.md,
+**Decided (user, 2026-10-21: "Let's do everything we can to finish up the lava and sewers. And get them in the game
+fully."):**
+- 5. Generator patterns: **1 Causeway, 2 Fork, 3 Ring, 4 Gauntlet**. Cave 5 (the Crag's tower climb) is not a pattern.
+- No lava creature yet: the salamander stays lab-only ("Not yet").
+- My defaults, accepted: a space is revealed only by bridges and crags (no "seen across" rule); measure the ten omni
+  lights per cave and fall back to emission plus four lights if they are too slow.
+
+Formerly open: 5 (which caves become the generator's patterns). Lava goes into the generator after the sewer (sewer-concept.md,
 "Decided: the decide-now set").

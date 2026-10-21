@@ -1580,3 +1580,11 @@ camera (ortho, yaw 45, pitch -56); `_close` is size 9.
 | 11. Where lava appears | "Supervillain + hellgates" | Lava caves only on **supervillain** sites and **next to hellgates**; not the founder. |
 
 The lava playtest answers from the same set are in `lava-playtest.md` ("Decided after the playtest").
+
+### Decided (user, 2026-10-21: "finish up the lava and sewers ... get them in the game fully")
+
+- **In scope for "finished":** sounds (gator hiss and nip, goo throw and splat, live wire buzz, wading) and dispatch lines
+  (the service level, the gator, the live wire), rendered with the Kokoro voice.
+- **Not in this push:** the steam valve, the gas pocket and eels.
+- **My defaults for the phase 3 follow-ups, accepted:** about one floor in three (influencer floors included); the service
+  stair forced narrow with a "SERVICE LEVEL" door; gates and staff may land in the sewer.
