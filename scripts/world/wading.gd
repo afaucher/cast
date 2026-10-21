@@ -24,6 +24,10 @@ const SPEED_MULT := 0.75          ## walking speed while wading
 const REFRESH := 2.0
 const META_IN := "wading"         ## LOCAL bookkeeping on the actor: it was in the water last frame
 const RIPPLE_NAME := "WadeRipple"
+## A hero's wading step sound (Sfx "wade_step", cosmetic) every this many units it walks in the water: about two a second
+## at a wading walk (4.5 x SPEED_MULT), none while it stands.
+const STEP_EVERY := 1.5
+const META_STEP := "wade_step"    ## LOCAL, on a wading hero: [its position last frame, units walked since the last step]
 
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
 
@@ -54,6 +58,8 @@ static func tick() -> void:
 		var wet := is_wading(a)
 		var was := a.has_meta(META_IN)
 		_ripple(a, wet, map)
+		if a is Hero:
+			_step(a, wet)
 		if wet:
 			if not was:
 				a.set_meta(META_IN, true)
@@ -63,6 +69,21 @@ static func tick() -> void:
 			a.remove_meta(META_IN)
 			if Net.resolves(a) and not a.dead:
 				Wet.douse(a, DampSpell.DAMP_SOAK)   # stepped out: wet for the full damp time from now
+
+
+## A hero's wading steps (cosmetic, every machine, from the shown position): a soft splash every STEP_EVERY units it walks
+## in the water.
+static func _step(a: Actor, on: bool) -> void:
+	if not on:
+		if a.has_meta(META_STEP):
+			a.remove_meta(META_STEP)
+		return
+	var w: Array = a.get_meta(META_STEP, [a.global_position, STEP_EVERY * 0.6])
+	var walked := float(w[1]) + GameWorld.flat_distance(a.global_position, w[0] as Vector3)
+	if walked >= STEP_EVERY:
+		walked = 0.0
+		Sfx.play_at("wade_step", a.global_position)
+	a.set_meta(META_STEP, [a.global_position, walked])
 
 
 ## The ripple ring round a wader's legs on the water surface (cosmetic).

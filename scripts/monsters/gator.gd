@@ -164,6 +164,9 @@ var _ripple: Node3D = null
 var _dead_k := 0.0
 var _speed_seen := 0.0
 var _last_pos := Vector3.ZERO
+var _heard_nip := false            ## the sounds (_sounds): its state was NIP last frame
+var _heard_wet := -1               ## ... it was in the water (1), on land (0), not seen yet (-1)
+var _splash_t := -INF              ## ... GameWorld.time of its last splash
 
 
 ## A gator standing at X/Z `at`, facing `face`, home in `region`, its bask `spots` (the first is where it starts resting).
@@ -268,6 +271,7 @@ func net_fields() -> Dictionary:
 		"_head_pitch": Net.LOCAL, "_jaw_k": Net.LOCAL, "_twitch_at": Net.LOCAL,
 		"_prev_yaw": Net.LOCAL, "_float_y": Net.LOCAL, "_wake": Net.LOCAL, "_wake_mat": Net.LOCAL, "_ripple": Net.LOCAL,
 		"_dead_k": Net.LOCAL, "_speed_seen": Net.LOCAL, "_last_pos": Net.LOCAL,
+		"_heard_nip": Net.LOCAL, "_heard_wet": Net.LOCAL, "_splash_t": Net.LOCAL,
 	})
 	return f
 
@@ -585,6 +589,7 @@ func _strike() -> void:
 	if v == null and target != null and is_instance_valid(target):
 		v = target   # (a puppet's strike from the wind-up event: Monster.net_strike sets `target`)
 	var at := jaws()
+	Sfx.play_at("gator_snap", at)   # (the host's bite and each client's: once per screen)
 	if v != null and is_instance_valid(v) and not v.dead:
 		var skip: Array = []
 		for a in GameWorld.actors_in_radius(at, NIP_REACH + 1.0):
@@ -965,6 +970,7 @@ func _on_death() -> void:
 	if _bar != null:
 		_bar.visible = false
 	Fx.number(global_position + Vector3(0, 1.2, 0), "-" + PricedProp.money(price), PricedProp.MONEY_RED, 1.1)
+	Sfx.play_at("gator_thrash", global_position)
 	if _wake != null:
 		_wake.visible = false
 	if _skin != null:
@@ -1069,6 +1075,7 @@ func _pose(delta: float, _moving: bool) -> void:
 	_last_pos = global_position
 	_speed_seen = lerpf(_speed_seen, moved, clampf(6.0 * delta, 0.0, 1.0))
 	_pose_rig(delta, wet)
+	_sounds(wet)
 	_float_y = lerpf(_float_y, WATER_LIFT if wet else 0.0, clampf(6.0 * delta, 0.0, 1.0))
 	body.position.y = _float_y
 	# eyes: half lit at rest, bright when it watches, hot when it nips
@@ -1163,6 +1170,21 @@ func _pose_rig(delta: float, wet: bool) -> void:
 	rig.jaw = _jaw_k
 	rig.breath = 0.5 + 0.5 * sin(t * TAU * (0.15 if state == HELD else 0.25) + float(spawn_seed % 97))
 	rig.apply()
+
+
+## Its sounds (cosmetic, LOCAL, every screen, from what a puppet shows too): the hiss as a nip's wind-up starts (its state
+## turns NIP), a splash as it goes into or out of the water (at most one a second, so swimming along the edge is quiet).
+## The bite and the death thrash play in _strike and _on_death.
+func _sounds(wet: bool) -> void:
+	var nip := state == NIP
+	if nip and not _heard_nip:
+		Sfx.play_at("gator_hiss", head())
+	_heard_nip = nip
+	var w := 1 if wet else 0
+	if _heard_wet >= 0 and w != _heard_wet and GameWorld.time - _splash_t >= 1.0:
+		_splash_t = GameWorld.time
+		Sfx.play_at("gator_splash", global_position)
+	_heard_wet = w
 
 
 func net_show(new_facing: Vector3, _is_climbing: bool, new_hp: float, new_state: int, telegraph: float, strike_count: int) -> void:

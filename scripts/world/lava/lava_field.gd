@@ -30,19 +30,27 @@ const CRUST_LIFE := 8.0
 const CRUST_WARN := 2.0
 const CRUST_FRAC := 0.9         ## of the damp's radius
 const CRUST_TAG := "lava_crust"
+## The bubbling bed (Sfx "lava_bubble", cosmetic): a 4 s play every BED_EVERY s (jittered), alternating between the lava
+## cell nearest the ear and the nearest one at least BED_SPREAD from it, both within BED_REACH. Two emitters at most.
+const BED_EVERY := 1.7
+const BED_REACH := 14.0
+const BED_SPREAD := 4.0
 
 var map: HexMap = null
 var lava: Dictionary = {}                ## Vector2i -> true: the cave's lava cells (void once active)
 var active := false
-var crusts: Array[Dictionary] = []       ## [{cells: Array[Vector2i], end: float, node: Node3D, mat: ShaderMaterial}]
+var crusts: Array[Dictionary] = []       ## [{cells: Array[Vector2i], end: float, node: Node3D, mat: ShaderMaterial, at: Vector3}]
 var _seen: Dictionary = {}               ## damp instance id -> true (its crust is made)
 var _hooked: Dictionary = {}             ## actor instance id -> true (its shove_impact is connected)
+var _bed_at := 0.0                       ## the bed's next play (GameWorld.time)
+var _bed_n := 0                          ## plays so far (which of the two spots is next)
 
 
 ## Who writes each var (see Net). The lava set is from the seed; the crusts follow from the damp casts on every machine.
 func net_fields() -> Dictionary:
 	return {
 		"map": Net.LOCAL, "lava": Net.SPAWN, "active": Net.LOCAL, "crusts": Net.LOCAL, "_seen": Net.LOCAL, "_hooked": Net.LOCAL,
+		"_bed_at": Net.LOCAL, "_bed_n": Net.LOCAL,
 	}
 
 
@@ -83,6 +91,7 @@ func _on_impact(kind: String, pos: Vector3, _amount: float, a: Actor) -> void:
 	var at := Vector3(pos.x, LavaCave.LAVA_Y + 0.1, pos.z)
 	var hot: Array[Color] = [LavaLook.HOT, LavaLook.CORE, Color(1.0, 0.25, 0.05)]
 	Fx.burst(at, hot, 26, 4.5, 0.14, 0.8, 7.0, Vector3.UP, 55.0, true)
+	Sfx.play_at("lava_sizzle", at)
 	if a.team == GameWorld.TEAM_HEROES and Net.resolves(a) and not a.dead:
 		a.apply_damage(EXTRA_DAMAGE, self)
 		Burning.ignite(a, self, BURN_TIME)
@@ -100,9 +109,13 @@ func _physics_process(_delta: float) -> void:
 		_seen[d.get_instance_id()] = true
 		_make_crust(d.global_position, DampSpell.damp_radius(d.power) * CRUST_FRAC, d.start_time + Damp.TELEGRAPH)
 	_rescue_stranded()
+	_bed(t)
 	for cr in crusts.duplicate():
 		var left := float(cr["end"]) - t
 		var warn := clampf(1.0 - left / CRUST_WARN, 0.0, 1.0)
+		if warn > 0.0 and not cr.has("cracking"):
+			cr["cracking"] = true
+			Sfx.play_at("lava_crack", cr["at"])
 		(cr["mat"] as ShaderMaterial).set_shader_parameter("flicker", warn)
 		var node := cr["node"] as Node3D
 		node.position = Vector3(sin(t * 47.0), 0.0, cos(t * 53.0)) * 0.025 * warn if warn > 0.0 else Vector3.ZERO
@@ -121,6 +134,36 @@ func _rescue_stranded() -> void:
 		if not lava.has(c) or map.has_cell(c):
 			continue
 		_into_lava(a)
+
+
+## The bubbling bed (cosmetic, every screen; Sfx "lava_bubble", ducked while the player speaks): every BED_EVERY s a play
+## at one of the two lava spots nearest the ear (alternating), none when no lava is within BED_REACH. Looks use fx_rng.
+func _bed(t: float) -> void:
+	if t < _bed_at or not Sfx.enabled:
+		return
+	_bed_at = t + BED_EVERY * GameWorld.fx_rng.randf_range(0.85, 1.15)
+	var ear := Sfx.ear()
+	if ear == Vector3.INF:
+		return
+	var spots: Array[Vector3] = []
+	for _k in 2:
+		var best := Vector3.INF
+		var best_d := BED_REACH
+		for c: Vector2i in lava:
+			if map.has_cell(c):
+				continue   # (crust)
+			var p := Hex.to_world(c)
+			var d := GameWorld.flat_distance(p, ear)
+			if d < best_d and (spots.is_empty() or GameWorld.flat_distance(p, spots[0]) >= BED_SPREAD):
+				best_d = d
+				best = p
+		if best == Vector3.INF:
+			break
+		spots.append(Vector3(best.x, LavaCave.LAVA_Y + 0.2, best.z))
+	if spots.is_empty():
+		return
+	_bed_n += 1
+	Sfx.play_at("lava_bubble", spots[_bed_n % spots.size()])
 
 
 ## Start the void rule on `a`, standing over the lava: a hero toward the nearest rock (where the pull will land it).
@@ -154,7 +197,9 @@ func _make_crust(centre: Vector3, radius: float, born: float) -> void:
 	add_child(node)
 	var mat := LavaLook.crust_material()   # (dark cooled rock; its cracks glow again as it is about to melt)
 	node.add_child(_crust_mesh(cells, mat))
-	crusts.append({"cells": cells, "end": born + CRUST_LIFE, "node": node, "mat": mat})
+	var at := Vector3(centre.x, LavaCave.LAVA_Y + 0.3, centre.z)
+	crusts.append({"cells": cells, "end": born + CRUST_LIFE, "node": node, "mat": mat, "at": at})
+	Sfx.play_at("lava_crust", at)
 	var steam: Array[Color] = [Color(0.92, 0.94, 0.96), Color(0.6, 0.6, 0.62)]
 	for c in cells:
 		if posmod(hash(c), 3) == 0:

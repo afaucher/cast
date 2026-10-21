@@ -117,7 +117,7 @@ func _on_broken(p: PricedProp, culprit: Node) -> void:
 	broke_at = p.broke_at if p != null and p.broke_at >= 0.0 else GameWorld.time
 	_culprit = weakref(culprit) if culprit != null else null
 	set_physics_process(true)
-	Sfx.play_at("fuse", global_position + Vector3.UP * 1.2)
+	Sfx.play_at("wire_spark", global_position + Vector3.UP * 1.2)
 
 
 ## A late joiner: the host's break moment and culprit arrived after the panel was shown broken. Run from that moment, and
@@ -156,6 +156,7 @@ func _physics_process(_delta: float) -> void:
 		_shock(shocks == 0)
 	if t >= DROP_T + PULSE_FOR + 0.05:
 		set_physics_process(false)
+		Sfx.play_at("wire_fizzle", drop_point)
 		if _end_glow != null:
 			_end_glow.visible = false   # the breaker trips: the cable is dead
 
@@ -308,6 +309,6 @@ func _shock_fx(first: bool) -> void:
 	Fx.ring(from, reach, Color(1.0, 0.95, 0.5, 0.55), 0.3, 0.0, false, 0.15)
 	if view != null and is_instance_valid(view):
 		view.flash(from, reach, 1.0 if first else 0.6)
-	Sfx.play_at("fuse", from)
+	Sfx.play_at("wire_shock", from)
 	if first:
 		Fx.shake(0.25)

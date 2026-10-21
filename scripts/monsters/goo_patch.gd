@@ -169,6 +169,7 @@ func light(at: float, by: Node) -> void:
 	_ticks = 0
 	_end = maxf(_end, at + FIRE_TIME)
 	_show_fire()
+	Sfx.play_at("goo_ignite", global_position)
 	changed.emit()
 
 
@@ -181,6 +182,7 @@ func wash() -> void:
 	_clear_fire()
 	changed.emit()
 	if GameWorld.root != null and GameWorld.root.is_inside_tree():
+		Sfx.play_at("goo_wash", global_position)
 		var fizz: Array[Color] = [Color(0.92, 0.96, 1.0), GooSoups.hot(GooSoups.BILE)]
 		Fx.burst(global_position + Vector3.UP * 0.2, fizz, 10, 1.4, 0.08, 0.6, -1.2, Vector3.UP, 60.0, false)
 

@@ -21,6 +21,24 @@ const GAME_CUES := {
 	"paper": "paper_flip",
 	"fuse": "fuse_hiss_v6",
 	"firework": "firework_v1",
+	# sewers and lava (2026-10-21)
+	"gator_hiss": "gator_hiss_v3",
+	"gator_snap": "gator_snap_v1",
+	"gator_splash": "gator_splash_v2",
+	"gator_thrash": "gator_thrash_v4",
+	"goo_throw": "goo_throw_v2",
+	"goo_splat": "goo_splat_v1",
+	"goo_splash": "goo_splash_v1",
+	"goo_ignite": "goo_ignite_v1",
+	"goo_wash": "goo_wash_v1",
+	"wire_spark": "wire_spark_v1",
+	"wire_shock": "wire_shock_v1",
+	"wire_fizzle": "wire_fizzle_v2",
+	"wade_step": "wade_step_v1",
+	"lava_bubble": "lava_bubble_v1",
+	"lava_crust": "lava_crust_v2",
+	"lava_crack": "lava_crack_v1",
+	"lava_sizzle": "lava_sizzle_v1",
 }
 
 

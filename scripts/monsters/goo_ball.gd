@@ -163,6 +163,8 @@ func _ready() -> void:
 		add_child(d)
 		_drops.append(d)
 	_fly(GameWorld.time)
+	if GameWorld.time - start_time < 0.3:
+		Sfx.play_at("goo_throw", from)   # (not for a copy that arrives with the ball already well on its way)
 
 
 func _exit_tree() -> void:
@@ -227,6 +229,7 @@ func _land() -> void:
 
 ## The splat (cosmetic): goo droplets, or a white splash and a ripple in the water. The ball and its marker go.
 func _splash(wet: bool) -> void:
+	Sfx.play_at("goo_splash" if wet else "goo_splat", to)
 	if _ball != null:
 		_ball.visible = false
 	for d in _drops:

@@ -8,6 +8,8 @@ extends TestCase
 ## - paper: a form opening plays it, so does a VOID going back and the spec sheet turning to another spell; a burst
 ##   of opens inside min_gap plays once;
 ## - pools: the cue's voice limit steals its oldest voice; jitter rolls GameWorld.fx_rng, never GameWorld.rng;
+## - ducking: the long beds (a duck_db: the lava's bubbling) go down while the local player speaks,
+##   held a moment after, then come back; other cues keep their level (the sewer and lava hooks: test_sfx_sewer_lava);
 ## - GameSettings round-trips the Effects / Paperwork / Spell feedback volumes and apply() sets each bus by name.
 ## No audio files or speech model needed: tests put their own streams in (Sfx.override_stream).
 
@@ -27,6 +29,7 @@ func setup() -> void:
 	await _check_pools()
 	_check_trigger_signal()
 	await _check_voice_cues()
+	await _check_ducking()
 	await _check_paper()
 	Sfx.disable_for_tests()
 	_check_settings()
@@ -269,6 +272,62 @@ func _check_voice_cues() -> void:
 	eq(starts[0], 2, "the next onset is a new speech start")
 	await _after_fade()
 	check(not Sfx.is_playing("fizzle"), "and it is cut again")
+	vc.stop()
+	vc.queue_free()
+
+
+## The long beds (a "duck_db" in CUES: the lava's bubbling) go down while the local player speaks and
+## come back after (audio-plan.md §4 rule 4); every other cue keeps its level.
+func _check_ducking() -> void:
+	var beds: Array[String] = []
+	for cue: String in Sfx.CUES:
+		if Sfx.CUES[cue].has("duck_db"):
+			beds.append(cue)
+			check(float(Sfx.CUES[cue]["duck_db"]) <= -6.0, "%s ducks by 6 dB or more" % cue)
+			check(bool(Sfx.CUES[cue]["positional"]), "%s is a 3D bed" % cue)
+	check(beds.has("lava_bubble"), "the lava bed ducks")
+	var vc := _caster()
+	var live := vc.start(PackedStringArray(["heal", "fireball", "corn"]))
+	Sfx.listen_to_voice(vc)
+	Sfx.override_stream("lava_bubble", _tone(3.0))
+	Sfx.override_stream("fireball", _tone(3.0))
+	await _real_ms(int(Sfx.DUCK_HOLD * 1000.0) + 80)   # (the last check's speech is over: no duck left)
+	Sfx._tick_duck(1.0)
+	var bed := Sfx.play_at("lava_bubble", Vector3(1, 0, 1)) as AudioStreamPlayer3D
+	var shot := Sfx.play_at("fireball", Vector3(2, 0, 2)) as AudioStreamPlayer3D
+	if not check(bed != null and shot != null, "a bed and a fireball playing"):
+		vc.stop()
+		vc.queue_free()
+		return
+	var base := float(Sfx.CUES["lava_bubble"]["volume_db"])
+	near(bed.volume_db, base, 0.01, "the bed at its level while nobody speaks")
+	_push(vc, 1.0, 0.0, live)
+	_push(vc, 0.3, 0.2, live)
+	check(vc.is_speaking(), "the player speaks")
+	Sfx._tick_duck(0.1)
+	near(Sfx.duck_level(), 1.0, 0.001, "ducked within the attack (%.0f ms)" % (Sfx.DUCK_ATTACK * 1000.0))
+	near(bed.volume_db, base + float(Sfx.CUES["lava_bubble"]["duck_db"]), 0.01, "the bed goes down by its duck_db")
+	near(shot.volume_db, float(Sfx.CUES["fireball"]["volume_db"]), 0.01, "a fireball keeps its level")
+	Sfx._last.erase("lava_bubble")   # (past its min_gap)
+	var later := Sfx.play_at("lava_bubble", Vector3(4, 0, 4)) as AudioStreamPlayer3D
+	if check(later != null, "a second bed play"):
+		near(later.volume_db, base + float(Sfx.CUES["lava_bubble"]["duck_db"]), 0.01, "a bed that starts while the player speaks starts ducked")
+	var t0 := Time.get_ticks_msec()
+	_push(vc, 1.0, 0.0, live)
+	check(not vc.is_speaking(), "the player stopped")
+	Sfx._tick_duck(0.1)
+	if Time.get_ticks_msec() - t0 < int(Sfx.DUCK_HOLD * 1000.0) - 50:   # (the push itself can take that long with the model)
+		near(Sfx.duck_level(), 1.0, 0.001, "held just after the voice stops (%.0f ms)" % (Sfx.DUCK_HOLD * 1000.0))
+	await _real_ms(int(Sfx.DUCK_HOLD * 1000.0) + 30)
+	Sfx._tick_duck(Sfx.DUCK_RELEASE * 0.5)
+	check(Sfx.duck_level() > 0.3 and Sfx.duck_level() < 0.7, "coming back up over the release (%.2f)" % Sfx.duck_level())
+	Sfx._tick_duck(Sfx.DUCK_RELEASE)
+	near(Sfx.duck_level(), 0.0, 0.001, "back up")
+	near(bed.volume_db, base, 0.01, "the bed at its level again")
+	Sfx.stop_cue("lava_bubble", 0.0)
+	Sfx.stop_cue("fireball", 0.0)
+	Sfx.override_stream("lava_bubble", _tone())
+	Sfx.override_stream("fireball", _tone())
 	vc.stop()
 	vc.queue_free()
 

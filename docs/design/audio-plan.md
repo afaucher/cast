@@ -1,7 +1,7 @@
 # Audio plan
 
 Status: **partly built**, 2026-10-18. The sound system and the user's five round 3 picks are in the game: see
-"As built" just below. The rest of this document is the proposal it came from. The prototype synth and the mic-leak
+"As built" just below. The sewer and lava cues (2026-10-21) are in "Sewers and lava" after it. The rest of this document is the proposal it came from. The prototype synth and the mic-leak
 probe in `tools/sfx_proto/` exist and ran (results below). The approved CC0 downloads are in `assets/audio/third_party/`
 (untracked; `SOURCES.md` there).
 
@@ -40,8 +40,8 @@ rendered offline to WAVs (below), because three of them are cut from recordings 
 
 **Bus layout** (`default_bus_layout.tres`): Master (HardLimiter, ceiling -0.5 dB); SFX (Compressor: -12 dB threshold,
 3:1, 5 ms attack, 150 ms release) with World and Stings under it; UI; VoiceFeedback; Music (empty, reserved). Stings
-has no cue yet. No ducking while speaking yet (rule 4 below): it needs a gain stage separate from the SFX volume
-setting, so it was left for later.
+has no cue yet. No bus ducking while speaking yet (rule 4 below): it needs a gain stage separate from the SFX volume
+setting, so it was left for later. The long beds duck per cue instead (2026-10-21, `duck_db`: "Sewers and lava" below).
 
 **`Sfx`** (`scripts/fx/sfx.gd`, autoload; no `class_name`, no gameplay state, so it needs no `net_fields`):
 - `CUES` holds file, bus, `volume_db`, `pitch_jitter`, `max_voices`, `min_gap`, `positional`, `unit_size` and `max_distance`.
@@ -106,6 +106,83 @@ packed. The six cues add about 0.15 MB (imported as QOA). `build.ps1`'s zip chec
   are the probed recipes.
 - The voice setup screen ("Try it") plays no cues.
 - Out of component (`spell_empty`) has no sound.
+
+## Sewers and lava (2026-10-21)
+
+The user's goal "finish up the lava and sewers ... get them in the game fully"; this is their sound. 17 cues, all 3D on the
+World bus, all cosmetic: every machine plays its own from events it already has (no sound crosses the network). Recipes
+in `tools/sfx_proto/sfx_round3.gd` ("sewers and lava"), rendered by `render_game_sfx.gd`, credits in
+`assets/audio/sfx/CREDITS.md`. The packs have no water recording, so all the water (splashes, slosh, droplets) is synth:
+short band-passed noise grains and tiny high "plinks"; recordings are layered in for thuds, the jaws, sparks and rock.
+
+| Cue | Recipe | Hooked at | Level | What it is |
+|---|---|---|---|---|
+| `gator_hiss` | `gator_hiss_v3` | `Gator._sounds`: its state turns NIP (host, or the streamed state on a puppet) | -6 | a "khh", a faint 9 kHz breath, a throat rattle under 300 Hz swelling to the bite, 0.55 s |
+| `gator_snap` | `gator_snap_v1` | `Gator._strike` (the host's bite; a client's `net_strike` when its screen reaches it) | -3 | jaws' clack (Kenney wood), a tooth click, a soft thud, droplets |
+| `gator_splash` | `gator_splash_v2` | `Gator._sounds`: into or out of the water, at most one a second per gator | -5 | a big splash, wet high, weight low |
+| `gator_thrash` | `gator_thrash_v4` | `Gator._on_death` (every machine, `Net.remote_die` too) | -3 | one splash, then three low tail slaps, 1 s |
+| `goo_throw` | `goo_throw_v2` | `GooBall._ready` (the host's ball and each client's copy; not a copy that arrives 0.3 s late) | -8 | a wet "shlup", a short airy whoosh |
+| `goo_splat` | `goo_splat_v1` | `GooBall._splash` on the floor or on someone | -5 | a squelch on a soft low body |
+| `goo_splash` | `goo_splash_v1` | `GooBall._splash` in water | -6 | a small splash |
+| `goo_ignite` | `goo_ignite_v1` | `GooPatch.light` (the host's decision; a client's from `obj.goo`) | -3 | a WHOOMPH: qubodup's Fire Spell down 6 semitones, low-passed, a thump |
+| `goo_wash` | `goo_wash_v1` | `GooPatch.wash` | -7 | a high fizz and droplets |
+| `wire_spark` | `wire_spark_v1` | `LiveWire._on_broken` (the panel's `obj.break` on every machine; was the fuse's hiss) | -3 | electrical snaps and Kenney glitches, a tinny clack, a sizzle |
+| (`wire_buzz`) | (`wire_buzz_v4`) | **not in the game**: no sustained buzz passed the probe (below). The pulses' cracks, every 1.5 s, carry "live" | | |
+| `wire_shock` | `wire_shock_v1` | `LiveWire._shock_fx`, every shock and pulse (was the fuse's hiss) | -2 | a crack, high crackle, a low "thoom", a hum flare |
+| `wire_fizzle` | `wire_fizzle_v2` | `LiveWire._physics_process`, the breaker trips | -6 | the buzz cutting out, a last pop |
+| `wade_step` | `wade_step_v1` | `Wading._step` (from `Wading.tick`, every machine): a hero only, one per `STEP_EVERY` (1.5) units walked in water, none standing | -14 | a soft slosh, a low plunk, two droplets, 0.26 s |
+| `lava_bubble` | `lava_bubble_v1` | `LavaField._bed`: every ~1.7 s (fx_rng jitter) a 4 s play at one of the two lava spots nearest the ear (`Sfx.ear()`), within 14, alternating; none with no lava near | -16, ducked -10 | rumble and thick bubbles, all under 600 Hz |
+| `lava_crust` | `lava_crust_v2` | `LavaField._make_crust`, one per crust | -4 | a "TSSH" of steam then a narrow 7.5 kHz sizzle, the rock settling |
+| `lava_crack` | `lava_crack_v1` | `LavaField._physics_process`, once as a crust's last `CRUST_WARN` (2 s) begins | -4 | seven rock cracks (Kenney mining hits + grit), faster and louder, over a groan |
+| `lava_sizzle` | `lava_sizzle_v1` | `LavaField._on_impact` ("void": a hero pulled back out, or anything sinking) | -3 | a low splut and a fierce sizzle |
+
+The lava hooks sit at the prototype's events (`LavaField`, solo `--lava-cave`); the lava going into the generator may move
+them: the cue names say what each is for.
+
+**Sfx additions.** `duck_db` per cue: while the local player speaks (`VoiceCaster.is_speaking()`, from
+`listen_to_voice`) those voices go down by it, in `DUCK_ATTACK` (30 ms), held `DUCK_HOLD` (0.3 s) after, back over
+`DUCK_RELEASE` (0.25 s); a bed started while speaking starts ducked. Only the lava bed has it (§4 rule 4, for it; the
+other cues are short and front-loaded). `Sfx.ear()`: where 3D sounds are heard from (the camera's focus), so an ambient
+emitter can be placed near the player. Still no loops: the bed is a one-shot replayed so plays overlap.
+
+**Listening.** Not yet heard by the user: each recipe was checked by its loudness outline and spectrum (`describe_rec.gd`)
+and by the probe. A reel of every cue at its game level and the in-game sequences (a nip, a throw and splat, a wire's whole life, a
+wade, 12 s of lava bed with a crust's life) is rendered by a scratch script for the user to listen to.
+
+**Mic-leak probe (2026-10-21).** `mic_leak_probe` now runs as a scene (`tools/sfx_proto/mic_leak_probe.tscn`; the
+recognizer's spell list needs the autoloads now, so `--script` no longer loads), C also runs voice b0 when recipes are
+named, and a new **D** says "cast <spell>" (5 spells x 2 voices) with a repeating or sustained cue under the whole
+utterance, at peaks 0.4, 0.2 and 0.1 and, for the beds, 0.1 ducked as the game does it, after a control row with no cue
+(always 10/10). Reference: the shipped `spell_fireball_v4b`, `stamp_thunk_v4`, `firework_v1` and `fuse_hiss_v6` passed
+C 24/24 with both voices.
+
+Six rounds; what failed and what fixed it:
+- **A (alone).** No cue ever cast. Filler words: `goo_throw_v1` "YES"/"HE" (its 6 kHz whoosh held 0.28 s); the buzzes with
+  a 6.5-7 kHz chopped band "SIX"; `lava_bubble_v1` "OH"/"WOO". Kept as filler (no cast), except the throw, shortened (v2).
+- **C (said over a cue starting with the voice, peak 0.4).** Held hisses and busy splashes mask the trigger's "k" or the
+  spell word's onset, as round 1 found: `gator_thrash_v1` (five splashes) "CAST VEAL", "CAST FOR"; `lava_crust_v1` (steam
+  still loud at the spell word) "CAST YALE"; `wire_fizzle_v1` "CAST BY HER BALL"; voice b0: `gator_splash_v1` and
+  `thrash_v3` "PAST HEAL"/"PAST FIREBALL" (the slap and slosh down to 700 Hz on "cast"); `gator_hiss_v1/v2` "CASTLE",
+  "CASTORN", "STIAL". The cures: the fuse's shape for the crust (a 0.12 s "TSSH", then a narrow 7.5 kHz sizzle); the
+  splashes' slap at a fifth and their slosh above 1.8 kHz with the weight in a low thud; the thrash as one splash then low
+  slaps; the hiss as a 0.12 s "khh" and a low rattle (the "hiss swells" is now mostly a rattle); the fizzle's band narrow
+  at 8.5 kHz.
+- **D (under the whole utterance).** Wading steps and the lava bed: clean at every level. The live wire's buzz is the hard
+  one: a **steady low hum** (60/120/180 Hz, v1-v3) made the gate split the utterance in two ("CAST / PEAL",
+  "CASTLE / ARMOR", "CA / ASKED / FIREBALL") at the realistic levels, worse with a steady hum (v3: 6/10 at 0.1); the
+  control never split. v4 has no tones (noise chopped at 120 Hz): clean at 0.1 ducked (10/10, twice) but it masks "cast"
+  at a loud leak (D 3/10 at 0.4, 7/10 at 0.2, "HALF HEALTH"; C 3/6). v5, only its 7 kHz chopped band, babbled words by
+  itself in A ("HE REPLIED", "I BELIEVE") and missed 3/10 at 0.4. So **no buzz ships**: the wire's pulses (a crack with a
+  0.3 s hum flare every 1.5 s) and its glow say "live". A rule for later beds: **no steady low tone.** (Arguably v4 at
+  -14 dB, 14 dB under the cues probed clean at 0.4, leaks at about 0.08 and ducks: inside its clean range. The user's call.)
+
+**Final round (the 17 shipped recipes):** A: no cast; filler words only from `goo_throw_v2` "HUMPH", `wire_fizzle_v2`
+"SIX", `lava_bubble_v1` "OH"/"WOO", `lava_crack_v1` "FOUR". C, both voices: **102/102**. D: wading steps and the lava bed
+**70/70** (0.4, 0.2, 0.1, and 0.1 ducked for the bed); the control 30/30.
+
+**Choices the user may want to change:** levels (the table), no buzz on the live wire (or v4 quiet and ducked), steps for
+heroes only (not monsters or employees), the bed's two emitters within 14 of the camera's focus, the lava sizzle also for
+a monster sinking, the gator's hiss now mostly a low rattle with a short "khh".
 
 The user's ask (2026-10-18): basic audio. Find out whether good open-license sounds exist or whether we can make them
 procedurally, track every source for attribution, and pick the top 10 sounds that make the game more fun and read
@@ -411,6 +488,8 @@ in test C, so in the game it must not play over a new utterance (it is cut when 
    needs a native AEC (e.g. WebRTC's) and is out of scope here.
 7. **Keep the probe.** Every new cue goes through `mic_leak_probe.gd` (or a test made from it) before it ships: no cue
    may produce a cast alone, and the armed chime may never break one.
+8. **Beds and repeating cues (2026-10-21):** probe them under the whole utterance (probe D); no steady low tone in a bed
+   (the gate splits "cast <spell>" in two under one); keep them quiet and give them a `duck_db`.
 
 ### 4b. The dispatch voice (measured 2026-10-19; PARKED)
 

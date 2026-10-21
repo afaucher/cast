@@ -14,6 +14,7 @@ const K_IMPACT := "kenney_impact-sounds/"
 const K_UI := "kenney_interface-sounds/"
 const K_RPG := "kenney_rpg-audio/"
 const FIREWORK := "freesound/336008__rudmer_rotteveel__whistle-and-explosion-single_firework.wav"
+const FIRE_SPELL := "freesound/442871__qubodup__fire-spell.wav"
 
 ## cue -> the recordings it is made from ("synth" = generated here).
 const SOURCES := {
@@ -26,6 +27,25 @@ const SOURCES := {
 	"order_click_v1": [K_UI + "tick_002.ogg"],
 	"fuse_hiss_v6": ["synth"],
 	"firework_v1": [FIREWORK],
+	# sewers and lava (2026-10-21): water is all synth (no splash recording in the packs)
+	"gator_hiss_v3": ["synth"],
+	"gator_snap_v1": [K_IMPACT + "impactWood_light_000.ogg", K_RPG + "metalLatch.ogg", K_IMPACT + "impactSoft_medium_000.ogg"],
+	"gator_splash_v2": [K_IMPACT + "impactSoft_heavy_000.ogg"],
+	"gator_thrash_v4": [K_IMPACT + "impactSoft_medium_000.ogg", K_IMPACT + "impactSoft_medium_002.ogg"],
+	"goo_throw_v2": ["synth"],
+	"goo_splat_v1": [K_IMPACT + "impactSoft_heavy_000.ogg"],
+	"goo_splash_v1": ["synth"],
+	"goo_ignite_v1": [FIRE_SPELL, K_IMPACT + "impactSoft_heavy_000.ogg"],
+	"goo_wash_v1": ["synth"],
+	"wire_spark_v1": [K_UI + "glitch_001.ogg", K_UI + "glitch_003.ogg", K_IMPACT + "impactMetal_light_000.ogg"],
+	"wire_buzz_v4": ["synth"],
+	"wire_shock_v1": ["synth"],
+	"wire_fizzle_v2": ["synth"],
+	"wade_step_v1": ["synth"],
+	"lava_bubble_v1": ["synth"],
+	"lava_crust_v2": [K_IMPACT + "impactSoft_heavy_000.ogg"],
+	"lava_crack_v1": [K_IMPACT + "impactMining_000.ogg", K_IMPACT + "impactMining_002.ogg", K_IMPACT + "impactMining_004.ogg"],
+	"lava_sizzle_v1": [K_IMPACT + "impactSoft_heavy_000.ogg"],
 }
 
 
@@ -178,3 +198,371 @@ func _fuse_hiss_v6() -> PackedFloat32Array:
 func _firework_v1() -> PackedFloat32Array:
 	var s := Rec.cut(Rec.load_mono(FIREWORK), 0.38)
 	return Rec.normalize(Rec.fade(s, 0.03, 0.45), -3.0)
+
+
+# ---------------------------------------------------------------- sewers and lava (2026-10-21)
+# The sounds of the sewer (gator, goo imps, the live wire, wading) and the lava (its bed, the damp crust, the crack before
+# it melts, the sizzle of a hero pulled out). The packs have no water recording, so the water is synth: short band-passed
+# noise grains (a slosh) and tiny high droplets. Mic rules (audio-plan.md §4, and "Sewers and lava" there for the probe
+# rounds that shaped these; the unchosen versions are in its history): short or front-loaded, never a hiss held through
+# a spell word; anything sustained keeps 300 Hz-4.5 kHz nearly empty and has NO steady low tone (the gate splits an
+# utterance over one); no pitch glide inside the speech band (the bubbles glide under 300 Hz, the droplets above 2.5 kHz
+# and for a few ms).
+
+## Water droplets: tiny "plinks" (a sine rising half again as it dies, 12-35 ms), `per_sec` on average, f_lo..f_hi Hz,
+## fading out across `length`.
+func _drops(o: PackedFloat32Array, start: float, length: float, per_sec: float, f_lo: float, f_hi: float, amp: float) -> void:
+	var t := start
+	while true:
+		t += _rng.randf_range(0.3, 1.7) / per_sec
+		if t >= start + length:
+			break
+		var f := _rng.randf_range(f_lo, f_hi)
+		var d := _rng.randf_range(0.012, 0.035)
+		var a := amp * _rng.randf_range(0.3, 1.0) * (1.0 - (t - start) / length)
+		_add_tone(o, t, d, func(k: float) -> float: return f * (1.0 + 0.5 * k), a,
+				func(k: float) -> float: return minf(k * 25.0, 1.0) * exp(-4.0 * k))
+
+
+## Wet texture: short band-passed noise grains (5-25 ms, centres f_lo..f_hi), `per_sec` on average, their level following
+## env(k) across `length`. It is what makes noise read as water rather than hiss.
+func _slosh(o: PackedFloat32Array, start: float, length: float, per_sec: float, f_lo: float, f_hi: float, amp: float,
+		env: Callable) -> void:
+	var t := start
+	while true:
+		t += _rng.randf_range(0.2, 1.8) / per_sec
+		if t >= start + length:
+			break
+		var fc := exp(_rng.randf_range(log(f_lo), log(f_hi)))
+		var d := _rng.randf_range(0.005, 0.025)
+		var a := amp * _rng.randf_range(0.4, 1.0) * float(env.call((t - start) / length))
+		_add_filtered_noise(o, t, d, func(_k: float) -> float: return fc, 2.5, 1, a, 0.002, d * 0.35)
+
+
+## A splash of `size` (0..1) at `start`: the slap (high-passed noise, a few ms), the wet body (slosh), a low plunge under
+## 100 Hz for the big ones, and droplets falling back. `slap` scales the slap and `lo` is the lowest slosh grain: the
+## gator's splashes take a soft slap (0.1) and the slosh above 1.8 kHz, so a big splash on someone's "cast" leaves the "k".
+func _splash_at(o: PackedFloat32Array, start: float, size: float, amp: float, slap: float = 0.5, lo: float = 700.0) -> void:
+	_add_filtered_noise(o, start, 0.08 + 0.1 * size, func(_k: float) -> float: return 1200.0, 0.7, 2, amp * slap, 0.002,
+			0.012 + 0.025 * size)
+	_slosh(o, start, 0.15 + 0.3 * size, 160.0 + 220.0 * size, lo, 5000.0, amp * 2.0,
+			func(k: float) -> float: return minf(k * 12.0, 1.0) * pow(1.0 - k, 1.6))
+	if size > 0.5:
+		_add_tone(o, start, 0.16, func(k: float) -> float: return 85.0 - 30.0 * k, amp * 0.6 * size,
+				func(k: float) -> float: return minf(k * 30.0, 1.0) * exp(-5.0 * k))
+	_drops(o, start + 0.08 + 0.1 * size, 0.2 + 0.35 * size, 18.0 + 20.0 * size, 2500.0, 6500.0, amp * 0.2)
+
+
+## A soft recorded thud from the Impact pack, trimmed and low-passed at `hz` (cut to `length` s when > 0).
+static func _thud(file: String, hz: float, length: float = -1.0) -> PackedFloat32Array:
+	var s := Rec.lowpass(Rec.trim(Rec.load_mono(K_IMPACT + file), -45.0, 0.0), hz, 2)
+	return Rec.fade(Rec.cut(s, 0.0, length), 0.0, 0.08) if length > 0.0 else s
+
+
+# --- the gator (scripts/monsters/gator.gd) ---------------------------------------------------------------------------------
+
+## The nip's wind-up (NIP_WINDUP 0.5 s; gator-look.md's "hiss swells"), 0.55 s: a "khh" up front (0.12 s, above 3.8 kHz),
+## then only a faint 9 kHz breath, and a throat rattle (52 and 104 Hz fluttering at 23 Hz, under 300 Hz) swelling to the
+## bite. (A held hiss, v1 and v2, masked the start of a spell word said over it.)
+func _gator_hiss_v3() -> PackedFloat32Array:
+	var o := _buf(0.55)
+	_add_noise(o, 0.0, 0.12, func(_k: float) -> float: return 3800.0, 0.8, 2, 0.9,
+			func(k: float) -> float: return minf(k * 25.0, 1.0) * pow(1.0 - k, 1.5))
+	_add_noise(o, 0.08, 0.45, func(_k: float) -> float: return 9000.0, 5.0, 1, 0.15,
+			func(k: float) -> float: return minf(k * 10.0, 1.0) * (1.0 - 0.5 * k))
+	for h: Array in [[52.0, 0.7], [104.0, 0.35]]:
+		var f: float = h[0]
+		_add_tone(o, 0.0, 0.55, func(_k: float) -> float: return f, float(h[1]),
+				func(k: float) -> float: return minf(k * 10.0, 1.0) * (0.6 + 0.4 * k) * (0.55 + 0.45 * sin(TAU * 23.0 * 0.55 * k)))
+	_fade_out(o, 0.03)
+	return _normalize(o, -3.0)
+
+
+## The bite: the jaws' clack (Kenney impactWood_light_000, up 2 semitones), a sharp tooth click on it (metalLatch's first
+## 50 ms, above 3 kHz), a soft thud of the head (impactSoft_medium_000, low-passed) and a spatter of droplets. 0.25 s.
+func _gator_snap_v1() -> PackedFloat32Array:
+	var clack := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_light_000.ogg"), -45.0, 0.0), 2.0)
+	clack = Rec.fade(Rec.cut(clack, 0.0, 0.16), 0.0, 0.1)
+	var click := Rec.highpass(Rec.cut(Rec.trim(Rec.load_mono(K_RPG + "metalLatch.ogg"), -30.0, 0.0), 0.0, 0.05), 3000.0, 2)
+	var s := Rec.mix(Rec.normalize(clack, -1.0), Rec.normalize(Rec.fade(click, 0.0, 0.03), -1.0), 0.0, -8.0)
+	s = Rec.mix(s, Rec.normalize(_thud("impactSoft_medium_000.ogg", 250.0), -1.0), 0.004, -3.0)
+	var o := _buf(0.25)
+	_drops(o, 0.03, 0.18, 30.0, 3000.0, 6000.0, 1.0)
+	s = Rec.mix(s, Rec.normalize(o, -1.0), 0.0, -14.0)
+	return Rec.normalize(Rec.fade(s, 0.0, 0.06), -1.0)
+
+
+## In or out of the water, 0.75 s: a big splash (a soft slap, the slosh above 1.8 kHz, a plunge under 100 Hz, droplets) on
+## a soft heavy thud (impactSoft_heavy_000, low-passed): the weight low, the wet high. (v1's slap and slosh down to 700 Hz,
+## right on someone's "cast", was heard as "PAST".)
+func _gator_splash_v2() -> PackedFloat32Array:
+	var o := _buf(0.75)
+	_splash_at(o, 0.0, 0.85, 1.0, 0.1, 1800.0)
+	var s := Rec.mix(Rec.normalize(o, -1.0), Rec.normalize(_thud("impactSoft_heavy_000.ogg", 220.0), -1.0), 0.0, -1.0)
+	return Rec.normalize(Rec.fade(s, 0.0, 0.12), -2.0)
+
+
+## Its death, 1.0 s: one big splash (the plain splash's), then the thrash in the low end only, three tail slaps
+## (impactSoft_medium 000/002, low-passed at 250 Hz) under falling droplets. (Five splashes in a row, v1-v2, kept the
+## 1-4 kHz band busy through a spell word: "CAST VEAL".)
+func _gator_thrash_v4() -> PackedFloat32Array:
+	var o := _buf(1.0)
+	_splash_at(o, 0.0, 0.9, 1.0, 0.1, 1800.0)
+	_drops(o, 0.35, 0.5, 20.0, 3000.0, 6500.0, 0.2)
+	var s := Rec.normalize(o, -1.0)
+	var slaps: Array[PackedFloat32Array] = [Rec.normalize(_thud("impactSoft_medium_000.ogg", 250.0), -1.0),
+			Rec.normalize(_thud("impactSoft_medium_002.ogg", 250.0), -1.0)]
+	s = Rec.mix(s, slaps[0], 0.0, -1.0)
+	var at: Array[float] = [0.22, 0.4, 0.62]
+	for i in at.size():
+		s = Rec.mix(s, slaps[(i + 1) % 2], at[i], -1.0 - 3.0 * float(i))
+	return Rec.normalize(Rec.fade(s, 0.0, 0.25), -2.0)
+
+
+# --- the goo imp (goo_imp.gd, goo_ball.gd, goo_patch.gd) ------------------------------------------------------------------
+
+## The throw, a wet lob (0.24 s): a "shlup" of wet grains as the ball leaves the hand with a small low "pok" under 200 Hz,
+## and a short airy whoosh at 8.5 kHz falling away from the start. (v1's 6 kHz whoosh, held for 0.28 s, was heard alone as
+## "YES".)
+func _goo_throw_v2() -> PackedFloat32Array:
+	var o := _buf(0.24)
+	_slosh(o, 0.0, 0.07, 400.0, 900.0, 3500.0, 1.0, func(k: float) -> float: return minf(k * 6.0, 1.0) * pow(1.0 - k, 1.2))
+	_add_tone(o, 0.0, 0.06, func(k: float) -> float: return 180.0 - 60.0 * k, 0.25,
+			func(k: float) -> float: return minf(k * 15.0, 1.0) * (1.0 - k))
+	_add_noise(o, 0.01, 0.14, func(_k: float) -> float: return 8500.0, 1.5, 1, 0.4,
+			func(k: float) -> float: return minf(k * 10.0, 1.0) * pow(1.0 - k, 2.0))
+	_drops(o, 0.03, 0.12, 25.0, 3000.0, 6000.0, 0.12)
+	return _normalize(o, -4.0)
+
+
+## The ball splats on the floor or on someone (0.42 s): a dense squelch of wet grains, a second thinner one, droplets, on a
+## low soft body (impactSoft_heavy_000's first 0.3 s, low-passed at 300 Hz).
+func _goo_splat_v1() -> PackedFloat32Array:
+	var o := _buf(0.42)
+	_slosh(o, 0.0, 0.14, 500.0, 600.0, 3500.0, 1.0, func(k: float) -> float: return pow(1.0 - k, 1.4))
+	_slosh(o, 0.06, 0.25, 60.0, 1500.0, 4500.0, 0.5, func(k: float) -> float: return pow(1.0 - k, 2.0))
+	_drops(o, 0.05, 0.25, 22.0, 2500.0, 5500.0, 0.15)
+	var s := Rec.mix(Rec.normalize(o, -1.0), Rec.normalize(_thud("impactSoft_heavy_000.ogg", 300.0, 0.3), -1.0), 0.0, -4.0)
+	return Rec.normalize(Rec.fade(s, 0.0, 0.08), -2.0)
+
+
+## The ball falls in the water: a small splash (0.5 s).
+func _goo_splash_v1() -> PackedFloat32Array:
+	var o := _buf(0.5)
+	_splash_at(o, 0.0, 0.35, 1.0)
+	_fade_out(o, 0.08)
+	return _normalize(o, -3.0)
+
+
+## A goo patch lit by a fireball: a WHOOMPH (0.75 s). A short suck of air (noise under 600 Hz swelling for 0.09 s), then
+## qubodup's "Fire Spell" (442871) pitched down 6 semitones and low-passed at 2 kHz, a soft heavy thump under it.
+func _goo_ignite_v1() -> PackedFloat32Array:
+	var o := _buf(0.1)
+	_add_noise(o, 0.0, 0.1, func(_k: float) -> float: return 600.0, 0.7, 0, 1.0, func(k: float) -> float: return k * k)
+	var fire := Rec.pitch(Rec.trim(Rec.load_mono(FIRE_SPELL), -50.0, 0.0), -6.0)
+	fire = Rec.fade(Rec.lowpass(Rec.cut(fire, 0.0, 0.7), 2000.0, 1), 0.005, 0.3)
+	var s := Rec.mix(Rec.normalize(o, -12.0), Rec.normalize(fire, -1.0), 0.09)
+	s = Rec.mix(s, Rec.normalize(_thud("impactSoft_heavy_000.ogg", 180.0), -1.0), 0.09, -4.0)
+	return Rec.normalize(Rec.fade(s, 0.0, 0.1), -1.0)
+
+
+## A goo patch washed away by damp: a fizz (0.65 s). A wet "pss" at once (above 5 kHz), then a fine fizz (crackle above
+## 4 kHz, a 7.5 kHz band) and droplets dying away. Front-loaded and high.
+func _goo_wash_v1() -> PackedFloat32Array:
+	var o := _buf(0.65)
+	_add_noise(o, 0.0, 0.18, func(_k: float) -> float: return 5000.0, 0.8, 2, 0.8,
+			func(k: float) -> float: return minf(k * 30.0, 1.0) * pow(1.0 - k, 1.5))
+	_add_noise(o, 0.05, 0.6, func(_k: float) -> float: return 7500.0, 3.0, 1, 0.5,
+			func(k: float) -> float: return minf(k * 10.0, 1.0) * exp(-3.5 * k))
+	var fizz := _buf(0.65)
+	_add_crackle(fizz, 0.02, 0.55, 90.0, 0.4)
+	o = Rec.mix(o, Rec.highpass(fizz, 4000.0, 2), 0.0)
+	_drops(o, 0.05, 0.35, 20.0, 3500.0, 7000.0, 0.15)
+	_fade_out(o, 0.05)
+	return _normalize(o, -5.0)
+
+
+# --- the live wire (scripts/world/sewer/live_wire.gd) ----------------------------------------------------------------------
+
+## The panel breaks (0.6 s): electrical snaps over the first quarter second, slowing (each a 6 ms high-passed click and a
+## recorded glitch, Kenney Interface glitch_001/003 above 1.5 kHz), the cover's tinny clack (impactMetal_light_000 up 3
+## semitones), then a sizzle dying away.
+func _wire_spark_v1() -> PackedFloat32Array:
+	var glitches: Array[PackedFloat32Array] = [Rec.highpass(Rec.load_mono(K_UI + "glitch_001.ogg"), 1500.0, 2),
+			Rec.highpass(Rec.load_mono(K_UI + "glitch_003.ogg"), 1500.0, 2)]
+	var snaps := _buf(0.6)
+	var o := _buf(0.6)
+	var t := 0.0
+	var i := 0
+	while t < 0.3:
+		var lvl := 1.0 - 0.6 * t / 0.3
+		_add_filtered_noise(snaps, t, 0.012, func(_k: float) -> float: return 2200.0, 0.7, 2, 3.0 * lvl * _rng.randf_range(0.6, 1.0),
+				0.0003, 0.003)
+		o = Rec.mix(o, glitches[i % 2], t, -2.0 - 1.5 * float(i))
+		t += _rng.randf_range(0.02, 0.05) + 0.06 * t
+		i += 1
+	o = Rec.mix(o, snaps, 0.0)
+	var clack := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_light_000.ogg"), -45.0, 0.0), 3.0)
+	o = Rec.mix(o, Rec.fade(Rec.cut(clack, 0.0, 0.18), 0.0, 0.12), 0.0, -6.0)
+	var tail := _buf(0.6)
+	_add_sizzle(tail, 0.22, 0.36)
+	o = Rec.mix(Rec.normalize(o, -1.0), Rec.normalize(tail, -1.0), 0.0, -9.0)
+	return Rec.normalize(Rec.fade(o, 0.0, 0.05), -2.0)
+
+
+## NOT IN THE GAME (a candidate: audio-plan.md "Sewers and lava", the user's call). A buzz while the live wire's cable lies
+## in the water (from its landing for LiveWire.PULSE_FOR: 6 s, one play). No tones: noise under 160 Hz chopped at 120 Hz
+## (a mains rattle without a pitch), a 7 kHz band chopped the same, a sparse high crackle; the speech band notched out. The
+## best of five buzzes in the probe, and still not clean: fine at a quiet, ducked leak (D 0.1 ducked 10/10) but it masks
+## "cast" at a loud one (D 3/10 at 0.4, C 3/6). A steady 60/120/180 Hz hum (v1-v3) split "cast <spell>" in two; the 7 kHz
+## band alone (v5) babbled words by itself.
+func _wire_buzz_v4() -> PackedFloat32Array:
+	var dur := 6.0
+	var o := _buf(dur)
+	var chop := func(k: float) -> float:
+		return maxf(sin(TAU * 120.0 * k * dur), 0.0) * (0.85 + 0.15 * sin(TAU * 0.4 * k * dur))
+	_add_noise(o, 0.0, dur, func(_k: float) -> float: return 160.0, 0.7, 0, 3.0, chop)
+	_add_noise(o, 0.0, dur, func(_k: float) -> float: return 7000.0, 2.0, 1, 0.5, chop)
+	var cr := _buf(dur)
+	_add_crackle(cr, 0.0, dur, 4.0, 0.35)
+	o = Rec.mix(o, Rec.highpass(cr, 5000.0, 2), 0.0)
+	o = Rec.fade(Rec.notch_band(o, 300.0, 4500.0, 3), 0.08, 0.6)
+	return _normalize(o, -6.0)
+
+
+## A shock (the first and each pulse, 0.45 s): a CRACK (a 6 ms broadband snap, a high-passed tail of 40 ms), dense high
+## crackle, a low "thoom" in the water (75 -> 55 Hz) and the hum flaring for 0.3 s. The loud part is the first 50 ms.
+func _wire_shock_v1() -> PackedFloat32Array:
+	var hi := _buf(0.45)
+	_add_filtered_noise(hi, 0.0, 0.01, func(_k: float) -> float: return 1000.0, 0.7, 2, 1.0, 0.0003, 0.003)
+	_add_filtered_noise(hi, 0.002, 0.15, func(_k: float) -> float: return 3500.0, 0.7, 2, 0.5, 0.001, 0.04)
+	var cr := _buf(0.45)
+	_add_crackle(cr, 0.0, 0.35, 90.0, 1.0)
+	hi = Rec.mix(hi, Rec.highpass(cr, 4000.0, 2), 0.0)
+	var lo := _buf(0.45)
+	_add_tone(lo, 0.0, 0.25, func(k: float) -> float: return 75.0 - 20.0 * k, 0.6,
+			func(k: float) -> float: return minf(k * 40.0, 1.0) * exp(-5.0 * k))
+	for f: float in [60.0, 120.0]:
+		_add_tone(lo, 0.0, 0.3, func(_k: float) -> float: return f, 0.35,
+				func(k: float) -> float: return minf(k * 30.0, 1.0) * (1.0 - k) * (0.7 + 0.3 * sin(TAU * 31.0 * 0.3 * k)))
+	var o := Rec.mix(Rec.normalize(hi, -1.0), Rec.normalize(lo, -1.0), 0.0, -4.0)
+	return _normalize(o, -1.0)
+
+
+## The breaker trips and the cable dies (0.8 s): the hum and a narrow 8.5 kHz "bzz" cutting in and out with growing gaps,
+## falling away, a snap at each cut, a last small pop and a thin high tail. (v1's wider 6.5 kHz band read as sibilants:
+## "cast fireball" over it was heard as "CAST BY HER BALL".)
+func _wire_fizzle_v2() -> PackedFloat32Array:
+	var o := _buf(0.8)
+	var gate := func(k: float) -> float: return minf(k * 20.0, 1.0) * minf((1.0 - k) * 20.0, 1.0)
+	var t := 0.0
+	while t < 0.5:
+		var on := _rng.randf_range(0.03, 0.08) * (1.0 - t)
+		var lvl := 1.0 - t / 0.6
+		for f: float in [60.0, 120.0]:
+			_add_tone(o, t, on, func(_k: float) -> float: return f, 0.45 * lvl, gate)
+		_add_noise(o, t, on, func(_k: float) -> float: return 8500.0, 5.0, 1, 0.5 * lvl, gate)
+		_add_filtered_noise(o, t + on, 0.004, func(_k: float) -> float: return 3000.0, 0.7, 2, 0.5 * lvl, 0.0003, 0.0015)
+		t += on + _rng.randf_range(0.03, 0.06) + 0.25 * t
+	_add_filtered_noise(o, 0.6, 0.01, func(_k: float) -> float: return 2000.0, 0.7, 2, 0.45, 0.0003, 0.003)
+	_add_noise(o, 0.6, 0.18, func(_k: float) -> float: return 8000.0, 4.0, 1, 0.2, func(k: float) -> float: return pow(1.0 - k, 2.0))
+	return _normalize(o, -4.0)
+
+
+# --- wading (scripts/world/wading.gd) --------------------------------------------------------------------------------------
+
+## One soft step in knee-deep water (0.26 s): a slosh of wet grains as the foot pushes through, a dull low "plunk" under
+## 200 Hz, two or three droplets. Short and quiet: frequent cues are struck, not sung (audio-plan.md §4 rule 2).
+func _wade_step_v1() -> PackedFloat32Array:
+	var o := _buf(0.26)
+	_slosh(o, 0.0, 0.16, 260.0, 500.0, 3000.0, 1.0, func(k: float) -> float: return minf(k * 6.0, 1.0) * pow(1.0 - k, 1.5))
+	_add_tone(o, 0.0, 0.08, func(k: float) -> float: return 150.0 - 40.0 * k, 0.25,
+			func(k: float) -> float: return minf(k * 20.0, 1.0) * (1.0 - k))
+	_drops(o, 0.06, 0.18, 18.0, 2500.0, 5000.0, 0.12)
+	_fade_out(o, 0.04)
+	return _normalize(o, -3.0)
+
+
+# --- lava (scripts/world/lava/) ---------------------------------------------------------------------------------------------
+
+## The bubbling bed near lava (4 s; LavaField plays it again a little before it ends, so plays overlap). All under ~600 Hz:
+## a rumble (noise under 110 Hz breathing slowly), thick "blorps" (a sine rising from 55-85 Hz to twice that as it dies,
+## under 300 Hz), each with a soft low "pok" as it bursts. Faded in and out so overlapping plays cross.
+func _lava_bubble_v1() -> PackedFloat32Array:
+	var dur := 4.0
+	var o := _buf(dur)
+	_add_noise(o, 0.0, dur, func(_k: float) -> float: return 110.0, 0.7, 0, 3.0,
+			func(k: float) -> float: return 0.6 + 0.4 * sin(TAU * 0.45 * dur * k + 0.7))
+	var t := 0.15
+	while t < dur - 0.3:
+		var f0 := _rng.randf_range(55.0, 85.0)
+		var d := _rng.randf_range(0.08, 0.16)
+		var a := _rng.randf_range(0.35, 0.8)
+		_add_tone(o, t, d, func(k: float) -> float: return f0 * (1.0 + k), a,
+				func(k: float) -> float: return minf(k * 12.0, 1.0) * exp(-3.0 * k))
+		_add_filtered_noise(o, t + d * 0.8, 0.03, func(_k: float) -> float: return 500.0, 0.7, 0, a * 0.8, 0.001, 0.008)
+		t += _rng.randf_range(0.18, 0.55)
+	o = Rec.fade(Rec.lowpass(o, 600.0, 2), 0.4, 0.5)
+	return _normalize(o, -3.0)
+
+
+## Damp crusts the lava (one per crust, 1.3 s): the fuse's shape. A "TSSH" of steam (0.12 s, above 3.5 kHz), then at once
+## a narrow 7.5 kHz sizzle dying over the second, sparse crackle, and the rock settling under it (impactSoft_heavy_000
+## low-passed at 160 Hz). (v1's steam, still loud as the spell word starts, masked the "h": "CAST YALE".)
+func _lava_crust_v2() -> PackedFloat32Array:
+	var o := _buf(1.3)
+	_add_noise(o, 0.0, 0.12, func(_k: float) -> float: return 3500.0, 0.8, 2, 1.0,
+			func(k: float) -> float: return minf(k * 40.0, 1.0) * pow(1.0 - k, 1.5))
+	_add_noise(o, 0.06, 1.2, func(_k: float) -> float: return 7500.0, 4.0, 1, 0.45,
+			func(k: float) -> float: return minf(k * 30.0, 1.0) * exp(-2.4 * k))
+	var cr := _buf(1.3)
+	_add_crackle(cr, 0.06, 1.0, 18.0, 0.25)
+	o = Rec.mix(o, Rec.highpass(cr, 5000.0, 2), 0.0)
+	o = Rec.mix(Rec.normalize(o, -1.0), Rec.normalize(_thud("impactSoft_heavy_000.ogg", 160.0), -1.0), 0.0, -5.0)
+	return Rec.normalize(Rec.fade(o, 0.0, 0.15), -2.0)
+
+
+## The crust is about to give (its last LavaField.CRUST_WARN, 2 s): rock cracking faster and louder. Seven cracks (the first
+## 0.14 s of Kenney's pick-on-rock hits, impactMining_000/002/004, 0-4 semitones down, each with a "crk" of grit snaps
+## above 2 kHz that laptop speakers carry) coming closer together, over a groan of noise under 90 Hz swelling. 2.05 s.
+func _lava_crack_v1() -> PackedFloat32Array:
+	var o := _buf(2.05)
+	_add_noise(o, 0.0, 2.05, func(_k: float) -> float: return 90.0, 0.8, 0, 1.0,
+			func(k: float) -> float: return 0.2 + 0.8 * pow(k, 1.5))
+	o = Rec.normalize(o, -12.0)
+	var rocks: Array[PackedFloat32Array] = []
+	for n: String in ["000", "002", "004"]:
+		rocks.append(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_%s.ogg" % n), -45.0, 0.0))
+	var at: Array[float] = [0.0, 0.62, 1.05, 1.36, 1.6, 1.78, 1.92]
+	for i in at.size():
+		var hit := Rec.pitch(rocks[i % 3], -2.0 * float(i % 3))
+		hit = Rec.normalize(Rec.fade(Rec.cut(hit, 0.0, 0.14), 0.0, 0.08), -1.0)
+		var lvl := -9.0 + 8.0 * float(i) / float(at.size() - 1)
+		o = Rec.mix(o, hit, at[i], lvl - 3.0)
+		# the "crk": three or four grit snaps in 30 ms, above 2 kHz (impulses, so they mask nothing for long)
+		var grit := _buf(0.06)
+		for j in _rng.randi_range(3, 4):
+			_add_filtered_noise(grit, float(j) * _rng.randf_range(0.006, 0.011), 0.02, func(_k: float) -> float: return 2000.0,
+					0.7, 2, _rng.randf_range(0.5, 1.0), 0.0003, 0.003)
+		o = Rec.mix(o, Rec.normalize(grit, -1.0), at[i], lvl)
+	return Rec.normalize(Rec.fade(o, 0.0, 0.05), -2.0)
+
+
+## A hero pulled back out of the lava (and anything that falls in): a hot "TSST" (0.95 s). A low wet splut
+## (impactSoft_heavy_000's first 0.35 s, low-passed) with a burst above 3 kHz on it at once, then a fierce sizzle (a 6 kHz
+## band and dense crackle above 4 kHz) dying over 0.8 s, two low bubbles under 150 Hz.
+func _lava_sizzle_v1() -> PackedFloat32Array:
+	var o := _buf(0.95)
+	_add_noise(o, 0.0, 0.12, func(_k: float) -> float: return 3000.0, 0.8, 2, 1.0,
+			func(k: float) -> float: return minf(k * 40.0, 1.0) * pow(1.0 - k, 1.5))
+	_add_noise(o, 0.03, 0.9, func(_k: float) -> float: return 6000.0, 2.0, 1, 0.8,
+			func(k: float) -> float: return minf(k * 15.0, 1.0) * exp(-3.2 * k) * (0.75 + 0.25 * sin(TAU * 17.0 * k)))
+	var cr := _buf(0.95)
+	_add_crackle(cr, 0.02, 0.85, 120.0, 0.6)
+	o = Rec.mix(o, Rec.highpass(cr, 4000.0, 2), 0.0)
+	for b: Array in [[0.15, 70.0], [0.4, 60.0]]:
+		var f0: float = b[1]
+		_add_tone(o, float(b[0]), 0.12, func(k: float) -> float: return f0 * (1.0 + k), 0.35,
+				func(k: float) -> float: return minf(k * 12.0, 1.0) * exp(-3.0 * k))
+	o = Rec.mix(Rec.normalize(o, -1.0), Rec.normalize(_thud("impactSoft_heavy_000.ogg", 250.0, 0.35), -1.0), 0.0, -4.0)
+	return Rec.normalize(Rec.fade(o, 0.0, 0.12), -1.5)

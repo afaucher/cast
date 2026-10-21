@@ -311,7 +311,10 @@ Cosmetic: `Sfx.play(cue)`, `Sfx.play_at(cue, pos)`, `Sfx.stop_cue(cue)`, `Sfx.li
 (`Sfx.CUES`) names each cue's file under `assets/audio/sfx/` (rendered by `tools/render_sfx.ps1`, not in git; a missing
 file is a silent cue with one warning), its bus (`default_bus_layout.tres`: Master > SFX > World / Stings, UI,
 VoiceFeedback, Music), voice limit and gap. Callers only listen (Game, forms, `Fx`); every machine plays its own sounds
-from the events it already has, and no RPC carries a sound. Off headless (tests: `Sfx.enable_for_tests()`).
+from the events it already has, and no RPC carries a sound. Off headless (tests: `Sfx.enable_for_tests()`). A cue with a
+`duck_db` (the long beds) goes down while the local player speaks; `Sfx.ear()` is where 3D sounds are heard from (for
+placing an ambient emitter, `LavaField`'s bed). A new cue passes the mic-leak probe (`tools/sfx_proto/mic_leak_probe.tscn`;
+audio-plan.md §4) before it ships.
 
 ### Spells (`scripts/spells/spell_book.gd`, `class_name SpellBook`; one def per spell in `scripts/spells/defs/`)
 ```gdscript
