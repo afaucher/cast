@@ -77,7 +77,7 @@ number in the theme row's looks ("lights") if a real min-spec machine says other
   start without climbing on the two-wide bridges alone; no office door on its doorways; archers on its isles; every isle
   reached by no walk, and by a climb-free walk over the crust LavaField makes from a min-power damp at its shore on the
   activated map; all four patterns come out; a shared run builds the same cave (its record in the map checksum); a floor
-  whose cave did not fit is byte for byte the floor without the option; the cave pass under 100 ms and a cave floor under
+  whose cave did not fit is byte for byte the floor without the option; the cave pass under 150 ms and a cave floor under
   600 ms. Measured: 13 caves on 13 rolled floors of 180 (8 villain, 5 hellgate); forced and natural, the patterns gauntlet 23,
   causeway 17, ring 17, fork 4; 84 isles; worst cave floor 337 ms (seed 39 floor 2: a cave attempt and the plain one, with
   other agents' tests loading the machine; test_dungeon_gen measured 158 ms average, 234 ms worst in the same session),
@@ -106,8 +106,9 @@ cluster for a cave, and the sewer net tests' floor moved. The cluster now keeps 
 - The camera-side rim is a wall at L + 3 like every room's wall, not the prototype's open lava running out of view.
 - A gate cave's far chamber holds its gate in its flat middle; a villain cave holds a gate only when GatePlanner's dice put one
   there (then it is hellfire too). The monster under a gate's room (`HellgateBeast`) is not adapted to a cave.
-- No lava sounds yet: the Sfx cues `lava_sizzle` (Fx, LavaField), `crust_form`, `crust_crack` and `crust_melt` (LavaField) are
-  called and stay silent until rendered.
+- Sounds (audio-plan.md "Sewers and lava"): the generic LavaField plays the cues the sound pass made for the prototype's,
+  `lava_crust` (a crust forms), `lava_crack` (its warning starts), `lava_sizzle` (anything lands in the lava: the owner's
+  shove_impact "lava", or a puppet seen going in) and the `lava_bubble` bed near the ear. No cue for the melt itself.
 - The room name and note word of the "lava" theme row are proposals awaiting the user's review (no dispatch line was added).
 
 **The user's feedback** on the concept (2026-10-20):

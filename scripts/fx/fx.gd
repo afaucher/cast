@@ -326,8 +326,7 @@ static func _on_shove_impact(kind: String, pos: Vector3, amount: float, actor: A
 			var map := GameWorld.map
 			if map != null and not map.cave.is_empty():
 				at.y = float(map.cave.get("lava_y", at.y))
-			burst(at + Vector3.UP * 0.1, hot, 26, 4.5, 0.14, 0.8, 7.0, Vector3.UP, 55.0, true)
-			Sfx.play_at("lava_sizzle", at)
+			burst(at + Vector3.UP * 0.1, hot, 26, 4.5, 0.14, 0.8, 7.0, Vector3.UP, 55.0, true)   # (the sizzle: LavaField)
 			if actor.team == GameWorld.TEAM_HEROES:
 				number(pos + Vector3(0, 2.6 + actor.radius, 0), "LAVA!", Color(1.0, 0.5, 0.2), 0.9)
 				shake(0.15)

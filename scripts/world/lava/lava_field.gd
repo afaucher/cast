@@ -26,12 +26,19 @@ extends Node3D
 ## NOBODY STANDS ON THE LAVA: Actor.move never puts a body over the void, AllyBrain never takes a formation slot across a gap,
 ## and _rescue_stranded gives the lava rule to anything this machine resolves that is found over a lava cell anyway.
 ## Cosmetic: a splash where a puppet (another machine's actor) goes into the lava; the owner's own splash is Fx's.
-## Sounds (Sfx cues, silent until rendered): "crust_form", "crust_crack", "crust_melt"; Fx plays "lava_sizzle".
+## Sounds (Sfx, cosmetic, every screen from what it already has; audio-plan.md "Sewers and lava"): "lava_crust" as a crust
+## forms, "lava_crack" as its warning starts, "lava_sizzle" when anything lands in the lava (the owner's shove_impact "lava",
+## or a puppet seen going in), and the bubbling bed "lava_bubble" near the ear (_bed).
 
 const CRUST_LIFE := 8.0
 const CRUST_WARN := 2.0
 const CRUST_FRAC := 0.9         ## of the damp's radius
 const CRUST_TAG := HexMap.CRUST_TAG
+## The bubbling bed (Sfx "lava_bubble", cosmetic): a 4 s play every BED_EVERY s (jittered), alternating between the lava
+## cell nearest the ear and the nearest one at least BED_SPREAD from it, both within BED_REACH. Two emitters at most.
+const BED_EVERY := 1.7
+const BED_REACH := 14.0
+const BED_SPREAD := 4.0
 
 var map: HexMap = null
 var lava: Dictionary = {}                ## Vector2i -> true: the cave's lava cells (void once active)
@@ -43,6 +50,9 @@ var _cell_end: Dictionary = {}           ## crust cell -> when it melts
 var _looks: Array[Dictionary] = []       ## {end, node, mat, warned}: one slab mesh per melt time
 var _seen: Dictionary = {}               ## damp instance id -> true (its source is made)
 var _splashed: Dictionary = {}           ## actor instance id -> true (a puppet's splash is drawn)
+var _hooked: Dictionary = {}             ## actor instance id -> true (its shove_impact is heard: the sizzle)
+var _bed_at := 0.0                       ## the bed's next play (GameWorld.time)
+var _bed_n := 0                          ## plays so far (which of the two spots is next)
 
 
 ## Who writes each var (see Net). The lava set is from the seed; the crust follows on every machine from the damp casts and
@@ -51,6 +61,7 @@ func net_fields() -> Dictionary:
 	return {
 		"map": Net.LOCAL, "lava": Net.SPAWN, "crustable": Net.LOCAL, "crust_level": Net.SPAWN, "active": Net.LOCAL,
 		"crusts": Net.LOCAL, "_cell_end": Net.LOCAL, "_looks": Net.LOCAL, "_seen": Net.LOCAL, "_splashed": Net.LOCAL,
+		"_hooked": Net.LOCAL, "_bed_at": Net.LOCAL, "_bed_n": Net.LOCAL,
 	}
 
 
@@ -68,6 +79,29 @@ func setup(m: HexMap) -> void:
 			whole = whole and m.has_cell(nn)
 		if whole:
 			crustable[c] = true
+	for a in GameWorld.actors():
+		_hook(a)
+	if not GameWorld.actor_spawned.is_connected(_hook):
+		GameWorld.actor_spawned.connect(_hook)
+
+
+func _exit_tree() -> void:
+	if GameWorld.actor_spawned.is_connected(_hook):
+		GameWorld.actor_spawned.disconnect(_hook)
+
+
+func _hook(a: Actor) -> void:
+	if a == null or _hooked.has(a.get_instance_id()):
+		return
+	_hooked[a.get_instance_id()] = true
+	a.shove_impact.connect(_on_impact)
+
+
+## Something went into the lava on this machine (its owner ran the lava rule: Actor._enter_void): the sizzle. Fx draws the
+## splash and the hero's "LAVA!".
+func _on_impact(kind: String, pos: Vector3, _amount: float) -> void:
+	if kind == "lava" and active:
+		Sfx.play_at("lava_sizzle", Vector3(pos.x, float(map.cave.get("lava_y", -1.0)) + 0.1, pos.z))
 
 
 ## The lava becomes void: from here a shove into it is the lava rule.
@@ -100,6 +134,38 @@ func _physics_process(_delta: float) -> void:
 	_rescue_stranded()
 	_splash_puppets()
 	_animate(t)
+	_bed(t)
+
+
+## The bubbling bed (cosmetic, every screen; Sfx "lava_bubble", ducked while the player speaks): every BED_EVERY s a play
+## at one of the two lava spots nearest the ear (alternating), none when no lava is within BED_REACH. Looks use fx_rng.
+func _bed(t: float) -> void:
+	if t < _bed_at or not Sfx.enabled:
+		return
+	_bed_at = t + BED_EVERY * GameWorld.fx_rng.randf_range(0.85, 1.15)
+	var ear := Sfx.ear()
+	if ear == Vector3.INF:
+		return
+	var y := float(map.cave.get("lava_y", -1.0)) + 0.2
+	var spots: Array[Vector3] = []
+	for _k in 2:
+		var best := Vector3.INF
+		var best_d := BED_REACH
+		for c: Vector2i in lava:
+			if map.has_cell(c):
+				continue   # (crust)
+			var p := Hex.to_world(c)
+			var d := GameWorld.flat_distance(p, ear)
+			if d < best_d and (spots.is_empty() or GameWorld.flat_distance(p, spots[0]) >= BED_SPREAD):
+				best_d = d
+				best = p
+		if best == Vector3.INF:
+			break
+		spots.append(Vector3(best.x, y, best.z))
+	if spots.is_empty():
+		return
+	_bed_n += 1
+	Sfx.play_at("lava_bubble", spots[_bed_n % spots.size()])
 
 
 ## A crust source: lava within `radius` of `centre` crusts from `born` for CRUST_LIFE (shared time). The same source twice
@@ -206,18 +272,15 @@ func _form_fx(cells: Array[Vector2i]) -> void:
 		sum += Hex.to_world(c)
 		if posmod(hash(c), 3) == 0:
 			Fx.burst(Hex.to_world(c) + Vector3(0, y + 0.6, 0), steam, 6, 1.2, 0.25, 1.2, -1.0, Vector3.UP, 40.0, false)
-	Sfx.play_at("crust_form", sum / float(cells.size()) + Vector3(0, y, 0))
+	Sfx.play_at("lava_crust", sum / float(cells.size()) + Vector3(0, y + 0.3, 0))
 
 
 func _melt_fx(cells: Array[Vector2i]) -> void:
 	var hot: Array[Color] = [LavaLook.HOT, LavaLook.CORE]
 	var y := float(map.cave.get("lava_y", -1.0))
-	var sum := Vector3.ZERO
 	for c in cells:
-		sum += Hex.to_world(c)
 		if posmod(hash(c), 2) == 0:
 			Fx.burst(Hex.to_world(c) + Vector3(0, y + 0.2, 0), hot, 5, 2.0, 0.12, 0.6, 6.0, Vector3.UP, 50.0, true)
-	Sfx.play_at("crust_melt", sum / float(cells.size()) + Vector3(0, y, 0))
 
 
 ## One slab mesh per melt time over the crust cells (rebuilt when the crust changes: a cast, a melt).
@@ -256,7 +319,7 @@ func _animate(t: float) -> void:
 		node.position = Vector3(sin(t * 47.0), 0.0, cos(t * 53.0)) * 0.025 * warn if warn > 0.0 else Vector3.ZERO
 		if warn > 0.0 and not bool(lk["warned"]):
 			lk["warned"] = true
-			Sfx.play_at("crust_crack", lk["at"])
+			Sfx.play_at("lava_crack", lk["at"])
 
 
 ## A slab of crust over each cell: a dark top at the crust's height and sides down into the lava.

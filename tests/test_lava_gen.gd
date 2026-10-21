@@ -17,7 +17,7 @@ extends MonsterTestBase
 
 const SEEDS := 60
 const FORCED := 24
-const PASS_BUDGET_MS := 100.0
+const PASS_BUDGET_MS := 150.0     ## (about 70 ms measured on an idle machine; 100+ while other test runs load it)
 const FLOOR_BUDGET_MS := 600.0     ## test_dungeon_gen's 300 ms a floor, twice: the cave attempt and, if it fails, the plain one
 
 var _probe: Node = null
