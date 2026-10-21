@@ -11,8 +11,9 @@ extends RefCounted
 ## Kinds: gator (bend: degrees the spine curls left, jaw: 0..1 open), salamander (the lava lab: the gator's body, crusted black
 ##        with glowing cracks and a frill; bend, jaw, crack), rat, rat_swarm (count, radius, seed), outfall
 ##        (radius, drop: a pipe mouth in a wall pouring into the channel), pipe_bundle (length, col), grate (size),
-##        grate_bridge (length, width), sluice (width, open), springer (height, col: a brick arch rib against a wall),
-##        ladder_wall (height), duck (a floating rubber duck), bars (width, height: iron bars across a culvert).
+##        grate_bridge (length, width), sluice (width, open, style: roof|skip|plate), springer (height, col: a brick
+##        arch rib against a wall), ladder_wall (height), duck (a floating rubber duck), bars (width, height: iron bars
+##        across a culvert).
 ## Round 2 (staging, docs/design/sewer-concept.md "Sewer round 2"): pump (col: a sump pump on a skid, a priced prop to
 ##        be), junction_box (drop: where the live cable's end hangs, relative; dropped: the cable lies in the water), gas
 ##        (radius, seed: a sewer-gas pocket's bubbles and haze on the water), tool_cart, shock (points: a world-space-free
@@ -56,7 +57,7 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 			_grate(s, float(params.get("size", 1.6)))
 			outline = 0.0
 		"grate_bridge": _grate_bridge(s, float(params.get("length", 3.6)), float(params.get("width", 1.3)))
-		"sluice": _sluice(s, float(params.get("width", 3.0)), float(params.get("open", 0.6)))
+		"sluice": _sluice(s, float(params.get("width", 3.0)), float(params.get("open", 0.6)), str(params.get("style", "")))
 		"springer": _springer(s, float(params.get("height", 1.5)), params.get("col", BRICK))
 		"ladder_wall": _ladder_wall(s, float(params.get("height", 1.6)))
 		"duck": _duck(s)
@@ -228,32 +229,107 @@ static func _rat_swarm(s: LowPoly.Soup, count: int, radius: float, seed_value: i
 
 # --- sewer furniture --------------------------------------------------------------------------------------------
 
-## A big round pipe mouth sticking out of a wall (the wall is behind it, -Z), its bore `drop` above the water, pouring a
-## stream down into the channel (+Z): a pipe stub with a rusted flange and a falling ribbon of water that fans out.
+## A big round pipe mouth sticking out of a wall (the wall is behind it, -Z), its bore `drop` above the deck, pouring a
+## stream down into the channel (+Z). The origin is at the deck's height; the water's surface is 0.14 under it
+## (SewerLayouts.SURFACE_Y). A concrete headwall holds the pipe (the room's walls are cut low for the camera, so the pipe
+## would float over them), and the stream reads as FALLING water (user, 2026-10-20: "There are horizontal lines coming
+## out. Is that water?"): one continuous ribbon in one water tone arcing off the lip, pale streaks running DOWN it, white
+## water where it meets the channel, a foam ring and a broken ripple ring spreading on the surface.
 static func _outfall(s: LowPoly.Soup, radius: float, drop: float) -> void:
+	var surface := -0.14
+	var concrete := Color(0.42, 0.4, 0.37)
 	var y := drop + radius
-	PropModels.cyl(s, radius, radius, 0.6, 10, Vector3(0, y, 0.0), Color(0.42, 0.4, 0.37), Vector3(90, 0, 0))
+	# the headwall: a slab on the wall face from the water up past the pipe, a capping course on it
+	var hw_w := radius * 2.0 + 0.55
+	var hw_top := y + radius + 0.22
+	PropModels.box(s, Vector3(hw_w, hw_top - surface + 0.1, 0.16), Vector3(0, (hw_top + surface - 0.1) * 0.5, -0.1), concrete.darkened(0.12))
+	PropModels.box(s, Vector3(hw_w + 0.12, 0.1, 0.24), Vector3(0, hw_top + 0.05, -0.1), concrete.lightened(0.08))
+	PropModels.cyl(s, radius, radius, 0.44, 10, Vector3(0, y, 0.1), concrete, Vector3(90, 0, 0))   # (its back end inside the headwall)
 	PropModels.cyl(s, radius + 0.08, radius + 0.08, 0.1, 10, Vector3(0, y, 0.28), RUST, Vector3(90, 0, 0))
 	PropModels.cyl(s, radius * 0.8, radius * 0.8, 0.04, 10, Vector3(0, y, 0.34), Color(0.05, 0.06, 0.05), Vector3(90, 0, 0))
-	# the stream: a curved ribbon of slabs from the lip down to the surface, widening as it falls
-	var n := 7
+	# the fall: a projectile arc off the lip (it leaves level and drops), sampled as one ribbon of joined segments
+	var y0 := y - radius * 0.5
+	var fall := y0 - surface + 0.12                      # (it runs on under the surface: no end to see)
+	var reach := 0.3 + 0.45 * sqrt(maxf(fall, 0.1))      # how far out it lands
+	var n := 12
+	var pts: Array[Vector3] = []
+	var half: Array[float] = []
+	for i in n + 1:
+		var u := float(i) / float(n)
+		pts.append(Vector3(0, y0 - fall * u * u, 0.28 + reach * u))
+		half.append(radius * (0.62 + 0.28 * u * u))      # (the bore's chord, fanning a little as it falls)
+	_outfall_ribbon(s, pts, half, 0.07, 0.0, g(WATER.darkened(0.3)))
+	# streaks running down the fall: pale strips on its outer face, each from near the lip to well down (each a few mm
+	# prouder than the last: where two cross they never share a plane)
+	var streaks := [[-0.7, 0.05, 0.85], [-0.38, 0.15, 1.0], [-0.05, 0.0, 0.7], [0.3, 0.1, 0.95], [0.62, 0.2, 1.0], [0.15, 0.45, 1.0], [-0.5, 0.5, 1.0]]
+	for si in streaks.size():
+		var st: Array = streaks[si]
+		var a := int(round(float(st[1]) * n))
+		var b := int(round(float(st[2]) * n))
+		var sp: Array[Vector3] = []
+		var sh: Array[float] = []
+		for i in range(a, b + 1):
+			sp.append(pts[i] + Vector3(float(st[0]) * half[i], 0, 0))
+			sh.append(0.035 + 0.02 * float(i) / float(n))
+		_outfall_ribbon(s, sp, sh, 0.02, 0.05 + 0.006 * float(si), g(WATER.lightened(0.6)))
+	# white water where it lands: a boil of foam round the foot of the fall, spray, a foam ring and a ripple
+	var land := Vector3(0, surface, pts[n].z - reach * 0.06)
+	var foam := g(Color(0.92, 0.96, 0.9))
+	for i in 9:
+		var a := TAU * float(i) / 9.0 + 0.3
+		var r := radius * (0.75 + 0.2 * float(i % 3))
+		var k := 0.1 + 0.04 * float(i % 2)
+		PropModels.ball(s, Vector3(k * 1.3, k * 0.7, k), land + Vector3(cos(a) * r, 0.04, sin(a) * r * 0.7), foam, 0, 0.0, Vector3(0, -rad_to_deg(a), 0))
+	for i in 5:
+		var a := TAU * float(i) / 5.0
+		PropModels.ball(s, Vector3(0.05, 0.05, 0.05), land + Vector3(cos(a) * radius * 0.9, 0.2 + 0.08 * float(i % 2), sin(a) * radius * 0.6), foam, 0, 0.0)
+	_outfall_ring(s, land + Vector3(0, 0.025, 0), radius * 1.1, radius * 1.3, 0.75, g(WATER.lightened(0.35)), 0)
+	_outfall_ring(s, land + Vector3(0, 0.015, 0), radius * 1.9, radius * 2.02, 0.75, WATER.lightened(0.2), 5)
+
+
+## A ribbon through `pts` (in the outfall's YZ plane, the width along X): `half` its half width at each point, `thick` its
+## thickness, `proud` how far it sits out along the curve's outer normal (a streak on the stream). One colour, no
+## per-face variation (the old stream's bands were the point). Each segment is its own little hull, wound from its own
+## middle, so every face is wound outward.
+static func _outfall_ribbon(s: LowPoly.Soup, pts: Array[Vector3], half: Array[float], thick: float, proud: float, col: Color) -> void:
+	var n := pts.size()
+	var rings: Array[PackedVector3Array] = []
 	for i in n:
-		var t0 := float(i) / float(n)
-		var t1 := float(i + 1) / float(n)
-		var z0 := 0.32 + 0.45 * t0 * t0 + 0.12 * t0
-		var z1 := 0.32 + 0.45 * t1 * t1 + 0.12 * t1
-		var y0 := y - radius * 0.6 - drop * t0
-		var y1 := y - radius * 0.6 - drop * t1
-		var w := radius * (1.1 + 0.6 * t0)
-		var mid := Vector3(0, (y0 + y1) * 0.5, (z0 + z1) * 0.5)
-		var seg_len := Vector2(z1 - z0, y1 - y0).length()
-		var tilt := rad_to_deg(atan2(z1 - z0, y0 - y1))
-		PropModels.box(s, Vector3(w * 2.0, seg_len + 0.04, 0.07), mid, g(WATER) if i % 2 == 0 else g(WATER.lightened(0.25)), Vector3(tilt, 0, 0))
-	# the splash where it lands
-	for i in 6:
-		var a := TAU * float(i) / 6.0
-		var p := Vector3(cos(a) * 0.32, 0.03, 0.32 + 0.45 + 0.12 + sin(a) * 0.32)
-		PropModels.ball(s, Vector3(0.12, 0.08, 0.12), p, g(Color(0.85, 0.92, 0.8)), 0, 0.0)
+		var t := (pts[mini(i + 1, n - 1)] - pts[maxi(i - 1, 0)]).normalized()
+		var nrm := Vector3(0, t.z, -t.y)          # out from the wall and up (the side the camera sees)
+		var c := pts[i] + nrm * proud
+		var x := Vector3(half[i], 0, 0)
+		var h := nrm * thick * 0.5
+		rings.append(PackedVector3Array([c - x + h, c + x + h, c + x - h, c - x - h]))
+	for i in n - 1:
+		var r0 := rings[i]
+		var r1 := rings[i + 1]
+		var mid := Vector3.ZERO
+		for k in 4:
+			mid += (r0[k] + r1[k]) / 8.0
+		var seg := LowPoly.Soup.new(17 + i, 0.0)
+		for k in 4:
+			seg.add_quad(r0[k] - mid, r0[(k + 1) % 4] - mid, r1[(k + 1) % 4] - mid, r1[k] - mid, col)
+		if i == n - 2:
+			seg.add_quad(r1[0] - mid, r1[1] - mid, r1[2] - mid, r1[3] - mid, col)
+		s.merge(seg, Transform3D(Basis(), mid))
+
+
+## A flat ring on the water (a ripple, a foam ring) round `at`, between radii r0 and r1, squashed to `squash` along Z;
+## `gaps` > 0 leaves out every gaps-th segment and the one after it (a broken ripple, not a drawn circle).
+static func _outfall_ring(s: LowPoly.Soup, at: Vector3, r0: float, r1: float, squash: float, col: Color, gaps: int) -> void:
+	var ring := LowPoly.Soup.new(5, 0.0)
+	var n := 16
+	var lift := Vector3(0, 1.0, 0)                # (wound from a point under the ring: every face up)
+	for i in n:
+		if gaps > 0 and (i % gaps == 0 or i % gaps == 1):
+			continue
+		var a0 := TAU * float(i) / float(n)
+		var a1 := TAU * float(i + 1) / float(n)
+		var d0 := Vector3(cos(a0), 0, sin(a0) * squash)
+		var d1 := Vector3(cos(a1), 0, sin(a1) * squash)
+		ring.add_quad(d0 * r0 + lift, d0 * r1 + lift, d1 * r1 + lift, d1 * r0 + lift, col)
+	s.merge(ring, Transform3D(Basis(), at - lift))
 
 
 ## A run of rusty pipes along +X on wall brackets (the wall is behind, -Z), with flanges, a T going down and a leak.
@@ -324,9 +400,21 @@ static func _grate_bridge(s: LowPoly.Soup, length: float, width: float) -> void:
 		PropModels.box(s, Vector3(length - 0.1, 0.04, 0.04), Vector3(0, 0.45, sz * (hw - 0.05)), HAZARD.darkened(0.2))
 
 
-## A sluice gate across a channel (along X, `width` wide): two steel guide posts in the walls' line, a lintel with a
-## wheel, and the gate plate raised `open` (0 shut, 1 fully up) so the water runs under it.
-static func _sluice(s: LowPoly.Soup, width: float, open: float) -> void:
+## A sluice gate in a flooded doorway (along X, `width` wide: the walls' line at +-width/2; the origin at the deck's height,
+## the channel floor 0.5 under it, the walls cut at 1.5 for the camera). Nothing stands or hangs in the walkable opening
+## at body height (user, 2026-10-20: "you walk through them. Just skip the pipes or stack them horizontally, like a roof
+## you can't see under"). `style`:
+##   "roof" (the default): the gate wound fully up. The jamb posts stand flush in the walls' line, and a steel header with
+##          hazard chevrons sits on them at the wall top, with the raised plate, a pipe and the red wheel stacked on it.
+##   "skip": no header. Only what sits in the walls' line: the jamb posts with their guide slots and hazard bands, and a
+##          gearbox with the red wheel on one jamb.
+##   "plate": the old look (lab only), with the plate raised `open` (0 shut, 1 fully up) and hanging across the opening.
+static func _sluice(s: LowPoly.Soup, width: float, open: float, style: String = "") -> void:
+	if style == "":
+		style = "roof"
+	if style != "plate":
+		_sluice_frame(s, width, style == "roof")
+		return
 	var hw := width * 0.5
 	var top := 2.0
 	for sx: float in [-1.0, 1.0]:
@@ -347,6 +435,56 @@ static func _sluice(s: LowPoly.Soup, width: float, open: float) -> void:
 		PropModels.box(s, Vector3(0.2, 0.05, 0.05), Vector3(cos(a) * 0.28, top + 0.05, sin(a) * 0.28), Color(0.75, 0.14, 0.1), Vector3(0, -rad_to_deg(a) + 90.0, 0))
 	PropModels.box(s, Vector3(0.6, 0.04, 0.04), Vector3(0, top + 0.05, 0), Color(0.75, 0.14, 0.1))
 	PropModels.box(s, Vector3(0.04, 0.04, 0.6), Vector3(0, top + 0.05, 0), Color(0.75, 0.14, 0.1))
+
+
+## The sluice's frame (styles "roof" and "skip"): every piece in the walls' line or over the wall top, none in the
+## opening below 1.5 over the deck (2.0 over the channel floor, where a wader's head is about 1.3).
+static func _sluice_frame(s: LowPoly.Soup, width: float, roof: bool) -> void:
+	var hw := width * 0.5
+	var bed := -0.5                     # the channel floor (SewerLayouts.CH_LEVEL)
+	var top := 1.5                      # the wall top (SewerLayouts.WALL_LEVEL)
+	var red := Color(0.75, 0.14, 0.1)
+	var post_top := top if roof else top + 0.3
+	for sx: float in [-1.0, 1.0]:
+		# the jamb post: its inner face 5 cm proud of the wall's face, a dark guide slot down its middle, hazard bands
+		var px := sx * (hw + 0.05)
+		PropModels.box(s, Vector3(0.2, post_top - bed, 0.34), Vector3(px, (post_top + bed) * 0.5, 0), STEEL.darkened(0.2))
+		PropModels.box(s, Vector3(0.03, post_top - bed - 0.1, 0.1), Vector3(sx * (hw - 0.065), (post_top + bed) * 0.5, 0), Color(0.06, 0.06, 0.07))
+		for i in 4:
+			var by := 0.05 + float(i) * 0.3
+			for sz: float in [-1.0, 1.0]:
+				PropModels.box(s, Vector3(0.16, 0.15, 0.02), Vector3(px, by, sz * 0.18), HAZARD if i % 2 == 0 else Color(0.08, 0.08, 0.1))
+		if not roof:
+			PropModels.box(s, Vector3(0.28, 0.08, 0.42), Vector3(px, post_top + 0.04, 0), STEEL.darkened(0.1))
+	if not roof:
+		# a gearbox on the right jamb, the screw's stub and the wheel flat on it (over the wall, not the opening)
+		var gx := hw + 0.05
+		PropModels.box(s, Vector3(0.24, 0.22, 0.3), Vector3(gx, post_top + 0.19, 0), Color(0.33, 0.4, 0.3))
+		PropModels.rod(s, Vector3(gx, post_top + 0.3, 0), Vector3(gx, post_top + 0.42, 0), 0.04, 0.04, 6, STEEL)
+		_sluice_wheel(s, Vector3(gx, post_top + 0.42, 0), 0.24, red)
+		return
+	# the header on the jambs at the wall top, a hazard chevron band on both faces
+	PropModels.box(s, Vector3(width + 0.5, 0.22, 0.36), Vector3(0, top + 0.11, 0), STEEL.darkened(0.15))
+	for i in int((width + 0.3) / 0.36):
+		for sz: float in [-1.0, 1.0]:
+			PropModels.box(s, Vector3(0.17, 0.12, 0.02), Vector3(-hw - 0.05 + 0.18 + float(i) * 0.36, top + 0.11, sz * 0.19), HAZARD if i % 2 == 0 else Color(0.08, 0.08, 0.1))
+	# the plate wound fully up into the header: its rusted bottom edge and ribs stacked on top, narrower than the header
+	PropModels.box(s, Vector3(width - 0.2, 0.2, 0.12), Vector3(0, top + 0.32, 0), RUST)
+	PropModels.box(s, Vector3(width - 0.1, 0.05, 0.18), Vector3(0, top + 0.3, 0), RUST_DK)
+	# a pipe along the back of the stack (the screw's housing), the screw and the wheel on top in the middle
+	PropModels.rod(s, Vector3(-hw - 0.1, top + 0.3, -0.13), Vector3(hw + 0.1, top + 0.3, -0.13), 0.06, 0.06, 7, RUST.darkened(0.15))
+	PropModels.rod(s, Vector3(0, top + 0.42, 0), Vector3(0, top + 0.55, 0), 0.04, 0.04, 6, STEEL)
+	_sluice_wheel(s, Vector3(0, top + 0.55, 0), 0.26, red)
+
+
+## A valve wheel lying flat at `at` (its rim, two spokes across, a hub).
+static func _sluice_wheel(s: LowPoly.Soup, at: Vector3, r: float, col: Color) -> void:
+	for i in 8:
+		var a := TAU * float(i) / 8.0
+		PropModels.box(s, Vector3(r * 0.72, 0.05, 0.05), at + Vector3(cos(a) * r, 0, sin(a) * r), col, Vector3(0, -rad_to_deg(a) + 90.0, 0))
+	PropModels.box(s, Vector3(r * 2.0, 0.035, 0.04), at, col)
+	PropModels.box(s, Vector3(0.04, 0.03, r * 2.0), at, col)
+	PropModels.cyl(s, 0.06, 0.06, 0.08, 8, at, STEEL.darkened(0.2))
 
 
 ## A brick arch rib springing from a wall (the wall is behind it, -Z): a pier up the wall and the first course of the

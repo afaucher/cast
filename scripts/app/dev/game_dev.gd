@@ -9,8 +9,8 @@ extends "res://scripts/app/game.gd"
 ##   --to-gate --to-theme --to-corridor --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
 ##   --shark-demo --monster-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
-## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|nip|wire (the sewer slice, solo only:
-## scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built").
+## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|nip|wire|sluice[:n]|outfall[:n] (the sewer slice,
+## solo only: scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built").
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -969,11 +969,13 @@ func _stage_plateau() -> void:
 		map.get_cell(n).level = base + 5
 
 
-## --sewer-demo overview|nip|wire (screenshots), after --demo-after seconds (1.0):
+## --sewer-demo overview|nip|wire|sluice[:n]|outfall[:n] (screenshots), after --demo-after seconds (1.0):
 ##   overview  the crew on the first sewer room's deck, the camera on the layout's middle; the staged monsters hold still
 ##   nip       the player steps into the gator's territory in front of it: it watches, gapes (the wind-up) and nips
 ##   wire      the crew dry by the first electrical panel, Rebar and two held skeletons wading near where its cable lands;
 ##             the player breaks the panel: the cable drops into the water and the shock runs through it
+##   sluice[:n]  the player wading through the layout's n-th sluice doorway (0: the first), Rebar just beyond it
+##   outfall[:n] the camera on the layout's n-th outfall pipe (use --zoom 10 for a close look)
 func _sewer_demo(stage: String) -> void:
 	for ally in allies:
 		var b := ally.get_node_or_null("AllyBrain")
@@ -1064,6 +1066,32 @@ func _sewer_demo(stage: String) -> void:
 			await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
 			if is_instance_valid(pan) and not pan.dead:
 				pan.apply_damage(5.0, player)   # (the player's arrow, say: the panel breaks, the cable drops)
+		_:
+			# sluice[:n] / outfall[:n]: the camera on the layout's n-th piece of that decor (0 = the first); at a sluice the
+			# player wades through its doorway and Rebar stands just beyond it (does anything hang at body height?)
+			var parts := stage.split(":")
+			var want := parts[0]
+			var nth := int(parts[1]) if parts.size() > 1 else 0
+			var found: Array[Dictionary] = []
+			for e: Dictionary in (_sewer_layout.get("decor", []) as Array):
+				if str(e["kind"]) == want:
+					found.append(e)
+			if found.is_empty() or player == null:
+				return
+			var d: Dictionary = found[clampi(nth, 0, found.size() - 1)]
+			var pos: Vector2 = d["pos"]
+			var at := Vector3(pos.x, 0.0, pos.y)
+			var fwd := Vector3(sin(deg_to_rad(float(d["yaw"]))), 0.0, cos(deg_to_rad(float(d["yaw"]))))
+			if want == "sluice":
+				player.global_position = at - fwd * 0.2
+				player.snap_to_ground()
+				player.face_point(at + fwd * 3.0)
+				var k := 0
+				for ally in allies:
+					ally.global_position = at + fwd * (1.6 + 1.6 * k) + Vector3(-fwd.z, 0.0, fwd.x) * (0.6 - 1.2 * k)
+					ally.snap_to_ground()
+					k += 1
+			_sewer_focus(at + fwd * (0.5 if want == "sluice" else 1.5))
 
 
 func _sewer_focus(at: Vector3) -> void:

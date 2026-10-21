@@ -542,7 +542,7 @@ static func _grate(s: LowPoly.Soup, p: Dictionary) -> void:
 
 
 static func _sluice(s: LowPoly.Soup, p: Dictionary) -> void:
-	SewerProps._sluice(s, float(p.get("width", 3.0)), float(p.get("open", 0.45)))
+	SewerProps._sluice(s, float(p.get("width", 3.0)), float(p.get("open", 0.45)), str(p.get("style", "")))
 
 
 static func _bars(s: LowPoly.Soup, p: Dictionary) -> void:

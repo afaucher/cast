@@ -6,11 +6,11 @@ extends RefCounted
 ##   _dev_floor     the layout's map and plan in place of the generated floor (game.gd's one hook for it)
 ##   (deferred)     SewerView dresses the terrain: the water, foam, kerbs, the look and its light
 ##   _spawn_near    stage(): the layout's monsters, its goblin scout, the gator, the live wires on the panels
-##   _dev_on_floor_ready  demo(): --sewer-demo overview|nip|wire (screenshots)
+##   _dev_on_floor_ready  demo(): --sewer-demo overview|nip|wire|sluice[:n]|outfall[:n] (screenshots)
 ## The flag starts the contract on floor 2 unless --floor says otherwise, so the crew arrives in the elevator, which stands
 ## on the layout's dry landing deck.
 ##
-## Flags: --sewer N, --sewer-demo overview|nip|wire (with --demo-after S, default 1.0).
+## Flags: --sewer N, --sewer-demo overview|nip|wire|sluice[:n]|outfall[:n] (with --demo-after S, default 1.0).
 
 
 ## The sewer flags into the game's opts (GameDev._parse_args).

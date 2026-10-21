@@ -940,8 +940,9 @@ the sump pump, the electrical panel and its live wire, and the decor kit. No gen
   and steps out onto the layout's dry landing deck. The landing is the exit: E there opens the elevator menu as usual, and
   the next floor is the same layout again.
 - Solo only: ignored in a shared run, like `--lava-cave` (`GameDev._sewer()`).
-- Screenshots: `--sewer-demo overview|nip|wire` (with `--demo-after S`): the crew on the first room's deck and the camera
-  on the layout; the player stepping into the gator's territory; the crew by a panel, the player breaking it.
+- Screenshots: `--sewer-demo overview|nip|wire|sluice[:n]|outfall[:n]` (with `--demo-after S`): the crew on the first
+  room's deck and the camera on the layout; the player stepping into the gator's territory; the crew by a panel, the
+  player breaking it; the player wading through a sluice doorway; the camera on an outfall.
 
 **What to try:**
 1. **Wade.** Every channel is one body of water: 0.75x, soaked (a fireball fizzles on you, a fire goes out).
@@ -971,7 +972,7 @@ the sump pump, the electrical panel and its live wire, and the decor kit. No gen
 | Its look | `Gator.model_for` (the lab's `SewerProps` "gator" at 1.3) | Toon material (`MonsterMaterial`: ink outline, amber rim), the eye slits its monster glow (`glow_gain` by state: half lit calm, bright watching, hot nipping), five pre-built bends x jaws shut / open chosen by its turning, a tail thrash when riled, a V wake and a ripple on the water. Z-fight clean (every variant in `ZFightModels`) |
 | The props | `PricedProp.TABLE` "sump_pump" ($3,500, HP 70) and "electrical_panel" ($250, HP 1), site "sewer" (no site's catalog has them) | Models: `PropModels` builds them from the lab's `pump` and `junction_box` |
 | The live wire | `scripts/world/sewer/live_wire.gd` (`LiveWire`), a child of each panel | On the panel's `broken` (billed to the breaker like any prop): the cable swings down (0.6 s) to the first water in front of the panel, then the shock: everyone standing in water within **5 hex cells** of the drop (`Combat.hits_in_radius`, then the hex distance and `water_at`): 12, x1.5 soaked, a 0.6 s daze (by the target's owner); then 6 (x1.5) every 1.5 s for 6 s; one use. Its damage is credited to the breaker (a gator it kills bills them) |
-| Decor | `RoomThemeDefs.DECOR` + `DecorModels`: outfall, pipe_bundle, grate, sluice, bars, tool_cart | The six from the scope, built from `SewerProps`; the sluice gates stand in the flooded doorways as decor (the plate raised, no door behaviour). In the z-fight registry with every other decor kind |
+| Decor | `RoomThemeDefs.DECOR` + `DecorModels`: outfall, pipe_bundle, grate, sluice, bars, tool_cart | The six from the scope, built from `SewerProps`; the sluice gates stand in the flooded doorways as decor (no door behaviour). Since the playtest fixes below, the gate is wound up overhead (style "roof") and the outfall pours a stream that reads as falling water. In the z-fight registry with every other decor kind |
 | Staging | `scripts/app/dev/sewer_dev.gd` (`SewerDev.stage`) | Round 2's lists without rats, eels, gas pockets, steam or bridges: skeletons on the decks and one or two wading, archers on decks across the channels (L5: the main's far ledge), a brute, a goblin scout on a wide hall's ledge (L1, L4) or at his post (L5), one gator, one employee (Stan in the bunker, Gary / Keith / Nigel on pump duty in a lair), notes (the signs DO NOT DRINK, DO NOT FEED THE GATOR, LEVEL RISES WITHOUT WARNING, GATOR CROSSING; the feeding rota, the pump log, the aquarium complaint), the pumps, a panel in every layout, explosives on dry decks, the villain's tanks and lockers in the lair layouts. Their pest-kind monsters count toward the floor's pest objective |
 | The flag | `scripts/app/dev/game_dev.gd` (`GameDev`): `_parse_args` (SewerDev.parse), `_dev_floor`, `_spawn_near`, `_dev_on_floor_ready` | `game.gd` gained ONE hook, `_dev_floor()` (a call after the plan in `_build_world` and its no-op), where GameDev swaps in the layout's map and plan |
 | Corn | `scripts/spells/corn_strike.gd` | One line beside `Shark.corn_at`: `Gator.corn_at` (chum) |
@@ -1005,6 +1006,47 @@ the sump pump, the electrical panel and its live wire, and the decor kit. No gen
 - The live wire: the panel's break is an `obj.break`; every machine runs the drop, the shock and the pulses from the break's
   shared moment (the code already applies each hit only where it resolves); `test_net_live_wire`.
 - The water body record and the layout in `NetFloor`'s checksum, and the flag allowed in a shared run.
+
+### Playtest fixes: the sluice and the outfall (2026-10-20)
+
+The user, playtesting `--sewer 2`:
+- "The gates with the red wheels and what look like pipes also don't read well because you walk through them. Just skip
+  the pipes or stack them horizontally, like a roof you can't see under."
+- "Also - the pipe in the sewer map, I can't tell what it is doing. There are horizontal lines coming out. Is that water?"
+
+What changed (`SewerProps._sluice` / `_outfall` in `scripts/art/lowpoly/props/sewer_props.gd`). The shots are taken at the
+game camera, before and after, in `sewer_fixes/`; `sheet.png` shows them all:
+- **The sluice: nothing in the opening at body height.** The old gate's plate hung at waist height across the doorway
+  (open 0.45), its posts stood just inside the jambs and the lintel sat at head height, so heroes waded through all three.
+  Two styles were built (`SewerProps.build("sluice", {"style": ...})`):
+  - **B "roof" (the default, the game's look):** the gate is wound fully up. The jamb posts stand flush in the walls'
+    line (a dark guide slot and hazard bands on them), and a steel header with hazard chevrons sits on them at the wall
+    top (1.5 over the deck, 2.0 over the channel floor; a wader's head is about 1.3). On the header, stacked horizontally,
+    are the raised rusted plate, a pipe along its back and the red wheel lying flat. At the game camera it hides no more
+    than an office door's header does.
+  - **A "skip":** no header. Only the jamb posts in the walls' line remain, a little taller, with a gearbox and the red
+    wheel on one of them.
+  - Why B: at the game camera B still reads as a gate across the doorway (a lintel with chevrons, the raised plate and
+    the wheel, like an office door's header). A, at the overview zoom, is a lone valve post beside an open doorway. The
+    old look stays selectable as `"plate"` for the labs.
+  - The sluice is decor that blocks nothing (`RoomThemeDefs` "sluice": `blocks: false`), so heroes, monsters and the
+    gator walk through the doorway as before.
+  - `DecorModels` passes the decor's `style` param on, so a layout can choose a style per placement (`SewerLayouts._sluice`
+    gives none: the default).
+- **The outfall: the stream reads as falling water.** The old stream was seven slabs in two alternating tones, so it
+  looked like horizontal bars. It also ended above the water. The new stream:
+  - one continuous ribbon in one water tone that arcs off the lip and falls into the channel (it runs on under the
+    surface, 0.14 under the deck);
+  - pale streaks running down the fall;
+  - white water where it lands: a boil of foam, spray, a foam ring and a broken ripple ring on the surface.
+  - A concrete headwall now holds the pipe, because the room's walls are cut low for the camera and the pipe used to
+    float above them.
+  - It is static: the decor kit has one material and no animation hook for a decor model. An animated scroll down the
+    fall would need its own shader and is left for later.
+  - Checked in L2 (brick) and L4 (concrete). The user allowed dropping the outfall if the stream still didn't read (the
+    water would come from "under" for now). It reads, so the layouts keep it.
+- Screenshots: `--sewer-demo sluice[:n]` (the player wading through the layout's n-th sluice doorway, Rebar just beyond it)
+  and `--sewer-demo outfall[:n]`, with `--zoom 10 --no-fog` (`GameDev._sewer_demo`).
 
 ### Known limits
 
