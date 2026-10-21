@@ -2,7 +2,8 @@
 extends RefCounted
 ## Which gameplay events carry state the snapshot does not (docs/design/networking-build-plan.md §3, "How
 ## test_net_contract grows"). test_net_contract holds every OWNER var of a replicated class to this rule: it is
-## either in the codec's field list (NetCodec.HERO_FIELDS, NetWorldCodec.*_FIELDS: it rides every snapshot) or named
+## either in the codec's field list (NetCodec.HERO_FIELDS, NetWorldCodec.*_FIELDS, a runtime actor's
+## NetWorldCodec.RUNTIME_ACTORS "fields": it rides every snapshot) or named
 ## here, with the event (or the reason) that makes it right on the other screens. A new OWNER var that is in neither
 ## fails the build, so content cannot silently go unreplicated.
 ##
@@ -29,7 +30,9 @@ const _ACTOR_WORLD := {
 }
 const _FIXED := "fixed: it never moves, turns or climbs (built from the floor plan on every machine)"
 
-## Host-owned classes (M3): script -> {OWNER var -> its carrier}. Their snapshot fields are in NetWorldCodec.
+## Host-owned classes (M3): script -> {OWNER var -> its carrier}. Their snapshot fields are in NetWorldCodec (a runtime
+## actor's in RUNTIME_ACTORS). A host-arbitrated object's obj.* events are its own (the net-object contract, NetObjects: its
+## net_link sends them, its net_event applies them), so its entry names them.
 const WORLD_CARRIES := {
 	"res://scripts/monsters/monster.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
@@ -133,7 +136,7 @@ const WORLD_CARRIES := {
 ## The packet types and event kinds the sync uses (documented here, defined where they are sent).
 ##   T_SNAP (unreliable)   hero snapshots, both ways (NetCodec); host -> client also the world (NetWorldCodec, M3)
 ##   seat.ai (reliable)    host -> clients: a seat went back to the AI as its original character
-##   world.* (reliable)    host -> clients (NetWorld): spawn (monsters and chickens), die, say, extract, phase, shove
+##   world.* (reliable)    host -> clients (NetWorld): spawn (monsters and runtime actors: chickens), die, say, extract, phase, shove
 ##   obj.* (reliable)      NetObjects: req / loadout (client -> host; M4: req hit on any host-owned actor, shove, mod);
 ##                         break, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
 ##                         shove / mod passed on to the owner of a player's hero (host -> clients); fuse / out (an
@@ -165,6 +168,8 @@ const KIND_SEAT_TAKE := "seat.take"
 ##   gone      the seed-built ids that are gone on the host (dead, broken, opened, extracted, used): removed or shown dead
 ##   replay    the events that made it (runtime spawns, pickups on the floor, statuses, dents), replayed once
 ##   handover  the heroes: the seat table, each seat's kit and player, its state (NetJoin heroes + SeatHandover.take)
+## A host-arbitrated object's replay rows are its own (late_join_state / apply_late_join, the net-object contract in
+## NetObjects); a runtime actor's are the world.spawn replay and the keyframe (NetWorld, RUNTIME_ACTORS).
 ## A new replicated class without an entry here fails the build: it would be wrong on a late joiner's screen.
 const LATE_JOIN := {
 	"res://scripts/heroes/hero.gd": "handover: kit, player name, owner and epoch per seat; position, HP, slots, charges, held slot (heroes); the joiner's own seat: SeatHandover.hero_state; statuses: replay; the AI seats' order states: `orders` (NetOrders.late_join_state)",
@@ -187,5 +192,5 @@ const LATE_JOIN := {
 	"res://scripts/contracts/mail_package.gd": "gone ids (opened: removed; its prize is a pickup, replayed)",
 	"res://scripts/spells/chicken.gd": "runtime spawns: replay of world.spawn (kind chicken); then the keyframe (a monster-format entry); statuses: replay",
 	"res://scripts/spells/component_pickup.gd": "replay of obj.pickup for every pickup on the floor (charges and age); a used seed-built one: gone ids",
-	"res://scripts/contracts/office_door.gd": "replay of obj.door / obj.break for every door (NetObjects.late_join_state `doors`: id, shut, swing, broken)",
+	"res://scripts/contracts/office_door.gd": "replay of obj.door / obj.break for every door (OfficeDoor.late_join_state `doors`: id, shut, swing, broken)",
 }

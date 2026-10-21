@@ -201,7 +201,8 @@ model), `scripts/fx/chicken_fx.gd` (the feathers), `SpellBook._cast_chicken`. Te
 - **Networking (the "owned actor" shape, host-owned like a monster):** the cast is an event that lands on every machine
   (`NetCasts.LEAD`); every screen shows the feather cloud, and **only the host spawns the flock** and runs it (rolls on
   `GameWorld.rng`). `NetWorld` announces each chicken as a runtime spawn (`world.spawn`, kind "chicken"), streams it as a
-  monster-format entry (`NetWorldCodec.CHICKEN_FIELDS`: state, the peck's wind-up, the peck count) and its death as
+  monster-format entry (it is the first runtime actor, `NetWorldCodec.RUNTIME_ACTORS`: state, the peck's wind-up, the
+  peck count) and its death as
   `world.die`. A client shows puppets that play the same pecks (the "0" on whatever its screen shows the chicken pecking),
   flaps and poof. A client's hit on a chicken is a request the host applies. Pecks change nothing a client owns (a hero
   shrugs), so nothing about them travels. A late joiner gets the chickens as runtime spawns plus the keyframe.

@@ -214,8 +214,8 @@ building it.
 | Shape | Examples | What it needs |
 |---|---|---|
 | **Scheduled effect**: one broadcast, then every machine computes it from `(SPAWN params, start time)` | corn, tentacles, boulder, fireball, arrows, Gasket's spin | Params `SPAWN`, motion `LOCAL`, hits through `Combat` |
-| **Owned actor** | heroes, monsters, employees, the Chicken spell's chickens (host-owned: the cast lands everywhere, the host spawns them) | `net_fields()`, changes through verbs |
-| **Host-arbitrated world object** | pickups, doors, elevator, priced props, explosive props (their blast is a scheduled effect at the host's fuse end: `hazards.md`) | Host-owned. Players request; the host grants with a reliable event |
+| **Owned actor** | heroes, monsters, employees, the Chicken spell's chickens (host-owned: the cast lands everywhere, the host spawns them) | `net_fields()`, changes through verbs. A host-owned actor spawned during play by a cast or an effect is a **runtime actor**: one `NetWorldCodec.RUNTIME_ACTORS` entry (its `world.spawn` kind, group and codec fields) and `net_read` / `net_write` / `make_shown` on the class |
+| **Host-arbitrated world object** | pickups, doors, elevator, priced props, explosive props (their blast is a scheduled effect at the host's fuse end: `hazards.md`) | Host-owned. Players request; the host grants with a reliable event. The class implements the **net-object contract** (`NetObjects`): `net_link`, `net_event`, and as needed `net_request`, `late_join_state` / `apply_late_join`, `net_order` (not an Actor) |
 | **Cosmetic** | debris, sparks, grime, decor animation | Nothing: local only, `fx_rng` |
 
 ### New-content checklist
@@ -229,6 +229,20 @@ Use this in every spec and review that adds content:
 6. What is cosmetic, and what is gameplay?
 7. What does a player who joins mid-floor see?
 8. Which two-peer scenario will cover it, once those exist?
+9. If it is a host-arbitrated object, it implements the net-object contract on its own class (`NetObjects`' header has the
+   full list; nothing in `scripts/net/` names the class):
+   - `net_link(objects, id)`: the host connects the object's signals to the `obj.*` events they become
+     (`objects.link`, `objects.tell`, `objects.count`);
+   - `net_event(kind, data, objects)`: a client applies those events to its copy;
+   - `net_request(what, data, peer, objects)`: the host decides a client's `obj.req` about it, once;
+   - `late_join_state(objects, id)` / `apply_late_join(section, row, objects)`: its rows of a late joiner's snapshot;
+   - not an Actor: `net_order()` places its net id after the actors (`NetFloor`), and `net_make_copy()` if a client's copy
+     must keep its physics. A copy with `net_tick` / `net_contacts` gets them from `NetObjects`.
+   Then its `NetEvents.WORLD_CARRIES` and `LATE_JOIN` entries, and `test_net_contract`'s `REPLICATED`.
+10. If it is a runtime actor (host-owned, spawned during play, not by a gate), it is a `NetWorldCodec.RUNTIME_ACTORS` entry and
+   implements `net_read(st)` (its mode, telegraph and extra slots), `net_write(st)`, `net_tick(delta)` and
+   `static make_shown(at)`; `NetWorld` streams it as a monster-format entry on the one runtime track. `test_net_contract`
+   holds its OWNER vars to the entry's fields.
 
 ### Known gaps, found while writing the declarations (2026-10-17)
 The declarations pass, but today's solo code does these things directly. Each one becomes a message

@@ -16,8 +16,8 @@ extends Node
 ##              players grabbing at once never both get it. The player's own machine then changes its own hero's
 ##              slots and charges (they are OWNER fields) and tells the crew (`obj.loadout`). A swapped-out spell is
 ##              a `drop` request: the host puts the pickup down.
-##   EMPLOYEES  E on an employee from a client is `follow` / `wait` (Employee.request_follow / request_wait run on
-##              the host). The client already found the employee within E's reach on its own screen, so the host
+##   EMPLOYEES  E on an employee from a client is `follow` / `wait` (Employee.net_request: request_follow / request_wait
+##              run on the host). The client already found the employee within E's reach on its own screen, so the host
 ##              trusts that and judges only the state (alive, not extracted, following that hero / free to recruit):
 ##              requests are taken in order, so of two at once the first wins and a conflicting later one is refused.
 ##              Range was the one thing the host's ~100 ms old picture got wrong (a second E press, M7 as built item 7).
@@ -85,11 +85,11 @@ var employee_log: Array = []
 var _session: NetSession = null
 var _local: Hero = null
 var _pickups: Dictionary = {}      ## host: id -> [ComponentPickup, charges announced]; client: id -> ComponentPickup
-var _ticked: Array[Node] = []      ## client: props and mail boxes that run their local look (net_tick)
+var _ticked: Array[Node] = []      ## client: net objects that run their local look (net_tick: props, mail boxes)
 var _requested: Dictionary = {}    ## client: pickup id -> host_time asked
 var _links: Array = []
 var _exit_taken := false
-var _contacts: Array[Node] = []    ## client: props, crates and mail its own shoved hero may hit (M4)
+var _contacts: Array[Node] = []    ## client: net objects its own shoved hero may hit (net_contacts: props, crates, mail; M4)
 
 
 func _ready() -> void:
@@ -105,6 +105,7 @@ func _ready() -> void:
 	Ledger.line_added.connect(_on_ledger_line)
 
 
+## (An object's own counters start here too when tests read them with stats[key]; count() adds any other key.)
 func _reset_stats() -> void:
 	employee_log = []
 	stats = {"hits_out": 0, "hits_in": 0, "breaks": 0, "grants": 0, "denies": 0, "requests": 0, "pickups": 0,

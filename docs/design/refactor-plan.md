@@ -14,6 +14,15 @@ Status: **in progress**. Done so far:
   and `use_press` on `Employee`, `ClueNote`, `OfficeDoor` and `ComponentPickup`, with thin adapters for the van and
   the elevator (`VanExitUse`, `ElevatorUse`). `game.gd` `use_target()` is a query over one candidate per kind; score
   bands keep the old order. `UseTarget` and the `_use_key` match are gone; requests and golden floors unchanged.
+- H5: networked objects and runtime actors are units. A host-arbitrated object implements the net-object contract on its
+  own class (`net_link`, `net_event`, `net_request`, `late_join_state` / `apply_late_join`, and `net_order` when it is not
+  an Actor): `PricedProp`, `ExplosiveProp`, `BreakableCrate`, `MailPackage`, `OfficeDoor`, `ComponentPickup`, and
+  `Employee`'s follow / wait requests. `NetObjects` dispatches by net id with no object class named; `NetFloor` collects
+  the non-actor objects in one walk by `net_order()` (ids unchanged). The chicken is the first runtime actor:
+  `NetWorldCodec.RUNTIME_ACTORS` and one `RUNTIME` track in `NetWorld` replace `CHICKEN_FIELDS`, `read_/write_chicken`
+  and the `is Chicken` branches. Event names, payloads, the late-join snapshot and the wire format are unchanged;
+  `test_net_contract` section 8 holds both units. The pickups' numbering, obj.pickup / pick / gone and first-come grants
+  stay `NetObjects`' pickup protocol.
 - wave 6 (early): H9, `LabBase` (`scripts/test_support/lab_base.gd`). 19 look-dev lab scripts moved onto it with their
   flags, output names and renders unchanged. Not yet moved: `pavise_lab`, `healer_lab`, `sewer_lab`,
   `sewer2_lab`, `lava_lab` and `lava_layouts_lab` (edited by the lava / sewer session; `sewer2`, `lava` and
@@ -144,7 +153,8 @@ Seed-built specials (scout, shark, and soon the Pavise and Water Cooler) declare
 - **Themes:** the vignette op match becomes a table of ops.
 - **Floors:** `THEME_FLOOR`/`THEME_WALL`/`THEME_LOOK` move into the theme row.
 
-### H5: networked objects and runtime actors as units
+### H5: networked objects and runtime actors as units (done)
+Status: done, see the top of this file; `docs/design/networking.md` ("New-content checklist", items 9 and 10) says how to add one.
 - **Host-arbitrated objects:** they implement one interface: `net_link(objects)`, `net_event(kind, data)`,
   `net_request(what, data)`, `late_join_state()` and `apply_late_join()`.
   - `NetFloor` collects them by group, not by per-type recursion, and keeps tree order so ids don't move.

@@ -9,6 +9,23 @@ commit if you only know the path.
 
 Entries are grouped by the wave that removed them. Newest first.
 
+## H5 (2026-10-20): per-type networking branches, removed in 11de02b..a50ab68
+- **Paths:** in `scripts/net/net_objects.gd`: the `is PricedProp / ExplosiveProp / BreakableCrate / MailPackage /
+  OfficeDoor` chain in `begin()`, the handlers `_on_prop_hurt`, `_on_broken`, `_on_mail_broken`, `_on_fuse`,
+  `_on_douse`, `_on_door`, `_on_door_smashed`, `_client_fuse` and `_client_break` (with its door and mail special
+  cases), the `obj.door` / `obj.fuse` / `obj.out` / `obj.hurt` cases of `_on_event`, the `door` and `follow` / `wait`
+  cases of `_host_request`, and the per-type loops of `late_join_state` / `apply_late_join` (11de02b, 1343ed5, 6591c44,
+  8fe8e81, 6aab8e9). In `scripts/net/net_floor.gd`: `doors_under`, `_collect_doors`, `pickups_under`,
+  `_collect_pickups` (c3d6b3f). In `scripts/net/net_world_codec.gd`: `CHICKEN_FIELDS`, `read_chicken`, `write_chicken`;
+  in `scripts/net/net_world.gd`: `const CHICKEN` and its branches (015c86a). About 200 lines.
+- **What it was:** every host-arbitrated object class had a branch in each of NetObjects' places (links, client events,
+  requests, breaks, late join) and a collector in NetFloor; the chicken, the one runtime-spawned host actor, had its own
+  kind, field list and read/write in NetWorld and its codec.
+- **What replaced it:** the net-object contract on each class (`net_link`, `net_event`, `net_request`,
+  `late_join_state` / `apply_late_join`, `net_order`, `net_make_copy`), `NetFloor.objects_under`, and
+  `NetWorldCodec.RUNTIME_ACTORS` with `Chicken.net_read` / `net_write` on one `RUNTIME` track (refactor-plan.md H5).
+  The code moved into the classes; nothing changes on the wire or in play.
+
 ## H6 (2026-10-20): the E key's if/elif chain, removed in 0ba7bbe
 - **Path:** in `scripts/app/game.gd`: `class UseTarget` (kind, verb, pos and an `employee` / `note` / `door` field per
   kind), the if/elif chain in `use_target()` that filled it, the `match t.kind` in `_use_key()`, and the
