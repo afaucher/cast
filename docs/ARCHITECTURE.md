@@ -408,6 +408,25 @@ explosive props (`HazardPlanner.plan`, own dice, the same wall poses), scale the
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.
 
+### Props, decor and room themes (one row each)
+Each kind declares itself in one table row; the modules that need a fact read it from the row (refactor-plan.md H4).
+- **A priced prop:** a row in `PricedProp.TABLE` (`scripts/contracts/priced_prop.gd`): name, price, hp, radius, site,
+  placement, and its look: `height`, `model` (a `PropModels` builder, `static func _x(s: LowPoly.Soup)`), `palette` and
+  an optional `extra` (`static func() -> Node3D`, e.g. the brazier's embers). Write the builder in
+  `scripts/art/lowpoly/props/prop_models.gd`; `PropModels.build/palette/height` and the z-fight registry read the row.
+  An **explosive** (site `"hazard"`) also needs `blast` {radius, damage, shove, fuse} and `fuse_point`: a hazard row
+  without a blast is an error (`ExplosiveProp.blast_of`), and `test_explosive_props` checks both.
+- **A decor kind:** a row in `RoomThemeDefs.DECOR` (`scripts/world/themes/room_theme_defs.gd`): placement, footprint,
+  blocks, weight, and `model` (a `DecorModels` builder, `static func _x(s: LowPoly.Soup, params: Dictionary)`), or
+  `node_model` (built on its own nodes, the neon sign), an optional `after` hook (`func(root, params)`: animation,
+  labels), `flat` (a floor decal) and `breakable` (smashes like a crate, `BreakableCrate`).
+- **A room theme:** a row in `RoomThemeDefs.THEMES` (name, site, min_cells, priced, hazards, recipe, light, and
+  `note_word`, `floor_mat`, optional `wall_mat` and `pool_look`) and its id in `POOLS`. `FloorMaterials`, `PoolGeo.look_of`
+  and `NoteFacts.theme_word` read the row; notes, materials and pools are in the floor plan, so changing a shipped
+  theme's fields changes golden floors. A new recipe op is a function in `ThemeVignettes` and one entry in
+  `ThemeVignettes.OPS` (`test_room_themes` checks every op has one). Story origins stay three keyed copies of the same
+  text (`ClientArchetype` events, `NoteCopy.STORY` "event", `RoomThemeDefs.ORIGIN_THEMES`), each checked by a test.
+
 ## Look-dev labs
 
 A lab is a scene `scenes/<x>_lab.tscn` with a script `<x>_lab.gd` that renders a feature for screenshots, run as

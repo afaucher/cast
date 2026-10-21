@@ -28,6 +28,12 @@ Status: **in progress**. Done so far:
   prop and `GLOW`, its remote-status hook and its voice aliases. `SpellBook.DEFS` is the ordered registry and `SPELLS` is
   built from it; `apply`, `ComponentProps.make`, `NetStatus._show` and `Incantation` read the defs. Callers read the
   tuning from the def (`HealSpell.HEAL_BASE`). Casts, numbers, net events and golden floors unchanged.
+- H4: props, decor and room themes are one row each. A `PricedProp.TABLE` row carries the prop's height, `PropModels`
+  builder, palette and extra, and for an explosive its blast and fuse point (a hazard without a blast is an error, not an
+  oil drum); a `RoomThemeDefs.DECOR` row its `DecorModels` builder, post-build hook, `flat` and `breakable`; a
+  `RoomThemeDefs.THEMES` row its `note_word`, `floor_mat`, `wall_mat` and `pool_look`. The builds, palettes and the
+  vignette op match (`ThemeVignettes.OPS`) are lookups. Origin rooms stay three test-checked copies (see H4 below).
+  Golden floors unchanged; `docs/ARCHITECTURE.md` ("Props, decor and room themes") says how to add each.
 - wave 6 (early): H9, `LabBase` (`scripts/test_support/lab_base.gd`). 19 look-dev lab scripts moved onto it with their
   flags, output names and renders unchanged. Not yet moved: `pavise_lab`, `healer_lab`, `sewer_lab`,
   `sewer2_lab`, `lava_lab` and `lava_layouts_lab` (edited by the lava / sewer session; `sewer2`, `lava` and
@@ -38,7 +44,7 @@ Moved to later waves:
 - the factory's pack planner, to H3;
 - the beast's peek/whip, which needs a visual check;
 - `NoteFacts.ROOM_WORDS`, to H4. It holds the shorter names notes use, so it isn't a copy, and it belongs in the theme
-  rows.
+  rows. Done in H4: each theme row's `note_word` (`NoteFacts.theme_word`).
 
 The rest is a proposal. Surveys were run against main at c2080ad; the line numbers are from then.
 
@@ -152,7 +158,12 @@ from it. One pack composer replaces the `MonsterFactory`/`SiteBuilder` copies.
 Seed-built specials (scout, shark, and soon the Pavise and Water Cooler) declare a planner (see H8).
 **Do this before the Water Cooler and the Pavise become real monsters.**
 
-### H4: props and decor as units
+### H4: props and decor as units (done)
+Status: done, see the top of this file. Shapes: def-table rows that name their builder (a method name, looked up as a
+`Callable` on `PropModels` / `DecorModels`), not per-kind files: the builders stay together in the model kits, which
+keeps those readable. Left alone: the origin rooms. The text is the key that joins the story event, its floor-3 note and
+its theme, and `test_room_themes` / `test_notes` already check every copy against `ClientArchetype`'s events; deriving
+`ORIGIN_THEMES` from the events would move theme ids into the story data without removing a copy.
 - **Props:** each prop def keeps its row, build function, palette, height, and for hazards `BLAST`/`FUSE_POINTS` in one
   place. That ends `prop_models`' three parallel structures, and a missing blast becomes an error, not an oil drum.
 - **Decor:** the same for `DECOR` and `decor_models`.

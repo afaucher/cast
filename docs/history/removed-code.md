@@ -9,6 +9,21 @@ commit if you only know the path.
 
 Entries are grouped by the wave that removed them. Newest first.
 
+## H4 (2026-10-20): the parallel tables of props, decor and room themes, removed in a188c05..701fe1e
+- **Paths:** in `scripts/art/lowpoly/props/prop_models.gd`: `HEIGHTS`, `FUSE_POINTS`, the `match kind` in `build()` and
+  `palette()` and the brazier's `if` (a188c05, a787bd1). In `scripts/contracts/explosive_prop.gd`: `BLAST` and its
+  oil-drum fallback (a787bd1). In `scripts/art/lowpoly/props/decor_models.gd`: `FLAT_KINDS` and both `match kind` in
+  `build()`; in `scripts/world/themes/room_theme_defs.gd`: `BREAKABLE_DECOR` (f533230). `FloorMaterials.THEME_FLOOR` /
+  `THEME_WALL`, `PoolGeo.THEME_LOOK`, `NoteFacts.ROOM_WORDS` (bc9139c). The 25-arm `match` in `ThemeVignettes.run`
+  (701fe1e). About 190 lines.
+- **What it was:** a prop kind was written into `PricedProp.TABLE` and three to five parallel tables and matches keyed
+  by the same string, a decor kind into `DECOR` and two matches, a room theme into `THEMES` and four tables in four
+  modules. A hazard missing from `BLAST` quietly blew up like an oil drum.
+- **What replaced it:** the same values, moved into the kind's own row (`PricedProp.TABLE`, `RoomThemeDefs.DECOR`,
+  `RoomThemeDefs.THEMES`) and read through lookups (`PropModels.row` / `builder`, `ExplosiveProp.blast_of`,
+  `DecorModels.builder`, `RoomThemeDefs.breakable_kinds`, `PoolGeo.look_of`, `NoteFacts.theme_word`) and the
+  `ThemeVignettes.OPS` table (refactor-plan.md H4). Nothing changes in play; golden floors are unchanged.
+
 ## H5 (2026-10-20): per-type networking branches, removed in 11de02b..a50ab68
 - **Paths:** in `scripts/net/net_objects.gd`: the `is PricedProp / ExplosiveProp / BreakableCrate / MailPackage /
   OfficeDoor` chain in `begin()`, the handlers `_on_prop_hurt`, `_on_broken`, `_on_mail_broken`, `_on_fuse`,
