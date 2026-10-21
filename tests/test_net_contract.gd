@@ -114,6 +114,8 @@ const LINT_CLEAN := [
 
 
 func setup() -> void:
+	for p: String in NetWorldCodec.RUNTIME_ACTORS:   # (a runtime actor's carriers: its own codec field list)
+		REPLICATED[p] = [NetWorldCodec.RUNTIME_ACTORS[p]["fields"], NetEvents.WORLD_CARRIES.get(p, {}), 5]
 	var scripts := _all_scripts("res://scripts/")
 	_check_declarations(scripts)
 	_check_lint(scripts)
@@ -378,7 +380,7 @@ var REPLICATED := {
 	"res://scripts/world/themes/breakable_crate.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/world/themes/breakable_crate.gd"], 0],
 	"res://scripts/contracts/mail_package.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/mail_package.gd"], 0],
 	"res://scripts/spells/component_pickup.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/spells/component_pickup.gd"], 0],
-	"res://scripts/spells/chicken.gd": [NetWorldCodec.CHICKEN_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/spells/chicken.gd"], 5],
+	# (the runtime actors, the Chicken spell's chickens among them, are added from NetWorldCodec.RUNTIME_ACTORS in setup)
 	"res://scripts/contracts/office_door.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/office_door.gd"], 0],
 }
 

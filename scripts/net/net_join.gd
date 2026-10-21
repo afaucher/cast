@@ -509,11 +509,13 @@ func _apply(d: Dictionary) -> void:
 		listed[int((e as Array)[0])] = true
 	for id in NetRegistry.ids():
 		var m := NetRegistry.node(id) as Actor
-		if id >= NetRegistry.RUNTIME_BASE and (m is Monster or m is Chicken) and not listed.has(id):
+		var runtime := NetWorldCodec.runtime_entry(m)
+		if id >= NetRegistry.RUNTIME_BASE and (m is Monster or not runtime.is_empty()) and not listed.has(id):
 			m.dead = true
 			m.remove_from_group("actors")
 			m.remove_from_group("monsters")
-			m.remove_from_group(Chicken.GROUP)
+			if not runtime.is_empty():
+				m.remove_from_group(str(runtime["group"]))
 			m.queue_free()
 			NetRegistry.unregister(id)
 	_session.world.apply_spawns(d.get("spawns", []) as Array)

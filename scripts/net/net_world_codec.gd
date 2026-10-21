@@ -30,8 +30,9 @@ extends RefCounted
 ##   u8  burst_in  seconds to the burst in 1/50 s while the flare is up (255 = no flare)
 ##   u8  shove_t   seconds to the origin gate's shove in centiseconds (255 = none winding up)
 ##
-## CHICKEN (16, the Chicken spell): a MONSTER entry. state = Chicken.State (WANDER 0, RUN 1, PECK 2, FLAP 3, POOF 4), telegraph =
-##   the peck's wind-up, strikes = its pecks (mod 256). NetWorld knows which ids are chickens (their `world.spawn` says so).
+## RUNTIME ACTORS (16 each): a MONSTER entry, filled and shown by the class (RUNTIME_ACTORS below). NetWorld knows which ids
+##   are runtime actors (their `world.spawn` says so). The chicken: state = Chicken.State (WANDER 0, RUN 1, PECK 2, FLAP 3,
+##   POOF 4), telegraph = the peck's wind-up, strikes = its pecks (mod 256).
 ##
 ## Deaths, spawns, speech, extraction, breaks and pickups are reliable EVENTS (NetWorld, NetObjects), not snapshot
 ## fields: the field tables below and NetEvents.WORLD_CARRIES together cover every OWNER var of these classes
@@ -72,14 +73,28 @@ const EMPLOYEE_FIELDS := {
 	"_dismissed": "head",
 	"_leader": "leader",
 }
-## Chicken / Actor var -> the part of the (monster-format) entry that carries it.
-const CHICKEN_FIELDS := {
-	"hp": "hp",
-	"facing": "angle",
-	"climbing": "flags",
-	"state": "flags",
-	"_peck_t": "telegraph",
-	"pecks": "strikes",
+## RUNTIME ACTORS: host-owned actors spawned during play by something other than a hellgate (a cast: the Chicken spell's
+## chickens). NetWorld streams them all through one track as MONSTER-format entries and announces each with `world.spawn`
+## (its kind). Script -> {
+##   "kind":   the name a world.spawn row carries,
+##   "group":  its query group (a late joiner drops a runtime actor the host no longer has from it, NetJoin),
+##   "fields": its var -> the part of the monster-format entry that carries it (test_net_contract holds its OWNER vars to it)}.
+## The class implements net_read(st) (host: its own slots of the entry, mode, telegraph and extra; read_runtime fills the
+## rest), net_write(st) (client: show the state on the puppet, already placed), static make_shown(at) (client: the puppet a world.spawn row builds) and
+## net_tick(delta); net_flash() if a client's hit on it should show at once (NetObjects.request_hit).
+const RUNTIME_ACTORS := {
+	"res://scripts/spells/chicken.gd": {
+		"kind": "chicken",
+		"group": Chicken.GROUP,
+		"fields": {
+			"hp": "hp",
+			"facing": "angle",
+			"climbing": "flags",
+			"state": "flags",
+			"_peck_t": "telegraph",
+			"pecks": "strikes",
+		},
+	},
 }
 ## Hellgate / Actor var -> the part of the entry that carries it.
 const GATE_FIELDS := {
@@ -280,23 +295,49 @@ static func write_monster(m: Monster, st: NetHeroState) -> void:
 	m.net_show(f, st.climbing, st.hp, st.mode, st.telegraph, st.extra)
 
 
-# --- Chickens (a monster entry) --------------------------------------------------------------------------------
+# --- Runtime actors (a monster entry) -------------------------------------------------------------------------
 
-## Fill `st` from a chicken (host).
-static func read_chicken(c: Chicken, st: NetHeroState) -> void:
-	st.hp = c.hp
-	st.angle = atan2(c.facing.z, c.facing.x)
-	st.climbing = c.climbing
-	st.mode = c.state
-	st.helpless = c.is_helpless()
-	st.telegraph = c._peck_t
-	st.extra = c.pecks & 255
+## The RUNTIME_ACTORS entry of `a`'s class (or of a class it extends), {} when it is not a runtime actor.
+static func runtime_entry(a: Object) -> Dictionary:
+	var s: Script = a.get_script() as Script if a != null else null
+	while s != null:
+		if RUNTIME_ACTORS.has(s.resource_path):
+			return RUNTIME_ACTORS[s.resource_path]
+		s = s.get_base_script()
+	return {}
 
 
-## Show a state on a chicken puppet (client): its own net_show plays a new peck, a hit, the poof.
-static func write_chicken(c: Chicken, st: NetHeroState) -> void:
-	c.global_position = st.pos
-	c.net_show(st.facing_vector(), st.climbing, st.hp, st.mode, st.telegraph, st.extra)
+static func is_runtime(a: Object) -> bool:
+	return not runtime_entry(a).is_empty()
+
+
+## The world.spawn kind of a runtime actor ("chicken").
+static func runtime_kind(a: Object) -> String:
+	return str(runtime_entry(a).get("kind", ""))
+
+
+## The script of the runtime actor a world.spawn row names, or null (a monster kind).
+static func runtime_script(kind: String) -> GDScript:
+	for path: String in RUNTIME_ACTORS:
+		if str(RUNTIME_ACTORS[path]["kind"]) == kind:
+			return load(path) as GDScript
+	return null
+
+
+## Fill `st` from a runtime actor (host): what every actor has here, then the class's own slots (net_read: mode, telegraph,
+## extra). Position, velocity and the teleport counter are the sampler's (NetWorld).
+static func read_runtime(a: Actor, st: NetHeroState) -> void:
+	st.hp = a.hp
+	st.angle = atan2(a.facing.z, a.facing.x)
+	st.climbing = a.climbing
+	st.helpless = a.is_helpless()
+	a.call("net_read", st)
+
+
+## Show a state on a runtime actor's puppet (client): placed here, then shown by the class (net_write).
+static func write_runtime(a: Actor, st: NetHeroState) -> void:
+	a.global_position = st.pos
+	a.call("net_write", st)
 
 
 # --- Employees ---------------------------------------------------------------------------------------------

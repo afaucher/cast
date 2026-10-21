@@ -17,8 +17,8 @@ extends Actor
 ##
 ## NETWORKING (networking.md shape "owned actor", host-owned like a monster): the cast is an event that lands on every
 ## machine (NetCasts, SpellBook.apply); only the host spawns the flock (SpellBook._cast_chicken) and runs its AI, with its
-## rolls on GameWorld.rng. NetWorld streams each chicken like a monster (a MONSTER-format entry, NetWorldCodec.CHICKEN_FIELDS:
-## state, the peck wind-up, the peck count), announces the spawn (`world.spawn`, kind "chicken") and the death (`world.die`);
+## rolls on GameWorld.rng. It is NetWorld's first RUNTIME ACTOR (NetWorldCodec.RUNTIME_ACTORS): streamed like a monster (a
+## MONSTER-format entry, net_read / net_write: state, the peck wind-up, the peck count), announced the spawn (`world.spawn`, kind "chicken") and the death (`world.die`);
 ## on a client it is a puppet (net_show / net_tick) that plays the same pecks, feathers and poof. A client's hit on it is a
 ## request the host applies (Net.route_hit). A late joiner gets it as a runtime spawn plus the keyframe (NetEvents.LATE_JOIN).
 
@@ -396,7 +396,7 @@ func _look(delta: float) -> void:
 
 # --- Puppet (a client shows the host's chicken) ------------------------------------------------------------------
 
-## Show the host's state (NetWorldCodec.write_chicken) and play what changed: a new peck pecks (the "0" and the feathers
+## Show the host's state (net_write) and play what changed: a new peck pecks (the "0" and the feathers
 ## land on whatever this screen shows it pecking), an HP drop flashes, the poof swells.
 func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: int, peck_t: float, peck_count: int) -> void:
 	facing = new_facing
@@ -413,6 +413,19 @@ func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: 
 		if _shown:
 			ChickenFx.peck(self, _shown_victim())
 	_shown = true
+
+
+## Host (a runtime actor, NetWorldCodec.RUNTIME_ACTORS): its own slots of the monster-format entry (the codec fills the
+## position, HP, facing, climbing and helpless): its state, the peck's wind-up and its pecks.
+func net_read(st: NetHeroState) -> void:
+	st.mode = state
+	st.telegraph = _peck_t
+	st.extra = pecks & 255
+
+
+## A puppet: show an (interpolated) state (the codec has placed it); net_show plays a new peck, a hit, the poof.
+func net_write(st: NetHeroState) -> void:
+	net_show(st.facing_vector(), st.climbing, st.hp, st.mode, st.telegraph, st.extra)
 
 
 ## A puppet's look each frame (on the host the physics process does it).

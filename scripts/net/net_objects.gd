@@ -220,10 +220,8 @@ func request_hit(target: Actor, amount: float, source: Node) -> bool:
 		return false
 	_session.send_event(1, "obj.req", {"what": "hit", "id": id, "a": amount, "by": net_id(source)})
 	stats["hits_out"] = int(stats["hits_out"]) + 1
-	if target is Monster:
-		(target as Monster).net_flash()   # (the hit shows now; the HP drop arrives with the host's stream)
-	elif target is Chicken:
-		(target as Chicken).net_flash()
+	if target.has_method("net_flash"):
+		target.call("net_flash")   # (a monster, a runtime actor: the hit shows now; the HP drop arrives with the host's stream)
 	return true
 
 
