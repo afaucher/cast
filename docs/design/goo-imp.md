@@ -128,7 +128,8 @@ checklist (`networking.md`) before any code.
 1. ~~**Which variant?**~~ **Decided (user, 2026-10-20): "Gloop is the best for the sewer."** Gloop (`drip`) is the look.
    The doc's own worry stands as a note for the build: a Gloop pack can read as glowing/buffed rather than ranged, so the
    throw's telegraph (the wind-up and the landing marker) has to carry "thrower".
-2. **The goo colour** (bile stays the default until answered): bile (recommended), pink (with a new skin), or tar? Is sharing chartreuse with the Water Boy's water
+2. ~~**The goo colour**~~ **Decided (user, 2026-10-20): "Keep bile goo."** The Water Boy shares the chartreuse; the
+   patch's lumpy splat (vs his rings) has to keep them apart. The original question: bile (recommended), pink (with a new skin), or tar? Is sharing chartreuse with the Water Boy's water
    acceptable?
 3. **The skin:** pale axolotl pink with gills, or closer to the swarmer (its violet, a sewer tint)?
 4. **The patch:** about 0.8 radius and 5 s in the mocks. Bigger and shorter, or smaller and longer? Does it slow
