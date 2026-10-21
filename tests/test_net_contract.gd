@@ -54,6 +54,8 @@ const NET_SCRIPTS := [
 	"res://scripts/spells/wet.gd",
 	"res://scripts/world/lava/lava_field.gd",   # (the lava cave prototype's rules: --lava-cave, solo only)
 	"res://scripts/world/sewer/live_wire.gd",   # (the sewer slice's live wire: --sewer, solo only for now)
+	"res://scripts/monsters/goo_ball.gd",       # (the goo imp's ball and patch: runtime objects the host announces, NetObjects)
+	"res://scripts/monsters/goo_patch.gd",
 ]
 
 const ACTOR := "res://scripts/core/actor.gd"
@@ -387,6 +389,11 @@ var REPLICATED := {
 	"res://scripts/spells/component_pickup.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/spells/component_pickup.gd"], 0],
 	# (the runtime actors, the Chicken spell's chickens among them, are added from NetWorldCodec.RUNTIME_ACTORS in setup)
 	"res://scripts/contracts/office_door.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/office_door.gd"], 0],
+	# the goo imp (a plain monster: its tell is a wind-up), its ball (a scheduled effect announced by the host: no OWNER var)
+	# and its patch (a runtime host-arbitrated object: obj.new, obj.goo)
+	"res://scripts/monsters/goo_imp.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/goo_ball.gd": [{}, {}, 0],
+	"res://scripts/monsters/goo_patch.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/monsters/goo_patch.gd"], 0],
 }
 
 
@@ -505,3 +512,16 @@ func _check_units(paths: Array[String]) -> void:
 		if not _extends_actor(script):
 			check(have.has("net_order"), "%s: a net object that is not an Actor says where its net id goes (net_order)" % p)
 	check(objects >= 5, "found the host-arbitrated objects (%d scripts with net_link)" % objects)
+	# Runtime objects (NetObjects.RUNTIME_OBJECTS: what the host makes during play and announces, obj.new): each builds its
+	# copy from a row (static net_copy), says what goes in the row (net_spawn_row), is declared (NET_SCRIPTS) and is held to
+	# its carriers and its late-join entry (REPLICATED).
+	for k: String in NetObjects.RUNTIME_OBJECTS:
+		var p := str(NetObjects.RUNTIME_OBJECTS[k])
+		var script := load(p) as GDScript
+		if not check(script != null, "RUNTIME_OBJECTS names a missing script: " + p):
+			continue
+		var have := _methods(script)
+		for m in ["net_spawn_row", "net_copy"]:
+			check(have.has(m), "%s: a runtime object implements %s (NetObjects calls it)" % [p, m])
+		check(p in NET_SCRIPTS or _extends_actor(script), p + ": a runtime object declares its vars (NET_SCRIPTS)")
+		check(REPLICATED.has(p), p + ": a runtime object is in REPLICATED (its carriers)")

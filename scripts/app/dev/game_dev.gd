@@ -708,6 +708,7 @@ func _shark_demo(stage: String) -> void:
 ##   aim    the pavise stands 7-9 from the player (to the screen's right if it can), plants facing them and aims (the dashed line
 ##          tracks for 0.8 s, then the solid line locks for 0.4 s and the bolt looses)
 ##   pulse  the pack is roughed up (each other monster 40% down), and the water boy raises its whistle and pours (0.8 s)
+##   goo    the goo imps (--spawn-near goo_imp,3) wake on the player and throw: tell 0.7 s, then about a second in the air
 func _monster_demo(stage: String) -> void:
 	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
 	if player == null or not is_inside_tree():
@@ -765,6 +766,10 @@ func _monster_demo(stage: String) -> void:
 			wb.aggro(player)
 			wb.target = player
 			wb._begin_windup(WaterBoy.POUR_TELL)
+		"goo":   # (goo-imp.md: --spawn-near goo_imp,3 --idle-monsters: the goo imps wake on the player and throw)
+			for m in _dev_monsters:
+				if is_instance_valid(m) and not m.dead and m is GooImp:
+					m.aggro(player)
 
 
 ## Dev flag --hazard-demo fuse|chain|invoice (with --hazard-near or --to-hazard; screenshots): after --demo-after seconds (1.0)

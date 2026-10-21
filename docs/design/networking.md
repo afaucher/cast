@@ -239,6 +239,9 @@ Use this in every spec and review that adds content:
    - not an Actor: `net_order()` places its net id after the actors (`NetFloor`), and `net_make_copy()` if a client's copy
      must keep its physics. A copy with `net_tick` / `net_contacts` gets them from `NetObjects`.
    Then its `NetEvents.WORLD_CARRIES` and `LATE_JOIN` entries, and `test_net_contract`'s `REPLICATED`.
+   - made during play by the host (not built from the seed: a goo imp's ball and patch): a `NetObjects.RUNTIME_OBJECTS` entry,
+     `net_spawn_row(objects)` and a static `net_copy(row, objects)`; its maker calls `Net.announce(node)` on the host (`obj.new`),
+     and a late joiner's rows go in the section `new` (goo-imp.md, "As built").
 10. If it is a runtime actor (host-owned, spawned during play, not by a gate), it is a `NetWorldCodec.RUNTIME_ACTORS` entry and
    implements `net_read(st)` (its mode, telegraph and extra slots), `net_write(st)`, `net_tick(delta)` and
    `static make_shown(at)`; `NetWorld` streams it as a monster-format entry on the one runtime track. `test_net_contract`

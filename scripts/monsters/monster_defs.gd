@@ -18,6 +18,10 @@ extends RefCounted
 ##   drops      component drops when one dies: [{spells, chance, charges?}] (SpellComponents.roll_drops)
 ##   pest       how a client names a pest of this kind ("skeletons"); the kinds with one are the contract pests
 ##   billed     {variant: {price, name}}: killing one bills the killer like a priced prop (the sharks)
+##   habitat    where the kind lives when it is not everywhere: "sewer" (the goo imp). A habitat kind has no "pack" and no
+##              "gate": normal floors' packs and the hellgates never deal it (test_monster_defs holds that)
+##   sewer_pack {min, max, weight}: a sewer pack of this kind is min-max of them, picked at this weight among the sewer kinds
+##              (MonsterFactory.compose_sewer / spawn_sewer_pack: the sewer's own packs, not the floor's pack roll)
 ##
 ## Order matters where noted: DEFS' order is the order of MonsterFactory.KINDS (the pack roll), MonsterModels.KINDS,
 ## the drop table and ClientArchetype.PEST_NAMES, which the floor plan and its checksum depend on.
@@ -79,6 +83,13 @@ const DEFS := {
 		"pack": {"cost": 3, "weight": 2.0, "min_floor": 2, "max": 1, "after": 3},
 		"drops": [{"spells": ["heal"], "chance": 0.30}, {"spells": ["damp"], "chance": 0.15}],
 	},
+	"goo_imp": {   ## the goo imp (goo-imp.md, "As built"): the sewer's ranged pest; sewer packs of 3-4, never a floor pack or a gate
+		"script": "res://scripts/monsters/goo_imp.gd", "model": "res://scripts/art/lowpoly/monsters/goo_imp_model.gd", "tris": 2200,
+		"habitat": "sewer",
+		"sewer_pack": {"min": 3, "max": 4, "weight": 1.0},
+		## per imp (imps come in packs): its counters, now and then
+		"drops": [{"spells": ["damp"], "chance": 0.05}, {"spells": ["fireball"], "chance": 0.04}],
+	},
 }
 
 ## The hellgate roll walks its kinds in this order (a different order would spawn different kinds for the same roll).
@@ -110,6 +121,25 @@ static func min_floor(kind: String) -> int:
 ## One pick of this kind is a clump (the imps).
 static func is_swarm(kind: String) -> bool:
 	return bool((row(kind).get("pack", {}) as Dictionary).get("swarm", false))
+
+
+## Where the kind lives: "" (everywhere a floor deals it) or its habitat ("sewer").
+static func habitat(kind: String) -> String:
+	return str(row(kind).get("habitat", ""))
+
+
+## The kinds dealt into sewer packs (a "sewer_pack" row), in DEFS order.
+static func sewer_kinds() -> Array[String]:
+	var out: Array[String] = []
+	for k: String in DEFS:
+		if (DEFS[k] as Dictionary).has("sewer_pack"):
+			out.append(k)
+	return out
+
+
+## {min, max, weight} of a sewer kind's pack ({} for any other kind).
+static func sewer_pack(kind: String) -> Dictionary:
+	return row(kind).get("sewer_pack", {})
 
 
 ## {kind: value} of one pack field over the pack kinds.

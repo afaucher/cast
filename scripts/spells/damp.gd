@@ -123,6 +123,7 @@ func _burst() -> void:
 	var radius := DampSpell.damp_radius(power)
 	var pos := global_position
 	var out := Burning.extinguish_in_radius(pos, radius)
+	GooPatch.wash_at(pos, radius)   # a goo imp's patches wash away (the host decides); Damp's own wet floor is what is left
 	if out > 0:
 		var steam: Array[Color] = [Color(0.92, 0.96, 1.0), Color(0.65, 0.74, 0.82)]
 		Fx.burst(pos + Vector3.UP * 0.6, steam, 14 + 3 * out, radius * 0.8, 0.22, 1.1, -1.4, Vector3.UP, 70.0, false)

@@ -5,6 +5,9 @@ extends TestCase
 ## only where it should (heroes never do), and its windup / swing / downed / tint / fade hooks run.
 
 const MAX_NODES := 20
+## The share of a model's faces that may glow (default a quarter: eyes, cracks, a jug). The goo imp is the exception the user
+## picked: Gloop drips with its own glowing goo (goo-imp.md §2, §6.1: "the goo is the beacon"), about 40 % of its faces.
+const GLOW_SHARE := {"goo_imp": 0.45}
 ## kind -> triangle budget
 var BUDGET := _budgets()   # each kind's MonsterDefs "tris"
 
@@ -30,6 +33,8 @@ func _part_names(kind: String) -> Array[String]:
 			return PaviseModel.PART_NAMES
 		"water_boy":
 			return WaterBoyModel.PART_NAMES
+		"goo_imp":
+			return GooImpModel.PART_NAMES
 		_:
 			return SwarmerModel.PART_NAMES
 
@@ -142,7 +147,8 @@ func _check_glow(kind: String, m: MonsterModel) -> void:
 			if cols[i].a < 0.75:
 				glow_faces += 1
 	check(glow_faces >= 4, "%s has emissive faces (eyes) (%d)" % [kind, glow_faces])
-	check(glow_faces < faces / 4, "%s glows only in small places (%d of %d faces)" % [kind, glow_faces, faces])
+	var share := float(GLOW_SHARE.get(kind, 0.25))
+	check(float(glow_faces) < float(faces) * share, "%s glows only in small places (%d of %d faces, under %d%%)" % [kind, glow_faces, faces, int(share * 100.0)])
 
 
 ## All part transforms flattened into one list, to see a pose change.

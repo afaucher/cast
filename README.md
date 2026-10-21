@@ -12,7 +12,8 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
 - **Exe:** `build\windows\Cast.exe` (made by `.\build.ps1`). Keep the DLLs and `Cast.pck` beside it.
 - **From source:** `.\run.ps1`.
 - **Sewer slice (dev, solo):** `.\run.ps1 --sewer 2 --spells damp,fireball --no-mic` plays a hand-built sewer floor (layouts 1-5)
-  with its gator and a live wire; see `docs/design/sewer-concept.md`, "Phase 1 as built".
+  with its gator and a live wire; see `docs/design/sewer-concept.md`, "Phase 1 as built". Layout 2 has a pack of goo imps
+  (the sewer's ranged pest, `docs/design/goo-imp.md`, "As built") on a deck in its north room.
 
 The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc goes back):
 
