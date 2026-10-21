@@ -280,3 +280,15 @@ climb in it, under an archer tower.
 3. **Damp crust:** is 8 s the right length? Should it be the whole radius (as now) or patchy like damp's puddles?
 4. **Lava damage:** 15 plus a burn. After playing, still mild enough?
 5. Which layouts should become the generator's **cave patterns**?
+
+### Decided after the playtest (user, 2026-10-20)
+
+| Question | The user | What it means |
+|---|---|---|
+| 1. Bridge width | "Two wide, 3 at the ends" | Spans stay **two wide**; **bridgeheads widen to three** so a fight can form where a bridge lands. |
+| 2. Archers on isles | "Keep, crust can always reach" | Archer isles stay, but **a damp crust can always reach one**: no towers like cave 5's. |
+| 3. Damp crust | "Whole radius, 8 s" | Unchanged from the playtest. |
+| 4. Lava damage | "Keep 15 + burn" | Unchanged: pulled back to the last safe spot, 15 damage and a burn. |
+
+Still open: 5 (which caves become the generator's patterns). Lava goes into the generator after the sewer (sewer-concept.md,
+"Decided: the decide-now set").

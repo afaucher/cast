@@ -1357,3 +1357,14 @@ camera (ortho, yaw 45, pitch -56); `_close` is size 9.
 **Both:**
 
 12. Build order: **sewer first** (proposed), or lava first for the combat payoff?
+
+### Decided (user, 2026-10-20: the "decide now" set)
+
+| Question | The user | What it means |
+|---|---|---|
+| The sewer's next step | "Into the generator" | **Phase 3 is next**: sewer clusters on real floors, solo first; networking (phase 2) after. |
+| 12. Build order | "Sewer first" | The sewer goes into the generator before lava. |
+| 1. Where sewers appear | "2-4 room cluster" | A **cluster of 2-4 rooms** on some lair and bunker floors (floors 2-3), reached by a service stair; the rest of the floor stays normal. |
+| 11. Where lava appears | "Supervillain + hellgates" | Lava caves only on **supervillain** sites and **next to hellgates**; not the founder. |
+
+The lava playtest answers from the same set are in `lava-playtest.md` ("Decided after the playtest").
