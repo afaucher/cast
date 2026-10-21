@@ -15,6 +15,7 @@ extends RefCounted
 ## Priced props declare theirs in PricedProp.TABLE ("place", "orient", "foot").
 
 const SERVICE := "service_entrance"     ## the start room's theme
+const SEWER := "sewer"                  ## a sewer cluster's rooms (SewerPlanner.theme; never dealt from a site's POOLS)
 
 const POOLS := {
 	"bunker": ["wine_cellar", "home_cinema", "spa", "gym", "server_room", "panic_room", "pool"],
@@ -232,6 +233,20 @@ const THEMES := {
 			{"op": "wet_floor"},
 		],
 		"light": {"color": Color(1.0, 0.78, 0.25), "energy": 4.0, "range": 7.0, "flicker": 0.0},
+	},
+	# The service level: the rooms of a sewer cluster (docs/design/sewer-concept.md, "Phase 3 as built"). Not in POOLS: only
+	# SewerPlanner.theme gives it, to the cluster DungeonGen cut. The water, the sump grates, the outfall and the culvert bars
+	# are SewerPlanner's (they follow the channels), the panel and the pumps HazardPlanner.plan_sewer's; its own recipe is the
+	# wet-floor sign. Priced props: none of its own (the panel and the pumps are placed by the water), so a sewer room takes
+	# any of the site's kinds, like a room whose theme has none in the catalog.
+	"sewer": {
+		"name": "Service level", "site": "any", "min_cells": 0,
+		"note_word": "service level", "floor_mat": FloorMaterials.F_FLAGSTONE, "wall_mat": FloorMaterials.W_STONE,
+		"priced": [],
+		"recipe": [
+			{"op": "wet_floor"},
+		],
+		"light": {"color": Color(0.78, 0.92, 0.5), "energy": 5.5, "range": 9.5, "flicker": 0.1},
 	},
 }
 

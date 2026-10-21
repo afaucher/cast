@@ -26,8 +26,21 @@ extends RefCounted
 ##   - "free": the hexagonal car on the exit room's centre cell (door toward the camera), solid sides, no_stand cells.
 ## The record goes to HexMap.elevator, the jambs / sides to HexMap.solids. It draws no random numbers.
 ##
+## THE SEWER CLUSTER (params "sewer": a seed, SewerCluster.seed_for; docs/design/sewer-concept.md "Phase 3 as built"): once
+## the tree and its base levels are made, a WING of the tree (a room and everything beyond it, 2-4 rooms, never the start)
+## becomes the cluster, on dice of its own (`srng`). Its rooms share one base level DROP_MIN..DROP_MAX below the room it
+## hangs off (at least MIN_LEVEL); its own links are flat (no terraces or stairs: one water level), a loop between two of its
+## rooms is a flat loop (never the climb shortcut), a loop from it to the rest of the floor is not cut (the stair is the one
+## way in), its rooms get no raised features or pits, and neither the exit nor the elevator goes in it. The tree link into
+## it is the SERVICE STAIR: flights of STAIRS cells (at most FLIGHT_MAX a cell) down from the room above. The main dice draw
+## as they would without the cluster (the flattened links' profiles are drawn and thrown away, the skipped features rolled
+## and not built), so the rest of the floor mostly stays as it was. The record goes to HexMap.sewer; SewerPlanner floods it.
+## ANY failure (no wing fits, the stair finds no straight run, validation) builds the attempt again without the option, so a
+## floor without a cluster is byte for byte the floor it always was (tests/test_sewer_gen.gd, test_golden_floor).
+##
 ## params (all optional): rooms, size, room_radius_min, room_radius_max, gap, loops, wall_height, elevator ("wall" |
-## "free"; a contract's floors use for_run(), which passes the job's choice).
+## "free"; a contract's floors use for_run(), which passes the job's choice), sewer (a cluster's seed, 0: none),
+## sewer_force (dev: try the cluster on every attempt before building without it).
 
 const MAX_ATTEMPTS := 24
 const MAX_BASE_LEVEL := 8
@@ -51,26 +64,61 @@ enum Feature { PLATFORM, ZIGGURAT, LEDGE, PILLAR, PIT }
 
 ## Generate a dungeon. Deterministic per seed (and params).
 static func generate(seed: int, params: Dictionary = {}) -> HexMap:
+	# A sewer cluster asked for: each attempt tries it first and, if anything fails, builds the attempt without it, so a floor
+	# that ends up without one is exactly the floor these params without "sewer" give.
+	var sewer := int(params.get("sewer", 0)) != 0
+	var plain := params
+	if params.has("sewer") or params.has("sewer_force"):
+		plain = params.duplicate()
+		plain.erase("sewer")
+		plain.erase("sewer_force")
+	if sewer and bool(params.get("sewer_force", false)):
+		for attempt in MAX_ATTEMPTS:   # (dev, --sewer-floor: any attempt with a cluster first)
+			var mf := _attempt(_attempt_seed(seed, attempt), params)
+			if mf != null:
+				return mf
 	for attempt in MAX_ATTEMPTS:
-		var s: int = seed if attempt == 0 else ((seed * 1103515245 + attempt * 12345 + 1) & 0x7fffffff)
-		var b := Builder.new(s, params)
-		var m: HexMap = b.build()
-		if m == null and b.notched:
-			# the notch spoiled this layout: the same layout with the free-standing car (the documented fallback)
-			var free := params.duplicate()
-			free["elevator"] = ElevatorGeo.PLACE_FREE
-			free["fallback"] = true
-			b = Builder.new(s, free)
-			m = b.build()
+		var s := _attempt_seed(seed, attempt)
+		if sewer:
+			var ms := _attempt(s, params)
+			if ms != null:
+				return ms
+		var m := _attempt(s, plain)
 		if m != null:
 			return m
 	push_warning("DungeonGen: no valid map for seed %d after %d attempts; using fallback" % [seed, MAX_ATTEMPTS])
 	return _fallback()
 
 
-## Floor `floor_n` of a contract: its floor seed and the job's elevator placement (every floor of a job alike).
-static func for_run(run: ContractRun, floor_n: int) -> HexMap:
-	return generate(run.floor_seed(floor_n), {"elevator": run.elevator_place})
+static func _attempt_seed(seed: int, attempt: int) -> int:
+	return seed if attempt == 0 else ((seed * 1103515245 + attempt * 12345 + 1) & 0x7fffffff)
+
+
+## One attempt: the layout of seed `s`, or null.
+static func _attempt(s: int, params: Dictionary) -> HexMap:
+	var b := Builder.new(s, params)
+	var m: HexMap = b.build()
+	if m == null and b.notched:
+		# the notch spoiled this layout: the same layout with the free-standing car (the documented fallback)
+		var free := params.duplicate()
+		free["elevator"] = ElevatorGeo.PLACE_FREE
+		free["fallback"] = true
+		b = Builder.new(s, free)
+		m = b.build()
+	return m
+
+
+## Floor `floor_n` of a contract: its floor seed and the job's elevator placement (every floor of a job alike), and a sewer
+## cluster when the floor rolls one (SewerCluster.seed_for). `shared`: a crew's run, which gets none until the sewer is
+## networked (SewerCluster.NETWORKED).
+static func for_run(run: ContractRun, floor_n: int, shared: bool = false) -> HexMap:
+	var params := {"elevator": run.elevator_place}
+	var sewer := SewerCluster.seed_for(run, floor_n, shared)
+	if sewer != 0:
+		params["sewer"] = sewer
+		if SewerCluster.force:
+			params["sewer_force"] = true
+	return generate(run.floor_seed(floor_n), params)
 
 
 ## Tiny always-valid map (a lone room with stairs), used only if every attempt fails. It has no elevator.
@@ -105,6 +153,11 @@ class Link:
 	var length: int = 0                 ## steps from room a to room b along the corridor
 	var door_a: Vector2i = Vector2i.ZERO
 	var door_b: Vector2i = Vector2i.ZERO
+	var loop := false
+	var narrow := false                 ## three cells across (the route only); else four (route and lane)
+	var route: Array[Vector2i] = []     ## [door_a, the route cells .., door_b]
+	var lanes: Array[Vector2i] = []     ## a tree link's lane cells (beside the route)
+	var cells: Array[Vector2i] = []     ## every corridor cell it added
 
 
 class Step:
@@ -146,9 +199,18 @@ class Builder:
 	var exit_order: Array[int] = []     ## room indices by walking distance from the start, farthest first (start room left out)
 	var elevator: Dictionary = {}       ## the elevator's record (ElevatorGeo)
 	var notched := false                ## the wall notch was cut (a failure afterwards is retried with the free car)
+	# the sewer cluster (see the header): its own dice, its rooms, their level and the stair link into them
+	var p_sewer := 0
+	var srng := RandomNumberGenerator.new()
+	var cluster: Dictionary = {}        ## room index -> true
+	var cluster_level := 0
+	var stair_pair := Vector2i(-1, -1)  ## (the room above, the cluster's first room): the service stair's tree link
+	var orig_level: Array[int] = []     ## every room's base level before the cluster was lowered (the burnt profiles)
 
 	func _init(s: int, params: Dictionary) -> void:
 		rng.seed = s
+		p_sewer = int(params.get("sewer", 0))
+		srng.seed = (p_sewer * 31 + s) & 0x7fffffff
 		p_rooms = int(params.get("rooms", 0))
 		p_size = int(params.get("size", DEFAULT_SIZE))
 		p_rmin = int(params.get("room_radius_min", DEFAULT_RMIN))
@@ -175,6 +237,8 @@ class Builder:
 		_add_elevator()
 		if not _validate_and_tag():
 			return null
+		if not cluster.is_empty():
+			_sewer_record()
 		return map
 
 	# ------------------------------------------------------------------ rooms
@@ -335,6 +399,10 @@ class Builder:
 		if hi - lo < 4 or not big_gap:
 			return false
 		for r in rooms:
+			orig_level.append(r.level)
+		if p_sewer != 0 and not _choose_cluster():
+			return false   # (no wing fits: generate() builds this attempt without the option)
+		for r in rooms:
 			for c in r.cells:
 				map.set_cell(c, r.level)
 
@@ -349,9 +417,94 @@ class Builder:
 		for pr in cand:
 			if made >= loops:
 				break
+			if not cluster.is_empty() and (cluster.has(pr.x) or cluster.has(pr.y)):
+				# the stair is the one way into the cluster, and the climb shortcut is never flooded
+				if cluster.has(pr.x) != cluster.has(pr.y) or made == 0:
+					continue
 			if _carve(pr.x, pr.y, made == 0, true):
 				made += 1
 		return true
+
+	# ------------------------------------------------------------------ the sewer cluster
+
+	## Pick the cluster (see the header): a wing of 2-4 rooms hanging off a room high enough for the stair, on the cluster's
+	## own dice. Lowers its rooms to one level. False when no wing fits.
+	func _choose_cluster() -> bool:
+		var n := rooms.size()
+		var parent: Array[int] = []
+		for _i in n:
+			parent.append(-1)
+		var order: Array[int] = [0]
+		var seen := {0: true}
+		var qi := 0
+		while qi < order.size():
+			var c: int = order[qi]
+			qi += 1
+			for nb: int in tree_adj[c]:
+				if not seen.has(nb):
+					seen[nb] = true
+					parent[nb] = c
+					order.append(nb)
+		var cands: Array[int] = []
+		for v in range(1, n):
+			var wing := _wing(v, parent)
+			if wing.size() < SewerCluster.MIN_ROOMS or wing.size() > SewerCluster.MAX_ROOMS or n - wing.size() < 3:
+				continue
+			if rooms[parent[v]].level - SewerCluster.DROP_MIN < SewerCluster.MIN_LEVEL:
+				continue
+			cands.append(v)
+		if cands.is_empty():
+			return false
+		var root: int = cands[srng.randi_range(0, cands.size() - 1)]
+		var up: int = parent[root]
+		var drop := srng.randi_range(SewerCluster.DROP_MIN, SewerCluster.DROP_MAX)
+		cluster_level = maxi(SewerCluster.MIN_LEVEL, rooms[up].level - drop)
+		for r in _wing(root, parent):
+			cluster[r] = true
+			rooms[r].level = cluster_level
+		stair_pair = Vector2i(up, root)
+		return true
+
+	## Room v and every room beyond it (away from the start) in the tree.
+	func _wing(v: int, parent: Array[int]) -> Array[int]:
+		var out: Array[int] = [v]
+		var i := 0
+		while i < out.size():
+			for nb: int in tree_adj[out[i]]:
+				if nb != parent[out[i]] and not out.has(nb):
+					out.append(nb)
+			i += 1
+		return out
+
+	## The cluster for HexMap.sewer: its rooms, level and seed, the service stair, its own halls, and every doorway of its
+	## rooms (SewerPlanner, GatorPlanner).
+	func _sewer_record() -> void:
+		var tags: Array[String] = []
+		var idx: Array = cluster.keys()
+		idx.sort()
+		for i: int in idx:
+			tags.append("room:%d" % i)
+		var halls: Array = []
+		var stair := {}
+		var doors: Array[Vector2i] = []
+		for l in links:
+			var ia := cluster.has(l.a)
+			var ib := cluster.has(l.b)
+			if not ia and not ib:
+				continue
+			doors.append(l.door_a)
+			doors.append(l.door_b)
+			var cells: Array[Vector2i] = l.cells.duplicate()
+			cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
+			if ia and ib:
+				halls.append({"a": "room:%d" % l.a, "b": "room:%d" % l.b, "door_a": l.door_a, "door_b": l.door_b,
+						"route": l.route.duplicate(), "lanes": l.lanes.duplicate(), "cells": cells, "narrow": l.narrow, "loop": l.loop})
+			else:
+				var inside_a := ia
+				stair = {"room": "room:%d" % (l.a if inside_a else l.b), "from": "room:%d" % (l.b if inside_a else l.a),
+						"door": l.door_a if inside_a else l.door_b, "door_up": l.door_b if inside_a else l.door_a, "cells": cells,
+						"narrow": l.narrow}
+		map.sewer = {"seed": p_sewer, "level": cluster_level, "rooms": tags, "stair": stair, "halls": halls, "all_doors": doors}
 
 	## Non-tree room pairs sorted so far-apart-in-tree but close-in-space pairs come first.
 	func _loop_candidates() -> Array[Vector2i]:
@@ -531,7 +684,15 @@ class Builder:
 		var S := _route(ra, rb)
 		if S.size() < 3:
 			return false
-		var steps := _profile(S, ra.level, rb.level, shortcut)
+		var steps: Array = []
+		var inside := cluster.has(ai) and cluster.has(bi)
+		var stair := stair_pair == Vector2i(ai, bi) or stair_pair == Vector2i(bi, ai)
+		if inside or stair:
+			# (the dice this link's profile draws without the cluster, drawn and thrown away: the floor around stays the same)
+			_profile(S, orig_level[ai], orig_level[bi], shortcut)
+			steps = _flat_steps(S.size() - 2, ra.level) if inside else _stair_profile(S, ra.level, rb.level)
+		else:
+			steps = _profile(S, ra.level, rb.level, shortcut)
 		if steps.is_empty():
 			return false
 		var n := S.size() - 2
@@ -552,6 +713,7 @@ class Builder:
 		for i in n + 2:
 			core.append(S[i])
 			core_idx[S[i]] = i
+		var lanes: Array[Vector2i] = []
 		if not narrow:
 			for i in range(1, n + 1):
 				var lane: Vector2i = S[i] + Hex.DIRS[posmod(Hex.dir_to(S[i], S[i + 1]) + 1, 6)]
@@ -566,6 +728,7 @@ class Builder:
 					continue   # a room cell
 				core.append(lane)
 				core_idx[lane] = i
+				lanes.append(lane)
 		added.append_array(_fill(core, core_idx, steps, ra, rb, ai, bi))
 		for c in added:
 			map.get_cell(c).tag = "corridor"
@@ -582,6 +745,11 @@ class Builder:
 		link.length = n + 1
 		link.door_a = S[0]
 		link.door_b = S[n + 1]
+		link.loop = loop
+		link.narrow = narrow
+		link.route = S
+		link.lanes = lanes
+		link.cells = added
 		links.append(link)
 		if shortcut:
 			climb_features += 1
@@ -626,7 +794,6 @@ class Builder:
 
 	## Height profile for cells S[1..n]; [] when the events cannot be placed.
 	func _profile(S: Array[Vector2i], la: int, lb: int, shortcut: bool) -> Array:
-		var n := S.size() - 2
 		var diff := lb - la
 		var events: Array = []   # [kind, delta]
 		var rest := diff
@@ -665,6 +832,32 @@ class Builder:
 			events[j] = tmp
 		if not climb_ev.is_empty():
 			events.insert(0 if bump else rng.randi_range(0, events.size()), climb_ev)
+		return _place_events(S, la, lb, events)
+
+	## A flat link (the sewer cluster's own halls): every cell at `level`.
+	func _flat_steps(n: int, level: int) -> Array:
+		var steps: Array = []
+		for _i in n:
+			var st := Step.new()
+			st.level = level
+			steps.append(st)
+		return steps
+
+	## The service stair from la to lb: only STAIRS, in flights of at most SewerCluster.FLIGHT_MAX levels, spread along the
+	## straight stretches. No dice. [] when they do not fit.
+	func _stair_profile(S: Array[Vector2i], la: int, lb: int) -> Array:
+		var diff := lb - la
+		var r := absi(diff)
+		var m := ceili(float(r) / SewerCluster.FLIGHT_MAX)
+		var events: Array = []
+		for k in m:
+			var rise: int = r / m + (1 if k < r % m else 0)
+			events.append([Ev.STAIRS, signi(diff) * rise])
+		return _place_events(S, la, lb, events)
+
+	## Put the profile's events on cells S[1..n] (stairs only on straight stretches), spread evenly; [] when they do not fit.
+	func _place_events(S: Array[Vector2i], la: int, lb: int, events: Array) -> Array:
+		var n := S.size() - 2
 		var e := events.size()
 		if e > n + 1:
 			return []
@@ -742,16 +935,20 @@ class Builder:
 					dist[l.b] = dist[l.a] + w
 				if dist[l.b] + w < dist[l.a]:
 					dist[l.a] = dist[l.b] + w
+		# (never a sewer cluster's room: the elevator and its landing stay dry; without a cluster this is room 1 on)
 		var best := 1
+		while cluster.has(best):
+			best += 1
 		for i in range(1, n):
-			if dist[i] > dist[best]:
+			if dist[i] > dist[best] and not cluster.has(i):
 				best = i
 		exit_cell = rooms[best].center
 		# the rooms the elevator may go in, farthest first (ties: lower index); the farthest is the exit room unless the
 		# wall elevator needs another
 		exit_order.clear()
 		for i in range(1, n):
-			exit_order.append(i)
+			if not cluster.has(i):
+				exit_order.append(i)
 		exit_order.sort_custom(func(a: int, b: int) -> bool: return dist[a] > dist[b] or (dist[a] == dist[b] and a < b))
 		exit_order.erase(best)
 		exit_order.push_front(best)
@@ -915,6 +1112,8 @@ class Builder:
 			if room.index % 3 == 1 or rng.randf() < 0.2:
 				plan.append(Feature.PIT)
 			var occupied := {}
+			# a sewer cluster's room rolls its features as ever (the dice stay in step) but builds none: one water level
+			var dry_run := cluster.has(room.index)
 			for kind in plan:
 				for _try in 14:
 					var c: Vector2i = keys[rng.randi_range(0, keys.size() - 1)]
@@ -931,12 +1130,14 @@ class Builder:
 						occupied[fc] = true
 						for d in Hex.DIRS:
 							occupied[fc + d] = true
+						if dry_run:
+							continue
 						if fp[fc] == PIT_MARK:
 							map.cells.erase(fc)
 							pits[fc] = true
 						else:
 							map.get_cell(fc).level = room.level + int(fp[fc])
-					if kind == Feature.LEDGE:
+					if kind == Feature.LEDGE and not dry_run:
 						climb_features += 1
 					break
 

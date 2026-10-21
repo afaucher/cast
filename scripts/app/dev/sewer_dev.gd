@@ -11,6 +11,11 @@ extends RefCounted
 ## on the layout's dry landing deck.
 ##
 ## Flags: --sewer N, --sewer-demo overview|nip|wire|sluice[:n]|outfall[:n] (with --demo-after S, default 1.0).
+##
+## PHASE 3 (the generator, "Phase 3 as built"): --sewer-floor forces a sewer cluster (SewerCluster.force) on every floor of a
+## solo job where any wing of rooms fits, whatever the site, the floor or the roll (never in a shared run), and starts the
+## contract on floor 2 unless --floor says otherwise; --to-sewer [head|foot] puts the crew at the head of the service stair
+## (or at its foot, in the first sewer room) once the floor is ready (GameDev._sewer_floor_ready).
 
 
 ## The sewer flags into the game's opts (GameDev._parse_args).
@@ -21,6 +26,14 @@ static func parse(args: PackedStringArray, opts: Dictionary) -> void:
 		opts["sewer"] = clampi(n, 1, SewerLayouts.COUNT)
 		if not opts.has("floor"):
 			opts["floor"] = 2   # (arrive in the elevator, onto the layout's dry landing deck)
+	if args.has("--sewer-floor"):
+		SewerCluster.force = true
+		opts["sewer_floor"] = true
+		if not opts.has("floor"):
+			opts["floor"] = 2
+	var k := args.find("--to-sewer")
+	if k >= 0:
+		opts["to_sewer"] = args[k + 1] if k + 1 < args.size() and not args[k + 1].begins_with("--") else "head"
 	var j := args.find("--sewer-demo")
 	if j >= 0 and j + 1 < args.size():
 		opts["sewer_demo"] = args[j + 1]

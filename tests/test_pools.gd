@@ -22,6 +22,8 @@ extends MonsterTestBase
 
 const RUN_SEEDS: Array[int] = [1, 2, 3, 4, 5, 7, 42]
 const DT := 1.0 / 60.0
+## The sewer cluster's decor that belongs in its water (SewerPlanner.dress, DoorPlanner's sluices; tests/test_sewer_gen.gd).
+const SEWER_WATER_DECOR: Array[String] = ["grate", "bars", "outfall", "sluice"]
 
 var _pools := 0
 var _pool_rooms := 0
@@ -96,6 +98,8 @@ func _check_generated() -> void:
 					if PoolGeo.look_of(plan.theme_of(rt)) != "":
 						_pool_rooms += 1
 				for rec in map.pools:
+					if bool(rec.get("body", false)):
+						continue   # (a sewer cluster's water: not a room's pool; tests/test_sewer_gen.gd)
 					_pools += 1
 					eq(str(rec["look"]), PoolGeo.look_of(plan.theme_of(str(rec["room"]))), "%s: the pool's look is its room's" % tag)
 					_check_pool(map, plan, rec, tag)
@@ -104,6 +108,8 @@ func _check_generated() -> void:
 				for pr in plan.props:
 					check(not _wet_footprint(map, pr["pos"], pr["yaw"], (pr["foot"] as Vector2).x, (pr["foot"] as Vector2).y), "%s: priced %s stands on dry floor" % [tag, pr["kind"]])
 				for dc in plan.decor:
+					if SEWER_WATER_DECOR.has(String(dc["kind"])):
+						continue   # (a sewer cluster's sump grates, culvert bars, outfall and sluices stand in its water on purpose)
 					check(not _wet_footprint(map, dc["pos"], dc["yaw"], float(dc["w"]), float(dc["d"])), "%s: decor %s stands on dry floor" % [tag, dc["kind"]])
 					check(String(dc["kind"]) != "pool_basin", "%s: the flat pool decal is gone" % tag)
 				for nt in plan.notes:

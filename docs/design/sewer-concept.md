@@ -1,7 +1,8 @@
 # Sewers and lava caves (concept)
 
 Status: **phase 1 built** (2026-10-20): the sewer's solo slice behind the dev flag `--sewer N`, see "Phase 1 as built" at
-the end of part 1. Everything else here is still concept: the generator, the networking and the rest of the scope.
+the end of part 1. **Phase 3 built** (2026-10-20): sewer clusters in the generator on solo runs, see "Phase 3 as built"
+after it. Still concept: the networking (phase 2) and the rest of the scope.
 
 **Round 2** ("Sewer round 2: connected water, staging, fights", after Part 1) answers the user's verdict on round 1.
 Where the two differ, round 2 replaces Part 1: the water as one connected body, the gator, grate bridges as dry
@@ -1055,6 +1056,85 @@ game camera, before and after, in `sewer_fixes/`; `sheet.png` shows them all:
   each other's reach, so it shuttles between the near ones.
 - The goblin scout on a ledge walks the ledge's middle; a 6.0 main's ledges are half rim cells, so in L5 he holds a post.
 - No footprints on land, no eels, rats, gas pockets or steam (the scope's cuts).
+
+## Phase 3 as built (2026-10-20)
+
+The user's decide-now answers: phase 3 next, sewer before lava, and a **cluster of 2-4 rooms on some lair and bunker floors
+(floors 2-3), reached by a service stair; the rest of the floor stays normal**. Option (a) of "How a sewer fits a floor".
+Solo runs only: a shared run never gets a cluster until phase 2 (below).
+
+### Play it
+
+```
+.\run.ps1 --seed 5 --floor 2 --spells damp,fireball --no-mic                         # a natural cluster (prepper, bunker)
+.\run.ps1 --seed 5 --floor 2 --spells damp,fireball --no-mic --to-sewer foot         # ... starting at the stair's foot
+.\run.ps1 --sewer-floor --seed 12 --spells damp,fireball --no-mic --to-sewer head    # force one on any floor
+```
+
+- **Natural seeds** (contract seed N = `--seed N` with `--floor`/`--spells`, `ContractBoard.run_for_seed`): floor 2 of
+  seeds **2, 3, 5, 6, 7** has a cluster (5: the prepper's bunker, two rooms, a pump room with two pumps and the panel; 3:
+  the founder's toxic culverts; 6: the supervillain's brick). The log names the cluster's rooms and the stair's head
+  ("sewer cluster: ...").
+- `--sewer-floor` (`SewerDev.parse`, `SewerCluster.force`): every floor of a solo job gets a cluster wherever a wing of
+  rooms fits, whatever the site, floor or roll; it starts the job on floor 2 unless `--floor` says otherwise. Never in a
+  shared run.
+- `--to-sewer head|foot`: the crew starts at the head of the service stair (default) or at its foot in the first sewer
+  room.
+- What is there: the stair down (a hall of STAIRS cells), a goo imp pack on a deck by the water, a sign at its foot ("RECLAIMED WATER: DO NOT DRINK" in a bunker,
+  "DO NOT FEED THE GATOR" in a lair), the rooms flooded by one connected channel, flooded narrow halls with sluice gates at
+  both ends, ledged wide halls, a gator (two in a cluster of four rooms), the electrical panel by the water (shoot it when
+  the pack wades), sump pumps ($3,500) in the room farthest from the stair, sometimes an oil drum on a deck, and the
+  floor's own packs, gates, staff, notes and mail wherever the planners put them, on the dry decks.
+
+### How it is built
+
+| Piece | Where | Notes |
+|---|---|---|
+| Which floors | `scripts/world/sewer/sewer_cluster.gd` (`SewerCluster`) | `seed_for(run, floor, shared)`: floors 2-3 (`FLOORS`), bunker and lair (`SITES`: every client today), `RATE` **0.5** on dice of its own (`floor_seed * 6151 + floor * 389 + 23`), 0 in a shared run while `NETWORKED` is false. The look per client: concrete (bunker), brick (lair), toxic (the tech founder) |
+| The cluster | `DungeonGen` "sewer" option (`for_run(run, floor, shared)` passes it) | After the tree and its base levels: a **wing** of the tree (a room and everything beyond it from the start: 2-4 rooms, at least three rooms left outside) hanging off a room high enough. Its rooms drop to one level `DROP_MIN..DROP_MAX` (3-5) below that room (at least level 1: the water is one level lower). Its own links are flat; a loop between two of its rooms is cut flat (never the climb shortcut); a loop from it to the rest is not cut, so the **service stair** (the tree link in: flights of STAIRS cells, at most 3 levels a cell, no terraces) is the one way in. No raised features or pits in its rooms; never the start or the exit / elevator room. Its own dice (`srng`); the main dice draw as without the cluster (the flattened links' profiles drawn and thrown away, the skipped features rolled), so the floor around mostly stays as it was. `HexMap.sewer` holds the record (rooms, level, seed, stair, halls with route / lanes / cells / narrow, every doorway) |
+| Byte-identical floors | `DungeonGen.generate` | Each attempt tries the cluster first and on any failure (no wing, no straight run for the stair, validation) builds the attempt without the option, so a floor without a cluster is exactly today's floor (`test_sewer_gen`, every floor; `test_golden_floor`) |
+| The water | `scripts/contracts/planners/sewer_planner.gd` (`SewerPlanner.plan`) | **First** in `SiteBuilder.plan`, before the gates (the doc proposed where `PoolGeo.carve` runs; the channels are fixed by the doorways, so everything else must see them: the gates and the staff now refuse pool cells, which changes nothing on a floor without one). Narrow halls flooded wall to wall, wide halls their route row and the cut row beside it (the lane is a 1.5 dry ledge). Each room: a sump in the middle (radius 1, 2 in a room of 140+ cells, smaller if over `WATER_CAP` 45 %), a hex line (or the shortest walk inside the room) from each sewer doorway to it; an edge room (one sewer doorway) carries on to the wall farthest from it: the **source** (an outfall) in the edge room farthest from the stair, a **barred culvert** in the others. The stair's doorway and the cells within 2 stay dry. Wet cells sink one level, dry neighbours get pool kites (PoolGeo's rule, water up to the walls as in the slice); ONE `HexMap.pools` record with `body` true. No dice |
+| Room theme | `RoomThemeDefs.THEMES` "sewer" (`SEWER`), `SewerPlanner.theme` | The H4 theme row: "Service level", note word "service level", flagstone floor and rough-stone walls, its downlight, the wet-floor sign as its recipe; not in any site's `POOLS` (only the cluster gets it), so PoolGeo never carves a pool there. Its halls and the walls round it are stone too (`SewerPlanner.materials`, after `FloorMaterials.assign`) |
+| Dressing | `SewerPlanner.dress` (after the decor) | A grate in each sump, the outfall at the source, iron bars at the culverts, the sign at the stair's foot |
+| Sluices | `DoorPlanner` (`_sluiced`, `SewerPlanner.sluice`) | Every doorway of a flooded narrow hall gets the decor kind "sluice" across it (whatever its model is: it is looked up by kind) and never an office door; wide halls stay open; the stair's doorway is an ordinary doorway (an office door when `DoorPlan` picks it) |
+| Panel and pumps | `HazardPlanner.plan_sewer` | The **electrical panel** on a wall within 4 cells of the water whose cable lands within 3.5 (`LiveWire.drop_point_for`); up to two **sump pumps** on the walls by the water of the room farthest from the stair; an **oil drum** on a dry deck in 60 %. Priced props in `SitePlan.props`, the drum in `hazards`, after the floor's own; own dice; the clearances of the floor's explosives |
+| The goo imps | `SewerPlanner.plan_pack` / `spawn` (`MonsterFactory.spawn_sewer_pack`, the goo imp's `"sewer_pack"` row) | One sewer pack (3-4 goo imps) a cluster, planned after the gators (so it keeps out of their territory, `SitePlan.blocked`) on the cluster's own dice: a room of the cluster other than the stair's when another has room, on its dry full cells within 2 of the water (a deck or a ledge over a channel) and more than 4 from the stair's foot. Spawned after the gators (the floor's last actors); they count toward the floor's pest objective like any pack. Spawn data in `HexMap.sewer["pack"]` |
+| The gators | `scripts/contracts/planners/gator_planner.gd` (`GatorPlanner`) | Planned last (own dice), spawned **after the sharks** (the last actors, so no earlier net id moves). One a cluster, two in a cluster of four rooms, in a room's sump (farthest from the stair first, 5+ from staff, 6+ from a gate; else mid-hall), a second 8+ from the first. Home region: the body's cells and the cluster's cells within 2 (never the stair). Bask spots: the sumps, the middle of each flooded hall, a dry deck cell by the water in each room. No pack monster within 4 of where one starts (`SitePlan.blocked`). Spawn data in `HexMap.sewer["gators"]` |
+| The look | `SewerView.dress_body` (`SewerPlanner.spawn`), `HexMapView` `Surf.CHANNEL` | A sewer body's pool kites are drawn on their own CHANNEL surface (material name `HexMapView.CHANNEL_MATERIAL`), so the view restyles only the sewer's bed and liners; the water, foam and kerbs of that body only, at its own surface. The floor's other materials, pools and lights are untouched (the slice's `dress` still restyles a whole sewer floor) |
+| Live wires | `SewerPlanner.spawn` | A `LiveWire` on every electrical panel (distance-based shock, N = 5, as built in phase 1) |
+| Timing | `SiteBuilder.last_sewer_usec`, `SewerPlanner.last_usec` | Outside `last_plan_usec`. Measured: about 10 ms of planning on the biggest cluster; generation of a sewer floor up to about 240 ms (a failed cluster attempt is built again without it) |
+| Tests | `tests/test_sewer_gen.gd` | Contract seeds 1-40, floors 2-3 (and floor 1 of 1-8): 2-4 rooms at one level, never the start or exit room, floors 2-3 of a bunker or lair; the stair has steps, goes down 3+ levels, its doorway dry; one body; every flooded hall's water joins both rooms'; every wide hall keeps a dry ledge; each room's water under the cap (in kites) and present; every doorway and room reachable from the start; nothing planned in the water; the panel's cable lands in water; one or two gators in their water, their spots in the region, the stair not theirs; no office door in the water, a sluice per flooded narrow doorway; the gators spawned after the sharks with a live wire per panel and the water drawn; a shared run gets none and builds exactly the floor without the option; a floor without a cluster has the same map and plan texts as `DungeonGen.generate` without the option; `--sewer-floor` forces one on most floors and still none when shared; the goo pack on dry deck by the water, spawned after the gators. Measured over the 80 floors 2-3: **27 have a cluster (34 %)**, all with a panel and a goo imp pack; sizes 2 rooms 14, 3 rooms 7, 4 rooms 6; 4 flooded narrow halls and 1 loop inside a cluster. `test_pools` skips the sewer's body record and its water decor (grates, bars, outfall, sluices: in the water on purpose); `test_hellgate_beast` builds its fixture floor without the option (its gate rooms changed with the cluster) |
+
+**Why RATE 0.5:** about a third of the rolls find no wing that fits (no 2-4 room wing under a room high enough for the
+stair), so a roll of 0.5 gives about one floor 2-3 in three with a cluster, the proposal's "about one floor in three". A cluster on every other
+floor would stop it being special; rarer and a two-floor job may never show one. One const to tune after a playtest.
+
+**Golden floors re-recorded** (`tests/golden/floors.json`): exactly the 12 golden floors that now have a cluster changed:
+1/3, 2/2, 3/2, 5/2, 5/3, 6/2, 6/3, 7/2, 7/3, 8/2, 9/2, 10/3 (seed/floor): the terrain, the plan and the spawn (the cluster, its
+props, gators and goo imps). The other 18 are byte for byte as recorded.
+
+### Known limits
+
+- Rooms keep their blob shapes: a lobed or bitten room's channel takes the shortest walk inside it, so some channels jog;
+  no L2 Y-junction or L5 6.0 main shapes (the main is a new hall width DungeonGen doesn't make). A loop inside a cluster
+  (L4) happens but rarely (1 in 27).
+- A wide hall's ledge is on its lane's side, not always the far side from the camera.
+- The stair is a tree link, so it is usually a wide (4.5) hall, not the doc's narrow service stair, and a narrow one's
+  head door is an ordinary office door (no "SERVICE LEVEL" stencil style yet).
+- A sewer floor is otherwise a different floor from its seed's old one (the exit cannot be in the cluster, its loops to the
+  rest are not cut), though most rooms and links come out the same.
+- No dispatch line for the service level yet (each needs a rendered radio clip, `tools/render_dispatch.ps1`).
+- Gates and staff may land in the cluster (as the doc wanted: going down is a money call); the gator keeps 5-6 cells from
+  them, so with staff in every sump it starts mid-hall.
+- Influencer floors (low fit per the client table) can roll a cluster like any bunker.
+
+### What phase 2 must flip
+
+`SewerCluster.NETWORKED` to true, once: the gator streams and its nip / shove / death go through the net layer (phase 1's
+"What phase 2 still needs"); the panel's break is an `obj` event that every machine's `LiveWire` runs from; **`HexMap.sewer`
+is in `NetFloor.map_text_of`** (the water is already there as cells and the body record; the gators' spawn data and the
+record are not); a 3-process test builds a sewer floor on every machine with the same checksum. `game.gd` already passes
+`_shared` to `DungeonGen.for_run`, so nothing else changes.
 
 ---
 

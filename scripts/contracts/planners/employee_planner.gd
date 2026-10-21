@@ -56,7 +56,7 @@ static func _employee_spot(map: HexMap, p: SitePlan, tag: String, avoid: Diction
 	var cands: Array[Vector2i] = []
 	for c in (p.rooms[tag] as Array[Vector2i]):
 		var cell: HexMap.Cell = map.cells[c]
-		if cell.type != HexMap.Tile.FLOOR or cell.level != level or avoid.has(c) or not map.is_walkable_cell(c):
+		if cell.type != HexMap.Tile.FLOOR or cell.level != level or avoid.has(c) or not map.is_walkable_cell(c) or cell.pool_mask != 0:
 			continue
 		var ok := true
 		for g in gate_cells:

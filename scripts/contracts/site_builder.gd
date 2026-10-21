@@ -4,7 +4,8 @@ extends RefCounted
 ## data, plan()) and the spawned things (spawn()).
 ##
 ## Each feature is a planner in scripts/contracts/planners/ (GatePlanner, EmployeePlanner, PropPlanner, HazardPlanner,
-## NotePlanner, PackagePlanner, PackPlanner, ScoutPlanner, SharkPlanner, DoorPlanner) with plan(...) and spawn(...).
+## NotePlanner, PackagePlanner, PackPlanner, ScoutPlanner, SharkPlanner, DoorPlanner, and for a sewer cluster SewerPlanner and
+## GatorPlanner) with plan(...) and spawn(...).
 ## SiteBuilder keeps the ORDER of both (plan(): the shared rng's draw order; spawn(): the net-id order), the van and the
 ## elevator body, the shared helpers (_index_rooms, _area, _corridor_zone, _edge_cells, _corridor_distance, NO_SPOT, ...),
 ## the shared names and clear zones, and the Site. A new environment adds a planner and one line in each.
@@ -48,6 +49,11 @@ extends RefCounted
 ##  - POOLS (PoolGeo, docs/design/pool-options.md "Built"): the indoor pool, science and shark moat rooms get an in-ground pool,
 ##    carved into the terrain right after the themes are dealt (clear of the doors, the start / exit / elevator zones,
 ##    the gates and the employees); everything planned after it (props, notes, decor, mail, monsters) keeps to dry floor;
+##  - a SEWER CLUSTER (DungeonGen's "sewer" option, HexMap.sewer; docs/design/sewer-concept.md "Phase 3 as built"): flooded
+##    FIRST (SewerPlanner.plan, terrain like the pools, its channels fixed by the doorways), so the gates, the staff and all
+##    the rest keep to its dry decks; its rooms take the "sewer" theme, HazardPlanner.plan_sewer hangs the electrical panel and
+##    the sump pumps by its water, GatorPlanner places its gators (spawned after the sharks) and SewerPlanner.plan_pack its goo
+##    imp pack (spawned after the gators), DoorPlanner puts sluices on its flooded narrow halls. Nothing of it on a floor without a cluster: those floors are exactly as before;
 ##  - the ELEVATOR (SitePlan.elevator: HexMap.elevator plus the job's look): its car, doorway and landing
 ##    (ElevatorGeo.keep_cells) are avoided and blocked like the exit zone, and it is a body in its room's ThemeCtx.
 ##
@@ -104,6 +110,8 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 		p.elevator["look"] = run.elevator_look
 	for c in ElevatorGeo.keep_cells(p.elevator):
 		avoid[c] = true
+	# A sewer cluster's water (terrain; nothing on a floor without one): before anything is placed. Timed on its own.
+	SewerPlanner.plan(map, run, floor_n, p)                             # no dice (the cluster's geometry)
 
 	# The features, in this order (the floor plan, its dice and the checksum hang on it; tests/test_golden_floor.gd checks it).
 	# "shared rng" is `rng` above, so a planner on it moves everything after it; "own dice" is a generator of its own.
@@ -112,6 +120,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	var theme_seed: int = run.floor_seed(floor_n)
 	var t0 := Time.get_ticks_usec()
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
+	SewerPlanner.theme(map, p)                                          # no dice; the cluster's rooms are sewer rooms
 	# the in-ground pools of the pool / science / moat rooms: terrain, carved before anything is placed in those rooms
 	PoolGeo.carve(map, p, avoid, near_corr, theme_seed * 613 + floor_n * 7 + 1)
 	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
@@ -122,20 +131,23 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	PropPlanner.plan(map, run, p, rng, avoid, near_corr, catalog, ctx)  # dice: the shared rng, then ctx.rng (the poses)
 	var t_hz := Time.get_ticks_usec()
 	HazardPlanner.plan(map, run, floor_n, p, avoid, near_corr, ctx)     # own dice (lent to ctx for its poses)
+	HazardPlanner.plan_sewer(map, run, floor_n, p, avoid, near_corr, ctx)   # the cluster's own dice: its panel and pumps
 	last_hazard_usec = Time.get_ticks_usec() - t_hz
 	NotePlanner.plan(map, run, floor_n, p, ctx)                         # own dice; before the decor, which steers round them
 	last_theme_usec += Time.get_ticks_usec() - t0
 	t0 = Time.get_ticks_usec()
 	RoomThemes.plan_decor(ctx)                                          # dice: ctx.rng, after the props' poses
 	last_theme_usec += Time.get_ticks_usec() - t0
+	SewerPlanner.dress(map, run, p)                                     # no dice: the sump grates, channel ends, the sign
 	PackagePlanner.plan(map, run, floor_n, p, ctx)                      # own dice; after the decor (sees every body)
 	PackPlanner.plan(run, floor_n, p)                                   # no dice (the room budgets)
 	_block_cells(p)                                                     # after everything a monster may not stand on
 	ScoutPlanner.plan(map, run, floor_n, p)                             # own dice; after the packs (prefers pack rooms)
-	last_plan_usec = Time.get_ticks_usec() - t_start
+	last_plan_usec = Time.get_ticks_usec() - t_start - SewerPlanner.last_usec
 	# The look of the floor: every cell's floor / wall material from its room's theme (FloorMaterials). Not planning, so
 	# it is timed on its own (FloorMaterials.last_usec) and not counted in last_plan_usec.
 	FloorMaterials.assign(map, p, run.site_type)
+	SewerPlanner.materials(map, p)                                      # the cluster's halls and walls
 	# The office doors and their thresholds (after the materials: a threshold writes its cells' floor). Timed on its own.
 	var t_doors := Time.get_ticks_usec()
 	DoorPlanner.plan(map, run, floor_n, p)                              # own dice (DoorPlan, from the floor seed)
@@ -144,6 +156,10 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	var t_sharks := Time.get_ticks_usec()
 	SharkPlanner.plan(map, run, floor_n, p)                             # own dice; last
 	last_shark_usec = Time.get_ticks_usec() - t_sharks
+	# A sewer cluster's gators: own dice (the cluster's seed); last. Timed with the sewer (SewerPlanner.last_usec).
+	GatorPlanner.plan(map, run, floor_n, p)
+	SewerPlanner.plan_pack(map, floor_n, p)                             # its goo imp pack: after the gators (their zones)
+	last_sewer_usec = SewerPlanner.last_usec + GatorPlanner.last_usec
 	return p
 
 
@@ -269,6 +285,8 @@ static func _flat_spot(map: HexMap, p: SitePlan, tag: String, c: Vector2i, radiu
 		var cell: HexMap.Cell = map.get_cell(n)
 		if cell == null or cell.type != HexMap.Tile.FLOOR or cell.level != level or not cell.tag.begins_with("room:") or not map.is_walkable_cell(n):
 			return false
+		if cell.pool_mask != 0:
+			return false   # (a sewer cluster's rim: it is flooded before the gates; the pools come later)
 	return true
 
 
@@ -285,6 +303,8 @@ static var last_door_usec := 0   ## the doors' planning and thresholds (not in l
 static var last_hazard_usec := 0
 ## Microseconds the last plan() spent choosing the pool sharks (SharkPlanner.plan; not in last_plan_usec, like the doors).
 static var last_shark_usec := 0
+## Microseconds the last plan() spent on a sewer cluster (SewerPlanner, GatorPlanner; not in last_plan_usec; 0 without one).
+static var last_sewer_usec := 0
 
 
 # --- wall cells (the priced props and the explosive props) ------------------------------------
@@ -405,6 +425,9 @@ class Site:
 	var jockeys: Array[Monster] = []    ## their imp gunners (also in `monsters`: imps, a pest kind)
 	var pest := ""                      ## the contract's pest ("everything" = every monster counts)
 	var pest_spawned := 0               ## pest-kind monsters placed by the packs (gate spawns come later)
+	var gators: Array[Gator] = []       ## a sewer cluster's gators (not monsters: the client's property), in plan order
+	var wires: Array[LiveWire] = []     ## the live wires on its electrical panels
+	var sewer_view: SewerView = null    ## its water's look
 
 
 ## Spawn a planned floor. SPAWN ORDER IS NET-ID ORDER: NetFloor numbers the actors in the order they are spawned here, and
@@ -425,7 +448,9 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	PackagePlanner.spawn(p, site)               # every box of every stack
 	PackPlanner.spawn(map, run, p, site, rng)   # draws from `rng`
 	ScoutPlanner.spawn(map, p, site)
-	SharkPlanner.spawn(run, p, site)            # the sharks and their imp gunners: the last actors
+	SharkPlanner.spawn(run, p, site)            # the sharks and their imp gunners
+	GatorPlanner.spawn(map, p, site)            # a sewer cluster's gators
+	SewerPlanner.spawn(map, run, p, site)       # its goo imp pack (the last actors), its water's look, the live wires
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
 	DoorPlanner.spawn(p, site)

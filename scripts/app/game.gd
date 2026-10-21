@@ -662,7 +662,9 @@ func _build_world() -> void:
 	if lava > 0:
 		map = LavaCave.build_map(lava)   # (--lava-cave, solo prototype: the hand-authored cave instead of DungeonGen)
 	else:
-		map = DungeonGen.for_run(_run, _floor_n())   # (the job's elevator: every floor of a job uses the same style)
+		# (the job's elevator: every floor of a job uses the same style; a shared run gets no sewer cluster until the sewer
+		# is networked: SewerCluster.NETWORKED)
+		map = DungeonGen.for_run(_run, _floor_n(), _shared)
 	if opts.has("stage_ledge"):
 		_stage_plateau()
 	# Plan the site now: it writes each cell's floor / wall material (Cell.mat_id, FloorMaterials) before the terrain
