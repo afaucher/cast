@@ -173,7 +173,7 @@ checklist (`networking.md`) before any code.
 | Aggro | 10 | |
 | Throw band | 5-9 from its target, with a line of sight | closer than 2.6 it backs off (never into water; cornered, it throws anyway) |
 | Tell | 0.7 s | the monsters' wind-up (a shove, a stagger or a daze calls it off) |
-| Cooldown | 2.6 s x 0.8-1.25 | the first throw of a fight waits 0.2-1.4 s: a pack's balls come one by one |
+| Cooldown | 2.6 s x 0.6-1.55 (1.6-4.0 s) | the first throw of a fight waits 0.2-2.0 s: a pack's balls come one by one. Widened from x0.8-1.25 and 0.2-1.4 after the first playtest (user, 2026-10-21: "can we jitter their throws a bit?", the timing) |
 | Aim | where the target stands, up to 0.6 off | no lead: the marker is fair |
 | Flight | 0.85-1.15 s | 0.85 + 0.03 per unit thrown; the arc tops out 1.4 + 0.12 per unit above the higher end |
 | Hit | 5 damage + the goo slow (x0.5 walking speed) for 1.5 s | anyone whose feet are within 0.55 (+ their radius) of the landing point, 1.0 up or down |
