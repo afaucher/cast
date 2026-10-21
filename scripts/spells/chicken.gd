@@ -16,7 +16,7 @@ extends Actor
 ## (GameWorld.hittable_in_radius: WEAPONS_HIT). It dies in a feather explosion.
 ##
 ## NETWORKING (networking.md shape "owned actor", host-owned like a monster): the cast is an event that lands on every
-## machine (NetCasts, SpellBook.apply); only the host spawns the flock (SpellBook._cast_chicken) and runs its AI, with its
+## machine (NetCasts, SpellBook.apply); only the host spawns the flock (ChickenSpell.cast) and runs its AI, with its
 ## rolls on GameWorld.rng. It is NetWorld's first RUNTIME ACTOR (NetWorldCodec.RUNTIME_ACTORS): streamed like a monster (a
 ## MONSTER-format entry, net_read / net_write: state, the peck wind-up, the peck count), announced the spawn (`world.spawn`, kind "chicken") and the death (`world.die`);
 ## on a client it is a puppet (net_show / net_tick) that plays the same pecks, feathers and poof. A client's hit on it is a
