@@ -12,10 +12,15 @@ extends Node3D
 ##            Swing apart. Smashed: both leaves flat, the sign hanging askew.
 ##   slider   a frosted glass suite front: two fixed glass panels at the sides and two sliding ones in the middle that
 ##            slide behind them, a teal logo band across the glass. Smashed: the glass is gone (shards), the frame stays.
+##   service  the SERVICE LEVEL door at the head of a sewer cluster's service stair (docs/design/sewer-concept.md, "Polish
+##            as built"; DoorPlanner): the double door's leaves and swing in plant green steel, no glass, a hazard-striped
+##            kick band and header, and the stencil "SERVICE" / "LEVEL" across the two leaves on both faces (Label3D, read
+##            left to right from either side). Smashed like the double.
 ## Local frame: X along the door line (from jamb a to jamb b), Z across it (+Z = the hall side), Y up, origin on the floor
 ## at the middle of the line. Pure presentation (LOCAL).
 
-const STYLES: Array[String] = ["single", "double", "slider"]
+const STYLES: Array[String] = ["single", "double", "slider", "service"]
+const SERVICE := "service"       ## the service stair head's style (DoorPlanner)
 const TRIM := Color(0.9, 0.88, 0.82)
 const FRAME := Color(0.33, 0.35, 0.39)  ## gunmetal: the default frame (user, 2026-10-19: "Gunmetal and tread plate.")
 const TRIM_DK := Color(0.62, 0.6, 0.56)
@@ -30,6 +35,9 @@ const FROST := Color(0.84, 0.92, 0.96)
 const LOGO := Color(0.1, 0.56, 0.6)
 const SIGN := Color(0.35, 1.0, 0.55)
 const BRASS := Color(0.95, 0.78, 0.36)
+const PLANT := Color(0.33, 0.41, 0.37)    ## the service door's paint
+const STENCIL := Color(0.96, 0.86, 0.42)  ## its stencil
+const STENCIL_WORDS: Array[String] = ["SERVICE", "LEVEL"]   ## TEXT PENDING THE USER'S REVIEW (2026-10-21): a draft
 
 const POST := 0.14               ## jamb post width (along the line)
 const DEPTH := 0.32              ## frame depth (across the line)
@@ -82,6 +90,8 @@ func palette() -> Array[Color]:
 			return [CREAM, CREAM_DK, STEEL, TRIM]
 		"slider":
 			return [FROST, WIRED, LOGO, TRIM]
+		"service":
+			return [PLANT, ElevatorModel.HAZ_Y, STEEL, ElevatorModel.HAZ_K]
 	return [OAK, OAK_DK, WIRED, TRIM]
 
 
@@ -143,6 +153,8 @@ func _build() -> void:
 	match style:
 		"double":
 			_build_double(top - HEAD)
+		"service":
+			_build_service(top - HEAD, top)
 		"slider":
 			_build_slider(top - HEAD)
 		_:
@@ -152,7 +164,7 @@ func _build() -> void:
 
 func _leaf_width() -> float:
 	match style:
-		"double":
+		"double", "service":
 			return _inner * 0.5 - 0.02
 		"slider":
 			return _inner * 0.25 + 0.03
@@ -242,6 +254,80 @@ func _build_double(leaf_top: float) -> void:
 		sg.merge(LowPoly.box(Vector3(0.62, 0.2, 0.08), STEEL_DK, 21), LowPoly.at(Vector3(0.0, 0.0, z)))
 		sg.merge(LowPoly.box(Vector3(0.54, 0.13, 0.03), PropModels.glow(SIGN), 22), LowPoly.at(Vector3(0.0, 0.0, z + face * 0.045)))
 	_mesh(sg, _sign, "SignBody")
+
+
+## The service door: the double's two leaves (hinged at the posts, swinging apart) in plant green steel with push bars, a
+## hazard-striped kick band low on each face, the stencil across them ("SERVICE" on the left leaf, "LEVEL" on the right, as
+## seen from either side), and hazard stripes along the header on both faces. No glass, no lit sign.
+func _build_service(leaf_top: float, top: float) -> void:
+	var lw := _leaf_width()
+	var font := FontVariation.new()
+	font.base_font = ThemeDB.fallback_font
+	font.variation_embolden = 1.0
+	for i in 2:
+		var dir := 1.0 if i == 0 else -1.0     # the free edge points toward the middle
+		var pivot := Node3D.new()
+		pivot.name = "Leaf%d" % i
+		pivot.position = Vector3(-dir * _inner * 0.5 + dir * 0.005, 0.0, 0.0)
+		add_child(pivot)
+		var s := LowPoly.Soup.new(47 + i, 0.05)
+		var cx := dir * (lw * 0.5)
+		s.merge(LowPoly.box(Vector3(lw, leaf_top - 0.02, LEAF_T), PLANT, 15 + i), LowPoly.at(Vector3(cx, leaf_top * 0.5, 0.0)))
+		for face in [-1.0, 1.0]:
+			var z: float = face * (LEAF_T * 0.5 + 0.06)
+			s.merge(LowPoly.box(Vector3(lw - 0.2, 0.07, 0.06), STEEL, 19), LowPoly.at(Vector3(cx, leaf_top * 0.4, z)))
+			for bx in [-1.0, 1.0]:
+				s.merge(LowPoly.box(Vector3(0.05, 0.1, 0.07), STEEL_DK, 20), LowPoly.at(Vector3(cx + bx * (lw * 0.5 - 0.14), leaf_top * 0.4, face * (LEAF_T * 0.5 + 0.032))))
+			# the kick band: hazard stripes on the leaf's face
+			var yaw := 0.0 if face > 0.0 else 180.0
+			_hazard(s, LowPoly.at(Vector3(cx, 0.15, face * (LEAF_T * 0.5 + 0.004)), Vector3(0, yaw, 0)), lw - 0.1, 0.2, 7, 53 + i)
+			# the stencil: read left to right from this face (the -Z face sees the leaves the other way round)
+			var word: String = STENCIL_WORDS[i] if face > 0.0 else STENCIL_WORDS[1 - i]
+			var l := Label3D.new()
+			l.name = "Stencil%s" % ("Front" if face > 0.0 else "Back")
+			l.text = word
+			l.font = font
+			l.font_size = 44
+			l.pixel_size = 0.0058
+			l.shaded = false
+			l.double_sided = false
+			l.modulate = STENCIL
+			l.outline_size = 0
+			l.position = Vector3(cx, leaf_top * 0.66, face * (LEAF_T * 0.5 + 0.008))
+			l.rotation_degrees = Vector3(0, yaw, 0)
+			l.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			l.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS
+			pivot.add_child(l)
+		_mesh(s, pivot, "LeafBody")
+		_leaves.append(pivot)
+		_leaf_dir.append(dir)
+	# hazard stripes along the header, both faces
+	var hs := LowPoly.Soup.new(49, 0.02)
+	for face in [-1.0, 1.0]:
+		var hz: float = face * ((DEPTH - 0.02) * 0.5 + 0.004)
+		_hazard(hs, LowPoly.at(Vector3(0.0, top - HEAD * 0.5, hz), Vector3(0, 0.0 if face > 0.0 else 180.0, 0)), _inner - 0.06, HEAD * 0.7, 12, 51)
+	_mesh(hs, self, "HeaderStripes")
+
+
+## Diagonal hazard stripes on a strip `length` x `width` centred on xf's origin, facing its +Z (ElevatorModel._stripes, on a
+## soup of a fixed seed: building this door never moves PropModels' shared seed counter, so no other model changes).
+static func _hazard(s: LowPoly.Soup, xf: Transform3D, length: float, width: float, n: int, seed_value: int) -> void:
+	var sub := LowPoly.Soup.new(seed_value, 0.05)
+	var step := length / n
+	var slant := width * 0.9
+	var hl := length * 0.5
+	for i in range(-2, n + 1):
+		var u0 := -hl + i * step
+		var col := ElevatorModel.HAZ_Y if posmod(i, 2) == 0 else ElevatorModel.HAZ_K
+		var p0 := Vector3(clampf(u0, -hl, hl), -width * 0.5, 0.01)
+		var p1 := Vector3(clampf(u0 + step, -hl, hl), -width * 0.5, 0.01)
+		var p2 := Vector3(clampf(u0 + step + slant, -hl, hl), width * 0.5, 0.01)
+		var p3 := Vector3(clampf(u0 + slant, -hl, hl), width * 0.5, 0.01)
+		if p1.x - p0.x < 0.002 and p2.x - p3.x < 0.002:
+			continue
+		sub.add_tri(p0, p1, p2, col)
+		sub.add_tri(p0, p2, p3, col)
+	ElevatorModel._flat(s, sub, xf)
 
 
 ## The frosted glass suite front: fixed glass either side, two sliding panels in the middle that slide behind them, a teal

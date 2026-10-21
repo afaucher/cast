@@ -32,7 +32,9 @@ extends RefCounted
 ## hangs off (at least MIN_LEVEL); its own links are flat (no terraces or stairs: one water level), a loop between two of its
 ## rooms is a flat loop (never the climb shortcut), a loop from it to the rest of the floor is not cut (the stair is the one
 ## way in), its rooms get no raised features or pits, and neither the exit nor the elevator goes in it. The tree link into
-## it is the SERVICE STAIR: flights of STAIRS cells (at most FLIGHT_MAX a cell) down from the room above. The main dice draw
+## it is the SERVICE STAIR: a NARROW hall (one lane, 3.0 between its walls; the user's accepted default, 2026-10-21: its
+## head takes the "service" office door, DoorPlanner) of flights of STAIRS cells (at most FLIGHT_MAX a cell) down from the
+## room above. The main dice draw
 ## as they would without the cluster (the flattened links' profiles are drawn and thrown away, the skipped features rolled
 ## and not built), so the rest of the floor mostly stays as it was. The record goes to HexMap.sewer; SewerPlanner floods it.
 ## ANY failure (no wing fits, the stair finds no straight run, validation) builds the attempt again without the option, so a
@@ -708,6 +710,8 @@ class Builder:
 		if not narrow and not narrow_used and n <= NARROW_MAX_LEN and rng.randf() < NARROW_CHANCE:
 			narrow = true
 			narrow_used = true
+		if stair:
+			narrow = true   # the service stair is always one lane wide (user, 2026-10-21); the main dice drew as without it
 		var core: Array[Vector2i] = []
 		var core_idx: Dictionary = {}     # core cell -> index into S (0 and n + 1 are the doors)
 		for i in n + 2:

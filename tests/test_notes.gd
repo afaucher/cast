@@ -35,6 +35,8 @@ func _all_lines() -> Array:
 	for f: int in NoteCopy.DISPATCH:
 		for t: String in NoteCopy.DISPATCH[f]:
 			out.append({"f": "dispatch", "t": t})
+	for k: String in NoteCopy.SEWER:   # (a sewer cluster's notes: SewerNotePlanner; placement in test_sewer_gen)
+		out.append_array(NoteCopy.SEWER[k])
 	return out
 
 
@@ -82,6 +84,7 @@ func _build_longest() -> void:
 		"client": longest.call(clients), "staff": longest.call(staff), "staff_room": longest.call(rooms), "staff_count": "4",
 		"gate_room": longest.call(rooms), "gate_count": "4", "prop": longest.call(props), "prop_room": longest.call(rooms),
 		"prop_price": longest.call(prices), "origin": longest.call(origins), "pest": longest.call(pests),
+		"sewer_room": NoteFacts.theme_word(RoomThemeDefs.SEWER),
 	}
 	for k: String in ["staff", "staff_room", "gate_room", "prop", "origin"]:
 		_longest[k.to_upper()] = str(_longest[k]).to_upper()

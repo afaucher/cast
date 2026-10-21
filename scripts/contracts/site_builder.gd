@@ -134,6 +134,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	HazardPlanner.plan_sewer(map, run, floor_n, p, avoid, near_corr, ctx)   # the cluster's own dice: its panel and pumps
 	last_hazard_usec = Time.get_ticks_usec() - t_hz
 	NotePlanner.plan(map, run, floor_n, p, ctx)                         # own dice; before the decor, which steers round them
+	SewerNotePlanner.plan(map, run, floor_n, p, ctx)                    # the cluster's own dice: its signs, rota and pump log
 	last_theme_usec += Time.get_ticks_usec() - t0
 	t0 = Time.get_ticks_usec()
 	RoomThemes.plan_decor(ctx)                                          # dice: ctx.rng, after the props' poses

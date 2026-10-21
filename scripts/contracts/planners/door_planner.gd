@@ -9,15 +9,24 @@ extends RefCounted
 ## A SEWER CLUSTER's flooded narrow halls (docs/design/sewer-concept.md, "Phase 3 as built"): both their doorways get a
 ## SLUICE GATE (SewerPlanner.sluice: the decor kind "sluice", whatever its look is, standing across the doorway with the water
 ## running under it) and never an office door; nothing changes on a floor without a cluster.
+## The SERVICE STAIR's head (the narrow stair down into the cluster, docs/design/sewer-concept.md "Polish as built") always
+## gets a door in the "service" style (OfficeDoorModel.SERVICE: hazard stripes and a SERVICE LEVEL stencil), even in the start
+## or the elevator room, where DoorPlan puts none: it marks the way down. Only its look differs from any office door.
+## (Provisional, 2026-10-21: whether it may override the start / elevator room rule is an open question for the user.)
 static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> void:
 	var sp := Doorways.spaces(map)
 	var dws := Doorways.find(map, sp)
 	var sluiced := _sluiced(map, dws)
-	for id in DoorPlan.choose(dws, p, run.floor_seed(floor_n)):
+	var head := service_head(map, dws)
+	var ids := DoorPlan.choose(dws, p, run.floor_seed(floor_n))
+	if head >= 0 and not ids.has(head):
+		ids.append(head)
+		ids.sort()
+	for id in ids:
 		if sluiced.has(id):
 			continue
 		var dw: Dictionary = dws[id]
-		var rec := {"style": OfficeDoor.DEFAULT_STYLE}
+		var rec := {"style": OfficeDoorModel.SERVICE if id == head else OfficeDoor.DEFAULT_STYLE}
 		for k in ["id", "room", "hall", "axis", "cell", "band", "a", "b", "center", "door_cells", "mouth_cells", "door_ok"]:
 			rec[k] = dw[k]
 		p.doors.append(rec)
@@ -40,6 +49,20 @@ static func _sluiced(map: HexMap, dws: Array[Dictionary]) -> Array[int]:
 				out.append(int(dw["id"]))
 				break
 	return out
+
+
+## The doorway at the head of the sewer cluster's service stair (in the room above, on the stair's hall) when it has a door
+## place (narrow, door_ok), else -1. -1 on a floor without a cluster.
+static func service_head(map: HexMap, dws: Array[Dictionary]) -> int:
+	var rec := SewerPlanner.record(map)
+	if rec.is_empty() or (rec["stair"] as Dictionary).is_empty():
+		return -1
+	var st: Dictionary = rec["stair"]
+	var up: Vector2i = st["door_up"]
+	for dw in dws:
+		if str(dw["room"]) == str(st["from"]) and (dw["door_cells"] as Array).has(up):
+			return int(dw["id"]) if bool(dw.get("narrow", false)) and bool(dw.get("door_ok", false)) else -1
+	return -1
 
 
 ## The planned doors, shut (user, 2026-10-19), in plan order.

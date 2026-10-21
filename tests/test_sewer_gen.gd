@@ -19,6 +19,7 @@ const FLOOR1_SEEDS := 8         ## ... and floor 1 (never a cluster)
 
 var _probe: Node = null   ## an empty spawn root for the checksums
 var packs := 0            ## clusters with a goo imp pack
+var sewer_notes := {}     ## SewerNotePlanner's notes by kind, over every cluster
 
 
 func setup() -> void:
@@ -66,6 +67,10 @@ func setup() -> void:
 	print("[sewer gen] %d of %d floors 2-3 have a cluster (%.0f%%), %d with a panel; natural floor-2 seeds: %s; worst gen %.0f ms, worst sewer plan %.1f ms" % [
 		clusters, eligible, 100.0 * clusters / maxf(1.0, eligible), panels, str(natural), worst_gen, worst_sewer / 1000.0])
 	print("[sewer gen] cluster sizes %s; %d flooded narrow halls, %d loops inside a cluster; %d goo imp packs" % [str(sizes), narrow, loops, packs])
+	print("[sewer gen] sewer notes %s" % str(sewer_notes))
+	check(int(sewer_notes.get("crossing", 0)) * 4 >= clusters * 3, "most clusters have a GATOR CROSSING sign (%d of %d)" % [int(sewer_notes.get("crossing", 0)), clusters])
+	check(int(sewer_notes.get("rota", 0)) * 4 >= clusters * 3, "most clusters have the feeding rota (%d of %d)" % [int(sewer_notes.get("rota", 0)), clusters])
+	check(int(sewer_notes.get("pump", 0)) >= 1 and int(sewer_notes.get("drink", 0)) >= 1, "pump logs and DO NOT DRINK signs are placed (%s)" % str(sewer_notes))
 	check(packs * 4 >= clusters * 3, "most clusters have a goo imp pack (%d of %d)" % [packs, clusters])
 	check(panels * 3 >= clusters * 2, "most clusters have an electrical panel (%d of %d)" % [panels, clusters])
 	check(clusters >= eligible / 5, "some floors 2-3 get a cluster (%d of %d)" % [clusters, eligible])
@@ -99,6 +104,8 @@ func _check_cluster(run: ContractRun, f: int, map: HexMap, plan: SitePlan, tag: 
 	check(stairs >= 1, "%s: the service stair has steps (%d STAIRS cells)" % [tag, stairs])
 	var up := int(plan.base_levels[str(st["from"])])
 	check(up - level >= SewerCluster.DROP_MIN, "%s: the stair goes down %d levels" % [tag, up - level])
+	_check_service_stair(map, plan, tag)
+	_check_sewer_notes(map, plan, tag)
 	# one body
 	var bodies := map.pools.filter(func(r: Dictionary) -> bool: return bool(r.get("body", false)))
 	eq(bodies.size(), 1, "%s: one body record" % tag)
@@ -197,6 +204,50 @@ func _check_cluster(run: ContractRun, f: int, map: HexMap, plan: SitePlan, tag: 
 	check(sluices >= narrow, "%s: the flooded narrow halls have sluices (%d for %d halls)" % [tag, sluices, narrow])
 
 
+## Polish (docs/design/sewer-concept.md, "Polish as built"): the service stair is a NARROW hall (one lane: 3.0 between its
+## walls at both doorways), its head in the room above has the one "service" office door (on the stair's own doorway), its
+## foot doorway is reachable from the start, and nothing else on the floor wears the service style.
+func _check_service_stair(map: HexMap, plan: SitePlan, tag: String) -> void:
+	var st: Dictionary = map.sewer["stair"]
+	check(bool(st["narrow"]), "%s: the service stair is a narrow hall" % tag)
+	var dws := Doorways.find(map, Doorways.spaces(map))
+	var head := DoorPlanner.service_head(map, dws)
+	check(head >= 0, "%s: the stair's head has a door place" % tag)
+	if head < 0:
+		return
+	check(bool(dws[head]["narrow"]) and float(dws[head]["width"]) <= Doorways.NARROW_MAX, "%s: the head doorway is narrow (%.2f)" % [tag, float(dws[head]["width"])])
+	var service: Array = plan.doors.filter(func(d: Dictionary) -> bool: return str(d["style"]) == OfficeDoorModel.SERVICE)
+	eq(service.size(), 1, "%s: one SERVICE LEVEL door" % tag)
+	if service.size() == 1:
+		eq(int(service[0]["id"]), head, "%s: it stands at the stair's head" % tag)
+		eq(str(service[0]["room"]), str(st["from"]), "%s: in the room above" % tag)
+	var reach := _reach(map, plan.start)
+	check(reach.has(st["door"]) and reach.has(st["door_up"]), "%s: the stair's head and foot are reachable from the start" % tag)
+
+
+## The sewer's notes (SewerNotePlanner): each on a dry deck by the water in a cluster room, apart from every other note, its
+## text filled, the GATOR CROSSING sign and the feeding rota on most clusters (counted in setup).
+func _check_sewer_notes(map: HexMap, plan: SitePlan, tag: String) -> void:
+	var rooms: Array = map.sewer["rooms"]
+	for nt in plan.notes:
+		if not nt.has("sewer"):
+			continue
+		sewer_notes[str(nt["sewer"])] = int(sewer_notes.get(str(nt["sewer"]), 0)) + 1
+		var c: Vector2i = nt["cell"]
+		check(rooms.has(map.get_cell(c).tag) and not map.is_pool_cell(c) and map.is_walkable_cell(c), "%s: the %s note is on a cluster room's dry floor" % [tag, nt["sewer"]])
+		var wet := false
+		for n in Hex.range_cells(c, SewerNotePlanner.WATER_REACH):
+			wet = wet or map.is_pool_cell(n)
+		check(wet, "%s: the %s note is by the water" % [tag, nt["sewer"]])
+		var t := str(nt["text"])
+		check(t != "" and not t.contains("{") and t.length() <= NoteCopy.MAX_LEN, "%s: the %s note reads: %s" % [tag, nt["sewer"], t])
+		for o in plan.notes:
+			if o != nt:
+				# (the stair foot's sign comes later, SewerPlanner.dress, 2-3 from the stair: these keep STAIR_CLEAR from it)
+				var apart := SewerNotePlanner.APART if o.has("sewer") or str(o["kind"]) != "hint" else 2
+				check(Hex.distance(c, o["cell"]) >= apart, "%s: the %s note keeps apart from the %s note" % [tag, nt["sewer"], o["kind"]])
+
+
 ## Every cell reached from `start` over walkable moves (wading is a one-level step).
 func _reach(map: HexMap, start: Vector2i) -> Dictionary:
 	var seen := {start: true}
@@ -222,6 +273,9 @@ func _check_unchanged(run: ContractRun, f: int, map: HexMap, plan: SitePlan) -> 
 	var a := NetFloor.checksum(map, plan, run, _probe)
 	var b := NetFloor.checksum(ref, ref_plan, run, _probe)
 	check(str(a["map"]) == str(b["map"]) and str(a["plan"]) == str(b["plan"]), "seed %d floor %d: without a cluster the floor is unchanged" % [run.seed, f])
+	for d in plan.doors:
+		check(str(d["style"]) != OfficeDoorModel.SERVICE, "seed %d floor %d: no service door without a cluster" % [run.seed, f])
+	check(plan.notes.filter(func(n: Dictionary) -> bool: return n.has("sewer")).is_empty(), "seed %d floor %d: no sewer notes without a cluster" % [run.seed, f])
 
 
 ## The same floor in a shared run (sewer phase 2): the same cluster, so every machine of a crew builds the solo floor of the

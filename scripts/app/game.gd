@@ -1167,6 +1167,7 @@ func _start() -> void:
 	_drop_near()
 	_setup_fog()
 	_start_lava()
+	SewerCalls.attach(self, map, _site.wires, _heroes, func() -> Hero: return player, fog, _banner)   # (dispatch's sewer calls; cosmetic)
 	_dev_on_floor_ready()
 	_enter_barrier()
 	if not await _dev_after_barrier():

@@ -50,7 +50,7 @@ func _check_lines() -> void:
 		keys[key] = l["text"]
 		texts[l["text"]] = true
 		kinds[l["kind"]] = int(kinds.get(l["kind"], 0)) + 1
-	for kind: String in ["incident", "floor2", "floor3", "origin_shut", "wipe", "call", "rescue_one", "rescue_many"]:
+	for kind: String in ["incident", "floor2", "floor3", "origin_shut", "wipe", "call", "sewer", "rescue_one", "rescue_many"]:
 		check(int(kinds.get(kind, 0)) > 0, "lines of kind %s exist" % kind)
 	# every source is covered
 	var incidents := 0
@@ -67,6 +67,11 @@ func _check_lines() -> void:
 	check(texts.has(NoteCopy.ORIGIN_SHUT), "the origin-gate line is listed")
 	for t: String in [NoteCopy.WIPE, NoteCopy.FLOOR_CLEAN, NoteCopy.STAFF_LOST, NoteCopy.YOU_DOWN, NoteCopy.EXIT_DOWN, NoteCopy.EXIT_OUT]:
 		check(texts.has(t), "the call is listed: %s" % t)
+	# the sewer's calls (sewer polish, 2026-10-21): the service level, the gator, the live wire; no names, short
+	for t: String in [NoteCopy.SEWER_DOWN, NoteCopy.GATOR_SEEN, NoteCopy.GATOR_BILLED, NoteCopy.WIRE_LIVE, NoteCopy.WIRE_SHOCK]:
+		check(NoteCopy.SEWER_CALLS.has(t) and texts.has(t), "the sewer call is listed: %s" % t)
+		check(t.length() <= 90 and not t.contains("{") and not t.contains("%") and not t.contains("("), "the sewer call is short, with no slot or name: %s" % t)
+	eq(int(kinds.get("sewer", 0)), NoteCopy.SEWER_CALLS.size(), "one clip per sewer call")
 	for t: String in NoteCopy.RESCUE_ONE:
 		check(texts.has(t), "rescue line listed: %s" % t)
 		check(not t.contains("%"), "no employee name in a rescue line (2026-10-20): %s" % t)
@@ -105,6 +110,8 @@ func _check_spoken() -> void:
 	eq(DispatchVoice.spoken("Copy, 2 staff out."), "Copy, two staff out!", "a count first in the line")
 	eq(DispatchVoice.number_words(21), "twenty-one", "numbers up to 99 and beyond")
 	eq(DispatchVoice.spoken(NoteCopy.ORIGIN_SHUT), "The origin gate is shut; the site calms down, the invoice does not!", "the origin-gate line, as in reel 11")
+	eq(DispatchVoice.spoken(NoteCopy.SEWER_DOWN), "You're on the service level; everything down there is wet, including the wiring!", "the service level call, one read")
+	eq(DispatchVoice.spoken(NoteCopy.WIRE_SHOCK), "That was the panel; get out of the water!", "the live wire call, one read")
 	for l in DispatchVoice.all_lines():
 		var text := str(l["text"])
 		var say := str(l["spoken"])

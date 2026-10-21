@@ -68,6 +68,9 @@ static func from_plan(plan: SitePlan, run: ContractRun) -> Dictionary:
 		f["prop_price"] = ContractRun.money(best_price)
 		f["_prop_room"] = str(best["room"])
 		f["_prop_kind"] = str(best["kind"])
+	# a sewer cluster's rooms, by the sewer theme row's word (only on a floor with one: SewerNotePlanner)
+	if plan.room_themes.values().has(RoomThemeDefs.SEWER):
+		f["sewer_room"] = theme_word(RoomThemeDefs.SEWER)
 	return f
 
 
