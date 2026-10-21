@@ -15,8 +15,8 @@ extends RefCounted
 ##
 ## PHASE 3 (the generator, "Phase 3 as built"): --sewer-floor forces a sewer cluster (SewerCluster.force) on every floor of a
 ## job where any wing of rooms fits, whatever the site, the floor or the roll (a crew: every window with the flag), and starts the
-## contract on floor 2 unless --floor says otherwise; --to-sewer [head|foot] puts the crew at the head of the service stair
-## (or at its foot, in the first sewer room) once the floor is ready (GameDev._sewer_floor_ready).
+## contract on floor 2 unless --floor says otherwise; --to-sewer [head|foot|sump[:n]] puts the crew at the head of the service
+## stair (or at its foot, in the first sewer room, or in sump n's water) once the floor is ready (GameDev._sewer_floor_ready).
 
 
 ## The sewer flags into the game's opts (GameDev._parse_args).

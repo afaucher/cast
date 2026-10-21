@@ -54,7 +54,13 @@ func _sewer_floor_ready() -> void:
 		", ".join(rec["rooms"]), int(rec["level"]), st["from"], up, (rec.get("gators", []) as Array).size(),
 		_site.wires.size() if _site != null else 0], Color(0.55, 0.9, 0.75))
 	if opts.has("to_sewer") and not _shared:
-		_teleport_crew(st["door"] if str(opts["to_sewer"]) == "foot" else up)
+		var to := str(opts["to_sewer"])
+		var sumps: Array = rec.get("sumps", [])
+		if to.begins_with("sump") and not sumps.is_empty():
+			var n := int(to.get_slice(":", 1)) if to.contains(":") else 0
+			_teleport_crew((sumps[clampi(n, 0, sumps.size() - 1)] as Dictionary)["cell"])
+		else:
+			_teleport_crew(st["door"] if to == "foot" else up)
 
 
 ## The sewer's look over the terrain HexMapView just built: the water, foam, kerbs, the channel and the light.

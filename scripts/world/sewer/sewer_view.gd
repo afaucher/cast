@@ -321,6 +321,12 @@ func _channel_material() -> ShaderMaterial:
 
 ## Murky moving water: the pools' banded toon water, darker and more opaque, with scum blotches and foam streaks drawn out
 ## along the local flow (vertex COLOR.rg carries the flow direction, 0.5 + 0.5 * dir), and the live wire's flash.
+## THE FLOW'S FRAME: the pattern is drawn in a frame along one of 12 FIXED directions (every 30 degrees), the two either side
+## of the local flow cross-faded, never in a frame along the interpolated flow itself. A frame turned by the flow is
+## dot(world position, flow): where the flow turns inside a kite (the switch between two flow lines, round a sump) its phase
+## swings by |position| x the angle, and on a generated floor, 30-60 m from the origin, that packed dozens of stripes into a
+## kite: a moire band along the kites' edges across the channel and rings round a sump (the user's playtest, 2026-10-21; the
+## hand layouts sit near the origin, so it hardly showed there). A fixed direction's frame is a plain translation.
 const WATER_SHADER := """
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled, specular_schlick_ggx;
@@ -347,19 +353,30 @@ void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	flow = normalize(COLOR.rg * 2.0 - 1.0 + vec2(0.0001));
 }
-void fragment() {
-	vec2 f = normalize(flow);
+// The pattern in the frame of fixed direction f: x the band (0, 0.5 or 1), y the scum, z the foam streak.
+vec3 flow_look(vec2 p, vec2 f, float t) {
 	vec2 n = vec2(-f.y, f.x);
-	float t = 1.3 + TIME * 0.5;
-	vec2 p = wp.xz;
 	float along = dot(p, f) - t * 0.8;
 	float across = dot(p, n);
 	float w = sin(along * 1.6 + sin(across * 1.3) * 0.8) + sin(across * 2.1 + along * 0.5 - t) + 0.5 * sin((along + across) * 3.0 + t * 1.7);
 	float band = floor(clamp(w * 0.2 + 0.5, 0.0, 0.999) * 3.0) / 2.0;
-	vec3 col = mix(deep_col.rgb, shallow_col.rgb, band * 0.8);
 	float scum = smoothstep(0.62, 0.7, vn(vec2(along * 0.45, across * 0.9) + 7.0));
-	col = mix(col, scum_col.rgb, scum * 0.7);
 	float streak = smoothstep(0.72, 0.8, vn(vec2(along * 0.6, across * 5.5)));
+	return vec3(band, scum, streak);
+}
+void fragment() {
+	float t = 1.3 + TIME * 0.5;
+	vec2 p = wp.xz;
+	float sector = atan(flow.y, flow.x) / (TAU / 12.0);
+	float s0 = floor(sector);
+	float a0 = s0 * TAU / 12.0;
+	float a1 = a0 + TAU / 12.0;
+	vec3 look = mix(flow_look(p, vec2(cos(a0), sin(a0)), t), flow_look(p, vec2(cos(a1), sin(a1)), t), sector - s0);
+	float band = look.x;
+	float scum = look.y;
+	float streak = look.z;
+	vec3 col = mix(deep_col.rgb, shallow_col.rgb, band * 0.8);
+	col = mix(col, scum_col.rgb, scum * 0.7);
 	col = mix(col, foam_col.rgb, streak * 0.55);
 	float fd = length(p - flash_pos.xz);
 	float fl = flash_k * (1.0 - smoothstep(flash_r * 0.55, flash_r, fd)) * (0.55 + 0.45 * sin(TIME * 70.0 + fd * 4.0));
@@ -379,8 +396,13 @@ static func _kite_poly(center: Vector3, k: int) -> Array[Vector2]:
 	return pts
 
 
+## A kite corner's key on the hex lattice: every kite corner (a cell centre, an edge midpoint, a cell corner) has X a whole
+## multiple of INNER / 2 and Z of SIZE / 4, so the key is those multiples. NOT millimetres: on a generated floor, far from
+## the origin, the same corner reached from two cells differs in the last float bit, and where it sits on a half millimetre
+## (X = -51.0955: 118 x INNER / 2) the two cells' keys split, the shared edge counted as an edge of the water on both sides
+## and each side drew foam and a kerb along it at the channel floor (ground_level there), under the water.
 static func _key(p: Vector2) -> Vector2i:
-	return Vector2i(roundi(p.x * 1000.0), roundi(p.y * 1000.0))
+	return Vector2i(roundi(p.x / (Hex.INNER * 0.5)), roundi(p.y / (Hex.SIZE * 0.25)))
 
 
 ## The water surface (a fan per pool kite of the sewer's cells, the flow in the vertex colour), the foam along every edge

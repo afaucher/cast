@@ -145,6 +145,7 @@ func _check_cluster(run: ContractRun, f: int, map: HexMap, plan: SitePlan, tag: 
 		var share := float(water) / maxf(1.0, kites)
 		check(share <= SewerPlanner.WATER_CAP + 0.05, "%s: %s's water is %.0f%% of its floor" % [tag, t, share * 100.0])
 		check(share > 0.05, "%s: %s has its channel (%.0f%%)" % [tag, t, share * 100.0])
+	_check_water_drawing(map, body, rec, tag)
 	# every doorway reachable from the start, wading where it must
 	var start: Vector2i = plan.start
 	var reach := _reach(map, start)
@@ -268,8 +269,60 @@ func _check_spawned(run: ContractRun, f: int, tag: String) -> void:
 
 
 ## --sewer-floor: a forced cluster on most floors, any site, a shared run alike (every window of a crew has the flag).
+## The body's water as SewerView draws it (the user's playtest, 2026-10-21, "What happened to this water"): the foam runs only
+## along the water's own edge (the far side of every foam strip is dry floor or a wall, never more of the body's water: a
+## shared kite edge both sides of which drew foam and a kerb, when two cells' corner keys split far from the origin), and
+## every kerb stands on a deck over the water, none under it.
+func _check_water_drawing(map: HexMap, body: Dictionary, rec: Dictionary, tag: String) -> void:
+	var only := {}
+	for c: Vector2i in (body["basin"] as Array) + (body["ring"] as Array):
+		only[c] = true
+	var v := SewerView.new()
+	v.flows = rec["flows"]
+	var surface_y := float(body["surface_y"])
+	v.build_water(map, only, surface_y, int(body["floor_level"]))
+	check(v.water != null and v.foam != null, "%s: the water and its foam are drawn" % tag)
+	if v.foam != null:
+		var arr := (v.foam.mesh as ArrayMesh).surface_get_arrays(0)
+		var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var cs: PackedColorArray = arr[Mesh.ARRAY_COLOR]
+		var inside := 0
+		var first := Vector3.INF
+		for q in vs.size() / 6:
+			var edge := Vector3.ZERO
+			var inner := Vector3.ZERO
+			for i in [0, 1, 2, 5]:   # (a quad's corners: _quad's triangles 0 1 2, 0 2 3)
+				if cs[q * 6 + i].a > 0.5:
+					edge += vs[q * 6 + i] * 0.5
+				else:
+					inner += vs[q * 6 + i] * 0.5
+			var probe := edge + (edge - inner).normalized() * 0.08
+			if map.water_at(probe) and only.has(Hex.from_world(probe)):
+				inside += 1
+				if first == Vector3.INF:
+					first = probe
+		eq(inside, 0, "%s: no foam strip runs through the water (first at %s)" % [tag, first])
+	if v.kerb != null:
+		# (its top faces only: a kerb's front face runs on down into the water, to the channel floor + 0.2)
+		var ka := (v.kerb.mesh as ArrayMesh).surface_get_arrays(0)
+		var kv: PackedVector3Array = ka[Mesh.ARRAY_VERTEX]
+		var kn: PackedVector3Array = ka[Mesh.ARRAY_NORMAL]
+		var low := 0
+		for i in kv.size():
+			if kn[i].y > 0.9 and kv[i].y < surface_y:
+				low += 1
+		eq(low, 0, "%s: no kerb top lies under the water" % tag)
+	v.free()
+
+
 func _check_force() -> void:
 	SewerCluster.force = true
+	# the playtest's floor (board seed 7, offer 2, floor 2: a column of kite corners at X = -51.0955) draws its water clean
+	var pr: ContractRun = ContractBoard.offers(7)[1]
+	var pm := DungeonGen.for_run(pr, 2)
+	SiteBuilder.plan(pm, pr, 2, PricedProp.catalog(pr.site_type))
+	if check(not SewerPlanner.record(pm).is_empty(), "the playtest's floor (board 7, offer 2, floor 2) has its cluster"):
+		_check_water_drawing(pm, pm.pools[int(pm.sewer["body"])], pm.sewer, "board 7 offer 2 floor 2")
 	var got := 0
 	for s in range(1, 13):
 		var run := ContractBoard.run_for_seed(s)
