@@ -43,11 +43,6 @@ const TANK_WHITE := Color(0.88, 0.88, 0.84)
 const CYL_GREEN := Color(0.16, 0.42, 0.24)
 const CYL_MAROON := Color(0.46, 0.1, 0.14)
 const CYL_BLUE := Color(0.2, 0.32, 0.5)
-## Where a lit explosive's fuse sparks (model space, front = +Z): the bung, the middle valve, the dome, the + terminal.
-const FUSE_POINTS := {
-	"oil_drum": Vector3(0.16, 1.06, 0.12), "gas_cylinders": Vector3(0.0, 1.42, 0.0),
-	"propane_tank": Vector3(0.0, 1.19, 0.0), "battery_pack": Vector3(0.28, 1.51, 0.18),
-}
 
 static var _seed := 1
 
@@ -590,9 +585,10 @@ static func _brazier(s: LowPoly.Soup) -> void:
 
 # ------------------------------------------------------------------ explosive props (placed by room theme, any site)
 
-## The point a lit fuse sparks from (model space).
+## The point a lit fuse sparks from (model space, front = +Z): the row's "fuse_point" (the bung, the valve, the dome,
+## the + terminal), else the model's top.
 static func fuse_point(kind: String) -> Vector3:
-	return FUSE_POINTS.get(kind, Vector3(0, height(kind), 0))
+	return row(kind).get("fuse_point", Vector3(0, height(kind), 0))
 
 
 ## The flame hazard diamond on a front face (facing +Z) at `pos`: a white diamond, a glowing orange one on it, a flame.

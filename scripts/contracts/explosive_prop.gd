@@ -48,13 +48,9 @@ const BURN_POWER := 0.7             ## the blast sets people on fire like a fire
 const TOUCH_SLACK := 0.15           ## a burning actor this close (edge to edge) lights it
 const CLIENT_LATE := 1.0            ## a copy told of a fuse whose blast is further gone than this shows no blast of its own
 
-## The blast of each kind: radius (world units), damage at the centre, shove at the centre, fuse (seconds).
-const BLAST := {
-	"oil_drum": {"radius": 3.0, "damage": 45.0, "shove": 2.6, "fuse": 1.3},
-	"gas_cylinders": {"radius": 3.2, "damage": 50.0, "shove": 2.8, "fuse": 1.0},
-	"propane_tank": {"radius": 3.4, "damage": 55.0, "shove": 3.0, "fuse": 1.2},
-	"battery_pack": {"radius": 2.8, "damage": 40.0, "shove": 2.4, "fuse": 1.5},
-}
+## The blast of each kind is its PricedProp.TABLE row's "blast": radius (world units), damage at the centre, shove at
+## the centre, fuse (seconds). A hazard row without one is an error (blast_of; tests/test_explosive_props.gd checks).
+const BLAST_KEYS: Array[String] = ["radius", "damage", "shove", "fuse"]
 
 var blast_radius := 3.0
 var blast_damage := 45.0
@@ -95,6 +91,17 @@ static func shot_damage(target: Actor, damage: float) -> float:
 	return damage
 
 
+## The kind's blast {radius, damage, shove, fuse} from its PricedProp.TABLE row. Empty, with an error, when the row has no
+## complete blast: an explosive never borrows another kind's numbers.
+static func blast_of(kind_id: String) -> Dictionary:
+	var b: Dictionary = (TABLE.get(kind_id, {}) as Dictionary).get("blast", {})
+	for k in BLAST_KEYS:
+		if not b.has(k):
+			push_error("ExplosiveProp: '%s' has no complete \"blast\" in PricedProp.TABLE" % kind_id)
+			return {}
+	return b
+
+
 ## A chained explosive `dist` units from the blast lights on this short fuse.
 static func chain_delay(dist: float) -> float:
 	return CHAIN_DELAY_MIN + CHAIN_DELAY_PER_UNIT * maxf(dist, 0.0)
@@ -111,7 +118,9 @@ static func blame_of(source: Node) -> Node:
 
 func setup(kind_id: String, opts: Dictionary = {}) -> void:
 	super(kind_id, opts)
-	var b: Dictionary = BLAST.get(kind_id, BLAST["oil_drum"])
+	var b := blast_of(kind_id)
+	if b.is_empty():
+		return
 	blast_radius = float(b["radius"])
 	blast_damage = float(b["damage"])
 	blast_shove = float(b["shove"])

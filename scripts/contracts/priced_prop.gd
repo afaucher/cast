@@ -89,16 +89,21 @@ const TABLE := {
 	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1),
 		"height": 1.15, "model": "_brazier", "extra": "_embers", "palette": [PropModels.IRON, PropModels.IRON_LT, Color(1.0, 0.55, 0.12)]},
 	# Explosive props (ExplosiveProp: a fuse, then a blast; docs/design/hazards.md). Site "hazard": never in a site's
-	# catalog; the room themes place them (RoomThemeDefs "hazards", HazardPlanner.plan). The blast numbers are
-	# ExplosiveProp.BLAST.
+	# catalog; the room themes place them (RoomThemeDefs "hazards", HazardPlanner.plan). Each one's row also carries
+	# "blast" (ExplosiveProp: radius in world units, damage and shove at the centre, fuse in seconds; required, a hazard
+	# without it is an error) and "fuse_point" (PropModels.fuse_point: where the lit fuse sparks, model space).
 	"oil_drum": {"name": "Oil drum", "price": 800, "hp": 40.0, "radius": 0.45, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(0.85, 0.85),
-		"height": 1.05, "model": "_oil_drum", "palette": [PropModels.DRUM_RED, PropModels.DRUM_RED_DK, PropModels.IRON, PropModels.HAZARD_YELLOW]},
+		"height": 1.05, "model": "_oil_drum", "palette": [PropModels.DRUM_RED, PropModels.DRUM_RED_DK, PropModels.IRON, PropModels.HAZARD_YELLOW],
+		"blast": {"radius": 3.0, "damage": 45.0, "shove": 2.6, "fuse": 1.3}, "fuse_point": Vector3(0.16, 1.06, 0.12)},
 	"gas_cylinders": {"name": "Gas cylinders", "price": 1800, "hp": 35.0, "radius": 0.5, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.15, 0.5),
-		"height": 1.45, "model": "_gas_cylinders", "palette": [PropModels.CYL_GREEN, PropModels.CYL_MAROON, PropModels.CYL_BLUE, PropModels.IRON_LT]},
+		"height": 1.45, "model": "_gas_cylinders", "palette": [PropModels.CYL_GREEN, PropModels.CYL_MAROON, PropModels.CYL_BLUE, PropModels.IRON_LT],
+		"blast": {"radius": 3.2, "damage": 50.0, "shove": 2.8, "fuse": 1.0}, "fuse_point": Vector3(0.0, 1.42, 0.0)},
 	"propane_tank": {"name": "Propane tank", "price": 1200, "hp": 45.0, "radius": 0.6, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.8),
-		"height": 1.2, "model": "_propane_tank", "palette": [PropModels.TANK_WHITE, PropModels.IRON, Color(0.85, 0.2, 0.15), PropModels.HAZARD_YELLOW]},
+		"height": 1.2, "model": "_propane_tank", "palette": [PropModels.TANK_WHITE, PropModels.IRON, Color(0.85, 0.2, 0.15), PropModels.HAZARD_YELLOW],
+		"blast": {"radius": 3.4, "damage": 55.0, "shove": 3.0, "fuse": 1.2}, "fuse_point": Vector3(0.0, 1.19, 0.0)},
 	"battery_pack": {"name": "Server battery pack", "price": 6500, "hp": 60.0, "radius": 0.52, "site": "hazard", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 0.7),
-		"height": 1.52, "model": "_battery_pack", "palette": [PropModels.OBSIDIAN, PropModels.IRON, Color(1.0, 0.55, 0.12), Color(0.3, 1.0, 0.5)]},
+		"height": 1.52, "model": "_battery_pack", "palette": [PropModels.OBSIDIAN, PropModels.IRON, Color(1.0, 0.55, 0.12), Color(0.3, 1.0, 0.5)],
+		"blast": {"radius": 2.8, "damage": 40.0, "shove": 2.4, "fuse": 1.5}, "fuse_point": Vector3(0.28, 1.51, 0.18)},
 	# The sewer's props (docs/design/sewer-concept.md, phase 1: --sewer only). Site "sewer": no site's catalog has them. The
 	# electrical panel breaks to any hit (HP 1) and drops the live wire into the water (LiveWire).
 	"sump_pump": {"name": "Sump pump", "price": 3500, "hp": 70.0, "radius": 0.6, "site": "sewer", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.2, 0.85),

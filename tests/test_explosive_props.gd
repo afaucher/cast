@@ -96,7 +96,12 @@ func _check_catalog() -> void:
 	eq(kinds.size(), 4, "four explosive kinds (%s)" % str(kinds))
 	for k in kinds:
 		check(not PricedProp.catalog("bunker").has(k) and not PricedProp.catalog("lair").has(k), "%s is never a site's random priced prop" % k)
-		check(ExplosiveProp.BLAST.has(k), "%s has blast numbers" % k)
+		var row: Dictionary = PricedProp.TABLE[k]
+		check(row.has("blast") and ExplosiveProp.BLAST_KEYS.all(func(key: String) -> bool: return (row["blast"] as Dictionary).has(key)),
+				"%s has its own blast numbers in its row (radius, damage, shove, fuse)" % k)
+		if check(row.get("fuse_point") is Vector3, "%s has a fuse point in its row" % k):
+			near(PropModels.fuse_point(k).distance_to(row["fuse_point"]), 0.0, 0.0001, "%s: PropModels reads the row's fuse point" % k)
+		eq(ExplosiveProp.blast_of(k), row.get("blast", {}), "%s: ExplosiveProp reads the row's blast" % k)
 		var e := _boom(k, Vector3(-6.0 + 4.0 * float(kinds.find(k)), 0, -5))
 		check(e != null, "%s spawns as an ExplosiveProp" % k)
 		if e == null:
