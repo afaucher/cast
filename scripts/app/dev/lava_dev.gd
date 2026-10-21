@@ -11,7 +11,7 @@ extends RefCounted
 ##                           lights (prints "[lava perf] ..." and quits)
 ## --lava-cave N (the hand-authored prototype caves) is game.gd's own flag.
 
-const PERF_FRAMES := 240
+const PERF_FRAMES := 480
 
 
 static func parse(args: PackedStringArray, opts: Dictionary) -> void:
@@ -82,6 +82,10 @@ static func perf(game: Node, map: HexMap) -> void:
 	ten.name = "PerfLights"
 	holder.add_child(ten)
 	LavaLook._build_lights(ten, cells, float(map.cave["lava_y"]), 10)
+	var forty := Node3D.new()   # (a slope: what one more light costs, for the min-spec estimate)
+	forty.name = "PerfLights40"
+	holder.add_child(forty)
+	LavaLook._build_lights(forty, cells, float(map.cave["lava_y"]), 40)
 	var own: Array[Node] = []
 	for ch in holder.get_children():
 		if ch is OmniLight3D:
@@ -89,14 +93,15 @@ static func perf(game: Node, map: HexMap) -> void:
 	var vp := game.get_viewport().get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(vp, true)
 	var results := {}
-	for mode in ["10", "4", "0"]:
+	for mode in ["0", "4", "10", "40", "10", "4", "0"]:
 		ten.visible = mode == "10"
+		forty.visible = mode == "40"
 		for l in own:
 			(l as Node3D).visible = mode == "4"
-		results[mode] = await _measure(game, vp)
-	print("[lava perf] %d lava cells, view %s, %s: 10 lights gpu %.3f ms cpu %.3f ms | 4 lights gpu %.3f cpu %.3f | none gpu %.3f cpu %.3f" % [
+		results[mode] = (results.get(mode, Vector2.ZERO) as Vector2) + await _measure(game, vp) * (1.0 if mode == "40" else 0.5)
+	print("[lava perf] %d lava cells, view %s, %s: 40 lights gpu %.3f ms cpu %.3f | 10 lights gpu %.3f ms cpu %.3f ms | 4 lights gpu %.3f cpu %.3f | none gpu %.3f cpu %.3f" % [
 		cells.size(), str(game.get_viewport().get_visible_rect().size), RenderingServer.get_video_adapter_name(),
-		results["10"].x, results["10"].y, results["4"].x, results["4"].y, results["0"].x, results["0"].y])
+		results["40"].x, results["40"].y, results["10"].x, results["10"].y, results["4"].x, results["4"].y, results["0"].x, results["0"].y])
 	game.get_tree().quit()
 
 

@@ -92,7 +92,7 @@ static func choose(b: DungeonGen.Builder) -> bool:
 		for opt: Array in _shapes(b, v, wing, parent):
 			options.append(opt)
 	if options.is_empty():
-		return _no("choose:89")
+		return _no("no wing of 2-3 rooms")
 	if LavaSite.force_pattern != "":
 		var want := options.filter(func(o: Array) -> bool: return str(o[2]) == LavaSite.force_pattern)
 		if not want.is_empty():
@@ -183,10 +183,10 @@ static func _carve(b: DungeonGen.Builder) -> bool:
 				owned[c] = true
 		elif ia or ib:
 			if entry != null:
-				return _no("_carve:180")   # (only the tree link comes in: the loops into a cave are not cut)
+				return _no("two halls into the cave")   # (only the tree link comes in: the loops into a cave are not cut)
 			entry = l
 	if entry == null:
-		return _no("_carve:183")
+		return _no("no hall into the cave")
 	var rock := {}    # cell -> level
 	var kind := {}    # cell -> "room:N" | "corridor" | "isle"
 	var radius := {}  # room index -> its chamber radius
@@ -236,14 +236,14 @@ static func _carve(b: DungeonGen.Builder) -> bool:
 	for w: Array in ways:
 		var br := _walkway(b, int(w[0]), int(w[1]), w[2], bool(w[3]), rock, kind, owned, lv)
 		if br.is_empty():
-			return _no("_carve:233")
+			return _no("a walkway cannot reach its chamber")
 		bridges.append(br)
 	# The neck: the hall in meets the root chamber at its doorway; the rock runs on to the chamber, three wide.
 	var root: int = info["root"]
 	var door: Vector2i = entry.door_b if entry.b == root else entry.door_a
 	var neck := _neck(b, root, door, rock, kind, owned, lv)
 	if neck.is_empty():
-		return _no("_carve:240")
+		return _no("the neck cannot reach the entry chamber")
 	# Landings stay flat (and so does each chamber's middle); the rest of each chamber gets rough.
 	var flat := {}
 	for br: Dictionary in bridges:
@@ -272,10 +272,10 @@ static func _carve(b: DungeonGen.Builder) -> bool:
 	for anchor: Dictionary in _anchors(b, pattern, order, bridges, extra):
 		var isle := _isle(b, anchor, rock, kind, lava, owned, foreign, isles, lv)
 		if isle.is_empty():
-			return _no("_carve:isle " + last_fail)
+			return _no("no isle a crust reaches (" + last_fail + ")")
 		isles.append(isle)
 	if isles.is_empty():
-		return _no("_carve:272")
+		return _no("no isle")
 	# Write the cells: rock at its levels, lava at the bed.
 	for c: Vector2i in rock:
 		b.map.set_cell(c, int(rock[c]))

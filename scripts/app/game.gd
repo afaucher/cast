@@ -1485,7 +1485,11 @@ func _on_join_ready(peer: int) -> void:
 	var extra := {"contract": _session.mirror_state()}
 	var lava := LavaField.of_world()
 	if lava != null:
-		extra["lava"] = lava.late_join_state()   # (a lava cave's live crusts: the joiner computes the same cells from them)
+		# (a lava cave's live crusts: the joiner computes the same cells from them; their start on the shared clock)
+		var rows := lava.late_join_state()
+		for r: Array in rows:
+			r[3] = Session.objects.host_stamp(float(r[3]))
+		extra["lava"] = rows
 	Session.join.admit(peer, extra)
 
 
@@ -1657,7 +1661,11 @@ func _on_join_snapshot(d: Dictionary) -> void:
 	_session.apply_mirror(d.get("contract", {}) as Dictionary)
 	var lava := LavaField.of_world()
 	if lava != null:
-		lava.apply_late_join(d.get("lava", []) as Array)
+		var rows := (d.get("lava", []) as Array).duplicate(true)
+		for r: Variant in rows:
+			if r is Array and (r as Array).size() >= 4:
+				(r as Array)[3] = Session.objects.local_stamp(float((r as Array)[3]))
+		lava.apply_late_join(rows)
 	var own := int((d.get("take", {}) as Dictionary).get("seat", 0))
 	var kits := d.get("kits", {}) as Dictionary
 	for k: Variant in kits:
