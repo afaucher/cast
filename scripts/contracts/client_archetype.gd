@@ -36,7 +36,7 @@ const DATA := {
 		"pay_scale": 1.0,
 		"employees": [2, 4],
 		"everything_chance": 0.25,
-		"warning": "Property: 1787 wine collection and a home cinema. Insured, but not by us.",
+		"warning": "Property: 1787 wine collection and a home cinema. You break it, you pay for it.",
 		"events": [
 			{"text": "During the annual door drill, someone opened the door to confirm it was sealed.", "dispatch": "Someone opened the door to confirm it was sealed, and the staff are still on the wrong side of it. Bring them out.", "origin": "wine cellar"},
 			{"text": "Movie night went ahead with the projector aimed at the wrong seal.", "dispatch": "Movie night ran with the projector aimed at the wrong seal. Some of the staff are still in the audience. Bring them out.", "origin": "home cinema"},

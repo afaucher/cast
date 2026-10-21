@@ -42,7 +42,7 @@ const STORY := {
 			{"f": "memo", "t": "Shelter plan: {staff} to the {staff_room}, with the good silver. The silver has priority."},
 			{"f": "voicemail", "t": "Me again. If anything happens, save the {prop} in the {prop_room}. Then the staff, if there's time."},
 			{"f": "report", "t": "Scratching behind the {gate_room} wall. Sommelier says it's the 1787 \"breathing\". Closed, no action."},
-			{"f": "sign", "t": "INSURED VALUE, {PROP}: {prop_price}. STAFF ARE INSURED SEPARATELY, AND LESS."},
+			{"f": "sign", "t": "PRICE TAG, {PROP}: {prop_price}. STAFF ARE CHEAPER. ACT ACCORDINGLY."},
 		],
 		3: [
 			{"f": "memo", "event": "wine cellar", "t": "Door drill, Sunday: open the cellar door to confirm it is sealed. If it is sealed, it won't open. Simple."},
@@ -84,7 +84,7 @@ const STORY := {
 			{"f": "memo", "t": "If the energy turns, {staff} leads everyone to the {staff_room} and breathes. In for four. Out for four."},
 			{"f": "report", "t": "Reading, {gate_room}: intense. Source: a crack in the floor. Recommended action: more crystals."},
 			{"f": "voicemail", "t": "Hiii, it's {client}. Nobody use the {gate_room} this week. Its energy is unaligned. Namaste."},
-			{"f": "sign", "t": "PLEASE BE GENTLE WITH THE {PROP}. It holds a lot of energy. It is insured for {prop_price}."},
+			{"f": "sign", "t": "PLEASE BE GENTLE WITH THE {PROP}. It holds a lot of energy."},
 		],
 		3: [
 			{"f": "memo", "event": "yoga studio", "t": "Closing ceremony: open your hearts, open your minds, open the circle. Don't worry about closing anything."},
@@ -126,7 +126,7 @@ const STORY := {
 			{"f": "memo", "t": "Shoot safety: if anything happens, {staff} gets everyone to the {staff_room}. Phones out. Content is content."},
 			{"f": "voicemail", "t": "Heyyy it's {client}. No shoots in the {gate_room}, the floor keeps glitching. Like, physically."},
 			{"f": "report", "t": "The {gate_room} is on the do-not-film list. Reason given: \"vibes\". Reviewed: no."},
-			{"f": "sign", "t": "#GIFTED: {PROP}. INSURED FOR {prop_price}. DO NOT LEAN ON IT FOR CONTENT."},
+			{"f": "sign", "t": "#GIFTED: {PROP}. RETAIL {prop_price}. DO NOT LEAN ON IT FOR CONTENT."},
 		],
 		3: [
 			{"f": "memo", "event": "content studio", "t": "Giveaway stream, 9 p.m. Rules: anyone following can win. Anyone. Legal says \"anyone\" is fine."},
@@ -161,8 +161,8 @@ const HINTS := {
 		{"f": "report", "t": "{gate_count} warm spots on this level's floor plan, one of them in the {gate_room}. Status: monitoring."},
 	],
 	"prop": [
-		{"f": "report", "h": INSURANCE_HEADER, "t": "{prop}, {prop_room}: insured for {prop_price}. Coverage excludes fire and acts of demon."},
-		{"f": "sign", "h": INSURANCE_HEADER, "t": "{PROP}: INSURED FOR {prop_price}. Please admire from at least one fireball away."},
+		{"f": "report", "h": INSURANCE_HEADER, "t": "{prop}, {prop_room}: {prop_price}. Condition: fine. Please keep it that way."},
+		{"f": "sign", "h": INSURANCE_HEADER, "t": "{PROP}: VALUED AT {prop_price}. Please admire from at least one fireball away."},
 	],
 }
 
