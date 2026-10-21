@@ -100,7 +100,7 @@ Gameplay and UI only ask: `Net.is_host()` (true offline: solo is hosting with no
 | `net_world.gd` (`NetWorld`, child `Session/World`, `Session.world`), `net_world_codec.gd` (`NetWorldCodec`) | the host-owned world (M3): the host packs its monsters (16 B), employees (15 B) and hellgates (7 B) once a tick after the heroes in the same packets (changed entries plus a spread keyframe, under 1.2 KB); a client shows them as puppets on one adaptive delay; spawns, deaths, speech, extraction and a gate's phase are `world.*` events. Runtime actors (host-owned actors a cast spawns: the Chicken spell's chickens) are one track: a `NetWorldCodec.RUNTIME_ACTORS` entry per class (its `world.spawn` kind, group and codec fields), streamed as monster-format entries the class fills and shows (`net_read` / `net_write`) |
 | `net_objects.gd` (`NetObjects`, child `Session/Objects`, `Session.objects`) | host-arbitrated objects (M3): a client's hits on props, crates and mail, its pickups (collect / swap / drop), its E on an employee and its exit choice are `obj.req` requests; the host decides once and tells everyone (`obj.*`); loadouts; the Ledger and objectives mirror; the first-to-choose exits and the host's invoice; an explosive prop's fuse (`obj.fuse {id, s, e, by}` on the shared clock, `obj.out`: every machine runs the blast itself at `e`). Each object's own part is the **net-object contract** on its class (`net_link`, `net_event`, `net_request`, `late_join_state` / `apply_late_join`; PricedProp, ExplosiveProp, BreakableCrate, MailPackage, OfficeDoor, ComponentPickup, and Employee's requests): `NetObjects` dispatches by net id and names no object class |
 | `net_casts.gd` (`NetCasts`, child `Session/Casts`, `Session.casts`) | casts and hero attacks as events (M4): a cast is resolved on the caster's machine and lands `LEAD` (0.2 s) later on every machine (`SpellBook.apply`); a hero's swing, shot, bowl or spin (`act`) is replayed on its puppet everywhere at the moment the puppet shows |
-| `net_status.gd` (`NetStatus`, child `Session/Status`, `Session.status`) | statuses (M4): the target's owner applies a modifier, a fire or a soak and announces it (`st`); the other screens show it (`Actor.net_set_modifiers`, `Burning.show_remote`, `Coffee.show_remote`, `Wet.douse`) |
+| `net_status.gd` (`NetStatus`, child `Session/Status`, `Session.status`) | statuses (M4): the target's owner applies a modifier, a fire or a soak and announces it (`st`); the other screens show it (`Actor.net_set_modifiers`, each spell def's `show_remote_mods` (`Coffee.show_remote`, the vines' wraps), `Burning.show_remote`, `Wet.douse`) |
 | `net_orders.gd` (`NetOrders`, child `Session/Orders`, `Session.orders`) | voice orders (combat-proposals.md 1.8): the speaker's machine sends `ord.req`, the host applies it once (`VoiceOrders.apply`: the AI seats and the employees) and sends `ord.ok` to everyone (the AI heroes' barks, the players it names for a marker) |
 | `steam_identity.gd` (`SteamIdentity`) | the one Steam init per process, the persona name |
 | `steam_lobby.gd` (`SteamLobby`, child `Session/Lobby`) | lobbies: create, list, join, leave, invites, lobby data |
@@ -313,11 +313,22 @@ file is a silent cue with one warning), its bus (`default_bus_layout.tres`: Mast
 VoiceFeedback, Music), voice limit and gap. Callers only listen (Game, forms, `Fx`); every machine plays its own sounds
 from the events it already has, and no RPC carries a sound. Off headless (tests: `Sfx.enable_for_tests()`).
 
-### Spells (`scripts/spells/spell_book.gd`, `class_name SpellBook`)
+### Spells (`scripts/spells/spell_book.gd`, `class_name SpellBook`; one def per spell in `scripts/spells/defs/`)
 ```gdscript
-const SPELLS := { "heal": {"name": "Heal", "cooldown": 8.0, "color": Color(...), "desc": "..."}, ... }
+const DEFS := [preload("res://scripts/spells/defs/heal.gd"), ...]   # the spell order
+static var SPELLS := { "heal": {"name": "Heal", "cooldown": 8.0, "color": Color(...), "desc": "..."}, ... }   # read-only, from DEFS
 static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool
 ```
+**Adding a spell.** Write one def, `scripts/spells/defs/<id>.gd` (`class_name <Id>Spell extends SpellDef`, all consts and
+static funcs; `spell_def.gd` is the contract), and add it to `SpellBook.DEFS` where it should sit in the picker. The def
+holds `ID`, its `ROW` (name, cooldown, colour, description, spoken word, component, available), `FOLLOWS`, `GLOW`, its
+`VOICE` aliases, its tuning consts and helpers, `cast(caster, power, target, start, extra) -> Node` (runs on every
+machine at the cast's moment: pick one of the four shapes in `networking.md` and run its new-content checklist), and
+`component_soup()`, its component's prop; it may override `cast_extra` (numbers fixed on the caster's machine, like the
+fireball's shot) and `show_remote_mods` (how a copy shows its status, like the vines' leg wraps). `SpellBook.apply`,
+`ComponentProps.make`, `NetStatus` and `Incantation` read the defs, so nothing else changes; an effect node with state
+(a scheduled effect like `Vines`) is its own class next to the def, in `NET_SCRIPTS`. Then the drop table
+(`SpellComponents`, `monster_defs.gd`) and the voice measurements (Incantation's header) are design calls.
 
 ### Forced movement (`Actor.shove`)
 `Actor.shove(dir, distance, source = null)` starts a short (0.2-0.35 s, ease-out) kinematic slide of

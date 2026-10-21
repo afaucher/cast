@@ -23,6 +23,11 @@ Status: **in progress**. Done so far:
   and the `is Chicken` branches. Event names, payloads, the late-join snapshot and the wire format are unchanged;
   `test_net_contract` section 8 holds both units. The pickups' numbering, obj.pickup / pick / gone and first-come grants
   stay `NetObjects`' pickup protocol.
+- H2: every spell is a def, `scripts/spells/defs/<id>.gd` (`class_name <Id>Spell extends SpellDef`): its `SPELLS` row,
+  tuning consts and helpers, `cast` (moved verbatim from `SpellBook._cast_*`), `FOLLOWS` and `cast_extra`, its component
+  prop and `GLOW`, its remote-status hook and its voice aliases. `SpellBook.DEFS` is the ordered registry and `SPELLS` is
+  built from it; `apply`, `ComponentProps.make`, `NetStatus._show` and `Incantation` read the defs. Callers read the
+  tuning from the def (`HealSpell.HEAL_BASE`). Casts, numbers, net events and golden floors unchanged.
 - wave 6 (early): H9, `LabBase` (`scripts/test_support/lab_base.gd`). 19 look-dev lab scripts moved onto it with their
   flags, output names and renders unchanged. Not yet moved: `pavise_lab`, `healer_lab`, `sewer_lab`,
   `sewer2_lab`, `lava_lab` and `lava_layouts_lab` (edited by the lava / sewer session; `sewer2`, `lava` and
@@ -127,6 +132,7 @@ that a registry loads. Central matches become lookups. Lists derive from the reg
   `NoteFacts.ROOM_WORDS` derives from `THEMES[].name`.
 
 ### H2: spells as units
+Status: done (see the top of this file). `docs/ARCHITECTURE.md` ("Adding a spell") says how to add one.
 `scripts/spells/defs/<id>.gd`, one per spell, holds:
 - the `SPELLS` row data;
 - `apply(caster, power, aim)`;
