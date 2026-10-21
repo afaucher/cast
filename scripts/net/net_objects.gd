@@ -72,9 +72,9 @@ signal granted(kind: String, spell: String, amount: int)
 
 const REACH_SLACK := 0.5       ## a claimed position may be this much beyond the pickup's own radius
 const REQUEST_RETRY := 0.8     ## a client asks again for a pickup after this long without an answer
-## A late joiner's snapshot (late_join_state): the objects' sections in the order they go on the wire, after "pickups". A
-## section an object names that is not here is added after these.
-const LATE_JOIN_SECTIONS := ["dents", "fuses", "doors"]
+## A late joiner's snapshot (late_join_state): the objects' sections in the order they go on the wire (each is there, empty
+## or not). A section an object names that is not here is added after these.
+const LATE_JOIN_SECTIONS := ["pickups", "dents", "fuses", "doors"]
 
 var active := false
 var stats := {}
@@ -358,14 +358,7 @@ func local_stamp(t: float) -> float:
 ## and age now) and every dented prop's HP (an obj.hurt replay). Broken things are gone ids (NetJoin).
 func late_join_state() -> Dictionary:
 	_host_pickups()   # (anything new is numbered and announced first)
-	var picks: Array = []
-	for id: int in _pickups:
-		var e: Array = _pickups[id]
-		var p: ComponentPickup = e[0] if is_instance_valid(e[0]) else null
-		if p == null or p._used or p.is_queued_for_deletion() or p.charges <= 0:
-			continue
-		picks.append([id, p.spell_id, p.charges, p.global_position, p.lifetime, p._age])
-	var out := {"pickups": picks}
+	var out := {}
 	for section: String in LATE_JOIN_SECTIONS:
 		out[section] = []
 	for id in NetRegistry.ids():
@@ -379,28 +372,25 @@ func late_join_state() -> Dictionary:
 	return out
 
 
-## The late joiner: the host's pickups and dents (late_join_state()). A seed-built pickup it already has takes the host's
-## charges; any other is created as a copy, exactly as obj.pickup would.
+## The late joiner: the host's rows (late_join_state()), section by section, each to its object by id. A pickup this machine
+## does not have (the host dropped it after the floor was built) is created as a copy, exactly as obj.pickup would.
 func apply_late_join(d: Dictionary) -> void:
-	for e: Variant in d.get("pickups", []) as Array:
-		var row := e as Array
-		if row == null or row.size() < 6:
-			continue
-		var id := int(row[0])
-		var have := NetRegistry.node(id) as ComponentPickup
-		if have != null:
-			have.charges = int(row[2])
-			_pickups[id] = have
-			continue
-		_client_pickup({"id": id, "s": row[1], "n": row[2], "at": row[3], "l": row[4], "age": row[5]})
-	for section: Variant in d:   # (the objects' own rows: each goes to its object, by id)
+	for section: Variant in d:
 		for e: Variant in d[section] as Array:
 			var row := e as Array
 			if row == null or row.is_empty():
 				continue
 			var obj := NetRegistry.node(int(row[0]))
-			if obj != null and obj.has_method("apply_late_join"):
-				obj.call("apply_late_join", str(section), row, self)
+			if obj != null:
+				if obj.has_method("apply_late_join"):
+					obj.call("apply_late_join", str(section), row, self)
+			elif section == "pickups" and row.size() >= 6:
+				_client_pickup({"id": row[0], "s": row[1], "n": row[2], "at": row[3], "l": row[4], "age": row[5]})
+
+
+## Client: `p` is the pickup with this id (its charges and its end come as obj.pick / obj.gone).
+func track_pickup(id: int, p: ComponentPickup) -> void:
+	_pickups[id] = p
 
 
 # --- Every frame ---------------------------------------------------------------------------------------------

@@ -167,6 +167,31 @@ func net_fields() -> Dictionary:
 	}
 
 
+# --- The net-object contract (NetObjects) ------------------------------------------------------------------------
+# A pickup's numbering, its obj.pickup / pick / gone and the first-come grants are NetObjects' pickup protocol; what is
+# this pickup's own is here.
+
+## Net ids: a pickup already on the floor at the barrier (a dev --drop-near) gets its id after the office doors'
+## (NetFloor.assign_ids).
+func net_order() -> int:
+	return 1
+
+
+## Host: this pickup for a late joiner, `pickups` [id, spell, charges, position, lifetime, age] (an obj.pickup replay).
+## A used one has none (a seed-built one is a gone id).
+func late_join_state(_objects: NetObjects, id: int) -> Dictionary:
+	if _used or is_queued_for_deletion() or charges <= 0:
+		return {}
+	return {"pickups": [id, spell_id, charges, global_position, lifetime, _age]}
+
+
+## The late joiner: a seed-built pickup it already has takes the host's charges (one it lacks, NetObjects creates).
+func apply_late_join(section: String, row: Array, objects: NetObjects) -> void:
+	if section == "pickups" and row.size() >= 6:
+		charges = int(row[2])
+		objects.track_pickup(int(row[0]), self)
+
+
 func _exit_tree() -> void:
 	_release_swap_offers()
 
