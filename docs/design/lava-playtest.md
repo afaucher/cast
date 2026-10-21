@@ -1,8 +1,108 @@
 # Lava caves: layouts and a playable prototype
 
-Status: **prototype, solo only, behind a dev flag** (2026-10-20). The normal floor generator does not make caves:
-DungeonGen and SiteBuilder never call this code. The concept is `sewer-concept.md`, part 2. This page covers the cave
-layouts and the playtest build.
+Status: **in the game, solo and crewed** (2026-10-21): the generator makes lava caves on real floors ("As built: caves on
+real floors", below). The hand-authored prototype caves (`--lava-cave N`) still work, on the same rules, and now in a crew too.
+The concept is `sewer-concept.md`, part 2. This page covers the cave layouts, the playtest build and the build in the game.
+
+## As built: caves on real floors (2026-10-21)
+
+The user (2026-10-21): "Let's do everything we can to finish up the lava and sewers. And get them in the game fully." Built to
+the decisions recorded below ("Decided after the playtest"): supervillain and hellgate caves only, patterns 1-4, two-wide
+bridges three wide at the bridgeheads, a crust can always reach an isle, sight only by bridges and crags, the lights measured.
+
+![The game: a hellfire gauntlet at its entry, a hellfire causeway from an isle's shore, a magma causeway](lava_caves/sheet.png)
+
+### Play it
+
+```
+.\run.ps1 --seed 6 --floor 2 --spells damp,fireball --no-mic --to-lava entry      # a natural cave (supervillain, gauntlet)
+.\run.ps1 --seed 11 --floor 3 --spells damp,fireball --no-mic --to-lava isle      # magma: no gate in it
+.\run.ps1 --lava-floor --lava-pattern ring --spells damp,fireball --no-mic --to-lava isle   # force one, any site
+.\run.ps1 -Crew 2 --lava-floor --spells damp,fireball                             # a crew (every window gets the flags)
+.\run.ps1 --lava-cave 1 --spells damp,fireball --no-mic                           # the prototype cave 1, as before
+```
+
+- **Natural floors** (contract seed N = `--seed N` with `--floor`, `ContractBoard.run_for_seed`): floor 2 of seeds 6, 11, 12,
+  16, 19 and floor 3 of seed 11 have a cave (test_lava_gen prints the list). The log names it: "lava cave: gauntlet, hellfire
+  look, chambers room:5, room:3 (entry room:5), 2 isles, 3 archers".
+- `--lava-floor` (`LavaDev`, `LavaSite.force`): every floor of the job gets a cave where a wing of rooms fits (floor 2 first;
+  on a floor of small hellgates the first gate goes in it); `--lava-pattern causeway|fork|ring|gauntlet` tries that pattern
+  first. In a crew every window needs the flags (the barrier's checksum sends out one that built another floor).
+- `--to-lava entry|far|isle` (solo): start at the cave's entry, in its far chamber, or on the shore an isle is crusted from.
+- `--lava-perf`: the light measurement below (prints "[lava perf]" and quits).
+
+### How it is built
+
+| Piece | Where | Notes |
+|---|---|---|
+| Which floors | `scripts/world/lava/lava_site.gd` (`LavaSite`) | Dice of its own per floor. VILLAIN: floors 2-3 of the supervillain, `RATE_VILLAIN` 0.5. GATE: floor 2 of the prepper, guru or influencer (`NOT_FOR`: the founder), `RATE_GATE` 0.3, and the cave MUST hold a hellgate (`needs_gate`). Floor 3 holds only the origin gate, in the story's room, so gate caves are floor 2's. `NETWORKED` true: a crew rolls the same caves as a solo run of the seed |
+| The cave | `DungeonGen` "cave" option, `scripts/world/lava/cave_gen.gd` (`CaveGen`) | A wing of 2-3 rooms (never the start, the exit or the elevator) at the root's level L, on the cave's own dice. CHAMBERS: each room's core (its extent less two, 3-5 cells) as rough rock: +1 on a quarter of the inner cells, -1 on some edge cells, a +2 crag in a big one; the middle (2 cells) and every landing (2 cells round a bridge's end) flat. BRIDGES: each link between two of its rooms, its A* route carried on into both rooms to the rock: route plus lane (TWO WIDE), the last two rows at each end THREE WIDE, levels a walk between L and L + 1, flat ends. SPANS (one wide, L..L + 2): the pattern's extra route. The NECK: the hall in from the floor meets the root chamber at its old doorway, the rock running on three wide. ISLES (radius 1, archers): one or two lava cells off the rock, checked with the crust itself (the min-power damp at a SHORE cell, `CaveGen.crust_cells`, then a climb-free walk onto it, `crust_path`). LAVA: the cave's own room and link cells that are not rock, two cells round the rock where free (three from anything not the cave's), a ring round each isle; at L - 5. The RIM: the walls round the lava raised to L + 3 (camera side) or L + 5..8 (back). Loops into the cave are not cut (its pattern adds its own ways). Record: `HexMap.cave` (pattern, level, crust level, lava surface, rooms, chambers, entry and neck, far chamber, gate, bridges with their rows and heads, isles with their shores, rock, lava, fog joins), `HexMap.lava` |
+| The patterns | `CaveGen._shapes`, `_carve` | Causeway (2 chambers: the bridge, an isle off its near half away from the goat path, a one-wide goat path); Gauntlet (2: one bridge, an isle off each end); Fork (3 in a row: the hub's own link one wide, a second route two wide, an isle between them); Ring (3: the links two wide, a one-wide span between the two not linked, an isle in the middle). A fork or ring whose extra route finds no way is a plain chain; a causeway without its goat path a gauntlet. Parallel walkways between the same two chambers are one fog space (the lava between their middles tagged "corridor", the playtest's fix 4) |
+| Byte-identical floors | `DungeonGen.generate` | Each attempt tries the cave first (without a sewer cluster: one set piece a floor), then the floor without it (its cluster, then plain), so a floor without a cave is exactly the floor it always was (`test_lava_gen`) |
+| The plan | `scripts/contracts/planners/lava_planner.gd` (`LavaPlanner`, H8) | `GatePlanner`: a gate cave's far chamber first for the floor's first gate. `theme`: the chambers take the "lava" theme row; the LOOK is HELLFIRE when a hellgate stands in a chamber, else MAGMA. `materials`: basalt on its rock, lava and rim. `DoorPlanner`: its doorways are openings, never office doors. `plan` (last): ARCHERS on the isles (two on the first, one on each other: `cave["archers"]`); no pack in the entry chamber (its isle's archers cover it); every other chamber's pack kept within 4 of the landing of the bridge it is entered by (`SitePlan.blocked`): PACKS AT THE BRIDGEHEADS. No dice |
+| The theme row | `RoomThemeDefs.THEMES` "lava" (`LAVA`) | Not in `POOLS`. Basalt floor (`FloorMaterials.F_BASALT`, `F_BASALT_HELL`) and rim (`W_BASALT`), no priced props, no recipe, a warm accent light; `"lava"` holds the two LOOKS: the lava's crust, hot and core colours and glow, the embers, the lights (colour, energy, how many: 10) and the cliff tint. The name "Magma chamber" and note word "magma chamber" are PROPOSALS awaiting the user's review of the text |
+| Spawn | `LavaPlanner.spawn` (after the sewer's) | The archers (the floor's last actors: no earlier net id moves), the look (`LavaLook.dress_cave`: the lava over the lava cells at its surface, the glow skirt, embers, ten unshadowed omnis by farthest-point picks; nothing else on the floor restyled) and the rules (`LavaField`, activated by `game._start_lava` once the fog has read the map with its lava cells) |
+| The look in the terrain | `HexMapView` | Cave rock is never drawn as crates (raised rock is rock), and its cliffs take the look's tint |
+| The lava rule | `Actor._enter_void` | The LAVA KIND OF VOID (`HexMap.lava`): a hero is pulled back to its last safe cell with `LAVA_DAMAGE` 15 and Burning for `LAVA_BURN` 6 s (a soaked hero does not ignite); anything else SINKS (`LAVA_SINK_TIME`) and dies; `shove_impact` "lava" (Fx: the splash and "LAVA!"). The prototype's layering on the pit's "void" signal is gone |
+| The melt verb | `Actor.lose_ground(source)` | The ground under a body is gone: the void rule from where it stands, by the machine that resolves the actor. `_note_safe` never records a crust as a safe cell, and `_safe_position` finds the nearest solid ground when the safe cell is gone. The prototype's write of the hero's private `_safe_cell` is gone |
+| The crust | `LavaField` | Every damp (`Damp`, a scheduled effect) is a crust SOURCE from its drizzle (start + telegraph) for 8 s: the lava within 90 % of its radius (never a cell a rim wall cuts). A lava cell is crust while any source covering it lasts (overlaps extend it). The cells come back into the map at the crust level (`set_cell`, tag `HexMap.CRUST_TAG`) and leave again (`remove_cell`); whoever stands on a melted cell gets `lose_ground` from the machine that resolves it; a safety net does the same for anything found over the lava. One slab mesh per melt time; its cracks glow and it shakes over its last 2 s |
+| Online | `NetFloor`, `game.gd` | The crust is a pure function of the damp casts (their shared start) and the clock, so every machine changes its map at the same shared moment with no message. The map text has a `cave=` line and skips the lava cells, so the checksum is the same before and after activation and while a crust lasts. A late joiner gets the live sources in the game's part of `join.snapshot` (`LavaField.late_join_state`, their start on the shared clock). `LavaField` declares its fields (all SPAWN or LOCAL); `test_net_contract`'s area-verb rule covers `lose_ground` |
+| Dev | `scripts/app/dev/lava_dev.gd` (`LavaDev`) | `--lava-floor`, `--lava-pattern`, `--to-lava`, `--lava-perf` |
+| Timing | `CaveGen.last_usec`, `SiteBuilder.last_lava_usec` | The cave pass: up to about 60 ms (an extra A* route for the patterns that have one); a cave floor generates in up to about 300 ms (test_dungeon_gen's budget; a failed cave attempt is built again without it) |
+
+### The lights, measured (`--lava-perf`)
+
+GPU and CPU render time looking at the cave, 1600x900 viewport, RTX 3080 (this machine), 480 frames per case, the cases in
+the order none, 4, 10, 40, 10, 4, none (averaged):
+
+| Cave | none | 4 lights | 10 lights | 40 lights |
+|---|---|---|---|---|
+| seed 12 floor 2, causeway, 195 lava cells | 4.00 ms GPU | 3.44 | 3.59 | 3.91 |
+| seed 16 floor 2, ring, 428 lava cells | 3.18 ms GPU | 3.24 | 2.81 | 2.58 |
+
+CPU stays at 0.27-0.31 ms in every case. Even forty unshadowed omnis cost less than the run-to-run noise (about 0.5 ms): in
+Godot's clustered forward renderer an unshadowed omni over a cave this size is below what the probe can see here. A min-spec
+estimate (a GPU ten times slower than this one, scaling the noise floor): under about 1 ms for ten lights, against a 16.6 ms
+frame. **Choice: keep the ten omnis** (the playtest's look); the emission + 4 lights fallback is not needed. The count is one
+number in the theme row's looks ("lights") if a real min-spec machine says otherwise.
+
+### Tests
+
+- `tests/test_lava_gen.gd` (contract seeds 1-60, floors 1-3, and `--lava-floor` on floors 2-3 of seeds 1-24): a cave only on a
+  supervillain's floors 2-3 or on floor 2 of another client but the founder, then with a hellgate in its far chamber; 2-3
+  chambers at one level, never the start or the elevator's room; the look follows the gate; the lava 4+ levels under every
+  rock beside it; every row of a two-wide bridge two wide and its bridgehead rows three wide; every chamber reached from the
+  start without climbing on the two-wide bridges alone; no office door on its doorways; archers on its isles; every isle
+  reached by no walk, and by a climb-free walk over the crust LavaField makes from a min-power damp at its shore on the
+  activated map; all four patterns come out; a shared run builds the same cave (its record in the map checksum); a floor
+  whose cave did not fit is byte for byte the floor without the option; the cave pass under 100 ms and a cave floor under
+  600 ms. Measured: 22 caves on 23 rolled floors of 180 (13 villain, 9 hellgate); forced and natural, the patterns gauntlet
+  30, causeway 20, ring 17, fork 3; 100 isles; worst cave floor 299 ms, worst cave pass 60 ms.
+- `tests/test_net_lava.gd` (three processes, `off` and `coast`; `--lava-floor` with the causeway on floor 2 of board 4): the
+  checksums and the cave record match on all three and every machine's lava is void; c1's hero shoved into the lava is
+  pulled back onto rock by c1's own machine (15 and burning) and the host shows it there with c1's HP; c1's damp crusts the
+  lava on both machines at the same shared moment, the same cells, and a path crosses onto the isle; the crust melts under
+  c1's hero (pulled back by c1's machine, 15; not burning: its own damp soaked it) and under a host monster (it sinks and dies
+  once, on the host; c1 shows it dead); a late joiner arriving while the host keeps a crust up has the same crust cells; the
+  OWNER-write guard never fires.
+- `tests/test_lava_cave.gd` passes unchanged on the new rules (the prototype caves now carry `HexMap.cave` and `HexMap.lava`).
+- `test_sewer_gen`: a floor whose sewer roll lost to a cave is test_lava_gen's to check.
+
+### Golden floors
+
+`tests/golden/floors.json` re-recorded: exactly ONE golden floor changed, **6/2** (seed/floor: the supervillain's floor 2),
+which rolls a cave (a gauntlet) and so no longer gets the sewer cluster it had: its map, plan and spawn (the cave instead of
+the cluster, its gators and goo imps; the archers on the isles). The other 29 are byte for byte as recorded.
+
+### Known limits
+
+- Fork is rare (3 in 70): it needs a wing of three rooms in a row and room for a second route between the last two.
+- The camera-side rim is a wall at L + 3 like every room's wall, not the prototype's open lava running out of view.
+- A gate cave's far chamber holds its gate in its flat middle; a villain cave holds a gate only when GatePlanner's dice put one
+  there (then it is hellfire too). The monster under a gate's room (`HellgateBeast`) is not adapted to a cave.
+- No lava sounds yet: the Sfx cues `lava_sizzle` (Fx, LavaField), `crust_form`, `crust_crack` and `crust_melt` (LavaField) are
+  called and stay silent until rendered.
+- The room name and note word of the "lava" theme row are proposals awaiting the user's review (no dispatch line was added).
 
 **The user's feedback** on the concept (2026-10-20):
 - "My biggest concern is how we fight there. I suspect we need 2x wide paths just to avoid falling in."
@@ -247,7 +347,7 @@ climb in it, under an archer tower.
 - **Lab:** `scenes/lava_layouts_lab.tscn` (`scripts/art/lowpoly/lava_layouts_lab.gd`) renders the plans and the game
   views from the same layouts.
 
-## Co-op
+## Co-op (the prototype, 2026-10-20; superseded by "As built" above: caves, and the prototype flag, work in a crew now)
 
 - **The flag is not used online.** `game.gd` builds a cave only when the run is not shared, so a crew never gets one.
   Nothing else in the game changed.
@@ -265,7 +365,7 @@ climb in it, under an archer tower.
     build adds a verb or a hook in `Actor` for this.
 - `test_net_contract` passes.
 
-## Known limits
+## Known limits (the prototype, 2026-10-20; the lava kind of void, the melt verb and the lights are resolved in "As built")
 
 - The lava's damage and burn are layered on the pit rule's signal (`shove_impact` "void"). A real build would give
   `Actor` a lava kind of void (the damage and burn in one place, a sink instead of a fall).

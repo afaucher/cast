@@ -39,7 +39,11 @@ fires, soaks, heals, coffee) by the target's owner (`Net.resolves`), which annou
 wind-up is an event and each client resolves the strike on its own hero (`world.windup`, `Monster.net_strike`). Crew floors
 have sewer clusters (`docs/design/sewer-concept.md`, "Phase 2 as built"): a priced prop's `obj.break` carries its shared
 moment and culprit (`PricedProp.broke_at`: the live wire runs from it, and a late joiner catches up from it), and an actor's own
-spawn data goes in the floor checksum (`net_spawn_text`: the gator's home region). A debug
+spawn data goes in the floor checksum (`net_spawn_text`: the gator's home region). Crew floors have lava caves too
+(`docs/design/lava-playtest.md`, "As built"): their terrain changes at run time on every machine alike (the lava leaves the
+map once the floor runs, a damp's crust puts it back for 8 s from the cast's shared start: `LavaField`, `HexMap.remove_cell` /
+`set_cell`), the checksum's map text skips it (`NetFloor`: `HexMap.lava`, the `cave=` record), a body stranded by it gets
+`Actor.lose_ground` from the machine that resolves it, and a late joiner gets the live crusts (`LavaField.late_join_state`). A debug
 guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). M7 (polish) is
 built locally; the two-PC Steam sign-off is `docs/design/steam-playtest-checklist.md`. Steam's overlay invites ask first in a
 job (`Session.invite_received` -> "Leave this job and join?"), "Invite crew" is on the job board and the pause form
@@ -54,8 +58,8 @@ var of `Hero` or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELD
 1. **Declare authority.** A class with gameplay state has `net_fields()` classifying **every** script
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.
-2. **Change other entities only through verbs:** `apply_damage`, `heal`, `shove`, `set_modifier`, `daze` and
-   `die`. Never write another actor's `hp`, `dead` or position.
+2. **Change other entities only through verbs:** `apply_damage`, `heal`, `shove`, `set_modifier`, `daze`,
+   `lose_ground` and `die`. Never write another actor's `hp`, `dead` or position.
 3. **Resolve hits through `Combat`** (`melee_arc`, `explode`, `slam`, `shove_radius`, `hits_in_radius`, `each_in_radius`,
    `Projectile`) rather than your own loop over actors. A loop of your own that calls a verb must ask
    `Combat.resolves` / `Net.resolves` for each actor (the test checks it): effects run on every machine.

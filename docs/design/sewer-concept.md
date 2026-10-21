@@ -1253,7 +1253,17 @@ each hero is shocked by its own window).
 
 # Part 2: the lava cave
 
-**Next step (2026-10-20): `lava-playtest.md`.** It has five cave layouts with the fight flow marked, and a playable solo
+**As built (2026-10-21): `lava-playtest.md`, "As built: caves on real floors".** Lava caves are in the generator, solo and
+crewed: a wing of 2-3 rooms (`DungeonGen` "cave" option, `CaveGen`) on a supervillain's floors 2-3 or, with a hellgate in it,
+on floor 2 of the other clients but the founder (`LavaSite`); the patterns are the playtest's caves 1-4; `LavaPlanner` plans it
+(the "lava" theme row with its magma and hellfire looks, archers on the isles, packs at the bridgeheads); `Actor` knows the lava
+kind of void and `lose_ground`; the damp crust is terrain on a schedule every machine computes (`LavaField`). Where this part's
+"Generator implications" differ from the build: the cave's rooms keep their room tags but only their cores are rock (the rest
+is lava), bridges are two wide (three at the heads) rather than one, the rim is the generator's walls raised (no WALL-free cave),
+and the lava cells stay in the map at the bed until play starts (then leave it), so fog, checksum and drawing need no lava flag
+per cell. No lava creature (the salamander stays lab-only).
+
+**Earlier step (2026-10-20): `lava-playtest.md`.** It has five cave layouts with the fight flow marked, and a playable solo
 prototype behind `--lava-cave N`. It also records the user's answers: two-wide bridges, archers on isles with no path,
 damp crust, and 15 damage plus a burn.
 

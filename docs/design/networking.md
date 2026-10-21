@@ -213,7 +213,7 @@ building it.
 
 | Shape | Examples | What it needs |
 |---|---|---|
-| **Scheduled effect**: one broadcast, then every machine computes it from `(SPAWN params, start time)` | corn, tentacles, boulder, fireball, arrows, Gasket's spin | Params `SPAWN`, motion `LOCAL`, hits through `Combat` |
+| **Scheduled effect**: one broadcast, then every machine computes it from `(SPAWN params, start time)` | corn, tentacles, boulder, fireball, arrows, Gasket's spin, a damp's lava crust (terrain on a schedule) | Params `SPAWN`, motion `LOCAL`, hits through `Combat` |
 | **Owned actor** | heroes, monsters, employees, the Chicken spell's chickens (host-owned: the cast lands everywhere, the host spawns them) | `net_fields()`, changes through verbs. A host-owned actor spawned during play by a cast or an effect is a **runtime actor**: one `NetWorldCodec.RUNTIME_ACTORS` entry (its `world.spawn` kind, group and codec fields) and `net_read` / `net_write` / `make_shown` on the class |
 | **Host-arbitrated world object** | pickups, doors, elevator, priced props, explosive props (their blast is a scheduled effect at the host's fuse end: `hazards.md`) | Host-owned. Players request; the host grants with a reliable event. The class implements the **net-object contract** (`NetObjects`): `net_link`, `net_event`, and as needed `net_request`, `late_join_state` / `apply_late_join`, `net_order` (not an Actor) |
 | **Cosmetic** | debris, sparks, grime, decor animation | Nothing: local only, `fx_rng` |
@@ -233,6 +233,13 @@ Use this in every spec and review that adds content:
      and a late joiner catches up from it without replaying what is past (`breaks`, `PricedProp.break_synced`).
    - Spawn data that is not in the map, the plan or the spawn table's position (a gator's home region, bask spots and seed)
      goes in the floor checksum through the actor's `net_spawn_text()` (`NetFloor.spawn_text_of`).
+   - TERRAIN THAT CHANGES AT RUN TIME (a lava cave: its lava leaves the map once the floor runs, a damp's crust comes back for
+     8 s): every machine changes its own `HexMap` from what it already has (the seed, the casts' shared start times, the
+     clock), through `HexMap.remove_cell` / `set_cell` (never `cells.erase`: the wall-face cache), the same cells at the same
+     shared moment; the floor checksum's map text must not depend on it (`NetFloor` skips `HexMap.lava`, the record is its
+     own `cave=` line); a body the change strands gets a verb (`Actor.lose_ground`) from the machine that resolves it; and a
+     late joiner gets what is live (the crust sources, on the shared clock: `LavaField.late_join_state`, the game's part of
+     `join.snapshot`). Nothing in `scripts/net/` names the class.
 8. Which two-peer scenario will cover it, once those exist?
 9. If it is a host-arbitrated object, it implements the net-object contract on its own class (`NetObjects`' header has the
    full list; nothing in `scripts/net/` names the class):
