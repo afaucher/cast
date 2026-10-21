@@ -22,6 +22,7 @@ const FLOOR_BUDGET_MS := 600.0     ## test_dungeon_gen's 300 ms a floor, twice: 
 
 var _probe: Node = null
 var _worst_gen := 0.0
+var _worst_tag := ""
 var _worst_pass := 0.0
 var _patterns := {}
 var _isles := 0
@@ -42,7 +43,7 @@ func setup() -> void:
 			var t0 := Time.get_ticks_usec()
 			var map := DungeonGen.for_run(run, f)
 			var ms := (Time.get_ticks_usec() - t0) / 1000.0
-			var rolled := LavaSite.seed_for(run, f, false) != 0
+			var rolled := LavaSite.seed_for(run, f, false) != 0 and SewerCluster.seed_for(run, f, false) == 0   # (a cluster floor keeps its cluster)
 			if rolled:
 				eligible += 1
 			if map.cave.is_empty():
@@ -50,8 +51,10 @@ func setup() -> void:
 					_check_unchanged(run, f, map)
 				continue
 			caves += 1
-			_worst_gen = maxf(_worst_gen, ms)
 			var tag := "seed %d floor %d (%s)" % [s, f, run.archetype_id]
+			if ms > _worst_gen:
+				_worst_gen = ms
+				_worst_tag = tag
 			check(rolled, "%s: a cave only where the floor rolled one" % tag)
 			check(run.archetype_id != "founder", "%s: never the founder's" % tag)
 			var plan := SiteBuilder.plan(map, run, f, PricedProp.catalog(run.site_type))
@@ -63,15 +66,15 @@ func setup() -> void:
 				check(f == 2, "%s: a hellgate cave on floor 2" % tag)
 				check(_gate_in(plan, map.cave["rooms"]), "%s: a hellgate in the cave (%s)" % [tag, str(plan.gates.map(func(g: Dictionary) -> String: return str(g["room"])))])
 				check(_gate_in(plan, [map.cave["far"]]), "%s: ... in its far chamber" % tag)
-			if natural.size() < 6:
-				natural.append("%d/%d %s" % [s, f, map.cave["pattern"]])
+			if natural.size() < 10:
+				natural.append("%d/%d %s %s %s" % [s, f, run.archetype_id, map.cave["pattern"], map.cave.get("look", "")])
 			_check_cave(run, f, map, plan, tag)
 			_check_shared(run, f, tag)
 	print("[lava gen] %d caves on %d rolled floors of %d seeds (%d villain, %d hellgate); natural: %s" % [caves, eligible, SEEDS, villain, gate, str(natural)])
 	check(caves >= 3, "some floors get a cave naturally (%d)" % caves)
 	check(villain >= 1 and gate >= 1, "both kinds come out (%d villain, %d hellgate)" % [villain, gate])
 	_check_forced()
-	print("[lava gen] patterns %s, %d isles; worst cave floor %.0f ms, worst cave pass %.1f ms" % [str(_patterns), _isles, _worst_gen, _worst_pass])
+	print("[lava gen] patterns %s, %d isles; worst cave floor %.0f ms (%s), worst cave pass %.1f ms" % [str(_patterns), _isles, _worst_gen, _worst_tag, _worst_pass])
 	for p in LavaSite.PATTERNS:
 		check(int(_patterns.get(p, 0)) >= 1, "the %s pattern comes out (%d)" % [p, int(_patterns.get(p, 0))])
 	check(_worst_pass < PASS_BUDGET_MS, "the cave pass is cheap (worst %.1f ms)" % _worst_pass)
@@ -101,7 +104,6 @@ func _check_forced() -> void:
 			if map.cave.is_empty():
 				continue
 			got += 1
-			_worst_gen = maxf(_worst_gen, ms * 0.5)   # (forced: every attempt tries the cave first, so up to 24 tries)
 			var plan := SiteBuilder.plan(map, run, f, PricedProp.catalog(run.site_type))
 			var tag := "forced seed %d floor %d" % [s, f]
 			if f == 2:

@@ -168,7 +168,7 @@ func _audit_cuts(label: String, m: HexMap, fog: RoomFog) -> void:
 
 static func standable_cell(m: HexMap, c: Vector2i) -> bool:
 	var cell: HexMap.Cell = m.cells[c]
-	return m.is_walkable_cell(c) and cell.tag != "rim" and cell.tag != "lava" and cell.level != LavaCave.LAVA_BED
+	return m.is_walkable_cell(c) and cell.tag != "rim" and cell.tag != "lava" and cell.tag != "isle" and cell.level != LavaCave.LAVA_BED and not m.is_lava(c)
 
 
 ## The shortest walk from `a` to `b` over `cells`.
@@ -211,7 +211,8 @@ static func standable(m: HexMap, fog: RoomFog, skip: Dictionary) -> Dictionary:
 	var out := {}
 	for c: Vector2i in fog.cell_space:
 		var cell: HexMap.Cell = m.cells[c]
-		if skip.has(c) or not m.is_walkable_cell(c) or cell.tag == "rim" or cell.tag == "lava" or cell.level == LavaCave.LAVA_BED:
+		# (a generated lava cave's isles are out of reach on purpose and its lava is no floor: test_lava_gen's)
+		if skip.has(c) or not m.is_walkable_cell(c) or cell.tag == "rim" or cell.tag == "lava" or cell.tag == "isle" or cell.level == LavaCave.LAVA_BED or m.is_lava(c):
 			continue
 		var s := fog.space_of_cell(c)
 		if not out.has(s):
@@ -243,7 +244,7 @@ func _audit(label: String, m: HexMap, skip: Dictionary) -> Array:
 	for s: int in cells:
 		var with_links: Array[Vector2i] = (cells[s] as Array[Vector2i]).duplicate()
 		for c: Vector2i in fog.cell_space:
-			if int(fog.cell_space[c]) == s and m.cells[c].tag == "corridor" and m.cells[c].level == LavaCave.LAVA_BED:
+			if int(fog.cell_space[c]) == s and m.cells[c].tag == "corridor" and (m.cells[c].level == LavaCave.LAVA_BED or m.is_lava(c)):
 				with_links.append(c)   # (a lava cave's fog link between parallel walkways: one space on purpose)
 		var pieces := _pieces(with_links)
 		if pieces > 1:

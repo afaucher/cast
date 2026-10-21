@@ -415,7 +415,7 @@ other client but the founder, then with a hellgate in it), and `DungeonGen`'s `"
 two-wide bridges (three wide at the bridgeheads) and the pattern's one-wide spans (causeway, fork, ring, gauntlet), with
 archer isles a damp crust always reaches and a tall rim; the record is `HexMap.cave` and the lava cells `HexMap.lava`
 (tagged "lava", at the lava bed while the floor is built and planned). A cave and a sewer cluster never share a floor
-(`generate` tries the cave first, then the floor without it). In `SiteBuilder`: `GatePlanner` puts the first gate of a
+(`for_run` asks for a cave only on a floor that rolled no cluster; `generate` tries a cluster first, then the cave, then plain). In `SiteBuilder`: `GatePlanner` puts the first gate of a
 hellgate cave in its far chamber, `LavaPlanner.theme` gives its chambers the "lava" theme row and picks the look (hellfire
 with a gate in it, else magma), `LavaPlanner.materials` makes it basalt, `DoorPlanner` leaves its doorways open,
 `LavaPlanner.plan` puts the archers on the isles and keeps the packs at the bridgeheads, and `LavaPlanner.spawn` spawns the

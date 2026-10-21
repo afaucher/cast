@@ -43,7 +43,7 @@ extends RefCounted
 ## tree and its levels (the wing's rooms at its root's level, so the hall in is unchanged), carve() once every link is cut
 ## (the loops into the cave are not cut: its pattern adds its own ways), raise_rim() before cut_walls, finish() after the
 ## validation (HexMap.cave, HexMap.lava). Its rooms get no features and never the exit. A cave and a sewer cluster are never
-## on one floor: generate() tries the cave first, then the floor without it (its cluster, then plain), attempt by attempt.
+## on one floor: generate() tries the floor's cluster first (when it rolled one), then the cave, then plain, attempt by attempt.
 ##
 ## params (all optional): rooms, size, room_radius_min, room_radius_max, gap, loops, wall_height, elevator ("wall" |
 ## "free"; a contract's floors use for_run(), which passes the job's choice), sewer (a cluster's seed, 0: none),
@@ -72,8 +72,9 @@ enum Feature { PLATFORM, ZIGGURAT, LEDGE, PILLAR, PIT }
 
 ## Generate a dungeon. Deterministic per seed (and params).
 static func generate(seed: int, params: Dictionary = {}) -> HexMap:
-	# A lava cave asked for (CaveGen, LavaSite): each attempt tries it first (without a sewer cluster: one set piece a floor),
-	# then the rest as below, so a floor that ends up without one is exactly the floor these params without "cave" give.
+	# A lava cave asked for (CaveGen, LavaSite): each attempt tries the floor's sewer cluster first when it rolled one (one set
+	# piece a floor, and a cluster floor stays the floor it was), then the cave, then the plain floor; so a floor that ends up
+	# without a cave is exactly the floor these params without "cave" give.
 	if int(params.get("cave", 0)) != 0:
 		var no_cave := params.duplicate()
 		for k in CAVE_KEYS:
@@ -81,18 +82,26 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 		var cave_only := params.duplicate()
 		cave_only.erase("sewer")
 		cave_only.erase("sewer_force")
+		var plain_floor := no_cave.duplicate()
+		plain_floor.erase("sewer")
+		plain_floor.erase("sewer_force")
 		if bool(params.get("cave_force", false)):
 			for attempt in MAX_ATTEMPTS:   # (dev, --lava-floor: any attempt with a cave first)
-				var mc := _attempt(_attempt_seed(seed, attempt), cave_only)
-				if mc != null:
-					return mc
+				var mf := _attempt(_attempt_seed(seed, attempt), cave_only)
+				if mf != null:
+					return mf
 		for attempt in MAX_ATTEMPTS:
-			var mc := _attempt(_attempt_seed(seed, attempt), cave_only)
+			var s := _attempt_seed(seed, attempt)
+			if int(no_cave.get("sewer", 0)) != 0:
+				var ms := _attempt(s, no_cave)
+				if ms != null:
+					return ms
+			var mc := _attempt(s, cave_only)
 			if mc != null:
 				return mc
-			var mr := _generate_attempt(seed, attempt, no_cave)
-			if mr != null:
-				return mr
+			var mp := _attempt(s, plain_floor)
+			if mp != null:
+				return mp
 		push_warning("DungeonGen: no valid map for seed %d after %d attempts; using fallback" % [seed, MAX_ATTEMPTS])
 		return _fallback()
 	# A sewer cluster asked for: each attempt tries it first and, if anything fails, builds the attempt without it, so a floor
@@ -124,20 +133,6 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 const CAVE_KEYS: Array[String] = ["cave", "cave_gate", "cave_force"]
 
 
-## Attempt `attempt` as generate() makes it without a cave: the sewer cluster (when asked for) first, then the plain floor.
-static func _generate_attempt(seed: int, attempt: int, params: Dictionary) -> HexMap:
-	var s := _attempt_seed(seed, attempt)
-	if int(params.get("sewer", 0)) != 0:
-		var ms := _attempt(s, params)
-		if ms != null:
-			return ms
-		var plain := params.duplicate()
-		plain.erase("sewer")
-		plain.erase("sewer_force")
-		return _attempt(s, plain)
-	return _attempt(s, params)
-
-
 static func _attempt_seed(seed: int, attempt: int) -> int:
 	return seed if attempt == 0 else ((seed * 1103515245 + attempt * 12345 + 1) & 0x7fffffff)
 
@@ -166,9 +161,11 @@ static func for_run(run: ContractRun, floor_n: int, shared: bool = false) -> Hex
 		params["sewer"] = sewer
 		if SewerCluster.force:
 			params["sewer_force"] = true
-	# a lava cave (LavaSite): tried before the cluster; --sewer-floor alone keeps its clusters
+	# a lava cave (LavaSite), on a floor that rolled no sewer cluster (one set piece a floor, and a cluster floor stays the floor
+	# it was; so a cave floor costs at most two attempts, the cave's and the plain one); --lava-floor forces one anyway (after
+	# the cluster, generate()), --sewer-floor alone keeps its clusters
 	var cave := LavaSite.seed_for(run, floor_n, shared)
-	if cave != 0 and (LavaSite.force or not SewerCluster.force):
+	if cave != 0 and (LavaSite.force or (not SewerCluster.force and sewer == 0)):
 		params["cave"] = cave
 		params["cave_gate"] = LavaSite.needs_gate(run, floor_n)
 		if LavaSite.force:

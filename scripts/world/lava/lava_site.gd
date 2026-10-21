@@ -16,16 +16,16 @@ extends RefCounted
 ##     (needs_gate: GatePlanner puts the floor's first gate there): the cave is where the gate leaks into the level.
 ## Either look follows the gate: a cave with a hellgate in it is HELLFIRE, else MAGMA (LavaPlanner, the "lava" theme row).
 ## A floor that rolls none, or whose rooms have no wing that fits, is byte for byte the floor it always was (DungeonGen builds
-## it without the option). A floor that rolls a cave and a sewer cluster gets the cave (one set piece a floor); when the cave
-## does not fit it gets its cluster.
+## it without the option). A floor that rolls a cave and a sewer cluster gets its cluster (one set piece a floor, and a
+## cluster floor stays the floor it was); the cave when the cluster does not fit.
 ##
 ## NETWORKED: true. Every machine builds the same cave from the seed (map.cave and map.lava in NetFloor's checksum), the crust
 ## is a scheduled effect every machine computes from the damp cast's shared time (LavaField), and every verb is applied only
 ## where the actor is resolved, so a crew rolls caves exactly as a solo run of the seed does.
 
 const NETWORKED := true
-const RATE_VILLAIN := 0.5
-const RATE_GATE := 0.3
+const RATE_VILLAIN := 0.75   ## of the villain floors that rolled no sewer cluster (a cluster floor keeps its cluster)
+const RATE_GATE := 0.4      ## likewise, of the other clients' floors 2
 const VILLAIN := "supervillain"
 const VILLAIN_FLOORS: Array[int] = [2, 3]
 const GATE_FLOORS: Array[int] = [2]

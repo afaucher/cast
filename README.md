@@ -16,7 +16,7 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
   --sewer 2` (every window gets the flag; "Phase 2 as built"). Layout 2 has a pack of goo imps
   (the sewer's ranged pest, `docs/design/goo-imp.md`, "As built") on a deck in its north room.
 - **Lava caves:** a supervillain's floors 2-3, and floor 2 of other clients with a hellgate in it, can roll a lava cave
-  (`.\run.ps1 --seed 6 --floor 2 --spells damp,fireball --no-mic --to-lava entry`); `--lava-floor` forces one (solo or every
+  (`.\run.ps1 --seed 31 --floor 2 --spells damp,fireball --no-mic --to-lava entry`); `--lava-floor` forces one (solo or every
   window of a crew). See `docs/design/lava-playtest.md`, "As built: caves on real floors".
 
 The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc goes back):
