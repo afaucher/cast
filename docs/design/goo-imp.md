@@ -129,12 +129,14 @@ checklist (`networking.md`) before any code.
    The doc's own worry stands as a note for the build: a Gloop pack can read as glowing/buffed rather than ranged, so the
    throw's telegraph (the wind-up and the landing marker) has to carry "thrower".
 2. ~~**The goo colour**~~ **Decided (user, 2026-10-20): "Keep bile goo."** The Water Boy shares the chartreuse; the
-   patch's lumpy splat (vs his rings) has to keep them apart. The original question: bile (recommended), pink (with a new skin), or tar? Is sharing chartreuse with the Water Boy's water
-   acceptable?
-3. **The skin:** pale axolotl pink with gills, or closer to the swarmer (its violet, a sewer tint)?
-4. **The patch:** about 0.8 radius and 5 s in the mocks. Bigger and shorter, or smaller and longer? Does it slow
-   monsters too (the mocks assume yes)?
-5. **A ball in the water:** a floating slick that drifts with the flow (shown), or just a splash?
-6. **Fire:** how long does a fire patch burn, and does it ignite actors standing in it (`Burning`) or only hurt them?
-7. **Damp:** does Damp on a patch wash it away at once, or turn it into a wet floor (Damp's slide)?
-8. **Pack size and HP:** three or four, swarmer-light (one hit) or a little tougher since they hang back?
+   patch's lumpy splat (vs his rings) has to keep them apart.
+**Decided (user, 2026-10-20), questions 3-8:**
+
+| Question | The user | What it means |
+|---|---|---|
+| 3. The skin | "as shown is fine" | Pale axolotl pink with red gills. |
+| 4. The patch | "as shown is fine until I play it" | About 0.8 radius, 5 s, slows monsters too; revisit after a playtest. |
+| 5. A ball in the water | "splash and gone" | No floating slick: a splash, and the ball is gone. |
+| 6. Fire on a patch | "no fire spread for now, just hurts" | A lit patch burns and **hurts** whoever stands in it; it does **not** set them `Burning`. (Its burn time is the build's call; propose ~3 s.) |
+| 7. Damp on a patch | "just have damp replace it" | Damp removes the goo patch; Damp's own wet floor is what's left. |
+| 8. Pack size and HP | "3-4 per pack, same toughness" | Packs of **3-4**, the swarmer imp's HP. |
