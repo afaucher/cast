@@ -107,6 +107,7 @@ func _check_tables() -> void:
 				eq(String((PricedProp.TABLE[k] as Dictionary)["site"]), site, "%s: %s belongs to the %s site" % [id, k, site])
 		for op: Dictionary in (def["recipe"] as Array):
 			check(String(op["op"]) != "", "%s recipe op has a name" % id)
+			check(ThemeVignettes.OPS.has(String(op["op"])), "%s: recipe op '%s' has a vignette (ThemeVignettes.OPS)" % [id, op["op"]])
 	# every decor kind has a rule and a model; every rule is a known one
 	var places := ["wall", "corner", "center", "floor", "group", "ring"]
 	var orients := ["away_from_wall", "face_center", "face_entrance", "face_start", "face_target", "parallel", "free"]

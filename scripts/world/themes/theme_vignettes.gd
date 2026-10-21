@@ -13,37 +13,45 @@ const SEAT_JITTER := 8.0          ## degrees; the rule allows 10, the test 15
 const MOAT_BRIDGE_GAP := Hex.SIZE + 0.05
 
 
+## Recipe op (RoomThemeDefs.THEMES "recipe") -> the vignette that runs it: func(ctx, room, op) -> bool, true when it
+## placed something. A whole vignette is a function below; a single piece by its rule is one of the small makers (a
+## corner piece, a wall piece, a row along a wall). A new op is one entry here (tests/test_room_themes.gd checks every
+## recipe op has one).
+static var OPS := {
+	"cinema": cinema, "tasting": tasting, "barrels": barrels, "circle": circle, "mats": mats, "bench_rack": bench_rack,
+	"desk": desk, "pool": pool, "carpet": carpet, "moat": moat, "specimen_pool": specimen_pool, "tanks": tanks,
+	"sign": neon, "hazard": hazard, "wet_floor": wet_floor,
+	"popcorn": _in_corner("popcorn_machine"), "crates": _in_corner("crate_stack"), "cage": _in_corner("chains_cage"),
+	"dumbbells": _on_wall("dumbbell_rack"), "shelf": _on_wall("specimen_shelf"), "bench": _on_wall("lab_bench"),
+	"console": _on_wall("lab_console"), "pipes": _on_wall("pipe_run", {"params": {"length": 3.2}}),
+	"racks": _in_row("rack_cab", 3, 1.05, 2), "bunks": _in_row("bunk_bed", 3, 2.15, 2),
+}
+
+
 ## Run one recipe op in a room. True when it placed something.
 static func run(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, op: Dictionary) -> bool:
 	if room.cells.size() < int(op.get("min_cells", 0)):
 		return false
-	match String(op["op"]):
-		"cinema": return cinema(ctx, room)
-		"popcorn": return not corner_one(ctx, room, "popcorn_machine").is_empty()
-		"tasting": return tasting(ctx, room)
-		"barrels": return barrels(ctx, room)
-		"circle": return circle(ctx, room)
-		"mats": return mats(ctx, room)
-		"bench_rack": return bench_rack(ctx, room)
-		"dumbbells": return not wall_one(ctx, room, "dumbbell_rack").is_empty()
-		"racks": return wall_row(ctx, room, "rack_cab", 3, 1.05, 2)
-		"desk": return desk(ctx, room)
-		"crates": return not corner_one(ctx, room, "crate_stack").is_empty()
-		"pool": return pool(ctx, room)
-		"cage": return not corner_one(ctx, room, "chains_cage").is_empty()
-		"carpet": return carpet(ctx, room)
-		"shelf": return not wall_one(ctx, room, "specimen_shelf").is_empty()
-		"bunks": return wall_row(ctx, room, "bunk_bed", 3, 2.15, 2)
-		"moat": return moat(ctx, room)
-		"specimen_pool": return specimen_pool(ctx, room)
-		"tanks": return tanks(ctx, room)
-		"pipes": return not wall_one(ctx, room, "pipe_run", {"params": {"length": 3.2}}).is_empty()
-		"bench": return not wall_one(ctx, room, "lab_bench").is_empty()
-		"console": return not wall_one(ctx, room, "lab_console").is_empty()
-		"sign": return neon(ctx, room, op)
-		"hazard": return hazard(ctx, room)
-		"wet_floor": return wet_floor(ctx, room)
-	return false
+	var fn: Callable = OPS.get(String(op["op"]), Callable())
+	return fn.call(ctx, room, op) if fn.is_valid() else false
+
+
+## An op that puts one `kind` in a concave corner (corner_one).
+static func _in_corner(kind: String) -> Callable:
+	return func(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary) -> bool:
+		return not corner_one(ctx, room, kind).is_empty()
+
+
+## An op that puts one `kind` against a wall (wall_one), with `extra` placement options.
+static func _on_wall(kind: String, extra: Dictionary = {}) -> Callable:
+	return func(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary) -> bool:
+		return not wall_one(ctx, room, kind, extra.duplicate(true)).is_empty()   # (a fresh copy per placement, as before)
+
+
+## An op that stands a row of `kind` along a wall (wall_row).
+static func _in_row(kind: String, count: int, spacing: float, min_count: int) -> Callable:
+	return func(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary) -> bool:
+		return wall_row(ctx, room, kind, count, spacing, min_count)
 
 
 # --- helpers ------------------------------------------------------------------------------------------------------
@@ -168,7 +176,7 @@ static func find_priced(ctx: ThemeCtx, tag: String, kind: String) -> Dictionary:
 ## A screen on a wall, 2-3 rows of recliners facing it. If the room holds the projector, the screen goes on
 ## the wall the projector faces and the projector faces it. Of the candidate walls the one with the most seats
 ## (and the most camera-facing screen) wins.
-static func cinema(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func cinema(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var proj := find_priced(ctx, room.tag, "projector")
 	var scored: Array[Dictionary] = []
 	for pose in wall_poses(ctx, room, "cinema_screen", 3.0):
@@ -233,7 +241,7 @@ static func _cinema_try(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, pose: Dictionary
 # --- tables, desks, benches ---------------------------------------------------------------------------------------
 
 ## A tasting table at the room's focal point with chairs facing it. Big rooms only (the recipe's min_cells).
-static func tasting(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func tasting(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	for c in cells_near(ctx, room, room.center_w, 8.0, 24):
 		var pos := ThemeGeo.world(c)
 		var mk := ctx.mark(room)
@@ -258,7 +266,7 @@ static func tasting(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 
 ## A desk against the wall, its monitor on it, its chair pulled up facing it.
-static func desk(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func desk(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var tries := 0
 	for pose in wall_poses(ctx, room, "desk", 6.0):
 		tries += 1
@@ -283,7 +291,7 @@ static func desk(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 
 ## A dumbbell rack against the wall with a weight bench in front of it (the bench's head end toward the rack).
-static func bench_rack(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func bench_rack(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var tries := 0
 	for pose in wall_poses(ctx, room, "dumbbell_rack", 6.0):
 		tries += 1
@@ -342,7 +350,7 @@ static func wall_row(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, kind: String, count
 # --- barrels ------------------------------------------------------------------------------------------------------
 
 ## A cluster of 2-3 barrels in a corner.
-static func barrels(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func barrels(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var tries := 0
 	for pose in wall_poses(ctx, room, "barrel", 0.0, true):
 		tries += 1
@@ -372,7 +380,7 @@ static func barrels(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 ## Candles ringing a chalk summoning circle at the room's focal point. If a hellgate stands there the circle is
 ## drawn around the gate (it IS the summoning circle); otherwise it sits at the centre.
-static func circle(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func circle(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var origin := not room.gate.is_empty() and bool(room.gate["origin"])
 	var cands: Array[Dictionary] = []      # {pos, radius, gate}
 	if not room.gate.is_empty():
@@ -411,7 +419,7 @@ static func circle(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 
 ## Three yoga mats side by side, all facing the same way (away from the door), around the middle of the room.
-static func mats(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func mats(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var away := room.center_w - room.entrance_w
 	var yaw0 := ThemeGeo.yaw_of(away.normalized() if away.length() > 1.0 else Vector2(0, 1))
 	var lat := ThemeGeo.lateral(yaw0)
@@ -443,7 +451,7 @@ static func mats(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 ## Loungers along the long sides of the room's in-ground pool (PoolGeo carved it into the terrain before the decor),
 ## each facing the water. False when the room got no pool (no room for one) or no lounger fits.
-static func pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var rec := PoolGeo.pool_of_room(ctx.map, room.tag)
 	if rec.is_empty():
 		return false
@@ -478,7 +486,7 @@ static func pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 ## The science room's specimen pool (PoolGeo: green water under a gantry with a dangling cage) gets a hazard sign on
 ## the deck beside it, facing the door. False when the room got no pool.
-static func specimen_pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func specimen_pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var rec := PoolGeo.pool_of_room(ctx.map, room.tag)
 	if rec.is_empty():
 		return false
@@ -503,7 +511,7 @@ static func specimen_pool(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 
 ## Two specimen tanks standing in the room's corners (along a wall where there is no corner left).
-static func tanks(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func tanks(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var n := 0
 	for i in 2:
 		if not corner_one(ctx, room, "specimen_tank").is_empty():
@@ -515,7 +523,7 @@ static func tanks(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 ## fins drawn by PoolView): the bridge is pulled back onto the deck on the door side (wading depth: anyone walks in and
 ## out anywhere, so it is decoration, lying flat where nobody wades through it), its iron lip toward the water, and the
 ## fin hazard sign stands beside it facing the door. False when the room got no moat (no room for one).
-static func moat(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func moat(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var rec := PoolGeo.pool_of_room(ctx.map, room.tag)
 	if rec.is_empty():
 		return false
@@ -557,7 +565,7 @@ static func moat(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 ## A red carpet runner leading from the throne toward the door (from the middle of the room toward the door
 ## when there is no throne).
-static func carpet(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func carpet(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var throne := find_priced(ctx, room.tag, "villain_throne")
 	if not throne.is_empty():
 		var tf := ThemeGeo.facing(float(throne["yaw"]))
@@ -617,7 +625,7 @@ static func neon(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, op: Dictionary) -> bool
 # --- the service entrance ------------------------------------------------------------------------------------------
 
 ## Hazard tape strung along a wall, near where the crew starts.
-static func hazard(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func hazard(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var scored: Array[Dictionary] = []
 	for pose in wall_poses(ctx, room, "hazard_tape", 6.0):
 		var d := float(Hex.distance(pose["cell"], ctx.plan.start))
@@ -635,7 +643,7 @@ static func hazard(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
 
 
 ## A WET FLOOR sign a few cells from the start, facing it.
-static func wet_floor(ctx: ThemeCtx, room: ThemeCtx.RoomInfo) -> bool:
+static func wet_floor(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, _op: Dictionary = {}) -> bool:
 	var start_w := ThemeGeo.world(ctx.plan.start)
 	var cands: Array[Dictionary] = []
 	for c in room.cells:
