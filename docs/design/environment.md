@@ -245,8 +245,8 @@ a torn-paper grime mark (`Grime.PAPER`) fades on the same clock.
 ## Breakable crates (decor) [built, 2026-10-17]
 Anything that reads as a stack of boxes or crates breaks. Playtest: "a different stack of boxes which is not
 breakable". The room themes' `crate_stack` (the panic room's `crates` op) was solid set dressing, so it is now a
-`BreakableCrate` (scripts/world/themes), listed in `RoomThemeDefs.BREAKABLE_DECOR` (add a box-like kind there
-and it breaks too). Shelves, racks, furniture, barrels and priced props stay solid.
+`BreakableCrate` (scripts/world/themes), marked `"breakable": true` in its `RoomThemeDefs.DECOR` row (mark a box-like kind
+so and it breaks too). Shelves, racks, furniture, barrels and priced props stay solid.
 - **Actor:** the piece's first blocker circle is the `BreakableCrate` (neutral, immovable, 10 hp, any damage
   breaks it, group `"breakables"`), so hero melee, arrows, Wick's bolt, Gasket's spin, corn, the fireball blast,
   tentacles, Rebar's bowl and shoves hit it exactly like a mail package. Other circles stay plain `DecorBlocker`s.

@@ -1,6 +1,6 @@
 class_name BreakableCrate
 extends Actor
-## A wooden crate stack of the room themes (DecorProp kinds in RoomThemeDefs.BREAKABLE_DECOR) that the crew can smash.
+## A wooden crate stack of the room themes (DecorProp kinds marked "breakable" in RoomThemeDefs.DECOR) that the crew can smash.
 ## It is the invisible walk-blocking circle of the piece (a neutral, immovable Actor like DecorBlocker, so heroes and
 ## monsters walk around it) AND a breakable: it joins the group "breakables" like a MailPackage, so hero melee,
 ## arrows, Wick's bolt, Gasket's spin, corn, the fireball blast, tentacles, Rebar's bowl and anything shoved into it

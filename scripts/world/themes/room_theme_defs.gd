@@ -219,53 +219,53 @@ const THEMES := {
 
 ## Decor kinds (not priced, purely decorative). w/d = footprint (lateral x forward, world units), h = height,
 ## blocks = walk-blocking (an invisible neutral blocker actor), weight = share of the room's decor budget.
+## The look (DecorModels.build): "model" = its DecorModels builder (func(s, params)), or "node_model" for a piece built on
+## its own nodes (the neon sign); "after" = a DecorModels hook (func(root, params)) that adds its animation or extra
+## children; "flat" = a floor decal (no ink outline, no shadow). "breakable" = it reads as boxes or crates: it joins the
+## "breakables" group and smashes like a mail package (BreakableCrate: no loot, no property damage); every other kind
+## (shelves, racks, furniture, barrels) stays solid. A new kind is one row here plus its builder in DecorModels.
 const DECOR := {
-	"recliner": {"place": "group", "orient": "face_target", "w": 1.0, "d": 1.1, "h": 1.3, "blocks": false, "weight": 0.7},
-	"cinema_screen": {"place": "wall", "orient": "away_from_wall", "w": 3.5, "d": 0.5, "h": 2.6, "blocks": false, "weight": 1.2},
-	"popcorn_machine": {"place": "corner", "orient": "face_center", "w": 0.95, "d": 0.8, "h": 1.8, "blocks": true, "weight": 1.0},
-	"yoga_mat": {"place": "floor", "orient": "parallel", "w": 0.75, "d": 1.9, "h": 0.06, "blocks": false, "weight": 0.3},
-	"summoning_circle": {"place": "center", "orient": "free", "w": 4.2, "d": 4.2, "h": 0.06, "blocks": false, "weight": 1.0},
-	"candle": {"place": "ring", "orient": "free", "w": 0.22, "d": 0.22, "h": 0.5, "blocks": false, "weight": 0.1},
-	"dumbbell_rack": {"place": "wall", "orient": "away_from_wall", "w": 1.7, "d": 0.65, "h": 1.0, "blocks": true, "weight": 1.0},
-	"weight_bench": {"place": "group", "orient": "face_target", "w": 0.6, "d": 1.6, "h": 0.6, "blocks": false, "weight": 0.5},
-	"bunk_bed": {"place": "wall", "orient": "away_from_wall", "w": 2.0, "d": 1.05, "h": 1.6, "blocks": true, "weight": 1.0},
-	"chains_cage": {"place": "corner", "orient": "face_center", "w": 1.2, "d": 1.2, "h": 2.2, "blocks": true, "weight": 1.0},
-	"specimen_shelf": {"place": "wall", "orient": "away_from_wall", "w": 1.8, "d": 0.55, "h": 1.95, "blocks": true, "weight": 1.0},
-	"neon_sign": {"place": "wall", "orient": "away_from_wall", "w": 1.9, "d": 0.4, "h": 2.2, "blocks": false, "weight": 0.5},
-	"hazard_tape": {"place": "wall", "orient": "away_from_wall", "w": 2.4, "d": 0.3, "h": 0.9, "blocks": false, "weight": 0.3},
-	"wet_floor_sign": {"place": "floor", "orient": "face_start", "w": 0.6, "d": 0.5, "h": 1.0, "blocks": false, "weight": 0.3},
-	"pool_lounger": {"place": "group", "orient": "face_target", "w": 0.85, "d": 1.9, "h": 0.6, "blocks": false, "weight": 0.5},
-	"specimen_tank": {"place": "corner", "orient": "face_center", "w": 1.5, "d": 1.5, "h": 2.1, "blocks": true, "weight": 1.0},
-	"lab_bench": {"place": "wall", "orient": "away_from_wall", "w": 1.85, "d": 0.8, "h": 1.45, "blocks": true, "weight": 1.0},
-	"lab_console": {"place": "wall", "orient": "away_from_wall", "w": 1.55, "d": 1.0, "h": 1.9, "blocks": true, "weight": 1.0},
-	"pipe_run": {"place": "wall", "orient": "away_from_wall", "w": 3.4, "d": 0.45, "h": 1.0, "blocks": false, "weight": 0.5},
-	"hazard_sign": {"place": "group", "orient": "face_target", "w": 0.9, "d": 0.3, "h": 1.85, "blocks": false, "weight": 0.3},
-	"moat_bridge": {"place": "group", "orient": "face_target", "w": 1.4, "d": 2.3, "h": 0.2, "blocks": false, "weight": 0.5},
-	"shark_fin": {"place": "ring", "orient": "free", "w": 0.4, "d": 0.8, "h": 0.6, "blocks": false, "weight": 0.2},
-	"red_carpet": {"place": "floor", "orient": "away_from_wall", "w": 1.5, "d": 5.0, "h": 0.05, "blocks": false, "weight": 0.5},
-	"tasting_table": {"place": "center", "orient": "face_entrance", "w": 1.5, "d": 1.5, "h": 1.0, "blocks": true, "weight": 1.0},
-	"chair": {"place": "group", "orient": "face_target", "w": 0.6, "d": 0.6, "h": 1.0, "blocks": false, "weight": 0.4},
-	"barrel": {"place": "group", "orient": "free", "w": 0.9, "d": 0.9, "h": 1.0, "blocks": true, "weight": 0.5},
-	"desk": {"place": "wall", "orient": "away_from_wall", "w": 1.7, "d": 0.85, "h": 0.85, "blocks": true, "weight": 1.0},
-	"monitor": {"place": "group", "orient": "away_from_wall", "w": 0.7, "d": 0.3, "h": 0.5, "blocks": false, "weight": 0.2},
-	"office_chair": {"place": "group", "orient": "face_target", "w": 0.65, "d": 0.65, "h": 1.0, "blocks": false, "weight": 0.4},
-	"rack_cab": {"place": "wall", "orient": "away_from_wall", "w": 0.95, "d": 0.85, "h": 2.0, "blocks": true, "weight": 1.0},
-	"crate_stack": {"place": "corner", "orient": "face_center", "w": 1.15, "d": 1.15, "h": 1.3, "blocks": true, "weight": 1.0},
+	"recliner": {"place": "group", "orient": "face_target", "w": 1.0, "d": 1.1, "h": 1.3, "blocks": false, "weight": 0.7, "model": "_recliner"},
+	"cinema_screen": {"place": "wall", "orient": "away_from_wall", "w": 3.5, "d": 0.5, "h": 2.6, "blocks": false, "weight": 1.2, "model": "_cinema_screen", "after": "_screen_after"},
+	"popcorn_machine": {"place": "corner", "orient": "face_center", "w": 0.95, "d": 0.8, "h": 1.8, "blocks": true, "weight": 1.0, "model": "_popcorn_machine"},
+	"yoga_mat": {"place": "floor", "orient": "parallel", "w": 0.75, "d": 1.9, "h": 0.06, "blocks": false, "weight": 0.3, "model": "_yoga_mat", "flat": true},
+	"summoning_circle": {"place": "center", "orient": "free", "w": 4.2, "d": 4.2, "h": 0.06, "blocks": false, "weight": 1.0, "model": "_summoning_circle", "flat": true},
+	"candle": {"place": "ring", "orient": "free", "w": 0.22, "d": 0.22, "h": 0.5, "blocks": false, "weight": 0.1, "model": "_candle", "after": "_candle_after"},
+	"dumbbell_rack": {"place": "wall", "orient": "away_from_wall", "w": 1.7, "d": 0.65, "h": 1.0, "blocks": true, "weight": 1.0, "model": "_dumbbell_rack"},
+	"weight_bench": {"place": "group", "orient": "face_target", "w": 0.6, "d": 1.6, "h": 0.6, "blocks": false, "weight": 0.5, "model": "_weight_bench"},
+	"bunk_bed": {"place": "wall", "orient": "away_from_wall", "w": 2.0, "d": 1.05, "h": 1.6, "blocks": true, "weight": 1.0, "model": "_bunk_bed"},
+	"chains_cage": {"place": "corner", "orient": "face_center", "w": 1.2, "d": 1.2, "h": 2.2, "blocks": true, "weight": 1.0, "model": "_chains_cage"},
+	"specimen_shelf": {"place": "wall", "orient": "away_from_wall", "w": 1.8, "d": 0.55, "h": 1.95, "blocks": true, "weight": 1.0, "model": "_specimen_shelf"},
+	"neon_sign": {"place": "wall", "orient": "away_from_wall", "w": 1.9, "d": 0.4, "h": 2.2, "blocks": false, "weight": 0.5, "node_model": "_neon_sign"},
+	"hazard_tape": {"place": "wall", "orient": "away_from_wall", "w": 2.4, "d": 0.3, "h": 0.9, "blocks": false, "weight": 0.3, "model": "_hazard_tape"},
+	"wet_floor_sign": {"place": "floor", "orient": "face_start", "w": 0.6, "d": 0.5, "h": 1.0, "blocks": false, "weight": 0.3, "model": "_wet_floor_sign", "after": "_wet_after"},
+	"pool_lounger": {"place": "group", "orient": "face_target", "w": 0.85, "d": 1.9, "h": 0.6, "blocks": false, "weight": 0.5, "model": "_pool_lounger"},
+	"specimen_tank": {"place": "corner", "orient": "face_center", "w": 1.5, "d": 1.5, "h": 2.1, "blocks": true, "weight": 1.0, "model": "_specimen_tank"},
+	"lab_bench": {"place": "wall", "orient": "away_from_wall", "w": 1.85, "d": 0.8, "h": 1.45, "blocks": true, "weight": 1.0, "model": "_lab_bench"},
+	"lab_console": {"place": "wall", "orient": "away_from_wall", "w": 1.55, "d": 1.0, "h": 1.9, "blocks": true, "weight": 1.0, "model": "_lab_console"},
+	"pipe_run": {"place": "wall", "orient": "away_from_wall", "w": 3.4, "d": 0.45, "h": 1.0, "blocks": false, "weight": 0.5, "model": "_pipe_run"},
+	"hazard_sign": {"place": "group", "orient": "face_target", "w": 0.9, "d": 0.3, "h": 1.85, "blocks": false, "weight": 0.3, "model": "_hazard_sign"},
+	"moat_bridge": {"place": "group", "orient": "face_target", "w": 1.4, "d": 2.3, "h": 0.2, "blocks": false, "weight": 0.5, "model": "_moat_bridge"},
+	"shark_fin": {"place": "ring", "orient": "free", "w": 0.4, "d": 0.8, "h": 0.6, "blocks": false, "weight": 0.2, "model": "_shark_fin", "after": "_fin_after"},
+	"red_carpet": {"place": "floor", "orient": "away_from_wall", "w": 1.5, "d": 5.0, "h": 0.05, "blocks": false, "weight": 0.5, "model": "_red_carpet", "flat": true},
+	"tasting_table": {"place": "center", "orient": "face_entrance", "w": 1.5, "d": 1.5, "h": 1.0, "blocks": true, "weight": 1.0, "model": "_tasting_table"},
+	"chair": {"place": "group", "orient": "face_target", "w": 0.6, "d": 0.6, "h": 1.0, "blocks": false, "weight": 0.4, "model": "_chair"},
+	"barrel": {"place": "group", "orient": "free", "w": 0.9, "d": 0.9, "h": 1.0, "blocks": true, "weight": 0.5, "model": "_barrel"},
+	"desk": {"place": "wall", "orient": "away_from_wall", "w": 1.7, "d": 0.85, "h": 0.85, "blocks": true, "weight": 1.0, "model": "_desk"},
+	"monitor": {"place": "group", "orient": "away_from_wall", "w": 0.7, "d": 0.3, "h": 0.5, "blocks": false, "weight": 0.2, "model": "_monitor"},
+	"office_chair": {"place": "group", "orient": "face_target", "w": 0.65, "d": 0.65, "h": 1.0, "blocks": false, "weight": 0.4, "model": "_office_chair"},
+	"rack_cab": {"place": "wall", "orient": "away_from_wall", "w": 0.95, "d": 0.85, "h": 2.0, "blocks": true, "weight": 1.0, "model": "_rack_cab"},
+	"crate_stack": {"place": "corner", "orient": "face_center", "w": 1.15, "d": 1.15, "h": 1.3, "blocks": true, "weight": 1.0, "model": "_crate_stack", "breakable": true},
 	# the sewer's decor kit (docs/design/sewer-concept.md, phase 1: the six that read most; SewerLayouts places them, no
 	# theme recipe uses them yet): an outfall pipe pouring into a channel, a pipe run on a wall, a floor grate, a sluice
 	# gate across a doorway (the plate raised over the water), iron bars across a culvert, a maintenance tool cart
-	"outfall": {"place": "wall", "orient": "away_from_wall", "w": 1.4, "d": 1.3, "h": 1.9, "blocks": false, "weight": 0.5},
-	"pipe_bundle": {"place": "wall", "orient": "away_from_wall", "w": 4.0, "d": 0.45, "h": 1.3, "blocks": false, "weight": 0.5},
-	"grate": {"place": "floor", "orient": "free", "w": 1.6, "d": 1.6, "h": 0.06, "blocks": false, "weight": 0.2},
-	"sluice": {"place": "wall", "orient": "away_from_wall", "w": 3.3, "d": 0.3, "h": 2.2, "blocks": false, "weight": 0.5},
-	"bars": {"place": "wall", "orient": "away_from_wall", "w": 2.8, "d": 0.2, "h": 1.3, "blocks": false, "weight": 0.3},
-	"tool_cart": {"place": "group", "orient": "face_target", "w": 0.85, "d": 0.5, "h": 0.95, "blocks": true, "weight": 0.5},
+	"outfall": {"place": "wall", "orient": "away_from_wall", "w": 1.4, "d": 1.3, "h": 1.9, "blocks": false, "weight": 0.5, "model": "_outfall"},
+	"pipe_bundle": {"place": "wall", "orient": "away_from_wall", "w": 4.0, "d": 0.45, "h": 1.3, "blocks": false, "weight": 0.5, "model": "_pipe_bundle"},
+	"grate": {"place": "floor", "orient": "free", "w": 1.6, "d": 1.6, "h": 0.06, "blocks": false, "weight": 0.2, "model": "_grate", "flat": true},
+	"sluice": {"place": "wall", "orient": "away_from_wall", "w": 3.3, "d": 0.3, "h": 2.2, "blocks": false, "weight": 0.5, "model": "_sluice"},
+	"bars": {"place": "wall", "orient": "away_from_wall", "w": 2.8, "d": 0.2, "h": 1.3, "blocks": false, "weight": 0.3, "model": "_bars"},
+	"tool_cart": {"place": "group", "orient": "face_target", "w": 0.85, "d": 0.5, "h": 0.95, "blocks": true, "weight": 0.5, "model": "_tool_cart"},
 }
-
-## Decor kinds that read as stacks of boxes or crates. They join the "breakables" group and smash like mail packages
-## (no loot, no property damage); every other kind (shelves, racks, furniture, barrels) stays solid. Add a box-like
-## kind here and it breaks too.
-const BREAKABLE_DECOR: Array[String] = ["crate_stack"]
 
 
 static func theme(id: String) -> Dictionary:
@@ -287,9 +287,19 @@ static func theme_name(id: String) -> String:
 	return String((THEMES.get(id, {}) as Dictionary).get("name", id))
 
 
-## True for the decor kinds that read as boxes or crates: they break (BreakableCrate) instead of standing solid.
+## True for the decor kinds that read as boxes or crates ("breakable"): they break (BreakableCrate) instead of standing
+## solid.
 static func is_breakable(kind: String) -> bool:
-	return BREAKABLE_DECOR.has(kind)
+	return bool(decor(kind).get("breakable", false))
+
+
+## Every breakable decor kind, in table order.
+static func breakable_kinds() -> Array[String]:
+	var out: Array[String] = []
+	for k: String in DECOR:
+		if is_breakable(k):
+			out.append(k)
+	return out
 
 
 static func decor(kind: String) -> Dictionary:

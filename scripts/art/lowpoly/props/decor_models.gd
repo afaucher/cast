@@ -9,9 +9,11 @@ extends RefCounted
 ##   var node := DecorModels.build("recliner")                       # Node3D "Model" with a "Body" MeshInstance3D
 ##   DecorModels.build("neon_sign", {"text": "EVIL", "color": Color(1, .2, .15), "dead": [3]})
 ##
+## Each kind's row in RoomThemeDefs.DECOR names its builder here ("model", or "node_model" for the neon sign) and its
+## post-build hook ("after"); build() reads the row (see builder()). A new decor kind is its row plus its builder.
 ## Animated pieces (neon sign letters, the cinema screen, the patrolling shark fin) carry a DecorAnim child.
-## Flat floor decals (chalk circle, carpet, mats) have no ink outline. (Pools and the moat are terrain now: PoolGeo / PoolView;
-## the moat's fins follow its channel, see DecorAnim.)
+## Flat floor decals (chalk circle, carpet, mats: "flat" in the row) have no ink outline. (Pools and the moat are terrain
+## now: PoolGeo / PoolView; the moat's fins follow its channel, see DecorAnim.)
 
 const GLYPHS := {
 	"A": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
@@ -33,7 +35,6 @@ const GLYPHS := {
 }
 const PIXEL := 0.085                ## neon sign: world size of one glyph pixel
 const LETTER_GAP := 0.12
-const FLAT_KINDS: Array[String] = ["summoning_circle", "red_carpet", "yoga_mat", "grate"]
 ## The pool lab's models (scripts/art/lowpoly/props/pool_props.gd) dress the science room: lab bench, pipe run, hazard sign.
 const PoolProps := preload("res://scripts/art/lowpoly/props/pool_props.gd")
 ## The sewer's decor kit (scripts/art/lowpoly/props/sewer_props.gd): outfall, pipe bundle, grate, sluice, bars, tool cart.
@@ -62,84 +63,36 @@ static func height(kind: String) -> float:
 static func build(kind: String, params: Dictionary = {}) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Model"
-	if kind == "neon_sign":
-		_neon_sign(root, params)
+	var row := RoomThemeDefs.decor(kind)
+	if row.has("node_model"):
+		builder(String(row["node_model"])).call(root, params)
 		return root
 	var s := LowPoly.Soup.new(7, 0.06)
 	PropModels._seed = int(kind.hash() % 9973)
-	match kind:
-		"recliner": _recliner(s)
-		"cinema_screen": _cinema_screen(s)
-		"popcorn_machine": _popcorn_machine(s)
-		"yoga_mat": _yoga_mat(s, int(params.get("variant", 0)))
-		"summoning_circle": _summoning_circle(s, float(params.get("radius", 2.1)))
-		"candle": _candle(s)
-		"dumbbell_rack": _dumbbell_rack(s)
-		"weight_bench": _weight_bench(s)
-		"bunk_bed": _bunk_bed(s)
-		"chains_cage": _chains_cage(s)
-		"specimen_shelf": _specimen_shelf(s)
-		"hazard_tape": _hazard_tape(s)
-		"wet_floor_sign": _wet_floor_sign(s)
-		"pool_lounger": _pool_lounger(s)
-		"specimen_tank": PropModels._specimen_vat(s)
-		"lab_bench": PoolProps._lab_bench(s)
-		"lab_console": PropModels._doomsday_console(s)
-		"pipe_run": PoolProps._pipe_run(s, float(params.get("length", 3.2)))
-		"hazard_sign": PoolProps._hazard_sign(s, PoolProps.HAZARD)
-		"moat_bridge": _moat_bridge(s)
-		"shark_fin": _shark_fin(s)
-		"red_carpet": _red_carpet(s, float(params.get("length", 5.0)))
-		"tasting_table": _tasting_table(s)
-		"chair": _chair(s)
-		"barrel": _barrel(s)
-		"desk": _desk(s)
-		"monitor": _monitor(s, params.get("color", Color(0.3, 0.95, 0.9)))
-		"office_chair": _office_chair(s)
-		"rack_cab": _rack_cab(s)
-		"crate_stack": _crate_stack(s)
-		"outfall": SewerProps._outfall(s, float(params.get("radius", 0.6)), float(params.get("drop", 1.0)))
-		"pipe_bundle": SewerProps._pipe_bundle(s, float(params.get("length", 4.0)), params.get("col", SewerProps.RUST))
-		"grate": SewerProps._grate(s, float(params.get("size", 1.6)))
-		"sluice": SewerProps._sluice(s, float(params.get("width", 3.0)), float(params.get("open", 0.45)))
-		"bars": SewerProps._bars(s, float(params.get("width", 2.8)), float(params.get("height", 1.3)))
-		"tool_cart": SewerProps._tool_cart(s)
-		_:
-			PropModels.box(s, Vector3(0.6, 0.6, 0.6), Vector3(0, 0.3, 0), PropModels.GOLD)
+	if row.has("model"):
+		builder(String(row["model"])).call(s, params)
+	else:
+		PropModels.box(s, Vector3(0.6, 0.6, 0.6), Vector3(0, 0.3, 0), PropModels.GOLD)
+	var flat := bool(row.get("flat", false))
 	var mi := MeshInstance3D.new()
 	mi.name = "Body"
 	mi.mesh = s.to_mesh()
-	var mat := MonsterMaterial.make(0.0 if FLAT_KINDS.has(kind) else 2.0)
+	var mat := MonsterMaterial.make(0.0 if flat else 2.0)
 	mat.set_shader_parameter("glow_gain", 1.5)
 	mi.material_override = mat
-	if FLAT_KINDS.has(kind):
+	if flat:
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(mi)
-	match kind:
-		"cinema_screen":
-			var screen := DecorScreen.make_quad(Vector2(2.9, 1.58))
-			screen.position = Vector3(0, 1.45, 0.095)
-			root.add_child(screen)
-			var anim := DecorAnim.new()
-			anim.mode = "screen"
-			anim.screen = screen
-			root.add_child(anim)
-		"shark_fin":
-			var fa := DecorAnim.new()
-			fa.mode = "fin"
-			fa.fin_center = params.get("center", Vector2.ZERO)
-			fa.fin_radius = float(params.get("radius", 3.0))
-			fa.fin_gap_yaw = float(params.get("gap_yaw", 0.0))
-			fa.fin_phase = float(params.get("phase", 0.0))
-			fa.fin_speed = float(params.get("speed", 0.6))
-			fa.fin_path = params.get("path", PackedVector2Array())
-			fa.fin_y = float(params.get("y", NAN))
-			root.add_child(fa)
-		"wet_floor_sign":
-			root.add_child(_wet_label())
-		"candle":
-			root.add_child(_flame_light_free())
+	if row.has("after"):
+		builder(String(row["after"])).call(root, params)
 	return root
+
+
+## A builder named in a DECOR row: a static func of this script. "model": func(s: LowPoly.Soup, params: Dictionary)
+## adds the piece to the merged mesh; "node_model": func(root: Node3D, params) builds the whole piece on the root (the
+## neon sign's letters); "after": func(root, params) adds the animated or extra children once the body is built.
+static func builder(method: String) -> Callable:
+	return Callable(DecorModels, method)
 
 
 # --- small wrappers over the PropModels primitives --------------------------------------------------------------
@@ -177,7 +130,7 @@ static func _seg(s: LowPoly.Soup, a: Vector2, b: Vector2, width: float, h: float
 
 # --- the theme pieces ------------------------------------------------------------------------------------------------
 
-static func _recliner(s: LowPoly.Soup) -> void:
+static func _recliner(s: LowPoly.Soup, _p: Dictionary) -> void:
 	var vel := PropModels.VELVET
 	_b(s, Vector3(0.84, 0.2, 0.84), Vector3(0, 0.1, 0.0), PropModels.WOOD_DK)
 	_b(s, Vector3(0.78, 0.22, 0.68), Vector3(0, 0.31, 0.04), vel)
@@ -190,7 +143,7 @@ static func _recliner(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.09, 0.03, 0.09), Vector3(0.47, 0.73, 0.2), _g(Color(1.0, 0.7, 0.25)))
 
 
-static func _cinema_screen(s: LowPoly.Soup) -> void:
+static func _cinema_screen(s: LowPoly.Soup, _p: Dictionary) -> void:
 	# plinth, black frame (the picture is a separate animated quad), drapes and a gold-trimmed valance
 	_b(s, Vector3(3.4, 0.3, 0.5), Vector3(0, 0.15, 0.0), PropModels.IRON)
 	_b(s, Vector3(3.1, 1.76, 0.16), Vector3(0, 1.45, 0.0), PropModels.OBSIDIAN)
@@ -205,7 +158,7 @@ static func _cinema_screen(s: LowPoly.Soup) -> void:
 		_b(s, Vector3(0.28, 0.5, 0.25), Vector3(sx, 0.55, 0.28), PropModels.IRON)
 
 
-static func _popcorn_machine(s: LowPoly.Soup) -> void:
+static func _popcorn_machine(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(0.8, 0.72, 0.62), Vector3(0, 0.4, 0), PropModels.VELVET)
 	_b(s, Vector3(0.82, 0.12, 0.64), Vector3(0, 0.5, 0), PropModels.CREAM)
 	for sx: float in [-0.34, 0.34]:
@@ -224,14 +177,16 @@ static func _popcorn_machine(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.62, 0.17, 0.08), Vector3(0, 1.8, 0), _g(Color(1.0, 0.3, 0.25)))
 
 
-static func _yoga_mat(s: LowPoly.Soup, variant: int) -> void:
+static func _yoga_mat(s: LowPoly.Soup, p: Dictionary) -> void:
+	var variant := int(p.get("variant", 0))
 	var col := MAT_COLORS[posmod(variant, MAT_COLORS.size())]
 	_b(s, Vector3(0.72, 0.045, 1.8), Vector3(0, 0.0225, 0), col)
 	_b(s, Vector3(0.12, 0.05, 1.7), Vector3(0, 0.026, 0), col.lightened(0.2))
 	_c(s, 0.075, 0.075, 0.72, 6, Vector3(0, 0.075, -0.93), col.darkened(0.1), Vector3(0, 0, 90))
 
 
-static func _summoning_circle(s: LowPoly.Soup, radius: float) -> void:
+static func _summoning_circle(s: LowPoly.Soup, p: Dictionary) -> void:
+	var radius := float(p.get("radius", 2.1))
 	# double chalk ring, a five-pointed star, tick marks and hot red sigils. The floor under it is a worn ritual
 	# rug (VanRug, added by DecorProp), not a dark disc: an opaque disc read as a flat black hole in the floor.
 	var segs := 36
@@ -257,13 +212,13 @@ static func _summoning_circle(s: LowPoly.Soup, radius: float) -> void:
 	_c(s, 0.22, 0.22, 0.05, 8, Vector3(0, 0.05, 0), _g(Color(1.0, 0.2, 0.15)))
 
 
-static func _candle(s: LowPoly.Soup) -> void:
+static func _candle(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_c(s, 0.1, 0.12, 0.05, 6, Vector3(0, 0.025, 0), Color(0.95, 0.9, 0.78))
 	_c(s, 0.065, 0.07, 0.34, 6, Vector3(0, 0.2, 0), PropModels.CREAM)
 	_rod(s, Vector3(0, 0.37, 0), Vector3(0, 0.56, 0), 0.06, 0.0, 5, _g(Color(1.0, 0.78, 0.28)))
 
 
-static func _dumbbell_rack(s: LowPoly.Soup) -> void:
+static func _dumbbell_rack(s: LowPoly.Soup, _p: Dictionary) -> void:
 	for sx: float in [-0.8, 0.8]:
 		_b(s, Vector3(0.09, 0.98, 0.56), Vector3(sx, 0.49, 0), PropModels.IRON)
 	var plates: Array[Color] = [Color(0.85, 0.2, 0.18), Color(0.2, 0.45, 0.9), Color(0.25, 0.75, 0.4), Color(0.95, 0.75, 0.2), Color(0.5, 0.5, 0.56), Color(0.85, 0.2, 0.18)]
@@ -278,7 +233,7 @@ static func _dumbbell_rack(s: LowPoly.Soup) -> void:
 				_c(s, 0.1, 0.1, 0.09, 6, Vector3(x, y + 0.11, z), col, Vector3(90, 0, 0))
 
 
-static func _weight_bench(s: LowPoly.Soup) -> void:
+static func _weight_bench(s: LowPoly.Soup, _p: Dictionary) -> void:
 	# head end (and the barbell on its uprights) at +Z
 	_b(s, Vector3(0.34, 0.1, 0.66), Vector3(0, 0.45, -0.4), Color(0.12, 0.12, 0.15))
 	_b(s, Vector3(0.34, 0.1, 0.62), Vector3(0, 0.55, 0.28), Color(0.7, 0.1, 0.12), Vector3(-16, 0, 0))
@@ -294,7 +249,7 @@ static func _weight_bench(s: LowPoly.Soup) -> void:
 		_c(s, 0.2, 0.2, 0.06, 8, Vector3(sx, 0.86, 0.6), Color(0.2, 0.2, 0.24) if absf(sx) > 0.45 else Color(0.8, 0.18, 0.15), Vector3(0, 0, 90))
 
 
-static func _bunk_bed(s: LowPoly.Soup) -> void:
+static func _bunk_bed(s: LowPoly.Soup, _p: Dictionary) -> void:
 	for sx: float in [-0.96, 0.96]:
 		for sz: float in [-0.46, 0.46]:
 			_b(s, Vector3(0.09, 1.6, 0.09), Vector3(sx, 0.8, sz), PropModels.IRON)
@@ -316,7 +271,7 @@ static func _bunk_bed(s: LowPoly.Soup) -> void:
 		_b(s, Vector3(0.14, 0.07, 0.02), Vector3(-0.8 + 0.3 * float(i), 0.2, 0.5), Color(0.95, 0.78, 0.15) if i % 2 == 0 else PropModels.OBSIDIAN)
 
 
-static func _chains_cage(s: LowPoly.Soup) -> void:
+static func _chains_cage(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(1.2, 0.1, 1.2), Vector3(0, 0.05, 0), PropModels.IRON)
 	_b(s, Vector3(1.2, 0.08, 1.2), Vector3(0, 1.82, 0), PropModels.IRON)
 	var bars: Array[Vector2] = [Vector2(-0.55, -0.55), Vector2(0, -0.55), Vector2(0.55, -0.55), Vector2(-0.55, 0.0), Vector2(0.55, 0.0), Vector2(-0.55, 0.55), Vector2(0.55, 0.55)]
@@ -342,7 +297,7 @@ static func _chains_cage(s: LowPoly.Soup) -> void:
 		_b(s, Vector3(0.07, 0.11, 0.035), Vector3(0.5, 1.7 - 0.12 * float(i), 0.55), PropModels.IRON_LT, Vector3(0, 90 if i % 2 == 0 else 0, 0))
 
 
-static func _specimen_shelf(s: LowPoly.Soup) -> void:
+static func _specimen_shelf(s: LowPoly.Soup, _p: Dictionary) -> void:
 	for sx: float in [-0.86, 0.0, 0.86]:
 		_b(s, Vector3(0.08, 1.95, 0.5), Vector3(sx, 0.975, 0), PropModels.IRON)
 	var glows: Array[Color] = [Color(0.3, 1.0, 0.5), Color(0.7, 0.35, 1.0), Color(1.0, 0.8, 0.3), Color(0.3, 1.0, 0.5)]
@@ -366,7 +321,7 @@ static func _specimen_shelf(s: LowPoly.Soup) -> void:
 			_ball(s, Vector3(0.05, 0.05, 0.05), Vector3(x, y + 0.18, 0.02), Color(0.2, 0.1, 0.25), 0, 0.2)
 
 
-static func _hazard_tape(s: LowPoly.Soup) -> void:
+static func _hazard_tape(s: LowPoly.Soup, _p: Dictionary) -> void:
 	var yel := Color(0.98, 0.8, 0.12)
 	for sx: float in [-1.1, 1.1]:
 		for i in 4:
@@ -381,7 +336,7 @@ static func _hazard_tape(s: LowPoly.Soup) -> void:
 			_b(s, Vector3(0.17, 0.12, 0.02), Vector3(x, y - sag, 0.0 if i % 2 == 0 else 0.003), yel if i % 2 == 0 else PropModels.OBSIDIAN, Vector3(0, 0, 18 if i % 2 == 0 else -18))
 
 
-static func _wet_floor_sign(s: LowPoly.Soup) -> void:
+static func _wet_floor_sign(s: LowPoly.Soup, _p: Dictionary) -> void:
 	var yel := Color(0.98, 0.82, 0.1)
 	_b(s, Vector3(0.5, 0.82, 0.04), Vector3(0, 0.45, 0.12), yel, Vector3(-12, 0, 0))
 	_b(s, Vector3(0.5, 0.82, 0.04), Vector3(0, 0.45, -0.12), yel.darkened(0.15), Vector3(12, 0, 0))
@@ -407,7 +362,7 @@ static func _wet_label() -> Label3D:
 	return l
 
 
-static func _pool_lounger(s: LowPoly.Soup) -> void:
+static func _pool_lounger(s: LowPoly.Soup, _p: Dictionary) -> void:
 	# the sitter faces +Z (feet end, toward the water); the backrest is at -Z and rises toward -Z, away from the seat.
 	# (A +X pitch lifts the -Z end of a box: the recliner/chair pitch -X because their backs are upright boxes.)
 	var white := Color(0.96, 0.96, 0.98)
@@ -424,7 +379,7 @@ static func _pool_lounger(s: LowPoly.Soup) -> void:
 
 ## The moat's bridge, pulled back onto the deck (the moat is wading depth: nobody needs it to cross): a plank gangway
 ## along +Z, its iron lip at the +Z end toward the water, the handrails folded down on it, a chain to haul it out.
-static func _moat_bridge(s: LowPoly.Soup) -> void:
+static func _moat_bridge(s: LowPoly.Soup, _p: Dictionary) -> void:
 	for sx: float in [-0.56, 0.56]:
 		_b(s, Vector3(0.12, 0.1, 2.2), Vector3(sx, 0.05, 0), PropModels.WOOD_DK)
 	for i in 7:
@@ -437,14 +392,15 @@ static func _moat_bridge(s: LowPoly.Soup) -> void:
 		_b(s, Vector3(0.1, 0.05, 0.14), Vector3(-0.1 + 0.07 * float(i % 2), 0.18, -1.0 - 0.13 * float(i)), PropModels.IRON.lightened(0.15), Vector3(0, 30.0 * float(i % 2), 0))
 
 
-static func _shark_fin(s: LowPoly.Soup) -> void:
+static func _shark_fin(s: LowPoly.Soup, _p: Dictionary) -> void:
 	var grey := Color(0.5, 0.55, 0.62)
 	PropModels.frus(s, Vector2(0.07, 0.5), Vector2(0.02, 0.07), 0.5, Vector3(0, 0.25, 0), grey, Vector2(0, -0.22))
 	PropModels.frus(s, Vector2(0.05, 0.22), Vector2(0.015, 0.04), 0.22, Vector3(0, 0.11, -0.45), grey.darkened(0.1), Vector2(0, -0.08))
 	_c(s, 0.34, 0.36, 0.03, 8, Vector3(0, 0.015, 0.05), _g(Color(0.6, 0.98, 1.0)))
 
 
-static func _red_carpet(s: LowPoly.Soup, length: float) -> void:
+static func _red_carpet(s: LowPoly.Soup, p: Dictionary) -> void:
+	var length := float(p.get("length", 5.0))
 	_b(s, Vector3(1.3, 0.04, length), Vector3(0, 0.02, 0), PropModels.VELVET)
 	for sx: float in [-0.62, 0.62]:
 		_b(s, Vector3(0.1, 0.05, length + 0.02), Vector3(sx, 0.025, 0), PropModels.GOLD)   # past the carpet's ends (flush, they z-fought)
@@ -455,7 +411,7 @@ static func _red_carpet(s: LowPoly.Soup, length: float) -> void:
 		_b(s, Vector3(0.18, 0.055, 0.18), Vector3(0, 0.028, z), PropModels.VELVET.darkened(0.2), Vector3(0, 45, 0))
 
 
-static func _tasting_table(s: LowPoly.Soup) -> void:
+static func _tasting_table(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_c(s, 0.4, 0.4, 0.07, 10, Vector3(0, 0.035, 0), PropModels.WOOD_DK)
 	_c(s, 0.13, 0.15, 0.82, 8, Vector3(0, 0.45, 0), PropModels.WOOD_DK)
 	_c(s, 0.78, 0.78, 0.09, 10, Vector3(0, 0.92, 0), PropModels.WOOD)
@@ -470,7 +426,7 @@ static func _tasting_table(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.3, 0.04, 0.2), Vector3(0.05, 1.0, 0.32), PropModels.CREAM, Vector3(0, 20, 0))
 
 
-static func _chair(s: LowPoly.Soup) -> void:
+static func _chair(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(0.46, 0.07, 0.46), Vector3(0, 0.5, 0), PropModels.WOOD)
 	_b(s, Vector3(0.4, 0.07, 0.4), Vector3(0, 0.56, 0.01), PropModels.VELVET)
 	for sx: float in [-0.195, 0.195]:
@@ -480,7 +436,7 @@ static func _chair(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.36, 0.3, 0.04), Vector3(0, 0.84, -0.17), PropModels.VELVET, Vector3(-6, 0, 0))
 
 
-static func _barrel(s: LowPoly.Soup) -> void:
+static func _barrel(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_c(s, 0.37, 0.46, 0.5, 10, Vector3(0, 0.25, 0), PropModels.WOOD)
 	_c(s, 0.46, 0.37, 0.5, 10, Vector3(0, 0.75, 0), PropModels.WOOD)
 	for hy: float in [0.12, 0.5, 0.88]:
@@ -489,7 +445,7 @@ static func _barrel(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.1, 0.05, 0.1), Vector3(0.1, 1.04, 0.05), PropModels.VELVET)
 
 
-static func _desk(s: LowPoly.Soup) -> void:
+static func _desk(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(1.7, 0.07, 0.82), Vector3(0, 0.82, 0), PropModels.WOOD_DK)
 	for sx: float in [-0.7, 0.7]:
 		_b(s, Vector3(0.36, 0.78, 0.72), Vector3(sx, 0.39, 0), PropModels.IRON)
@@ -503,7 +459,8 @@ static func _desk(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.28, 0.05, 0.36), Vector3(-0.58, 0.88, 0.12), PropModels.CREAM, Vector3(0, 14, 0))
 
 
-static func _monitor(s: LowPoly.Soup, glow_col: Color) -> void:
+static func _monitor(s: LowPoly.Soup, p: Dictionary) -> void:
+	var glow_col: Color = p.get("color", Color(0.3, 0.95, 0.9))
 	_b(s, Vector3(0.24, 0.03, 0.18), Vector3(0, 0.015, 0), PropModels.IRON)
 	_b(s, Vector3(0.06, 0.22, 0.05), Vector3(0, 0.13, -0.02), PropModels.IRON)
 	_b(s, Vector3(0.74, 0.44, 0.06), Vector3(0, 0.45, 0), PropModels.OBSIDIAN, Vector3(-6, 0, 0))
@@ -511,7 +468,7 @@ static func _monitor(s: LowPoly.Soup, glow_col: Color) -> void:
 	_b(s, Vector3(0.3, 0.04, 0.025), Vector3(-0.12, 0.55, 0.06), _g(glow_col.lightened(0.5)), Vector3(-6, 0, 0))
 
 
-static func _office_chair(s: LowPoly.Soup) -> void:
+static func _office_chair(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_c(s, 0.05, 0.05, 0.3, 5, Vector3(0, 0.25, 0), PropModels.IRON)
 	for i in 5:
 		var a := TAU * float(i) / 5.0
@@ -524,7 +481,7 @@ static func _office_chair(s: LowPoly.Soup) -> void:
 		_b(s, Vector3(0.05, 0.05, 0.3), Vector3(sx, 0.68, -0.02), PropModels.IRON)
 
 
-static func _rack_cab(s: LowPoly.Soup) -> void:
+static func _rack_cab(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(0.92, 2.0, 0.8), Vector3(0, 1.0, -0.02), STEEL_BLUE)
 	_b(s, Vector3(0.96, 0.06, 0.84), Vector3(0, 2.0, -0.02), PropModels.IRON_LT)
 	var leds: Array[Color] = [Color(0.3, 1.0, 0.45), Color(0.35, 0.8, 1.0), Color(1.0, 0.65, 0.15), Color(0.3, 1.0, 0.45)]
@@ -536,7 +493,7 @@ static func _rack_cab(s: LowPoly.Soup) -> void:
 		_b(s, Vector3(0.3, 0.04, 0.02), Vector3(0.18, y - 0.04, 0.41), Color(0.22, 0.24, 0.3))
 
 
-static func _crate_stack(s: LowPoly.Soup) -> void:
+static func _crate_stack(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(1.0, 0.6, 1.0), Vector3(0, 0.3, 0), PropModels.WOOD)
 	for sx: float in [-0.455, 0.455]:
 		# the end battens stand 1 cm proud of the crate's sides as they do of its top and front (flush, they z-fought)
@@ -550,7 +507,86 @@ static func _crate_stack(s: LowPoly.Soup) -> void:
 		_c(s, 0.072, 0.072, 0.05, 6, Vector3(0.04 + cos(a) * 0.18, 1.16, sin(a) * 0.18), PropModels.VELVET)
 
 
+# --- pieces built by other kits (the priced props, the pool lab, the sewer) --------------------------------------------
+
+static func _specimen_tank(s: LowPoly.Soup, _p: Dictionary) -> void:
+	PropModels._specimen_vat(s)
+
+
+static func _lab_bench(s: LowPoly.Soup, _p: Dictionary) -> void:
+	PoolProps._lab_bench(s)
+
+
+static func _lab_console(s: LowPoly.Soup, _p: Dictionary) -> void:
+	PropModels._doomsday_console(s)
+
+
+static func _pipe_run(s: LowPoly.Soup, p: Dictionary) -> void:
+	PoolProps._pipe_run(s, float(p.get("length", 3.2)))
+
+
+static func _hazard_sign(s: LowPoly.Soup, _p: Dictionary) -> void:
+	PoolProps._hazard_sign(s, PoolProps.HAZARD)
+
+
+static func _outfall(s: LowPoly.Soup, p: Dictionary) -> void:
+	SewerProps._outfall(s, float(p.get("radius", 0.6)), float(p.get("drop", 1.0)))
+
+
+static func _pipe_bundle(s: LowPoly.Soup, p: Dictionary) -> void:
+	SewerProps._pipe_bundle(s, float(p.get("length", 4.0)), p.get("col", SewerProps.RUST))
+
+
+static func _grate(s: LowPoly.Soup, p: Dictionary) -> void:
+	SewerProps._grate(s, float(p.get("size", 1.6)))
+
+
+static func _sluice(s: LowPoly.Soup, p: Dictionary) -> void:
+	SewerProps._sluice(s, float(p.get("width", 3.0)), float(p.get("open", 0.45)))
+
+
+static func _bars(s: LowPoly.Soup, p: Dictionary) -> void:
+	SewerProps._bars(s, float(p.get("width", 2.8)), float(p.get("height", 1.3)))
+
+
+static func _tool_cart(s: LowPoly.Soup, _p: Dictionary) -> void:
+	SewerProps._tool_cart(s)
+
+
 # --- animated pieces ------------------------------------------------------------------------------------------------
+
+## The cinema screen's picture: an animated quad in the frame.
+static func _screen_after(root: Node3D, _p: Dictionary) -> void:
+	var screen := DecorScreen.make_quad(Vector2(2.9, 1.58))
+	screen.position = Vector3(0, 1.45, 0.095)
+	root.add_child(screen)
+	var anim := DecorAnim.new()
+	anim.mode = "screen"
+	anim.screen = screen
+	root.add_child(anim)
+
+
+## A shark fin patrols its moat: params center, radius, gap_yaw, phase, speed, path, y (DecorAnim "fin").
+static func _fin_after(root: Node3D, p: Dictionary) -> void:
+	var fa := DecorAnim.new()
+	fa.mode = "fin"
+	fa.fin_center = p.get("center", Vector2.ZERO)
+	fa.fin_radius = float(p.get("radius", 3.0))
+	fa.fin_gap_yaw = float(p.get("gap_yaw", 0.0))
+	fa.fin_phase = float(p.get("phase", 0.0))
+	fa.fin_speed = float(p.get("speed", 0.6))
+	fa.fin_path = p.get("path", PackedVector2Array())
+	fa.fin_y = float(p.get("y", NAN))
+	root.add_child(fa)
+
+
+static func _wet_after(root: Node3D, _p: Dictionary) -> void:
+	root.add_child(_wet_label())
+
+
+static func _candle_after(root: Node3D, _p: Dictionary) -> void:
+	root.add_child(_flame_light_free())
+
 
 ## A flickering candle flame is just the glow facets; this hook is kept for pieces that get a light later.
 static func _flame_light_free() -> Node3D:

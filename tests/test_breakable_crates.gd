@@ -1,5 +1,5 @@
 extends TestCase
-## Breakable crate stacks (decor kinds RoomThemeDefs.BREAKABLE_DECOR, BreakableCrate): they join the "breakables"
+## Breakable crate stacks (decor kinds marked "breakable" in RoomThemeDefs.DECOR, BreakableCrate): they join the "breakables"
 ## group and break to one hit of melee, arrows, a bolt, an area spell, a shove and Rebar's bowl; breaking leaves
 ## planks that fade at 30 s and a Grime mark, removes the model and the blocker circle (so it stops blocking), and
 ## it is NOT property damage and drops nothing. Shelves, racks, furniture and barrels stay solid. Also: a top box of
@@ -86,7 +86,7 @@ func _check_kinds() -> void:
 	check(RoomThemeDefs.is_breakable("crate_stack"), "crate_stack is a breakable decor kind")
 	for k in ["barrel", "rack_cab", "specimen_shelf", "desk", "bunk_bed", "chains_cage", "tasting_table", "popcorn_machine", "dumbbell_rack"]:
 		check(not RoomThemeDefs.is_breakable(k), "%s stays solid" % k)
-	for k: String in RoomThemeDefs.BREAKABLE_DECOR:
+	for k: String in RoomThemeDefs.breakable_kinds():
 		check(RoomThemeDefs.is_decor(k) and bool(RoomThemeDefs.decor(k)["blocks"]), "%s is a real blocking decor kind" % k)
 
 

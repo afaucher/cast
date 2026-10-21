@@ -111,6 +111,10 @@ func _check_tables() -> void:
 		check(places.has(String(m["place"])), "%s has a placement rule" % kind)
 		check(orients.has(String(m["orient"])), "%s has an orientation rule" % kind)
 		check(float(m["w"]) > 0.0 and float(m["d"]) > 0.0 and float(m["weight"]) > 0.0, "%s has a footprint and a weight" % kind)
+		var model := String(m.get("model", m.get("node_model", "")))
+		check(DecorModels.builder(model).is_valid(), "%s names a DecorModels builder (%s)" % [kind, model])
+		if m.has("after"):
+			check(DecorModels.builder(String(m["after"])).is_valid(), "%s: its post-build hook is a DecorModels function" % kind)
 		var node := DecorModels.build(kind, {"radius": 2.0, "length": 4.0, "text": "OM", "color": Color.RED})
 		var body := node.get_node_or_null("Body") as MeshInstance3D
 		check(body != null and body.mesh != null and body.mesh.get_surface_count() > 0, "%s builds a mesh" % kind)

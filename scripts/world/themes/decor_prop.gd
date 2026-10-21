@@ -1,7 +1,7 @@
 class_name DecorProp
 extends Node3D
 ## A piece of set dressing in the world (DecorModels model + optional walk-blocking). Not priced: purely
-## decorative, and solid except for the boxes and crates (RoomThemeDefs.BREAKABLE_DECOR). A "blocking" kind adds
+## decorative, and solid except for the boxes and crates ("breakable" in RoomThemeDefs.DECOR). A "blocking" kind adds
 ## invisible neutral DecorBlocker actors (the same soft circle separation the priced props use), so heroes and
 ## monsters walk around it; a non-blocking one (rugs, signs, recliners, candles) is walked through. A crate kind's
 ## first circle is a BreakableCrate instead: smash it and the model, the circles and the blocking are gone.
