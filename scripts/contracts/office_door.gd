@@ -290,6 +290,17 @@ func net_show(is_shut: bool, swing_dir: int) -> void:
 
 # --- The net-object contract (NetObjects) ------------------------------------------------------------------------------
 
+## Net ids: a door's comes after every actor's, before the pickups' (NetFloor.assign_ids).
+func net_order() -> int:
+	return 0
+
+
+## A client: the door is a copy (the host decides it), but its physics keeps running: it animates the leaves and sees this
+## machine's own hero walk into it shut (a request to the host). NetFloor.freeze_copies.
+func net_make_copy() -> void:
+	set_meta(Net.COPY_META, true)
+
+
 ## Host: an opened or shut door goes to everyone as `obj.door {id, s, w}`; a brute's smash as `obj.break {id, by}` (the bill
 ## goes out as obj.ledger).
 func net_link(objects: NetObjects, id: int) -> void:

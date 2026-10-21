@@ -37,46 +37,33 @@ static func assign_ids(root: Node, heroes: Dictionary) -> int:
 		NetRegistry.register(next, a)
 		next += 1
 	var actors := next - ID_BASE
-	# The office doors (host-arbitrated objects, not actors), in build order, after the actors: no actor's id moves.
-	for d in doors_under(root):
-		NetRegistry.register(next, d)
-		next += 1
-	# M3: component pickups already on the floor (a dev --drop-near) are host-owned things too, built the same everywhere.
-	for p in pickups_under(root):
-		NetRegistry.register(next, p)
+	# The host-arbitrated objects that are not actors (office doors, then component pickups already on the floor: a dev
+	# --drop-near), after the actors: no actor's id moves.
+	for o in objects_under(root):
+		NetRegistry.register(next, o)
 		next += 1
 	NetRegistry.seed_top = next
 	return actors
 
 
-## Every OfficeDoor under `root`, depth first in tree order.
-static func doors_under(root: Node) -> Array[Node]:
-	var out: Array[Node] = []
+## Every networked node under `root` that is not an Actor (it has net_order(): a host-arbitrated object, NetObjects), in id
+## order: by net_order() (office doors 0, component pickups 1), and within one order depth first in tree order.
+static func objects_under(root: Node) -> Array[Node]:
+	var found: Array = []   # [net_order, tree index, node]
 	if root != null:
-		_collect_doors(root, out)
+		_collect_objects(root, found)
+	found.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	var out: Array[Node] = []
+	for f: Array in found:
+		out.append(f[2])
 	return out
 
 
-static func _collect_doors(n: Node, out: Array[Node]) -> void:
+static func _collect_objects(n: Node, found: Array) -> void:
 	for c in n.get_children():
-		if c is OfficeDoor:
-			out.append(c)
-		_collect_doors(c, out)
-
-
-## Every ComponentPickup under `root`, depth first in tree order.
-static func pickups_under(root: Node) -> Array[Node]:
-	var out: Array[Node] = []
-	if root != null:
-		_collect_pickups(root, out)
-	return out
-
-
-static func _collect_pickups(n: Node, out: Array[Node]) -> void:
-	for c in n.get_children():
-		if c is ComponentPickup:
-			out.append(c)
-		_collect_pickups(c, out)
+		if not (c is Actor) and c.has_method("net_order"):
+			found.append([int(c.call("net_order")), found.size(), c])
+		_collect_objects(c, found)
 
 
 static func id_of(node: Node) -> int:
@@ -99,7 +86,7 @@ static func _collect(n: Node, out: Array[Actor]) -> void:
 
 
 ## Make every host-owned thing under `root` a copy (client side): actors except `keep` (the local hero), and the
-## component pickups on the floor. Returns how many.
+## host-arbitrated objects (objects_under: an object with net_make_copy() makes itself one). Returns how many.
 static func freeze_copies(root: Node, keep: Array) -> int:
 	var n := 0
 	for a in actors_under(root):
@@ -107,15 +94,11 @@ static func freeze_copies(root: Node, keep: Array) -> int:
 			continue
 		Net.make_copy(a)
 		n += 1
-	if root != null and root.is_inside_tree():
-		for p in root.get_tree().get_nodes_in_group("component_pickups"):
-			if root.is_ancestor_of(p):
-				Net.make_copy(p)
-				n += 1
-	# Office doors: copies too (the host decides them), but their physics keeps running: it animates the leaves and sees
-	# this machine's own hero walk into a shut door (a request to the host).
-	for d in doors_under(root):
-		d.set_meta(Net.COPY_META, true)
+	for o in objects_under(root):
+		if o.has_method("net_make_copy"):
+			o.call("net_make_copy")
+		else:
+			Net.make_copy(o)
 		n += 1
 	return n
 
