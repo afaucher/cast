@@ -77,6 +77,11 @@ var solids: Array[PackedVector2Array] = []   ## convex polygons (world X/Z) that
 var no_stand: Dictionary = {}    ## Vector2i -> true: floor under a set piece (not a full cell: no path node, no standing spot)
 var elevator: Dictionary = {}    ## the elevator's record (ElevatorGeo.make_*), {} when the floor has none
 var pools: Array[Dictionary] = []   ## the in-ground pools (PoolGeo records: room, look, basin, ring, outline, surface ...)
+## The floor's SEWER CLUSTER (DungeonGen's "sewer" option, then SewerPlanner and GatorPlanner; docs/design/sewer-concept.md
+## "Phase 3 as built"): {seed, level, rooms, stair, halls, all_doors, and once flooded body (index into pools), look, sumps,
+## ends, source, flows, gators}. {} on a floor without one. Spawn data, solo only for now: phase 2 puts it in NetFloor's
+## checksum (its water already is, as cells and the body record in pools).
+var sewer: Dictionary = {}
 ## DYNAMIC BLOCKERS (shut doors, docs/design/exploration.md "Decisions: map information, fog and doors"): key -> [a: Vector2,
 ## b: Vector2, top: float]. A segment in world X/Z that is SOLID while it is set (user, 2026-10-19: a shut door is solid):
 ## line_of_sight treats it as a wall face up to world height `top`; bodies stop against it like a wall face (_gather adds it
@@ -93,7 +98,7 @@ var _solid_box := Rect2()        ## the bounding box of every solid
 ## Who may write each var (see Net). The map is built from the floor seed on every machine.
 func net_fields() -> Dictionary:
 	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "solids": Net.SPAWN, "no_stand": Net.SPAWN,
-		"elevator": Net.SPAWN, "pools": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL,
+		"elevator": Net.SPAWN, "pools": Net.SPAWN, "sewer": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL,
 		"blockers": Net.LOCAL}
 
 

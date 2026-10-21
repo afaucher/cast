@@ -37,7 +37,10 @@ const SEAM_COLOR := Color(1.0, 0.40, 0.07)
 const START_COLOR := Color(0.2, 1.0, 0.72)
 const EXIT_COLOR := Color(1.0, 0.28, 1.0)
 
-enum Surf { FLOOR_TOP, WALL_TOP, CRATE_TOP, STAIRS_TOP, CLIFF, WALL_SIDE, CRATE_SIDE, STAIRS_SIDE, SEAM, POOL }
+enum Surf { FLOOR_TOP, WALL_TOP, CRATE_TOP, STAIRS_TOP, CLIFF, WALL_SIDE, CRATE_SIDE, STAIRS_SIDE, SEAM, POOL, CHANNEL }
+## The material name of the CHANNEL surface: a sewer body's pool kites (a HexMap.pools record whose look is "sewer_*"), drawn
+## like the pools but on their own surface, so SewerView restyles a generated floor's sewer without touching its pools.
+const CHANNEL_MATERIAL := "sewer_channel"
 
 ## Filled by build(): triangles, vertices, surfaces, cells, stair_steps, crates.
 var stats: Dictionary = {}
@@ -505,11 +508,13 @@ void fragment() {
 
 func _material(surf: int) -> Material:
 	var m := ShaderMaterial.new()
-	if surf == Surf.POOL:
+	if surf == Surf.POOL or surf == Surf.CHANNEL:
 		if _pool_shader == null:
 			_pool_shader = Shader.new()
 			_pool_shader.code = POOL_SHADER
 		m.shader = _pool_shader
+		if surf == Surf.CHANNEL:
+			m.resource_name = CHANNEL_MATERIAL
 		return m
 	if surf == Surf.SEAM:
 		if _glow_shader == null:
@@ -1326,8 +1331,9 @@ func _add_pool_cell(c: Vector2i, cell: HexMap.Cell) -> void:
 	if wall != 0:
 		_add_wall_part(c, cell, wall)
 	var center := Hex.to_world(c)
-	var b: Batch = _batches[Surf.POOL]
-	b.mat = float(POOL_LOOK_INDEX.get(_pool_look(c), 0))
+	var look := _pool_look(c)
+	var b: Batch = _batches[Surf.CHANNEL if look.begins_with("sewer") else Surf.POOL]
+	b.mat = float(POOL_LOOK_INDEX.get(look, 0))
 	var y_pool := cell.pool_level * LH
 	for run: Array in _runs(pool):
 		var pts: Array = []

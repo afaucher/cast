@@ -10,7 +10,8 @@ extends Node3D
 ## "brick" (Victorian, the lair: murky olive water, a damp green tide line), "toxic" (the lair's overflow: glowing acid
 ## green). Presentation only: built on every machine from the map (spawn data), no state.
 ##
-##   var v := SewerView.dress(game, map, terrain, "concrete", flows)
+##   var v := SewerView.dress(game, map, terrain, "concrete", flows)     # a whole sewer floor (the slice, --sewer N)
+##   var v := SewerView.dress_body(root, map, terrain, body, "brick", flows)   # a generated floor's cluster (phase 3)
 ##   v.flash(at, 8.7, 1.0)    # the live wire's shock lights the water round `at` (LiveWire)
 
 const FOAM_W := 0.16
@@ -84,6 +85,36 @@ static func dress(parent: Node3D, map: HexMap, terrain: HexMapView, p_look: Stri
 	v.relight(parent)
 	v.build_water(map)
 	return v
+
+
+## A sewer cluster on a generated floor (SewerPlanner.spawn, phase 3): ONE body's water, foam and kerbs (its basin and ring
+## cells, at its own surface), and the channel bed and liners in the look on HexMapView's CHANNEL surface (a sewer body's
+## pool kites), nothing else: the rest of the floor keeps its materials, its pools and its light.
+static func dress_body(parent: Node3D, map: HexMap, terrain: HexMapView, body: Dictionary, p_look: String, p_flows: Array) -> SewerView:
+	var v := SewerView.new()
+	v.name = "SewerView"
+	v.look_id = p_look if LOOKS.has(p_look) else "concrete"
+	v.look = LOOKS[v.look_id]
+	v.flows = p_flows
+	parent.add_child(v)
+	if terrain != null:
+		v.restyle_channel(terrain)
+	var only := {}
+	for c: Vector2i in (body["basin"] as Array) + (body["ring"] as Array):
+		only[c] = true
+	v.build_water(map, only, float(body["surface_y"]), int(body["floor_level"]))
+	return v
+
+
+## Only the sewer's channel surface in the look (HexMapView.CHANNEL_MATERIAL), not the floor's pools.
+func restyle_channel(terrain: HexMapView) -> void:
+	if terrain.mesh_instance == null:
+		return
+	var mesh := terrain.mesh_instance.mesh as ArrayMesh
+	for i in mesh.get_surface_count():
+		var m := mesh.surface_get_material(i)
+		if m != null and m.resource_name == HexMapView.CHANNEL_MATERIAL:
+			mesh.surface_set_material(i, _channel_material())
 
 
 ## The water's flow direction at p (X/Z): along the nearest flow segment.
@@ -354,9 +385,9 @@ static func _key(p: Vector2) -> Vector2i:
 
 ## The water surface (a fan per pool kite of the sewer's cells, the flow in the vertex colour), the foam along every edge
 ## of the water (rims and walls), and a stone kerb along every rim (an edge that is not a wall). Kites: every pool kite of
-## the map (the sewer's map has no other pools).
-func build_water(map: HexMap) -> void:
-	var surface_y := SewerLayouts.SURFACE_Y
+## the map (the sewer's map has no other pools), or with `only` the kites of those cells (one body of a generated floor) at
+## that body's surface over its channel floor (`floor_level`).
+func build_water(map: HexMap, only: Dictionary = {}, surface_y: float = SewerLayouts.SURFACE_Y, floor_level: int = SewerLayouts.CH_LEVEL) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var edges := {}        ## sorted end keys -> [a, b, centre of the kite (inside the water), count]
@@ -365,7 +396,7 @@ func build_water(map: HexMap) -> void:
 	var n_kites := 0
 	for c: Vector2i in keys:
 		var cell: HexMap.Cell = map.cells[c]
-		if cell.type == HexMap.Tile.WALL or cell.pool_mask == 0:
+		if cell.type == HexMap.Tile.WALL or cell.pool_mask == 0 or (not only.is_empty() and not only.has(c)):
 			continue
 		var m := cell.pool_mask & ~cell.wall_mask
 		for k in 6:
@@ -416,7 +447,7 @@ func build_water(map: HexMap) -> void:
 	var kc: Color = look["kerb"]
 	var kerb_ends := {}     ## vertex key -> [vertex, top, [outward normals of the rim edges ending there]]
 	var n_kerb := 0
-	var floor_y := SewerLayouts.CH_LEVEL * Hex.LEVEL_HEIGHT
+	var floor_y := floor_level * Hex.LEVEL_HEIGHT
 	for key: Array in edges:
 		var e: Array = edges[key]
 		if int(e[3]) != 1:

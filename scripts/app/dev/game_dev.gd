@@ -9,8 +9,9 @@ extends "res://scripts/app/game.gd"
 ##   --to-gate --to-theme --to-corridor --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
 ##   --shark-demo --monster-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
-## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer
-## slice, solo only: scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built").
+## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer slice,
+## solo only: scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built"); --sewer-floor --to-sewer
+## head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built").
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -40,6 +41,20 @@ func _dev_floor() -> void:
 	_dress_sewer.call_deferred()
 
 
+## A generated floor's sewer cluster (phase 3): say where it is, and with --to-sewer put the crew at the stair's head.
+func _sewer_floor_ready() -> void:
+	var rec := SewerPlanner.record(map)
+	if rec.is_empty():
+		return
+	var st: Dictionary = rec["stair"]
+	var up: Vector2i = st["door_up"]
+	_log("sewer cluster: %s at level %d, down the service stair from %s (its head at %s); %d gator, %d live wire" % [
+		", ".join(rec["rooms"]), int(rec["level"]), st["from"], up, (rec.get("gators", []) as Array).size(),
+		_site.wires.size() if _site != null else 0], Color(0.55, 0.9, 0.75))
+	if opts.has("to_sewer") and not _shared:
+		_teleport_crew(st["door"] if str(opts["to_sewer"]) == "foot" else up)
+
+
 ## The sewer's look over the terrain HexMapView just built: the water, foam, kerbs, the channel and the light.
 func _dress_sewer() -> void:
 	if not is_inside_tree() or map == null or _sewer_layout.is_empty():
@@ -65,6 +80,7 @@ func _sewer_populate() -> void:
 
 
 func _dev_on_floor_ready() -> void:
+	_sewer_floor_ready()
 	if _sewer() > 0 and opts.has("sewer_demo"):
 		_sewer_demo(str(opts["sewer_demo"]))
 	if opts.has("tour"):

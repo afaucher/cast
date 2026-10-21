@@ -24,7 +24,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Monsters | `scripts/monsters/*`, `tests/test_monster*.gd` | monsters agent |
 | Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` (the game), `scripts/app/dev/game_dev.gd` (GameDev: the dev and screenshot drivers behind the `--` flags, the script the scene runs; new dev drivers go there) | lead |
 | Networking: authority kinds, the net contract test | `scripts/net/*`, `tests/test_net_contract.gd` | lead. Every owner adds `net_fields()` entries for its own vars |
-| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
+| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`, and a sewer cluster's `SewerPlanner` and `GatorPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
 | Design docs | `docs/design/*` | design agent |
 
 ## Boot flow and the main menu
@@ -371,7 +371,8 @@ Monsters idle until a hero is within aggro range with line of sight, then act.
 `DungeonGen.generate(seed: int, params := {}) -> HexMap`. Cells are tagged: `"start"` (one cell),
 `"exit"` (one cell), `"room:<n>"` for room floors (so monsters can be packed per room; a room's cut border cells
 carry its tag too), `"corridor"`. `HexMapView` (`scripts/world/hex_map_view.gd`, extends Node3D): `build(map)`.
-A contract's floor is `DungeonGen.for_run(run, floor)` (the job's elevator placement). The `"exit"` cell is the
+A contract's floor is `DungeonGen.for_run(run, floor, shared)` (the job's elevator placement, and a sewer cluster when the floor
+rolls one: below). The `"exit"` cell is the
 elevator's landing: `ElevatorGeo` (`scripts/world/elevator_geo.gd`) places the car (a notch cut into a wall, or
 free-standing) and writes `HexMap.elevator`, its solids (`HexMap.solids`: convex polygons the collision queries treat
 like wall faces) and its `HexMap.no_stand` cells; `ElevatorArrival` (`scripts/contracts/elevator_arrival.gd`) builds the
@@ -384,6 +385,18 @@ after the themes are dealt): basin cells one level down and ring cells cut along
 and soaks whoever stands in the water. See `docs/design/pool-options.md`, "Built". A cut cell may hold pool kites too
 (water up to a wall: the sewer slice, `--sewer N`, `SewerLayouts` / `SewerView` / `Gator` / `LiveWire`, dev and solo only;
 `docs/design/sewer-concept.md`, "Phase 1 as built").
+**Sewer clusters (phase 3, solo runs):** `SewerCluster.seed_for(run, floor, shared)` rolls one on floors 2-3 (`RATE`, its own
+dice; never while `shared` until `SewerCluster.NETWORKED`), and `DungeonGen`'s `"sewer"` option cuts it: a wing of 2-4 rooms
+lowered to one level, its own links flat, a service stair of STAIRS cells down into it, no features in it, never the start or
+exit room; the record is `HexMap.sewer`. Any failure builds the attempt without the option, so a floor without a cluster is
+byte-identical to before. In `SiteBuilder.plan`, `SewerPlanner.plan` floods it FIRST (before the gates: wet cells one level
+down, one `HexMap.pools` body record), `SewerPlanner.theme` gives its rooms the `RoomThemeDefs` "sewer" row,
+`HazardPlanner.plan_sewer` hangs the electrical panel and the pumps by its water, `SewerPlanner.dress` adds the grates,
+outfall, culvert bars and the stair sign, `SewerPlanner.materials` its halls' stone, `DoorPlanner` sluices its flooded narrow
+doorways, `GatorPlanner` its gators and `SewerPlanner.plan_pack` its goo imp pack (`MonsterFactory.spawn_sewer_pack`; spawned
+after the sharks, gators first; `SewerPlanner.spawn` then draws the water,
+`SewerView.dress_body` over HexMapView's CHANNEL surface, and attaches the live wires). `tests/test_sewer_gen.gd`;
+`docs/design/sewer-concept.md`, "Phase 3 as built".
 
 Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
 To keep that clean:

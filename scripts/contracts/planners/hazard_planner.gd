@@ -104,3 +104,105 @@ static func spawn(run: ContractRun, p: SitePlan, site: SiteBuilder.Site) -> void
 		var hazard := PricedProp.spawn(hz["cell"], str(hz["kind"]), {"site": run.site_type, "pos": hz["pos"], "yaw": hz["yaw"]})
 		if hazard != null:
 			site.hazards.append(hazard)
+
+
+# --- the sewer cluster's money calls (docs/design/sewer-concept.md, "Phase 3 as built") ------------------------------
+
+const PANEL_REACH := 3.5               ## world units from a panel to where its cable lands in the water (LiveWire looks 3.5 ahead)
+const PANEL_ANCHOR := 4                ## wall cells this close to the water may hold the panel or a pump
+const SEWER_PUMPS := 2                 ## sump pumps in the pump room (the cluster's room farthest from its stair)
+const SEWER_DRUM_ODDS := 0.6           ## an oil drum on a dry deck of the cluster
+
+
+## A floor with a sewer cluster (SewerPlanner): the ELECTRICAL PANEL ($250) on a wall within PANEL_REACH of the water (its live
+## wire, LiveWire: the cable drops into the water and shocks everyone in it within 5 cells; SewerPlanner.spawn attaches it), up
+## to SEWER_PUMPS SUMP PUMPS ($3,500) on the pump room's walls by the water, and now and then an OIL DRUM on a dry deck (never
+## on a wet or rim cell: ThemeCtx keeps to dry floor). Priced props go in SitePlan.props, the drum in SitePlan.hazards, after
+## the floor's own. Own dice (the cluster's seed): nothing else on the floor moves. Nothing on a floor without a cluster.
+static func plan_sewer(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, avoid: Dictionary, near_corr: Dictionary, ctx: ThemeCtx) -> void:
+	var rec := SewerPlanner.record(map)
+	if rec.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(rec["seed"]) * 197 + floor_n * 29 + 13
+	var saved_rng := ctx.rng
+	ctx.rng = rng
+	var wet := {}
+	for c: Vector2i in (map.pools[int(rec["body"])]["basin"] as Array):
+		wet[c] = true
+	var tags: Array[String] = []
+	for t: String in rec["rooms"]:
+		if ctx.rooms.has(t):
+			tags.append(t)
+	var stair_door: Vector2i = rec["stair"]["door"]
+	var by_far := tags.duplicate()
+	by_far.sort_custom(func(a: String, b: String) -> bool:
+		var da := Hex.distance(p.centers[a], stair_door)
+		var db := Hex.distance(p.centers[b], stair_door)
+		return da > db or (da == db and int(a.trim_prefix("room:")) < int(b.trim_prefix("room:"))))
+	var order := tags.duplicate()
+	ThemeVignettes.shuffle(order, rng)
+	# the panel: the first room (in a shuffled order) with a wall by the water to hang it on
+	for tag: String in order:
+		if _sewer_prop(map, p, ctx, tag, "electrical_panel", _by_water(map, p, tag, avoid, near_corr, wet), true):
+			break
+	# the pumps, in the pump room
+	if not by_far.is_empty():
+		for _i in SEWER_PUMPS:
+			_sewer_prop(map, p, ctx, by_far[0], "sump_pump", _by_water(map, p, by_far[0], avoid, near_corr, wet), false)
+	# the drum
+	if rng.randf() < SEWER_DRUM_ODDS:
+		for tag: String in order:
+			var edge := SiteBuilder._edge_cells(map, p, tag, avoid, near_corr)
+			ThemeVignettes.shuffle(edge, rng)
+			var pose := _hazard_pose(ctx, p, tag, "oil_drum", edge.slice(0, HAZARD_ANCHORS), p.gate_cells(), Vector2.INF)
+			if not pose.is_empty():
+				_commit_hazard(ctx, p, tag, "oil_drum", pose)
+				break
+	ctx.rng = saved_rng
+
+
+## A room's wall cells within PANEL_ANCHOR of the water.
+static func _by_water(map: HexMap, p: SitePlan, tag: String, avoid: Dictionary, near_corr: Dictionary, wet: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for c in SiteBuilder._edge_cells(map, p, tag, avoid, near_corr):
+		if _near_wet(c, wet, PANEL_ANCHOR):
+			out.append(c)
+	return out
+
+
+static func _near_wet(c: Vector2i, wet: Dictionary, r: int) -> bool:
+	for n in Hex.range_cells(c, r):
+		if wet.has(n):
+			return true
+	return false
+
+
+## Place one sewer priced prop of `kind` in room `tag` on one of `anchors` (the panel: only where its cable reaches the water),
+## clear of the staff, the gates and the other props. True when placed.
+static func _sewer_prop(map: HexMap, p: SitePlan, ctx: ThemeCtx, tag: String, kind: String, anchors: Array[Vector2i], panel: bool) -> bool:
+	if anchors.is_empty():
+		return false
+	for pose in RoomThemes.priced_poses(ctx, tag, kind, anchors):
+		var c: Vector2i = pose["cell"]
+		var pos: Vector2 = pose["pos"]
+		if map.water_at(Vector3(pos.x, 0.0, pos.y)):
+			continue
+		var ok := true
+		for g in p.gate_cells():
+			ok = ok and Hex.distance(g, c) >= HAZARD_GATE_CLEAR
+		for e in p.employees:
+			ok = ok and Hex.distance(e["cell"], c) >= HAZARD_EMPLOYEE_CLEAR
+		for pr in p.props + p.hazards:
+			ok = ok and Hex.distance(pr["cell"], c) >= HAZARD_PROP_CLEAR
+		if not ok:
+			continue
+		if panel:
+			var drop := LiveWire.drop_point_for(map, pos, ThemeGeo.facing(float(pose["yaw"])))
+			if drop == Vector3.INF or pos.distance_to(Vector2(drop.x, drop.z)) > PANEL_REACH:
+				continue
+		RoomThemes.commit_priced(ctx, tag, kind, pose)
+		p.props.append({"cell": c, "kind": kind, "room": tag, "pos": pos, "yaw": pose["yaw"], "place": pose["place"],
+				"orient": pose["orient"], "foot": pose["foot"]})
+		return true
+	return false
