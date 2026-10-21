@@ -42,6 +42,9 @@ rendered offline to WAVs (below), because three of them are cut from recordings 
 3:1, 5 ms attack, 150 ms release) with World and Stings under it; UI; VoiceFeedback; Music (empty, reserved). Stings
 has no cue yet. No bus ducking while speaking yet (rule 4 below): it needs a gain stage separate from the SFX volume
 setting, so it was left for later. The long beds duck per cue instead (2026-10-21, `duck_db`: "Sewers and lava" below).
+**Ducking is switched off for now** (`Sfx.ducking := false`; user, 2026-10-21: "Lets leave off ducking for now. We probably
+want to turn it on for everything later."): the lava bed plays at its level while you speak; the mechanism and its test
+stay, for turning it on for every cue later. The live wire's buzz stays out (it failed the probe without ducking too).
 
 **`Sfx`** (`scripts/fx/sfx.gd`, autoload; no `class_name`, no gameplay state, so it needs no `net_fields`):
 - `CUES` holds file, bus, `volume_db`, `pitch_jitter`, `max_voices`, `min_gap`, `positional`, `unit_size` and `max_distance`.

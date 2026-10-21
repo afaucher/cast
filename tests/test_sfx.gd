@@ -301,6 +301,17 @@ func _check_ducking() -> void:
 		return
 	var base := float(Sfx.CUES["lava_bubble"]["volume_db"])
 	near(bed.volume_db, base, 0.01, "the bed at its level while nobody speaks")
+	# Ducking is off in the game for now (Sfx.ducking): the player's voice leaves the bed alone.
+	check(not Sfx.ducking, "ducking is off by default (user, 2026-10-21)")
+	_push(vc, 1.0, 0.0, live)
+	_push(vc, 0.3, 0.2, live)
+	Sfx._tick_duck(0.1)
+	near(bed.volume_db, base, 0.01, "with ducking off, the bed keeps its level while the player speaks")
+	_push(vc, 1.0, 0.0, live)
+	await _real_ms(int(Sfx.DUCK_HOLD * 1000.0) + 80)
+	Sfx._tick_duck(1.0)
+	# The mechanism, switched on as it will be later.
+	Sfx.ducking = true
 	_push(vc, 1.0, 0.0, live)
 	_push(vc, 0.3, 0.2, live)
 	check(vc.is_speaking(), "the player speaks")
@@ -324,6 +335,7 @@ func _check_ducking() -> void:
 	Sfx._tick_duck(Sfx.DUCK_RELEASE)
 	near(Sfx.duck_level(), 0.0, 0.001, "back up")
 	near(bed.volume_db, base, 0.01, "the bed at its level again")
+	Sfx.ducking = false
 	Sfx.stop_cue("lava_bubble", 0.0)
 	Sfx.stop_cue("fireball", 0.0)
 	Sfx.override_stream("lava_bubble", _tone())

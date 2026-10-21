@@ -118,6 +118,9 @@ const STOP_FADE := 0.025
 
 ## Sounds play (false headless until enable_for_tests()).
 var enabled := false
+## Ducking under the player's voice is OFF for now (user, 2026-10-21: "Lets leave off ducking for now. We probably want to
+## turn it on for everything later."): the duck_db cues keep their level. The mechanism stays, for every cue later.
+var ducking := false
 ## Where the cue files are (tests point it at an empty folder). Changing it forgets the loaded streams.
 var dir := DIR:
 	set(v):
@@ -376,7 +379,7 @@ func _tick_duck(delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	if c != null and c.is_speaking():
 		_spoke_ms = now
-	var want := 1.0 if now - _spoke_ms < int(DUCK_HOLD * 1000.0) else 0.0
+	var want := 1.0 if ducking and now - _spoke_ms < int(DUCK_HOLD * 1000.0) else 0.0
 	var k := move_toward(_duck_k, want, delta / (DUCK_ATTACK if want > _duck_k else DUCK_RELEASE))
 	if is_equal_approx(k, _duck_k):
 		return
