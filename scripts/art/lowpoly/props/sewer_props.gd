@@ -274,10 +274,16 @@ static func _pipe_bundle(s: LowPoly.Soup, length: float, col: Color) -> void:
 	# a T down to the floor with a valve wheel, at one end
 	var tx := length * 0.5 - 0.5
 	PropModels.rod(s, Vector3(tx, 0.55, 0.18), Vector3(tx, 0.05, 0.18), 0.1, 0.1, 7, col)
+	# the handwheel faces the room (+Z) on a short stem: a hexagon rim standing upright, a cross of spokes and a hub
+	# (the rim was laid out flat and scattered, reading as red bits on the floor: user, 2026-10-20)
+	var wc := Vector3(tx, 0.3, 0.36)
+	var wheel := Color(0.75, 0.14, 0.1)
 	for i in 6:
 		var a := TAU * float(i) / 6.0
-		PropModels.box(s, Vector3(0.16, 0.04, 0.04), Vector3(tx + cos(a) * 0.17, 0.3, 0.32 + sin(a) * 0.17), Color(0.75, 0.14, 0.1), Vector3(-rad_to_deg(a), 0, 90))
-	PropModels.box(s, Vector3(0.05, 0.05, 0.16), Vector3(tx, 0.3, 0.26), IRON)
+		PropModels.box(s, Vector3(0.16, 0.04, 0.04), wc + Vector3(cos(a), sin(a), 0) * 0.17, wheel, Vector3(0, 0, rad_to_deg(a) + 90.0))
+	PropModels.box(s, Vector3(0.3, 0.03, 0.03), wc, wheel)
+	PropModels.box(s, Vector3(0.026, 0.3, 0.026), wc, wheel)   # (thinner than the cross bar: no shared faces)
+	PropModels.box(s, Vector3(0.05, 0.05, 0.1), Vector3(tx, 0.3, 0.3), IRON)
 
 
 ## A square floor grate: an iron frame and bars (flat; under the water it reads as the drain).
