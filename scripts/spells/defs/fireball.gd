@@ -13,6 +13,13 @@ const ROW := {
 	"component": "Ember horn", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+const VOICE := {
+	"fireball": 1.0, "fire ball": 1.0, "fireballs": 0.9, "fire balls": 0.9,
+	"fire bowl": 0.9, "fire bull": 0.85, "fire bald": 0.85, "fire ball's": 0.9,
+	"fire": 0.7,
+}
+
 const FIREBALL_SPEED := 11.0
 const FIREBALL_DAMAGE := 40.0
 const FIREBALL_RADIUS_BASE := 1.4

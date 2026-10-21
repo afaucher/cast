@@ -258,54 +258,8 @@ const TUNING := {
 	# Words that may precede the trigger and still make it the start of an
 	# incantation (a lone letter counts too: "okay" is heard as "O K").
 	"preamble": ["okay", "ok", "please", "now", "uh", "um", "er", "ah", "hey", "so", "then", "and", "alright", "right", "oh"],
-	# spell id -> {phrase: quality}. A spell id missing here accepts its own name.
-	"spells": {
-		"heal": {
-			"heal": 1.0, "heel": 1.0, "he'll": 1.0, "heals": 0.9, "healing": 0.85,
-			"healer": 0.8, "eel": 0.8, "hail": 0.7, "hill": 0.6, "ill": 0.6,
-		},
-		"fireball": {
-			"fireball": 1.0, "fire ball": 1.0, "fireballs": 0.9, "fire balls": 0.9,
-			"fire bowl": 0.9, "fire bull": 0.85, "fire bald": 0.85, "fire ball's": 0.9,
-			"fire": 0.7,
-		},
-		"armor": {
-			"armor": 1.0, "armour": 1.0, "armer": 0.9, "arm or": 0.9, "arm er": 0.9,
-			"armored": 0.85, "armory": 0.8,
-		},
-		"corn": {
-			"corn": 1.0, "korn": 0.9, "corns": 0.9, "corner": 0.75, "corners": 0.7,
-			"corny": 0.75, "cornet": 0.7, "kern": 0.6, "cord": 0.6,
-		},
-		# Aliases are measured mishearings only, all below the 0.85 bare-match floor
-		# so none can fire without the trigger (see the tentacles note in the header).
-		"tentacles": {
-			"tentacles": 1.0, "tentacle": 1.0,
-			"headacles": 0.8, "headacle": 0.75, "headagle": 0.75, "acles": 0.75,
-		},
-		# The exact words plus the one measured mishearing, below the 0.85 bare floor (see the TEETH note in the header).
-		"teeth": {
-			"teeth": 1.0, "tooth": 1.0,
-			"ooth": 0.75,
-		},
-		# vines / damp / coffee: the exact words plus the measured mishearings, all below the 0.85 bare floor
-		# (see the VINES / DAMP / COFFEE note in the header).
-		"vines": {
-			"vines": 1.0, "vine": 1.0,
-			"bines": 0.75,
-		},
-		"damp": {
-			"damp": 1.0,
-		},
-		"coffee": {
-			"coffee": 1.0,
-			"coughing": 0.8, "cough": 0.75,
-		},
-		# chicken: the word and its plural (see the CHICKEN note in the header).
-		"chicken": {
-			"chicken": 1.0, "chickens": 1.0,
-		},
-	},
+	# The spells table, spell id -> {phrase: quality}, is not here: each spell def (scripts/spells/defs/) holds its VOICE,
+	# and _init() puts them in as "spells" (SpellBook.voice_aliases()). A spell id missing there accepts its own name.
 	# --- Voice orders (see VOICE ORDERS below) ---
 	# Orders on or off (the game turns them on; Incantation on its own parses them too).
 	"orders": true,
@@ -398,6 +352,7 @@ func _init(spell_ids: PackedStringArray = PackedStringArray(), overrides: Dictio
 	if spell_ids.is_empty():
 		spell_ids = PackedStringArray(SpellBook.ids())
 	_cfg = TUNING.duplicate(true)
+	_cfg["spells"] = SpellBook.voice_aliases()   # (each spell def's VOICE; an override below still replaces it)
 	for k in overrides:
 		_cfg[k] = overrides[k]
 	_spell_ids = spell_ids

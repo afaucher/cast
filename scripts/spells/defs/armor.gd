@@ -12,6 +12,12 @@ const ROW := {
 	"component": "Hide plate", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+const VOICE := {
+	"armor": 1.0, "armour": 1.0, "armer": 0.9, "arm or": 0.9, "arm er": 0.9,
+	"armored": 0.85, "armory": 0.8,
+}
+
 const ARMOR_MULT_WEAK := 0.75      ## damage multiplier at power ~0
 const ARMOR_MULT_STRONG := 0.4     ## damage multiplier at power 1
 const ARMOR_DURATION_BASE := 5.0

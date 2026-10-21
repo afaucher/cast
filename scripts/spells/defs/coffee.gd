@@ -13,6 +13,14 @@ const ROW := {
 	"component": "Coffee beans", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+## The exact word plus the measured mishearings, all below the 0.85 bare floor
+## (see the VINES / DAMP / COFFEE note in Incantation's header).
+const VOICE := {
+	"coffee": 1.0,
+	"coughing": 0.8, "cough": 0.75,
+}
+
 const COFFEE_RADIUS_BASE := 1.5    ## a SMALL radius
 const COFFEE_RADIUS_POWER := 0.5
 const COFFEE_MOVE_MULT := 1.6      ## +60% walking speed

@@ -47,6 +47,15 @@ static func _index_defs() -> Dictionary:
 static func def_of(id: String) -> GDScript:
 	return _defs_by_id.get(id) as GDScript
 
+
+## spell id -> {heard phrase: match quality}: each def's VOICE, in DEFS order (Incantation's "spells" table). Fresh copies.
+static func voice_aliases() -> Dictionary:
+	var out := {}
+	for d: GDScript in DEFS:
+		out[d.ID] = (d.VOICE as Dictionary).duplicate(true)
+	return out
+
+
 # --- Targeting: every spell lands where the player aims, like the ranged bolt.
 const SPELL_RANGE := Hero.BOLT_RANGE  ## same reach as the ranged attack
 const ALLY_SNAP := 1.3                ## aim this close to a hero snaps onto them

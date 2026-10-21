@@ -12,6 +12,12 @@ const ROW := {
 	"component": "Grave moss", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+const VOICE := {
+	"heal": 1.0, "heel": 1.0, "he'll": 1.0, "heals": 0.9, "healing": 0.85,
+	"healer": 0.8, "eel": 0.8, "hail": 0.7, "hill": 0.6, "ill": 0.6,
+}
+
 const HEAL_RADIUS := 3.0
 const HEAL_BASE := 35.0
 

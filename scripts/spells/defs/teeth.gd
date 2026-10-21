@@ -13,6 +13,14 @@ const ROW := {
 	"component": "Loose teeth", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+## The exact words plus the one measured mishearing, below the 0.85 bare floor
+## (see the TEETH note in Incantation's header).
+const VOICE := {
+	"teeth": 1.0, "tooth": 1.0,
+	"ooth": 0.75,
+}
+
 const TEETH_RADIUS_BASE := 2.0
 const TEETH_RADIUS_POWER := 0.6
 const TEETH_GROW_SLOW := 2.0       ## grow time at power ~0 (seconds)

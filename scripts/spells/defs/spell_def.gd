@@ -6,9 +6,12 @@ extends RefCounted
 ##
 ## Every def has:
 ##   const ID := "heal"        the spell id (lowercase)
-##   const ROW := {...}        its SpellBook.SPELLS row: "name", "cooldown", "color", "desc", "word", "component", "available"
+##   const ROW := {...}        its SpellBook.SPELLS row: "name", "cooldown", "color", "desc", "word", "component",
+##                             "available"
 ##   const FOLLOWS := false    true for a support spell that follows the teammate the aim snapped onto (SpellBook.cast)
 ##   const GLOW := 0.1         how strongly its component prop's own colour glows (ComponentProps.make)
+##   const VOICE := {...}      what the recognizer hears as its word: {heard phrase: match quality} (Incantation; the
+##                             measurements behind each alias are in Incantation's header)
 ##   its tuning consts and the helpers derived from them (HealSpell.HEAL_BASE, HealSpell.heal_amount(power))
 ##   static func cast(caster, power, target, start, extra) -> Node
 ##       the effect, applied on every machine at the cast's moment (SpellBook.apply). `power` is already clamped to

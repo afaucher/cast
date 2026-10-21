@@ -12,6 +12,12 @@ const ROW := {
 	"component": "Corn kernel", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+const VOICE := {
+	"corn": 1.0, "korn": 0.9, "corns": 0.9, "corner": 0.75, "corners": 0.7,
+	"corny": 0.75, "cornet": 0.7, "kern": 0.6, "cord": 0.6,
+}
+
 
 static func corn_damage(power: float) -> float:
 	return CornStrike.DAMAGE * clampf(power, SpellBook.MIN_POWER, 1.0)

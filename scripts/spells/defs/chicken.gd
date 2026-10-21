@@ -13,6 +13,12 @@ const ROW := {
 	"component": "Chicken feather", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+## The word and its plural (see the CHICKEN note in Incantation's header).
+const VOICE := {
+	"chicken": 1.0, "chickens": 1.0,
+}
+
 
 ## The flock lands (every machine, at the cast's moment): a feather cloud at the aim point on every screen, and the chickens
 ## from the HOST only (Net.is_host: solo too). They are host-owned actors like monsters: a client gets them from the world

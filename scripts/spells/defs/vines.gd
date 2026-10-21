@@ -13,6 +13,14 @@ const ROW := {
 	"component": "Seed pod", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+## The exact words plus the measured mishearing, below the 0.85 bare floor
+## (see the VINES / DAMP / COFFEE note in Incantation's header).
+const VOICE := {
+	"vines": 1.0, "vine": 1.0,
+	"bines": 0.75,
+}
+
 const VINES_RADIUS_BASE := 2.4
 const VINES_RADIUS_POWER := 0.6
 const VINES_ROOT_BASE := 1.6       ## seconds rooted at power ~0

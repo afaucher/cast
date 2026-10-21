@@ -12,6 +12,14 @@ const ROW := {
 	"component": "Neon ichor", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+## Aliases are measured mishearings only, all below the 0.85 bare-match floor so none can fire without the trigger
+## (see the TENTACLES note in Incantation's header).
+const VOICE := {
+	"tentacles": 1.0, "tentacle": 1.0,
+	"headacles": 0.8, "headacle": 0.75, "headagle": 0.75, "acles": 0.75,
+}
+
 const TENTACLES_RADIUS_BASE := 2.2
 const TENTACLES_RADIUS_POWER := 0.8
 const TENTACLES_SHOVE_BASE := 2.5

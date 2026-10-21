@@ -13,6 +13,12 @@ const ROW := {
 	"component": "Soggy sponge", "available": true,
 }
 
+## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
+## The exact word (see the VINES / DAMP / COFFEE note in Incantation's header).
+const VOICE := {
+	"damp": 1.0,
+}
+
 const DAMP_RADIUS_BASE := 4.0      ## a WIDE area
 const DAMP_RADIUS_POWER := 1.0
 const DAMP_SOAK := 15.0            ## seconds nobody in the area can ignite (Burning.soak)
