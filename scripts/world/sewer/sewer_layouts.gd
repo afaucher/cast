@@ -490,6 +490,10 @@ static func _junction() -> Dictionary:
 	_mon(L, "archer", w(e + D[1] * 2), 4)
 	_mon(L, "archer", w(e + D[4] * 2), 1)
 	_mon(L, "brute", w(wr + D[2] * 2), 1)
+	# a goo imp pack (goo-imp.md, "As built"): three on N's dry east deck over the channel, facing the hall and the west deck
+	_mon(L, "goo_imp", w(n + D[1] * 2), 4)
+	_mon(L, "goo_imp", w(n + D[0] + D[1]), 4)
+	_mon(L, "goo_imp", w(n + D[0] * 2), 4)
 	L["employee"] = {"cell": e + D[2] * 2, "name": "Gary (Henchman 1)", "style": "henchman"}
 	_note(L, e + D[5] * 2, "memo", "FEEDING ROTA", "Gator: Mon/Wed/Fri. Not Gary. Gary is not food. Gary, stop volunteering.", 2)
 	_note(L, j0 + D[5] * 3 + D[4], "sign", "NOTICE", "DO NOT FEED THE GATOR", 1)

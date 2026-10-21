@@ -147,8 +147,8 @@ func _clear() -> void:
 		c.queue_free()
 
 
-func _imp(kind: String, p: Vector3, face: Vector3, pose: String = "rest", k: float = 1.0, col: Color = goo) -> GooImpBlockouts.GooImp:
-	var m: GooImpBlockouts.GooImp = GooImpBlockouts.build(kind, col)
+func _imp(kind: String, p: Vector3, face: Vector3, pose: String = "rest", k: float = 1.0, col: Color = goo) -> GooImpBlockouts.ImpBody:
+	var m: GooImpBlockouts.ImpBody = GooImpBlockouts.build(kind, col)
 	_stand(m, p, face)
 	m.pose_preview(pose, k)
 	return m

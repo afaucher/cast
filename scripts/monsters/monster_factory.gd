@@ -173,3 +173,73 @@ static func _pick_spread(free: Array[Vector2i], placed: Array[Vector2i], rng: Ra
 			best_score = nearest
 			best = c
 	return best
+
+
+# --- Sewer packs (docs/design/goo-imp.md, "As built") --------------------------------------------------------------------
+# The sewer's own packs: the kinds with a MonsterDefs "sewer_pack" row (the goo imp: "habitat" "sewer"). compose() never deals
+# them, so a normal floor's packs are unchanged. THE HOOK for the sewer generator (sewer room clusters on real floors): a
+# sewer room asks compose_sewer() for its pack's kinds and spawn_sewer_pack() to place it on the room's dry cells, with its
+# own dice (the floor plan's draw order is the planner's). The sewer slice (--sewer 2) stages a pack by hand instead.
+
+## One sewer pack's kinds: a sewer kind picked by its "sewer_pack" weight (or `kind`, when it is one), `min`-`max` of it,
+## rolled on `rng`. Empty when there is no sewer kind.
+static func compose_sewer(rng: RandomNumberGenerator, kind: String = "") -> Array[String]:
+	var out: Array[String] = []
+	var kinds := MonsterDefs.sewer_kinds()
+	if kinds.is_empty():
+		return out
+	var pick := kind if kinds.has(kind) else ""
+	if pick == "":
+		var total := 0.0
+		for k in kinds:
+			total += float(MonsterDefs.sewer_pack(k).get("weight", 1.0))
+		var roll := rng.randf() * total
+		pick = kinds[kinds.size() - 1]
+		for k in kinds:
+			roll -= float(MonsterDefs.sewer_pack(k).get("weight", 1.0))
+			if roll <= 0.0:
+				pick = k
+				break
+	var sp := MonsterDefs.sewer_pack(pick)
+	var n := rng.randi_range(int(sp.get("min", 1)), int(sp.get("max", 1)))
+	for _i in n:
+		out.append(pick)
+	return out
+
+
+## Spawn a sewer pack (compose_sewer, or `count` of `kind`) as a clump on DRY cells of `cells`: full floor, not stairs, not
+## water (a goo imp hangs back on dry ground), within 2 of a centre rolled on `rng`. Returns the monsters (spawned).
+static func spawn_sewer_pack(cells: Array[Vector2i], rng: RandomNumberGenerator, kind: String = "", count: int = -1) -> Array[Monster]:
+	var out: Array[Monster] = []
+	var map := GameWorld.map
+	var free: Array[Vector2i] = []
+	for c in cells:
+		if free.has(c):
+			continue
+		if map != null:
+			var cell := map.get_cell(c)
+			if cell == null or not map.is_walkable_cell(c) or cell.type == HexMap.Tile.STAIRS or map.is_pool_cell(c) \
+					or (not map.pools.is_empty() and map.water_at(Hex.to_world(c, float(cell.level)))):
+				continue
+		free.append(c)
+	if free.is_empty():
+		return out
+	var kinds := compose_sewer(rng, kind)
+	if kinds.is_empty():
+		return out
+	if count > 0:
+		var k0 := kinds[0]
+		kinds.clear()
+		for _i in count:
+			kinds.append(k0)
+	var center := free[rng.randi_range(0, free.size() - 1)]
+	var near: Array[Vector2i] = []
+	for c in free:
+		if Hex.distance(c, center) <= 2:
+			near.append(c)
+	near.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return Hex.distance(a, center) < Hex.distance(b, center))
+	for i in mini(kinds.size(), near.size()):
+		var m := spawn(kinds[i], near[i])
+		if m != null:
+			out.append(m)
+	return out

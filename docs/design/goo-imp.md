@@ -1,8 +1,10 @@
 # Goo imp (sewer pest)
 
-**Status: [proposal], look-dev only.** The user asked (2026-10-20): "Show me just the goo imp". Nothing here is in the
-game: no Monster kind, no `MonsterDefs` row, no `net_fields()`, not in `MonsterModels` or `ZFightModels`. The three
-blockouts and the lab exist only to pick a look.
+**Status: [built] (2026-10-20), sewer only; see "7. As built" at the end.** The user asked (2026-10-20) "Show me just the
+goo imp", picked Gloop in bile goo (section 6), then said to build it. It is a real monster kind (`goo_imp`) that only the
+sewer deals: the sewer slice's layout 2 stages a pack of three (`.\run.ps1 --sewer 2 --spells damp,fireball --no-mic`), and
+`MonsterFactory.compose_sewer` / `spawn_sewer_pack` are the hook for the sewer rooms on generated floors. Sections 1-6 are
+the look-dev record as it was.
 
 - Blockouts: `scripts/art/lowpoly/monsters/goo_imp_blockouts.gd` (`GooImpBlockouts.build(kind, goo_colour)`, a
   `MonsterModel` with `pose_preview("rest" | "windup" | "swing")`).
@@ -140,3 +142,105 @@ checklist (`networking.md`) before any code.
 | 6. Fire on a patch | "no fire spread for now, just hurts" | A lit patch burns and **hurts** whoever stands in it; it does **not** set them `Burning`. (Its burn time is the build's call; propose ~3 s.) |
 | 7. Damp on a patch | "just have damp replace it" | Damp removes the goo patch; Damp's own wet floor is what's left. |
 | 8. Pack size and HP | "3-4 per pack, same toughness" | Packs of **3-4**, the swarmer imp's HP. |
+
+## 7. As built (2026-10-20)
+
+### What it is
+- **The monster:** `scripts/monsters/goo_imp.gd` (`GooImp extends Monster`, MonsterDefs kind `goo_imp`). **Look:** Gloop in
+  bile goo, pale axolotl pink with red gills (`GooImpModel`, `scripts/art/lowpoly/monsters/goo_imp_model.gd`, built on the
+  look-dev's `DripImp`; about 2000 triangles, ui height 1.04). The look-dev's inner class `GooImp` is now `ImpBody` (the
+  game's class took the name).
+- **The thrower read** (section 3's worry: a Gloop pack can read "buffed"): the tell is the monsters' wind-up (0.7 s), during
+  which the right hand takes the ball back over the head and the **ball swells to twice its size** (the thrown ball's size);
+  the body's goo hardly flares (`glow_flare` 0.15); right after the throw its **hands are empty** and a new ball wells up over
+  0.45 s. In the air the ball is big and glowing with a trail of droplets, and the **landing marker** (a dark shadow that grows
+  and darkens as the ball comes down, inside a bile ring the size of a patch) is on the floor from the throw to the splat.
+- **Where it lives:** MonsterDefs rows have a new `habitat` field (`"sewer"`) and a `sewer_pack` field (`{min 3, max 4,
+  weight 1}`). A habitat kind has no `pack` and no `gate`, so `MonsterFactory.compose` (every normal floor's packs) and the
+  hellgates never deal it; `test_monster_defs` holds that (floor packs never roll one even with a 50x bias), and
+  `test_golden_floor` is unchanged. **The hook for the sewer generator:** `MonsterFactory.compose_sewer(rng, kind = "")` (one
+  sewer pack's kinds: 3-4 goo imps) and `MonsterFactory.spawn_sewer_pack(cells, rng, kind = "", count = -1)` (spawns it as a
+  clump on the DRY cells of a room: full floor, not stairs, not water), each on the caller's own dice.
+- **Staged:** the sewer slice's layout 2 (`SewerLayouts._junction`) has three on N's (the aquarium overflow's) dry east deck
+  over the channel, facing the flooded hall and the west deck.
+- **Drops** (a design call): per imp, damp 5 %, fireball 4 % (its two counters).
+
+### The numbers
+| | | |
+|---|---|---|
+| HP | 12 | the swarmer's ("same toughness") |
+| Speed | 3.6 | (swarmer 5.5); shove_mult 1.5, radius 0.26 |
+| Aggro | 10 | |
+| Throw band | 5-9 from its target, with a line of sight | closer than 2.6 it backs off (never into water; cornered, it throws anyway) |
+| Tell | 0.7 s | the monsters' wind-up (a shove, a stagger or a daze calls it off) |
+| Cooldown | 2.6 s x 0.8-1.25 | the first throw of a fight waits 0.2-1.4 s: a pack's balls come one by one |
+| Aim | where the target stands, up to 0.6 off | no lead: the marker is fair |
+| Flight | 0.85-1.15 s | 0.85 + 0.03 per unit thrown; the arc tops out 1.4 + 0.12 per unit above the higher end |
+| Hit | 5 damage + the goo slow (x0.5 walking speed) for 1.5 s | anyone whose feet are within 0.55 (+ their radius) of the landing point, 1.0 up or down |
+| Patch | radius 0.8, 5 s (shrinks away over the last 0.6 s) | x0.5 walking speed on it: heroes, monsters, employees and chickens alike (not a shark, nobody in the air) |
+| Fire on a patch | burns 3 s, 4 damage every 0.5 s (24 over the burn) to whoever stands in it | never sets anyone `Burning` (no fire spread); a hero's fire never takes a hero below 1 HP (as `Burning`); burnt off, it leaves a scorch |
+| Damp on a patch | removes it (a lit one too) | Damp's own wet floor is what is left |
+| Water | a splash and gone | no slick |
+
+It hangs back on DRY ground: while it fights (and idles and searches) `GooImp.move` refuses any step from dry floor into
+water, so a pack on a deck waits at the edge of a channel and throws from there; walking home it may wade, and an imp shoved
+into the water walks out to the nearest dry floor first.
+
+### Network shapes (networking.md)
+- **The imp:** a host-owned monster (Monster's shape) with no OWNER var of its own; its tell is `world.windup`. A puppet's
+  `net_strike` throws nothing (the host's ball is on its way). Late join: a monster's keyframe.
+- **The ball: a scheduled effect the host announces.** `GooImp._strike` (host) throws a `GooBall` and calls
+  `Net.announce(ball)`: `NetObjects.adopt` gives it a runtime id and sends `obj.new {id, k "goo_ball", r [imp, from, to,
+  start (shared clock), flight, damage]}`; every client builds the same ball (`GooBall.net_copy`) and flies it on its own clock
+  for the same shared moment. At the splat **each machine resolves the hit on what it resolves** (`Combat.resolves`: its own
+  heroes; the hit's slow is a modifier its owner applies and NetStatus shows). Params SPAWN; flight, marker, splash LOCAL.
+  Late join: skipped (it lands within about a second).
+- **The patch: a host-arbitrated world object made during play.** Only the ball's OWNER (the host) decides a patch, from where
+  it has the heroes (a ball nobody stood under, on dry floor), and announces it the same way (`obj.new {k "goo_patch"}`). The
+  host decides its two changes, **lit** (`GooPatch.fire_at`, called from the fireball's blast, which runs on every machine,
+  acts only on patches this machine owns) and **washed** (`GooPatch.wash_at`, from Damp's burst, the same), and tells everyone
+  `obj.goo {id, st, t, by}` (`net_link` / `net_event`). Every machine then runs the patch on its own clock: the slow is LOCAL
+  (like pool water: `Actor.effective_speed` asks `GooPatch.speed_mult`, from the patches every screen has; nothing travels);
+  the burn's ticks are applied to the actors each machine resolves (`Net.resolves`: a hero's player, the host for the rest);
+  the drying and the burn-out are scheduled. OWNER vars `lit_at`, `lit_by`, `washed` (carrier: `obj.goo`). Late join: every
+  live patch with its state, rebuilt as obj.new would (`late_join_state`, section `new`).
+- **The new net piece: RUNTIME OBJECTS** (`NetObjects.RUNTIME_OBJECTS`, `Net.announce`, `obj.new`). A host-arbitrated object
+  the host makes during play (not seed-built) implements the net-object contract plus `net_spawn_row(objects)` and a static
+  `net_copy(row, objects)`; NetObjects numbers it (`NetRegistry` runtime ids), links it, sends `obj.new`, builds the clients'
+  copies and the late joiner's (`new` rows). Nothing in `scripts/net/` names the classes but the kind table. `test_net_contract`
+  section 8 holds each runtime object to it (its two methods, NET_SCRIPTS, REPLICATED); no allowlist was widened.
+- **Who disagrees, and how much:** the host decides a patch from its ~100 ms old view of a client's hero. A client that dodged
+  at the last moment on its own screen takes no hit and sees no patch (the host saw it under the ball); one that walked in at
+  the last moment takes the hit on its own machine and a patch appears under it about half a round trip later. Near misses, as
+  option A intends. A fireball's blast point can differ between machines only when it hits an actor in flight; the host's
+  blast is the one that lights.
+- Cosmetic: the goo on a hero's boots (`GooBoots`, `scripts/fx/goo_boots.gd`), the marker, droplets, splashes and flames; every
+  screen draws them from what it shows. No sound cues were added (the monsters' attacks have none yet).
+
+### How to play it
+- `.\run.ps1 --sewer 2 --spells damp,fireball --no-mic`: the junction; the pack is in N (the aquarium overflow), up the north
+  hall from the drain junction, on the east deck across the channel. Fight it from N's west deck to see patches (a ball into
+  the channel only splashes); fireball a patch under the pack; Damp a patch away.
+- Any floor, for a quick look: `.\run.ps1 --seed 7 --contract 1 --spells fireball,damp --spawn-near goo_imp,3 --no-mic`; for
+  screenshots add `--idle-monsters --monster-demo goo` (the allies hold, the imps wake on the player and throw).
+- Online: no normal floor deals it (the sewer slice is solo); the net test spawns them on a shared floor.
+
+### Tests
+- `test_monster_goo_imp` (solo): the tell, the throw, a hit (5 and the slow, no patch), a miss's patch slowing a hero and a
+  monster and drying up after 5 s, a ball into water, the real fireball lighting a patch (it hurts, sets nobody Burning, burns
+  out after 3 s), the real Damp washing one away (its wet floor stays), dry ground across a channel, a pack's throws spread
+  out, and the rows a client and a late joiner build from.
+- `test_net_goo_imp` (two processes, `off` and `coast`): the throw and the victim-decided hit, the host's patch on the client
+  slowing the client's hero, the client's fireball lighting it on the host (blamed on the client, the same lit moment on both,
+  the burn applied to the client's hero by the client), the client's Damp washing one away; the OWNER-write guard quiet.
+- `test_monster_models` (the model; the goo imp may glow on up to 45 % of its faces, the user's pick, where every other model
+  keeps to 25 %), `test_monster_defs` (habitat, sewer packs), `test_net_contract` (sections 1, 4, 7, 8), `test_zfight` (the
+  model, `goo/patch`, `goo/patch_burnt`, `goo/ball`, `goo/boots`; the look-dev head's teeth were sunk into the grin to stop a
+  z-fight).
+
+### What's left
+- Wire `compose_sewer` / `spawn_sewer_pack` into the generated sewer rooms (the sewer-generator merge).
+- Playtest the numbers (the user: "as shown is fine until I play it"): the patch's size and life, the 0.5 slow, and the throw
+  rate of a pack of four.
+- A throw and a splat sound (Sfx cues and the mic-leak probe, audio-plan.md).
+- Only a fireball lights a patch: an explosive prop's blast or a burning actor walking in does not.

@@ -131,6 +131,12 @@ const WORLD_CARRIES := {
 		"pass_through_until": _ACTOR_WORLD["pass_through_until"],
 		"_modifiers": "st {k mods} from the host when they change (NetStatus, M4): vines roots, coffee on a chicken",
 	},
+	# A goo imp's patch (goo-imp.md, "As built"): a runtime object the host makes (NetObjects obj.new); its two changes are its own.
+	"res://scripts/monsters/goo_patch.gd": {
+		"lit_at": "obj.goo {id, st 1, t} (GooPatch.net_link / net_event): the host lit it; every machine burns it from shared time t",
+		"lit_by": "obj.goo {by}: who lit it (the burn's damage source)",
+		"washed": "obj.goo {id, st 2}: the host's Damp washed it away",
+	},
 }
 
 ## The packet types and event kinds the sync uses (documented here, defined where they are sent).
@@ -140,7 +146,8 @@ const WORLD_CARRIES := {
 ##   obj.* (reliable)      NetObjects: req / loadout (client -> host; M4: req hit on any host-owned actor, shove, mod);
 ##                         break, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
 ##                         shove / mod passed on to the owner of a player's hero (host -> clients); fuse / out (an
-##                         explosive prop's fuse lit, with its start, end and igniter / put out by a soak)
+##                         explosive prop's fuse lit, with its start, end and igniter / put out by a soak); new (a runtime
+##                         object the host made: a goo imp's ball or patch, NetObjects.RUNTIME_OBJECTS) / goo (a patch lit or washed)
 ##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
 ##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
@@ -193,4 +200,7 @@ const LATE_JOIN := {
 	"res://scripts/spells/chicken.gd": "runtime spawns: replay of world.spawn (kind chicken); then the keyframe (a monster-format entry); statuses: replay",
 	"res://scripts/spells/component_pickup.gd": "replay of obj.pickup for every pickup on the floor (charges and age); a used seed-built one: gone ids",
 	"res://scripts/contracts/office_door.gd": "replay of obj.door / obj.break for every door (OfficeDoor.late_join_state `doors`: id, shut, swing, broken)",
+	"res://scripts/monsters/goo_imp.gd": "as monster.gd (keyframe, gone ids); a throw's tell under way: skipped (a wind-up, under a second)",
+	"res://scripts/monsters/goo_ball.gd": "no replay: a ball in flight lands within about a second, so a late joiner skips it; the patch it leaves is replayed (goo_patch.gd)",
+	"res://scripts/monsters/goo_patch.gd": "replay of obj.new for every live patch with its state (GooPatch.late_join_state, section `new`: where, its start, lit and by whom)",
 }

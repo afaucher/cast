@@ -75,6 +75,12 @@ static func models() -> Array[Dictionary]:
 		out.append({"name": "pavise/%s/reloading" % c, "make": _pavise.bind(c, "planted", 0.0, false), "ground": true})
 		out.append({"name": "pavise/%s/arrows" % c, "make": _pavise.bind(c, "planted", 1.0, true), "ground": true})
 	out.append({"name": "chicken", "make": func() -> Node3D: return ChickenModel.new(), "ground": true})
+	# the goo imp's goo (docs/design/goo-imp.md, "As built"; the imp itself is monster/goo_imp): a patch fresh and burnt, the
+	# ball in flight, the goo on a hero's boots
+	out.append({"name": "goo/patch", "make": GooSoups.patch.bind(GooPatch.RADIUS, 17, false), "ground": true})
+	out.append({"name": "goo/patch_burnt", "make": GooSoups.patch.bind(GooPatch.RADIUS, 17, true), "ground": true})
+	out.append({"name": "goo/ball", "make": GooSoups.ball.bind(GooSoups.BILE), "ground": false})
+	out.append({"name": "goo/boots", "make": GooSoups.boots.bind(GooSoups.BILE), "ground": true})
 	for id: String in SpellBook.SPELLS:
 		out.append({"name": "component/" + id, "make": ComponentProps.make.bind(id, false), "ground": true})
 	for kind: String in POOL_KINDS:

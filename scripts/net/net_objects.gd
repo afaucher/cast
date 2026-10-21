@@ -60,6 +60,15 @@ extends Node
 ## A client's copy that has net_tick(delta) gets it every frame (its look), and one with net_contacts() is checked against
 ## this machine's own shoved hero. What is not an object's own (hits, shoves, modifiers, exits, loadouts, the money and the
 ## pickups' numbering and first-come grants) stays here.
+##
+## RUNTIME OBJECTS (docs/design/goo-imp.md, "As built": a goo imp's balls and patches). A host-arbitrated object the host
+## MAKES during play (not built from the seed) is a RUNTIME_OBJECTS class. Its maker calls Net.announce(node) on the host:
+## adopt() gives it a runtime id (NetRegistry), links it (net_link, as any net object) and sends `obj.new {id, k, r}` (its
+## kind and net_spawn_row(objects)); a client builds its copy with the class's static net_copy(row, objects) and makes it a
+## copy (net_make_copy, else Net.make_copy). From then on it is an ordinary net object (net_event, late_join_state). A late
+## joiner's rows for one go in the section `new` ([id, kind, row]): one it does not have is built as obj.new would.
+##   net_spawn_row(objects) -> Array        host: what a client needs to build it (times on the shared clock: host_stamp)
+##   static net_copy(row, objects) -> Node  client: build and spawn the copy (local_stamp), or null to skip it
 
 ## Client: the host's objective bookkeeping (ContractSession.mirror_state()).
 signal contract_received(state: Dictionary)
@@ -75,6 +84,12 @@ const REQUEST_RETRY := 0.8     ## a client asks again for a pickup after this lo
 ## A late joiner's snapshot (late_join_state): the objects' sections in the order they go on the wire (each is there, empty
 ## or not). A section an object names that is not here is added after these.
 const LATE_JOIN_SECTIONS := ["pickups", "dents", "fuses", "doors"]
+## RUNTIME OBJECTS (above): obj.new's kind -> the class a client builds its copy from (test_net_contract holds each to the
+## contract).
+const RUNTIME_OBJECTS := {
+	"goo_ball": "res://scripts/monsters/goo_ball.gd",
+	"goo_patch": "res://scripts/monsters/goo_patch.gd",
+}
 
 var active := false
 var stats := {}
@@ -170,6 +185,56 @@ static func is_net_object(n: Node) -> bool:
 ## Host: tell every client `kind` (an object's net_link sends its obj.* events through this).
 func tell(kind: String, data: Dictionary) -> void:
 	_send(0, kind, data)
+
+
+## Host: a RUNTIME_OBJECTS node this machine just made (Net.announce): its id, its links and `obj.new` to every client. The id
+## (0 when it is not adopted: offline, a client, no floor, not a runtime object).
+func adopt(n: Node) -> int:
+	if n == null or not _host() or not active:
+		return 0
+	var have := NetFloor.id_of(n)
+	if have != 0:
+		return have
+	var kind := runtime_kind(n)
+	if kind == "":
+		push_warning("NetObjects.adopt: %s is not a RUNTIME_OBJECTS class" % n)
+		return 0
+	var id := NetRegistry.next_runtime_id()
+	NetRegistry.register(id, n)
+	if n.has_method("net_link"):
+		n.call("net_link", self, id)
+	_send(0, "obj.new", {"id": id, "k": kind, "r": n.call("net_spawn_row", self)})
+	count("news")
+	return id
+
+
+## The RUNTIME_OBJECTS kind of `n` ("" when its class is none of them).
+static func runtime_kind(n: Object) -> String:
+	var s: Script = n.get_script() as Script if n != null else null
+	while s != null:
+		for k: String in RUNTIME_OBJECTS:
+			if str(RUNTIME_OBJECTS[k]) == s.resource_path:
+				return k
+		s = s.get_base_script()
+	return ""
+
+
+## Client: the host made a runtime object (obj.new, or a late joiner's `new` row): build the copy unless it has it.
+func _client_new(id: int, kind: String, row: Array) -> void:
+	if id == 0 or NetRegistry.has_id(id) or GameWorld.root == null or not RUNTIME_OBJECTS.has(kind):
+		return
+	var script := load(str(RUNTIME_OBJECTS[kind])) as GDScript
+	var n: Node = script.call("net_copy", row, self) if script != null else null
+	if n == null:
+		return
+	NetRegistry.register(id, n)
+	if n.has_method("net_make_copy"):
+		n.call("net_make_copy")
+	else:
+		Net.make_copy(n)
+	if n.has_method("net_tick"):
+		_ticked.append(n)
+	count("news")
 
 
 ## Count `key` in stats (tests and the report).
@@ -385,6 +450,8 @@ func apply_late_join(d: Dictionary) -> void:
 					obj.call("apply_late_join", str(section), row, self)
 			elif section == "pickups" and row.size() >= 6:
 				_client_pickup({"id": row[0], "s": row[1], "n": row[2], "at": row[3], "l": row[4], "age": row[5]})
+			elif section == "new" and row.size() >= 3:
+				_client_new(int(row[0]), str(row[1]), row[2] as Array)   # (a runtime object the host made: built as obj.new would)
 
 
 ## Client: `p` is the pickup with this id (its charges and its end come as obj.pick / obj.gone).
@@ -481,6 +548,8 @@ func _on_event(from: int, kind: String, data: Dictionary, _stamp: float) -> void
 	match kind:
 		"obj.pickup":
 			_client_pickup(data)
+		"obj.new":
+			_client_new(int(data.get("id", 0)), str(data.get("k", "")), data.get("r", []) as Array)
 		"obj.pick":
 			var held: Variant = _pickups.get(int(data.get("id", 0)))
 			var p: ComponentPickup = held if held != null and is_instance_valid(held) else null

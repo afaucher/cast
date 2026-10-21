@@ -4,7 +4,7 @@ extends RefCounted
 ## MonsterDefs has no row, nothing declares gameplay state, and they are not in ZFightModels.
 ##
 ##   const GooImpBlockouts := preload("res://scripts/art/lowpoly/monsters/goo_imp_blockouts.gd")
-##   var m := GooImpBlockouts.build("sac", GooImpBlockouts.GOO["bile"])   # a GooImp (MonsterModel)
+##   var m := GooImpBlockouts.build("sac", GooImpBlockouts.GOO["bile"])   # an ImpBody (MonsterModel)
 ##   m.pose_preview("windup", 1.0)       # the throw: the ball drawn back over the head; "swing" = the release
 ##   m.ball_point()                      # world point of the goo ball in its hand (or ladle)
 ##
@@ -34,7 +34,7 @@ const GOO := {
 }
 
 
-static func build(kind: String, goo: Color = GOO["bile"]) -> GooImp:
+static func build(kind: String, goo: Color = GOO["bile"]) -> ImpBody:
 	match kind:
 		"sac":
 			return SacImp.new(goo)
@@ -57,7 +57,7 @@ static func hot(c: Color) -> Color:
 
 ## The shared imp: body, head with gills, arms, legs, finned tail; a goo ball under the right hand. Subclasses add their
 ## carry and override the throwing arm.
-class GooImp extends MonsterModel:
+class ImpBody extends MonsterModel:
 	const SKIN := Color(0.88, 0.52, 0.50)
 	const SKIN_LIGHT := Color(0.96, 0.66, 0.60)
 	const SKIN_DARK := Color(0.60, 0.30, 0.34)
@@ -127,7 +127,7 @@ class GooImp extends MonsterModel:
 		slab(s, Vector3(0, -0.10, -0.225), Vector3(0.26, 0.03, 0.04), glow(goo), 933, Vector3.ZERO, 0.0, 0.0)          # goo in the mouth
 		for i in 4:
 			var x := -0.105 + 0.07 * float(i)
-			limb(s, Vector3(x, -0.05, -0.235), Vector3(x, -0.10, -0.235), 0.025, 0.0, 4, CLAW, 934 + i, 0.0, 0.03)     # teeth
+			limb(s, Vector3(x, -0.06, -0.235), Vector3(x, -0.11, -0.235), 0.025, 0.0, 4, CLAW, 934 + i, 0.0, 0.03)     # teeth (roots inside the grin: no cap on its top face)
 		limb(s, Vector3(-0.12, -0.11, -0.22), Vector3(-0.13, -0.24, -0.21), 0.025, 0.012, 4, glow(goo), 939)            # drool
 		blob(s, Vector3(-0.13, -0.245, -0.21), Vector3.ONE * 0.028, glow(goo), 940, 0.1)
 		limb(s, Vector3(0.09, -0.11, -0.22), Vector3(0.10, -0.18, -0.22), 0.02, 0.01, 4, glow(goo), 941)
@@ -231,7 +231,7 @@ class GooImpBlockoutsUtil:
 # =============================================================================== sac
 
 ## A glowing goo bladder grown on its back, veined, a spout on top drooling.
-class SacImp extends GooImp:
+class SacImp extends ImpBody:
 	func _build_carry() -> void:
 		_add_part("sac", _sac_soup(), parts["body"] as Node3D, Vector3(0, 0.30, 0.20))
 
@@ -258,7 +258,7 @@ class SacImp extends GooImp:
 
 ## The imp dripping with goo: a goo cap down its head, drips off the chin, elbows and belly, a puddle at its feet, the ball
 ## welling up in both hands in front of its belly.
-class DripImp extends GooImp:
+class DripImp extends ImpBody:
 	func _build_carry() -> void:
 		var head := parts["head"] as Node3D
 		_add_part("cap", _cap_soup(), head, Vector3.ZERO)
@@ -323,7 +323,7 @@ class DripImp extends GooImp:
 # =============================================================================== ladle
 
 ## A yellow mop bucket of goo on its left arm, a long ladle in its right; the ball sits in the ladle's bowl.
-class LadleImp extends GooImp:
+class LadleImp extends ImpBody:
 	const BUCKET := Color(0.98, 0.80, 0.16)
 	const BUCKET_DARK := Color(0.62, 0.48, 0.10)
 	const STEEL := Color(0.70, 0.73, 0.76)

@@ -62,6 +62,7 @@ static func cast(caster: Actor, power: float, aim: Vector3, _start: float, extra
 		var src: Node = src_ref.get_ref() as Node
 		MonsterSenses.fire_at(pos, radius)   # fire lights a goblin scout's rockets, before the blast's damage lands
 		ExplosiveProp.fire_at(pos, radius, src)   # ... and the fuse of an explosive prop (the host lights it; a soaked one fizzles)
+		GooPatch.fire_at(pos, radius, src)   # ... and a goo imp's patch (the host lights it: it burns and hurts, no fire spread)
 		Combat.explode(pos, radius, dmg, team, src, 1.0)
 		# Every neutral actor takes the blast too: priced props (breaking one costs money) and employees.
 		for n in GameWorld.actors_in_radius(pos, radius, GameWorld.TEAM_NEUTRAL):

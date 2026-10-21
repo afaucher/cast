@@ -308,6 +308,14 @@ static func request_drop(spell: String, amount: int, pos: Vector3, life: float) 
 		s.objects.request_drop(spell, amount, pos, life)
 
 
+## A runtime object this machine made as the host (NetObjects.RUNTIME_OBJECTS: a goo imp's ball, a goo patch): on a shared
+## floor it gets a net id and every client builds its copy (NetObjects.adopt: obj.new). Offline, solo or on a client:
+## nothing (0). Returns its id.
+static func announce(node: Node) -> int:
+	var s := session()
+	return s.objects.adopt(node) if s != null and s.objects != null else 0
+
+
 ## Where a monster should aim at `target` (M3a, networking.md "Monsters chasing non-host players"): a remote player's
 ## hero is where its newest snapshot says plus its velocity for that snapshot's age, not the ~100 ms old puppet the host
 ## draws. Everything else (and everything offline) is where it stands.
