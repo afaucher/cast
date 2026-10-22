@@ -1,15 +1,46 @@
 # Rebar's jaw and upper chest
 
-Status: **[proposal]** (2026-10-22). Look-dev only: the game's Rebar is unchanged until the user picks a jaw and a chest.
+Status: **decided and built** (2026-10-22). Sections 1-4 were the proposal; section 0 records the pick and what was built.
 
 The user (2026-10-22): "And Rebar needs more of a jaw." Then: "We also need to look at Rebar's upper chest. It doesn't
 read well with the orange neck collar but then flesh tone before more vest."
 
 ![sheet](rebar_jaw/sheet.png)
 
-`sheet.png`: every jaw (rows) with every chest (columns), three-quarter, head and chest. Pick one row and one column.
+`sheet.png`: every jaw (rows) with every chest (columns), three-quarter, head and chest.
 
-## Why he reads this way today
+## 0. Decided (user, 2026-10-22): "Lantern jaw with open vest."
+
+| Question | Decision |
+|---|---|
+| Jaw | **A Lantern**, with the 8-degree tip-back |
+| Chest | **2 Open vest** (which also ends the bare stone band: the shell now runs from the belt to the neck) |
+
+![before and after](rebar_jaw/before_after.png)
+
+`before_after.png`: the game camera at 1:1 (shown x3), the party HUD's headshot (x3) and three-quarter, before and after.
+
+As built (`RebarModel._head_soup`, `_vest_soup`): the lab's look-dev options (`--jaw` / `--chest`, `RebarModel.JAWS` /
+`CHESTS`) are gone and the game's Rebar renders pixel-for-pixel as the lab's `--jaw lantern --chest open` did. He is 1248
+triangles (was 1268). Checked:
+
+- `test_rebar_model`, `test_zfight`, `test_move_feel_anim` (PoseClip over his walk, swings, slam and the strike-first
+  bowl), `test_menu_backdrops`, `test_main_menu`, `test_hero_kits` pass. The held component rides the left glove and is
+  unaffected.
+- The headshot (`Headshots`) frames on the head mesh's bounds, so it follows the bigger jaw by itself: the face, jaw and
+  chin fill the portrait and the open vest shows below.
+- **The jaw and the arms.** The jaw is wider and juts further than the old head, so the arms now come close to it.
+  Measured from the head's vertices against his shoulder and upper-arm boulders: at rest and through the slam the jaw's
+  back corner touches the shoulder boulder by about 1 cm (hidden: stone under stone). At the peak of the bowl's
+  follow-through (`bowl_a` = `BOWL_FOLLOW`, the right arm swung up and in by `BOWL_IN` 0.45) the upper arm passes about
+  3.5 cm into the jaw's front corner for a few frames, with the arm in front of the chin. `BOWL_IN` 0.30 clears it; left
+  as is for the animation's owner to decide.
+- **The garage's "after" face scuffs** (`dress_crew` in `scripts/ui/backdrops/after_job.gd`) are placed on the head mesh bounds' front plane. With
+  the lantern that plane is the chin, so the plaster lands on the chin plate and the soot smudges up at eye height float
+  in front of the face. They need to follow the face (the skull front is at head-local z -0.23, the chin at about -0.44
+  after the tip-back) rather than the bounds.
+
+## 1. Why he read this way (before)
 
 - **No jaw.** The head is a 0.50-wide block with a thin jaw slab tucked under it, the same stone colour as the face. From
   the steep game camera (pitch -56) you see the top of the block and a sliver of brow; there is nothing below it to read.
@@ -17,7 +48,7 @@ read well with the orange neck collar but then flesh tone before more vest."
   started at its hem (`y0`). So the shell sits 0.43 lower than its own collar, top plate and shoulder straps, and the
   stone chest shows between them. The vest also covers most of the belt, so the buckle pokes through it.
 
-## Jaws
+## 2. Jaws
 
 ![jaws](rebar_jaw/jaws.png)
 
@@ -33,7 +64,7 @@ All three keep his brow, eyes and nose, and tip the head back 8 degrees so the g
 
 `lineup.png`: Wick, Rebar and Gasket at the game camera at the game's 1080p pixel scale (shown x3), colour and greyscale.
 
-## Chests
+## 3. Chests
 
 ![chests](rebar_jaw/chests.png)
 
@@ -48,7 +79,7 @@ All three keep his brow, eyes and nose, and tip the head back 8 degrees so the g
 `game.png`: every pair at the game camera (1:1, shown x3). Option 2's white straps over the shoulders read the most
 "hi-vis" from above; option 3's navy shoulders change his silhouette's colour the most.
 
-## Checks (every pair)
+## 4. Checks (every pair, during the look-dev)
 
 - Triangles: 1200-1340 (today 1268; budget 2500, `test_rebar_model`).
 - `ZFightCheck`: nothing over 5 cm2 (the look-dev tape band stands off the vest a little more than today's).
@@ -56,18 +87,13 @@ All three keep his brow, eyes and nose, and tip the head back 8 degrees so the g
   bowl, the cast and the walk. `test_move_feel_anim`, `test_rebar_model` and `test_zfight` also pass with the pairs
   broad + tee, lantern + vest and underbite + open made the default (a temporary local change, not committed).
 
-## Looking at them
+## Looking at him
 
 ```
-godot --path . --resolution 1600x1600 -- --scene res://scenes/rebar_lab.tscn --jaw underbite --chest vest --shot <abs.png>
+godot --path . --resolution 1600x1600 -- --scene res://scenes/rebar_lab.tscn --views crew,head,headshot,bowl --shot <abs.png>
 ```
 
-`--jaw lantern|underbite|broad` and `--chest vest|open|tee` (`RebarModel.JAWS` / `CHESTS`); without them the lab shows the
-game's Rebar. Extra views: `head` (face close-up), `crew` (game camera with Wick and Gasket; also writes
-`<base>_crew_crop.png`), `slam_up` / `slam`. `--views a,b,c` renders several views in one run.
-
-## Building the pick
-
-Make the chosen jaw and chest the defaults in `RebarModel` (fold their code into `_head_soup` / `_vest_soup`, drop the
-options and `JAWS` / `CHESTS`), then check the headshots (`scripts/ui/headshots.gd`) and the menu backdrop, which frame
-his head.
+Views beyond the lab's own: `head` (face close-up), `crew` (the game camera with Wick and Gasket; also writes
+`<base>_crew_crop.png`), `slam_up` / `slam`, `bowl` (the bowl's follow-through), `headshot` (the party HUD's portrait).
+The look-dev sheets were rendered with the options the lab had then (`--jaw` / `--chest`, commit "Rebar look-dev: jaw and
+upper chest options in the lab").

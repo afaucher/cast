@@ -8,11 +8,11 @@ extends LabBase
 ##               <png minus .png>_<view>.png plus a contact sheet at <png>, then quits.
 ## --view <name> only that view (any name in VIEWS) as <png>; --views a,b,c those views as <base>_<view>.png.
 ## --pose punch  freeze Rebar mid-punch (mostly for checking the swing silhouette)
-## --jaw <name> --chest <name>  look-dev heads and chests (RebarModel.JAWS / CHESTS; none = the game's Rebar;
-##               docs/design/rebar-jaw.md). Extra views for it: head (a close-up of the face), crew (the game camera at
-##               the game's 1080p pixel scale, Rebar between Wick and Gasket; also <base>_crew_crop.png, x3 nearest),
-##               slam_up / slam (the slam's top and bottom, three-quarter):
-##   godot --path . --resolution 1600x1600 -- --scene res://scenes/rebar_lab.tscn --jaw lantern --chest vest --view crew --shot <abs.png>
+## Extra views: head (a close-up of the face), crew (the game camera at the game's 1080p pixel scale, Rebar between Wick
+##               and Gasket; also <base>_crew_crop.png, x3 nearest), slam_up / slam (the slam's top and bottom,
+##               three-quarter), bowl (the bowl's follow-through), headshot (the party HUD's portrait, x3).
+##               The jaw and vest look-dev: docs/design/rebar-jaw.md.
+##   godot --path . --resolution 1600x1600 -- --scene res://scenes/rebar_lab.tscn --views crew,head,headshot --shot <abs.png>
 ## No --shot: just opens the lab and orbits slowly with idle animation.
 
 const GAME_YAW := 45.0
@@ -34,12 +34,11 @@ const VIEWS := {
 	"crew": [GAME_YAW, CREW_PITCH, CREW_SIZE],
 	"slam_up": [125.0, -20.0, 5.2],
 	"slam": [125.0, -20.0, 5.2],
+	"bowl": [150.0, -20.0, 3.4],
 }
 const SHEET_ORDER: Array[String] = ["front", "three_quarter", "back", "overhead", "game"]
 
 var pose := ""
-var jaw := ""
-var chest := ""
 var rebar: RebarModel
 var old_hero: Hero
 var wick: WickModel
@@ -51,7 +50,7 @@ var _spin := 0.0
 func _ready() -> void:
 	_parse_args()
 	build_arena(26, 14, 20, 1)
-	rebar = RebarModel.new(jaw, chest)
+	rebar = RebarModel.new()
 	rebar.position = Vector3.ZERO
 	add_child(rebar)
 	wick = WickModel.new()
@@ -76,8 +75,6 @@ func _ready() -> void:
 
 func _parse_args() -> void:
 	pose = arg(args, "--pose")
-	jaw = arg(args, "--jaw")
-	chest = arg(args, "--chest")
 
 
 ## Orbit the camera around Rebar and put the old hero on the camera's right.
@@ -98,6 +95,8 @@ func _place_view(view: String) -> void:
 		tgt = Vector3(0, 3.0, 0)
 	elif view.begins_with("slam"):
 		tgt = Vector3(0, 1.9, 0)
+	elif view == "bowl":
+		tgt = Vector3(0, 2.4, 0)
 	_slam(view)
 	aim(float(v[0]), float(v[1]), size, tgt, dist)
 	# Old hero beside Rebar: on the camera's right (so they are side by side on screen)
@@ -119,12 +118,15 @@ func _place_view(view: String) -> void:
 	gasket.rotation.y = rebar.rotation.y
 
 
-## Freeze the slam's top (slam_up) or bottom (slam: both fists down in front, the torso bent) for the clip check.
+## Freeze the slam's top (slam_up) or bottom (slam: both fists down in front, the torso bent), or the bowl's
+## follow-through (bowl), for the clip check.
 func _slam(view: String) -> void:
 	if shot_path == "":
 		return
 	rebar._arm_kick["slam_w"] = 1.0 if view.begins_with("slam") else 0.0
 	rebar._arm_kick["slam_a"] = RebarModel.SLAM_UP if view == "slam_up" else RebarModel.SLAM_DOWN
+	rebar._arm_kick["bowl_w"] = 1.0 if view == "bowl" else 0.0
+	rebar._arm_kick["bowl_a"] = RebarModel.BOWL_FOLLOW
 	rebar.apply_idle(0.6)
 
 
@@ -148,6 +150,16 @@ func _run_shots() -> void:
 		views.assign(arg(args, "--views").split(","))
 	var images: Array[Image] = []
 	for view in views:
+		if view == "headshot":   # the party HUD's portrait (Headshots), x3 nearest
+			var shots := Headshots.new()
+			add_child(shots)
+			if shots.texture("hero:rebar") == null:
+				await shots.rendered
+			var pic := Headshots.cached("hero:rebar").get_image()
+			pic.resize(pic.get_width() * 3, pic.get_height() * 3, Image.INTERPOLATE_NEAREST)
+			save_shot(pic, shot_path if only_view != "" else "%s_%s.png" % [base, view])
+			shots.queue_free()
+			continue
 		_place_view(view)
 		var img := await grab()
 		var out_path := shot_path if only_view != "" else "%s_%s.png" % [base, view]
