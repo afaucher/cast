@@ -42,7 +42,7 @@ bridges three wide at the bridgeheads, a crust can always reach an isle, sight o
 | The patterns | `CaveGen._shapes`, `_carve` | Causeway (2 chambers: the bridge, an isle off its near half away from the goat path, a one-wide goat path); Gauntlet (2: one bridge, an isle off each end); Fork (3 in a row: the hub's own link one wide, a second route two wide, an isle between them); Ring (3: the links two wide, a one-wide span between the two not linked, an isle in the middle). A fork or ring whose extra route finds no way is a plain chain; a causeway without its goat path a gauntlet. Parallel walkways between the same two chambers are one fog space (the lava between their middles tagged "corridor", the playtest's fix 4) |
 | Byte-identical floors | `DungeonGen.generate` | Each attempt tries the floor's sewer cluster first when it rolled one (one set piece a floor: a cluster floor stays the floor it was), then the cave, then the plain floor, so a floor without a cave is exactly the floor it always was (`test_lava_gen`) |
 | The plan | `scripts/contracts/planners/lava_planner.gd` (`LavaPlanner`, H8) | `GatePlanner`: a gate cave's far chamber first for the floor's first gate. `theme`: the chambers take the "lava" theme row; the LOOK is HELLFIRE when a hellgate stands in a chamber, else MAGMA. `materials`: basalt on its rock, lava and rim. `DoorPlanner`: its doorways are openings, never office doors. `plan` (last): ARCHERS on the isles (two on the first, one on each other: `cave["archers"]`); no pack in the entry chamber (its isle's archers cover it); every other chamber's pack kept within 4 of the landing of the bridge it is entered by (`SitePlan.blocked`): PACKS AT THE BRIDGEHEADS. No dice |
-| The theme row | `RoomThemeDefs.THEMES` "lava" (`LAVA`) | Not in `POOLS`. Basalt floor (`FloorMaterials.F_BASALT`, `F_BASALT_HELL`) and rim (`W_BASALT`), no priced props, no recipe, a warm accent light; `"lava"` holds the two LOOKS: the lava's crust, hot and core colours and glow, the embers, the lights (colour, energy, how many: 10) and the cliff tint. The name "Magma chamber" and note word "magma chamber" are PROPOSALS awaiting the user's review of the text |
+| The theme row | `RoomThemeDefs.THEMES` "lava" (`LAVA`) | Not in `POOLS`. Basalt floor (`FloorMaterials.F_BASALT`, `F_BASALT_HELL`) and rim (`W_BASALT`), no priced props, no recipe, a warm accent light; `"lava"` holds the two LOOKS: the lava's crust, hot and core colours and glow, the embers, the lights (colour, energy, how many: 10) and the cliff tint. The name "Magma chamber" and note word "magma chamber" (and the hero's damage word "LAVA!") were approved by the user on 2026-10-21 ("Approve as proposed") |
 | Spawn | `LavaPlanner.spawn` (after the sewer's) | The archers (the floor's last actors: no earlier net id moves), the look (`LavaLook.dress_cave`: the lava over the lava cells at its surface, the glow skirt, embers, ten unshadowed omnis by farthest-point picks; nothing else on the floor restyled) and the rules (`LavaField`, activated by `game._start_lava` once the fog has read the map with its lava cells) |
 | The look in the terrain | `HexMapView` | Cave rock is never drawn as crates (raised rock is rock), and its cliffs take the look's tint |
 | The lava rule | `Actor._enter_void` | The LAVA KIND OF VOID (`HexMap.lava`): a hero is pulled back to its last safe cell with `LAVA_DAMAGE` 15 and Burning for `LAVA_BURN` 6 s (a soaked hero does not ignite); anything else SINKS (`LAVA_SINK_TIME`) and dies; `shove_impact` "lava" (Fx: the splash and "LAVA!"). The prototype's layering on the pit's "void" signal is gone |
@@ -118,6 +118,14 @@ cluster for a cave, and the sewer net tests' floor moved. The cluster now keeps 
 - "That mild damage sounds fine." This is 15 damage plus Burning; heroes are pulled back and monsters die.
 - "For the lava room cluster question - show me some layouts."
 - "Can we playtest what we have for lava?"
+
+### Decided at the merge (user, 2026-10-21)
+
+| Question | The user | What it means |
+|---|---|---|
+| The text | "Approve as proposed" | "Magma chamber" / "magma chamber" / "LAVA!" stand. |
+| A floor that rolls both a sewer and a cave | "Sewer wins" | The cluster keeps the floor; caves only where no cluster rolled. |
+| Fewer pool rooms get their pool (caves crowd the hellgates) | "Accept" | `test_pools`' floor is 0.82 (was 0.85). |
 
 ## Playtest fixes (2026-10-20)
 
