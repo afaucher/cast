@@ -388,6 +388,9 @@ Speeds as in C.
 
 ### 5.3 As built: package A "grounded" as an A/B profile (2026-10-21)
 
+**The user's blind A/B (2026-10-22): "Grounded is better. Not there yet."** Grounded beats today; more is needed on top of it
+(see the animation track, `animation-research.md`, and the gap table above for what is still missing).
+
 The user (2026-10-21): "Let's try the package A grounded. Preferably so I can A/B." Built: the profile table, package A, the
 judder check, the lab, the log and the tests. **`today` is still the default**: nothing changes for normal play until the
 user picks.
