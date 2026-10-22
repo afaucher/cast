@@ -23,8 +23,6 @@ const WALL_ALLOW := {
 const ENDS_ALLOW := {
 	"decor/bunk_bed": [1, "the ladder's rail tops stand free above the top bunk, as a bunk ladder's do"],
 	"prop/gas_cylinders": [2, "the rack's two uprights end at their tops"],
-	"decor/specimen_tank": [1, "the specimen vat (another agent's rework, 2026-10-21): reported, not changed here"],
-	"prop/specimen_vat": [1, "the specimen vat (another agent's rework, 2026-10-21): reported, not changed here"],
 	"van/closed": [5, "the mirror arms and the roof-rack rails' open ends"],
 	"van/open_lit": [5, "the mirror arms and the roof-rack rails' open ends"],
 	"elevator/service_wall/closed": [2, "the lamp cage's wires end at the bulb"],

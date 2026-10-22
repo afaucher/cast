@@ -504,8 +504,12 @@ static func _specimen_vat(s: LowPoly.Soup) -> void:
 	# bubbles rising past it
 	for b: Vector3 in [Vector3(-0.3, 0.5, 0.18), Vector3(-0.27, 0.85, 0.22), Vector3(-0.32, 1.2, 0.12), Vector3(0.3, 1.35, 0.1)]:
 		ball(s, Vector3(0.035, 0.035, 0.035), b, glow(Color(0.8, 1.0, 0.85)), 0, 0.0)
-	# pipes to the control box
-	rod(s, Vector3(0.0, 2.06, 0.0), Vector3(-0.7, 1.95, -0.3), 0.06, 0.06, 5, IRON_LT)
+	# the pipe from the cap over the side and down into the control box on the base (it ran off the cap the other way and
+	# ended in the air: the prop audit, 2026-10-21)
+	var elbow := Vector3(0.7, 2.04, 0.1)
+	rod(s, Vector3(0.2, 2.04, 0.05), elbow, 0.06, 0.06, 5, IRON_LT)
+	ball(s, Vector3(0.075, 0.075, 0.075), elbow, IRON_LT, 0, 0.0)
+	rod(s, elbow, Vector3(0.7, 0.33, 0.1), 0.06, 0.06, 5, IRON_LT)
 	box(s, Vector3(0.3, 0.35, 0.2), Vector3(0.7, 0.18, 0.1), IRON_LT)
 	box(s, Vector3(0.18, 0.08, 0.02), Vector3(0.7, 0.24, 0.21), glow(Color(1.0, 0.4, 0.2)))
 
