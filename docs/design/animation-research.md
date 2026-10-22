@@ -1,0 +1,373 @@
+# Hero animation feel: research, diagnosis and look-dev
+
+Status: **[research]**, 2026-10-21. Nothing here is built into the game or decided. The user asked: "Lets look at a parallel
+topic of how to animate our main characters to have better feel - so it feels like you are really controlling them."
+This doc covers ANIMATION: how the heroes' bodies respond to what the player does. Movement itself (speed curves, dodge,
+sprint, camera) is in `docs/design/movement-research.md`, written by a parallel agent; section 6 says where the two meet.
+Every **[proposal]** is cosmetic. It is derived on each screen from state every screen already has, so it adds no net
+traffic (`AGENTS.md`, shape 4 "cosmetic").
+
+Mocks: `scenes/anim_lab.tscn` (`scripts/art/lowpoly/anim_lab.gd`, `scripts/art/lowpoly/anim_lab_feel.gd`) and the
+pictures in `docs/design/animation/` (section 5). They are lab-only and touch no gameplay code.
+
+---
+
+## 0. Summary
+
+- **Today the bodies are clocks, not reactions.** Each model's `apply_idle(t, speed)` plays sines on a fixed timer. Speed
+  only scales the stride's size. Nothing else about the motion reaches the body: no acceleration, no direction of travel,
+  no blow, no voice.
+- **The five things that most break "I'm controlling them"**, in order:
+  1. The legs ignore the direction of travel. Heroes face the cursor, so most player movement is off-axis.
+  2. The melee wind-up plays after the hit has already landed.
+  3. The body never reacts to starting, stopping, turning or being shoved: no lean, no settle.
+  4. A voice cast has 0.3-1 s of dead air: the hero does nothing until the spell fires.
+  5. Getting hit is only a white flash. There is no flinch and no hit-stop.
+- **Recommendation: build the locomotion layer (treatment B) first, with the strike-first melee timing.** Both are cheap,
+  cosmetic and on screen every second. Next comes the voice channel, then hit reactions (section 7).
+
+---
+
+## 1. How a hero animates today (diagnosis)
+
+**The code.**
+- `Hero` (`scripts/heroes/hero.gd`) owns `_visual`, a yaw node.
+- The faceted models (`WickModel`, `GasketModel`, `RebarModel`, all `LowPolyModel`, `scripts/art/lowpoly/`) are built
+  from rigid named parts and posed in code every frame by `apply_idle(t, speed)`.
+- Actions are tweens on per-model "arm kick" scalars (`LowPolyModel._kick_arm`) that `apply_idle` adds to the rest pose.
+
+### 1.1 What each moment does today
+
+| Moment | What the code does | What it looks like |
+|---|---|---|
+| **Walk / run** | `LowPolyModel._process` measures speed from its own position change (smoothed at 10/s). `apply_idle` swings rigid legs about the hip by `sin(t·ω)·A·walk`, where ω is fixed per model (Wick 9, Gasket 8, Rebar 7 rad/s) and `walk = clamp(speed / 4…4.5, 0, 1)`. The body bobs with `abs(sin)`. The arms counter-swing. | Cadence never changes with speed; only stride size does. Above `walk_ref` (coffee) the stride stops growing. See the stride table below. |
+| **Start / stop** | `Actor.move` gives full speed on the first frame and zero on the frame the key is released (no acceleration). The legs follow the smoothed speed. | The body glides off at full speed while the legs ramp up over about 0.2 s. On a stop the legs keep pedalling for about 0.2 s after the body is still. No lean, no settle. |
+| **Facing / turning** | `facing` is the cursor (`PlayerController` calls `face_point(aim)` every frame after `move`). `_visual` turns toward it at `TURN_RATE` 18/s (63% in 55 ms, about 95% in 170 ms). | Turning is fast and responsive, which is good. But the legs always swing along `facing`. |
+| **Strafe / backpedal** | Legs swing in the model's own forward plane whatever the direction of travel. | Walking sideways reads as a forward walk while gliding sideways (the moonwalk). AI allies kite this way all the time (`AllyBrain`: `move(-dir)` + `face_point(foe)`). |
+| **Idle** | Breathing sines. Wick has a nervous fidget (head darts, hat bob, trembling knees). Gasket and Rebar have a slow nod. | Good personality, especially Wick. Nothing reacts to the world (a nearby fight, low HP). |
+| **Melee** | The hit resolves on the click frame (`_melee_effect` → `Combat.melee_arc`, `Fx.slash_arc`). Then `attack_swing()` starts its wind-up: Wick `_kick_arm("bash", 1.0, -1.25, 0.10, 0.07, 0.30)`, Gasket `(…, 0.12, 0.08, 0.32)` with a body lean, Rebar `(…, 0.06, 0.07, 0.30)`. | The damage number, flash and arc appear while the weapon is still going **back**. The weapon reaches the target 0.17 s (Wick), 0.20 s (Gasket) or 0.13 s (Rebar) after the hit landed: an anticipation that only adds lag. |
+| **Ranged** | Wick's `shoot_pose` raises the bow in 0.07 s, draws in 0.09 s and recoils elastically. The hold-to-draw `draw_hold` and charge ring are good. Gasket's spin turns the model 360°. Rebar's bowl is an underhand swing with a body lean. | Reads well. The arrow is already away when the raise starts (the same problem as melee, but small). |
+| **Voice cast** | Between speech onset and the spell, the body does nothing. `trigger_heard` only plays the `cast_heard` sound, on the speaker's machine. On the spell (`try_cast` → `_cast_pose`) the wand or wrench kicks up (peak about 0.18 s, back over 0.5 s). Online the effect lands `NetCasts.LEAD` (0.2 s) later on every machine. The caster's pose peak roughly matches by luck. A puppet's pose plays when the event arrives, so it peaks one network delay late. | The 0.3-1 s the player spends speaking is invisible. The held component (the heal crystal is torso-sized) hides Wick's wand hand (`strip_cast.png`, top row). |
+| **Getting hit** | `Fx.flash` (a white overlay for 0.12 s), a damage number and a camera shake for your own hero on slam, landing or daze. No pose change and no hit-stop anywhere in the code. | A white blink. The body never flinches. |
+| **Shoved / airborne** | `Actor.shove` slides the whole hero (ease-out over 0.2-0.35 s). The model stays rigid, and its legs **walk** because it measures speed from position. Airborne arcs (gravity 24) only happen over ledges. Landing raises dust and a ring. | A board sliding across the floor while walking in place, then stopping dead. |
+| **Climb / drop a level** | `climbing` slows the hero (`climb_speed_factor` 0.25-0.6) and eases Y at 4/s. Walking off a step eases Y down at 14/s. | A slow walk that floats up. No reach or hop. A drop is a smooth slide down. |
+| **Wading** | Speed ×0.75, a ripple ring, a step sound. | A slower normal walk, waist-deep. No high-stepping. |
+| **Dazed** | Stars, and `_visual` sways (z 0.2·sin 11t, x 0.08·sin 7t). | Reads well. The only reaction pose in the game. |
+| **Downed** | `_visual` tips over to 90° in 0.35 s (bounce) and the model desaturates. The idle stops. | Fine, and readable. |
+| **AI teammates / puppets** | Same Hero and model code. A puppet's speed comes from its interpolated position, so everything above happens on every screen. Its `damaged` signal does not fire, because the net layer writes its HP. | Same as the owner's hero. Anything we derive from position works on puppets for free. |
+
+### 1.2 Stride match (measured)
+
+These numbers come from the lab's `--measure` mode. It walks each hero for 1.5 s and tracks the soles. The value is the
+planted foot's backward sweep relative to the hip at its fastest, divided by the ground speed. **1.00 means the foot is
+still at mid-stance.** Below 1 the feet skate along with the body (ice skating). Above 1 they paddle backward. 0 means the
+legs swing across the direction of travel (strafing).
+
+| Case | Wick today | Gasket today | Rebar today | Treatment B (all three) |
+|---|---|---|---|---|
+| Bow drawn, 2.25 u/s | 1.22 | 0.51 | 0.96 | 0.98 / 1.00 / 1.05 |
+| Wading, 3.4 | 1.22 | 0.51 | 0.96 | 0.97 / 1.00 / 1.05 |
+| Walk, 4.5 | 1.08 | **0.45** | 0.96 | 0.97 / 1.00 / 1.05 |
+| Coffee, 7.2 | 0.67 | **0.28** | 0.60 | 0.97 / 1.00 / 1.05 |
+| Strafe, aim 90° off | **0.00** | **0.00** | **0.00** | 0.95 / 0.98 / 1.03 |
+| Backpedal | 1.08 | 0.45 | 0.96 | 0.97 / 0.99 / 1.05 |
+
+Gasket's short legs (hip at 0.48) cycle at the same 8 rad/s as everyone else's, so her feet slide at more than half the
+ground speed. Every hero skates when strafing. This is the gap the player sees most, because aiming with the mouse while
+walking means walking off-axis.
+
+### 1.3 Screen size
+
+- At the game camera (ortho 24, pitch -56°, 1080p) a hero is about 55-75 px tall, and a hand or wand is 3-6 px.
+- In the game-zoom strip (`strip_game_zoom.png`), arm-level poses (the cast's wand raise, the bash) barely register.
+- What reads at that size:
+  - **whole-body** motion: lean, squash, the bob, a hop;
+  - **the silhouette** of a big weapon (the wrench's overhead arc);
+  - **ground-plane FX** (rings, the slash wedge).
+- This matches Riot's rule that silhouette comes first and animation second (sources 27, 28 below).
+
+---
+
+## 2. Research: what makes a character feel controlled
+
+Source numbers refer to the list in section 8. Where a page could not be opened, the list says so.
+
+1. **The first frame must move.**
+   - Mick West measures good responsiveness as about 3-4 frames from input to the screen at 60 fps. Every frame that
+     animation adds before the impulse is lag. [21, 22]
+   - In Heavenly Sword attacks responded in 7/60 s, but turning took 18/60 s: the turn animations were the lag. [22]
+   - Halo: Reach starts the grenade throw on the button press and hides up to about 150 ms of network wait inside it. [30]
+2. **The player's wind-up is near zero; the enemy's wind-up is a telegraph.**
+   - Give player attacks short anticipation and spend the frames on follow-through and recoil. NPCs get long
+     anticipation so the player can react. [23]
+   - Cast's monsters already telegraph (the brute's slam, the pavise's line). The heroes copied the monster pattern.
+3. **Recovery is cancellable.**
+   - Supergiant's first Hades II patch made the dash cancel out of attack recoveries "more reliably" because it felt
+     unresponsive. [1, 2]
+   - In Dota, the backswing after a cast can be cancelled freely. [26]
+4. **Visual acceleration, not mechanical.**
+   - Diablo IV added start and stop animations without changing the actual movement speed. [3]
+   - The body can lag and overshoot the true velocity through springs while the simulation stays instant. [11]
+5. **Springs over lerps.**
+   - Holden's critically damped spring and half-life damper are stable and independent of the frame rate. [11]
+   - t3ssel8r's second-order follower (frequency f, damping ζ, response r) gives personality: ζ < 1 wobbles and
+     overshoots; r < 0 anticipates. [10]
+   - Inertialization snaps to the new pose at once and decays the leftover offset, so there is no blend lag. [12]
+6. **Phase the gait by distance, not time.**
+   - Rosen's "stride wheel" (Overgrowth, GDC 2014) does this with about 4 poses per cycle, interpolated by springs. It is
+     the closest reference for rigid parts posed in code. [8]
+   - Unreal's stride warping does the same: stride scale = speed / authored speed. Its orientation warping turns the legs
+     toward the travel direction while the torso keeps facing. That is exactly our strafe gap. [15]
+7. **Hit-stop is a short freeze, scaled to the blow and capped.**
+   - Vlambeer: a 10-20 ms pause on every hit, plus 1 white frame and 2 hurt frames. [17]
+   - Sakurai (Smash): attacker and victim freeze together, scaled by damage and capped. Projectiles get less, and
+     4-player fights get less. The victim shakes side to side on the ground and up and down in the air. [24]
+   - A study puts the best hit-stop for a big blow at 0.1-0.2 s. [25]
+8. **Squash, stretch, overshoot.**
+   - Overshoot the extreme poses, hold the key poses a beat, offset the limbs' timing, and break the rig (smears). [29]
+   - Juice comes from tweening, squash and stretch, particles and shake, not from slower moves. [16, 17]
+9. **Readability at small size.**
+   - Silhouette is first. Facing must read at a glance. The hit area must match the VFX. Visual weight follows
+     gameplay importance. [27, 28]
+10. **Hide latency in a motion that starts at once.**
+    - Halo's grenade throw [30], Dota's cast point [26] and WoW's ~400 ms spell queue [31] all do this.
+    - People expect a conversational reply within about 100-300 ms [32]. Cast's 0.3-1 s from speech to spell needs a
+      visible "I'm hearing you".
+11. **Animate puppets locally from smoothed state.**
+    - Show remote characters about one send interval in the past, interpolated with velocity. [33, 34, 35]
+    - Derive their gait, lean and turn locally from the smoothed velocity rather than streaming animation state. [36]
+    - Replay discrete actions as events. [36, 37]
+    - Cast already streams heroes at 30 Hz with position, velocity and facing, and replays actions as `act` events.
+
+Gaps in the research: I found no primary developer talk on animation responsiveness for Hades, Diablo IV, Tunic, Lost Ark,
+Ravenswatch or Hyper Light Drifter, only patch notes, reviews and second-hand quotes. GDC Vault was down for maintenance,
+so the Vault links are unverified.
+
+---
+
+## 3. Gap analysis for Cast
+
+Ranked by expected effect on "it feels like I'm controlling them". The cost is for the game version, not the mock.
+
+| # | Gap | Why it hurts control | Fix (treatment) | Net cost | Perf | Effort |
+|---|---|---|---|---|---|---|
+| 1 | **Legs ignore the direction of travel** (strafe 0.00, backpedal moonwalk). AI allies kite this way constantly. | Most player movement is off-axis because the hero faces the cursor. The feet contradict the input every second. | B: turn the legs toward the travel direction, mirror the swing past 110° | none (velocity and facing are shown on every screen) | a basis per leg | S |
+| 2 | **Melee wind-up after the hit** (hit-to-impact 0.13-0.20 s) | The click's result (number, flash, arc) arrives before the body does it. Every swing feels late. | C: strike first: wind in 1 frame, impact on frame 3-4, a long follow-through, a small lunge | none (`act` already replays it) | none | XS (tween arguments) |
+| 3 | **No body response to acceleration** (start, stop, turn, shove) | The input lands but the body never commits. The hero is a board on rails. | B: a lean that leads the velocity (spring), squash on start and stop, a bank in turns, legs still while shoved | none | 2 springs | S |
+| 4 | **Voice cast dead air** (0.3-1 s) | Speaking is the main verb, and nothing shows it was heard until the spell lands. Network and recognizer latency are not hidden. | C: channel: listen on speech onset, gather on the trigger word (a wand or wrench up, a hand glow, a ring on the floor drawing in), release on the spell (snap, stretch, flash) | the owner's own screen for free; showing other players' channels needs a 1-byte "armed" event (open question) | 2 meshes while casting | M |
+| 5 | **Hits have no body reaction** | Taking damage reads as a UI event, not a blow. The attacker's blows feel weightless too. | C: a flinch away from the blow (lean and head springs), a 4-frame victim hit-stop with a shake, a 3-frame attacker hit-stop on contact | none (on a puppet, derive it from the HP dropping in its snapshot) | none | S |
+| 6 | Stride not matched (Gasket 0.45, coffee 0.28-0.67, Wick paddles 1.22 when slow) | Ice skating reads as "not touching the floor". | B: run the model's clock at `speed / (leg · amplitude)`; Gasket's swing ×1.45 | none | none | XS |
+| 7 | Legs walk during a shove | The body is being pushed but pedals. | B's lean, plus pausing the stride while `is_shoved()` (not in the mock yet) | none | none | XS |
+| 8 | The held component hides the cast hand | The cast pose is invisible behind a torso-sized crystal. | Make the component the focus: it lifts and glows during the channel. Or move it to the off-hand. | none | none | S |
+| 9 | No climb, drop or landing poses | Height changes, a pillar of Cast's exploration, have no physicality. | A reach-and-hop on climb, a drop hop, landing squash (the spring in B takes impulses) | none | none | S-M |
+| 10 | Secondary motion is timer-driven (Wick's hat and quiver bob on sines) | Accessories don't trail turns or stops, so the body reads as one rigid piece. | Drive the hat tip, beard braids, vest and quiver off the lean spring (one spring each) | none | 1 spring per accessory | S |
+| 11 | Wading has no pose | The water is only a speed number. | Shorter, higher steps and a lowered body while `Wading.is_wading` | none | none | XS |
+
+---
+
+## 4. Treatments (as built in the mock)
+
+All three lanes use the **same real Hero** with its faceted model, moved by `Hero.move`, hit by `apply_damage`, shoved by
+`Actor.shove` and swinging by `Hero.melee`. The lab inserts a "feel" node between `Hero._visual` and the model.
+
+- **A "Today".** The game as it is.
+- **B "grounded" (locomotion layer).** Driven only by the hero's shown position and facing:
+  - **Lean.**
+    - `head offset = v_smooth · lean + (v_raw − v_smooth) · kick`, where `v_smooth` approaches the raw velocity at 9/s.
+      The result is mapped to pitch and roll, clamped at ±0.38 rad (22°) and passed through a spring.
+    - Wick: lean 0.032, kick 0.075, spring f 2.6 Hz, ζ 0.42 (wobbly, nervous).
+    - Gasket: 0.028 / 0.065 / 3.2 Hz / ζ 0.5 (snappy).
+    - Rebar: 0.018 / 0.045 / 1.7 Hz / ζ 0.65 (heavy, slow).
+    - Starting leans the body forward and stopping throws it back, then it settles. Turning banks it. A shove tips it
+      back against the slide.
+  - **Squash.**
+    - A spring at 4.5 Hz, ζ 0.32, clamped −0.16 to +0.2, scaled `(1 + s/2, 1 − s, 1 + s/2)` about the feet.
+    - Impulses: −0.9 (a stretch) on starting, +1.3 (a squash) on stopping. Per-hero multiplier: Wick 1.0, Gasket 1.2,
+      Rebar 0.6.
+  - **Stride clock.**
+    - The model's own `apply_idle` clock runs at `rate = lerp(ω_model, speed / (leg · A · walk), smoothstep(0, 0.25, walk))`.
+    - The legs (hip-to-sole) are Wick 0.92, Gasket 0.46 and Rebar 1.17. Gasket's swing is ×1.45.
+    - It is a one-line change to `LowPolyModel._process` plus a per-model leg length.
+  - **Legs follow the travel direction.**
+    - Leg yaw is −0.85 × the angle between travel and facing, clamped at ±1.35 rad.
+    - Past 110° (backpedal) the swing is mirrored and the legs face forward.
+    - It fades in from 0.2 to 1.2 u/s and turns at 14/s.
+    - The torso keeps facing the cursor, like Unreal's orientation warping.
+- **C "actions" (B + the action layer).**
+  - **Strike-first melee.**
+    - Wick `_kick_arm("bash", 0.9, -1.3, 0.017, 0.05, 0.34)`, Gasket `("weapon", 1.0, -1.35, 0.017, 0.06, 0.36)`,
+      Rebar `(arm, -0.4, 1.6, 0.017, 0.05, 0.32)`.
+    - The impact lands on frame 3-4 instead of 8-12.
+    - A forward lunge of 0.16 u that decays at 10/s, plus a −3.2 rad/s pitch kick and a −0.6 stretch.
+    - A 3-frame attacker hit-stop 4 frames after the click when the blow connects.
+  - **Hit reaction.**
+    - A flinch impulse away from the blow: lean 9 rad/s and head 14 rad/s, × damage/12, clamped 0.4-1.6.
+    - Squash +1.6, then a **4-frame victim hit-stop** (the model and its tweens freeze) with a ±0.08 u shake.
+  - **Voice channel.**
+    - Speech onset sets the channel target to 0.35 (listen). The trigger word sets it to 0.75 (gather). It ramps up at
+      2.6/s and down at 4/s.
+    - While channelling:
+      - the wand, wrench or fists rise to 0.95·c, with a 47 Hz tremble;
+      - the body crouches (squash 0.07·c);
+      - a cool glow at the casting hand grows to a radius of (0.08 + 0.45c)·0.5;
+      - **a ring on the floor** shrinks from radius 1.6 to 0.8 while its alpha rises from 0.25 to 0.85.
+    - **Release** on the spell:
+      - the arm snaps from 0.7 to 1.15 in 1 frame plus 0.05 s;
+      - the body stretches (−1.6) and throws forward (−2.6 rad/s);
+      - a flash sphere and an outward ring play.
+
+### What the mocks show (look at the strips)
+
+- **`strip_attack.png`**
+  - Today: the slash wedge is on the floor at t=0.32-0.38 s while the bow is still swinging back.
+  - C: the bow is through the wedge at 0.35 s.
+  - It is the clearest single difference, and it reads at game zoom too (`strip_game_zoom.png`, third block).
+- **`strip_strafe.png` / `gif_strafe.gif`.** Today: the legs scissor forward and back while Wick glides sideways. B and C:
+  the legs turn into the walk, and the body leans into it and back on the stop.
+- **`strip_startstop.png`**
+  - B leans into the start (t=0.45-0.75) and rocks back on the stop (1.38) before settling.
+  - Today stays bolt upright.
+  - At game zoom the lean is the one change that still reads clearly.
+- **`strip_cast.png` / `gif_cast.gif`**
+  - C shows the floor ring from 0.40 s (listen), drawing in by 1.0 s (armed), and the burst at 1.12-1.35 s.
+  - Today and B show nothing until 1.12 s.
+  - At game zoom only the ring reads; the hand glow is a few pixels. In the close-up the heal crystal hides the wand
+    (gap 8).
+- **`strip_hit.png`**
+  - The 0.12 s white flash already covers the first frames; C's flinch shows after it (0.45 s).
+  - On the shove (1.05-1.2 s) B and C tip back against the slide. Today walks in place while sliding.
+- **`sheet_gasket.png`**
+  - Gasket's coat hides most of her legs, so stride matching matters less for her visually than the lean.
+  - Strike-first **loses her best silhouette**: Today's overhead wrench wind-up (t=0.35-0.38 s) is the biggest, most
+    readable shape in her kit. Proposal: keep a 2-frame wind, or move the overhead arc to the follow-through
+    (overshoot past the floor and lift back over the shoulder).
+
+---
+
+## 5. Mock files
+
+| File | What |
+|---|---|
+| `scenes/anim_lab.tscn`, `scripts/art/lowpoly/anim_lab.gd` | The lab: three lanes of one real hero (Today / B / C) playing a scripted clip (`--clip startstop\|strafe\|turn\|cast\|hit\|attack`, `--hero wick\|gasket\|rebar`, `--zoom close\|game`, `--frames-dir` for GIF frames, `--measure` for the stride table). Run it with `--fixed-fps 60`; the usage is in its header. |
+| `scripts/art/lowpoly/anim_lab_feel.gd` | The proposed feel layer (levels 1 and 2), with every parameter above. It is a plain Node3D between `_visual` and the model, written to be lifted into the game almost as is. |
+| `docs/design/animation/strip_startstop.png`, `strip_strafe.png`, `strip_cast.png`, `strip_attack.png`, `strip_hit.png` | Wick close-ups (ortho 8, pitch -32°): rows Today / B / C, 8 times each (labelled). |
+| `docs/design/animation/strip_game_zoom.png` | Start/stop, cast and bash at the real game zoom (ortho 24, pitch -56°, pixels ×2). |
+| `docs/design/animation/sheet_gasket.png` | Gasket: start/stop, strafe, cast, wrench smash. |
+| `docs/design/animation/gif_strafe.gif`, `gif_cast.gif`, `gif_attack.gif` | The three lanes side by side at 30 fps. |
+
+To regenerate, run:
+
+```
+godot --path . --fixed-fps 60 --resolution 1920x1080 -- --scene res://scenes/anim_lab.tscn --hero wick --clip cast --shot <abs>.png [--zoom game] [--frames-dir <abs dir>]
+```
+
+The strips in the docs folder were labelled and palette-reduced afterwards with a small PIL script, and the GIFs made with
+ffmpeg's palettegen. Neither script is committed.
+
+---
+
+## 6. Where animation meets movement (`movement-research.md`)
+
+- **If the movement doc adds real acceleration or deceleration to `Actor.move`**, B's lean still works and gets subtler:
+  its kick term is the gap between the shown velocity and its smoothed copy. Turn the `kick` gains down so the body
+  doesn't double up.
+- **The movement doc should keep the first-frame response instant**, or have it come from motion (principle 1). The
+  animation layer then supplies the weight (principle 4: visual acceleration, not mechanical).
+- **A dodge or dash, if added, needs a pose.**
+  - A tuck or roll with a squash at the start and the end, driven by `is_shoved()`-style forced-motion state, so puppets
+    get it free.
+  - Its recovery should cancel into walking (Hades II, source 1).
+- **Sprint** would push the speed past every model's `walk_ref`. B's stride clock already handles any speed, and the lean
+  grows with speed (clamped at 22°).
+- **Camera.** A follow camera with look-ahead makes the lean read better, because the hero stays put on screen.
+  Screenshake is already used for slams, landings and dazes. Hit-stop should never freeze the camera or the simulation,
+  only the model.
+
+---
+
+## 7. Recommendation
+
+1. **First: treatment B plus strike-first, as one change (about a day).**
+   - What to do:
+     - Add a feel node per hero (lift `anim_lab_feel.gd`'s level 1) between `_visual` and the model.
+     - Move the stride clock into `LowPolyModel`, and give each model `leg_len` and tuning.
+     - Pause the stride while `is_shoved()`.
+     - Change the three `attack_swing()` tween timings, plus Wick's `shoot_pose` raise.
+   - Why first: it is purely cosmetic, derived from the position and facing every screen already shows, so puppets and AI
+     allies get it free, and it adds no new net state. It also costs a few springs per hero per frame.
+   - The test to add: a lab measure like section 1.2 as a headless test (stride match within 0.85-1.15 and strafe above
+     0.8 for all three heroes).
+2. **Second: the voice channel** on your own hero: `speech_started`, `trigger_heard` and `spell_cast` from `VoiceCaster`
+   and `Hero`.
+   - The ring on the floor is what reads at game zoom.
+   - Make the held component the glowing focus.
+   - Online, aim the release peak at the cast's landing time (`at`). Puppets can play their release when the event lands
+     instead of when it arrives.
+3. **Third: hit reactions and hit-stop.**
+   - Victim: derive the flinch from the HP dropping on every screen, with its direction from the nearest hostile.
+   - Attacker: a hit-stop on contact on the attacker's own screen.
+   - Keep the stops at 3-4 frames: four players and dozens of imps means many hits (Sakurai's caution).
+4. **Later:** climb, drop and landing poses, the wading step, accessory springs (Wick's hat, Gasket's braids, Rebar's vest
+   tape), and idle reactions (looking toward noise, a slump at low HP).
+
+---
+
+## 8. Sources
+
+[V] means I opened the page and checked it. [S] means I saw it only through search results or secondary coverage (403,
+GDC Vault maintenance, or a video with no readable text). No quote here is longer than 15 words.
+
+1. Hades II Early Access Patch 1 notes (Supergiant, 2024-05-16, via Shacknews): a dash out of attack recoveries "more
+   reliably", more responsive turning. https://www.shacknews.com/article/139921/hades-2-early-access-patch-notes-1 [S]
+2. Steam thread, Hades II dash complaints: blames locking into attack animations. https://steamcommunity.com/app/1145350/discussions/0/4357872738330399478 [S]
+3. Prima Games, "Blizzard reveals how Diablo IV will be different from Diablo III" (2019): added blend, stop and turn animations. https://primagames.com/news/blizzard-reveals-how-diablo-iv-will-be-different-diablo-iii [S]
+4. Diablo III animation talk summary (Icy Veins); Julian Love, GDC 2012: responsiveness as a core value. https://www.icy-veins.com/forums/topic/27128-lightning-talk-animation-support/ [S]
+5. Stevivor interview, Acid Nerve on Death's Door (2021): kept 2D-action responsiveness in 3D. https://stevivor.com/features/interviews/acid-nerve-talks-deaths-door-interview/ [S]
+6. TechRaptor, "How Dead Mage created the art for Children of Morta": a few keyframes, timed in engine first. https://techraptor.net/content/how-dead-mage-created-the-art-for-children-of-morta [S]
+7. Passtech, "Behind the Scene Ep. 2" (Ravenswatch, 2024): top-down animation (a teaser only). https://passtechgames.com/?p=4451 [V]
+8. David Rosen, "An Indie Approach to Procedural Animation", GDC 2014: few poses, springs, the stride wheel. https://gamedeveloper.com/design/video-an-indie-approach-to-procedural-animation [V]
+9. Game Developer, "Crafting the complex, chaotic ecosystem of Rain World" (2017): physics points drive the drawn parts. https://gamedeveloper.com/design/crafting-the-complex-chaotic-ecosystem-of-i-rain-world-i- [V]
+10. t3ssel8r, "Giving Personality to Procedural Animations using Math" (2022): second-order f, ζ, r follower. https://www.youtube.com/watch?v=KPoeNZZ6H4s [V, title only]
+11. Daniel Holden, "Spring-It-On: The Game Developer's Spring-Roll-Call": dampers, critically damped springs, inertialization. https://theorangeduck.com/page/spring-roll-call [V]
+12. David Bollo, "Inertialization", GDC 2018 (Gears of War): snap, then decay the offset. https://www.gdcvault.com/play/1025165/Inertialization-High-Performance-Animation-Transitions [S]
+13. Simon Clavet, "Motion Matching and The Road to Next-Gen Animation", GDC 2016: transition clips cut for responsiveness. https://gdcvault.com/play/1023280/Motion-Matching-and-The-Road [S]
+14. Alexander Bereznyak, "IK Rig: Procedural Pose Animation", GDC 2016. https://gdcvault.com/play/1022984/IK-Rig-Procedural-Pose [S]
+15. Epic, Pose Warping docs: stride warping (scale = speed / authored speed) and orientation warping. https://dev.epicgames.com/documentation/en-us/unreal-engine/pose-warping-in-unreal-engine [V]
+16. Jonasson and Purho, "Juice it or lose it" (2012). https://www.youtube.com/watch?v=Fy0aCDmgnxg [V, title only]
+17. Jan Willem Nijman, "The Art of Screenshake" (2013); the breakdown at infovore.org: 10-20 ms hit pause, a white frame. https://infovore.org/?p=5275 [V]
+18. Mark Brown, "Secrets of Game Feel and Juice" (GMTK). https://amara.org/v/C3BGA [S]
+19. Steve Swink, "Game Feel: The Secret Ingredient". https://www.gamedeveloper.com/design/game-feel-the-secret-ingredient [S]
+20. GameSpot, Celeste's forgiveness mechanics (2020). https://www.gamespot.com/articles/celeste-dev-explains-how-they-made-their-game-feel/1100-6474775/ [S]
+21. Mick West, "Programming Responsiveness" (2008): 3 frames best case; the impulse goes on frame 1. https://www.gamedeveloper.com/programming/programming-responsiveness [V]
+22. Mick West, "Measuring Responsiveness in Video Games" (2008): Heavenly Sword attacks 7/60 s, turns 18/60 s. https://www.gamedeveloper.com/design/measuring-responsiveness-in-video-games [V]
+23. gameanim.com, "Basics: Fast vs Slow" (2005): short player anticipation, long NPC anticipation. https://www.gameanim.com/?p=115 [V]
+24. Sakurai, "Thoughts on Hitstop" (Famitsu, translated by Source Gaming, 2015): scaled, capped, the victim shakes. https://sourcegaming.info/2015/11/11/thoughts-on-hitstop-sakurais-famitsu-column-vol-490-1/ [V]
+25. SciTePress hit-stop study (2024): best at about 0.1-0.2 s for a 3D attack scene. https://www.scitepress.org/Papers/2024/124614/124614.pdf [S]
+26. Liquipedia / Dota 2 wiki: cast point, a cancellable backswing, turn rate (180° in about 0.15-0.19 s). https://liquipedia.net/dota2/Cast_point, https://dota2.fandom.com/wiki/Turn_rate [S]
+27. Riot, "Gameplay Clarity in League" (2021): silhouette first, facing at a glance, hit areas match the VFX. https://www.leagueoflegends.com/en-us/news/dev/clarity-in-league/ [V]
+28. Riot, "Ask Riot: Let's Talk Clarity" (2021). https://www.leagueoflegends.com/en-us/news/dev/ask-riot-let-s-talk-clarity/ [V]
+29. David Gibson, Overwatch character animation, GDC 2016 (summary): overshoot, hold, offset, smears. https://babel.speldesign.uu.se/?p=113918 [V]
+30. David Aldridge, "I Shot You First" (Halo: Reach netcode), GDC 2011 (summary): animate on press, hide about 150 ms. https://edgegap.com/blog/game-backend-deep-dive-halo-reach-netcode-host-migration [V]
+31. WoW spell queue window (community): about 400 ms. https://us.forums.blizzard.com/en/wow/t/input-lag-spellqueuewindow-and-spell-batching/1210379 [S]
+32. Picovoice, latency in speech recognition: conversational gaps of about 100-300 ms. https://picovoice.ai/blog/latency-in-speech-recognition [S]
+33. Glenn Fiedler, "Snapshot Interpolation". https://gafferongames.com/post/snapshot_interpolation/ [V]
+34. Gabriel Gambetta, "Entity Interpolation". https://gabrielgambetta.com/entity-interpolation.html [V]
+35. Valve, Source Multiplayer Networking: a 100 ms interpolation delay, extrapolation capped at 0.25 s. https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking [S]
+36. Unreal CharacterMovementComponent proxy smoothing: proxies animate from replicated velocity. https://docs.unrealengine.com/4.27/en-US/API/Runtime/Engine/GameFramework/UCharacterMovementComponent/MoveSmooth/index.html [S]
+37. Tim Ford, "Overwatch Gameplay Architecture and Netcode", GDC 2017. https://gdcvault.com/play/1024001/-Overwatch-Gameplay-Architecture-and [S]
+
+---
+
+## 9. Open questions for the user
+
+1. **When should the channel start?**
+   - On **speech onset**: it hides the most latency, but every sentence to your friends makes your hero twitch a little.
+   - On **the trigger word**: about 0.3 s later, and only when you mean it.
+   - The mock does both, at 0.35 and 0.75. Is a small "listening" tell on all talk OK?
+2. **Should other players see your channel?** Locally it is free. On puppets it needs a tiny reliable "armed" event
+   (about 1 byte per cast attempt), or puppets only show the release.
+3. **Gasket's overhead wind-up**: strike-first everywhere, or keep a 2-frame wind for the heavy hitters (Gasket, Rebar) and
+   move the big arc into the follow-through?
+4. **Exaggeration.** The mock leans up to 22° and squashes up to 16-20%. More cartoon, or less?
+5. **Hit-stop on your own screen only** (cosmetic, the model only), or never for the crowd fights (imp clumps)?
+6. **The held component during a cast**: make it the glowing focus that lifts, or move it to the off-hand?

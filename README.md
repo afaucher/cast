@@ -220,7 +220,7 @@ further), **coffee** (+60% move and attack speed for six seconds, twitchy, then 
   --no-mic`, `--floor 3`, or `--shot <png> --shot-after 4` for screenshots. They're listed at the
   top of `scripts/app/game.gd`. `--menu` brings the menu back.
 - **Labs** (`--scene res://scenes/<name>.tscn`): `terrain_preview`, `voice_lab`, `wick_lab`,
-  `gasket_lab`, `rebar_lab`, `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `van_lab` (the crew's work van arriving over its summoning circle), `teeth_lab`, `new_spells_lab` (vines, damp, coffee and chicken: `--spell vines|damp|coffee|chicken`, and for chicken `--closeup` or `--pickup`),
+  `gasket_lab`, `rebar_lab`, `anim_lab` (hero animation feel look-dev: today vs the proposed layers, `docs/design/animation-research.md`), `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `van_lab` (the crew's work van arriving over its summoning circle), `teeth_lab`, `new_spells_lab` (vines, damp, coffee and chicken: `--spell vines|damp|coffee|chicken`, and for chicken `--closeup` or `--pickup`),
   `backdrop_lab` (the garage behind the main menu and the job board, plus the storefront prototype: `--option garage|storefront`, `--mood dawn|night|after`, `--hero wick|gasket|rebar`, `--board` lays the real job board over the garage).
 - **Tests:** the runner fails a test on any `SCRIPT ERROR`. Logs go to `test_logs/`. Net tests (`tests/test_net_*.gd`
   with `const PEERS := N`) run as N headless processes over ENet localhost, after the parallel batch, under each
