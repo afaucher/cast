@@ -449,6 +449,9 @@ The user: **"Gasket's primary attack is better. What about the secondary?"** Mea
 The user played the 7-frame whirl: **"It's too fast! It doesn't read as a spin it is so fast."** (The table above is that
 first version.) Now:
 
+**Speed decided (user, 2026-10-22, after trying 20/25/30 in the gym with F10): "25 is fine."** 25 frames stays the
+default. The spin radius (2.1 vs 1.9) is still open.
+
 - **A slower turn that reads**: a 3-frame twist back with a crouch (the wind-up), the full turn in **25 frames** (0.42 s,
   quick through the middle: a smoothstep), then a **stagger** (she overshoots by 0.35 rad and settles over 12 frames, a
   roll of the body) before the wrench comes back to her side. 0.52 s of whirl from the click.
