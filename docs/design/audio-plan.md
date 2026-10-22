@@ -187,6 +187,37 @@ Six rounds; what failed and what fixed it:
 heroes only (not monsters or employees), the bed's two emitters within 14 of the camera's focus, the lava sizzle also for
 a monster sinking, the gator's hiss now mostly a low rattle with a short "khh".
 
+## Footsteps (2026-10-21)
+
+The movement feel's `grounded` profile (`movement-research.md` 5.3) adds dry footsteps and a landing thud. They play only
+with that profile (`today`, the default, is silent as before), on every screen, for every hero, from the shown motion
+(`HeroGait`): cosmetic, nothing crosses the network. Recipes in `tools/sfx_proto/sfx_round3.gd` ("footsteps"), Kenney's
+impact pack (CC0), rendered by `render_game_sfx.gd`. Each step is a Kenney footstep cut to its heel strike (about 0.1 s) and
+low-passed, so it stays a thump under the consonants: they repeat under every utterance a walking player speaks (§4 rules 2
+and 8).
+
+| Cue | Recipe | Hooked at | Level | What it is |
+|---|---|---|---|---|
+| `step_hard` | `step_hard_v1` | `HeroGait._footsteps`, one per foot plant (`Gait.plants`) on concrete, slate, tile, marble, stone, basalt, pool tile | -27 | `footstep_concrete_001` a semitone down, low-passed at 1.4 kHz, 0.11 s |
+| `step_soft` | `step_soft_v1` | ... on carpet and rubber | -27 | `footstep_carpet_001` low-passed at 900 Hz, 0.08 s |
+| `step_wood` | `step_wood_v1` | ... on wood | -27 | `footstep_wood_001` low-passed at 1.5 kHz, 0.05 s |
+| `step_metal` | `step_metal_v1` | ... on diamond plate | -27 | the hard heel and a faint `impactMetal_light_002` ring under 2.2 kHz, 0.13 s |
+| `land_thud` | `land_thud_v1` | `HeroGait._landing`: a hero lands on foot from 2+ levels (a shove's landing keeps Fx's) | -14 | a soft body thud under 300 Hz and a heel, 0.25 s |
+
+None play in pool water (Wading's `wade_step` does). 3D, `unit_size` 5 and `max_distance` 26 for the steps: your own and your
+crew's near you, not the far side of the room. `Sfx.ducking` stays off (the user's choice).
+
+**Mic-leak probe (2026-10-21)**, `mic_leak_probe.tscn` with the five recipes (D repeats each step every 0.23 s, Wick's cadence
+at a walk, under the whole utterance):
+- **A (alone, peak 0.5, gate on and off):** no cast. Filler words only: `step_hard` "FOUR", `step_soft` "POOP" (gate off),
+  `step_metal` "BUT"/"BOBO" (off) and "FOOL"/"BO"/"BOOM" (on), `land_thud` "FOUR"; `step_wood` nothing.
+- **C (said over the cue starting with the voice, peak 0.4, voices a0 and b0):** **30/30** cast (a "CA" fragment is often
+  heard before the phrase, but the spell lands every time).
+- **D (repeating under the whole utterance):** **10/10** at each of 0.4, 0.2 and 0.1 for every step (**120/120** in all);
+  the control row 30/30.
+
+The metal step babbles the most alone (its ring); if a player reports phantom words on diamond plate, drop its ring first.
+
 The user's ask (2026-10-18): basic audio. Find out whether good open-license sounds exist or whether we can make them
 procedurally, track every source for attribution, and pick the top 10 sounds that make the game more fun and read
 better ("a sound when cast is activated", "spells pffting").

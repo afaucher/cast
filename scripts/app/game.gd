@@ -101,7 +101,12 @@ extends Node3D
 ##                       (1-5, LavaCave) instead of the generated floor: rock islands and two-wide bridges over lava, archers on
 ##                       isolated isles, a melee pack on the path, damp crusts the lava (LavaField). In a crew: every window.
 ##   --lava-floor, --lava-pattern P, --to-lava entry|far|isle, --lava-perf   dev: a generated lava cave (LavaDev, scripts/app/dev)
-## Keys: F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
+##   --move-lab          dev: the movement lab (MoveLab, docs/design/movement-research.md "As built") instead of the generated
+##                       floor: a lap of slalom, steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen.
+##                       In a crew every window needs it (run.ps1 -Crew passes it to all).
+##   --move-feel today|grounded|shuffle, --physics-interp on|off   dev: the movement-feel profile and the judder check (MoveFeel;
+##                       F6 / F7 switch them live). In a crew the host's profile is everyone's.
+## Keys: F6 next movement profile, F7 physics interpolation (MoveFeelTag), F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
 ##
@@ -247,6 +252,7 @@ var _seat_notices: Array[String] = []   ## every "takes over" line this screen s
 
 func _ready() -> void:
 	InputSetup.ensure_actions()
+	MoveFeel.boot()
 	_parse_args()
 	if opts.has("hero") and HeroKit.has_kit(str(opts["hero"])):
 		Session.character_id = str(opts["hero"]).to_lower()   # (dev: before a crew opens, so the roster carries it too)
@@ -416,6 +422,9 @@ func _parse_args() -> void:
 			"--hud-stage": opts["hud_stage"] = nxt
 			"--hud-followers": opts["hud_followers"] = int(nxt)
 			"--lava-cave": opts["lava_cave"] = clampi(int(nxt), 1, LavaCave.COUNT)
+			"--move-lab": opts["move_lab"] = true
+	if opts.has("move_lab") and not opts.has("spells"):
+		opts["spells"] = "heal,damp"   # (the lab goes straight in: a heal for the pen, a damp for the lava)
 
 
 # --- Contract flow: board -> contract -> floors -> invoice ------------------------------------
@@ -428,7 +437,7 @@ func _resolve_run() -> void:
 		if opts.has("contract"):
 			var k: int = opts["contract"]
 			run = ContractBoard.offers(board_seed)[k] if k >= 0 and k < ContractBoard.OFFER_COUNT else ContractBoard.run_for_seed(k)
-		elif opts.has("spells") or opts.has("floor"):
+		elif opts.has("spells") or opts.has("floor") or opts.has("move_lab"):
 			run = ContractBoard.run_for_seed(board_seed)
 		if opts.has("net_wait"):
 			run = null   # the board waits for the crew first (_net_wait_check)
@@ -662,6 +671,8 @@ func _build_world() -> void:
 	var lava := _lava_cave()
 	if lava > 0:
 		map = LavaCave.build_map(lava)   # (--lava-cave, solo prototype: the hand-authored cave instead of DungeonGen)
+	elif _move_lab():
+		map = MoveLab.build_map()        # (--move-lab: the movement lab's course)
 	else:
 		# (the job's elevator: every floor of a job uses the same style; a shared run rolls the same sewer cluster as a solo
 		# one: SewerCluster.NETWORKED)
@@ -672,6 +683,8 @@ func _build_world() -> void:
 	# is built. _populate_site() spawns this plan once the crew has picked its spells.
 	if lava > 0:
 		_plan = LavaCave.plan(map, _floor_n())
+	elif _move_lab():
+		_plan = MoveLab.plan(map, _floor_n())
 	else:
 		_plan = SiteBuilder.plan(map, _run, _floor_n(), PricedProp.catalog(_run.site_type))
 	_dev_floor()   # (dev hook: --sewer swaps in a hand-authored map and plan; GameDev)
@@ -689,6 +702,8 @@ func _build_world() -> void:
 	DungeonLook.apply(self, map)
 	if lava > 0:
 		LavaLook.dress(self, map, view)
+	elif _move_lab():
+		LavaLook.dress_cave(self, map, {})   # (the lab's lava under the bridge)
 
 	var exits := map.cells_with_tag("exit")
 	if not exits.is_empty():
@@ -870,6 +885,8 @@ func _populate_site() -> void:
 	_site = SiteBuilder.spawn(map, _run, _plan)
 	if _lava_cave() > 0:
 		LavaCave.spawn_monsters(_lava_cave(), _site)   # (the cave's archers on their isles and its melee pack)
+	if _move_lab():
+		MoveLab.spawn_monsters(_site)   # (the lab's pen: a grunt and a swarmer)
 	var origin := _site.origin_gate != null
 	var small := _site.gates.size() - (1 if origin else 0)
 	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned)
@@ -900,6 +917,11 @@ func _lava_cave() -> int:
 	return int(opts.get("lava_cave", 0)) if not _dev_released else 0
 
 
+## --move-lab: the movement lab instead of the generated floor (every window of a crew needs the flag, like --lava-cave).
+func _move_lab() -> bool:
+	return bool(opts.get("move_lab", false)) and not _dev_released
+
+
 ## A lava cave's rules (LavaField: a generated cave's, made by LavaPlanner.spawn, or the --lava-cave prototype's), after the
 ## fog has read the map with its lava cells: from here the lava is void with its bite, and damp crusts it. Every machine.
 func _start_lava() -> void:
@@ -914,6 +936,8 @@ func _start_lava() -> void:
 	field.activate()
 	if _lava_cave() > 0:
 		_log("lava cave %d: %s (%s)" % [_lava_cave(), LavaCave.layout(_lava_cave())["name"], LavaCave.layout(_lava_cave())["blurb"]], Color(1.0, 0.6, 0.3))
+	elif _move_lab():
+		_log("movement lab: profile %s (F6 next, F7 interpolation %s)" % [MoveFeel.label(), "on" if MoveFeel.interp else "off"], Color(1.0, 0.6, 0.3))
 	else:
 		_log("lava cave: %s, %s look, chambers %s (entry %s), %d isles, %d archers%s" % [map.cave["pattern"], map.cave.get("look", "magma"),
 			", ".join(map.cave["rooms"]), (map.cave["entry"] as Dictionary)["room"], (map.cave["isles"] as Array).size(),
@@ -1178,6 +1202,8 @@ func _start() -> void:
 	_start_lava()
 	SewerCalls.attach(self, map, _site.wires, _heroes, func() -> Hero: return player, fog, _banner)   # (dispatch's sewer calls; cosmetic)
 	_dev_on_floor_ready()
+	rig.aim_source = controller.aim_point   # (a movement feel's camera lead leans a little toward the aim)
+	MoveFeelTag.attach(self, player, MoveLab.gates() if _move_lab() else {})   # (F6 / F7 and the passive move log)
 	_enter_barrier()
 	if not await _dev_after_barrier():
 		return

@@ -8,7 +8,7 @@ extends Node
 ##   BOARD     the host rolls the board seed and sends it (crew.board {seed, hi}); every machine draws the same
 ##             three offers (ContractBoard.offers(seed)), read-only for clients. The host's highlighted card
 ##             follows along (crew.hi {i}).
-##   LICENSE   the host takes a job (crew.job {archetype, seed, difficulty}); everyone builds the contract and
+##   LICENSE   the host takes a job (crew.job {archetype, seed, difficulty, feel}); everyone builds the contract and
 ##             opens their OWN license checkout. Signing it is the "ready" step: a client sends
 ##             crew.signed {spells}; the host keeps "signed" and "spells" on the roster entry and sends the
 ##             roster, so every machine sees who is still signing ("waiting for <name>").
@@ -188,7 +188,7 @@ func host_pick(run: ContractRun) -> void:
 	floor_change = false
 	job_ended = false
 	board_note = ""
-	job = {"archetype": run.archetype_id, "seed": run.seed, "difficulty": run.difficulty}
+	job = {"archetype": run.archetype_id, "seed": run.seed, "difficulty": run.difficulty, "feel": MoveFeel.crew_data()}   # (feel: the host's movement profile is the crew's, MoveFeel)
 	_clear_run_state()
 	_session.set_members(0, {"signed": false, "ready": false, "spells": []})
 	_to_members("crew.job", job)
@@ -228,6 +228,7 @@ func note_floor(n: int, seats: Array) -> void:
 func join_floor(the_job: Dictionary, start: float, epoch: float) -> void:
 	var sums := local_sums   # (this machine's own checksum of the floor it built: kept)
 	job = the_job.duplicate()
+	MoveFeel.apply_crew(job)
 	floor_change = false
 	board_note = ""
 	_clear_run_state()
@@ -396,6 +397,7 @@ func _client_event(kind: String, data: Dictionary) -> void:
 			floor_change = false
 			board_note = ""
 			job = data.duplicate()
+			MoveFeel.apply_crew(job)
 			_clear_run_state()
 			job_changed.emit()
 			waiting_changed.emit()

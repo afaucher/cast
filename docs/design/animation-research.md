@@ -292,6 +292,9 @@ ffmpeg's palettegen. Neither script is committed.
      - Add a feel node per hero (lift `anim_lab_feel.gd`'s level 1) between `_visual` and the model.
      - Move the stride clock into `LowPolyModel`, and give each model `leg_len` and tuning.
      - Pause the stride while `is_shoved()`.
+     - (2026-10-21: these two are built, as `Gait` (`scripts/art/lowpoly/gait.gd`, the per-model tuning in its table): the
+       movement feel's `grounded` profile runs it in the game (`HeroGait`, `movement-research.md` 5.3) and this lab's lane B
+       runs the same code. The lean, the squash and strike-first are still this track's to add on top.)
      - Change the three `attack_swing()` tween timings, plus Wick's `shoot_pose` raise.
    - Why first: it is purely cosmetic, derived from the position and facing every screen already shows, so puppets and AI
      allies get it free, and it adds no new net state. It also costs a few springs per hero per frame.

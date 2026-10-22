@@ -46,6 +46,12 @@ const SOURCES := {
 	"lava_crust_v2": [K_IMPACT + "impactSoft_heavy_000.ogg"],
 	"lava_crack_v1": [K_IMPACT + "impactMining_000.ogg", K_IMPACT + "impactMining_002.ogg", K_IMPACT + "impactMining_004.ogg"],
 	"lava_sizzle_v1": [K_IMPACT + "impactSoft_heavy_000.ogg"],
+	# footsteps (the movement feel "grounded", 2026-10-21): Kenney's footsteps, only their low heel
+	"step_hard_v1": [K_IMPACT + "footstep_concrete_001.ogg"],
+	"step_soft_v1": [K_IMPACT + "footstep_carpet_001.ogg"],
+	"step_wood_v1": [K_IMPACT + "footstep_wood_001.ogg"],
+	"step_metal_v1": [K_IMPACT + "footstep_concrete_003.ogg", K_IMPACT + "impactMetal_light_002.ogg"],
+	"land_thud_v1": [K_IMPACT + "impactSoft_heavy_000.ogg", K_IMPACT + "footstep_concrete_002.ogg"],
 }
 
 
@@ -566,3 +572,46 @@ func _lava_sizzle_v1() -> PackedFloat32Array:
 				func(k: float) -> float: return minf(k * 12.0, 1.0) * exp(-3.0 * k))
 	o = Rec.mix(Rec.normalize(o, -1.0), Rec.normalize(_thud("impactSoft_heavy_000.ogg", 250.0, 0.35), -1.0), 0.0, -4.0)
 	return Rec.normalize(Rec.fade(o, 0.0, 0.12), -1.5)
+
+
+# --- footsteps (the movement feel "grounded": scripts/heroes/hero_gait.gd; docs/design/movement-research.md "As built") --------
+
+## One dry footstep on a material (0.12 s): a Kenney footstep cut to its heel strike, low-passed so it stays a thump under
+## the speech band's consonants (they repeat under every utterance a walking player speaks: audio-plan.md §4 rules 2 and 8).
+static func _step(file: String, lp: float, semis: float = 0.0) -> PackedFloat32Array:
+	var s := Rec.trim(Rec.load_mono(K_IMPACT + file), -40.0, 0.002)
+	s = Rec.cut(s, 0.0, 0.12)
+	if semis != 0.0:
+		s = Rec.pitch(s, semis)
+	s = Rec.lowpass(s, lp, 2)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.05), -3.0)
+
+
+## Concrete, slate, tile, marble, stone, basalt: a hard heel.
+func _step_hard_v1() -> PackedFloat32Array:
+	return _step("footstep_concrete_001.ogg", 1400.0, -1.0)
+
+
+## Carpet and rubber: a soft, dull pat.
+func _step_soft_v1() -> PackedFloat32Array:
+	return _step("footstep_carpet_001.ogg", 900.0)
+
+
+## Wood: a hollow knock.
+func _step_wood_v1() -> PackedFloat32Array:
+	return _step("footstep_wood_001.ogg", 1500.0)
+
+
+## Diamond plate: the hard heel and a faint tinny ring under 2.2 kHz.
+func _step_metal_v1() -> PackedFloat32Array:
+	var heel := _step("footstep_concrete_003.ogg", 1400.0, -1.0)
+	var ring := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_light_002.ogg"), -40.0, 0.0), 0.0, 0.14), 2200.0, 2)
+	ring = Rec.fade(ring, 0.001, 0.06)
+	return Rec.normalize(Rec.mix(heel, Rec.normalize(ring, -1.0), 0.004, -9.0), -3.0)
+
+
+## A landing from two levels or more (0.25 s): a soft body thud under 300 Hz and both heels at once.
+func _land_thud_v1() -> PackedFloat32Array:
+	var body := _thud("impactSoft_heavy_000.ogg", 300.0, 0.25)
+	var heel := _step("footstep_concrete_002.ogg", 1200.0, -2.0)
+	return Rec.normalize(Rec.fade(Rec.mix(Rec.normalize(body, -1.0), heel, 0.0, -5.0), 0.0, 0.08), -2.0)

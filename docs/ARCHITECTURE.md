@@ -363,6 +363,10 @@ and the cooldown, then spends 1 charge), `cooldown_left(id) -> float`, `cooldown
 numbers and the drop table; `Monster._on_death` rolls the drops; `ComponentPickup` is the world prop).
 The player-controlled hero has `is_player = true`.
 `PlayerController` reads input. `AllyBrain` drives AI allies.
+How a hero walks follows the active movement profile (`MoveFeel`, `docs/design/movement-research.md` "As built"): with
+`today` (the default) `Hero.move` is the plain walk; with `grounded` the owner's walk is `HeroMotion` (envelope, hop, mantle,
+fall) and every screen draws the stride, footsteps and dust from the shown motion (`HeroGait`, on `Gait`, which the animation
+lab shares). In a crew the host's profile rides `crew.job`.
 
 ### Monsters (`scripts/monsters/*.gd`, each extends `Monster extends Actor`)
 `MonsterFactory.spawn(kind: String, cell: Vector2i) -> Monster`. Kinds: `grunt`, `archer`, `brute`, `swarmer` (the packs), `pavise` and

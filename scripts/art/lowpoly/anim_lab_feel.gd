@@ -13,19 +13,15 @@ extends Node3D
 ##                        lunge and an attacker hit-stop.
 ##
 ## Everything is cosmetic and derived (no new net state): velocity from the position delta works on a puppet as it does
-## on the owner. No randomness.
+## on the owner. No randomness. The stride clock and the legs are Gait's (scripts/art/lowpoly/gait.gd), the same code the
+## game's "grounded" movement profile runs (movement-research.md "As built"); this layer adds the lean, the squash and level 2.
 
-## Per-model tuning. leg: hip-to-sole length (model units x scale); amp: the model's own stride swing (rad at walk 1);
-## omega: the model's own stride rate (rad/s in its apply_idle); walk_ref: the speed its apply_idle calls walk 1;
-## amp_mult: extra swing (Gasket's stubby legs); lean: speed-lean (rad per unit/s); kick: acceleration lean (rad per unit/s
-## of velocity change); f / zeta: the lean spring (Hz, damping: lower f = heavier, lower zeta = more overshoot).
+## Per-model tuning (the stride's is Gait.TUNING). lean: speed-lean (rad per unit/s); kick: acceleration lean (rad per
+## unit/s of velocity change); f / zeta: the lean spring (Hz, damping: lower f = heavier, lower zeta = more overshoot).
 const TUNING := {
-	"wick": {"leg": 0.92, "amp": 0.60, "omega": 9.0, "walk_ref": 4.0, "amp_mult": 1.0,
-			"lean": 0.032, "kick": 0.075, "f": 2.6, "zeta": 0.42, "squash": 1.0},
-	"gasket": {"leg": 0.46, "amp": 0.55, "omega": 8.0, "walk_ref": 4.0, "amp_mult": 1.45,
-			"lean": 0.028, "kick": 0.065, "f": 3.2, "zeta": 0.50, "squash": 1.2},
-	"rebar": {"leg": 1.17, "amp": 0.50, "omega": 7.0, "walk_ref": 4.5, "amp_mult": 1.0,
-			"lean": 0.018, "kick": 0.045, "f": 1.7, "zeta": 0.65, "squash": 0.6},
+	"wick": {"lean": 0.032, "kick": 0.075, "f": 2.6, "zeta": 0.42, "squash": 1.0},
+	"gasket": {"lean": 0.028, "kick": 0.065, "f": 3.2, "zeta": 0.50, "squash": 1.2},
+	"rebar": {"lean": 0.018, "kick": 0.045, "f": 1.7, "zeta": 0.65, "squash": 0.6},
 }
 const LEAN_MAX := 0.38
 const HITSTOP_FRAMES := 4          ## a victim's freeze (~67 ms at 60 fps)
@@ -38,17 +34,13 @@ var level := 1
 
 var _tu: Dictionary
 var _prev := Vector3.INF
-var _v_smooth := Vector3.ZERO      ## velocity through a critically damped spring (the "body mass")
-var _speed := 0.0
-var _t := 0.0                      ## the model's clock (apply_idle time)
+var _gait: Gait                    ## the stride clock and the legs (its v_smooth is the "body mass" the lean reads)
 var _lean := Vector2.ZERO          ## x = pitch, y = roll (rad), and its spring velocity
 var _lean_v := Vector2.ZERO
 var _sq := 0.0                     ## squash (+) / stretch (-), spring
 var _sq_v := 0.0
 var _sq_bias := 0.0                ## a held crouch (the channel)
 var _moving := false
-var _leg_yaw := 0.0
-var _leg_rest := {}                ## leg part -> rest position
 var _head_whip := Vector2.ZERO
 var _head_whip_v := Vector2.ZERO
 var _freeze := 0                   ## hit-stop frames left
@@ -71,9 +63,7 @@ func setup(h: Hero, m: LowPolyModel, k: String, lvl: int) -> void:
 	kind = k
 	level = lvl
 	_tu = TUNING[k]
-	model.idle_enabled = false
-	for side in ["leg_l", "leg_r"]:
-		_leg_rest[side] = (model.parts[side] as Node3D).position
+	_gait = Gait.new(m, k)
 
 
 func _spring(x: float, v: float, target: float, f: float, zeta: float, dt: float) -> Vector2:
@@ -105,11 +95,10 @@ func step(dt: float) -> void:
 	_shake = 0.0
 
 	# --- the body: a critically damped velocity, the lean that leads it ---------------------------------------------
-	_v_smooth += (raw - _v_smooth) * clampf(dt * 9.0, 0.0, 1.0)
-	_speed = lerpf(_speed, raw.length(), clampf(dt * 14.0, 0.0, 1.0))
+	_gait.advance(raw, dt)   # (Gait: the smoothed velocity, the speed and the stride clock matched to the ground)
 	var yaw := (get_parent() as Node3D).rotation.y
-	var local_v := _v_smooth.rotated(Vector3.UP, -yaw)
-	var local_kick := (raw - _v_smooth).rotated(Vector3.UP, -yaw)
+	var local_v := _gait.v_smooth.rotated(Vector3.UP, -yaw)
+	var local_kick := (raw - _gait.v_smooth).rotated(Vector3.UP, -yaw)
 	var lean_vec := local_v * float(_tu["lean"]) + local_kick * float(_tu["kick"])   # where the head goes
 	var target := Vector2(clampf(lean_vec.z, -LEAN_MAX, LEAN_MAX), clampf(-lean_vec.x, -LEAN_MAX, LEAN_MAX))
 	var px := _spring(_lean.x, _lean_v.x, target.x, float(_tu["f"]), float(_tu["zeta"]), dt)
@@ -128,32 +117,11 @@ func step(dt: float) -> void:
 	scale = Vector3(1.0 + _sq * 0.5, 1.0 - _sq, 1.0 + _sq * 0.5)
 	rotation = Vector3(_lean.x, 0.0, _lean.y)
 
-	# --- stride matched to the ground: run the model's clock at the rate its legs need -------------------------------
-	var omega_m := float(_tu["omega"])
-	var walk := clampf(_speed / float(_tu["walk_ref"]), 0.0, 1.0)
-	var amp := float(_tu["amp"]) * float(_tu["amp_mult"]) * maxf(walk, 0.05)
-	var omega_match := _speed / (float(_tu["leg"]) * amp)
-	var rate := lerpf(omega_m, omega_match, smoothstep(0.0, 0.25, walk))
-	_t += dt * rate / omega_m
-
 	# --- the action layer drives the arm kicks it owns before the pose is built ---------------------------------------
 	if level >= 2:
 		_step_channel(dt)
-	model.apply_idle(_t, _speed)
-
-	# --- legs: the swing amplitude, then turned toward the way the hero walks (strafe, backpedal) ----------------------
-	var a := atan2(local_v.x, -local_v.z) if _v_smooth.length() > 0.4 else 0.0
-	var back := absf(a) > deg_to_rad(110.0)
-	var leg_target := -(wrapf(a - PI, -PI, PI) if back else a) * 0.85
-	leg_target = clampf(leg_target, -1.35, 1.35) * smoothstep(0.2, 1.2, _v_smooth.length())
-	_leg_yaw = lerp_angle(_leg_yaw, leg_target, clampf(dt * 14.0, 0.0, 1.0))
-	for side: String in _leg_rest:
-		var leg := model.parts[side] as Node3D
-		var r := leg.rotation
-		r.y = 0.0   # (last frame's yaw: apply_idle rewrites only the swing)
-		r.x *= float(_tu["amp_mult"]) * (-1.0 if back else 1.0)
-		leg.basis = Basis(Vector3.UP, _leg_yaw) * Basis.from_euler(r)
-		leg.position = Basis(Vector3.UP, _leg_yaw) * (_leg_rest[side] as Vector3)
+	# --- the stride at the matched clock, the legs turned toward the way the hero walks (strafe, backpedal): Gait -----
+	_gait.pose(yaw, dt)
 
 	# --- reactions: the head whip and the strike lunge ----------------------------------------------------------------
 	if level >= 2:
@@ -252,7 +220,7 @@ func on_fizzle() -> void:
 func _step_channel(dt: float) -> void:
 	_channel = move_toward(_channel, _channel_target, dt * (2.6 if _channel_target > _channel else 4.0))
 	var c := _channel
-	var tremble := sin(_t * 47.0) * 0.04 * c
+	var tremble := sin(_gait.t * 47.0) * 0.04 * c
 	match kind:
 		"wick":
 			if _release_t < 0.0 or _release_t > 0.6:
@@ -287,7 +255,7 @@ func _update_glow(c: float) -> void:
 		var host: Node3D = model.parts["wand"] if kind == "wick" else (model.hold_anchor if model.hold_anchor != null else model.parts["body"])
 		host.add_child(_glow)
 		_glow.position = Vector3(0, 0.5, 0) if kind == "wick" else Vector3(0, 0.15, 0)
-	var flick := 1.0 + 0.12 * sin(_t * 31.0)
+	var flick := 1.0 + 0.12 * sin(_gait.t * 31.0)
 	var k := (0.08 + 0.45 * c) * flick if c > 0.02 else 0.0
 	_glow.visible = k > 0.0
 	_glow.scale = Vector3.ONE * maxf(k, 0.001) / model.scale.x

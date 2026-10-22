@@ -39,6 +39,12 @@ const GAME_CUES := {
 	"lava_crust": "lava_crust_v2",
 	"lava_crack": "lava_crack_v1",
 	"lava_sizzle": "lava_sizzle_v1",
+	# footsteps (the movement feel "grounded", 2026-10-21)
+	"step_hard": "step_hard_v1",
+	"step_soft": "step_soft_v1",
+	"step_wood": "step_wood_v1",
+	"step_metal": "step_metal_v1",
+	"land_thud": "land_thud_v1",
 }
 
 

@@ -42,3 +42,13 @@ slosh, droplets), the hisses, the hum and the bubbling are synth; the recordings
 | `lava_crust` | `lava_crust_v2` | synth steam on `impactSoft_heavy_000.ogg` (Impact Sounds, low-passed) | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
 | `lava_crack` | `lava_crack_v1` | `impactMining_000/002/004.ogg` (Impact Sounds, their first hits), with synth grit and groan | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
 | `lava_sizzle` | `lava_sizzle_v1` | synth sizzle on `impactSoft_heavy_000.ogg` (Impact Sounds, low-passed) | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
+
+**Footsteps (2026-10-21).** The movement feel's `grounded` profile; built in `tools/sfx_proto/sfx_round3.gd` ("footsteps").
+
+| Cue (file) | Recipe | Made from | Author | Licence | URL |
+|---|---|---|---|---|---|
+| `step_hard` | `step_hard_v1` | `footstep_concrete_001.ogg` (Impact Sounds), its heel strike, a semitone down, low-passed | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
+| `step_soft` | `step_soft_v1` | `footstep_carpet_001.ogg` (Impact Sounds), its heel strike, low-passed | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
+| `step_wood` | `step_wood_v1` | `footstep_wood_001.ogg` (Impact Sounds), its heel strike, low-passed | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
+| `step_metal` | `step_metal_v1` | `footstep_concrete_003.ogg` and a faint `impactMetal_light_002.ogg` ring (Impact Sounds), low-passed | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
+| `land_thud` | `land_thud_v1` | `impactSoft_heavy_000.ogg` under 300 Hz and `footstep_concrete_002.ogg` (Impact Sounds) | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |

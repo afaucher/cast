@@ -39,6 +39,7 @@ const NET_SCRIPTS := [
 	"res://scripts/heroes/arrow_shot.gd",
 	"res://scripts/heroes/bowl_boulder.gd",
 	"res://scripts/heroes/ally_brain.gd",
+	"res://scripts/heroes/hero_motion.gd",      # (the owner's walk under a movement feel: envelope, hop, mantle, fall)
 	"res://scripts/monsters/shark_steer.gd",
 	"res://scripts/heroes/player_controller.gd",
 	"res://scripts/spells/armor_zone.gd",

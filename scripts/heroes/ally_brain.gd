@@ -84,6 +84,7 @@ const ATTACK_END_RANGE := 10.0 ## "attack" ends once no monster within this is i
 const ATTACK_QUIET := 1.0      ## ... for this long
 const PRIORITY_BONUS := 3.0    ## "attack": a priority target (the Water Boy) counts this much nearer
 const FLANK_TIME := 0.5        ## a shielded foe: step round its flank this long before trying again
+const ARRIVE_MIN := 0.35       ## a movement feel's arrival slowdown never walks slower than this share of full speed
 ## What the ally says when it takes an order, by kit (VoiceOrders shows it over its head on every screen).
 const BARKS := {
 	"rebar": {"go": "Moving.", "attack": "Finally.", "follow": "Right behind you."},
@@ -163,6 +164,7 @@ func _physics_process(delta: float) -> void:
 		hero.order_state = order_state()   # (the party HUD's chip; the host sends the change to the clients, NetOrders)
 	if hero == null or hero.dead or hero.is_helpless():
 		return
+	hero.pace = 1.0   # (a profile's catch-up sets it again below while the ally is far behind: _follow)
 	match order:
 		"go":
 			_tick_go(delta)
@@ -724,7 +726,11 @@ func _follow(delta: float) -> void:
 			to = to.normalized()
 			if _in_lane(hero.global_position + to * hero.effective_speed() * delta) or _in_lane(hero.global_position + to * PROBE_STEP):
 				return   # just out of the walking leader's lane: wait beside it rather than cut back across it to the slot
-			_move_toward(slot, delta)
+			# A movement feel's smoother catch-up (MoveFeel "ally_catchup", grounded): a little faster while far behind a moving
+			# leader, and easing into the slot (ally_arrive) instead of stopping dead on it. Nothing with `today`.
+			if MoveFeel.num("ally_catchup") > 1.0 and _leader_walking() and d_slot > MoveFeel.num("ally_catchup_dist"):
+				hero.pace = MoveFeel.num("ally_catchup")
+			_move_toward(slot, delta, MoveFeel.num("ally_arrive"))
 			return
 	_keep_personal_space(delta, slot)
 
@@ -752,14 +758,16 @@ func _has_los(foe: Actor) -> bool:
 	return map == null or map.line_of_sight(Combat.chest(hero), Combat.chest(foe))
 
 
-## Step toward a world point: straight when the way is clear, else along an A* cell path.
-func _move_toward(goal: Vector3, delta: float) -> void:
+## Step toward a world point: straight when the way is clear, else along an A* cell path. `arrive` > 0: inside that many
+## units of the goal the walk slows with the distance left (down to ARRIVE_MIN of full speed).
+func _move_toward(goal: Vector3, delta: float, arrive: float = 0.0) -> void:
 	var to := goal - hero.global_position
 	to.y = 0.0
 	if to.length() < 0.05:
 		return
 	if _direct_clear(hero.global_position, goal):
-		hero.move(to.normalized(), delta)
+		var k := clampf(to.length() / arrive, ARRIVE_MIN, 1.0) if arrive > 0.0 else 1.0
+		hero.move(to.normalized() * k, delta)
 		return
 	var map: HexMap = GameWorld.map
 	var goal_cell := Hex.from_world(goal)

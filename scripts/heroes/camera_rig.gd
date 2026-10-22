@@ -16,10 +16,15 @@ const SHAKE_DECAY := 2.2
 const SHAKE_MAX_OFFSET := 0.5
 
 var target: Node3D = null
+## The aim point (a Callable returning a world Vector3), for a movement feel's camera lead toward the aim; unset = none.
+var aim_source: Callable = Callable()
 var right_inset_px := 0.0   ## screen pixels covered on the right (debug panel); keeps the target centered in the rest
 var camera: Camera3D
 var _trauma := 0.0
 var _zoom_target := SIZE_DEFAULT
+var _lead_vel := Vector3.ZERO     ## the target's velocity, smoothed over MoveFeel "cam_lead_time" (the lead)
+var _lead_last := Vector3.INF
+var lead := Vector3.ZERO          ## the offset the camera leads by right now (tests)
 
 
 func _ready() -> void:
@@ -40,6 +45,12 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if target != null and is_instance_valid(target):
 		var want := target.global_position + Vector3.UP * FOCUS_HEIGHT
+		if MoveFeel.num("cam_lead") > 0.0:
+			want += _lead(delta)
+		elif _lead_last != Vector3.INF:
+			_lead_last = Vector3.INF
+			_lead_vel = Vector3.ZERO
+			lead = Vector3.ZERO
 		global_position = global_position.lerp(want, clampf(FOLLOW_RATE * delta, 0.0, 1.0))
 	camera.size = lerpf(camera.size, _zoom_target, clampf(10.0 * delta, 0.0, 1.0))
 	if _trauma > 0.0:
@@ -50,6 +61,31 @@ func _process(delta: float) -> void:
 	else:
 		camera.h_offset = _inset_offset()
 		camera.v_offset = 0.0
+
+
+## A movement feel's lead (docs/design/movement-research.md, package A): cam_lead units along the target's velocity
+## (smoothed over cam_lead_time, so a reversal eases the view across rather than snapping it), plus cam_aim_share of the
+## way toward the aim, at most cam_lead_max in all.
+func _lead(delta: float) -> Vector3:
+	var p := target.global_position
+	if _lead_last == Vector3.INF or delta <= 0.0:
+		_lead_last = p
+	var v := (p - _lead_last) / maxf(delta, 0.0001)
+	v.y = 0.0
+	_lead_last = p
+	if v.length() > 30.0:
+		v = Vector3.ZERO   # (a teleport)
+	_lead_vel = _lead_vel.lerp(v, clampf(delta / maxf(MoveFeel.num("cam_lead_time"), 0.01), 0.0, 1.0))
+	var full := 4.5
+	if target is Actor:
+		full = maxf((target as Actor).move_speed, 0.1)
+	var out := _lead_vel / full * MoveFeel.num("cam_lead")
+	if aim_source.is_valid():
+		var to: Vector3 = (aim_source.call() as Vector3) - p
+		to.y = 0.0
+		out += to * MoveFeel.num("cam_aim_share")
+	lead = out.limit_length(MoveFeel.num("cam_lead_max"))
+	return lead
 
 
 ## World units to slide the view so the target sits in the middle of the uncovered area.

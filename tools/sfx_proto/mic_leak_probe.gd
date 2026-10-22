@@ -19,7 +19,8 @@ const Render = preload("res://tools/sfx_proto/render_game_sfx.gd")
 const RATE := 16000
 const STEP := 320
 ## D: recipe -> seconds between its starts under the utterance (how the game repeats it).
-const REPEATS := {"wade_step_v1": 0.45, "lava_bubble_v1": 1.7, "wire_buzz_v4": 6.0}
+const REPEATS := {"wade_step_v1": 0.45, "lava_bubble_v1": 1.7, "wire_buzz_v4": 6.0,
+		"step_hard_v1": 0.23, "step_soft_v1": 0.23, "step_wood_v1": 0.23, "step_metal_v1": 0.23}   # (footsteps: Wick's cadence at a walk)
 ## D: the beds the game ducks while the local player speaks (Sfx duck_db), and by how much.
 const DUCKED := {"lava_bubble_v1": true, "wire_buzz_v4": true}
 const DUCK_DB := -10.0

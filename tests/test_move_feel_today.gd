@@ -1,4 +1,4 @@
-﻿extends TestCase
+extends TestCase
 ## The `today` movement profile is the game as it was before MoveFeel existed, to the last digit
 ## (docs/design/movement-research.md, "As built"). A scripted walk over a course with every kind of ground (a +1 step and a
 ## +2 climb, a reversal, a wall push, a lava edge slide, wading, coffee, a bow draw, a 3-level drop) and an AI ally following
@@ -86,7 +86,7 @@ func setup() -> void:
 	if not check(FileAccess.file_exists(PATH), "the recorded trace exists (%s)" % PATH):
 		finish()
 		return
-	var want := FileAccess.get_file_as_string(PATH).strip_edges().split("\n")
+	var want := FileAccess.get_file_as_string(PATH).replace("\r", "").strip_edges().split("\n")
 	eq(lines.size(), want.size(), "as many frames as recorded")
 	var first_bad := -1
 	for i in mini(lines.size(), want.size()):

@@ -106,6 +106,19 @@ const CUES := {
 	## Something lands in the lava (LavaField._on_impact: a hero pulled back out, a monster sinking): the sizzle.
 	"lava_sizzle": {"file": "lava_sizzle.wav", "bus": "World", "volume_db": -3.0, "pitch_jitter": 0.06,
 		"max_voices": 3, "min_gap": 0.1, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
+	# --- footsteps (the movement feel "grounded", 2026-10-21; audio-plan.md "Footsteps"): HeroGait, one per foot plant of any
+	## hero on any screen (from the shown motion), on the floor's material; quiet and close (they repeat under speech).
+	"step_hard": {"file": "step_hard.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
+	"step_soft": {"file": "step_soft.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
+	"step_wood": {"file": "step_wood.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
+	"step_metal": {"file": "step_metal.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
+	## A hero lands on foot from two levels or more (HeroGait._landing, every screen).
+	"land_thud": {"file": "land_thud.wav", "bus": "World", "volume_db": -14.0, "pitch_jitter": 0.06,
+		"max_voices": 3, "min_gap": 0.1, "positional": true, "unit_size": 8.0, "max_distance": 40.0},
 }
 ## Cues with a "duck_db" (the long beds) go down by it while the local player speaks (audio-plan.md §4 rule 4, built for
 ## those cues only): down in DUCK_ATTACK, held DUCK_HOLD after the voice stops, back up over DUCK_RELEASE.

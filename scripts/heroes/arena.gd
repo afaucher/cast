@@ -10,7 +10,7 @@ extends Node3D
 ##   --autocast <spell>       with --shot: cast that spell first (aimed at a dummy)
 ##   --shot-after <seconds>   with --autocast: game seconds between cast and shot (default 0.5)
 ##   --show-picker            with --shot: screenshot the spell picker
-## Controls: WASD move, mouse aim, LMB melee, RMB bolt, 1/2 cast slots,
+## Controls: WASD move, mouse aim, LMB melee, RMB bolt, 1/2 cast slots, F6 / F7 movement feel / interpolation (MoveFeel),
 ## Enter = type a spell ("heal", "cast fireball"), mouse wheel zoom, F5 restart.
 
 const ARENA_RADIUS := 8
@@ -45,6 +45,7 @@ var _dummies: Array[TrainingDummy] = []
 
 func _ready() -> void:
 	InputSetup.ensure_actions()
+	MoveFeel.boot()
 	var args := OS.get_cmdline_user_args()
 	var spells := _arg_list(args, "--spells")
 	_shot_path = _arg_value(args, "--shot")
@@ -126,6 +127,8 @@ func _start(slots: Array[String]) -> void:
 	hud.enable_console()
 	controller.enabled = true
 	_spawn_monsters()
+	rig.aim_source = controller.aim_point
+	MoveFeelTag.attach(self, player)   # (F6 / F7: the movement-feel A/B works here too)
 	if _shot_path != "":
 		controller.aim_override = _dummies[0].global_position
 	_started = true

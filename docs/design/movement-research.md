@@ -1,6 +1,7 @@
 # Movement feel: research and options
 
-Status: **[research]**, 2026-10-21. Nothing here is built or decided. It answers the user's note of the same day: "the
+Status: **[research]**, 2026-10-21; package A is **built as an A/B profile** (section 5.3, "As built"), `today` stays the
+default until the user picks. Nothing else here is built or decided. It answers the user's note of the same day: "the
 movement feels a little too basic but I am not sure what is missing." It measures what the hero's movement does today,
 compares it with top-down and isometric action games known for good movement, ranks the gaps for Cast, and proposes
 packages to try side by side. **[proposal]** marks every number and rule still waiting on the user.
@@ -384,6 +385,125 @@ Speeds as in C.
   Each is a separate commit with its own test: the envelope's start and stop distances, an arc's apex height, the
   dodge's i-frame window, the edge stop, and two peers where a monster strike on a dodging client's hero does no
   damage.
+
+### 5.3 As built: package A "grounded" as an A/B profile (2026-10-21)
+
+The user (2026-10-21): "Let's try the package A grounded. Preferably so I can A/B." Built: the profile table, package A, the
+judder check, the lab, the log and the tests. **`today` is still the default**: nothing changes for normal play until the
+user picks.
+
+#### How to A/B
+| Command | What it does |
+|---|---|
+| `.\run.ps1 --move-lab --move-feel shuffle --no-mic` | The lab (below), with `today` and `grounded` dealt in a random order as **"feel 1" / "feel 2"**. The tag says only the number; which is which is printed to the console and written in every log row. |
+| `.\run.ps1 --move-lab --move-feel grounded --no-mic` | The lab, profiles named. `today` is the default. |
+| **F6** | The next profile (the tag in the lower left names it, or its number when blind, for about 2 s). In a crew it does nothing (the tag says "set by the host"). |
+| **F7** | Physics interpolation of your own heroes on / off (the judder check). `--physics-interp on` starts with it on. |
+| `.\run.ps1 --seed 7 --contract 0 --spells heal,corn --move-feel grounded` | Any real floor (F6 / F7 work there too, and in the arena, `--scene res://scenes/arena.tscn`). |
+| `.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded` | Two windows: how a teammate's grounded walk reads on a puppet. |
+
+The flags work in any order; MoveFeel reads them once per run (`Boot`, the game and the arena call `MoveFeel.boot`).
+
+#### What was built
+| Piece | Where | What |
+|---|---|---|
+| The table | `scripts/heroes/move_feel.gd` (`MoveFeel`) | Profiles `today` (every key at its "off" value: the old code paths run) and `grounded`. The flag, F6's cycle, shuffle, the crew rule. Every hero, the camera and the AI read the active profile here. |
+| The walk | `scripts/heroes/hero_motion.gd` (`HeroMotion`), `Hero.move` | The envelope, the hop, the mantle, gravity. On the machine that moves the hero only. `today`: `Hero.move` is the old walk. |
+| The feet | `scripts/heroes/hero_gait.gd` (`HeroGait`) on `scripts/art/lowpoly/gait.gd` (`Gait`) | Stride and legs, footsteps, dust, the big landing. Every screen, from the shown motion. |
+| Camera | `CameraRig._lead` | The lead. |
+| Allies | `AllyBrain._follow`, `_move_toward` | The arrival slowdown and the catch-up (`Hero.pace`). |
+| Judder | `Hero._interp_show` / `_interp_restore` | F7 (below). |
+| Lab | `scripts/heroes/move_lab.gd` (`MoveLab`), `--move-lab` | The course, as floor 1 of a contract. |
+| Tag, keys, log | `scripts/heroes/move_feel_tag.gd`, `scripts/heroes/move_log.gd` | F6 / F7, the tag, `user://move_lab.csv`. |
+
+**The stride is shared with the animation track.** `animation-research.md`'s lab (`anim_lab_feel.gd`, level 1) already had
+a stride matched to the ground and legs turned toward the travel. That logic now lives in `Gait`, and both the lab's lane B
+and this profile run it, so the animation work layers on top of it rather than fighting it. Its **lean, squash, landing
+squash, strike-first and hit-stop are left to the animation track** (the coordinator's call); so the doc's "lean about 6°
+into acceleration" and "a landing squash of 0.08 s" are not in package A.
+
+#### The grounded numbers (measured: `test_move_feel_grounded`, 60 Hz)
+| Part | Doc's starting point | As built (measured) |
+|---|---|---|
+| Start | boost 45%, 0.08 s | First frame 2.02 u/s (45% of 4.5), full speed on frame 6 (**0.083 s**). Top speed unchanged (4.50). |
+| Stop | 0.07 s, 0.16 u | **0.067 s** (4 frames), slide **0.12 u** (the doc's 0.16 is the continuous formula; in 60 Hz steps it is 0.12). |
+| Reversal | 0.10 s through zero | **0.10 s** (6 frames). Any turn of more than 60° and any speed change while walking (coffee, water) use the same rate: a 90° WASD turn takes 0.07 s. |
+| Hop (+1) | 0.12 s, peak 0.15 above the step | 0.12 s, peak **0.149** above the step. Starts `HOP_LEAD` (0.04 s of walking plus half a radius) before the edge, so the feet never sink into the face (deepest 0.000 past the edge; today: about 0.1 s inside it). Stairs are walked as before. |
+| Mantle (+2) | held 0.15 / 0.25 / 0.40 s, rise 0.15 s | Held **0.15 s** (Wick), **0.27** (default), **0.42** (Gasket), then a 0.15 s rise. A +2 now costs **0.26 / 0.37 / 0.52 s** over flat (today 0.07 / 0.13 / 0.20). Letting go or turning away during the hold cancels it. Rebar still can't climb. `climbing` is set for the mantle (it streams). |
+| Drops | gravity 24 u/s², the walk carried | A 3-level drop falls **0.35 s** (21 frames), speeding up every frame (0.007, 0.013 ... 0.133 u a frame; today: fastest first). A landing from 2+ levels keeps **40%** of the speed and ramps back over `start` (about 0.09 s of lost speed). |
+| Edges | the stop slide never goes over | Held: every step still goes through `Actor.move`, so lava and pits refuse it (`test_move_feel_grounded`, the edge case; `test_move_lab`, the bridge). |
+| Casting | free | Unchanged: no root, no slow while speaking (tested). |
+| Stride | from distance, legs match the body | The planted foot's sweep over the ground speed (1.00 = no skating; the animation doc's measure): walk **0.98**, coffee **0.97**, bow drawn **0.97**, strafe **1.05** (today: Wick 1.08 / 0.67 / 1.22 / 0.00; Gasket 0.45 at a walk). The stride pauses while shoved. |
+| Footsteps | a dry step per stride on the floor's material | One per foot plant (`Gait.plants`) on `step_hard` (concrete, slate, tile, marble, stone, basalt), `step_soft` (carpet, rubber), `step_wood`, `step_metal` (diamond plate); none in pool water (Wading's splash). At -27 dB, heard within about 26 units. A legless prototype body steps every 1.1 units. |
+| Dust | on a reversal, a hard stop, a landing | Small puffs on a start (kicked back), a stop from 3.5 u/s or more, a turn of 75° or more and a 2+ level landing (with a ring and `land_thud`), at least 0.35 s apart. |
+| Camera | lead 1.2 u, smoothed 0.35 s, +15% toward the aim, max 2 | As the doc. |
+| Allies | the envelope, slow inside 1 u of the slot, x1.15 when far behind | As the doc: the slowdown never below 35% of full speed; the catch-up while more than 3.2 u from the slot behind a walking leader. |
+| Lane assist | within 15° of a wall line or a bridge axis | **Not built** (it is input bending, not feel, and needs its own A/B: open question below). |
+
+A lap of the lab on foot (`test_move_lab`, the path the map's own pathing takes, through the pool): today **23.9 s**,
+grounded **24.2 s** (the mantle's hold and the landing recovery).
+
+#### The judder check (gap 0)
+`probe_move_judder` (not in the suite: `Godot --path . --headless --fixed-fps <hz> -- --run-test probe_move_judder`) walks a
+hero at full speed and reads, every rendered frame, where it is drawn and where the camera is:
+
+| Refresh | F7 off: frames the hero does not move | off: jump against the camera | F7 on: frames still | on: jump |
+|---|---|---|---|---|
+| 60 Hz | 0 of 240 | 0.9 px | 0 | 0.9 px (identical) |
+| 120 Hz | **120 of 240** | **2.1 px** | 0 | 0.5 px |
+| 144 Hz | **140 of 240** | **1.9 px** | 0 | 0.4 px |
+| 165 Hz | **152 of 240** | **2.1 px** | 0 | 0.3 px |
+
+So on a 60 Hz monitor interpolation changes nothing (it only adds one physics tick, 16 ms, of drawing delay). On a 120-165 Hz
+monitor, with it off, your own hero stands still on half or more of the frames and steps about 2 px against the smoothly
+following camera every tick: a fine, constant stutter. With it on, the steps are perfectly even. **It is not the default**
+(the user decides, after trying F7 on their own monitor; question 1 below).
+
+How it works: not Godot's global `physics_interpolation` (a lot of the game moves things in `_process`: puppets, the camera,
+the models' parts, Fx). Instead a hero this machine moves is drawn between its last two physics positions
+(`Engine.get_physics_interpolation_fraction()`) and its true position is put back at the start of every physics tick
+(`SceneTree.physics_frame`), before anything simulates; a position something else set in between (a teleport, an arrival) is
+kept. Monsters and puppets are unchanged (puppets already move every frame). `test_move_feel_grounded` holds that it never
+changes where the hero really is.
+
+#### Networking
+- **Nothing new on the wire.** The envelope, hops, mantle and falls are the owner's motion and stream as a walk; the mantle
+  sets the already-streamed `climbing` flag. Puppets get their stride, footsteps, dust and landing thud on every screen from
+  the shown motion (`HeroGait`, like Wading's splashes). The snapshots keep their size (`test_net_move_feel`).
+- **The host's profile is everyone's.** It rides the job (`crew.job` gets `feel: {id, blind}`; a late joiner gets the job
+  too), as §5.2 recommends: a puppet's stride, hop and landing are drawn with the profile THAT screen has, so the crew must
+  agree; an A/B in a crew should compare like with like; and a later profile with a dodge is gameplay every machine must
+  agree on. F6 is off while crewed. Interpolation (F7) is each machine's own: it only changes how that screen draws its own
+  heroes.
+- Declared per AGENTS.md: `Hero.pace` and `_motion` PRIVATE, `_gait` and the interpolation state LOCAL; `HeroMotion` is in
+  `test_net_contract`'s `NET_SCRIPTS` (all PRIVATE); `HeroGait` declares its LOCAL vars. No allowlist was widened.
+
+#### What is logged
+`user://move_lab.csv` (`%APPDATA%\Godot\app_userdata\Cast\move_lab.csv`), passive, never in tests: one **period** row per
+stretch played on one profile (closed by F6 / F7 or leaving the floor) and, in the lab, one **lap** row per START-to-FINISH.
+Columns: time, session, scene (lab | floor), mode (today | grounded | shuffle), label (what the tag showed), profile (the real
+one), interp, event, seconds, distance, laps, lap_s (the lap, or the period's best), hits and damage taken, edge_stops (walking
+stopped at a pit's or the lava's edge), starts, stops, reversals, refresh_hz (the monitor's) and fps.
+
+#### The lab (`--move-lab`)
+A hand-built floor played as floor 1 (like `--lava-cave`: the HUD, voice, AI allies and crews all work), west to east: the
+start pad, a slalom of three pillars, a +1 stair run up three levels, a 3-level drop, a +2 ledge (and a 2-level drop off it),
+a one-wide bridge at 60° over lava, a wading pool, a cut-wall corridor at 60°, and the finish pad with a grunt and a swarmer
+in a pen whose gap is the gate. Floors are concrete, carpet, wood, marble, tile, flagstone, pool tile and diamond plate, so
+every footstep is heard. `--move-lab` alone goes straight in (heal and damp signed). The lap runs from the start pad to the
+finish pad.
+
+#### Tests
+`test_move_feel_today` (today against a trace recorded before any profile existed: every frame of a course with steps, a
+climb, a reversal, a wall push, the lava edge, wading, coffee, the bow and a drop, the player and an AI ally),
+`test_move_feel_grounded` (the numbers above, the profiles, shuffle and the log), `test_move_lab` (the course and a lap per
+profile) and `test_net_move_feel` (two processes on the lab, `off` and `coast`).
+
+#### Open questions (added)
+- Which feels better, blind? (The CSV keeps the laps per profile; the user's feel is the answer.)
+- The stop slide is 0.12 u at 60 Hz. Longer (`stop` 0.09 gives 0.17 u)?
+- Lane assist for keys (package A's last row) was not built: try it as its own toggle?
+- The lean and landing squash are the animation track's: try them on top of grounded next?
 
 ---
 

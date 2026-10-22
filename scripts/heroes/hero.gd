@@ -129,6 +129,20 @@ var _daze_shown := false             ## this screen is showing the daze (stars, 
 ## are untouched. Null = the prototype look.
 var visual_override: Node3D = null
 
+## MOVEMENT FEEL (MoveFeel, docs/design/movement-research.md "As built"). With the `today` profile none of this runs: move()
+## is the old walk and the drawn hero is the old one. `grounded`: the owner's walk has an envelope, hops, mantles and falls
+## (HeroMotion, on the machine that moves this hero), and every screen draws its stride, footsteps and dust from the shown
+## motion (HeroGait). `pace` is an AI ally's catch-up (AllyBrain sets it; a profile without one leaves it at 1).
+var pace := 1.0
+var _motion: HeroMotion = null
+var _gait: HeroGait = null
+## Physics interpolation of a hero this machine moves (MoveFeel.interp, F7): between physics ticks the node is drawn where
+## it was a fraction of the way from the last tick to this one, and put back before the next tick (_interp_restore).
+var _ip_prev := Vector3.INF
+var _ip_cur := Vector3.ZERO
+var _ip_shown := Vector3.INF      ## the position this frame drew it at (INF: not displaced)
+var _ip_hooked := false
+
 
 func _init() -> void:
 	team = GameWorld.TEAM_HEROES
@@ -136,6 +150,9 @@ func _init() -> void:
 	move_speed = 4.5
 	radius = 0.4
 	display_name = "Hero"
+	_motion = HeroMotion.new(self)
+	_gait = HeroGait.new(self)
+	process_physics_priority = 10   # (after its PlayerController / AllyBrain: a frame with no move() is a coast)
 
 
 func _ready() -> void:
@@ -177,6 +194,9 @@ func net_fields() -> Dictionary:
 		"_charge_ring": Net.LOCAL, "_charge_mat": Net.LOCAL,
 		# The daze look: every screen shows it from the daze modifier (_modifiers, announced by the owner).
 		"_ui_top": Net.LOCAL, "_daze_stars": Net.LOCAL, "_daze_shown": Net.LOCAL,
+		# Movement feel: the owner's walk (its result streams as the position) and this screen's drawing of it.
+		"pace": Net.PRIVATE, "_motion": Net.PRIVATE,
+		"_gait": Net.LOCAL, "_ip_prev": Net.LOCAL, "_ip_cur": Net.LOCAL, "_ip_shown": Net.LOCAL, "_ip_hooked": Net.LOCAL,
 	})
 	return f
 
@@ -556,19 +576,54 @@ func _arrow_effect(dir: Vector3, drawn: bool) -> void:
 	_shoot_pose()
 
 
-## Move at draw_move_mult speed while the bow is drawn.
+## Walk (the controllers call it every frame they steer). Under a profile with an envelope it is HeroMotion's; otherwise the
+## plain walk below, exactly as it always was.
 func move(dir: Vector3, delta: float) -> bool:
-	if _draw_start < 0.0:
+	if MoveFeel.on("envelope"):
+		return _motion.walk(dir, delta)
+	return _walk(dir, delta)
+
+
+## The plain walk: Actor.move at draw_move_mult speed while the bow is drawn (and an AI ally's catch-up `p`, grounded only).
+func _walk(dir: Vector3, delta: float, p: float = 1.0) -> bool:
+	if _draw_start < 0.0 and p == 1.0:
 		return super.move(dir, delta)
 	var base := move_speed
-	move_speed = base * draw_move_mult   # (Actor.move then applies the modifiers on top: coffee, goo, roots)
+	move_speed = base * (draw_move_mult if _draw_start >= 0.0 else 1.0) * p   # (Actor.move then applies the modifiers on top: coffee, goo, roots)
 	var moved := super.move(dir, delta)
 	move_speed = base
 	return moved
 
 
+## Full walking speed right now, everything included (the bow, coffee, water, goo, roots, an ally's catch-up).
+func walk_speed() -> float:
+	return effective_speed() * (draw_move_mult if _draw_start >= 0.0 else 1.0) * pace
+
+
+## A +2 ledge is a slow climb, or (a profile with a mantle) never walked onto: the mantle takes the hero up.
 func _climb_allowed() -> bool:
-	return can_climb
+	return can_climb and not MoveFeel.on("mantle")
+
+
+## Under an envelope the walk's own vertical rules replace the eased settle (HeroMotion.vertical); placing a hero
+## (no delta) is unchanged.
+func snap_to_ground(delta: float = -1.0) -> void:
+	if delta >= 0.0 and MoveFeel.on("envelope") and not Net.is_puppet(self):
+		return
+	super.snap_to_ground(delta)
+
+
+## The movement feel's per-tick part, on the machine that moves this hero (after its controller or AI: priority 10).
+func _physics_process(delta: float) -> void:
+	if not MoveFeel.on("envelope"):
+		if _motion.mantle != 0 or _motion.vel != Vector3.ZERO or _motion.air or _motion.hop_t >= 0.0:
+			_motion.reset()   # (switched back to today mid-step: the plain walk takes over from here)
+		return
+	if Net.is_puppet(self):
+		return
+	if _motion.moved_frame != Engine.get_physics_frames():
+		_motion.coast(delta)
+	_motion.vertical(delta)
 
 
 ## Keep the model's bow and the charge ring in step with the draw.
@@ -861,9 +916,11 @@ static func _sphere(r: float) -> SphereMesh:
 func _process(delta: float) -> void:
 	if _visual == null:
 		return
+	_interp_show()
 	var target_yaw := atan2(-facing.x, -facing.z)
 	_visual_yaw = lerp_angle(_visual_yaw, target_yaw, clampf(TURN_RATE * delta, 0.0, 1.0))
 	_visual.rotation.y = _visual_yaw
+	_gait.tick(delta)
 	if _draw_start >= 0.0:
 		if dead or is_helpless():
 			cancel_draw()
@@ -875,6 +932,54 @@ func _process(delta: float) -> void:
 			var pulse := 1.0 + 0.04 * sin(GameWorld.time * 6.0)
 			_shield_bubble.scale = Vector3.ONE * pulse
 	_update_daze_visuals(delta)
+
+
+# --- Physics interpolation (MoveFeel.interp, F7; docs/design/movement-research.md "As built", the judder check) -------------
+
+## Draw this hero between its last two physics positions (Engine.get_physics_interpolation_fraction), when this machine
+## moves it. Its true position is put back at the start of the next physics tick (_interp_restore), before anything
+## simulates; a position something else set in between (a teleport, an arrival) is kept.
+func _interp_show() -> void:
+	if not MoveFeel.interp or Net.is_puppet(self) or not is_inside_tree():
+		if _ip_hooked:
+			_interp_unhook()
+		return
+	if not _ip_hooked:
+		_ip_hooked = true
+		get_tree().physics_frame.connect(_interp_restore)
+		_ip_prev = global_position
+		_ip_cur = global_position
+		_ip_shown = Vector3.INF
+	if _ip_shown == Vector3.INF or global_position != _ip_shown:
+		_ip_cur = global_position   # (the last tick's true position; or something placed the hero since)
+	if _ip_prev == Vector3.INF or _ip_prev.distance_to(_ip_cur) > 2.0:
+		_ip_prev = _ip_cur
+	var shown := _ip_prev.lerp(_ip_cur, clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0))
+	global_position = shown
+	_ip_shown = shown
+
+
+## The start of a physics tick: the true position back, and it becomes the "previous" one for the next drawn frames.
+func _interp_restore() -> void:
+	if _ip_shown != Vector3.INF and global_position == _ip_shown:
+		global_position = _ip_cur
+	_ip_shown = Vector3.INF
+	_ip_prev = global_position
+
+
+func _interp_unhook() -> void:
+	_ip_hooked = false
+	if _ip_shown != Vector3.INF and global_position == _ip_shown:
+		global_position = _ip_cur
+	_ip_shown = Vector3.INF
+	_ip_prev = Vector3.INF
+	if is_inside_tree() and get_tree().physics_frame.is_connected(_interp_restore):
+		get_tree().physics_frame.disconnect(_interp_restore)
+
+
+func _exit_tree() -> void:
+	if _ip_hooked:
+		_interp_unhook()
 
 
 ## The daze on this screen (the owner's daze, or the one its owner announced): stars over the head, the model reeling

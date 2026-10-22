@@ -18,6 +18,13 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
 - **Lava caves:** a supervillain's floors 2-3, and floor 2 of other clients with a hellgate in it, can roll a lava cave
   (`.\run.ps1 --seed 31 --floor 2 --spells damp,fireball --no-mic --to-lava entry`); `--lava-floor` forces one (solo or every
   window of a crew). See `docs/design/lava-playtest.md`, "As built: caves on real floors".
+- **Movement feel A/B (dev):** `.\run.ps1 --move-lab --move-feel shuffle --no-mic` plays the movement lab (a lap of slalom,
+  steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen) with the two movement profiles dealt blind as
+  "feel 1" / "feel 2"; **F6** switches profile, **F7** physics interpolation. `--move-feel today|grounded` names one (the
+  default is `today`, the game as it was), `--physics-interp on` starts with interpolation. Works on any floor and in the
+  arena too; in a crew the host's profile is everyone's (`.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded`). Every
+  stretch and lap is logged to `%APPDATA%\Godot\app_userdata\Cast\move_lab.csv`. See `docs/design/movement-research.md`,
+  "As built".
 
 The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc goes back):
 
