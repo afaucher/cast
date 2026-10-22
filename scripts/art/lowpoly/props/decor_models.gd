@@ -518,8 +518,13 @@ static func _crate_stack(s: LowPoly.Soup, _p: Dictionary) -> void:
 
 # --- pieces built by other kits (the priced props, the pool lab, the sewer) --------------------------------------------
 
+## The priced specimen vat's body; its fluid and glass come in _tank_after (the vat's glass is a separate see-through mesh).
 static func _specimen_tank(s: LowPoly.Soup, _p: Dictionary) -> void:
 	PropModels._specimen_vat(s)
+
+
+static func _tank_after(root: Node3D, _p: Dictionary) -> void:
+	root.add_child(PropModels._specimen_vat_glass())
 
 
 static func _lab_bench(s: LowPoly.Soup, _p: Dictionary) -> void:

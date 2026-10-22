@@ -81,7 +81,7 @@ const TABLE := {
 	"torture_rack": {"name": "Torture rack", "price": 1500, "hp": 80.0, "radius": 0.75, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 0.9),
 		"height": 0.95, "model": "_torture_rack", "palette": [PropModels.WOOD_DK, PropModels.WOOD, PropModels.IRON, Color(0.7, 0.62, 0.45)]},
 	"specimen_vat": {"name": "Specimen vat", "price": 5000, "hp": 45.0, "radius": 0.68, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.5, 1.5),
-		"height": 2.0, "model": "_specimen_vat", "palette": [PropModels.IRON, Color(0.3, 1.0, 0.55), Color(0.2, 0.55, 0.4), Color(0.45, 0.2, 0.6)]},
+		"height": 2.1, "model": "_specimen_vat", "extra": "_specimen_vat_glass", "palette": [PropModels.IRON, Color(0.3, 1.0, 0.55), Color(0.2, 0.55, 0.4), Color(0.45, 0.2, 0.6)]},
 	"villain_throne": {"name": "Villain throne", "price": 9000, "hp": 100.0, "radius": 0.7, "site": "lair", "place": "wall", "orient": "face_entrance", "foot": Vector2(1.1, 1.2),
 		"height": 2.35, "model": "_villain_throne", "palette": [PropModels.OBSIDIAN, PropModels.VELVET, PropModels.GOLD, Color(0.9, 0.88, 0.8)]},
 	"shark_tank": {"name": "Shark tank", "price": 7000, "hp": 60.0, "radius": 0.78, "site": "lair", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.6, 1.0),

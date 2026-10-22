@@ -444,29 +444,131 @@ static func _torture_rack(s: LowPoly.Soup) -> void:
 	box(s, Vector3(0.02, 0.025, 0.02), Vector3(0.66, 0.64, -0.24), glow(Color(1.0, 0.25, 0.1)))
 
 
+## The specimen vat's glass tube: radius, bottom and top (model space). The body (_specimen_vat) is the iron, the bars and
+## the creature, which floats wholly inside VAT_R; the glowing fluid and the glass are _specimen_vat_glass (the row's
+## "extra", and the specimen tank decor's "after"), so the creature is seen THROUGH the glass, never poking out of it.
+const VAT_R := 0.5
+const VAT_Y0 := 0.2               ## the glass's foot, sunk in the base (its top is at 0.22)
+const VAT_Y1 := 1.88              ## the glass's head, inside the cap (its underside is at 1.84)
+const VAT_FLUID := Color(0.25, 0.95, 0.5)
+const VAT_SPECIMEN := Color(0.36, 0.1, 0.52)
+const VAT_ROT := Vector3(0, 22.5, 0)   ## the octagons turned so a flat facet (not an edge) faces the front
+
+
 static func _specimen_vat(s: LowPoly.Soup) -> void:
-	# iron base and cap with a ring of bolts
-	cyl(s, 0.75, 0.7, 0.3, 8, Vector3(0, 0.15, 0), IRON)
-	cyl(s, 0.74, 0.7, 0.14, 8, Vector3(0, 1.75, 0), IRON)
-	cyl(s, 0.5, 0.44, 0.18, 8, Vector3(0, 1.91, 0), IRON_LT)
+	# iron base with a ring of bolts; a slim cap (a wide one hides the vat's insides from the steep game camera)
+	cyl(s, 0.75, 0.7, 0.22, 8, Vector3(0, 0.11, 0), IRON, VAT_ROT)
+	cyl(s, 0.56, 0.56, 0.12, 8, Vector3(0, 1.9, 0), IRON, VAT_ROT)
+	cyl(s, 0.4, 0.34, 0.14, 8, Vector3(0, 2.03, 0), IRON_LT, VAT_ROT)
 	for i in 8:
 		var a := TAU * float(i) / 8.0
-		ball(s, Vector3(0.04, 0.04, 0.04), Vector3(cos(a) * 0.62, 0.32, sin(a) * 0.62), GOLD_DK, 0, 0.05)
-	# the glowing green fluid, ringed by four iron bars
-	cyl(s, 0.5, 0.5, 1.44, 8, Vector3(0, 1.03, 0), glow(Color(0.25, 0.95, 0.5)))
+		ball(s, Vector3(0.04, 0.04, 0.04), Vector3(cos(a) * 0.62, 0.24, sin(a) * 0.62), GOLD_DK, 0, 0.05)
+	# four iron bars outside the glass, in front of its diagonal facets
 	for i in 4:
 		var a2 := TAU * float(i) / 4.0 + PI / 4.0
-		cyl(s, 0.045, 0.045, 1.5, 5, Vector3(cos(a2) * 0.58, 1.03, sin(a2) * 0.58), IRON_LT)
-	# what is floating in it
-	ball(s, Vector3(0.24, 0.3, 0.22), Vector3(0.0, 1.05, 0.38), Color(0.4, 0.15, 0.55), 1, 0.15)
-	ball(s, Vector3(0.05, 0.05, 0.05), Vector3(-0.08, 1.15, 0.58), glow(Color(1.0, 0.95, 0.3)), 0, 0.0)
-	ball(s, Vector3(0.05, 0.05, 0.05), Vector3(0.1, 1.15, 0.58), glow(Color(1.0, 0.95, 0.3)), 0, 0.0)
-	rod(s, Vector3(-0.1, 0.85, 0.4), Vector3(-0.3, 0.45, 0.45), 0.07, 0.025, 5, Color(0.4, 0.15, 0.55))
-	rod(s, Vector3(0.1, 0.85, 0.4), Vector3(0.3, 0.5, 0.48), 0.07, 0.025, 5, Color(0.4, 0.15, 0.55))
+		cyl(s, 0.035, 0.035, 1.62, 5, Vector3(cos(a2) * 0.535, 1.03, sin(a2) * 0.535), IRON_LT)
+	# what is floating in it (the escaped specimen's kind, small): wholly inside the glass, and low and squat, so the
+	# steep game camera sees it under the cap. Its faces glow (vertex alpha): the fluid lights it, not the room, so it
+	# reads as a purple shape against the green from any side, cap shadow or not. Eyes all round (the vat may face any way).
+	ball(s, Vector3(0.32, 0.26, 0.29), Vector3(0.0, 0.8, 0.0), glow(VAT_SPECIMEN), 1, 0.14)
+	ball(s, Vector3(0.18, 0.13, 0.17), Vector3(0.06, 1.02, -0.06), glow(VAT_SPECIMEN.lightened(0.12)), 1, 0.12)
+	for e: Vector2 in [Vector2(-25, 0.09), Vector2(22, 0.1), Vector2(0, -0.07), Vector2(95, 0.05), Vector2(-105, 0.06), Vector2(175, 0.08)]:
+		var th := deg_to_rad(e.x)
+		var k := sqrt(1.0 - pow(e.y / 0.26, 2.0))
+		var out := Vector3(sin(th), 0.0, cos(th))
+		var at := Vector3(sin(th) * 0.32 * k, 0.8 + e.y, cos(th) * 0.29 * k)
+		ball(s, Vector3(0.065, 0.065, 0.065), at, glow(Color(0.98, 0.95, 0.85)), 0, 0.0)
+		ball(s, Vector3(0.03, 0.03, 0.03), at + out * 0.056, glow(Color(1.0, 0.85, 0.15)), 0, 0.0)
+	for i in 5:
+		var a3 := TAU * float(i) / 5.0 + 0.6
+		var p := Vector3(cos(a3) * 0.17, 0.64, sin(a3) * 0.17)
+		var q := Vector3(cos(a3 + 0.5) * 0.34, 0.34 + 0.08 * float(i % 2), sin(a3 + 0.5) * 0.34)
+		rod(s, p, q, 0.065, 0.02, 4, glow(VAT_SPECIMEN.darkened(0.2)))
+	# bubbles rising past it
+	for b: Vector3 in [Vector3(-0.3, 0.5, 0.18), Vector3(-0.27, 0.85, 0.22), Vector3(-0.32, 1.2, 0.12), Vector3(0.3, 1.35, 0.1)]:
+		ball(s, Vector3(0.035, 0.035, 0.035), b, glow(Color(0.8, 1.0, 0.85)), 0, 0.0)
 	# pipes to the control box
-	rod(s, Vector3(0.0, 1.98, 0.0), Vector3(-0.7, 1.85, -0.3), 0.06, 0.06, 5, IRON_LT)
+	rod(s, Vector3(0.0, 2.06, 0.0), Vector3(-0.7, 1.95, -0.3), 0.06, 0.06, 5, IRON_LT)
 	box(s, Vector3(0.3, 0.35, 0.2), Vector3(0.7, 0.18, 0.1), IRON_LT)
 	box(s, Vector3(0.18, 0.08, 0.02), Vector3(0.7, 0.24, 0.21), glow(Color(1.0, 0.4, 0.2)))
+
+
+const _VAT_GLASS_SHADER := """
+shader_type spatial;
+render_mode blend_mix, unshaded, cull_back, depth_draw_never, shadows_disabled;
+
+// The specimen vat's glass: clear where it faces the viewer, thicker green toward the silhouette (judged around the
+// tube's axis, so the steep game camera still looks THROUGH the front facet). COLOR is the paint; COLOR.a lifts a face
+// to at least that opacity (the white streaks).
+uniform float face_alpha = 0.14;
+uniform float edge_alpha = 0.8;
+uniform float edge_gain = 1.6;
+varying vec3 wn;
+
+void vertex() {
+	wn = MODEL_NORMAL_MATRIX * NORMAL;
+}
+
+void fragment() {
+	vec3 v = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
+	vec2 vh = normalize(v.xz + vec2(1e-5));
+	vec2 nh = normalize(wn.xz + vec2(1e-5));
+	float edge = 1.0 - clamp(dot(vh, nh), 0.0, 1.0);
+	ALBEDO = COLOR.rgb * (1.0 + edge * edge_gain);
+	ALPHA = max(mix(face_alpha, edge_alpha, edge), COLOR.a);
+}
+"""
+
+static var _vat_glass_shader: Shader
+
+
+## The specimen vat's fluid and glass, beside its body: an inside-out glowing tube (only its far wall and floor draw, so
+## from any side you look into it) and the see-through glass over it with two white streaks.
+static func _specimen_vat_glass() -> Node3D:
+	var root := Node3D.new()
+	root.name = "VatGlass"
+	# the fluid: a cylinder turned inside out (mirrored, so its faces point in), no outline (an inverted hull of it
+	# would ink over the opening)
+	var f := LowPoly.Soup.new(17, 0.04)
+	var h := VAT_Y1 - VAT_Y0
+	var tube := LowPoly.cylinder(VAT_R - 0.03, VAT_R - 0.03, h - 0.06, 8, glow(VAT_FLUID), 18, 0.0, 2, 0.05)
+	f.merge(tube, Transform3D(Basis.from_euler(Vector3(0, deg_to_rad(VAT_ROT.y), 0)).scaled(Vector3(-1, 1, 1)), Vector3(0, (VAT_Y0 + VAT_Y1) * 0.5 + 0.01, 0)))
+	var fluid := MeshInstance3D.new()
+	fluid.name = "Fluid"
+	fluid.mesh = f.to_mesh()
+	var fm := MonsterMaterial.make(0.0)
+	fm.set_shader_parameter("glow_gain", 1.25)
+	fluid.material_override = fm
+	fluid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(fluid)
+	# the glass: an outward tube, its near side drawn see-through
+	var g := LowPoly.Soup.new(19, 0.0)
+	var tint := Color(VAT_FLUID.r * 0.7, VAT_FLUID.g * 0.85, VAT_FLUID.b * 0.75, 0.0)
+	g.merge(LowPoly.cylinder(VAT_R, VAT_R, h, 8, tint, 20, 0.0, 1, 0.0), LowPoly.at(Vector3(0, (VAT_Y0 + VAT_Y1) * 0.5, 0), VAT_ROT))
+	# two white streaks 6 mm proud of the glass: [facet angle (deg; the front facet is 90), offset along it, half width,
+	# bottom, top]
+	var ap := VAT_R * cos(PI / 8.0) + 0.006
+	for st: Array in [[90.0, 0.115, 0.04, 0.36, 1.72], [90.0, 0.03, 0.014, 0.55, 1.6]]:
+		var phi := deg_to_rad(float(st[0]))
+		var d := Vector3(cos(phi), 0.0, sin(phi))
+		var t := Vector3(-sin(phi), 0.0, cos(phi))
+		var mid := d * ap + t * float(st[1])
+		var w: float = st[2]
+		var lo := Vector3.UP * float(st[3])
+		var hi := Vector3.UP * float(st[4])
+		g.add_quad(mid - t * w + lo, mid + t * w + lo, mid + t * w + hi, mid - t * w + hi, Color(0.92, 1.0, 0.95, 0.7))
+	var glass := MeshInstance3D.new()
+	glass.name = "Glass"
+	glass.mesh = g.to_mesh()
+	if _vat_glass_shader == null:
+		_vat_glass_shader = Shader.new()
+		_vat_glass_shader.code = _VAT_GLASS_SHADER
+	var gm := ShaderMaterial.new()
+	gm.shader = _vat_glass_shader
+	glass.material_override = gm
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(glass)
+	return root
 
 
 static func _villain_throne(s: LowPoly.Soup) -> void:

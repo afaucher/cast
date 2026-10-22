@@ -294,7 +294,7 @@ const DECOR := {
 	"hazard_tape": {"place": "wall", "orient": "away_from_wall", "w": 2.4, "d": 0.3, "h": 0.9, "blocks": false, "weight": 0.3, "model": "_hazard_tape"},
 	"wet_floor_sign": {"place": "floor", "orient": "face_start", "w": 0.6, "d": 0.5, "h": 1.0, "blocks": false, "weight": 0.3, "model": "_wet_floor_sign", "after": "_wet_after"},
 	"pool_lounger": {"place": "group", "orient": "face_target", "w": 0.85, "d": 1.9, "h": 0.6, "blocks": false, "weight": 0.5, "model": "_pool_lounger"},
-	"specimen_tank": {"place": "corner", "orient": "face_center", "w": 1.5, "d": 1.5, "h": 2.1, "blocks": true, "weight": 1.0, "model": "_specimen_tank"},
+	"specimen_tank": {"place": "corner", "orient": "face_center", "w": 1.5, "d": 1.5, "h": 2.1, "blocks": true, "weight": 1.0, "model": "_specimen_tank", "after": "_tank_after"},
 	"lab_bench": {"place": "wall", "orient": "away_from_wall", "w": 1.85, "d": 0.8, "h": 1.45, "blocks": true, "weight": 1.0, "model": "_lab_bench"},
 	"lab_console": {"place": "wall", "orient": "away_from_wall", "w": 1.55, "d": 1.0, "h": 1.9, "blocks": true, "weight": 1.0, "model": "_lab_console"},
 	"pipe_run": {"place": "wall", "orient": "away_from_wall", "w": 3.4, "d": 0.45, "h": 1.0, "blocks": false, "weight": 0.5, "model": "_pipe_run", "backed": true},

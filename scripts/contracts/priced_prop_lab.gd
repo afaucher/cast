@@ -12,6 +12,7 @@ extends LabBase
 ##                  bunker / lair   one catalog row, ortho size 12
 ##                  prop    one prop alone (needs --prop <kind>), ortho size 3.6; --yaw/--pitch/--size override
 ## --prop <kind>  with --view prop
+## --decor <kind> with --view prop: a room-theme decor piece (DecorModels) instead of a priced prop
 ## No --shot: opens the lab; the demo toilet breaks and rebuilds every few seconds.
 
 const GAME_YAW := 45.0
@@ -20,6 +21,7 @@ const GAME_SIZE := 24.0
 const SPACING := 2.45
 
 var only_prop := ""
+var only_decor := ""
 var cam_yaw := NAN
 var cam_pitch := NAN
 var cam_size := NAN
@@ -44,7 +46,9 @@ func _ready() -> void:
 	ticker = DamageTicker.new()
 	ticker.hold_time = 600.0
 	layer.add_child(ticker)
-	if only_view == "prop":
+	if only_view == "prop" and only_decor != "":
+		add_child(DecorModels.build(only_decor))
+	elif only_view == "prop":
 		var p := PricedProp.spawn(Vector2i.ZERO, only_prop if only_prop != "" else "gold_toilet", {})
 		props.append(p)
 	else:
@@ -57,6 +61,7 @@ func _ready() -> void:
 
 func _parse_args() -> void:
 	only_prop = arg(args, "--prop")
+	only_decor = arg(args, "--decor")
 	if arg(args, "--yaw") != "":
 		cam_yaw = float(arg(args, "--yaw"))
 	if arg(args, "--pitch") != "":
