@@ -30,9 +30,20 @@ extends Node
 ## so when the enemy gets close."): every leash (LEASH from the leader, HOLD_LEASH from a "go" spot, ATTACK_LEASH from the
 ## speaker) used to be one line: a step past it dropped the fight, the walk back toward the slot crossed it again, and the
 ## fight came back, every few frames, so Rebar punching a walker away from him and Wick backing off a grunt each shook in
-## place at the line, turning 180 degrees (and grounded_anim's lean kicking) five times a second. Past a leash the ally now
-## goes back until it is LEASH_RETURN inside it before it fights again (`_leash_ok`), and Wick backing off stops short of the
-## leash and stands his ground there (shoots, or swings when it is that close: cornered) instead of backing out through it.
+## place at the line, turning 180 degrees (and grounded_anim's lean kicking) five times a second. A latch (walk back
+## LEASH_RETURN, then fight again) only made the loop two units long (user, 2026-10-22: "Rebar got stuck again, this time
+## walking the 2 units back and forth each time"). So THE LEASH PICKS TARGETS, it never moves the ally:
+##   - the ally never steps past its leash while fighting (`_chase`): at the line it stands, facing the foe, and swings or
+##     shoots at what comes into reach; and it does not run after a foe that is still sliding from its own punch or boulder
+##   - a foe it is fighting stays its foe KEEP_SLACK past the range it was picked in, so a knockback does not drop it
+##   - a foe out of bounds that is still in the fight close by (WATCH_RANGE) is watched, not walked away from: the ally holds
+##     where it stands, facing it, until the leader walks on (`_watch`)
+##   - an ally past its leash while the leader walks on, or LEASH_RETURN past it, stops fighting and catches up; it fights
+##     again once it is back inside the leash with the leader stopped or walking its way (`_leash_ok`: no line to flip
+##     across, and no fight to turn back to while the leader walks off); catching up, it still swings at a foe in the
+##     fight within its reach (`_swipe`)
+## Wick backing off stops short of the leash and stands his ground there (shoots, or swings when it is that close: cornered)
+## instead of backing out through it.
 ## Wick's kiting commits the same way: once a foe is inside RANGED_MIN he backs off until it is KITE_SLACK past it, rather
 ## than backing off one frame and turning to shoot the next (his facing swung 180 degrees every frame at 3.5 units), and once
 ## cornered he stands until that kiting is over.
@@ -69,7 +80,9 @@ const BLOCK_LANE := 1.25       ## half-width of the leader's lane
 const HEADING_MIN_STEP := 0.012   ## the leader moved at least this far this frame: it is walking
 const ENGAGE_RANGE := 9.0      ## only fight monsters this close to the leader
 const LEASH := 8.0             ## never chase farther than this from the leader ...
-const LEASH_RETURN := 2.0      ## ... and once past a leash, come this far back inside it before fighting again
+const LEASH_RETURN := 2.0      ## ... an ally this far past its leash (the leader walked off) stops fighting and follows
+const KEEP_SLACK := 1.5        ## the foe it is fighting stays its foe this far past the range it was picked in
+const WATCH_RANGE := 4.0       ## a foe in the fight this close, out of bounds: the ally holds and faces it (LEASHES COMMIT)
 const CORNER_MARGIN := 0.6     ## a ranged ally backs off no closer than this to its leash: then it stands and fights
 const MELEE_STOP := 1.25       ## melee ally closes to this distance
 const RANGED_MIN := 3.5
@@ -141,7 +154,7 @@ var _foe: Actor = null            ## the monster it is fighting (kept while it s
 var _react_at: Dictionary = {}    ## monster instance id -> when this ally may engage it (the reaction delay)
 var _rng := RandomNumberGenerator.new()
 var _clear_side := 0.0            ## stepping out of the leader's lane to this side (+1 / -1 across its heading), 0 when not
-var _leashed := false            ## went past a leash: going back inside it (LEASH_RETURN) before fighting again
+var _catching_up := false         ## past its leash while the leader walks on (or far past it): following, not fighting
 var _kiting := false              ## a ranged ally backing off a foe that came inside RANGED_MIN (until KITE_SLACK past it)
 var _standing := false            ## ... and cornered at its leash while it does: it stands its ground until the kiting ends
 var _roomy_cell := Vector2i(1 << 20, 1 << 20)   ## the formation slot's cell last frame (kept while a crowd moves; NO PACING)
@@ -171,7 +184,7 @@ func net_fields() -> Dictionary:
 		"order": Net.PRIVATE, "order_point": Net.PRIVATE, "order_by": Net.PRIVATE, "_arrived": Net.PRIVATE,
 		"_quiet_since": Net.PRIVATE, "_foe": Net.PRIVATE, "_react_at": Net.PRIVATE,
 		"_rng": Net.PRIVATE,      # the reaction delays: a generator seeded from the floor, rolled on the host only
-		"_clear_side": Net.PRIVATE, "_roomy_cell": Net.PRIVATE, "_leashed": Net.PRIVATE, "_kiting": Net.PRIVATE, "_standing": Net.PRIVATE,
+		"_clear_side": Net.PRIVATE, "_roomy_cell": Net.PRIVATE, "_kiting": Net.PRIVATE, "_catching_up": Net.PRIVATE, "_standing": Net.PRIVATE,
 	}
 
 
@@ -191,7 +204,7 @@ func _physics_process(delta: float) -> void:
 			var foe := _pick_target()
 			if foe:
 				_fight(foe, delta)
-			else:
+			elif not _swipe() and not _watch():
 				_follow(delta)
 
 
@@ -204,8 +217,8 @@ func give_order(kind: String, by: Hero, point: Vector3 = Vector3.INF) -> String:
 		return ""
 	_foe = null
 	_arrived = false
-	_leashed = false
 	_kiting = false
+	_catching_up = false
 	_standing = false
 	_quiet_since = -1.0
 	_path.clear()
@@ -251,7 +264,7 @@ func _tick_go(delta: float) -> void:
 		_arrived = true
 	var foe: Actor = null
 	if _arrived:
-		if _leash_ok(d, HOLD_LEASH):
+		if _leash_ok():
 			foe = _pick_restrained(order_point, HOLD_RANGE)
 	else:
 		foe = _pick_restrained(order_point, 0.0)   # (range 0: self-defence only)
@@ -264,7 +277,7 @@ func _tick_go(delta: float) -> void:
 ## "attack": fight anything near, no restraint; when nothing near has been fighting for ATTACK_QUIET, follow the speaker.
 func _tick_attack(delta: float) -> void:
 	var foe: Actor = null
-	if leader == null or leader.dead or _leash_ok(GameWorld.flat_distance(hero.global_position, leader.global_position), ATTACK_LEASH):
+	if _leash_ok():
 		foe = _pick_free(hero.global_position, ATTACK_RANGE)
 	if foe != null:
 		_quiet_since = -1.0
@@ -317,15 +330,43 @@ func set_heading(dir: Vector3) -> void:
 		_heading = dir.normalized()
 
 
-## True while this ally may fight at `dist` from what its `leash` is measured from. Past the leash it stops and goes back,
-## and only fights again once it is LEASH_RETURN inside it (LEASHES COMMIT in the header).
-func _leash_ok(dist: float, leash: float) -> bool:
-	if _leashed:
-		_leashed = dist > leash - LEASH_RETURN
-	elif dist > leash:
-		_leashed = true
-		_foe = null
-	return not _leashed
+## What the leash is measured from: the "go" spot, else the leader (INF: no leash, the leader is down).
+func _leash_anchor() -> Vector3:
+	if order == "go":
+		return order_point
+	return leader.global_position if leader != null and not leader.dead else Vector3.INF
+
+
+## The leash's length: HOLD_LEASH under "go", ATTACK_LEASH under "attack", else LEASH.
+func _leash_len() -> float:
+	return HOLD_LEASH if order == "go" else (ATTACK_LEASH if order == "attack" else LEASH)
+
+
+## May the ally pick a fight now? Not while it is catching up: from a step past its leash while the leader walks on (or
+## LEASH_RETURN past it) until it is back inside it with the leader standing or walking its way (LEASHES COMMIT).
+func _leash_ok() -> bool:
+	var past := not _within_leash(hero.global_position)
+	var walking := order != "go" and _leader_walking()   # (a "go" spot does not walk off)
+	if past and (walking or not _within_leash(hero.global_position, LEASH_RETURN)):
+		_catching_up = true
+	elif _catching_up and not past and (not walking or _leader_coming()):
+		_catching_up = false
+	return not _catching_up
+
+
+## The leader is walking toward this ally (not away from it): a fight here is on its way, not left behind.
+func _leader_coming() -> bool:
+	if leader == null or leader.dead:
+		return false
+	var rel := hero.global_position - leader.global_position
+	rel.y = 0.0
+	return _leader_walking() and _heading.dot(rel) > 0.0
+
+
+## True when `p` is no more than `slack` past the leash.
+func _within_leash(p: Vector3, slack: float = 0.0) -> bool:
+	var a := _leash_anchor()
+	return a == Vector3.INF or GameWorld.flat_distance(p, a) <= _leash_len() + slack
 
 
 func _anchor() -> Vector3:
@@ -335,8 +376,8 @@ func _anchor() -> Vector3:
 ## No order: under the restraint baseline, the best monster already in the fight near the leader (see the header); without
 ## it (tests), the old eager pick. Nothing while we are too far out.
 func _pick_target() -> Actor:
-	if leader and not leader.dead and not _leash_ok(GameWorld.flat_distance(hero.global_position, leader.global_position), LEASH):
-		return null
+	if not _leash_ok():
+		return null   # (the leader walked off: catch up first)
 	if not restraint:
 		return _pick_eager(_anchor(), ENGAGE_RANGE)
 	return _pick_restrained(_anchor(), ENGAGE_RANGE)
@@ -359,7 +400,7 @@ func _pick_eager(anchor: Vector3, reach: float) -> Actor:
 ## "attack": the nearest monster within `reach` of `anchor` that is in the fight or in sight (it opens fights), no delay.
 func _pick_free(anchor: Vector3, reach: float) -> Actor:
 	if _foe != null and is_instance_valid(_foe) and not _foe.dead \
-			and GameWorld.flat_distance(_foe.global_position, anchor) <= reach:
+			and GameWorld.flat_distance(_foe.global_position, anchor) <= reach + KEEP_SLACK:
 		return _foe
 	var best: Actor = null
 	var best_d := INF
@@ -391,7 +432,8 @@ func _pick_restrained(anchor: Vector3, reach: float) -> Actor:
 			continue
 		var on_me := _target_of(m) == hero
 		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
-		if not on_me and GameWorld.flat_distance(m.global_position, anchor) > reach:
+		var keep := KEEP_SLACK if m == _foe and reach > 0.0 else 0.0   # (a knockback does not drop the foe it is fighting)
+		if not on_me and GameWorld.flat_distance(m.global_position, anchor) > reach + keep:
 			continue
 		if on_me and d > ENGAGE_RANGE:
 			continue
@@ -409,8 +451,8 @@ func _pick_restrained(anchor: Vector3, reach: float) -> Actor:
 			best_rank = rank
 			best_d = d
 			best = m
-	if _foe != null and is_instance_valid(_foe) and not _foe.dead and keep_rank <= best_rank:
-		best = _foe
+	if _foe != null and is_instance_valid(_foe) and not _foe.dead and keep_rank < 99 and keep_rank <= best_rank:
+		best = _foe   # (only while it passed the checks above: a foe out of range or out of the fight is let go)
 	_foe = best
 	if _react_at.size() > 64:
 		_forget_gone()
@@ -492,12 +534,12 @@ func _fight(foe: Actor, delta: float) -> void:
 			hero.face_point(foe.global_position)
 			_shoot(foe, dir, d)
 		else:
-			_move_toward(foe.global_position, delta)
+			_chase(foe, delta)
 	else:
 		if d <= _melee_stop() + 0.2:
 			_swing(foe, dir)
 		else:
-			_move_toward(foe.global_position, delta)
+			_chase(foe, delta)
 			if d <= hero.melee_reach - 0.2:
 				_swing(foe, dir)
 
@@ -505,12 +547,56 @@ func _fight(foe: Actor, delta: float) -> void:
 ## A ranged ally backing off along `away` would come within CORNER_MARGIN of its leash (the leader's, or under "go" the spot's):
 ## it stands its ground there instead (LEASHES COMMIT in the header).
 func _cornered(away: Vector3, delta: float) -> bool:
-	var anchor := order_point if order == "go" else (leader.global_position if leader != null and not leader.dead else Vector3.INF)
-	if anchor == Vector3.INF:
-		return false
-	var leash := HOLD_LEASH if order == "go" else (ATTACK_LEASH if order == "attack" else LEASH)
 	var next := hero.global_position + away * maxf(hero.effective_speed() * delta, PROBE_STEP)
-	return GameWorld.flat_distance(next, anchor) > leash - CORNER_MARGIN
+	return not _within_leash(next, -CORNER_MARGIN)
+
+
+## Close in on `foe`, but never past the leash: at the line the ally stands and faces it (it swings or shoots at what comes
+## into reach), and it does not run after a foe still sliding from a knockback (its punch, its boulder). LEASHES COMMIT.
+func _chase(foe: Actor, delta: float) -> void:
+	if foe.is_shoved():
+		hero.face_point(foe.global_position)   # (let it land: it was just knocked away)
+		return
+	var to := foe.global_position - hero.global_position
+	to.y = 0.0
+	var next := hero.global_position + to.normalized() * maxf(hero.effective_speed() * delta, PROBE_STEP)
+	var a := _leash_anchor()
+	if not _within_leash(next) and GameWorld.flat_distance(next, a) >= GameWorld.flat_distance(hero.global_position, a):
+		hero.face_point(foe.global_position)   # at the line: hold it
+		return
+	_move_toward(foe.global_position, delta)
+
+
+## Catching up (no foe picked): a swing, without stopping, at a foe in the fight that came within reach on its own, when the
+## swing is ready. True if it swung (the follow resumes next frame).
+func _swipe() -> bool:
+	if not _catching_up or hero.cooldown_left(Hero.KEY_MELEE) > 0.0:
+		return false
+	for m in GameWorld.actors_in_radius(hero.global_position, hero.melee_reach - 0.2, GameWorld.TEAM_MONSTERS):
+		if _in_fight(m):
+			var to := m.global_position - hero.global_position
+			to.y = 0.0
+			_swing(m, to.normalized() if to.length() > 0.001 else hero.facing)
+			return true
+	return false
+
+
+## No foe to fight, the leader standing, but something in the fight within WATCH_RANGE that is out of bounds (beyond what
+## the leash lets the ally pick): hold here and face it rather than walk back to the slot and out again. True if it holds.
+func _watch() -> bool:
+	if leader == null or leader.dead or _leader_walking() or not _within_leash(hero.global_position):
+		return false
+	var best: Actor = null
+	var best_d := WATCH_RANGE
+	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
+		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
+		if d <= best_d and _in_fight(m):
+			best_d = d
+			best = m
+	if best == null:
+		return false
+	hero.face_point(best.global_position)
+	return true
 
 
 # --- The client's property ---------------------------------------------------------------------
