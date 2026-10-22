@@ -334,7 +334,7 @@ uniform vec4 slime : source_color;
 uniform float slime_glow = 0.0;
 varying vec3 wp;
 varying vec3 wn;
-float h21(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+""" + ShaderHash.GLSL + """
 float vn(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
@@ -422,7 +422,7 @@ uniform float alpha = 0.8;
 uniform float glow_gain = 0.2;
 varying vec3 wp;
 varying vec2 flow;
-float h21(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+""" + ShaderHash.GLSL + """
 float vn(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);

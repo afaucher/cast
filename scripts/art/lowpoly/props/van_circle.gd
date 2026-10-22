@@ -35,13 +35,13 @@ uniform vec3 amber = vec3(1.0, 0.52, 0.10);
 uniform vec3 chalk_col = vec3(0.90, 0.86, 0.74);
 varying vec2 pp;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+""" + ShaderHash.GLSL + """
 
 float noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+	return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 
 // distance to a segment; h = position along it (0..1)
@@ -91,7 +91,7 @@ void fragment() {
 	float tid = floor(ta);
 	float toff = (fract(ta) - 0.5) / 24.0 * 6.2831853 * 1.07;     // arc length across the tick
 	float tick_len = step(1.04, r) * step(r, 1.11);
-	float tick = mix(9.0, abs(toff), tick_len * step(0.28, hash(vec2(tid, 3.0))));
+	float tick = mix(9.0, abs(toff), tick_len * step(0.28, h21(vec2(tid, 3.0))));
 	d = min(d, mix(9.0, tick, vis_ring));
 
 	float ra = a * 10.0;
@@ -100,10 +100,10 @@ void fragment() {
 	float rune_d = 9.0;
 	float inside = step(abs(rl.x), 0.2) * step(abs(rl.y), 0.052);
 	for (int k = 0; k < 3; k++) {
-		float h1 = hash(vec2(rid, float(k) * 7.0 + 1.0));
-		float h2 = hash(vec2(rid, float(k) * 7.0 + 2.0));
-		float h3 = hash(vec2(rid, float(k) * 7.0 + 3.0));
-		float h4 = hash(vec2(rid, float(k) * 7.0 + 4.0));
+		float h1 = h21(vec2(rid, float(k) * 7.0 + 1.0));
+		float h2 = h21(vec2(rid, float(k) * 7.0 + 2.0));
+		float h3 = h21(vec2(rid, float(k) * 7.0 + 3.0));
+		float h4 = h21(vec2(rid, float(k) * 7.0 + 4.0));
 		vec2 pa = vec2(floor(h1 * 3.0) - 1.0, floor(h2 * 2.0) - 0.5) * vec2(0.08, 0.075);
 		vec2 pb = vec2(floor(h3 * 3.0) - 1.0, floor(h4 * 2.0) - 0.5) * vec2(0.08, 0.075);
 		pb = mix(pb, pa + vec2(0.0, 0.07), step(length(pb - pa), 0.001));

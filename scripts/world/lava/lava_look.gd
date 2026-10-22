@@ -30,26 +30,6 @@ const LIGHT := Color(1.0, 0.45, 0.15)
 const LIGHT_E := 1.6
 const EMBER := Color(1.0, 0.55, 0.15)
 
-## The patterns' lattice hash: two values in [0, 1) for a lattice point (whole-number coordinates), from its integers
-## (pcg2d, Jarzynski and Olano 2020), so every pixel that asks about the same point gets the same answer. It was
-## fract(sin(dot(p, k)) * 43758.5): the cave sits 20-100 m from the origin, so the sine's argument is in the tens of
-## thousands, where one rounding step of it (the GPU computes dot(i + g, k) for each of the nine neighbours its own way)
-## is a different value; one feature point came out in two places either side of a lattice line and the plates were cut
-## along it, the warp and heat noise too: the creases (user playtest 2026-10-21, docs/design/lava-playtest.md).
-const HASH := """
-vec2 h22(vec2 p) {
-	uvec2 v = uvec2(ivec2(floor(p + 0.5)) + 32768);
-	v = v * 1664525u + 1013904223u;
-	v.x += v.y * 1664525u;
-	v.y += v.x * 1664525u;
-	v = v ^ (v >> 16u);
-	v.x += v.y * 1664525u;
-	v.y += v.x * 1664525u;
-	v = v ^ (v >> 16u);
-	return vec2(v >> 8u) * (1.0 / 16777216.0);
-}
-"""
-
 ## Crusted lava: dark plates (a cellular pattern) drifting slowly, the glow in the cracks between them and in slow hot
 ## patches. Unshaded and HDR. `flicker` (0..1) brightens and breaks the cracks (a damp crust about to give way).
 const LAVA_SHADER := """
@@ -63,7 +43,7 @@ uniform float crust_k = 0.55;
 uniform float heat_k = 0.32;
 uniform float flicker = 0.0;
 varying vec3 wp;
-""" + HASH + """
+""" + ShaderHash.GLSL + """
 float vn(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
@@ -108,7 +88,7 @@ uniform vec4 hot : source_color;
 uniform vec4 core : source_color;
 uniform float flicker = 0.0;
 varying vec3 wp;
-""" + HASH + """
+""" + ShaderHash.GLSL + """
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 void fragment() {
 	vec2 p = wp.xz * 1.5;

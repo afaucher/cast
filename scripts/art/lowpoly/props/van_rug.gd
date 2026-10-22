@@ -29,13 +29,13 @@ const vec3 RUST = vec3(0.66, 0.26, 0.10);
 const vec3 OCHRE = vec3(0.88, 0.62, 0.24);
 const vec3 CREAM = vec3(0.84, 0.74, 0.54);
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+""" + ShaderHash.GLSL + """
 
 float noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+	return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 
 float fbm(vec2 p) {
@@ -51,7 +51,7 @@ vec3 tri_cell(vec2 p, float t) {
 	float up = step(1.0, f.x + f.y);
 	vec2 c = i + mix(vec2(0.33333), vec2(0.66667), up);
 	float cy = c.y / 1.1547;
-	return vec3(hash(i * 2.0 + vec2(up, up * 3.0)), vec2(c.x + cy * 0.57735, cy) * t);
+	return vec3(h21(i * 2.0 + vec2(up, up * 3.0)), vec2(c.x + cy * 0.57735, cy) * t);
 }
 
 void vertex() {
@@ -71,8 +71,8 @@ void fragment() {
 	float fcell = an * 300.0;
 	float fid = floor(fcell);
 	float ff = fract(fcell) - 0.5;
-	float flen = 0.010 + 0.034 * hash(vec2(fid, 4.0));
-	float strand = step(abs(ff), 0.21) * step(0.2, hash(vec2(fid, 8.0)));
+	float flen = 0.010 + 0.034 * h21(vec2(fid, 4.0));
+	float strand = step(abs(ff), 0.21) * step(0.2, h21(vec2(fid, 8.0)));
 	bool body = u < edge_u;
 	bool fringe = u >= edge_u && u < edge_u + flen && strand > 0.5;
 	if (!body && !fringe) {
@@ -85,7 +85,7 @@ void fragment() {
 	vec3 col;
 	if (!body) {
 		float k = (u - edge_u) / flen;
-		col = mix(vec3(0.66, 0.55, 0.40), vec3(0.34, 0.27, 0.20), k) * (0.75 + 0.25 * hash(vec2(fid, 2.0)));
+		col = mix(vec3(0.66, 0.55, 0.40), vec3(0.34, 0.27, 0.20), k) * (0.75 + 0.25 * h21(vec2(fid, 2.0)));
 	} else if (u < 0.82) {
 		// the field: deep maroon, every facet a touch lighter or darker, a faint rust line out near the border
 		col = MAROON * (0.86 + 0.28 * tone);

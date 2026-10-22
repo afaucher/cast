@@ -459,6 +459,7 @@ uniform vec4 moat_base : source_color = vec4(0.4, 0.42, 0.37, 1.0);
 uniform vec4 moat_grout : source_color = vec4(0.13, 0.15, 0.13, 1.0);
 varying vec3 wp;
 varying vec3 wn;
+""" + ShaderHash.GLSL + """
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
@@ -481,7 +482,7 @@ void fragment() {
 		vec2 f = fract(q);
 		float ed = min(min(f.x, 1.0 - f.x) * bs.x, min(f.y, 1.0 - f.y) * bs.y);
 		float joint = 1.0 - smoothstep(0.012, 0.03, ed);
-		float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+		float h = h21(cell);
 		vec3 stone = moat_base.rgb * (0.82 + 0.3 * h) * COLOR.rgb;
 		ALBEDO = mix(stone, moat_grout.rgb, joint);
 		ROUGHNESS = 0.85;

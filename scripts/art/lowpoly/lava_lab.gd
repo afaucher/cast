@@ -299,10 +299,7 @@ uniform vec4 core : source_color;
 uniform float glow = 3.0;
 uniform float crust_k = 0.55;
 varying vec3 wp;
-vec2 h22(vec2 p) {
-	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-	return fract(sin(p) * 43758.5453);
-}
+""" + ShaderHash.GLSL + """
 float vn(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);

@@ -138,12 +138,24 @@ the sine's argument is in the tens of thousands, where one rounding step of it (
 each of the nine unrolled neighbours) is a completely different value: the same feature point came out in two places either
 side of a lattice line, and the value noise behind the warp, the hot patches and the plate shading broke the same way (the
 warp's lines every 2.5 m shifted the whole pattern). Moving the pattern next to the origin cut fewer plates but not none.
-**The fix:** `LavaLook.HASH`, an integer hash of the point's coordinates (pcg2d), shared by the lava and the damp crust:
+**The fix:** `ShaderHash.GLSL` (`scripts/world/shader_hash.gd`; it was `LavaLook.HASH` at first), an integer hash of the
+point's coordinates (pcg2d), spliced into the lava and the damp crust:
 every pixel that asks about a point gets the same answer, at any distance. The look's statistics are unchanged (still
 uniform values; the warp, cell size and colours untouched; the warp never folds: its Jacobian stays positive, at least 0.27 of
 nominal), only the dice. `test_lava_gen` builds the first natural cave's look and checks that none of its pattern shaders (and
 the crust's) hashes with a sine. Before and after at `--zoom 8` (seed 31 floor 2, `--to-lava entry`):
 `lava_caves/lava_creases_before.png`, `lava_caves/lava_creases_after.png`.
+
+**The same hash everywhere else** (follow-up, the same day): the other pattern shaders that hashed with a sine now splice
+`ShaderHash.GLSL` too: the sewer's channel bed and liners and its water (`SewerView`: their value noise visits a point from
+its neighbours, the lava's case; the clusters sit 30-60 m from the origin), the shark moat's stone blocks
+(`HexMapView.POOL_SHADER`), the van's rug and summoning circle (`VanRug`, `VanCircle`: drawn in their own small local
+frame, so they could hardly show it, changed so nothing hashes with a sine), and the lava and sewer labs. Same looks, other
+dice (checked at the game camera: the sewer water on seed 7 contract 1 floor 2 `--sewer-floor --to-sewer foot`, the rug
+and the circle side by side before and after). `tests/test_shader_hash.gd` reads every script under `scripts/` for a
+`fract(sin(` outside comments and checks that each of these shaders splices `ShaderHash.GLSL` and declares its hash once.
+(`HexMapView.MATERIAL_SHADER`'s own sine-free `h21`/`h22`, fract of a small multiple, is left as is: its products stay
+small, so a rounding step moves it by far less than a step of a sine times 43758.)
 
 ## Playtest fixes (2026-10-20)
 
