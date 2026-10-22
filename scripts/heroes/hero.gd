@@ -139,6 +139,8 @@ var _gait: HeroGait = null
 ## grounded_anim (the animation track, animation-research.md "As built"): the lean, the squash and the strike-first swing,
 ## drawn on every screen from the shown motion and the replayed swing (HeroFeel).
 var _feel: HeroFeel = null
+## grounded_anim: Gasket's spin under way (SpinSweep), or null.
+var _sweep: SpinSweep = null
 ## Physics interpolation of a hero this machine moves (MoveFeel.interp, F7): between physics ticks the node is drawn where
 ## it was a fraction of the way from the last tick to this one, and put back before the next tick (_interp_restore).
 var _ip_prev := Vector3.INF
@@ -200,7 +202,7 @@ func net_fields() -> Dictionary:
 		"_ui_top": Net.LOCAL, "_daze_stars": Net.LOCAL, "_daze_shown": Net.LOCAL,
 		# Movement feel: the owner's walk (its result streams as the position) and this screen's drawing of it.
 		"pace": Net.PRIVATE, "_motion": Net.PRIVATE,
-		"_gait": Net.LOCAL, "_feel": Net.LOCAL, "_ip_prev": Net.LOCAL, "_ip_cur": Net.LOCAL, "_ip_shown": Net.LOCAL, "_ip_hooked": Net.LOCAL,
+		"_gait": Net.LOCAL, "_feel": Net.LOCAL, "_sweep": Net.LOCAL, "_ip_prev": Net.LOCAL, "_ip_cur": Net.LOCAL, "_ip_shown": Net.LOCAL, "_ip_hooked": Net.LOCAL,
 	})
 	return f
 
@@ -735,6 +737,14 @@ func _spin_effect(dir: Vector3) -> void:
 	var reach := float(spin_area()["reach"])
 	for foe in GameWorld.actors_in_radius(global_position, reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
+	if MoveFeel.on("strike_first"):
+		# grounded_anim: a timed sweep, each target hit as the wrench head passes it (SpinSweep, a scheduled effect from
+		# this moment on every machine: the owner's click, the act's replay on the others)
+		if _sweep != null and is_instance_valid(_sweep):
+			_sweep.queue_free()
+		_sweep = SpinSweep.start(self, dir, reach, SPIN_DAMAGE, SPIN_SHOVE)
+		_spin_pose(false)
+		return
 	var touched := Combat.arc_targets(self, dir, reach, 360.0)
 	if not Combat.melee_arc(self, dir, reach, 360.0, SPIN_DAMAGE, SPIN_SHOVE).is_empty():
 		MonsterSenses.noise(global_position, MonsterSenses.NOISE_MELEE, "melee")

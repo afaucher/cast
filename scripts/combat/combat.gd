@@ -100,6 +100,28 @@ static func lane_targets(attacker: Actor, dir: Vector3, near: float, far: float,
 	return out
 
 
+## A melee blow on `targets` picked by a caller's own timing (SpinSweep: the ones the wrench head passed this tick, from
+## arc_targets): the shield test, then only what this machine resolves. Returns the actors hit.
+static func land_melee(attacker: Actor, targets: Array[Actor], dir: Vector3, damage: float, shove: float = 0.0) -> Array[Actor]:
+	return _land_melee(attacker, targets, dir, damage, shove)
+
+
+## Push each of `actors` `distance` away from `pos` (shove_radius for a set a caller picked: SpinSweep's teammates), the
+## shield test first, each by the machine that resolves it. Returns the actors pushed.
+static func shove_actors(actors: Array[Actor], pos: Vector3, distance: float, source: Node = null) -> Array[Actor]:
+	var out: Array[Actor] = []
+	for a in actors:
+		if shielded(a, pos, HIT_BLAST, source):
+			continue
+		if not Net.resolves_hit(a, source):
+			continue
+		var away := a.global_position - pos
+		away.y = 0.0
+		a.shove(away if away.length() > 0.05 else a.facing, distance, source)
+		out.append(a)
+	return out
+
+
 ## A melee blow on `targets` (from arc_targets / lane_targets): the shield test, then only what this machine resolves.
 static func _land_melee(attacker: Actor, targets: Array[Actor], dir: Vector3, damage: float, shove: float) -> Array[Actor]:
 	var hit: Array[Actor] = []

@@ -445,6 +445,27 @@ The user: **"Gasket's primary attack is better. What about the secondary?"** Mea
 - Tests: `test_move_feel_anim` (`_secondary`: the release pose on the click's frame, the full turn, the spin's hit-stop and
   dust ring, a dummy 2.45 out missed today and hit now, no arm in the body, today untouched).
 
+#### Gasket's spin, a timed sweep (2026-10-22)
+The user played the 7-frame whirl: **"It's too fast! It doesn't read as a spin it is so fast."** (The table above is that
+first version.) Now:
+
+- **A slower turn that reads**: a 3-frame twist back with a crouch (the wind-up), the full turn in **25 frames** (0.42 s,
+  quick through the middle: a smoothstep), then a **stagger** (she overshoots by 0.35 rad and settles over 12 frames, a
+  roll of the body) before the wrench comes back to her side. 0.52 s of whirl from the click.
+- **The hit lands where the wrench is**: instead of every target on the click, each target is hit **as the head passes its
+  angle**, once per spin (`SpinSweep`, a scheduled effect: the head starts out at her right and goes counter-clockwise from
+  above). Measured on eight dummies round her: every hit on the very frame the drawn head passes it (the test allows +-1),
+  the last 23 frames after the click, none on the click. Teammates the head passes are shoved as before.
+- **Networking**: the spin's start is the `act` every other screen already replays on its puppet at the moment it shows
+  the act's time (NetCasts), so each machine runs the same schedule from the same shared moment and applies only what it
+  resolves (`Combat.land_melee` / `shove_actors`: the attacker's machine for the monsters and props, each teammate's own
+  machine for its hero). Nothing new on the wire; `SpinSweep` is in `test_net_contract`'s scripts (all SPAWN / LOCAL).
+- Kept: the radius 2.1 (not decided), the white effects (dust dragged round under the head, a pale ring at the end), and
+  a 1-frame hold each time the head passes a target (at most 3 per spin).
+- **Try the speed in the gym** (the user: "Rather than render a GIF, can we just test in the gym?"): `.\run.ps1 --gym
+  --move-feel grounded_anim`, play Gasket (F2), RMB; **F10** (or the panel's "Spin speed") cycles the turn through 20 /
+  **25** / 30 frames live (`SpinSweep.DEV_SPEEDS`; 25 is the pick). No GIF was rendered for this version.
+
 #### Networking
 Nothing new on the wire. HeroFeel is cosmetic and declares every var LOCAL (`test_net_contract`); a puppet leans from its
 streamed position and plays a replayed swing strike-first (`test_net_move_feel_anim`, two processes: the client takes the

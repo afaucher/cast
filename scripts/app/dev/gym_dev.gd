@@ -17,7 +17,8 @@ extends Node
 ##     monsters, clear what the panel put down, a mixed pack, teleports, and the HIT LOG (GymStats: hits, and damage dealt
 ##     and taken per minute)
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
-## Movement profiles work as anywhere (F6 / F7; `--gym --move-feel grounded_anim`).
+## Movement profiles work as anywhere (F6 / F7; `--gym --move-feel grounded_anim`). F10 ("Spin speed") cycles Gasket's
+## grounded_anim spin through SpinSweep.DEV_SPEEDS.
 
 const GAME := preload("res://scripts/app/game.gd")
 const DEFAULT_SPELLS := "fireball,heal,damp,tentacles"
@@ -88,7 +89,7 @@ func setup(g: Node) -> void:
 		[["infinite", "Infinite", infinite], ["no_cooldowns", "No cooldown", no_cooldowns], ["ai", "AI", ai_on],
 			["god", "God", god], ["areas", "Areas", false]],
 		[["heal", "Heal crew"], ["refill", "Refill spells"], ["clear", "Clear monsters"], ["clear_spawned", "Clear spawned"], ["pack", "Spawn pack"],
-			["reset_log", "Reset log"]],
+			["reset_log", "Reset log"], ["spin_speed", "Spin speed"]],
 		GOTO)
 	panel.spawn_pressed.connect(func(id: String) -> void: spawn(id, ring_point()))
 	panel.hero_pressed.connect(switch_to)
@@ -324,6 +325,19 @@ func act(nm: String) -> void:
 			_status("a pack of %d" % made.size())
 		"reset_log":
 			stats.reset()
+		"spin_speed":
+			cycle_spin_speed()
+
+
+## F10 / "Spin speed": Gasket's spin under grounded_anim (SpinSweep) turns at the next of SpinSweep.DEV_SPEEDS, live, so
+## the user can feel them (the user, 2026-10-22: "Rather than render a GIF, can we just test in the gym?"). Dev only.
+func cycle_spin_speed() -> void:
+	var speeds := SpinSweep.DEV_SPEEDS
+	var cur := SpinSweep.turn_frames()
+	SpinSweep.dev_frames = speeds[(speeds.find(cur) + 1) % speeds.size()]
+	var n := SpinSweep.turn_frames()
+	_status("spin: a full turn in %d frames (%.2f s)%s%s" % [n, n / 60.0, "  (the pick)" if n == SpinSweep.TURN_FRAMES else "",
+			"" if MoveFeel.on("strike_first") else "  [needs --move-feel grounded_anim]"])
 
 
 ## Every hero at full health; a downed one gets up (Hero.become, full: as a joiner arrives).
@@ -422,6 +436,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				set_toggle("god", not god)
 			KEY_F9:
 				panel.visible = not panel.visible
+			KEY_F10:
+				cycle_spin_speed()
 			KEY_G:
 				if selected != "":
 					spawn(selected, cursor_point())

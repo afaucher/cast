@@ -76,11 +76,15 @@ const STRIKES := {
 ##     bow was still at his hip, raised 5 frames later; a drawn shot also dipped the bow to his hip and back up).
 ##   Rebar's bowl: his right glove is down and forward at the boulder on the click's frame, then follows through (today the
 ##     boulder rolled out 1.6 from his hand, which swung through about 14 frames later).
-const WHIRL_FRAMES := 9
+const WHIRL_FRAMES := 9            ## (the first whirl, too fast to read: the user, 2026-10-22; kept for the record)
+## Gasket's spin is a timed sweep (SpinSweep): the model turns with the sweep's own schedule (so the head is where the hits
+## land), then a stagger: it overshoots by SPIN_OVERSHOOT and settles over SPIN_FOLLOW frames before the wrench comes back.
+const SPIN_FOLLOW := 12
+const SPIN_OVERSHOOT := 0.35
+const SPIN_RETURN := 12            ## frames for the wrench to come back to her side after the stagger
+const SPIN_HIT_HOLDS := 3          ## a 1-frame hold per target the head passes, at most this many per spin
 const SECONDARIES := {
-	"gasket": {"impact": 1, "squash": 1.5, "lunge": 0.0, "kind": "spin", "keys": {
-		"spin": [[0, 0.0], [1, 1.0], [WHIRL_FRAMES + 4, 1.0], [WHIRL_FRAMES + 16, 0.0]],
-		"yaw": [[0, 0.0], [1, 0.0], [WHIRL_FRAMES + 1, TAU]]}},
+	"gasket": {"impact": 1, "squash": 1.4, "lunge": 0.0, "kind": "spin", "keys": {"spin": [[0, 0.0]]}},   # (driven by _step_spin)
 	"wick": {"impact": 1, "squash": -0.8, "lunge": 0.3, "kind": "shot", "keys": {
 		"raise": [[0, 1.0], [14, 1.0], [32, 0.0]],
 		"draw": [[0, -0.35], [7, -0.2], [32, -0.2]]}},
@@ -121,6 +125,10 @@ var _connect := false              ## the blow touched something (a hit-stop at 
 var _dir := Vector3.FORWARD        ## the swing's direction (X/Z)
 var smashes := 0                   ## smash landings marked on the floor (tests)
 var secondaries := 0               ## secondaries played strike-first (tests)
+var _spin_t := 0.0                 ## s into the spin (the sweep's own clock while it runs)
+var _spin_holds := 0
+var _spin_yaw0 := 0.0              ## the visual yaw she spun from
+var _spin_dust := 0
 var spins_marked := 0              ## spins' dust rings (tests)
 var _impacted := false
 
@@ -136,7 +144,8 @@ func net_fields() -> Dictionary:
 		"_vs": Net.LOCAL, "_vq": Net.LOCAL, "_lean_v": Net.LOCAL, "_sq_v": Net.LOCAL, "_moving": Net.LOCAL,
 		"_lunge": Net.LOCAL, "_freeze": Net.LOCAL, "_strike": Net.LOCAL, "_age": Net.LOCAL, "_connect": Net.LOCAL,
 		"_impacted": Net.LOCAL, "held_frames": Net.LOCAL, "_held": Net.LOCAL, "_top": Net.LOCAL, "_dir": Net.LOCAL,
-		"smashes": Net.LOCAL, "secondaries": Net.LOCAL, "spins_marked": Net.LOCAL,
+		"smashes": Net.LOCAL, "secondaries": Net.LOCAL, "spins_marked": Net.LOCAL, "_spin_t": Net.LOCAL,
+		"_spin_holds": Net.LOCAL, "_spin_yaw0": Net.LOCAL, "_spin_dust": Net.LOCAL,
 	}
 
 
@@ -244,8 +253,21 @@ func secondary(connects: bool = false) -> bool:
 	_connect = connects
 	_dir = hero.facing
 	_impacted = false
+	_spin_t = 0.0
+	_spin_holds = 0
+	_spin_dust = 0
+	_spin_yaw0 = atan2(-hero.facing.x, -hero.facing.z)
 	secondaries += 1
 	return true
+
+
+## The spin's head passed `n` targets this tick (SpinSweep, on every machine): a 1-frame hold of the pose each time, at
+## most SPIN_HIT_HOLDS per spin (a crowd would stall the whirl).
+func spin_pass(n: int) -> void:
+	if not active() or n <= 0 or _spin_holds >= SPIN_HIT_HOLDS:
+		return
+	_spin_holds += 1
+	_freeze = maxf(_freeze, F)
 
 
 ## Start `timeline` (a strike or a secondary), putting the one it cuts off back at rest.
@@ -314,6 +336,9 @@ func _step_strike(delta: float) -> void:
 	if _age < 0.0:
 		return
 	_age += delta
+	if str(_strike.get("kind", "")) == "spin":
+		_step_spin(delta)
+		return
 	var frame := _age / F
 	var keys := _strike["keys"] as Dictionary
 	var done := true
@@ -352,6 +377,44 @@ func _step_strike(delta: float) -> void:
 		_age = -1.0
 
 
+## Gasket's spin, drawn from the sweep's own schedule (SpinSweep.angle_at on its clock while it runs), so the wrench head
+## is over each target on the tick it is hit: the twist back, the turn, a stagger past the end, the wrench back to her side,
+## and the dust it drags round under the head.
+func _step_spin(delta: float) -> void:
+	var sw: SpinSweep = hero._sweep if hero._sweep != null and is_instance_valid(hero._sweep) else null
+	_spin_t = sw.elapsed if sw != null else _spin_t + delta
+	var dur := SpinSweep.duration()
+	var ant := SpinSweep.ANTICIPATION * F
+	var back := dur + SPIN_FOLLOW * F
+	if not _impacted:
+		_impacted = true
+		impact_frame = Engine.get_process_frames()
+		_sq_v += float(_strike.get("squash", 0.0)) * float(_tu["squash"])   # (the crouch of the wind-up)
+		spins_marked += 1
+	model._arm_kick["spin"] = smoothstep(0.0, ant, _spin_t) if _spin_t < back else 1.0 - smoothstep(back, back + SPIN_RETURN * F, _spin_t)
+	var th := SpinSweep.angle_at(minf(_spin_t, dur))
+	if _spin_t > dur:
+		var k := clampf((_spin_t - dur) / (SPIN_FOLLOW * F), 0.0, 1.0)
+		th = TAU + SPIN_OVERSHOOT * sin(PI * k) * (1.0 - k)   # (the stagger: past the end and back)
+		if _spin_dust >= 0:
+			_spin_dust = -1
+			_lean_v.y += 2.4   # (she staggers with the weight)
+			Fx.spin_dust(hero.global_position, float(hero.spin_area()["reach"]))
+	model.rotation.y = th + _spin_yaw0 - hero._visual_yaw
+	if _spin_t > ant and _spin_t < dur and _spin_dust >= 0:
+		_spin_dust += 1
+		if _spin_dust % 3 == 0:   # the dust it drags round, under the head
+			var head := hero.global_position + Vector3.RIGHT.rotated(Vector3.UP, _spin_yaw0 + th) * float(hero.spin_area()["reach"]) * 0.95
+			var dust: Array[Color] = [Color(0.85, 0.78, 0.64), Color(0.7, 0.62, 0.5)]
+			Fx.burst(head + Vector3.UP * 0.08, dust, 3, 1.2, 0.08, 0.3, 2.0, Vector3.UP, 60.0, false)
+	if _spin_t >= back + SPIN_RETURN * F:
+		model._arm_kick["spin"] = 0.0
+		model.rotation.y = 0.0
+		_spin_dust = 0
+		_strike = {}
+		_age = -1.0
+
+
 ## A timeline's channels back at rest (the model's turn too).
 func _rest(keys: Dictionary) -> void:
 	for ch: String in keys:
@@ -359,6 +422,8 @@ func _rest(keys: Dictionary) -> void:
 			model.rotation.y = 0.0
 		else:
 			model._arm_kick[ch] = 0.0
+		if ch == "spin":
+			model.rotation.y = 0.0   # (a spin cut off: she faces forward again)
 
 
 ## The timeline `keys` ([[frame, value], ...]) at `frame`, easing out between keys.

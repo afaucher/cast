@@ -14,7 +14,7 @@ extends TestCase
 ## It prints the measured numbers ([anim] lines) for the doc.
 
 const DT := 1.0 / 60.0
-const WHIRL_CHECK := HeroFeel.WHIRL_FRAMES + 4   ## frames after the spin by which she has turned all the way round (+ its hit-stop)
+const WHIRL_CHECK := SpinSweep.ANTICIPATION + SpinSweep.TURN_FRAMES + 4   ## frames after the spin by which she has turned all the way round (+ its holds)
 
 var root: Node3D
 
@@ -79,6 +79,7 @@ func setup() -> void:
 	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
 	for kit in ["wick", "gasket", "rebar"]:
 		await _secondary(kit)
+	await _spin_sweep()
 	await _areas()
 	await _others()
 	await _puppet()
@@ -232,7 +233,7 @@ func _secondary(kit: String) -> void:
 		await frames(1)
 		var worst := 0.0
 		var turned := 0.0
-		for i in 50:
+		for i in 75:
 			if kit == "gasket":
 				turned = maxf(turned, m.rotation.y)
 				if i == WHIRL_CHECK:
@@ -253,8 +254,8 @@ func _secondary(kit: String) -> void:
 		if kit == "gasket":
 			near(float(h.spin_area()["reach"]), 2.1, 0.001, "gasket: the spin reaches the wrench's sweep")
 			check(d.hp < d.max_hp, "the spin hit the dummy")
-			eq(fe.held_frames - held0, 2, "gasket: a spin that connects holds 2 frames")
-			eq(fe.spins_marked, 1, "gasket: the spin kicks up its dust ring")
+			eq(fe.held_frames - held0, 1, "gasket: a 1-frame hold as the head passes the dummy")
+			eq(fe.spins_marked, 1, "gasket: the spin drags its dust round")
 			near(m.rotation.y, 0.0, 0.0001, "gasket: the model faces forward again after the whirl")
 			eq(_dark_marks(), 0, "gasket: white effects only")
 	# the spin's reach: a dummy 2.45 out is missed today (1.9 + its 0.45) and hit by the wrench's sweep (2.1)
@@ -269,8 +270,70 @@ func _secondary(kit: String) -> void:
 		var far := _dummy(g.global_position + Vector3(2.45, 0, 0))
 		await get_tree().physics_frame
 		g.shoot(Vector3.RIGHT)
+		await frames(40)   # (grounded_anim: the head reaches it a quarter of the way round)
 		eq(far.hp < far.max_hp, prof == MoveFeel.GROUNDED_ANIM, "gasket %s: a dummy 2.45 out is %s" % [prof, "hit" if prof == MoveFeel.GROUNDED_ANIM else "missed"])
 	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
+
+
+## Gasket's timed spin (SpinSweep; the user, 2026-10-22, on the 7-frame whirl: "It's too fast! It doesn't read as a
+## spin"): eight dummies round her, each hit once, within a frame of the drawn wrench head passing it, the turn taking about
+## SpinSweep.duration(); and none is hit on the click.
+func _spin_sweep() -> void:
+	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
+	var hp: Array = _hero(_row([2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]), "gasket")
+	var h: Hero = hp[0]
+	(hp[1] as PlayerController).queue_free()
+	await frames(3)
+	h.face_point(h.global_position + Vector3(5, 0, 0))
+	await frames(10)
+	var m := h.visual_override as GasketModel
+	var dummies: Array[TrainingDummy] = []
+	var hit_at := {}
+	var hits := {}
+	for k in 8:
+		var d := _dummy(h.global_position + Vector3(1.6, 0, 0).rotated(Vector3.UP, TAU * k / 8.0 + 0.2))
+		dummies.append(d)
+		var id := d.get_instance_id()
+		hits[id] = 0
+		d.damaged.connect(func(_a: float, _s: Node) -> void:
+			hits[id] = int(hits[id]) + 1
+			hit_at[id] = Engine.get_process_frames())
+	await get_tree().physics_frame
+	var click := Engine.get_process_frames()
+	h.shoot(Vector3.RIGHT)
+	var on_click := 0
+	for d in dummies:
+		on_click += 1 if d.hp < d.max_hp else 0
+	eq(on_click, 0, "no dummy is hit on the click any more")
+	var best := {}       # dummy id -> [smallest angle to the drawn head, its frame]
+	for i in 70:
+		await get_tree().process_frame
+		var head := (m.parts["weapon"] as Node3D).global_transform * Vector3(0, 1.43, 0) - h.global_position
+		head.y = 0.0
+		if head.length() < 1.0 or i > SpinSweep.ANTICIPATION + SpinSweep.turn_frames() - 3:
+			continue   # (only while the wrench is out and on its way round: at rest its head is over her shoulder, and at the
+			           # end it comes round to where it started)
+		for d in dummies:
+			var to := d.global_position - h.global_position
+			to.y = 0.0
+			var gap := absf(head.signed_angle_to(to, Vector3.UP))
+			var id := d.get_instance_id()
+			if not best.has(id) or gap < float(best[id][0]):
+				best[id] = [gap, Engine.get_process_frames()]
+	var worst := 0
+	var last := 0
+	for d in dummies:
+		var id := d.get_instance_id()
+		eq(int(hits[id]), 1, "each dummy is hit once")
+		if hit_at.has(id):
+			worst = maxi(worst, absi(int(hit_at[id]) - int(best[id][1])))
+			last = maxi(last, int(hit_at[id]) - click)
+	print("[anim] spin sweep: 8 dummies, hits within %d frame(s) of the head passing them, the last %d frames after the click (turn %d + wind-up %d)" % [
+		worst, last, SpinSweep.turn_frames(), SpinSweep.ANTICIPATION])
+	check(worst <= 1, "each dummy is hit within a frame of the wrench head passing it (%d)" % worst)
+	check(last >= SpinSweep.turn_frames() - 4 and last <= SpinSweep.ANTICIPATION + SpinSweep.turn_frames() + 1, "the hits run round the whole turn (the last at %d frames)" % last)
+	for d in dummies:
+		d.queue_free()
 
 
 ## Dark unshaded marks in the world right now (Fx.ground_smash once drew dark cracks; the user asked for the white
@@ -396,6 +459,10 @@ func _puppet() -> void:
 	await frames(1)
 	eq(h._feel.strikes, 1, "a replayed swing plays strike-first on the puppet")
 	eq(h._feel.smashes, 1, "a puppet Gasket's replayed smash marks its landing on this floor")
+	h.net_act("spin", Vector3.RIGHT, false)
+	await frames(2)
+	check(h._sweep != null and is_instance_valid(h._sweep), "a replayed spin runs its timed sweep on this screen too (from the act's moment)")
+	eq(h._feel.secondaries, 1, "... and whirls the puppet with it")
 	Net.release_copy(h)
 
 

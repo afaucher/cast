@@ -38,6 +38,7 @@ func _ready() -> void:
 	zoom = arg(args, "--zoom", "close")
 	frames_dir = arg(args, "--frames-dir")
 	MoveFeel.reset()
+	SpinSweep.dev_frames = int(arg(args, "--spin-frames", "0"))   # (Gasket's grounded_anim spin: try another turn speed)
 	var strike := arg(args, "--strike", HeroFeel.FOLLOW)
 	for p in arg(args, "--profiles", "grounded,grounded_anim").split(","):
 		if strike == "both" and p == MoveFeel.GROUNDED_ANIM and hero_kind != "wick":   # (Wick has one bash)

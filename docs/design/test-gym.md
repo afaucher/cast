@@ -29,6 +29,7 @@ the job board as usual.
 | **F4** | monster AI on / off (off: they stand like dummies; hits and shoves still land) |
 | **F8** | god mode for the crew (no damage taken) |
 | **F9** | hide / show the panel |
+| **F10** | Gasket's spin speed under `grounded_anim` (the timed sweep): a full turn in 20 / **25** / 30 frames, live (the panel's "Spin speed" too; `animation-research.md` "Gasket's spin, a timed sweep") |
 | **G**, middle-click | spawn the last picked kind at the cursor |
 
 F1 (voice panel), F5, F6 / F7 (movement feel), Esc and 1-4 (ready a slot) are the game's as ever.

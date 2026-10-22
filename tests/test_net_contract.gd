@@ -38,6 +38,7 @@ const NET_SCRIPTS := [
 	"res://scripts/combat/projectile.gd",
 	"res://scripts/heroes/arrow_shot.gd",
 	"res://scripts/heroes/bowl_boulder.gd",
+	"res://scripts/heroes/spin_sweep.gd",       # (grounded_anim: Gasket's timed spin, a scheduled effect from the act's moment)
 	"res://scripts/heroes/ally_brain.gd",
 	"res://scripts/heroes/hero_motion.gd",      # (the owner's walk under a movement feel: envelope, hop, mantle, fall)
 	"res://scripts/monsters/shark_steer.gd",
