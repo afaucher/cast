@@ -10,7 +10,8 @@ extends RefCounted
 ##     step_metal; in pool water Wading's splash plays instead), and every STEP_EVERY units for a body with no legs to count;
 ##   - small dust puffs on a start, a hard stop from speed and a sharp turn or reversal (DUST_COOLDOWN apart);
 ##   - a landing from MoveFeel.LAND_BIG_LEVELS or more on foot: dust, a ring and a thud (a shove's landing has its own, Fx).
-## The lean, squash and strike-first of animation-research.md are that track's next step, not package A's.
+## The lean, squash and strike-first of animation-research.md are HeroFeel's (the grounded_anim profile, `body`), which
+## also holds this stride still while the hero is shoved or airborne and through a hit-stop.
 
 const STEP_EVERY := 1.1           ## a legless (prototype) body: a step every this many units walked
 const DUST_COOLDOWN := 0.35
@@ -73,6 +74,15 @@ func tick(delta: float) -> void:
 	_prev = pos
 	if raw.length() > 20.0 or hero.is_shoved():
 		raw = Vector3.ZERO   # a teleport; or a shove: the stride pauses (animation-research.md §7)
+	if MoveFeel.on("body"):
+		# grounded_anim (HeroFeel): a hit-stop holds the whole pose; a shove or a hop / fall holds the stride where it is
+		if hero._feel.frozen():
+			return
+		if gait != null and (hero.is_shoved() or not _grounded):
+			gait.hold()
+			gait.pose(hero._visual_yaw, delta)
+			_landing(pos)
+			return
 	if gait != null:
 		gait.advance(raw, delta)
 		gait.pose(hero._visual_yaw, delta)

@@ -366,7 +366,10 @@ The player-controlled hero has `is_player = true`.
 How a hero walks follows the active movement profile (`MoveFeel`, `docs/design/movement-research.md` "As built"): with
 `today` (the default) `Hero.move` is the plain walk; with `grounded` the owner's walk is `HeroMotion` (envelope, hop, mantle,
 fall) and every screen draws the stride, footsteps and dust from the shown motion (`HeroGait`, on `Gait`, which the animation
-lab shares). In a crew the host's profile rides `crew.job`.
+lab shares). `grounded_anim` adds the body lean and squash and the strike-first swing (`HeroFeel`, a pivot between
+`Hero._visual` and the model, also from the shown motion and the replayed swing) and each kit's own hit area
+(`Hero.melee_area`: a wedge through `Combat.melee_arc`, or a lane through `Combat.melee_lane`; `docs/design/animation-research.md`
+"As built"). In a crew the host's profile rides `crew.job`.
 
 ### Monsters (`scripts/monsters/*.gd`, each extends `Monster extends Actor`)
 `MonsterFactory.spawn(kind: String, cell: Vector2i) -> Monster`. Kinds: `grunt`, `archer`, `brute`, `swarmer` (the packs), `pavise` and

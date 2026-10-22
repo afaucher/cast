@@ -2,16 +2,19 @@ class_name MoveFeel
 extends RefCounted
 ## Movement-feel profiles (docs/design/movement-research.md §5.2 and "As built"): one data table, like HeroKit, so two
 ## ways of moving can be tried side by side. `today` is the game exactly as it was (every key at its OFF value: the old
-## code paths run, frame for frame: test_move_feel_today holds it to a recorded trace); `grounded` is package A. Every
-## hero, the camera and the AI allies read the ACTIVE profile here; nothing else stores a copy.
+## code paths run, frame for frame: test_move_feel_today holds it to a recorded trace); `grounded` is package A;
+## `grounded_anim` is grounded plus the animation track's treatment B (a lean that leads the velocity, squash on start and
+## stop, the stride held while shoved or airborne: HeroFeel) and the strike-first melee with each hero's hit area reshaped
+## to its weapon (docs/design/animation-research.md "As built"). Every hero, the camera and the AI allies read the ACTIVE
+## profile here; nothing else stores a copy.
 ##
-##   --move-feel today|grounded|shuffle   (default today: normal play stays as it was until the user picks)
+##   --move-feel today|grounded|grounded_anim|shuffle   (default today: normal play stays as it was until the user picks)
 ##   --physics-interp on|off              (default off) the owned heroes drawn between physics ticks (Hero, "judder")
 ##   F6  next profile (the tag names it for a moment; in shuffle the tag says only "feel 1" / "feel 2": blind)
 ##   F7  physics interpolation on / off
 ##
-## SHUFFLE (the blind A/B): the profiles are dealt in a random order as "feel 1", "feel 2"; the run starts on feel 1 and F6
-## moves to the next. Which is which is printed when the order is dealt and written with every row of user://move_lab.csv
+## SHUFFLE (the blind A/B): the BLIND profiles (grounded and grounded_anim: the question being asked now) are dealt in a
+## random order as "feel 1", "feel 2"; the run starts on feel 1 and F6 moves to the next (today stays selectable by name). Which is which is printed when the order is dealt and written with every row of user://move_lab.csv
 ## (MoveLog), never shown on screen.
 ##
 ## A CREW (networking): the HOST's profile is everyone's. It goes out with the job (CrewFlow.host_pick puts `feel` in
@@ -23,9 +26,12 @@ extends RefCounted
 
 const TODAY := "today"
 const GROUNDED := "grounded"
+const GROUNDED_ANIM := "grounded_anim"
 const SHUFFLE := "shuffle"
 ## The real profiles, in F6 order.
-const ORDER: Array[String] = [TODAY, GROUNDED]
+const ORDER: Array[String] = [TODAY, GROUNDED, GROUNDED_ANIM]
+## The profiles shuffle deals (the A/B asked now: user, 2026-10-22, "Animation B + strike-first" on top of grounded).
+const BLIND: Array[String] = [GROUNDED, GROUNDED_ANIM]
 
 ## What every key means when a profile does not set it: the game as it was (`today` sets nothing).
 const OFF := {
@@ -53,6 +59,9 @@ const OFF := {
 	"ally_arrive": 0.0,     ## an AI ally slows inside this many units of its slot
 	"ally_catchup": 1.0,    ## ... and walks this much faster while far behind a moving leader
 	"ally_catchup_dist": 0.0,
+	"body": false,          ## treatment B (HeroFeel): the lean, the squash, the stride held while shoved or airborne
+	"strike_first": false,  ## the melee pose lands on the frame the hit resolves (HeroFeel's strike), a lunge, a 3-frame hit-stop
+	"melee_areas": {},      ## kit -> the primary's hit area (Hero.melee_area); a kit not listed keeps its own wedge
 }
 
 ## The table. Numbers are the doc's package A starting points, tuned by measurement where the "As built" section says so.
@@ -66,6 +75,24 @@ const PROFILES := {
 		"gait": true, "footsteps": true, "dust": true,
 		"cam_lead": 1.2, "cam_lead_time": 0.35, "cam_aim_share": 0.15, "cam_lead_max": 2.0,
 		"ally_arrive": 1.0, "ally_catchup": 1.15, "ally_catchup_dist": 3.2,
+	},
+	# grounded + the animation track (animation-research.md "As built"). The hit areas are a balance PROPOSAL, measured from
+	# where each weapon travels in the strike-first swing (anim_lab --overlay): "arc" is today's wedge (reach, arc); "lane"
+	# is Combat.melee_lane (everything within `radius` of the line from `near` to `far` ahead; near == far: a disc).
+	GROUNDED_ANIM: {
+		"envelope": true, "boost": 0.45, "start": 0.08, "stop": 0.07, "reversal": 0.10,
+		"hop": true, "hop_time": 0.12, "hop_peak": 0.15,
+		"mantle": true, "mantle_hold": 0.25, "mantle_hold_kits": {"wick": 0.15, "gasket": 0.40}, "mantle_rise": 0.15,
+		"gravity": 24.0, "land_slow": 0.4,
+		"gait": true, "footsteps": true, "dust": true,
+		"cam_lead": 1.2, "cam_lead_time": 0.35, "cam_aim_share": 0.15, "cam_lead_max": 2.0,
+		"ally_arrive": 1.0, "ally_catchup": 1.15, "ally_catchup_dist": 3.2,
+		"body": true, "strike_first": true,
+		"melee_areas": {
+			"wick": {"shape": "arc", "reach": 1.3, "arc": 90.0},
+			"gasket": {"shape": "lane", "near": 0.6, "far": 1.9, "radius": 0.25},
+			"rebar": {"shape": "lane", "near": 1.05, "far": 1.05, "radius": 0.85},
+		},
 	},
 }
 ## A landing from this many levels or more is a big one (dust, a thud, the landing slowdown).
@@ -114,7 +141,7 @@ static func reset() -> void:
 	switches = 0
 
 
-## today | grounded | shuffle (anything else is today).
+## today | grounded | grounded_anim | shuffle (anything else is today).
 static func set_mode(m: String, seed_value: int = -1) -> void:
 	if m == SHUFFLE:
 		mode = SHUFFLE
@@ -123,7 +150,7 @@ static func set_mode(m: String, seed_value: int = -1) -> void:
 			rng.seed = seed_value
 		else:
 			rng.randomize()
-		blind_order = ORDER.duplicate()
+		blind_order = BLIND.duplicate()
 		for k in range(blind_order.size() - 1, 0, -1):
 			var r := rng.randi_range(0, k)
 			var tmp := blind_order[k]

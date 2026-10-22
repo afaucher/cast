@@ -84,10 +84,19 @@ const BOW_AIM_ROLL := deg_to_rad(20.0)
 const BOW_AIM_POS := Vector3(-0.18, 0.64, -0.70)    ## body-local grip while aiming
 const BOW_WIND_POS := Vector3(-0.88, 0.36, 0.10)    ## bash wind-up
 const BOW_STRIKE_POS := Vector3(-0.02, 0.30, -0.76)
+## The strike-first bash's follow-through (the grounded_anim profile, HeroFeel's `follow` channel 0..1): the bow carries on
+## from the strike across to his right front, so the sweep covers the wedge it hits.
+const BOW_FOLLOW_POS := Vector3(0.46, 0.26, -0.56)
+const BOW_FOLLOW_ROLL := -0.7
 
 const HAND_R_REST := Vector3(0.38, -0.08, -0.03)    ## body-local right fist hanging
 const HAND_R_CAST := Vector3(0.30, 0.80, -0.56)     ## wand raised
 const WAND_REST_POS := Vector3(0.26, 0.06, -0.16)   ## tucked in the belt at the right hip
+## The held spell component (hold_item) rides in his right fist wherever it is (hanging, on the string, raised with the
+## wand): just under the knuckles, so the wand stands clear above it, and about 0.35 across (it used to float 0.3 above
+## the hand at torso size and hid the wand hand: animation-research.md gap 8).
+const HOLD_GRIP := Vector3(0.0, -0.09, -0.05)
+const HOLD_SCALE := 0.7
 const WAND_REST_ROT := Vector3(deg_to_rad(-18.0), 0.0, deg_to_rad(-16.0))
 
 var _body_base_y := BODY_Y
@@ -101,8 +110,8 @@ func _init() -> void:
 	_setup_model("WickModel", MODEL_SCALE)
 	ui_height = 2.27 * MODEL_SCALE
 	has_own_weapon = true
-	_arm_kick = {"bash": 0.0, "cast": 0.0, "raise": 0.0, "draw": 0.0}
-	hold_scale = 1.5
+	_arm_kick = {"bash": 0.0, "cast": 0.0, "raise": 0.0, "draw": 0.0, "follow": 0.0}
+	hold_scale = HOLD_SCALE
 	_thin_mat = LowPolyMaterial.make(1.1)
 	_build()
 
@@ -455,6 +464,10 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	elif bash < 0.0:
 		bow_pos = bow_pos.lerp(BOW_STRIKE_POS, minf(-bash / 1.2, 1.0))
 		roll += bash * 1.1
+	var follow := clampf(arm_kick("follow"), 0.0, 1.0)
+	if follow > 0.0:
+		bow_pos = bow_pos.lerp(BOW_FOLLOW_POS, follow)
+		roll += BOW_FOLLOW_ROLL * follow
 	bow_pos = bow_pos.lerp(BOW_AIM_POS, raise)
 	roll = lerpf(roll, BOW_AIM_ROLL, raise)
 	yaw = lerpf(yaw, BOW_AIM_YAW, raise)
@@ -483,7 +496,7 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 
 	# a held component sits in the free right hand, wherever it is (hanging, drawing, raised)
 	if hold_anchor != null:
-		hold_anchor.position = hand + Vector3(0.20, 0.28, -0.06)
+		hold_anchor.position = hand + HOLD_GRIP
 
 
 ## Re-aim a sleeve from the shoulder at `hand`, stretching it a little so it always reaches.

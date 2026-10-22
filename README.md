@@ -19,8 +19,10 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
   (`.\run.ps1 --seed 31 --floor 2 --spells damp,fireball --no-mic --to-lava entry`); `--lava-floor` forces one (solo or every
   window of a crew). See `docs/design/lava-playtest.md`, "As built: caves on real floors".
 - **Movement feel A/B (dev):** `.\run.ps1 --move-lab --move-feel shuffle --no-mic` plays the movement lab (a lap of slalom,
-  steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen) with the two movement profiles dealt blind as
-  "feel 1" / "feel 2"; **F6** switches profile, **F7** physics interpolation. `--move-feel today|grounded` names one (the
+  steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen) with `grounded` and `grounded_anim` (grounded
+  plus the body lean / squash, strike-first melee and each hero's hit area reshaped to its weapon:
+  `docs/design/animation-research.md`, "As built") dealt blind as "feel 1" / "feel 2"; **F6** switches profile, **F7** physics
+  interpolation. `--move-feel today|grounded|grounded_anim` names one (the
   default is `today`, the game as it was), `--physics-interp on` starts with interpolation. Works on any floor and in the
   arena too; in a crew the host's profile is everyone's (`.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded`). Every
   stretch and lap is logged to `%APPDATA%\Godot\app_userdata\Cast\move_lab.csv`. See `docs/design/movement-research.md`,
@@ -227,7 +229,7 @@ further), **coffee** (+60% move and attack speed for six seconds, twitchy, then 
   --no-mic`, `--floor 3`, or `--shot <png> --shot-after 4` for screenshots. They're listed at the
   top of `scripts/app/game.gd`. `--menu` brings the menu back.
 - **Labs** (`--scene res://scenes/<name>.tscn`): `terrain_preview`, `voice_lab`, `wick_lab`,
-  `gasket_lab`, `rebar_lab`, `anim_lab` (hero animation feel look-dev: today vs the proposed layers, `docs/design/animation-research.md`), `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `van_lab` (the crew's work van arriving over its summoning circle), `teeth_lab`, `new_spells_lab` (vines, damp, coffee and chicken: `--spell vines|damp|coffee|chicken`, and for chicken `--closeup` or `--pickup`),
+  `gasket_lab`, `rebar_lab`, `anim_lab` (hero animation feel look-dev: today vs the proposed layers, `docs/design/animation-research.md`), `strike_lab` (the movement-feel profiles side by side in the game's own code, and `--overlay`: each hero's melee hit area against its weapon's swept path), `monster_lab`, `hellgate_lab`, `employee_lab`, `prop_lab`, `package_lab`, `van_lab` (the crew's work van arriving over its summoning circle), `teeth_lab`, `new_spells_lab` (vines, damp, coffee and chicken: `--spell vines|damp|coffee|chicken`, and for chicken `--closeup` or `--pickup`),
   `backdrop_lab` (the garage behind the main menu and the job board, plus the storefront prototype: `--option garage|storefront`, `--mood dawn|night|after`, `--hero wick|gasket|rebar`, `--board` lays the real job board over the garage).
 - **Tests:** the runner fails a test on any `SCRIPT ERROR`. Logs go to `test_logs/`. Net tests (`tests/test_net_*.gd`
   with `const PEERS := N`) run as N headless processes over ENet localhost, after the parallel batch, under each

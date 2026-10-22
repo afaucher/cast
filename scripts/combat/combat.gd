@@ -50,7 +50,22 @@ static func shielded(target: Actor, from_point: Vector3, kind: String = HIT_MELE
 static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: float, damage: float, shove: float = 0.0) -> Array[Actor]:
 	dir.y = 0.0
 	dir = dir.normalized()
-	var hit: Array[Actor] = []
+	return _land_melee(attacker, arc_targets(attacker, dir, reach, arc_deg), dir, damage, shove)
+
+
+## Like melee_arc, but the area is a LANE along `dir`: everything within `radius` of the segment from `near` to `far` ahead
+## of the attacker (a capsule; near == far is a disc centred there). A centred overhead strike: the shaft comes down along
+## the line and the head lands at `far` (Hero.melee_area, the grounded_anim profile). The shove is still away from the attacker.
+static func melee_lane(attacker: Actor, dir: Vector3, near: float, far: float, radius: float, damage: float, shove: float = 0.0) -> Array[Actor]:
+	dir.y = 0.0
+	dir = dir.normalized()
+	return _land_melee(attacker, lane_targets(attacker, dir, near, far, radius), dir, damage, shove)
+
+
+## What a melee wedge would touch (no verbs, no shield test: a query): the other team's living actors, breakables, a hero's
+## priced props, within `reach` (plus each one's radius) and `arc_deg` of `dir`, at most 2 levels up or down.
+static func arc_targets(attacker: Actor, dir: Vector3, reach: float, arc_deg: float) -> Array[Actor]:
+	var out: Array[Actor] = []
 	var foe := GameWorld.other_team(attacker.team)
 	for a in GameWorld.hittable_in_radius(attacker.global_position, reach, foe, attacker.team == GameWorld.TEAM_HEROES):
 		var to := a.global_position - attacker.global_position
@@ -60,6 +75,35 @@ static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: floa
 		# Can't swing up/down a cliff: at most a 2-level difference.
 		if absf(a.global_position.y - attacker.global_position.y) > 2.1 * Hex.LEVEL_HEIGHT:
 			continue
+		out.append(a)
+	return out
+
+
+## What a melee lane would touch (a query, like arc_targets): within `radius` plus each one's radius of the segment from
+## `near` to `far` ahead along `dir`.
+static func lane_targets(attacker: Actor, dir: Vector3, near: float, far: float, radius: float) -> Array[Actor]:
+	var out: Array[Actor] = []
+	var foe := GameWorld.other_team(attacker.team)
+	var p := attacker.global_position
+	var a0 := Vector2(p.x + dir.x * near, p.z + dir.z * near)
+	var a1 := Vector2(p.x + dir.x * far, p.z + dir.z * far)
+	var mid := p + dir * (near + far) * 0.5
+	for a in GameWorld.hittable_in_radius(mid, (far - near) * 0.5 + radius, foe, attacker.team == GameWorld.TEAM_HEROES):
+		var q := Vector2(a.global_position.x, a.global_position.z)
+		if Geometry2D.get_closest_point_to_segment(q, a0, a1).distance_to(q) > radius + a.radius:
+			continue
+		if absf(a.global_position.y - p.y) > 2.1 * Hex.LEVEL_HEIGHT:
+			continue
+		out.append(a)
+	return out
+
+
+## A melee blow on `targets` (from arc_targets / lane_targets): the shield test, then only what this machine resolves.
+static func _land_melee(attacker: Actor, targets: Array[Actor], dir: Vector3, damage: float, shove: float) -> Array[Actor]:
+	var hit: Array[Actor] = []
+	for a in targets:
+		var to := a.global_position - attacker.global_position
+		to.y = 0.0
 		if shielded(a, attacker.global_position, HIT_MELEE, attacker):
 			continue   # (a clank on the planks: no damage, no shove)
 		if not Net.resolves_hit(a, attacker):

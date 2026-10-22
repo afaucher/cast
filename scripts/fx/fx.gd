@@ -235,6 +235,41 @@ static func slash_arc(origin: Vector3, dir: Vector3, reach: float, arc_deg: floa
 	tw.tween_callback(mi.queue_free)
 
 
+## The floor mark of Combat.melee_lane (a centred overhead strike): a stadium from `near` to `far` ahead of `origin` along
+## `dir`, `radius` wide on each side, the same glow and fade as slash_arc, plus a quick ring where the blow lands (`far`).
+static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, radius: float, color: Color) -> void:
+	if not _world_ready():
+		return
+	dir.y = 0.0
+	dir = dir.normalized()
+	var side := Vector3(-dir.z, 0.0, dir.x)
+	var pts: Array[Vector3] = []   # the outline: the near cap (+side round the back to -side), then the far cap
+	var segs := 8
+	for i in segs + 1:
+		var a := PI * float(i) / segs
+		pts.append(dir * near + (side * cos(a) - dir * sin(a)) * radius)
+	for i in segs + 1:
+		var a := PI * float(i) / segs
+		pts.append(dir * far + (-side * cos(a) + dir * sin(a)) * radius)
+	var c := dir * (near + far) * 0.5
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in pts.size():
+		for v: Vector3 in [c, pts[(i + 1) % pts.size()], pts[i]]:
+			st.set_normal(Vector3.UP)
+			st.add_vertex(v)
+	var mat := glow_material(Color(color.r, color.g, color.b, 0.45))
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	GameWorld.spawn(mi, origin + Vector3.UP * 0.25)
+	var tw := mi.create_tween()
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.18)
+	tw.tween_callback(mi.queue_free)
+	ring(origin + dir * far + Vector3.UP * 0.1, radius + 0.35, Color(color.r, color.g, color.b, 0.7), 0.22, 0.0, false, 0.4)
+
+
 ## Nudge any CameraRig in the scene (group "camera_rig").
 static func shake(amount: float) -> void:
 	if _world_ready():
