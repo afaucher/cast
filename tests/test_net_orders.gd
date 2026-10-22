@@ -73,13 +73,20 @@ func run_host() -> void:
 		var h0 := hench[0]
 		var m := _nearest_monster(h0.global_position)
 		var hits := [0.0]
+		var m_at := Vector3.INF
 		if m != null:
-			m.global_position = _open_spot(h0.global_position, 2.5)
+			# Just outside the henchman's PANIC_RANGE: the nearest monster, and no panic. Any closer and the henchman runs from
+			# it while the client's order is on the wire (most of a second on a coast link), then fights whatever monster is
+			# nearest where it stopped (FIGHT takes the nearest), not this one.
+			m.global_position = _open_spot(h0.global_position, Employee.PANIC_RANGE + 0.75)
+			m_at = m.global_position
 			m.damaged.connect(func(a: float, src: Node) -> void:
 				if src is Employee:
 					hits[0] += a)
-		command(c1, "goto", {"at": _open_spot(h0.global_position, 3.0)})
+		# The client stands on the henchman's far side: between the two, its hero would be in the henchman's way.
+		command(c1, "goto", {"at": _open_spot(h0.global_position, 3.0, m_at)})
 		check(await wait_reports("there", 1, 10.0), "the client walked over")
+		check(h0.state != Employee.State.PANIC, "the henchman did not panic at the monster (%s)" % h0.state_name())
 		command(c1, "say", {"text": "Hench attack", "at": Vector3.INF})
 		check(await until(func() -> bool: return h0.state == Employee.State.FIGHT, 5.0), "the henchmen fight on the client's order (%s)" % h0.state_name())
 		eq(Session.orders.applied.back()["refused"], 0, "henchmen do not refuse")
@@ -211,12 +218,15 @@ func _nearest_monster(p: Vector3) -> Monster:
 	return best
 
 
-## Walkable floor about `dist` from `p` (the first of eight directions that has it), level with it.
-func _open_spot(p: Vector3, dist: float) -> Vector3:
+## Walkable floor about `dist` from `p` (the first of eight directions that has it), level with it. With `away`, only a
+## direction that does not head toward `away`.
+func _open_spot(p: Vector3, dist: float, away: Vector3 = Vector3.INF) -> Vector3:
 	var map := game.get("map") as HexMap
 	for k in 8:
 		var a := TAU * float(k) / 8.0
 		var q := p + Vector3(cos(a), 0.0, sin(a)) * dist
+		if away != Vector3.INF and Vector3(q.x - p.x, 0.0, q.z - p.z).dot(Vector3(away.x - p.x, 0.0, away.z - p.z)) > 0.0:
+			continue
 		if map.is_walkable_cell(Hex.from_world(q)) and not map.blocks_point(q, 0.6) and absf(map.ground_height(q) - p.y) < 0.6:
 			return Vector3(q.x, map.ground_height(q), q.z)
 	return p
