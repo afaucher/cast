@@ -732,13 +732,22 @@ func _spin() -> bool:
 
 
 func _spin_effect(dir: Vector3) -> void:
-	for foe in GameWorld.actors_in_radius(global_position, SPIN_REACH, GameWorld.other_team(team)):
+	var reach := float(spin_area()["reach"])
+	for foe in GameWorld.actors_in_radius(global_position, reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
-	if not Combat.melee_arc(self, dir, SPIN_REACH, 360.0, SPIN_DAMAGE, SPIN_SHOVE).is_empty():
+	var touched := Combat.arc_targets(self, dir, reach, 360.0)
+	if not Combat.melee_arc(self, dir, reach, 360.0, SPIN_DAMAGE, SPIN_SHOVE).is_empty():
 		MonsterSenses.noise(global_position, MonsterSenses.NOISE_MELEE, "melee")
-	Combat.shove_radius(global_position, SPIN_REACH, SPIN_SHOVE, self, team, self, 2.1 * Hex.LEVEL_HEIGHT)   # teammates too
-	Fx.slash_arc(global_position, dir, SPIN_REACH, 360.0, hero_color.lightened(0.5))
-	_spin_pose()
+	Combat.shove_radius(global_position, reach, SPIN_SHOVE, self, team, self, 2.1 * Hex.LEVEL_HEIGHT)   # teammates too
+	Fx.slash_arc(global_position, dir, reach, 360.0, hero_color.lightened(0.5))
+	_spin_pose(not touched.is_empty())
+
+
+## The spin's area right now: {"shape": "arc", "reach", "arc": 360}: SPIN_REACH, or the active MoveFeel profile's
+## `spin_reach` (grounded_anim: the radius the wrench head really sweeps, animation-research.md "As built").
+func spin_area() -> Dictionary:
+	var r := MoveFeel.num("spin_reach")
+	return {"shape": "arc", "reach": r if r > 0.0 else SPIN_REACH, "arc": 360.0}
 
 
 ## Fire the weak ranged bolt toward `dir` (X/Z).
@@ -1091,13 +1100,19 @@ func _swing_pose(connects: bool = false, dir: Vector3 = Vector3.ZERO) -> void:
 
 
 func _bowl_pose() -> void:
+	if _feel.secondary():
+		return   # (grounded_anim: the glove is at the boulder on the click's frame, HeroFeel)
 	if visual_override != null and visual_override.has_method("bowl_pose"):
 		visual_override.call("bowl_pose")
 		return
 	_shoot_pose()
 
 
-func _spin_pose() -> void:
+## The spin's pose. Under strike_first (grounded_anim) HeroFeel whirls her through it at once (the hits already landed),
+## with a hit-stop when it touches something; otherwise the model's own spin.
+func _spin_pose(connects: bool = false) -> void:
+	if _feel.secondary(connects):
+		return
 	if visual_override != null and visual_override.has_method("spin"):
 		visual_override.call("spin", 0.5)
 		return
@@ -1112,6 +1127,8 @@ func _spin_pose() -> void:
 
 
 func _shoot_pose() -> void:
+	if secondary_kind == "arrow" and _feel.secondary():
+		return   # (grounded_anim: Wick's bow is up and released on the click's frame, HeroFeel)
 	if visual_override != null and visual_override.has_method("shoot_pose"):
 		visual_override.call("shoot_pose")
 	if _weapon == null:

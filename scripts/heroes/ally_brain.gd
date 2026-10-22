@@ -835,7 +835,7 @@ func _direct_clear(from: Vector3, to: Vector3) -> bool:
 ##   bowl: an enemy 3 to 9 away in line of sight, and no other hero standing in the lane.
 func _try_secondary(foe: Actor) -> bool:
 	if hero.secondary_kind == "spin":
-		var reach := Hero.SPIN_REACH
+		var reach := float(hero.spin_area()["reach"])   # (the profile's: grounded_anim fits it to the wrench's sweep)
 		var close := GameWorld.actors_in_radius(hero.global_position, reach, GameWorld.TEAM_MONSTERS)
 		if close.size() >= 2 or (close.size() == 1 and hero.cooldown_left(Hero.KEY_RANGED) <= 0.0):
 			if prop_care and not _arc_clear(hero.facing, reach, 360.0):

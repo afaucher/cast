@@ -18,7 +18,7 @@ extends RefCounted
 ##     `hitstop` (50 ms; Gasket's smash 83 ms; the simulation, the hero's motion and the damage are untouched). Gasket's and
 ##     Rebar's big overhead shapes play in the follow-through (STYLE "follow") or as a 2-frame wind-up before the impact
 ##     ("wind": the lab's alternative). A SMASH (the hit area says `smash`: Gasket's hammer) also marks its landing on the
-##     floor (Fx.ground_smash: cracks, a shock ring, dust) on every screen, and nudges the camera of the attacker's own
+##     floor (Fx.ground_smash: a pale shock ring and dust, no cracks) on every screen, and nudges the camera of the attacker's own
 ##     screen only (`shake`).
 ##   - The stride is held while shoved or airborne (HeroGait asks `body`): the legs stop walking under a sliding body.
 
@@ -67,6 +67,28 @@ const STRIKES := {
 		"slam_w": [[0, 0.0], [2, 1.0], [20, 1.0], [38, 0.0]],
 		"slam_a": [[0, RebarModel.SLAM_UP], [2, RebarModel.SLAM_UP], [4, RebarModel.SLAM_DOWN], [8, RebarModel.SLAM_DOWN], [20, 0.6], [38, 0.0]]}},
 }
+## The SECONDARIES (RMB), strike-first like the primary: the effect already happened on the click (the spin's hits, the
+## arrow, the boulder), so the pose is at its release on that frame. "kind" says what else lands then ("spin": a dust ring
+## at her feet), "yaw" keys turn the whole model (rad), "lunge" scales the strike's lunge and pitch.
+##   Gasket's spin: the wrench is out on the click's frame and she whirls a full turn in WHIRL_FRAMES (today she took 25
+##     frames to sweep round, after every hit had landed), then the wrench comes back to her side.
+##   Wick's arrow: the bow is up and the string snaps forward on the click's frame (today the arrow left his chest while the
+##     bow was still at his hip, raised 5 frames later; a drawn shot also dipped the bow to his hip and back up).
+##   Rebar's bowl: his right glove is down and forward at the boulder on the click's frame, then follows through (today the
+##     boulder rolled out 1.6 from his hand, which swung through about 14 frames later).
+const WHIRL_FRAMES := 9
+const SECONDARIES := {
+	"gasket": {"impact": 1, "squash": 1.5, "lunge": 0.0, "kind": "spin", "keys": {
+		"spin": [[0, 0.0], [1, 1.0], [WHIRL_FRAMES + 4, 1.0], [WHIRL_FRAMES + 16, 0.0]],
+		"yaw": [[0, 0.0], [1, 0.0], [WHIRL_FRAMES + 1, TAU]]}},
+	"wick": {"impact": 1, "squash": -0.8, "lunge": 0.3, "kind": "shot", "keys": {
+		"raise": [[0, 1.0], [14, 1.0], [32, 0.0]],
+		"draw": [[0, -0.35], [7, -0.2], [32, -0.2]]}},
+	"rebar": {"impact": 1, "squash": 1.2, "lunge": 0.5, "kind": "bowl", "keys": {
+		"bowl_w": [[0, 0.0], [1, 1.0], [14, 1.0], [30, 0.0]],
+		"bowl_a": [[0, RebarModel.BOWL_RELEASE], [3, RebarModel.BOWL_RELEASE], [14, RebarModel.BOWL_FOLLOW], [30, 0.0]]}},
+}
+const SPIN_HITSTOP := 0.033        ## s: a spin that touches something holds 2 frames (lighter than a smash)
 ## Which timeline the heavy hitters play: "follow" (the overhead shape after the impact: impact on the click's frame) or
 ## "wind" (a 2-frame wind-up: impact 3 frames after the click). The lab sets it to compare (--strike); the game plays FOLLOW.
 const FOLLOW := "follow"
@@ -98,6 +120,8 @@ var _age := -1.0                   ## s since the click (-1: no strike)
 var _connect := false              ## the blow touched something (a hit-stop at the impact)
 var _dir := Vector3.FORWARD        ## the swing's direction (X/Z)
 var smashes := 0                   ## smash landings marked on the floor (tests)
+var secondaries := 0               ## secondaries played strike-first (tests)
+var spins_marked := 0              ## spins' dust rings (tests)
 var _impacted := false
 
 
@@ -112,7 +136,7 @@ func net_fields() -> Dictionary:
 		"_vs": Net.LOCAL, "_vq": Net.LOCAL, "_lean_v": Net.LOCAL, "_sq_v": Net.LOCAL, "_moving": Net.LOCAL,
 		"_lunge": Net.LOCAL, "_freeze": Net.LOCAL, "_strike": Net.LOCAL, "_age": Net.LOCAL, "_connect": Net.LOCAL,
 		"_impacted": Net.LOCAL, "held_frames": Net.LOCAL, "_held": Net.LOCAL, "_top": Net.LOCAL, "_dir": Net.LOCAL,
-		"smashes": Net.LOCAL,
+		"smashes": Net.LOCAL, "secondaries": Net.LOCAL, "spins_marked": Net.LOCAL,
 	}
 
 
@@ -202,13 +226,34 @@ func strike(connects: bool, dir: Vector3 = Vector3.ZERO) -> bool:
 		key += "_wind"
 	if not STRIKES.has(key):
 		return false
-	_strike = STRIKES[key]
-	_age = 0.0
+	_play(STRIKES[key])
 	_connect = connects
 	_dir = Vector3(dir.x, 0.0, dir.z).normalized() if Vector3(dir.x, 0.0, dir.z).length() > 0.001 else hero.facing
 	_impacted = false
 	strikes += 1
 	return true
+
+
+## The hero's secondary went off (Hero._spin_pose / _shoot_pose / _bowl_pose, on the owner's click or replayed on a
+## puppet): its SECONDARIES timeline, strike-first. `connects`: a spin touched something (a SPIN_HITSTOP). False (the
+## caller plays the model's own pose) when this layer is not driving the body or the kit has none.
+func secondary(connects: bool = false) -> bool:
+	if not active() or not MoveFeel.on("strike_first") or not SECONDARIES.has(hero.kit_id):
+		return false
+	_play(SECONDARIES[hero.kit_id])
+	_connect = connects
+	_dir = hero.facing
+	_impacted = false
+	secondaries += 1
+	return true
+
+
+## Start `timeline` (a strike or a secondary), putting the one it cuts off back at rest.
+func _play(timeline: Dictionary) -> void:
+	if not _strike.is_empty():
+		_rest(_strike["keys"] as Dictionary)
+	_strike = timeline
+	_age = 0.0
 
 
 ## The frame (60ths of a second after the click) the playing timeline reaches its impact pose (tests, the lab).
@@ -221,6 +266,8 @@ func stop() -> void:
 	if model != null and is_instance_valid(model):
 		for ch: String in _channels():
 			model._arm_kick[ch] = 0.0
+		if not _strike.is_empty():
+			_rest(_strike["keys"] as Dictionary)
 		if pivot != null and is_instance_valid(pivot) and model.get_parent() == pivot and not model.is_queued_for_deletion():
 			var vis := pivot.get_parent()
 			if vis != null:
@@ -256,8 +303,8 @@ func _attach(m: LowPolyModel) -> void:
 
 func _channels() -> Array[String]:
 	var out: Array[String] = []
-	for k: String in STRIKES:
-		for ch: String in (STRIKES[k]["keys"] as Dictionary):
+	for t: Dictionary in STRIKES.values() + SECONDARIES.values():
+		for ch: String in (t["keys"] as Dictionary):
 			if not out.has(ch) and model != null and model._arm_kick.has(ch):
 				out.append(ch)
 	return out
@@ -272,28 +319,46 @@ func _step_strike(delta: float) -> void:
 	var done := true
 	for ch: String in keys:
 		var k: Array = keys[ch]
-		model._arm_kick[ch] = _sample(k, frame)
+		if ch == "yaw":
+			model.rotation.y = _sample(k, frame)
+		else:
+			model._arm_kick[ch] = _sample(k, frame)
 		if frame < float((k[k.size() - 1] as Array)[0]):
 			done = false
 	if not _impacted and frame >= float(_strike["impact"]) - 0.01:
 		_impacted = true
 		impact_frame = Engine.get_process_frames()
-		_lunge = float(_tu["lunge"])
-		_lean_v.x -= float(_tu["pitch"])
+		var lk := float(_strike.get("lunge", 1.0))
+		_lunge = float(_tu["lunge"]) * lk
+		_lean_v.x -= float(_tu["pitch"]) * lk
 		_sq_v += float(_strike.get("squash", 0.0)) * float(_tu["squash"])
+		var spin := str(_strike.get("kind", "")) == "spin"
 		if _connect:
-			_freeze = float(_tu.get("hitstop", HITSTOP))
+			_freeze = SPIN_HITSTOP if spin else float(_tu.get("hitstop", HITSTOP))
 		var area := hero.melee_area()
-		if bool(area.get("smash", false)):
+		if spin:
+			spins_marked += 1
+			Fx.spin_dust(hero.global_position, float(hero.spin_area()["reach"]))
+		elif _strike.has("kind"):
+			pass   # (an arrow or a bowl: the projectile is the effect)
+		elif bool(area.get("smash", false)):
 			smashes += 1
 			Fx.ground_smash(hero.global_position + _dir * float(area["far"]), float(area.get("end_radius", 0.5)))
 			if hero.is_player and float(_tu["shake"]) > 0.0:
 				Fx.shake(float(_tu["shake"]))   # (this screen's own hero only: a puppet's smash shakes no one)
 	if done:
-		for ch: String in keys:
-			model._arm_kick[ch] = 0.0
+		_rest(keys)
 		_strike = {}
 		_age = -1.0
+
+
+## A timeline's channels back at rest (the model's turn too).
+func _rest(keys: Dictionary) -> void:
+	for ch: String in keys:
+		if ch == "yaw":
+			model.rotation.y = 0.0
+		else:
+			model._arm_kick[ch] = 0.0
 
 
 ## The timeline `keys` ([[frame, value], ...]) at `frame`, easing out between keys.

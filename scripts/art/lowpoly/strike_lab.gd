@@ -206,7 +206,23 @@ func _swing(i: int) -> void:
 	h._ready_at.erase(Hero.KEY_MELEE)
 	if i < dummies.size():
 		dummies[i].heal(dummies[i].max_hp)
-	h.melee(_swing_dir)
+	_attack(h)
+
+
+## The attack the lab plays: the primary, or with --secondary the RMB one (Gasket's spin, Wick's tap arrow, Rebar's bowl).
+func _attack(h: Hero) -> void:
+	if args.has("--secondary"):
+		h._ready_at.erase(Hero.KEY_RANGED)
+		h.shoot(_swing_dir)
+	else:
+		h.melee(_swing_dir)
+
+
+## The area the overlay draws: the primary's, or the secondary's (Hero.spin_area; a projectile's has none).
+func _area_of(h: Hero) -> Dictionary:
+	if args.has("--secondary"):
+		return h.spin_area() if h.secondary_kind == "spin" else {}
+	return h.melee_area()
 
 
 ## --clipcheck: play the clip and print, per lane, the deepest the arms sink into the body (PoseClip) and on which frames.
@@ -288,23 +304,37 @@ func _overlay() -> void:
 		paths.append([])
 		impact.append(-1)
 	var t0 := Engine.get_process_frames()
+	var proj: Array = []            # lane -> the projectile its secondary launched (an arrow, a boulder), or null
+	var ppaths: Array = []          # lane -> [frame] -> its hero-relative position (or null)
+	for i in n:
+		proj.append(null)
+		ppaths.append([])
 	for f in 60:
 		for i in n:
 			_use(i)
 			var h := heroes[i]
 			h.face_point(h.global_position + _swing_dir * 5.0)
 			if f == OVERLAY_CLICK:
-				h.melee(_swing_dir)
+				var before := _projectiles()
+				_attack(h)
+				for p in _projectiles():
+					if not before.has(p) and p.get("source") == h:
+						proj[i] = p
 			h._physics_process(DT)
 			h._process(DT)
 		_use(0)
 		await get_tree().process_frame
 		for i in n:
 			(paths[i] as Array).append(_points(heroes[i]))
+			var alive: bool = proj[i] != null and is_instance_valid(proj[i])
+			(ppaths[i] as Array).append(_rel(heroes[i], (proj[i] as Node3D).global_position) if alive else null)
+	_ppaths = ppaths
 	for i in n:
 		var fe: HeroFeel = heroes[i]._feel
-		if fe.strikes > 0 and fe.impact_frame >= 0:
+		if (fe.strikes > 0 or fe.secondaries > 0) and fe.impact_frame >= 0:
 			impact[i] = fe.impact_frame - t0
+		elif args.has("--secondary") and heroes[i].secondary_kind == "spin":   # the model's own spin: when the sweep is done
+			impact[i] = OVERLAY_CLICK + _sweep_frames(paths[i])
 		else:   # the model's own swing: the frame the first point is farthest forward (low enough to hit)
 			var best := -INF
 			for f in range(OVERLAY_CLICK, (paths[i] as Array).size()):
@@ -315,9 +345,13 @@ func _overlay() -> void:
 	# the numbers, and the marks on the floor
 	for i in n:
 		_use(i)
-		var line := _report(i, paths[i], impact[i])
+		var line := _report_secondary(i, paths[i], impact[i]) if args.has("--secondary") else _report(i, paths[i], impact[i])
 		_draw_area(heroes[i])
 		_draw_path(heroes[i], paths[i], impact[i])
+		for f in mini(OVERLAY_CLICK + 14, (ppaths[i] as Array).size()):
+			var pp: Variant = ppaths[i][f]
+			if pp != null:   # the projectile's first frames, cyan
+				_dot(heroes[i], Vector2((pp as Vector3).x, (pp as Vector3).z), 0.07, Color(0.3, 1.0, 1.0, 1.0))
 		var lab := Label3D.new()
 		lab.text = "%s  %s\n%s" % [hero_kind.capitalize(), _lane_name(i), line]
 		lab.font_size = 36
@@ -339,7 +373,7 @@ func _overlay() -> void:
 			var h := heroes[i]
 			h._ready_at.erase(Hero.KEY_MELEE)
 			if f == OVERLAY_CLICK:
-				h.melee(_swing_dir)
+				_attack(h)
 			h._physics_process(DT)
 			h._process(DT)
 		_use(0)
@@ -357,6 +391,77 @@ func _overlay() -> void:
 	finish()
 
 
+var _ppaths: Array = []
+
+
+## The projectiles in the world (arrows, bolts, boulders).
+func _projectiles() -> Array:
+	var out := []
+	for c in GameWorld.root.get_children():
+		if c is Projectile or c is BowlBoulder:
+			out.append(c)
+	return out
+
+
+## `w` relative to the hero (x: to its right, y: up from the floor, z: forward along the swing).
+func _rel(h: Hero, w: Vector3) -> Vector3:
+	var fwd := _swing_dir
+	var side := Vector3(-fwd.z, 0.0, fwd.x)
+	var d := w - h.global_position
+	return Vector3(d.dot(side), d.y, d.dot(fwd))
+
+
+## Frames after the click until the weapon's first point has swept 330 degrees round the hero (a spin).
+func _sweep_frames(path: Array) -> int:
+	var total := 0.0
+	var prev := INF
+	for f in range(OVERLAY_CLICK, path.size()):
+		var p: Vector3 = path[f][0]
+		var a := atan2(p.x, p.z)
+		if prev != INF:
+			total += absf(wrapf(a - prev, -PI, PI))
+		prev = a
+		if total >= deg_to_rad(330.0):
+			return f - OVERLAY_CLICK
+	return path.size() - OVERLAY_CLICK
+
+
+## The secondary's numbers (a spin: the wrench head's reach round her and how long the sweep takes; a projectile: where it
+## appears against where the bow or the hand is).
+func _report_secondary(i: int, path: Array, imp: int) -> String:
+	var h := heroes[i]
+	if h.secondary_kind == "spin":
+		var area := _area_of(h)
+		var lo := INF
+		var hi := 0.0
+		for f in range(OVERLAY_CLICK, mini(path.size(), OVERLAY_CLICK + 40)):
+			var p: Vector3 = path[f][0]
+			if p.y < HIT_HEIGHT and Vector2(p.x, p.z).length() > 1.0:
+				lo = minf(lo, Vector2(p.x, p.z).length())
+				hi = maxf(hi, Vector2(p.x, p.z).length())
+		var sweep := _sweep_frames(path)
+		print("overlay %s %-24s spin: the head sweeps %d frames after the click at %.2f..%.2f from her, %.2f up; area %s, grunt area %.2f u2" % [
+			hero_kind, _lane_name(i), sweep, lo, hi, (path[mini(imp, path.size() - 1)][0] as Vector3).y, str(area), _area_size(area, GRUNT_R)])
+		return "the wrench sweeps round %d frames after the hits\nhead %.1f..%.1f out / area %.1f, grunt area %.1f u2" % [
+			sweep, lo, hi, float(area["reach"]), _area_size(area, GRUNT_R)]
+	var pp: Array = _ppaths[i]
+	var spawn := -1
+	for f in pp.size():
+		if pp[f] != null:
+			spawn = f
+			break
+	if spawn < 0:
+		return "no projectile"
+	var at: Vector3 = pp[spawn]
+	var hand: Vector3 = path[spawn][0]
+	var rel: Vector3 = path[imp][0]
+	print("overlay %s %-24s %s: appears frame +%d at fwd %.2f side %+.2f up %.2f; the %s is then at fwd %.2f side %+.2f up %.2f (%.2f away); its release pose is frame +%d at fwd %.2f side %+.2f up %.2f" % [
+		hero_kind, _lane_name(i), h.secondary_kind, spawn - OVERLAY_CLICK, at.z, at.x, at.y, "bow" if hero_kind == "wick" else "hand",
+		hand.z, hand.x, hand.y, at.distance_to(hand), imp - OVERLAY_CLICK, rel.z, rel.x, rel.y])
+	return "%s appears +%d frames, %.1f from the %s\nthe release pose comes +%d frames\n" % [h.secondary_kind, spawn - OVERLAY_CLICK,
+		at.distance_to(hand), "bow" if hero_kind == "wick" else "hand", imp - OVERLAY_CLICK]
+
+
 ## The tracked points of `h`'s weapon now, relative to the hero (x: to its right, y: up from the floor, z: forward).
 func _points(h: Hero) -> Array:
 	var m := h.visual_override as LowPolyModel
@@ -372,7 +477,7 @@ func _points(h: Hero) -> Array:
 
 func _report(i: int, path: Array, imp: int) -> String:
 	var h := heroes[i]
-	var area := h.melee_area()
+	var area := _area_of(h)
 	var low := 0
 	var inside := 0
 	var reach := 0.0
@@ -437,8 +542,11 @@ static func _area_size(area: Dictionary, r: float) -> float:
 
 
 func _draw_area(h: Hero) -> void:
-	var area := h.melee_area()
+	var area := _area_of(h)
 	var col := Color(1.0, 0.85, 0.3)
+	if area.is_empty():   # (a projectile: no area of its own here)
+		_line(h, _circle(Vector2.ZERO, h.radius, 24), Color(0.9, 0.9, 0.95, 0.8), 0.02)
+		return
 	_fill(h, _outline(area, 0.0), Color(col, 0.28))
 	_line(h, _outline(area, 0.0), Color(col, 0.95), 0.035)
 	_line(h, _outline(area, GRUNT_R), Color(col, 0.45), 0.018)

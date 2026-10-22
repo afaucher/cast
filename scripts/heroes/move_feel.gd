@@ -62,6 +62,7 @@ const OFF := {
 	"body": false,          ## treatment B (HeroFeel): the lean, the squash, the stride held while shoved or airborne
 	"strike_first": false,  ## the melee pose lands on the frame the hit resolves (HeroFeel's strike), a lunge, a 3-frame hit-stop
 	"melee_areas": {},      ## kit -> the primary's hit area (Hero.melee_area); a kit not listed keeps its own wedge
+	"spin_reach": 0.0,      ## Gasket's spin radius (Hero.spin_area); 0 keeps Hero.SPIN_REACH
 }
 
 ## The table. Numbers are the doc's package A starting points, tuned by measurement where the "As built" section says so.
@@ -95,6 +96,9 @@ const PROFILES := {
 			"gasket": {"shape": "lane", "near": 0.6, "far": 1.95, "radius": 0.25, "end_radius": 0.6, "smash": true},
 			"rebar": {"shape": "lane", "near": 1.05, "far": 1.05, "radius": 0.85},
 		},
+		# Gasket's spin (the user, 2026-10-22: "What about the secondary?"): the wrench head sweeps round 2.1-2.3 from her
+		# (Hero.SPIN_REACH is 1.9), so a monster the head visibly crosses is one it hits
+		"spin_reach": 2.1,
 	},
 }
 ## A landing from this many levels or more is a big one (dust, a thud, the landing slowdown).

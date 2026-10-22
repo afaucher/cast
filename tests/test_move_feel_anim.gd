@@ -14,6 +14,7 @@ extends TestCase
 ## It prints the measured numbers ([anim] lines) for the doc.
 
 const DT := 1.0 / 60.0
+const WHIRL_CHECK := HeroFeel.WHIRL_FRAMES + 4   ## frames after the spin by which she has turned all the way round (+ its hit-stop)
 
 var root: Node3D
 
@@ -57,8 +58,11 @@ func _dummy(pos: Vector3) -> TrainingDummy:
 	return d
 
 
+func _init() -> void:
+	timeout_sec = 600.0   # (game time: TestCase starts its timer in _ready, before setup; the walks, swings and poses add up)
+
+
 func setup() -> void:
-	timeout_sec = 150.0
 	MoveFeel.reset()
 	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
 	root = Node3D.new()
@@ -73,6 +77,8 @@ func setup() -> void:
 		for kit in ["wick", "gasket", "rebar"]:
 			await _no_clip(kit, prof)
 	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
+	for kit in ["wick", "gasket", "rebar"]:
+		await _secondary(kit)
 	await _areas()
 	await _others()
 	await _puppet()
@@ -189,7 +195,8 @@ func _strike(kit: String) -> void:
 	var held := fe.held_frames - held0
 	var want_held := roundi(float(HeroFeel.TUNING[kit]["hitstop"]) * 60.0)
 	check(absi(held - want_held) <= 1, "%s: a connecting blow holds the attacker's pose about %d frames (%d)" % [kit, want_held, held])
-	eq(fe.smashes, 1 if kit == "gasket" else 0, "%s: %s" % [kit, "the smash marks its landing on the floor" if kit == "gasket" else "no smash mark"])
+	eq(fe.smashes, 1 if kit == "gasket" else 0, "%s: %s" % [kit, "the smash marks its landing (ring and dust)" if kit == "gasket" else "no smash mark"])
+	eq(_dark_marks(), 0, "%s: no dark crack on the floor (the user: \"Just the white effects\")" % kit)
 	print("[anim] %s strike: damage on frame %d, impact pose on frame %d, hit-stop %d frames" % [kit, hit_frame[0], fe.impact_frame, held])
 	# a miss: no hit-stop; the cooldown is the kit's (strike first changes no timing)
 	d.global_position = h.global_position + Vector3(-4, 0, 0)
@@ -201,6 +208,87 @@ func _strike(kit: String) -> void:
 	near(h.cooldown_left(Hero.KEY_MELEE), h.melee_cooldown, 0.0001, "%s: the kit's cooldown, unchanged" % kit)
 	await frames(10)
 	eq(fe.held_frames - held0, 0, "%s: a miss has no hit-stop" % kit)
+
+
+## The secondaries strike-first (the user, 2026-10-22: "What about the secondary?"): the pose is at its release on the
+## click's frame (Wick's bow up, Rebar's glove down at the boulder, Gasket's wrench out and whirling a full turn in about
+## WHIRL_FRAMES), a spin that touches something holds 2 frames and kicks up its dust ring, its area is the wrench's sweep
+## (2.1; today 1.9), and no arm goes through Gasket's or Rebar's body; today plays the models' own poses.
+func _secondary(kit: String) -> void:
+	for prof: String in [MoveFeel.TODAY, MoveFeel.GROUNDED_ANIM]:
+		MoveFeel.set_mode(prof)
+		var hp: Array = _hero(_row([2, 2, 2, 2, 2, 2, 2, 2, 2]), kit)
+		var h: Hero = hp[0]
+		(hp[1] as PlayerController).queue_free()
+		await frames(3)
+		var fe := h._feel
+		var m := h.visual_override as LowPolyModel
+		var d := _dummy(h.global_position + Vector3(1.4, 0, 0))
+		h.face_point(h.global_position + Vector3(5, 0, 0))
+		await get_tree().physics_frame
+		var shot_frame := Engine.get_process_frames()
+		var held0 := fe.held_frames
+		check(h.shoot(Vector3.RIGHT), "%s %s: the secondary goes off" % [kit, prof])
+		await frames(1)
+		var worst := 0.0
+		var turned := 0.0
+		for i in 50:
+			if kit == "gasket":
+				turned = maxf(turned, m.rotation.y)
+				if i == WHIRL_CHECK:
+					check(turned >= TAU * 0.95 or prof == MoveFeel.TODAY, "gasket %s: a full turn within %d frames (%.0f deg)" % [prof, WHIRL_CHECK + 1, rad_to_deg(turned)])
+			if kit != "wick":
+				worst = maxf(worst, float(PoseClip.depth(m, kit)[0]))
+			await get_tree().process_frame
+		if prof == MoveFeel.TODAY:
+			eq(fe.secondaries, 0, "%s today: the model's own pose" % kit)
+			if kit == "gasket":
+				eq(float(h.spin_area()["reach"]), Hero.SPIN_REACH, "gasket today: the spin keeps SPIN_REACH")
+			continue
+		eq(fe.secondaries, 1, "%s: the secondary plays strike-first" % kit)
+		print("[anim] %s secondary: release pose on frame %d (click %d), deepest arm in body %.3f, hit-stop %d frames, turned %.0f deg" % [
+			kit, fe.impact_frame, shot_frame, worst, fe.held_frames - held0, rad_to_deg(turned)])
+		check(absi(fe.impact_frame - shot_frame) <= 1, "%s: its release pose is on the click's frame (%d vs %d)" % [kit, fe.impact_frame, shot_frame])
+		check(worst <= 0.01, "%s: no arm inside the body through the secondary (%.3f)" % [kit, worst])
+		if kit == "gasket":
+			near(float(h.spin_area()["reach"]), 2.1, 0.001, "gasket: the spin reaches the wrench's sweep")
+			check(d.hp < d.max_hp, "the spin hit the dummy")
+			eq(fe.held_frames - held0, 2, "gasket: a spin that connects holds 2 frames")
+			eq(fe.spins_marked, 1, "gasket: the spin kicks up its dust ring")
+			near(m.rotation.y, 0.0, 0.0001, "gasket: the model faces forward again after the whirl")
+			eq(_dark_marks(), 0, "gasket: white effects only")
+	# the spin's reach: a dummy 2.45 out is missed today (1.9 + its 0.45) and hit by the wrench's sweep (2.1)
+	for prof: String in [MoveFeel.TODAY, MoveFeel.GROUNDED_ANIM]:
+		MoveFeel.set_mode(prof)
+		if kit != "gasket":
+			break
+		var hp2: Array = _hero(_row([2, 2, 2, 2, 2, 2, 2]), kit)
+		var g: Hero = hp2[0]
+		(hp2[1] as PlayerController).queue_free()
+		await frames(1)
+		var far := _dummy(g.global_position + Vector3(2.45, 0, 0))
+		await get_tree().physics_frame
+		g.shoot(Vector3.RIGHT)
+		eq(far.hp < far.max_hp, prof == MoveFeel.GROUNDED_ANIM, "gasket %s: a dummy 2.45 out is %s" % [prof, "hit" if prof == MoveFeel.GROUNDED_ANIM else "missed"])
+	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
+
+
+## Dark unshaded marks in the world right now (Fx.ground_smash once drew dark cracks; the user asked for the white
+## effects only).
+func _dark_marks() -> int:
+	var n := 0
+	for mi in GameWorld.root.find_children("*", "MeshInstance3D", true, false):
+		var m := (mi as MeshInstance3D).material_override as StandardMaterial3D
+		if m == null or m.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED or m.albedo_color.a <= 0.3 or m.albedo_color.v >= 0.2:
+			continue
+		var on_actor := false   # (an hp bar's backing, a dummy's dark parts: not a mark on the floor)
+		var p: Node = mi.get_parent()
+		while p != null and p != GameWorld.root:
+			on_actor = on_actor or p is Actor
+			p = p.get_parent()
+		if not on_actor:
+			n += 1
+	return n
 
 
 ## No arm sinks into its own body (PoseClip) at any frame of a walk, a stop, two swings (the whole follow-through, with the

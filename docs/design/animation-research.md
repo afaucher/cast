@@ -415,12 +415,35 @@ a smash weapon. But the point is MUCH better than the 'swing arc' that was there
   0.98 of the landing. Grunt hit area **4.20** (today's wedge 2.78, the lane alone 2.88); farthest hit 2.93 (1.88, 2.53).
   Damage and cooldown are unchanged, so one target takes the same DPS; the extra area is more targets per swing (a crowd
   ahead of her). The floor mark draws the disc.
-- **Weight.** At the impact, on every screen (a puppet's replayed smash too): dark cracks radiating from the head, a fast
-  shock ring and a puff of dust (`Fx.ground_smash`). A connecting smash holds her pose **83 ms (5 frames)** instead of 50.
-  The attacker's own screen gets a small camera nudge (`Fx.shake(0.12)`; a puppet's smash shakes no one). Strike-first
-  timing is unchanged: the impact is still on the damage frame.
+- **Weight.** At the impact, on every screen (a puppet's replayed smash too): a fast pale shock ring and a puff of dust
+  (`Fx.ground_smash`). (First built with dark cracks radiating from the head too; the user, 2026-10-22: **"Lets also
+  remove the crack from Gasket's primary. Just the white effects you have."** Removed; `test_move_feel_anim` checks no dark
+  mark is left on the floor.) A connecting smash holds her pose **83 ms (5 frames)** instead of 50. The attacker's own
+  screen gets a small camera nudge (`Fx.shake(0.12)`; a puppet's smash shakes no one). Strike-first timing is unchanged:
+  the impact is still on the damage frame.
 - Evidence: `ga_overlay_gasket.png`, `ga_gasket_close.png`, `ga_gasket_game.png`, `ga_gif_gasket_attack.gif` (redone),
   `ga_held_gasket.png`.
+
+#### The secondaries (2026-10-22)
+The user: **"Gasket's primary attack is better. What about the secondary?"** Measured with `strike_lab --overlay
+--secondary` (the RMB attack; a projectile's first frames in cyan) and `--clipcheck`:
+
+| Hero | Secondary | Today (and grounded) | grounded_anim |
+|---|---|---|---|
+| Gasket | spin: every monster within the spin's reach hit at once, on the click | the wrench sweeps round **25 frames** after the hits (0.1 s to swing out, a 0.5 s turn); its head runs 2.1-2.2 from her, the area is 1.9 | **strike-first whirl**: the wrench is out on the click's frame and she turns a full circle in **7 frames**, then brings it back; the area is **2.1** (the head's sweep: grunt hit area 16.3 -> 19.3, +18%); a pale ring and dust thrown out low at her feet (`Fx.spin_dust`, white effects only); a spin that touches something holds **2 frames**; no arm in her body (0.000) |
+| Wick | tap arrow: flies from his chest on the click | the arrow leaves while the bow is still at his hip (0.9 from the arrow), raised **5 frames later**; a drawn shot dipped the bow to his hip and back up | **strike-first shot**: the bow is up and the string snaps forward on the click's frame (no dip after a draw); the arrow starts under the raised bow (0.6 below it: it flies at chest height, the bow is held at the eye) |
+| Rebar | bowl: the boulder rolls out 1.1 ahead of him on the click | the boulder appears **1.6 from his hand** (his glove hangs at his side) and the underhand swing comes 14-27 frames later | **strike-first release**: he stoops and his right glove is down and in at the boulder (**0.8** from its centre) on the click's frame, then follows through up; no arm in his body (0.007) |
+
+- Damage, cooldowns, the arrow's and the boulder's paths are unchanged: only the poses (and the spin's radius, a proposal
+  behind the profile) changed. The AI's "use the spin" check uses the same radius (`Hero.spin_area`).
+- **Proposed, not built:** Wick's drawing hand reaches into his face at full draw in his aim pose (0.18 deep today, 0.06
+  with the string at rest: an archer's anchor at the cheek, but it hides the hand). A little more room between the bow and
+  his face (`WickModel.BOW_AIM_POS`) would fix it in every profile; and the arrow could start at the bow's height. Both
+  change today's look, so they wait for the user.
+- Evidence: `ga_overlay_secondary_{gasket,wick,rebar}.png`, `ga_secondary_{gasket,wick,rebar}.png` (grounded vs
+  grounded_anim, close and game zoom), `ga_gif_gasket_spin.gif` (half speed).
+- Tests: `test_move_feel_anim` (`_secondary`: the release pose on the click's frame, the full turn, the spin's hit-stop and
+  dust ring, a dummy 2.45 out missed today and hit now, no arm in the body, today untouched).
 
 #### Networking
 Nothing new on the wire. HeroFeel is cosmetic and declares every var LOCAL (`test_net_contract`); a puppet leans from its

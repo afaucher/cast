@@ -28,6 +28,13 @@ const SLAM_DOWN := 0.62
 const SLAM_CLASP := 0.46
 const SLAM_BEND := 0.45        ## his torso bends forward this far (rad) at the bottom of the slam ...
 const SLAM_CROUCH := 0.22      ## ... and sinks this much (model units), so the fists come down to a grunt's head
+## The strike-first BOWL (grounded_anim, HeroFeel's `bowl_w` / `bowl_a`): his right arm swings forward and in (BOWL_IN)
+## with the slam's bend and a deeper crouch, so the glove is down at the boulder on the click's frame (BOWL_RELEASE), then
+## follows through up (BOWL_FOLLOW).
+const BOWL_RELEASE := 0.45
+const BOWL_FOLLOW := 1.7
+const BOWL_IN := 0.45
+const BOWL_CROUCH := 0.34
 
 const PART_NAMES: Array[String] = ["body", "head", "vest", "belt", "arm_l", "arm_r", "glove_l", "glove_r", "leg_l", "leg_r"]
 
@@ -57,7 +64,7 @@ var _head_base_y := 1.24
 func _init() -> void:
 	_setup_model("RebarModel", MODEL_SCALE)
 	ui_height = 2.95 * MODEL_SCALE
-	_arm_kick = {"arm_l": 0.0, "arm_r": 0.0, "slam_w": 0.0, "slam_a": 0.0}
+	_arm_kick = {"arm_l": 0.0, "arm_r": 0.0, "slam_w": 0.0, "slam_a": 0.0, "bowl_w": 0.0, "bowl_a": 0.0}
 	# the held spell component: gripped in the palm of his left glove (glove-local; the knuckles are at z -0.38), half
 	# in the leather so it reads as held, about 0.55 across beside a 0.8 glove (it used to hang off the glove's outside)
 	hold_offset = Vector3(0.0, -0.20, -0.30)
@@ -221,14 +228,19 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var a := arm_kick("slam_a")
 	var down := w * clampf(inverse_lerp(SLAM_UP, SLAM_DOWN, a), 0.0, 1.0)
 	var clasp := SLAM_CLASP * down
-	if w > 0.0 or _slam_bent:
-		body.rotation.x = -SLAM_BEND * down * down   # (forward: the model faces -Z)
-		body.position.y -= SLAM_CROUCH * down
-		_slam_bent = w > 0.0
+	var bw := clampf(arm_kick("bowl_w"), 0.0, 1.0)   # (the strike-first bowl: his right glove down at the boulder)
+	var stoop := maxf(down, bw * clampf(inverse_lerp(BOWL_FOLLOW, BOWL_RELEASE, arm_kick("bowl_a")), 0.0, 1.0))
+	if w > 0.0 or bw > 0.0 or _slam_bent:
+		body.rotation.x = -SLAM_BEND * stoop * stoop   # (forward: the model faces -Z)
+		body.position.y -= (SLAM_CROUCH if bw <= 0.0 else BOWL_CROUCH) * stoop
+		_slam_bent = w > 0.0 or bw > 0.0
 	for s: int in [-1, 1]:
 		var side := "arm_l" if s < 0 else "arm_r"
 		var swing := ARM_FWD + s * (stride * 0.28 * walk - sway) + arm_kick(side)
-		(parts[side] as MeshInstance3D).rotation = Vector3(lerpf(swing, a, w), clasp * s, deg_to_rad(10.0 * s) * (1.0 - 0.6 * w))
+		var r := Vector3(lerpf(swing, a, w), clasp * s, deg_to_rad(10.0 * s) * (1.0 - 0.6 * w))
+		if s > 0 and bw > 0.0:
+			r = r.lerp(Vector3(arm_kick("bowl_a"), BOWL_IN, deg_to_rad(4.0)), bw)
+		(parts[side] as MeshInstance3D).rotation = r
 
 
 ## A quick heavy punch with alternating arms: wind back, slam forward, recover.

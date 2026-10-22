@@ -279,8 +279,9 @@ static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, ra
 	ring(origin + dir * far + Vector3.UP * 0.1, maxf(radius, end_radius) + 0.35, Color(color.r, color.g, color.b, 0.7), 0.22, 0.0, false, 0.4)
 
 
-## A hammer's landing on the floor (HeroFeel, a smash's impact; cosmetic, every screen): dark cracks radiating from `pos`
-## out to about `radius`, a fast shock ring and a puff of dust, all gone in about 0.6 s. Looks use GameWorld.fx_rng.
+## A hammer's landing on the floor (HeroFeel, a smash's impact; cosmetic, every screen): a fast pale shock ring out to
+## about `radius` and a puff of dust, gone in about 0.5 s. (No dark cracks: the user, 2026-10-22, "Lets also remove the
+## crack from Gasket's primary. Just the white effects you have.")
 static func ground_smash(pos: Vector3, radius: float) -> void:
 	if not _world_ready():
 		return
@@ -288,41 +289,19 @@ static func ground_smash(pos: Vector3, radius: float) -> void:
 	var g := map.ground_height(pos) if map != null else NAN
 	if not is_nan(g):
 		pos.y = g
-	var rng := GameWorld.fx_rng
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var n := 7
-	for i in n:
-		var a := TAU * (i + rng.randf_range(-0.3, 0.3)) / n
-		var len := radius * rng.randf_range(0.75, 1.15)
-		var d := Vector3(cos(a), 0.0, sin(a))
-		var bend := Vector3(-d.z, 0.0, d.x) * rng.randf_range(-0.12, 0.12) * len
-		var w0 := 0.07
-		var side := Vector3(-d.z, 0.0, d.x)
-		var mid := d * len * 0.5 + bend
-		var tip := d * len
-		for v: Vector3 in [side * w0, mid + side * w0 * 0.6, -side * w0, -side * w0, mid + side * w0 * 0.6, mid - side * w0 * 0.6,
-				mid - side * w0 * 0.6, mid + side * w0 * 0.6, tip]:
-			st.set_normal(Vector3.UP)
-			st.add_vertex(v)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.albedo_color = Color(0.06, 0.05, 0.05, 0.85)
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.set_meta("no_flash", true)
-	GameWorld.spawn(mi, pos + Vector3.UP * 0.03)
-	var tw := mi.create_tween()
-	tw.tween_interval(0.3)
-	tw.tween_property(mat, "albedo_color:a", 0.0, 0.35)
-	tw.tween_callback(mi.queue_free)
 	ring(pos + Vector3.UP * 0.08, radius + 0.25, Color(1.0, 0.92, 0.75, 0.85), 0.28, 0.0, false, 0.2)
 	var dust: Array[Color] = [Color(0.8, 0.72, 0.58), Color(0.6, 0.52, 0.42)]
 	burst(pos + Vector3.UP * 0.1, dust, 14, 3.2, 0.1, 0.5, 4.0, Vector3.UP, 80.0, false)
+
+
+## Gasket's spin kicking up the floor (HeroFeel, a whirl's start; cosmetic, every screen): a pale ring sweeping out to
+## `radius` at her feet and dust thrown out low all round. White effects only, like the smash.
+static func spin_dust(pos: Vector3, radius: float) -> void:
+	if not _world_ready():
+		return
+	ring(pos + Vector3.UP * 0.08, radius, Color(1.0, 0.94, 0.8, 0.8), 0.3, 0.0, false, 0.35)
+	var dust: Array[Color] = [Color(0.8, 0.72, 0.58), Color(0.6, 0.52, 0.42)]
+	burst(pos + Vector3.UP * 0.12, dust, 16, 3.6, 0.09, 0.45, 3.0, Vector3.UP, 88.0, false)
 
 
 ## Nudge any CameraRig in the scene (group "camera_rig").
