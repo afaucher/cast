@@ -25,6 +25,8 @@ strike-first melee, hit areas matched to the weapons).
 - [ ] Steps (hop), +2 climbs (mantle), drops (gravity, landing) feel right.
 - [ ] Stop slide: is 0.07 s / 0.12 u right, or should it be longer?
 - [ ] In a crew, every window uses the host's profile.
-- [ ] Next: blind A/B `grounded` vs `grounded_anim` once it lands.
+- [x] Blind A/B `grounded` vs `grounded_anim`, as Gasket (2026-10-22): "Gasket feels MUCH better" — the aimed smash
+  beats the old swing arc. Fixes in progress: the arm clipping into the body on the smash, a bigger hammer impact.
+- [ ] Wick and Rebar in `grounded_anim`.
 
 Try: `.\run.ps1 --move-lab --move-feel shuffle` (F6 switch, F7 smoothing); crew: `.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded`
