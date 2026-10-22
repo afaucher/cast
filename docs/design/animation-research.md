@@ -337,7 +337,7 @@ areas. **`today` is still the default**; nothing changes in normal play until th
 | The body (B) | `HeroFeel` (`scripts/heroes/hero_feel.gd`), ticked from `Hero._process` before `HeroGait` | A pivot node between `Hero._visual` and the model (added and removed as the profile switches). The lab's lean and squash, per hero, from the shown position: lean = smoothed velocity x `lean` + (quick - smoothed velocity) x `kick`, through a spring, clamped at 22 degrees; a shove tips the body back against the slide. Squash springs on a start (a stretch) and a stop (a squash sized by the speed just had). |
 | Stride held | `HeroGait`, `Gait.hold` | Under `body`, the stride clock stops while the hero is shoved or airborne (a hop, a fall): the legs keep their pose instead of walking on air. grounded is unchanged (its shove case still settles the legs). |
 | Strike first | `HeroFeel.STRIKES`, `Hero._swing_pose` | The swing's pose is a timeline of the model's kick channels: the weapon is at its impact on the frame the hit resolves (the click's frame), then a small lunge, a forward pitch and a squash; when the blow touched something, a **50 ms (3-frame) hit-stop of the attacker's pose only** (the simulation, the hero's motion, the damage and the cooldown are untouched). Puppets play it from the replayed `act`. |
-| The weapons | `WickModel` (`follow`), `GasketModel` (`smash_w`, `smash_a`), `RebarModel` (`slam_w`, `slam_a`) | New channels, at rest unless HeroFeel drives them (today's poses are unchanged). Wick's bash carries through to his right front. **Gasket: a centred overhead smash**: both hands on the handle, the wrench comes straight down on her centre line and the head lands about 1.9 ahead. **Rebar: a centred double-fist slam** (my call, since his alternating punches landed 0.8 ahead at his sides while his wedge reached 1.8 at 120 degrees): both fists come down together in front of him with a forward bend and a crouch. |
+| The weapons | `WickModel` (`follow`), `GasketModel` (`smash_w`, `smash_a`), `RebarModel` (`slam_w`, `slam_a`) | New channels, at rest unless HeroFeel drives them (today's poses are unchanged). Wick's bash carries through to his right front. **Gasket: an overhead smash onto her centre line**: the wrench comes straight down and the head lands about 2.0 ahead on her centre line (first built two-handed; since the user's playtest one-handed beside her right shoulder, see "Gasket after the playtest" below). **Rebar: a centred double-fist slam** (my call, since his alternating punches landed 0.8 ahead at his sides while his wedge reached 1.8 at 120 degrees): both fists come down together in front of him with a forward bend and a crouch. |
 | Hit areas | `Hero.melee_area`, `Combat.melee_lane` / `lane_targets` / `arc_targets`, `Fx.slam_lane` | Each kit's area under the profile. A lane is everything within `radius` of the segment from `near` to `far` ahead (near = far: a disc). The floor mark matches the area (`Fx.slam_lane`: the stadium plus a ring where the blow lands). The AI's prop check and its "turn the swing" use the area (`AllyBrain._area_clear`, `Hero.melee_half_angle`). |
 | Lab | `scripts/art/lowpoly/strike_lab.gd`, `scenes/strike_lab.tscn` | Built on the anim lab: lanes are profiles, `--strike follow\|wind\|both`, `--overlay`. |
 
@@ -371,7 +371,7 @@ area a grunt (radius 0.38) can stand in and be hit (the thin outline). "Grunt hi
 | Hero | Today's area (today, grounded) | Where today's weapon lands | Proposed area (grounded_anim) | Where the new weapon lands | Grunt hit area | Farthest hit (grunt centre) |
 |---|---|---|---|---|---|---|
 | Wick (bow bash) | wedge 1.3, 90 deg | 0.8 ahead, centred (inside) | **unchanged**: wedge 1.3, 90 deg | 0.9 ahead, the bow across his front +-0.8 (inside) | 2.22 -> 2.22 | 1.68 -> 1.68 |
-| Gasket (hammer) | wedge 1.5, 90 deg | **2.3 ahead, 0.9 to her right, 1.2 up: outside the wedge** (2% of the swing's low path inside it) | **lane** 0.6 -> 1.9 ahead, 0.25 wide each side (the shaft's line and the head's landing) | 1.9 ahead, centred, on the floor (inside) | 2.78 -> 2.88 (+4%) | 1.88 -> 2.53 (+0.65) |
+| Gasket (hammer) | wedge 1.5, 90 deg | **2.3 ahead, 0.9 to her right, 1.2 up: outside the wedge** (2% of the swing's low path inside it) | **lane** 0.6 -> 1.95 ahead, 0.25 wide each side, **ending in a disc of 0.6 round the head's landing** (the smash; first built as the lane alone, 0.6 -> 1.9) | 2.0 ahead, centred, on the floor (inside) | 2.78 -> 4.20 (+51%; the lane alone was 2.88) | 1.88 -> 2.93 (the lane alone 2.53) |
 | Rebar (slam fist) | wedge 1.8, 120 deg | 0.8 ahead, 1.0 to the side (the punching fist; the wedge reaches 1.8) | **disc** of 0.85 centred 1.05 ahead (the shockwave where both fists land) | 1.0 ahead, centred, 0.8 up (inside) | 4.98 -> 4.75 (-5%) | 2.18 -> 2.28 (+0.10) |
 
 What changes in play: **damage, cooldowns and shoves are unchanged, so DPS is unchanged** (Wick 30, Gasket 43, Rebar 19
@@ -398,6 +398,30 @@ transform and sized to the hand, so it follows every pose (walk, the swings, the
 standing, walking, a swing and a cast, under today and grounded_anim. Before / after: `ga_held_<hero>.png` (`strike_lab
 --clip held`). The "cast armed" look (a floor rune / hand glow while speaking) is a separate look-dev track and not built here.
 
+#### Gasket after the playtest (2026-10-22)
+The user played `grounded_anim` as Gasket: **"Gasket feels MUCH better. The animation has a problem though, the arm
+penetrates the body and disappears when the hammer comes down. The impact of the hammer should be a little bigger too. It is
+a smash weapon. But the point is MUCH better than the 'swing arc' that was there before."** Fixed:
+
+- **No arm in the body.** Measured with `PoseClip` (each arm's centre line against the body parts' boxes; `strike_lab
+  --clipcheck` prints it per frame): the two-handed smash buried her left arm 0.27 deep in her coat at the impact and her
+  right arm 0.22 in her head at the top of the follow-through. A straight arm from her shoulder to a fist on her centre line
+  has to cross her coat, so the smash is now **one-handed**: her right fist rides an arc in the plane of her right shoulder
+  (outside the coat and the beard), the handle is turned in (0.39 rad) so the head still lands on her centre line, and her
+  left arm swings back and out for balance (the held component stays in that hand, in view). Deepest now: **0.000** for
+  every frame of a walk, a stop, two swings (follow-through and wind-up, with the lean, squash and lunge) and a cast, for
+  Gasket, Rebar (0.005 before; his clasp is 0.46 now) and Wick (`test_move_feel_anim`, `_no_clip`).
+- **A bigger smash.** The aimed lane stays and ends in a disc of 0.6 round the head (2.0 ahead): a grunt is hit within
+  0.98 of the landing. Grunt hit area **4.20** (today's wedge 2.78, the lane alone 2.88); farthest hit 2.93 (1.88, 2.53).
+  Damage and cooldown are unchanged, so one target takes the same DPS; the extra area is more targets per swing (a crowd
+  ahead of her). The floor mark draws the disc.
+- **Weight.** At the impact, on every screen (a puppet's replayed smash too): dark cracks radiating from the head, a fast
+  shock ring and a puff of dust (`Fx.ground_smash`). A connecting smash holds her pose **83 ms (5 frames)** instead of 50.
+  The attacker's own screen gets a small camera nudge (`Fx.shake(0.12)`; a puppet's smash shakes no one). Strike-first
+  timing is unchanged: the impact is still on the damage frame.
+- Evidence: `ga_overlay_gasket.png`, `ga_gasket_close.png`, `ga_gasket_game.png`, `ga_gif_gasket_attack.gif` (redone),
+  `ga_held_gasket.png`.
+
 #### Networking
 Nothing new on the wire. HeroFeel is cosmetic and declares every var LOCAL (`test_net_contract`); a puppet leans from its
 streamed position and plays a replayed swing strike-first (`test_net_move_feel_anim`, two processes: the client takes the
@@ -421,7 +445,7 @@ the areas against today's wedge target by target, today and grounded untouched, 
 
 #### Open questions (added)
 1. Blind: does `grounded_anim` feel better than `grounded`?
-2. Gasket's lane: a sharper, aimed hammer (proposed), or keep some width (a lane 0.35 wide, or a short wedge)?
+2. Gasket's smash disc at 0.6 (grunt area +51% over today): right, or smaller (0.5: about +35%)?
 3. Follow-through (built) or the 2-frame wind-up (`--strike wind`: reads more like a hammer, lands 3 frames after the number)?
 4. Squash at 6-7% reads at the close zoom; at the game zoom only the lean reads. More (up to the 16-20% limits)?
 5. Should hit-stop scale with the blow (Gasket longer, Wick shorter) and skip in crowd fights (Sakurai's caution)?

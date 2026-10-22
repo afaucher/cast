@@ -531,9 +531,12 @@ func _area_clear(dir: Vector3) -> bool:
 	var p0 := hero.global_position
 	var a0 := Vector2(p0.x + dir.x * float(area["near"]), p0.z + dir.z * float(area["near"]))
 	var a1 := Vector2(p0.x + dir.x * float(area["far"]), p0.z + dir.z * float(area["far"]))
-	for p in GameWorld.props_in_radius(p0, float(area["far"]) + float(area["radius"]) + PROP_MARGIN):
+	var end := float(area.get("end_radius", 0.0))   # (a smash's disc round the landing)
+	for p in GameWorld.props_in_radius(p0, float(area["far"]) + maxf(float(area["radius"]), end) + PROP_MARGIN):
 		var q := Vector2(p.global_position.x, p.global_position.z)
 		if Geometry2D.get_closest_point_to_segment(q, a0, a1).distance_to(q) <= float(area["radius"]) + p.radius + PROP_MARGIN:
+			return false
+		if end > 0.0 and q.distance_to(a1) <= end + p.radius + PROP_MARGIN:
 			return false
 	return true
 

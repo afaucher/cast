@@ -56,10 +56,11 @@ static func melee_arc(attacker: Actor, dir: Vector3, reach: float, arc_deg: floa
 ## Like melee_arc, but the area is a LANE along `dir`: everything within `radius` of the segment from `near` to `far` ahead
 ## of the attacker (a capsule; near == far is a disc centred there). A centred overhead strike: the shaft comes down along
 ## the line and the head lands at `far` (Hero.melee_area, the grounded_anim profile). The shove is still away from the attacker.
-static func melee_lane(attacker: Actor, dir: Vector3, near: float, far: float, radius: float, damage: float, shove: float = 0.0) -> Array[Actor]:
+## `end_radius` > 0 adds a disc of that radius round `far` (a smash: the head's landing knocks everything around it).
+static func melee_lane(attacker: Actor, dir: Vector3, near: float, far: float, radius: float, damage: float, shove: float = 0.0, end_radius: float = 0.0) -> Array[Actor]:
 	dir.y = 0.0
 	dir = dir.normalized()
-	return _land_melee(attacker, lane_targets(attacker, dir, near, far, radius), dir, damage, shove)
+	return _land_melee(attacker, lane_targets(attacker, dir, near, far, radius, end_radius), dir, damage, shove)
 
 
 ## What a melee wedge would touch (no verbs, no shield test: a query): the other team's living actors, breakables, a hero's
@@ -80,17 +81,18 @@ static func arc_targets(attacker: Actor, dir: Vector3, reach: float, arc_deg: fl
 
 
 ## What a melee lane would touch (a query, like arc_targets): within `radius` plus each one's radius of the segment from
-## `near` to `far` ahead along `dir`.
-static func lane_targets(attacker: Actor, dir: Vector3, near: float, far: float, radius: float) -> Array[Actor]:
+## `near` to `far` ahead along `dir`, or (end_radius > 0) within end_radius of `far`.
+static func lane_targets(attacker: Actor, dir: Vector3, near: float, far: float, radius: float, end_radius: float = 0.0) -> Array[Actor]:
 	var out: Array[Actor] = []
 	var foe := GameWorld.other_team(attacker.team)
 	var p := attacker.global_position
 	var a0 := Vector2(p.x + dir.x * near, p.z + dir.z * near)
 	var a1 := Vector2(p.x + dir.x * far, p.z + dir.z * far)
 	var mid := p + dir * (near + far) * 0.5
-	for a in GameWorld.hittable_in_radius(mid, (far - near) * 0.5 + radius, foe, attacker.team == GameWorld.TEAM_HEROES):
+	for a in GameWorld.hittable_in_radius(mid, (far - near) * 0.5 + maxf(radius, end_radius), foe, attacker.team == GameWorld.TEAM_HEROES):
 		var q := Vector2(a.global_position.x, a.global_position.z)
-		if Geometry2D.get_closest_point_to_segment(q, a0, a1).distance_to(q) > radius + a.radius:
+		var in_lane := Geometry2D.get_closest_point_to_segment(q, a0, a1).distance_to(q) <= radius + a.radius
+		if not in_lane and q.distance_to(a1) > end_radius + a.radius:
 			continue
 		if absf(a.global_position.y - p.y) > 2.1 * Hex.LEVEL_HEIGHT:
 			continue

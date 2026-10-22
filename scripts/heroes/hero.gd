@@ -452,24 +452,26 @@ func _melee_effect(dir: Vector3) -> void:
 	var area := melee_area()
 	var lane := str(area["shape"]) == "lane"
 	var far := float(area["far"]) if lane else 0.0
-	var reach := far + float(area["radius"]) if lane else float(area["reach"])
+	var end := float(area.get("end_radius", 0.0))
+	var reach := far + maxf(float(area["radius"]), end) if lane else float(area["reach"])
 	for foe in GameWorld.actors_in_radius(global_position, reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
-	var touched := (Combat.lane_targets(self, dir, float(area["near"]), far, float(area["radius"])) if lane
+	var touched := (Combat.lane_targets(self, dir, float(area["near"]), far, float(area["radius"]), end) if lane
 			else Combat.arc_targets(self, dir, float(area["reach"]), float(area["arc"])))
-	var hit := (Combat.melee_lane(self, dir, float(area["near"]), far, float(area["radius"]), melee_damage, melee_shove) if lane
+	var hit := (Combat.melee_lane(self, dir, float(area["near"]), far, float(area["radius"]), melee_damage, melee_shove, end) if lane
 			else Combat.melee_arc(self, dir, float(area["reach"]), float(area["arc"]), melee_damage, melee_shove))
 	if not hit.is_empty():
 		MonsterSenses.noise(global_position, MonsterSenses.NOISE_MELEE, "melee")   # a blow that lands is heard
 	if lane:
-		Fx.slam_lane(global_position, dir, float(area["near"]), far, float(area["radius"]), hero_color.lightened(0.5))
+		Fx.slam_lane(global_position, dir, float(area["near"]), far, float(area["radius"]), hero_color.lightened(0.5), end)
 	else:
 		Fx.slash_arc(global_position, dir, float(area["reach"]), float(area["arc"]), hero_color.lightened(0.5))
-	_swing_pose(not touched.is_empty())
+	_swing_pose(not touched.is_empty(), dir)
 
 
 ## This hero's primary hit area right now: {"shape": "arc", "reach", "arc"} (a wedge from the hero: the kit's own, and
-## every kit under today / grounded) or {"shape": "lane", "near", "far", "radius"} (Combat.melee_lane), from the active
+## every kit under today / grounded) or {"shape": "lane", "near", "far", "radius"} (Combat.melee_lane; an optional
+## "end_radius" adds a disc round the landing spot, and "smash" marks the landing on the floor: HeroFeel), from the active
 ## MoveFeel profile's `melee_areas` (grounded_anim: each weapon's own shape, animation-research.md "As built").
 func melee_area() -> Dictionary:
 	var areas := MoveFeel.value("melee_areas") as Dictionary
@@ -483,7 +485,7 @@ func melee_area() -> Dictionary:
 func melee_half_angle() -> float:
 	var area := melee_area()
 	if str(area["shape"]) == "lane":
-		return rad_to_deg(atan2(float(area["radius"]), maxf(float(area["far"]), 0.01)))
+		return rad_to_deg(atan2(maxf(float(area["radius"]), float(area.get("end_radius", 0.0))), maxf(float(area["far"]), 0.01)))
 	return float(area["arc"]) * 0.5
 
 
@@ -1066,8 +1068,8 @@ func _refresh_bar() -> void:
 
 ## The swing's pose. `connects`: the blow touched something. Under strike_first (grounded_anim) HeroFeel plays it (the
 ## impact on this frame, then the follow-through, a hit-stop when it connects); otherwise the model's own swing.
-func _swing_pose(connects: bool = false) -> void:
-	if _feel.strike(connects):
+func _swing_pose(connects: bool = false, dir: Vector3 = Vector3.ZERO) -> void:
+	if _feel.strike(connects, dir if dir != Vector3.ZERO else facing):
 		return
 	if visual_override != null and visual_override.has_method("attack_swing"):
 		visual_override.call("attack_swing")

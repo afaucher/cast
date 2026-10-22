@@ -237,7 +237,8 @@ static func slash_arc(origin: Vector3, dir: Vector3, reach: float, arc_deg: floa
 
 ## The floor mark of Combat.melee_lane (a centred overhead strike): a stadium from `near` to `far` ahead of `origin` along
 ## `dir`, `radius` wide on each side, the same glow and fade as slash_arc, plus a quick ring where the blow lands (`far`).
-static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, radius: float, color: Color) -> void:
+## `end_radius` > 0 adds the disc round the landing (Combat.melee_lane's smash).
+static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, radius: float, color: Color, end_radius: float = 0.0) -> void:
 	if not _world_ready():
 		return
 	dir.y = 0.0
@@ -258,6 +259,14 @@ static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, ra
 		for v: Vector3 in [c, pts[(i + 1) % pts.size()], pts[i]]:
 			st.set_normal(Vector3.UP)
 			st.add_vertex(v)
+	if end_radius > radius:   # the landing's disc (drawn a hair above the lane, so the overlap is not doubled in the fade)
+		var dc := dir * far
+		for i in 20:
+			var a0 := TAU * i / 20.0
+			var a1 := TAU * (i + 1) / 20.0
+			for v: Vector3 in [dc, dc + Vector3(cos(a1), 0.0, sin(a1)) * end_radius, dc + Vector3(cos(a0), 0.0, sin(a0)) * end_radius]:
+				st.set_normal(Vector3.UP)
+				st.add_vertex(v + Vector3.UP * 0.005)
 	var mat := glow_material(Color(color.r, color.g, color.b, 0.45))
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
@@ -267,7 +276,53 @@ static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, ra
 	var tw := mi.create_tween()
 	tw.tween_property(mat, "albedo_color:a", 0.0, 0.18)
 	tw.tween_callback(mi.queue_free)
-	ring(origin + dir * far + Vector3.UP * 0.1, radius + 0.35, Color(color.r, color.g, color.b, 0.7), 0.22, 0.0, false, 0.4)
+	ring(origin + dir * far + Vector3.UP * 0.1, maxf(radius, end_radius) + 0.35, Color(color.r, color.g, color.b, 0.7), 0.22, 0.0, false, 0.4)
+
+
+## A hammer's landing on the floor (HeroFeel, a smash's impact; cosmetic, every screen): dark cracks radiating from `pos`
+## out to about `radius`, a fast shock ring and a puff of dust, all gone in about 0.6 s. Looks use GameWorld.fx_rng.
+static func ground_smash(pos: Vector3, radius: float) -> void:
+	if not _world_ready():
+		return
+	var map: HexMap = GameWorld.map
+	var g := map.ground_height(pos) if map != null else NAN
+	if not is_nan(g):
+		pos.y = g
+	var rng := GameWorld.fx_rng
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 7
+	for i in n:
+		var a := TAU * (i + rng.randf_range(-0.3, 0.3)) / n
+		var len := radius * rng.randf_range(0.75, 1.15)
+		var d := Vector3(cos(a), 0.0, sin(a))
+		var bend := Vector3(-d.z, 0.0, d.x) * rng.randf_range(-0.12, 0.12) * len
+		var w0 := 0.07
+		var side := Vector3(-d.z, 0.0, d.x)
+		var mid := d * len * 0.5 + bend
+		var tip := d * len
+		for v: Vector3 in [side * w0, mid + side * w0 * 0.6, -side * w0, -side * w0, mid + side * w0 * 0.6, mid - side * w0 * 0.6,
+				mid - side * w0 * 0.6, mid + side * w0 * 0.6, tip]:
+			st.set_normal(Vector3.UP)
+			st.add_vertex(v)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(0.06, 0.05, 0.05, 0.85)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_meta("no_flash", true)
+	GameWorld.spawn(mi, pos + Vector3.UP * 0.03)
+	var tw := mi.create_tween()
+	tw.tween_interval(0.3)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.35)
+	tw.tween_callback(mi.queue_free)
+	ring(pos + Vector3.UP * 0.08, radius + 0.25, Color(1.0, 0.92, 0.75, 0.85), 0.28, 0.0, false, 0.2)
+	var dust: Array[Color] = [Color(0.8, 0.72, 0.58), Color(0.6, 0.52, 0.42)]
+	burst(pos + Vector3.UP * 0.1, dust, 14, 3.2, 0.1, 0.5, 4.0, Vector3.UP, 80.0, false)
 
 
 ## Nudge any CameraRig in the scene (group "camera_rig").

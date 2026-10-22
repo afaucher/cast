@@ -89,7 +89,9 @@ func _ready() -> void:
 		_overlay()
 		return
 	_aim_camera()
-	if shot_path != "":
+	if args.has("--clipcheck"):
+		_clipcheck()
+	elif shot_path != "":
 		_record()
 	else:
 		_loop()
@@ -205,6 +207,29 @@ func _swing(i: int) -> void:
 	if i < dummies.size():
 		dummies[i].heal(dummies[i].max_hp)
 	h.melee(_swing_dir)
+
+
+## --clipcheck: play the clip and print, per lane, the deepest the arms sink into the body (PoseClip) and on which frames.
+func _clipcheck() -> void:
+	await wait_frames(3)
+	var worst: Array[float] = []
+	var at: Array[String] = []
+	for i in heroes.size():
+		worst.append(0.0)
+		at.append("")
+	for f in int(_clip_def()[0] * 60.0):
+		_step(f)
+		await get_tree().process_frame
+		for i in heroes.size():
+			var d: Array = PoseClip.depth(heroes[i].visual_override as LowPolyModel, hero_kind)
+			if float(d[0]) > 0.0:
+				print("clip %s %s frame %d (%.3f s): %.3f %s" % [hero_kind, _lane_name(i), f, f * DT, float(d[0]), str(d[1])])
+			if float(d[0]) > worst[i]:
+				worst[i] = float(d[0])
+				at[i] = "frame %d %s" % [f, str(d[1])]
+	for i in heroes.size():
+		print("clipcheck %s %s: deepest %.3f (%s)" % [hero_kind, _lane_name(i), worst[i], at[i]])
+	finish()
 
 
 # --- The overlay: the hit area and the weapon's path, top-down ----------------------------------------------------------
@@ -367,7 +392,7 @@ func _report(i: int, path: Array, imp: int) -> String:
 	print("overlay %s %-24s impact frame +%d at fwd %.2f side %+.2f up %.2f | low path: reach %.2f, side %+.2f..%+.2f, %d%% inside the area | area %s, grunt area %.2f u2" % [
 		hero_kind, _lane_name(i), imp - OVERLAY_CLICK, ip.z, ip.x, ip.y, reach, lat_min, lat_max,
 		roundi(100.0 * inside / maxf(1.0, low)), str(area), _area_size(area, GRUNT_R)])
-	var far := float(area["far"]) + float(area["radius"]) if str(area["shape"]) == "lane" else float(area["reach"])
+	var far := float(area["far"]) + maxf(float(area["radius"]), float(area.get("end_radius", 0.0))) if str(area["shape"]) == "lane" else float(area["reach"])
 	return "impact +%d frames, %.1f ahead, %+.1f aside\n%s\nweapon reach %.1f / area %.1f\ngrunt hit area %.2f u2" % [
 		imp - OVERLAY_CLICK, ip.z, ip.x, "inside the area" if _in_area(area, ip.x, ip.z, 0.0) else "OUTSIDE the area", reach, far,
 		_area_size(area, GRUNT_R)]
@@ -376,6 +401,9 @@ func _report(i: int, path: Array, imp: int) -> String:
 static func _in_area(area: Dictionary, x: float, z: float, grow: float) -> bool:
 	if str(area["shape"]) == "lane":
 		var q := Vector2(x, z)
+		var end := float(area.get("end_radius", 0.0))
+		if end > 0.0 and q.distance_to(Vector2(0, float(area["far"]))) <= end + grow:
+			return true
 		return Geometry2D.get_closest_point_to_segment(q, Vector2(0, float(area["near"])), Vector2(0, float(area["far"]))).distance_to(q) <= float(area["radius"]) + grow
 	var v := Vector2(x, z)
 	if v.length() > float(area["reach"]) + grow:
@@ -389,6 +417,19 @@ static func _in_area(area: Dictionary, x: float, z: float, grow: float) -> bool:
 ## only grows outward: Combat tests the centre's angle).
 static func _area_size(area: Dictionary, r: float) -> float:
 	if str(area["shape"]) == "lane":
+		if float(area.get("end_radius", 0.0)) > 0.0:   # (a lane and a disc: counted on a 1 cm grid)
+			var big := maxf(float(area["radius"]), float(area["end_radius"])) + r
+			var n := 0
+			var step := 0.01
+			var z := float(area["near"]) - big
+			while z <= float(area["far"]) + big:
+				var x := -big
+				while x <= big:
+					if _in_area(area, x, z, r):
+						n += 1
+					x += step
+				z += step
+			return n * step * step
 		var rr := float(area["radius"]) + r
 		return (float(area["far"]) - float(area["near"])) * 2.0 * rr + PI * rr * rr
 	var rr2 := float(area["reach"]) + r
@@ -401,6 +442,12 @@ func _draw_area(h: Hero) -> void:
 	_fill(h, _outline(area, 0.0), Color(col, 0.28))
 	_line(h, _outline(area, 0.0), Color(col, 0.95), 0.035)
 	_line(h, _outline(area, GRUNT_R), Color(col, 0.45), 0.018)
+	var end := float(area.get("end_radius", 0.0))
+	if end > 0.0:   # (the smash's disc round the landing)
+		var c := Vector2(0, float(area["far"]))
+		_fill(h, _circle(c, end, 32), Color(col, 0.28))
+		_line(h, _circle(c, end, 32), Color(col, 0.95), 0.035)
+		_line(h, _circle(c, end + GRUNT_R, 32), Color(col, 0.45), 0.018)
 	_line(h, _circle(Vector2.ZERO, h.radius, 24), Color(0.9, 0.9, 0.95, 0.8), 0.02)
 
 

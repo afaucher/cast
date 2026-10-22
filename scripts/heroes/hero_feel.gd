@@ -15,17 +15,20 @@ extends RefCounted
 ##   - STRIKE FIRST: a melee swing's pose is driven from here (STRIKES: kick channels on the model) so the weapon is at its
 ##     impact on the frame the hit resolves (Hero.melee resolves on the click frame), then a small lunge, a forward pitch
 ##     and, when the blow touched something, a HITSTOP freeze of this hero's pose only (the model and this layer hold for
-##     50 ms; the simulation, the hero's motion and the damage are untouched). Gasket's and Rebar's big overhead shapes play
-##     in the follow-through (STYLE "follow") or as a 2-frame wind-up before the impact ("wind": the lab's alternative).
+##     `hitstop` (50 ms; Gasket's smash 83 ms; the simulation, the hero's motion and the damage are untouched). Gasket's and
+##     Rebar's big overhead shapes play in the follow-through (STYLE "follow") or as a 2-frame wind-up before the impact
+##     ("wind": the lab's alternative). A SMASH (the hit area says `smash`: Gasket's hammer) also marks its landing on the
+##     floor (Fx.ground_smash: cracks, a shock ring, dust) on every screen, and nudges the camera of the attacker's own
+##     screen only (`shake`).
 ##   - The stride is held while shoved or airborne (HeroGait asks `body`): the legs stop walking under a sliding body.
 
 ## Per-hero personality (the lab's numbers): lean rad per unit/s, kick rad per unit/s of velocity change, the lean spring
 ## (f Hz, zeta: lower f is heavier, lower zeta overshoots more), the squash impulse scale, the strike's lunge (units) and
-## forward pitch kick (rad/s).
+## forward pitch kick (rad/s), the hit-stop on a connect (s) and the own-screen camera nudge of a smash.
 const TUNING := {
-	"wick": {"lean": 0.032, "kick": 0.075, "f": 2.6, "zeta": 0.42, "squash": 1.0, "lunge": 0.16, "pitch": 3.2},
-	"gasket": {"lean": 0.028, "kick": 0.065, "f": 3.2, "zeta": 0.50, "squash": 1.2, "lunge": 0.14, "pitch": 2.6},
-	"rebar": {"lean": 0.018, "kick": 0.045, "f": 1.7, "zeta": 0.65, "squash": 0.6, "lunge": 0.10, "pitch": 1.8},
+	"wick": {"lean": 0.032, "kick": 0.075, "f": 2.6, "zeta": 0.42, "squash": 1.0, "lunge": 0.16, "pitch": 3.2, "hitstop": 0.05, "shake": 0.0},
+	"gasket": {"lean": 0.028, "kick": 0.065, "f": 3.2, "zeta": 0.50, "squash": 1.2, "lunge": 0.14, "pitch": 2.6, "hitstop": 0.083, "shake": 0.12},
+	"rebar": {"lean": 0.018, "kick": 0.045, "f": 1.7, "zeta": 0.65, "squash": 0.6, "lunge": 0.10, "pitch": 1.8, "hitstop": 0.05, "shake": 0.0},
 }
 const LEAN_MAX := 0.38             ## rad (22 degrees), the lean's hard limit
 const SQUASH_MIN := -0.16          ## a stretch (the body 16% taller)
@@ -37,7 +40,7 @@ const STOP_KICK := 4.0             ## ... and on a stop from a walk (a squash, a
 const KICK_SPEED := 4.5            ## the walk the impulses are sized for (a slower start or stop kicks less)
 const MOVING := 0.5                ## shown speed (u/s) above which the body counts as moving
 const SHOVE_LEAN := 0.07           ## rad per unit/s of slide: the head left behind by a shove
-const HITSTOP := 0.05              ## s: the attacker's freeze when its blow touches something (3 frames at 60 Hz)
+const HITSTOP := 0.05              ## s: the attacker's freeze when its blow touches something (3 frames at 60 Hz; TUNING's)
 const LUNGE_DECAY := 10.0
 const F := 1.0 / 60.0              ## STRIKES' keys are in 60ths of a second
 
@@ -93,6 +96,8 @@ var _held := false                 ## this frame is a hit-stop frame
 var _strike: Dictionary = {}       ## the timeline playing ({} none)
 var _age := -1.0                   ## s since the click (-1: no strike)
 var _connect := false              ## the blow touched something (a hit-stop at the impact)
+var _dir := Vector3.FORWARD        ## the swing's direction (X/Z)
+var smashes := 0                   ## smash landings marked on the floor (tests)
 var _impacted := false
 
 
@@ -106,7 +111,8 @@ func net_fields() -> Dictionary:
 		"strikes": Net.LOCAL, "impact_frame": Net.LOCAL, "max_lean": Net.LOCAL, "_tu": Net.LOCAL, "_prev": Net.LOCAL,
 		"_vs": Net.LOCAL, "_vq": Net.LOCAL, "_lean_v": Net.LOCAL, "_sq_v": Net.LOCAL, "_moving": Net.LOCAL,
 		"_lunge": Net.LOCAL, "_freeze": Net.LOCAL, "_strike": Net.LOCAL, "_age": Net.LOCAL, "_connect": Net.LOCAL,
-		"_impacted": Net.LOCAL, "held_frames": Net.LOCAL, "_held": Net.LOCAL, "_top": Net.LOCAL,
+		"_impacted": Net.LOCAL, "held_frames": Net.LOCAL, "_held": Net.LOCAL, "_top": Net.LOCAL, "_dir": Net.LOCAL,
+		"smashes": Net.LOCAL,
 	}
 
 
@@ -186,8 +192,9 @@ func tick(delta: float) -> void:
 
 
 ## The hero swung (Hero._swing_pose: on the owner's click, or replayed on a puppet). `connects`: the blow touched something
-## (a hit-stop at the impact). False (the caller plays the model's own swing) when this layer is not driving the body.
-func strike(connects: bool) -> bool:
+## (a hit-stop at the impact); `dir` the swing's direction (a smash marks its landing that way). False (the caller plays
+## the model's own swing) when this layer is not driving the body.
+func strike(connects: bool, dir: Vector3 = Vector3.ZERO) -> bool:
 	if not active() or not MoveFeel.on("strike_first"):
 		return false
 	var key := hero.kit_id
@@ -198,6 +205,7 @@ func strike(connects: bool) -> bool:
 	_strike = STRIKES[key]
 	_age = 0.0
 	_connect = connects
+	_dir = Vector3(dir.x, 0.0, dir.z).normalized() if Vector3(dir.x, 0.0, dir.z).length() > 0.001 else hero.facing
 	_impacted = false
 	strikes += 1
 	return true
@@ -274,7 +282,13 @@ func _step_strike(delta: float) -> void:
 		_lean_v.x -= float(_tu["pitch"])
 		_sq_v += float(_strike.get("squash", 0.0)) * float(_tu["squash"])
 		if _connect:
-			_freeze = HITSTOP
+			_freeze = float(_tu.get("hitstop", HITSTOP))
+		var area := hero.melee_area()
+		if bool(area.get("smash", false)):
+			smashes += 1
+			Fx.ground_smash(hero.global_position + _dir * float(area["far"]), float(area.get("end_radius", 0.5)))
+			if hero.is_player and float(_tu["shake"]) > 0.0:
+				Fx.shake(float(_tu["shake"]))   # (this screen's own hero only: a puppet's smash shakes no one)
 	if done:
 		for ch: String in keys:
 			model._arm_kick[ch] = 0.0

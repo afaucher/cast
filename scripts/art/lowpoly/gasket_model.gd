@@ -55,19 +55,22 @@ const ARM_LEN := 0.62                               ## shoulder to fist
 const WEAPON_REST_POS := Vector3(0.70, -0.06, -0.24)   ## body-local fist (the weapon pivot)
 const WEAPON_REST_ROT := Vector3(0.0, 0.0, deg_to_rad(-7.0))   ## handle leans a little out to her right
 const SPIN_OUT_POS := Vector3(0.78, 0.30, -0.30)
-## The CENTRED OVERHEAD SMASH (the grounded_anim profile's strike, driven by HeroFeel through two kick channels):
-## `smash_w` (0..1) carries the wrench from its rest at her right side onto her centre line, two-handed; `smash_a` is the
-## handle's pitch there (rad): SMASH_UP is the wrench straight up over her head (tipped back), SMASH_DOWN the head on the
-## floor in front of her, along her facing. The fists ride an arc between SMASH_FIST_UP and SMASH_FIST_DOWN (body-local).
+## The OVERHEAD SMASH (the grounded_anim profile's strike, driven by HeroFeel through two kick channels): `smash_w` (0..1)
+## blends the wrench from its rest into the smash, `smash_a` is the handle's pitch (rad): SMASH_UP the wrench straight up
+## over her right shoulder (tipped back), SMASH_DOWN its head on the floor in front of her. Her right fist rides an arc in
+## the plane of her right shoulder (SMASH_FIST_UP .. SMASH_FIST_DOWN, body-local), outside her coat and beard, and the
+## handle is turned in by SMASH_YAW so the head comes down on her CENTRE LINE, about 1.85 ahead. One-handed: her left arm
+## swings back and out for balance (SMASH_ARM_L), so neither arm passes through her body at any frame (the user,
+## 2026-10-22: "the arm penetrates the body and disappears when the hammer comes down"; PoseClip measures it).
 const SMASH_UP := 0.45
 const SMASH_DOWN := -1.95
-const SMASH_FIST_UP := Vector3(0.05, 0.92, 0.04)
-const SMASH_FIST_DOWN := Vector3(0.03, 0.12, -0.46)
-const SMASH_GRIP_L := Vector3(0.0, -0.24, 0.0)      ## where her left fist holds the handle (weapon-local), below the right
-const ARM_L_LEN := 0.76                             ## left shoulder to the bare fist
+const SMASH_FIST_UP := Vector3(0.50, 1.04, 0.08)
+const SMASH_FIST_DOWN := Vector3(0.52, 0.16, -0.62)
+const SMASH_YAW := 0.39
+const SMASH_ARM_L := Vector3(-0.45, 0.0, deg_to_rad(-26.0))   ## the left arm's rotation at the bottom (back and out)
 ## The held spell component (hold_item): gripped just past her left fist's knuckles (arm_l-local; the fist is at
 ## (0, -0.76, 0)), about 0.45 across so it reads without hiding the hand. It follows the arm in every pose, and its scale
-## undoes the sleeve's stretch (the smash pulls the left arm to the handle).
+## undoes any stretch of the sleeve.
 const HOLD_GRIP := Vector3(0.0, -0.86, -0.09)
 const HOLD_SCALE := 0.9
 
@@ -265,33 +268,22 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var rot := WEAPON_REST_ROT
 	rot.x = k * 1.15
 	rot.z = lerpf(rot.z, deg_to_rad(-92.0), out)
-	# the centred smash (grounded_anim): onto her centre line, the handle pitched by smash_a, both hands on it
+	# the overhead smash (grounded_anim): the fist on an arc beside her right shoulder, the handle pitched by smash_a and
+	# turned in so the head lands on her centre line; the left arm swings back and out
 	var w := clampf(arm_kick("smash_w"), 0.0, 1.0)
 	if w > 0.0:
 		var a := arm_kick("smash_a")
 		var s := clampf(inverse_lerp(SMASH_UP, SMASH_DOWN, a), 0.0, 1.0)
-		var fist := SMASH_FIST_UP.lerp(SMASH_FIST_DOWN, s) + Vector3(0.0, 0.10, -0.12) * sin(s * PI)   # (an arc, not a chord)
+		var fist := SMASH_FIST_UP.lerp(SMASH_FIST_DOWN, s) + Vector3(0.04, 0.10, -0.12) * sin(s * PI)   # (an arc, not a chord)
 		pos = pos.lerp(fist, w)
-		rot = rot.lerp(Vector3(a, 0.0, 0.0), w)
+		rot = rot.lerp(Vector3(a, SMASH_YAW, 0.0), w)
+		arm_l.rotation = arm_l.rotation.lerp(SMASH_ARM_L, w * (0.4 + 0.6 * s))
 	var weapon := parts["weapon"] as MeshInstance3D
 	weapon.position = pos
 	weapon.rotation = rot
 	_aim_right_arm(pos)
-	if w > 0.0:
-		_aim_left_arm(pos + Basis.from_euler(rot) * SMASH_GRIP_L, w)
 	if hold_anchor != null:
 		hold_anchor.scale = Vector3(hold_scale, hold_scale / maxf(arm_l.scale.y, 0.01), hold_scale)
-
-
-## The smash: her left fist onto the handle (blended by `w` from its hanging pose), the sleeve stretched to reach.
-func _aim_left_arm(grip: Vector3, w: float) -> void:
-	var arm := parts["arm_l"] as MeshInstance3D
-	var d := grip - arm.position
-	var dist := d.length()
-	if dist < 0.01:
-		return
-	arm.quaternion = arm.quaternion.slerp(Quaternion(Vector3.DOWN, d / dist), w)
-	arm.scale = Vector3(1.0, lerpf(1.0, clampf(dist / ARM_L_LEN, 0.6, 1.4), w), 1.0)
 
 
 ## Re-aim the right sleeve from the shoulder at the fist, stretching it a little so it always reaches.

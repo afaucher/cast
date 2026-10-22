@@ -90,7 +90,9 @@ const PROFILES := {
 		"body": true, "strike_first": true,
 		"melee_areas": {
 			"wick": {"shape": "arc", "reach": 1.3, "arc": 90.0},
-			"gasket": {"shape": "lane", "near": 0.6, "far": 1.9, "radius": 0.25},
+			# Gasket's smash (the user, 2026-10-22: "The impact of the hammer should be a little bigger too. It is a smash
+			# weapon."): the lane of the shaft, ending in a disc round the head's landing, marked on the floor
+			"gasket": {"shape": "lane", "near": 0.6, "far": 1.95, "radius": 0.25, "end_radius": 0.6, "smash": true},
 			"rebar": {"shape": "lane", "near": 1.05, "far": 1.05, "radius": 0.85},
 		},
 	},

@@ -68,6 +68,11 @@ func setup() -> void:
 	await _held()
 	for kit in ["wick", "gasket", "rebar"]:
 		await _strike(kit)
+	for prof: String in [MoveFeel.TODAY, MoveFeel.GROUNDED_ANIM]:
+		MoveFeel.set_mode(prof)
+		for kit in ["wick", "gasket", "rebar"]:
+			await _no_clip(kit, prof)
+	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
 	await _areas()
 	await _others()
 	await _puppet()
@@ -182,7 +187,9 @@ func _strike(kit: String) -> void:
 	near(h.visual_override.arm_kick(key), want, 0.05, "%s: the weapon is at its impact on that frame" % kit)
 	await frames(8)
 	var held := fe.held_frames - held0
-	check(held >= 2 and held <= 4, "%s: a connecting blow holds the attacker's pose about 3 frames (%d)" % [kit, held])
+	var want_held := roundi(float(HeroFeel.TUNING[kit]["hitstop"]) * 60.0)
+	check(absi(held - want_held) <= 1, "%s: a connecting blow holds the attacker's pose about %d frames (%d)" % [kit, want_held, held])
+	eq(fe.smashes, 1 if kit == "gasket" else 0, "%s: %s" % [kit, "the smash marks its landing on the floor" if kit == "gasket" else "no smash mark"])
 	print("[anim] %s strike: damage on frame %d, impact pose on frame %d, hit-stop %d frames" % [kit, hit_frame[0], fe.impact_frame, held])
 	# a miss: no hit-stop; the cooldown is the kit's (strike first changes no timing)
 	d.global_position = h.global_position + Vector3(-4, 0, 0)
@@ -196,12 +203,43 @@ func _strike(kit: String) -> void:
 	eq(fe.held_frames - held0, 0, "%s: a miss has no hit-stop" % kit)
 
 
+## No arm sinks into its own body (PoseClip) at any frame of a walk, a stop, two swings (the whole follow-through, with the
+## lean, squash and lunge) and a cast. The user (2026-10-22), on Gasket's smash: "the arm penetrates the body and disappears".
+func _no_clip(kit: String, prof: String) -> void:
+	for style: String in [HeroFeel.FOLLOW, HeroFeel.WIND]:
+		HeroFeel.style = style
+		var hp: Array = _hero(_row([2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]), kit)
+		var h: Hero = hp[0]
+		var pc: PlayerController = hp[1]
+		_dummy(h.global_position + Vector3(1.2, 0, 0))
+		await frames(2)
+		var m := h.visual_override as LowPolyModel
+		var worst := 0.0
+		var what := ""
+		for i in 150:
+			pc.move_override = Vector3.RIGHT if i < 30 else Vector3.ZERO
+			if i == 40 or i == 95:
+				h._ready_at.erase(Hero.KEY_MELEE)
+				h.melee(Vector3.RIGHT)
+			if i == 135:
+				h._cast_pose()
+			await get_tree().process_frame
+			var d: Array = PoseClip.depth(m, kit)
+			if float(d[0]) > worst:
+				worst = float(d[0])
+				what = "frame %d, %s" % [i, d[1]]
+		check(worst <= 0.01, "%s %s (%s): no arm inside the body (deepest %.3f: %s)" % [kit, prof, style, worst, what])
+		if kit != "gasket" and kit != "rebar":
+			break
+	HeroFeel.style = HeroFeel.FOLLOW
+
+
 ## The reshaped areas (grounded_anim) against today's wedge (grounded): a target each one hits and the other misses.
 func _areas() -> void:
 	# kit -> [[forward, side, hit under grounded, hit under grounded_anim], ...]
 	var cases := {
 		"wick": [[1.2, 0.0, true, true], [0.0, 1.2, false, false]],
-		"gasket": [[2.25, 0.0, false, true], [1.0, 0.85, true, false], [0.8, 0.0, true, true]],
+		"gasket": [[2.25, 0.0, false, true], [1.0, 0.85, true, false], [0.8, 0.0, true, true], [1.95, 0.9, false, true], [3.1, 0.0, false, false]],
 		"rebar": [[1.0, 1.5, true, false], [2.0, 0.0, true, true], [0.7, 0.0, true, true]],
 	}
 	for kit: String in cases:
@@ -269,6 +307,7 @@ func _puppet() -> void:
 	h.net_act("melee", Vector3.RIGHT, false)
 	await frames(1)
 	eq(h._feel.strikes, 1, "a replayed swing plays strike-first on the puppet")
+	eq(h._feel.smashes, 1, "a puppet Gasket's replayed smash marks its landing on this floor")
 	Net.release_copy(h)
 
 

@@ -25,7 +25,7 @@ const MODEL_SCALE := 1.1
 ## on his centre line as they come down (SLAM_CLASP, the arms' inward yaw at the bottom).
 const SLAM_UP := 2.85
 const SLAM_DOWN := 0.62
-const SLAM_CLASP := 0.50
+const SLAM_CLASP := 0.46
 const SLAM_BEND := 0.45        ## his torso bends forward this far (rad) at the bottom of the slam ...
 const SLAM_CROUCH := 0.22      ## ... and sinks this much (model units), so the fists come down to a grunt's head
 

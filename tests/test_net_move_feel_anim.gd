@@ -4,7 +4,8 @@ extends NetGameTest
 ##   - the client plays the host's profile (it rides the job), so both screens agree on the lean, the strike and the hit areas;
 ##   - each screen leans the other's puppet from its shown motion (HeroFeel on a puppet) with nothing new on the wire (the
 ##     snapshots keep their size);
-##   - each hero swings twice; the other screen replays both swings strike-first on its puppet (the `act` event it already had).
+##   - each hero swings twice; the other screen replays both swings strike-first on its puppet (the `act` event it already had),
+##     and a puppet Gasket's smash marks its landing on that floor too.
 
 const PEERS := 2
 const SEED := 21
@@ -27,13 +28,16 @@ func run_host() -> void:
 	var theirs: Dictionary = reported(client_peers()[0], "walk")
 	eq(str(theirs["feel"]), "grounded_anim", "the client plays the host's profile")
 	for d: Dictionary in [mine, theirs]:
-		print("[anim net] seat %d: puppet layer %s, puppet lean up to %.1f deg, puppet strikes %d, own strikes %d, snapshot max %d B" % [
-			int(d["seat"]), str(d["puppet_body"]), float(d["puppet_lean"]), int(d["puppet_strikes"]), int(d["own_strikes"]), int(d["out_max"])])
+		print("[anim net] seat %d: puppet %s, layer %s, lean up to %.1f deg, strikes %d, smashes %d, own strikes %d, snapshot max %d B" % [
+			int(d["seat"]), str(d["puppet_kit"]), str(d["puppet_body"]), float(d["puppet_lean"]), int(d["puppet_strikes"]), int(d["puppet_smashes"]),
+			int(d["own_strikes"]), int(d["out_max"])])
 		check(bool(d["puppet_body"]), "seat %d: the puppet gets the body layer" % int(d["seat"]))
 		check(float(d["puppet_lean"]) > 3.0, "seat %d leans the puppet from its shown motion (%.1f deg)" % [int(d["seat"]), float(d["puppet_lean"])])
 		eq(int(d["own_strikes"]), 2, "seat %d's own hero struck twice" % int(d["seat"]))
 		eq(int(d["puppet_strikes"]), 2, "seat %d replays both of the other's swings strike-first" % int(d["seat"]))
 		check(int(d["out_max"]) <= 40, "snapshots keep their size (%d B)" % int(d["out_max"]))
+		if str(d["puppet_kit"]) == "gasket":
+			eq(int(d["puppet_smashes"]), 2, "seat %d marks a puppet Gasket's smashes on its floor" % int(d["seat"]))
 	for p in client_peers():
 		command(p, "end")
 	check(await wait_done(1, 30.0), "the client is done")
@@ -76,4 +80,5 @@ func _walk() -> Dictionary:
 	var puppet := hero_at(other_seat)
 	return {"seat": my_seat(), "feel": MoveFeel.active(), "puppet_body": puppet != null and puppet._feel.active(),
 		"puppet_lean": rad_to_deg(lean), "puppet_strikes": puppet._feel.strikes if puppet != null else -1,
-		"own_strikes": own._feel.strikes, "out_max": int(Session.snap.stats["out_max"])}
+		"own_strikes": own._feel.strikes, "out_max": int(Session.snap.stats["out_max"]),
+		"puppet_kit": puppet.kit_id if puppet != null else "", "puppet_smashes": puppet._feel.smashes if puppet != null else -1}
