@@ -78,7 +78,7 @@ number in the theme row's looks ("lights") if a real min-spec machine says other
   reached by no walk, and by a climb-free walk over the crust LavaField makes from a min-power damp at its shore on the
   activated map; all four patterns come out; a shared run builds the same cave (its record in the map checksum); a floor
   whose cave did not fit is byte for byte the floor without the option; the cave pass under 150 ms and a cave floor under
-  600 ms. Measured: 13 caves on 13 rolled floors of 180 (8 villain, 5 hellgate); forced and natural, the patterns gauntlet 23,
+  600 ms; the lava as drawn hashes its patterns with integers, no sine hash (see "The lava's creases"). Measured: 13 caves on 13 rolled floors of 180 (8 villain, 5 hellgate); forced and natural, the patterns gauntlet 23,
   causeway 17, ring 17, fork 4; 84 isles; worst cave floor 337 ms (seed 39 floor 2: a cave attempt and the plain one, with
   other agents' tests loading the machine; test_dungeon_gen measured 158 ms average, 234 ms worst in the same session),
   worst cave pass 70 ms.
@@ -126,6 +126,24 @@ cluster for a cave, and the sewer net tests' floor moved. The cluster now keeps 
 | The text | "Approve as proposed" | "Magma chamber" / "magma chamber" / "LAVA!" stand. |
 | A floor that rolls both a sewer and a cave | "Sewer wins" | The cluster keeps the floor; caves only where no cluster rolled. |
 | Fewer pool rooms get their pool (caves crowd the hellgates) | "Accept" | `test_pools`' floor is 0.82 (was 0.85). |
+
+### The lava's creases (user playtest, 2026-10-21: "there are these texture creases in the lava itself")
+
+On a generated cave (seed 31 floor 2, the hellfire ring, `--to-lava entry`) the lava's cracks were cut along straight lines
+and didn't continue, and the hot patches had seams. Not the geometry: with the glow skirt hidden the cuts stayed, and drawing
+each plate in a flat colour of its own (the cell id) showed plates sliced in two along a lattice line of the pattern.
+Widening the cellular search from 3 x 3 to 5 x 5 changed nothing (not the classic missed neighbour). **The cause:** both
+lava shaders hashed their lattice points with `fract(sin(dot(p, k)) * 43758.5)`. The cave sits 20-100 m from the origin, so
+the sine's argument is in the tens of thousands, where one rounding step of it (the GPU forms `dot(i + g, k)` its own way in
+each of the nine unrolled neighbours) is a completely different value: the same feature point came out in two places either
+side of a lattice line, and the value noise behind the warp, the hot patches and the plate shading broke the same way (the
+warp's lines every 2.5 m shifted the whole pattern). Moving the pattern next to the origin cut fewer plates but not none.
+**The fix:** `LavaLook.HASH`, an integer hash of the point's coordinates (pcg2d), shared by the lava and the damp crust:
+every pixel that asks about a point gets the same answer, at any distance. The look's statistics are unchanged (still
+uniform values; the warp, cell size and colours untouched; the warp never folds: its Jacobian stays positive, at least 0.27 of
+nominal), only the dice. `test_lava_gen` builds the first natural cave's look and checks that none of its pattern shaders (and
+the crust's) hashes with a sine. Before and after at `--zoom 8` (seed 31 floor 2, `--to-lava entry`):
+`lava_caves/lava_creases_before.png`, `lava_caves/lava_creases_after.png`.
 
 ## Playtest fixes (2026-10-20)
 

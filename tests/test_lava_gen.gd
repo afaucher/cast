@@ -70,6 +70,8 @@ func setup() -> void:
 				natural.append("%d/%d %s %s %s" % [s, f, run.archetype_id, map.cave["pattern"], map.cave.get("look", "")])
 			_check_cave(run, f, map, plan, tag)
 			_check_shared(run, f, tag)
+			if caves == 1:
+				_check_drawing(map, tag)
 	print("[lava gen] %d caves on %d rolled floors of %d seeds (%d villain, %d hellgate); natural: %s" % [caves, eligible, SEEDS, villain, gate, str(natural)])
 	check(caves >= 3, "some floors get a cave naturally (%d)" % caves)
 	check(villain >= 1 and gate >= 1, "both kinds come out (%d villain, %d hellgate)" % [villain, gate])
@@ -82,6 +84,28 @@ func setup() -> void:
 	Monster.use_proto_visuals = false
 	_probe.free()
 	finish()
+
+
+## The lava as drawn (LavaLook.dress_cave, and the damp's crust): every pattern shader hashes its lattice points from their
+## integers. A sine hash (fract(sin(dot(p, k)) * 43758.5)) of a point tens of metres from the origin turns one rounding step
+## of its argument into another value, so the same feature point came out in two places either side of a lattice line and
+## the lava's plates were cut along it (user playtest 2026-10-21: "texture creases in the lava"). The shaders can't run
+## headless; this reads their code.
+func _check_drawing(map: HexMap, tag: String) -> void:
+	var holder := Node3D.new()
+	var look := LavaLook.dress_cave(holder, map, LavaPlanner.look_row(map))
+	var mats: Array[ShaderMaterial] = [LavaLook.crust_material()]
+	for n in look.find_children("*", "GeometryInstance3D", true, false):
+		if (n as GeometryInstance3D).material_override is ShaderMaterial:
+			mats.append((n as GeometryInstance3D).material_override as ShaderMaterial)
+	check(mats.size() >= 2, "%s: the lava is drawn with its pattern shader (%d shaders)" % [tag, mats.size()])
+	var sine := RegEx.create_from_string("fract\\s*\\(\\s*sin\\s*\\(")
+	for m in mats:
+		var code := m.shader.code
+		var name := code.get_slice("\n", 2).strip_edges()
+		check(sine.search(code) == null, "%s: no sine hash in the lava's patterns (%s)" % [tag, name])
+		check(not code.contains("h22") or code.contains("uvec2"), "%s: its h22 is an integer hash (%s)" % [tag, name])
+	holder.free()
 
 
 func _gate_in(plan: SitePlan, rooms: Array) -> bool:
