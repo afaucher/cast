@@ -1,5 +1,11 @@
 # Echo cancellation: cleaning our own sounds out of the mic
 
+**PARKED (user, 2026-10-22: "Lets park the audio research for now with those open questions").** Nothing more is built
+until the open questions are answered: speakers or headphones (and what players will use); re-running the probe with
+Voice Clarity / Audio enhancements off on the QuadCast (and whether NVIDIA Broadcast or similar is in the chain); an
+optional startup calibration chirp; downloading speexdsp (BSD-3); "Echo cancel" as a player setting or in Diagnostics.
+Ducking stays off meanwhile (`Sfx.ducking`).
+
 *[research] 2026-10-22. Nothing in the game changed. Two lab tools were added: `tools/echo_probe.gd` (plays sweeps,
 records the Master bus and the mic at once) and `tools/echo_probe_analyze.py` (delay, level, drift, and how much a
 linear canceller removes). The user asked: "knowing what we played, can we identify the feedback delay (if any) and use
