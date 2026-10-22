@@ -367,13 +367,18 @@ func _no_clip(kit: String, prof: String) -> void:
 		var m := h.visual_override as LowPolyModel
 		var worst := 0.0
 		var what := ""
-		for i in 150:
+		for i in 260:
 			pc.move_override = Vector3.RIGHT if i < 30 else Vector3.ZERO
 			if i == 40 or i == 95:
 				h._ready_at.erase(Hero.KEY_MELEE)
 				h.melee(Vector3.RIGHT)
 			if i == 135:
 				h._cast_pose()
+			if kit == "wick" and i == 160:   # (the user, 2026-10-22, "Fix the clip": his drawing hand went into his face)
+				h._ready_at.erase(Hero.KEY_RANGED)
+				h.start_draw()
+			if kit == "wick" and i == 215:
+				h.release_draw(Vector3.RIGHT)
 			await get_tree().process_frame
 			var d: Array = PoseClip.depth(m, kit)
 			if float(d[0]) > worst:

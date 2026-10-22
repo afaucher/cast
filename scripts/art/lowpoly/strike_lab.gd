@@ -7,6 +7,7 @@ extends "res://scripts/art/lowpoly/anim_lab.gd"
 ##   godot --path . --fixed-fps 60 --resolution 1920x1080 -- --scene res://scenes/strike_lab.tscn --hero gasket
 ##         --clip attack|startstop|strafe --shot <abs.png> [--profiles grounded,grounded_anim] [--strike follow|wind|both]
 ##         [--zoom close|game] [--frames-dir <abs dir>]
+##   ... --clip draw                   Wick holds RMB to draw (0.30 s) and lets go (1.30 s): the drawn shot
 ##   ... --clip held [--held <spell>]  stand, walk, stop, swing, cast with a spell's component in the hand (default heal)
 ##   ... --overlay --shot <abs.png>   the primary's hit area on the floor and the weapon's swept path, top-down, per lane
 ##                                    (and the numbers, printed: "overlay ...")
@@ -15,6 +16,7 @@ extends "res://scripts/art/lowpoly/anim_lab.gd"
 ## --strike follow|wind|both   the heavy hitters' strike (HeroFeel.style); both: grounded, then grounded_anim with each
 
 const DOWN_TIMES := [0.283, 0.3, 0.317, 0.35, 0.4, 0.467, 0.55, 0.7]   ## the attack strip (the click is at 0.30)
+const DRAW_TIMES := [0.2, 0.35, 0.6, 1.0, 1.25, 1.32, 1.4, 1.7]       ## the draw clip: Wick holds RMB from 0.30, lets go at 1.30
 const HELD_TIMES := [0.2, 0.55, 0.8, 1.2, 1.3, 1.45, 1.7, 2.0]         ## the held clip: rest, walk, walk, swing x2, rest, cast, after
 ## The points of each weapon the overlay tracks: [part, part-local point]; the first is the one the numbers quote.
 const TRACK := {
@@ -132,11 +134,15 @@ func _clip_def() -> Array:
 		return [0.75, DOWN_TIMES]
 	if clip == "held":
 		return [2.1, HELD_TIMES]
+	if clip == "draw":
+		return [1.8, DRAW_TIMES]
 	return CLIPS[clip]
 
 
 ## The "held" clip: stand, walk right, stop, a melee swing, a cast (where the held component sits through each pose).
 func _input_at(t: float) -> Array:
+	if clip == "draw":
+		return [Vector3.ZERO, _right]
 	if clip == "held":   # (facing the camera three-quarters, so both hands show)
 		return [_right if t >= 0.3 and t < 1.0 else Vector3.ZERO, _swing_dir]
 	return super._input_at(t)
@@ -190,6 +196,11 @@ func _lane_events(f: int, i: int) -> void:
 		"attack":
 			if at.call(0.3) or at.call(0.9):
 				_swing(i)
+		"draw":   # (Wick: hold to draw, then the drawn shot)
+			if at.call(0.3):
+				h.start_draw()
+			if at.call(1.3):
+				h.release_draw(_swing_dir)
 		"held":
 			if at.call(1.2):
 				_swing(i)

@@ -79,9 +79,13 @@ const BOW_PULL := 0.46                             ## string travel when fully d
 const BOW_REST_POS := Vector3(-0.70, 0.12, -0.28)   ## body-local grip while carried
 const BOW_REST_YAW := deg_to_rad(90.0)              ## carried with its curve facing the viewer from the front
 const BOW_REST_ROLL := deg_to_rad(36.0)             ## and canted so both limbs show
-const BOW_AIM_YAW := deg_to_rad(22.0)              ## the aimed bow is turned a little so its curve still shows
+const BOW_AIM_YAW := deg_to_rad(38.0)              ## the aimed bow is turned so its string draws back past his right cheek, not into his face
 const BOW_AIM_ROLL := deg_to_rad(20.0)
-const BOW_AIM_POS := Vector3(-0.18, 0.64, -0.70)    ## body-local grip while aiming
+## Aiming, he turns his body this far to his right (his bow arm toward the target) and his head back the same, so the bow,
+## turned more for the string to clear his cheek, still points the arrow ahead. (The user, 2026-10-22, "Fix the clip": his
+## drawing hand used to sink into his face, 0.18 deep at a full draw.)
+const AIM_TURN := 0.42
+const BOW_AIM_POS := Vector3(-0.16, 0.66, -0.82)    ## body-local grip while aiming (out in front: the drawing hand stays clear of his face)
 const BOW_WIND_POS := Vector3(-0.88, 0.36, 0.10)    ## bash wind-up
 const BOW_STRIKE_POS := Vector3(-0.02, 0.30, -0.76)
 ## The strike-first bash's follow-through (the grounded_anim profile, HeroFeel's `follow` channel 0..1): the bow carries on
@@ -445,9 +449,9 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 
 	var body := parts["body"] as MeshInstance3D
 	body.position = Vector3(sin(t * 0.7) * 0.015 * calm, _body_base_y + breath * 0.010 - absf(stride) * 0.035 * walk, 0.0)
-	body.rotation = Vector3(-0.10 - 0.05 * walk + breath * 0.01 + 0.12 * bash, sin(t * 0.8) * 0.04 * calm - 0.25 * raise, 0.0)
+	body.rotation = Vector3(-0.10 - 0.05 * walk + breath * 0.01 + 0.12 * bash, sin(t * 0.8) * 0.04 * calm - AIM_TURN * raise, 0.0)
 	var head := parts["head"] as MeshInstance3D
-	head.rotation = Vector3(0.05 + sin(t * 1.7) * 0.02 - 0.04 * walk, (sin(t * 1.1) * 0.20 + sin(t * 3.1) * 0.07) * calm * (1.0 - raise) + 0.25 * raise, 0.0)
+	head.rotation = Vector3(0.05 + sin(t * 1.7) * 0.02 - 0.04 * walk, (sin(t * 1.1) * 0.20 + sin(t * 3.1) * 0.07) * calm * (1.0 - raise) + AIM_TURN * raise, 0.0)
 	var hat := parts["hat"] as MeshInstance3D
 	hat.rotation = Vector3(0.16 + sin(t * 2.3) * 0.10 - absf(stride) * 0.12 * walk, 0.0, 0.10 + sin(t * 1.7 + 1.0) * 0.12 + stride * 0.06 * walk)
 	var tremble := sin(t * 7.0) * 0.03 * calm
@@ -484,7 +488,7 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var hand := HAND_R_REST + Vector3(0.0, sin(t * 3.3) * 0.01 * calm, -stride * 0.20 * walk)
 	hand = hand.lerp(HAND_R_CAST, cast)
 	var nock := bow_pos + bow.basis * Vector3(0.0, 0.0, BOW_BULGE + BOW_PULL * clampf(draw, 0.0, 1.0))
-	hand = hand.lerp(nock, raise)
+	hand = hand.lerp(nock, raise) + Vector3(0.10, 0.0, -0.12) * sin(raise * PI)   # (on the way up or down it swings out round his chest)
 	_aim_arm(parts["arm_r"] as MeshInstance3D, hand)
 
 	# the wand: tucked in the belt, drawn to the hand for a cast

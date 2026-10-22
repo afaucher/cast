@@ -6,12 +6,18 @@ extends Projectile
 ## trails a glow.
 
 const STEP := 0.2                  ## max distance per collision check (the arrow is fast)
+## The arrow is DRAWN leaving the bow: it starts LIFT above its flight line (the raised bow, about eye height; it flies, and
+## hits, at chest height as always) and eases down onto it over the first LIFT_RUN units. Cosmetic: the flight, the hits
+## and the terrain it meets are unchanged.
+const LIFT := 0.6
+const LIFT_RUN := 2.5
 
 var pierce := 1
 var drawn := false
 var hits: Array[Actor] = []        ## actors struck so far, in order (tests read this)
 
 var _hit_ids := {}                 ## instance id -> true, so nothing is hit twice
+var _look: Node3D = null           ## the drawn shaft (and glow), lifted to the bow at first (LIFT)
 
 
 ## Fire an arrow from `shooter`'s chest toward `dir` (X/Z). `drawn` styles it as the charged shot.
@@ -40,7 +46,7 @@ func net_fields() -> Dictionary:
 	f.merge({
 		"drawn": Net.SPAWN,
 		# Used up as the arrow strikes, so each machine recounts it from its own flight.
-		"pierce": Net.LOCAL, "hits": Net.LOCAL, "_hit_ids": Net.LOCAL,
+		"pierce": Net.LOCAL, "hits": Net.LOCAL, "_hit_ids": Net.LOCAL, "_look": Net.LOCAL,
 	})
 	return f
 
@@ -69,6 +75,7 @@ func _physics_process(delta: float) -> void:
 			_impact(null, door)   # a shut door stops the arrow like a wall (it sticks in the door)
 			return
 		global_position = to
+		_lift()
 		if _travelled >= max_range:
 			_impact(null, to)
 			return
@@ -99,14 +106,24 @@ func _impact(_hit: Actor, pos: Vector3) -> void:
 	queue_free()
 
 
+## The drawn shaft's height over the flight line: LIFT off a hero's bow, down to 0 by LIFT_RUN.
+func _lift() -> void:
+	if _look != null:
+		var k := clampf(1.0 - _travelled / LIFT_RUN, 0.0, 1.0)
+		_look.position.y = (LIFT if source is Hero else 0.0) * k * k
+
+
 func _build_visual() -> void:
+	_look = Node3D.new()
+	add_child(_look)
+	_lift()
 	var shaft_len := 0.95 if drawn else 0.6
 	var mi := MeshInstance3D.new()
 	var shaft := BoxMesh.new()
 	shaft.size = Vector3(0.05 if drawn else 0.035, 0.05 if drawn else 0.035, shaft_len)
 	mi.mesh = shaft
 	mi.material_override = Fx.glow_material(Color(color, 0.95))
-	add_child(mi)
+	_look.add_child(mi)
 	if drawn:
 		var halo := MeshInstance3D.new()
 		var sph := SphereMesh.new()
@@ -115,7 +132,7 @@ func _build_visual() -> void:
 		halo.mesh = sph
 		halo.scale = Vector3(1.0, 1.0, 2.6)
 		halo.material_override = Fx.glow_material(Color(color, 0.35))
-		add_child(halo)
+		_look.add_child(halo)
 	# The arrow flies along its own -Z.
 	if direction.length() > 0.001:
 		look_at(global_position + direction, Vector3.UP)

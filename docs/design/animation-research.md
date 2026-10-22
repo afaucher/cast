@@ -436,10 +436,18 @@ The user: **"Gasket's primary attack is better. What about the secondary?"** Mea
 
 - Damage, cooldowns, the arrow's and the boulder's paths are unchanged: only the poses (and the spin's radius, a proposal
   behind the profile) changed. The AI's "use the spin" check uses the same radius (`Hero.spin_area`).
-- **Proposed, not built:** Wick's drawing hand reaches into his face at full draw in his aim pose (0.18 deep today, 0.06
-  with the string at rest: an archer's anchor at the cheek, but it hides the hand). A little more room between the bow and
-  his face (`WickModel.BOW_AIM_POS`) would fix it in every profile; and the arrow could start at the bow's height. Both
-  change today's look, so they wait for the user.
+- ~~Proposed~~ **Built (every profile, today included):** Wick's drawing hand reached into his face at full draw in his aim
+  pose (0.18 deep, 0.06 with the string at rest). The user, 2026-10-22: **"Fix the clip."** Now:
+  - the aimed bow is held further out (`BOW_AIM_POS` (-0.16, 0.66, -0.82), was (-0.18, 0.64, -0.70)) and turned more
+    (`BOW_AIM_YAW` 38 deg, was 22) so the string draws back past his right cheek; he turns his body to his right by
+    `AIM_TURN` (0.42 rad, was 0.25) and his head back by the same, so the arrow still points ahead;
+  - on the way up and down his right hand swings out round his chest (it used to cut through the jacket when the bow
+    dipped on a drawn shot and as it lowered);
+  - `PoseClip` reads **0.000** for his arms through a hold-to-draw and the drawn shot, the tap shot, the bash, walking and a
+    cast, today and grounded_anim (`strike_lab --clip draw --clipcheck`; `test_move_feel_anim` `_no_clip`);
+  - the arrow is **drawn** leaving the bow: its shaft starts 0.6 above its flight line (the raised bow) and eases down
+    onto it over its first 2.5 units (`ArrowShot.LIFT`). It still flies and hits at chest height, so what it hits, the
+    terrain that stops it, props and the Pavise's planks are unchanged (`test_arrow_props`, `test_monster_pavise`).
 - Evidence: `ga_overlay_secondary_{gasket,wick,rebar}.png`, `ga_secondary_{gasket,wick,rebar}.png` (grounded vs
   grounded_anim, close and game zoom), `ga_gif_gasket_spin.gif` (half speed).
 - Tests: `test_move_feel_anim` (`_secondary`: the release pose on the click's frame, the full turn, the spin's hit-stop and
