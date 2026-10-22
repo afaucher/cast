@@ -17,16 +17,23 @@ extends RefCounted
 ## 4.5 for a tree link (two full lanes), 3.0 for a loop, the climb shortcut or the chokepoint (one full lane: NARROW).
 ##
 ## THE DOOR PLACE (on the hex grid, never at an angle; only a NARROW doorway has one, the user's rule: a wide hallway
-## always meets its room open): the DOORWAY CELL `cell` (the corridor's one full cell there, on its centre lane, its centre
-## `center`), the BAND (that cell and the two cut cells beside it on the room side, cell + DIRS[axis +/- 2]: a chevron
-## that closes the corridor wall to wall), `edges` (the hex edges between the band and the room, clipped to the floor), and
-## the DOOR LINE: `a` / `b`, the two JAMBS where the corridor's wall faces end at the room (wall corners), `center` their
-## middle on the floor. The door stands on that chord, in the room's wall line (`flush`: the room wall runs straight past
-## both jambs; false at a bend, where the chord cuts straight across the corner). `door_ok` says it has all of that.
+## always meets its room open): the DOORWAY CELL `cell` (the corridor's full cell just past the door, on its centre lane),
+## the BAND (that cell and the two cut cells beside it on the room side, cell + DIRS[axis +/- 2]: a chevron that closes the
+## corridor wall to wall), `edges` (the hex edges between the band and the room, clipped to the floor), and the DOOR LINE:
+## `a` / `b`, its two JAMBS (wall points, hex centres), `center` their middle on the floor. `door_ok` says it has all of that.
+## The door line is SQUARE across the corridor through the band's two cut cells (_square_place; user, 2026-10-21: "normal
+## doors would be placed perpendicular to the hall, or at least prioritize the shortest span"): the corridor's width, 3.0,
+## its shortest cut, at the lane cell nearest the room whose line seals the opening, so one jamb is where the corridor's
+## second wall ends and the other on the opposite corridor wall (both on the room's wall line where it meets the corridor
+## square on). Only where no lane cell has one (none on the 90 floors test_door_span builds) is it the older chord
+## between the two points where the corridor's wall faces end at the room, which could run diagonally across a flared or
+## oblique mouth. `flush`: the room wall runs straight past both jambs. settle() then moves the cells on the wrong side
+## of a door line to the space on their side (fog goes by cell).
 ##
 ##   var sp := Doorways.spaces(map)          # {cell_space, cells, kind, order}
 ##   var dws := Doorways.find(map, sp)       # [{id, room, hall, door_cells, mouth_cells, mid, axis, width, narrow, dead_end,
 ##                                           #   ok, door_ok, cell, center, band, edges, a, b}]
+##   Doorways.settle(map, sp["cell_space"], dws)   # (the fog's spaces: each door's cells on its own side)
 
 const HALL_PREFIX := "hall:"
 const SPAN_STEP := 0.3          ## how far apart the cross-sections tried for a door are (world units along the axis)
@@ -39,6 +46,13 @@ const JAMB_SEARCH := 4.5        ## how far back toward the room a corridor wall 
 const JAMB_SPAN_MAX := 5.2      ## a door chord longer than this (a very oblique mouth) is no door place
 const MARCH := 0.04             ## the step of the march out to each wall face
 const MARCH_MAX := 3.4
+const SQUARE_BACK := 2          ## the square door place is looked for from this many lane cells toward the room ...
+const SQUARE_ON := 3            ## ... to this many into the hall, from the doorway cell the cross-section found
+const SEAL_REACH := 0.12        ## a door's line runs on this far into wall past each jamb (it seals the opening)
+const SEAL_SAMPLES := 24        ## points tried along a door's line for open, level floor
+const SETTLE_REACH := 4.5       ## settle(): cells this close to a door's middle take the space on their side of it ...
+const SETTLE_ON := 0.05         ## ... unless their floor is this close to the door line (a jamb's cut cell)
+const SIGHT_STEP := 0.1         ## settle()'s plain-sight test samples the line this finely
 const MARCH_COARSE := 5         ## the march's stride, in MARCH steps (0.2): finer steps only inside the stride that hits
 
 
@@ -157,6 +171,86 @@ static func find(map: HexMap, sp: Dictionary = {}) -> Array[Dictionary]:
 	for dw in out:
 		dw["dead_end"] = (rooms_of[dw["hall"]] as Dictionary).size() < 2
 	return out
+
+
+## SETTLE the spaces at the door places (after find()): a door stands square across its corridor where the corridor's
+## second wall ends (_square_place), which need not be where the tags change from corridor to room, so some of the hall's
+## cells can lie on the room side of the door line (or the room's on the hall side). Fog goes by cell (a hero's space is
+## the cell under them), so each such cell moves to the space on its side: every cell of the doorway's room or hall whose
+## floor is within SETTLE_REACH of the door's middle, in plain sight of it (no wall between) and off the line by more than
+## SETTLE_ON. In plain sight is what keeps it to the opening: a straight line from the door's middle reaches the other side
+## of a sealing door only through a wall. The jambs' own cut cells (their centres on the line) keep their spaces.
+## `cell_space` maps cell -> space (spaces()' tags, or RoomFog's indices); each doorway names its room's and hall's space
+## under `room_key` / `hall_key`. Changes cell_space in place (only it: spaces()' `cells` lists stay as they were) and
+## returns the cells it moved. Deterministic, from the map alone. RoomFog.build settles its spaces this way, after cutting
+## its long halls (so the cuts fall where they did).
+static func settle(map: HexMap, cell_space: Dictionary, dws: Array[Dictionary], room_key: String = "room", hall_key: String = "hall") -> Array[Vector2i]:
+	var moved := {}
+	var order: Array[Vector2i] = []
+	for dw in dws:
+		if not bool(dw.get("door_ok", false)) or not dw.has("a") or not dw.has(room_key) or not dw.has(hall_key):
+			continue
+		var a: Vector2 = dw["a"]
+		var b: Vector2 = dw["b"]
+		var m := (a + b) * 0.5
+		var t := (b - a).normalized()
+		var n := Vector2(-t.y, t.x)
+		var ax: Vector3 = dw["axis"]
+		if n.dot(Vector2(ax.x, ax.z)) < 0.0:
+			n = -n   # (toward the hall)
+		var room: Variant = dw[room_key]
+		var hall: Variant = dw[hall_key]
+		var around := Hex.range_cells(Hex.from_world(Vector3(m.x, 0.0, m.y)), ceili(SETTLE_REACH / (Hex.SIZE * Hex.SQRT3)) + 1)
+		around.sort_custom(_cell_less)
+		for c in around:
+			if not cell_space.has(c):
+				continue
+			var space: Variant = cell_space[c]
+			if space != room and space != hall:
+				continue
+			var cell: HexMap.Cell = map.cells[c]
+			if cell.type == HexMap.Tile.WALL or cell.wall_mask == HexMap.ALL_KITES:
+				continue
+			var fp := _floor_point(cell, c)
+			var side := (fp - m).dot(n)
+			if fp.distance_to(m) > SETTLE_REACH or absf(side) <= SETTLE_ON or not _in_sight(map, m, fp):
+				continue
+			var want: Variant = hall if side > 0.0 else room
+			if want != space:
+				if not moved.has(c):
+					order.append(c)
+				moved[c] = want
+	var out: Array[Vector2i] = []
+	for c in order:
+		if cell_space[c] != moved[c]:
+			cell_space[c] = moved[c]
+			out.append(c)
+	return out
+
+
+## A cell's floor, flat (world X/Z): its centre, or for a cut cell the middle of its floor kites.
+static func _floor_point(cell: HexMap.Cell, c: Vector2i) -> Vector2:
+	var w := Hex.to_world(c)
+	if cell.wall_mask == 0:
+		return Vector2(w.x, w.z)
+	var d := Vector2.ZERO
+	for k in 6:
+		if (cell.wall_mask >> k) & 1 == 0:
+			var ang := (k + 0.5) * PI / 3.0
+			d += Vector2(cos(ang), -sin(ang))
+	if d.length() < 0.001:
+		return Vector2(w.x, w.z)
+	return Vector2(w.x, w.z) + d.normalized() * Hex.SIZE * 0.5
+
+
+## No wall on the flat line from p to q (sampled every SIGHT_STEP).
+static func _in_sight(map: HexMap, p: Vector2, q: Vector2) -> bool:
+	var n := maxi(1, ceili(p.distance_to(q) / SIGHT_STEP))
+	for i in range(1, n + 1):
+		var x := p.lerp(q, float(i) / n)
+		if map.wall_at(Vector3(x.x, 0.0, x.y)):
+			return false
+	return true
 
 
 ## Split a pair's contact cells into connected patches: [[door cells], [mouth cells]] per patch, in cell order.
@@ -299,6 +393,8 @@ static func _door_place(map: HexMap, dw: Dictionary, sp: Dictionary, p: Vector3,
 	var cell: HexMap.Cell = map.get_cell(best)
 	if cell.type == HexMap.Tile.STAIRS:
 		return
+	if _square_place(map, dw, sp, best, axis_i):
+		return
 	var center := Hex.to_world(best, float(cell.level))
 	var band: Array[Vector2i] = [best]
 	for k in [axis_i + 2, axis_i + 4]:
@@ -311,22 +407,7 @@ static func _door_place(map: HexMap, dw: Dictionary, sp: Dictionary, p: Vector3,
 	var d2 := _march(map, center, -perp)
 	if d1 < 0.0 or d2 < 0.0 or not _level_between(map, center + perp * d1, center - perp * d2):
 		return
-	# the hex edges between the band and the room side, clipped to the floor
-	var inband := {}
-	for c in band:
-		inband[c] = true
-	var edges: Array = []
-	for c in band:
-		var cc := Hex.to_world(c)
-		for k in 6:
-			if inband.has(c + Hex.DIRS[k]) or Hex.dir_vector(k).dot(axis) > -0.01:
-				continue
-			var dv := Hex.dir_vector(k)
-			var m := cc + Hex.edge_mid(k)
-			var along := Vector3(-dv.z, 0.0, dv.x) * (Hex.SIZE * 0.5)
-			var seg := _clip_to_floor(map, m - along, m + along, cc)
-			if not seg.is_empty():
-				edges.append(seg)
+	var edges := _band_edges(map, band, axis)
 	dw["cell"] = best
 	dw["band"] = band
 	dw["edges"] = edges
@@ -352,6 +433,96 @@ static func _door_place(map: HexMap, dw: Dictionary, sp: Dictionary, p: Vector3,
 	dw["b"] = Vector2(jr.x, jr.z)
 	dw["flush"] = _flush(map, jl, jr, axis)
 	dw["door_ok"] = not edges.is_empty()
+
+
+## The SQUARE door place (user, 2026-10-21: "normal doors would be placed perpendicular to the hall, or at least prioritize
+## the shortest span"): the door stands square across the corridor, on the line through the two cut cells of a lane
+## cell's band (lane + DIRS[axis +/- 2]: their centres are on the corridor's two wall lines, 3.0 apart for a narrow hall,
+## the corridor's width and so the shortest cut there is). The lane cells from SQUARE_BACK toward the room to SQUARE_ON
+## into the hall from `near` are tried (full cells of the hall, or of the room where its tags reach into the corridor),
+## the room's end first: the first whose line SEALS the opening (_seals: both ends
+## run on into wall, level floor between) is the door place, so the door stands at the jamb that reaches furthest into
+## the hall, square, and the other jamb is on that corridor wall (where the room wall meets the corridor square on, both
+## are on the room's wall line). False (nothing written) when no lane cell has one: _door_place then falls back to the
+## jambs' chord.
+static func _square_place(map: HexMap, dw: Dictionary, sp: Dictionary, near: Vector2i, axis_i: int) -> bool:
+	var hall: String = dw["hall"]
+	var cell_space: Dictionary = sp["cell_space"]
+	var axis := Hex.dir_vector(axis_i)
+	for k in range(-SQUARE_BACK, SQUARE_ON + 1):
+		var lane: Vector2i = near + Hex.DIRS[axis_i] * k
+		var lane_space := str(cell_space.get(lane, ""))
+		if (lane_space != hall and lane_space != str(dw["room"])) or not map.is_walkable_cell(lane):
+			continue
+		var cell: HexMap.Cell = map.get_cell(lane)
+		if cell.type == HexMap.Tile.STAIRS:
+			continue
+		var band: Array[Vector2i] = [lane]
+		for j in [axis_i + 2, axis_i + 4]:
+			var side: Vector2i = lane + Hex.DIRS[posmod(j, 6)]
+			var sc: HexMap.Cell = map.get_cell(side)
+			if sc == null or sc.type == HexMap.Tile.WALL or sc.type == HexMap.Tile.STAIRS or sc.level != cell.level:
+				break
+			band.append(side)
+		if band.size() < 3:
+			continue
+		var ja := Hex.to_world(band[1], float(cell.level))
+		var jb := Hex.to_world(band[2], float(cell.level))
+		if not _seals(map, ja, jb, cell.level):
+			continue
+		var edges := _band_edges(map, band, axis)
+		if edges.is_empty():
+			continue
+		var dc := (ja + jb) * 0.5
+		dc.y = map.ground_height(dc)
+		dw["cell"] = lane
+		dw["band"] = band
+		dw["edges"] = edges
+		dw["center"] = dc
+		dw["a"] = Vector2(ja.x, ja.z)
+		dw["b"] = Vector2(jb.x, jb.z)
+		dw["flush"] = _flush(map, ja, jb, axis)
+		dw["door_ok"] = true
+		return true
+	return false
+
+
+## Does a door on p -> q close the opening: both ends run on into wall (SEAL_REACH past each), and the floor between is
+## open (no wall) and one flat level `level` (no stairs)? Then nobody walks round it: a wall face meets each jamb.
+static func _seals(map: HexMap, p: Vector3, q: Vector3, level: int) -> bool:
+	var u := q - p
+	u.y = 0.0
+	u = u.normalized()
+	if not map.wall_at(p - u * SEAL_REACH) or not map.wall_at(q + u * SEAL_REACH):
+		return false
+	for i in range(1, SEAL_SAMPLES):
+		var m := p.lerp(q, float(i) / SEAL_SAMPLES)
+		if map.wall_at(m):
+			return false
+		var c: HexMap.Cell = map.get_cell(Hex.from_world(m))
+		if c == null or c.type == HexMap.Tile.STAIRS or absf(map.ground_level(m) - level) > 0.01:
+			return false
+	return true
+
+
+## The hex edges between a door band and the room side (facing against `axis`), clipped to the floor.
+static func _band_edges(map: HexMap, band: Array[Vector2i], axis: Vector3) -> Array:
+	var inband := {}
+	for c in band:
+		inband[c] = true
+	var edges: Array = []
+	for c in band:
+		var cc := Hex.to_world(c)
+		for k in 6:
+			if inband.has(c + Hex.DIRS[k]) or Hex.dir_vector(k).dot(axis) > -0.01:
+				continue
+			var dv := Hex.dir_vector(k)
+			var m := cc + Hex.edge_mid(k)
+			var along := Vector3(-dv.z, 0.0, dv.x) * (Hex.SIZE * 0.5)
+			var seg := _clip_to_floor(map, m - along, m + along, cc)
+			if not seg.is_empty():
+				edges.append(seg)
+	return edges
 
 
 ## Walk back from the doorway cell toward the room along one corridor wall (at `dist` along `side`) to where the wall

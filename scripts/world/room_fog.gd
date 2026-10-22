@@ -121,6 +121,8 @@ static func build(m: HexMap) -> RoomFog:
 		f.hall_group.append(s if f.is_hall[s] else -1)
 	if split_long_halls:
 		f._split_halls(m)
+	# A door's cells go to the space on their side of its line (a hero in front of a shut door is in the space in front).
+	Doorways.settle(m, f.cell_space, f.doorways, "ri", "hi")
 	var n := f.tags.size()
 	f.segmented.resize(n)
 	var group_size := {}
