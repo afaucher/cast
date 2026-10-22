@@ -157,6 +157,22 @@ and the circle side by side before and after). `tests/test_shader_hash.gd` reads
 (`HexMapView.MATERIAL_SHADER`'s own sine-free `h21`/`h22`, fract of a small multiple, is left as is: its products stay
 small, so a rounding step moves it by far less than a step of a sine times 43758.)
 
+### The frozen embers (user playtest, 2026-10-22: "The sparks from the lava seem frozen in the air. Are they supposed to move?")
+
+They were meant to rise (the look's "embers rising", the lab's "little glowing chips drifting up"), but `LavaLook` and the
+lava lab built them as ONE STATIC MESH of chips at random heights, placed once and never moved. **The fix:** `LavaLook.embers`
+(the cave, the `--lava-cave` prototype and the lava lab all use it) still builds one mesh, but every chip's vertices carry its
+centre offset and a phase (`CUSTOM0`) and a climb rate and seed (`UV`), and `LavaLook.EMBER_SHADER` moves it from `TIME`: up
+`EMBER_RISE` (3 m) over 2.4-4.5 s from just over the lava, a sideways drift of up to `EMBER_SWAY` (0.35 m), a tumble, grown
+in at the bottom and shrunk to a point at the top before it starts again (an unshaded chip can't fade, so it shrinks), and
+dimming as it climbs. Same count (160, the lab 110), same colours (the look's `ember`), same seeded placement (cosmetic, its
+own generator, never `GameWorld.rng`); the cost is still one draw call and no CPU per frame, and the mesh's bounds take the
+climb so a chip is never culled mid-air. `LavaLook.ember_center` is the shader's motion on the CPU. `test_lava_gen` checks
+that every chip of a natural cave has a climb rate and its phase, that the phases are spread, that the shader moves them by
+`TIME`, that the bounds hold the climb and that an ember climbs and starts again. Before and after (seed 31 floor 2,
+`--to-lava isle --zoom 6`, four frames 0.2 s apart): `lava_embers/before_after.png`; across eight frames the share of ember
+pixels at the same place in the next frame went from 0.95-1.0 to 0.0-0.06.
+
 ## Playtest fixes (2026-10-20)
 
 The user played cave 1 as Gasket, with damp and fireball. What came up, what caused it, and the fix:
@@ -363,7 +379,7 @@ climb in it, under an archer tower.
 - **`LavaLook`** (`scripts/world/lava/lava_look.gd`): the magma look from the lab.
   - Rock restyle, and the crate texture swapped for rock.
   - The lava surface: unshaded crust over glowing cracks.
-  - The glow skirt up the rock faces, embers, and 10 warm omni lights.
+  - The glow skirt up the rock faces, rising embers (a vertex shader: "The frozen embers" above), and 10 warm omni lights.
   - DungeonLook dimmed.
 - **`LavaField`** (`scripts/world/lava/lava_field.gd`): the rules.
   - **Lava is void.** Once the floor runs, the lava cells leave the map, so the game's own pit rule applies

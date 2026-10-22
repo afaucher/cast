@@ -29,6 +29,10 @@ const CRUST_K := 0.55
 const LIGHT := Color(1.0, 0.45, 0.15)
 const LIGHT_E := 1.6
 const EMBER := Color(1.0, 0.55, 0.15)
+const EMBER_COUNT := 160
+const EMBER_RISE := 3.0                     ## world units an ember climbs over its life
+const EMBER_SWAY := 0.35                    ## world units it drifts sideways by the top
+const EMBER_RATE := Vector2(0.22, 0.42)     ## lives per second (a climb of 2.4 to 4.5 s)
 
 ## Crusted lava: dark plates (a cellular pattern) drifting slowly, the glow in the cracks between them and in slow hot
 ## patches. Unshaded and HDR. `flicker` (0..1) brightens and breaks the cracks (a damp crust about to give way).
@@ -117,8 +121,38 @@ void fragment() {
 }
 """
 
+## The embers' motion (see `embers`): rise, drift and tumble from TIME in the vertex shader; grown in at the bottom, shrunk
+## out at the top (an unshaded chip can't fade, so it shrinks to a point and starts again). Unshaded HDR (it blooms).
+const EMBER_SHADER := """
+shader_type spatial;
+render_mode unshaded, cull_disabled, shadows_disabled;
+uniform vec4 ember : source_color = vec4(1.0, 0.55, 0.15, 1.0);
+uniform float gain = 2.5;
+uniform float rise = 3.0;
+uniform float sway = 0.35;
+varying float heat;
+void vertex() {
+	vec3 off = CUSTOM0.xyz;
+	float t = TIME;
+	float life = fract(CUSTOM0.w + t * UV.x);
+	float w = UV.y * 6.2831853;
+	vec3 c = VERTEX - off;
+	c += vec3((sin(t * 1.3 + w) * 0.6 + sin(t * 0.47 + w * 2.0) * 0.4) * sway * life, life * rise,
+			(cos(t * 1.1 + w * 1.7) * 0.6 + cos(t * 0.53 + w) * 0.4) * sway * life);
+	float grow = smoothstep(0.0, 0.08, life) * (1.0 - smoothstep(0.6, 1.0, life));
+	float a = t * (1.5 + UV.y * 2.0) + w;
+	vec2 sp = vec2(cos(a) * off.x - sin(a) * off.z, sin(a) * off.x + cos(a) * off.z);
+	VERTEX = c + vec3(sp.x, off.y, sp.y) * grow;
+	heat = 1.0 - 0.45 * life;
+}
+void fragment() {
+	ALBEDO = ember.rgb * gain * heat;
+}
+"""
+
 static var _shader: Shader
 static var _crust_shader: Shader
+static var _ember_shader: Shader
 
 
 static func crust_material() -> ShaderMaterial:
@@ -303,23 +337,73 @@ static func _build_lava(holder: Node3D, map: HexMap, cells: Array[Vector2i], lav
 
 
 static func _build_embers(holder: Node3D, cells: Array[Vector2i], lava_y: float = LavaCave.LAVA_Y, ember: Color = EMBER) -> void:
-	if cells.is_empty():
-		return
-	var es := LowPoly.Soup.new(5, 0.0)
+	var mi := embers(cells, lava_y, ember, EMBER_COUNT)
+	if mi != null:
+		holder.add_child(mi)
+
+
+## EMBERS (user playtest 2026-10-22: "The sparks from the lava seem frozen in the air. Are they supposed to move?"; they
+## are: the doc's "embers rising"). They were a static mesh of glowing chips placed once. Now each chip RISES from just over
+## the lava, drifting sideways and tumbling, grows in, shrinks out at the top and starts again: all of it in the vertex
+## shader (EMBER_SHADER) from TIME, so it is one draw call and no CPU per frame however many there are. Each chip's vertices
+## carry its centre offset and phase (CUSTOM0) and its rate and seed (UV); `ember_center` is the same motion on the CPU.
+## Placement is from its own seeded generator (cosmetic, the same on every machine; never GameWorld.rng). Null without lava.
+static func embers(cells: Array[Vector2i], lava_y: float, ember: Color, count: int, seed_value: int = 77) -> MeshInstance3D:
+	if cells.is_empty() or count <= 0:
+		return null
 	var r := RandomNumberGenerator.new()
-	r.seed = 77
-	for i in mini(160, cells.size()):
+	r.seed = seed_value
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
+	const TIPS := [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]
+	const FACES := [[0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4], [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5]]
+	for i in mini(count, cells.size()):
 		var c: Vector2i = cells[r.randi_range(0, cells.size() - 1)]
-		var p := Hex.to_world(c) + Vector3(r.randf_range(-0.8, 0.8), lava_y + r.randf_range(0.3, 3.2), r.randf_range(-0.8, 0.8))
-		PropModels.box(es, Vector3.ONE * r.randf_range(0.03, 0.06), p, PropModels.glow(ember), Vector3(r.randf() * 90.0, r.randf() * 90.0, 0))
+		var base := Hex.to_world(c) + Vector3(r.randf_range(-0.8, 0.8), lava_y + r.randf_range(0.05, 0.4), r.randf_range(-0.8, 0.8))
+		var size := r.randf_range(0.03, 0.06)
+		var tilt := Basis.from_euler(Vector3(r.randf() * TAU, r.randf() * TAU, 0.0))
+		var phase := r.randf()
+		var rate := r.randf_range(EMBER_RATE.x, EMBER_RATE.y)
+		var sd := r.randf()
+		for f: Array in FACES:
+			for k: int in f:
+				var off := tilt * ((TIPS[k] as Vector3) * size)
+				st.set_uv(Vector2(rate, sd))
+				st.set_custom(0, Color(off.x, off.y, off.z, phase))
+				st.set_normal(Vector3.UP)
+				st.add_vertex(base + off)
 	var mi := MeshInstance3D.new()
 	mi.name = "Embers"
-	mi.mesh = es.to_mesh()
-	var m := MonsterMaterial.make(0.0)
-	m.set_shader_parameter("glow_gain", 2.5)
-	mi.material_override = m
+	mi.mesh = st.commit()
+	# the vertex shader moves them up to EMBER_RISE above where they were built and EMBER_SWAY sideways: keep them unculled
+	var box := mi.mesh.get_aabb()
+	mi.custom_aabb = AABB(box.position - Vector3(EMBER_SWAY + 0.1, 0.1, EMBER_SWAY + 0.1),
+			box.size + Vector3(2.0 * EMBER_SWAY + 0.2, EMBER_RISE + 0.2, 2.0 * EMBER_SWAY + 0.2))
+	mi.material_override = ember_material(ember)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	holder.add_child(mi)
+	return mi
+
+
+static func ember_material(ember: Color = EMBER) -> ShaderMaterial:
+	if _ember_shader == null:
+		_ember_shader = Shader.new()
+		_ember_shader.code = EMBER_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = _ember_shader
+	m.set_shader_parameter("ember", ember)
+	m.set_shader_parameter("rise", EMBER_RISE)
+	m.set_shader_parameter("sway", EMBER_SWAY)
+	return m
+
+
+## Where EMBER_SHADER draws an ember's centre at shader time `t` (the same formula: tests, and anything that wants to
+## follow one): `base` is where it was built, `phase` its CUSTOM0.w, `rate` and `sd` its UV.
+static func ember_center(base: Vector3, phase: float, rate: float, sd: float, t: float) -> Vector3:
+	var life := fposmod(phase + t * rate, 1.0)
+	var w := sd * TAU
+	return base + Vector3((sin(t * 1.3 + w) * 0.6 + sin(t * 0.47 + w * 2.0) * 0.4) * EMBER_SWAY * life, life * EMBER_RISE,
+			(cos(t * 1.1 + w * 1.7) * 0.6 + cos(t * 0.53 + w) * 0.4) * EMBER_SWAY * life)
 
 
 ## Warm unshadowed omnis over the lava, spread by farthest-point picks (LIGHTS of them).

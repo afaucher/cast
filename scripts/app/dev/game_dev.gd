@@ -12,7 +12,8 @@ extends "res://scripts/app/game.gd"
 ## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer slice:
 ## scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built"; --sewer N in a crew too since "Phase 2 as
 ## built"); --sewer-floor --to-sewer head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built"); and (LavaDev.parse)
-## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md).
+## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md);
+## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z (frame sequences for flicker hunts: _take_shot_later).
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -26,6 +27,19 @@ func _parse_args() -> void:
 	super()
 	SewerDev.parse(OS.get_cmdline_user_args(), opts)
 	LavaDev.parse(OS.get_cmdline_user_args(), opts)
+	var args := OS.get_cmdline_user_args()
+	var i := args.find("--shot-seq")
+	if i >= 0 and i + 1 < args.size():
+		opts["shot_seq"] = maxi(1, int(args[i + 1]))
+	var k := args.find("--shot-every")
+	if k >= 0 and k + 1 < args.size():
+		opts["shot_every"] = maxi(1, int(args[k + 1]))
+	if args.has("--shadow-mask"):
+		opts["shadow_mask"] = true
+	var d := args.find("--cam-drift")
+	if d >= 0 and d + 1 < args.size():
+		var xz := args[d + 1].split(",")
+		opts["cam_drift"] = Vector3(float(xz[0]), 0.0, float(xz[1]) if xz.size() > 1 else 0.0)
 
 
 ## --sewer N: the sewer layout to build, or 0. In a crew (sewer phase 2) every window needs the same flag (run.ps1 -Crew
@@ -1155,3 +1169,44 @@ func _sewer_focus(at: Vector3) -> void:
 	mk.global_position = at
 	rig.target = mk
 	rig.snap()
+
+
+## --shot <png> --shot-seq N [--shot-every K] [--shadow-mask] [--cam-drift x,z]: a frame SEQUENCE instead of one picture,
+## for flicker hunts (diff the frames). After --shot-after it saves N frames K rendered frames apart as <png>_000.png ...
+## and prints the camera per frame. --shadow-mask also saves each frame again with the key light's shadow off
+## (<png>_000_ns.png: the pixels darker in the first are the shadow); --cam-drift moves the camera x,z world units per
+## saved frame, steadily, while the crew stands (2026-10-22 wall-shadow flicker hunt).
+func _take_shot_later(path: String, after: float) -> void:
+	if not opts.has("shot_seq"):
+		super(path, after)
+		return
+	await get_tree().create_timer(after).timeout
+	var drift := Vector3.ZERO
+	var mk: Node3D = null
+	if opts.has("cam_drift"):
+		drift = opts["cam_drift"]
+		mk = Node3D.new()
+		GameWorld.root.add_child(mk)
+		mk.global_position = rig.global_position - Vector3.UP * CameraRig.FOCUS_HEIGHT
+		rig.target = mk
+	var stem := path.get_basename()
+	var every := int(opts.get("shot_every", 1))
+	var key := find_child("KeyLight", true, false) as DirectionalLight3D
+	for n in int(opts["shot_seq"]):
+		for _f in every:
+			if mk != null:
+				mk.global_position += drift / float(every)
+				rig.global_position += drift / float(every)
+			await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("%s_%03d.png" % [stem, n])
+		if opts.has("shadow_mask") and key != null:
+			key.shadow_enabled = false
+			await RenderingServer.frame_post_draw
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("%s_%03d_ns.png" % [stem, n])
+			key.shadow_enabled = true
+		var cam := get_viewport().get_camera_3d()
+		print("[shot-seq] %03d  frame %d  cam %s  hero %s" % [n, Engine.get_frames_drawn(),
+			str(cam.global_position) if cam != null else "-", str(player.global_position) if player != null else "-"])
+	print("[game] screenshot sequence saved: ", stem, "_*.png")
+	get_tree().quit()

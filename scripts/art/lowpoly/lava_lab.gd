@@ -419,21 +419,10 @@ func _build_lava() -> void:
 		l.shadow_enabled = false
 		add_child(l)
 		l.position = Hex.to_world(pk) + Vector3(0, LAVA_Y + 2.2, 0)
-	# embers: little glowing chips drifting up over the lava (seeded)
-	var es := LowPoly.Soup.new(5, 0.0)
-	var erng := RandomNumberGenerator.new()
-	erng.seed = 77
-	for i in 110:
-		var cc: Vector2i = cells[erng.randi_range(0, cells.size() - 1)]
-		var p := Hex.to_world(cc) + Vector3(erng.randf_range(-0.8, 0.8), LAVA_Y + erng.randf_range(0.3, 3.2), erng.randf_range(-0.8, 0.8))
-		PropModels.box(es, Vector3.ONE * erng.randf_range(0.03, 0.06), p, PropModels.glow(look["ember"]), Vector3(erng.randf() * 90.0, erng.randf() * 90.0, 0))
-	var emi := MeshInstance3D.new()
-	emi.mesh = es.to_mesh()
-	var em := MonsterMaterial.make(0.0)
-	em.set_shader_parameter("glow_gain", 2.5)
-	emi.material_override = em
-	emi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(emi)
+	# embers: little glowing chips drifting up over the lava (seeded; LavaLook.embers moves them)
+	var emi := LavaLook.embers(cells, LAVA_Y, look["ember"], 110)
+	if emi != null:
+		add_child(emi)
 
 
 ## A glowing ring on the lava (a creature's wake, a hero's splash), flat at the surface.

@@ -105,7 +105,42 @@ func _check_drawing(map: HexMap, tag: String) -> void:
 		var name := code.get_slice("\n", 2).strip_edges()
 		check(sine.search(code) == null, "%s: no sine hash in the lava's patterns (%s)" % [tag, name])
 		check(not code.contains("h22") or code.contains("uvec2"), "%s: its h22 is an integer hash (%s)" % [tag, name])
+	_check_embers(look, tag)
 	holder.free()
+
+
+## The embers RISE (user playtest 2026-10-22: "The sparks from the lava seem frozen in the air"; they were a static mesh).
+## The motion is the vertex shader's (it can't run headless): every chip carries a climb rate > 0 and a phase, the shader
+## moves them by TIME, the bounds hold the climb (or they'd be culled mid-air), and the CPU mirror (LavaLook.ember_center)
+## climbs and starts again.
+func _check_embers(look: Node3D, tag: String) -> void:
+	var em := look.find_child("Embers", true, false) as MeshInstance3D
+	check(em != null, "%s: the cave has embers" % tag)
+	if em == null:
+		return
+	var code := (em.material_override as ShaderMaterial).shader.code
+	check(code.contains("TIME") and code.contains("CUSTOM0") and code.contains("VERTEX ="), "%s: the embers move in their vertex shader" % tag)
+	var arrays := em.mesh.surface_get_arrays(0)
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	var custom: PackedFloat32Array = arrays[Mesh.ARRAY_CUSTOM0]
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var slow := 1.0e9
+	var phases := {}
+	for i in uvs.size():
+		slow = minf(slow, uvs[i].x)
+		phases[snappedf(custom[i * 4 + 3], 0.01)] = true
+	check(uvs.size() == verts.size() and custom.size() == verts.size() * 4, "%s: every ember vertex has its rate and phase" % tag)
+	check(slow > 0.1, "%s: every ember climbs (slowest %.2f lives/s)" % [tag, slow])
+	check(phases.size() >= 20, "%s: the embers are spread through their climb (%d phases)" % [tag, phases.size()])
+	var top := -1.0e9
+	for v in verts:
+		top = maxf(top, v.y)
+	var box := em.custom_aabb
+	check(box.end.y >= top + LavaLook.EMBER_RISE, "%s: the embers' bounds hold their climb (%.1f >= %.1f)" % [tag, box.end.y, top + LavaLook.EMBER_RISE])
+	var a := LavaLook.ember_center(Vector3.ZERO, 0.1, 0.3, 0.5, 0.0)
+	var b := LavaLook.ember_center(Vector3.ZERO, 0.1, 0.3, 0.5, 1.0)
+	var c := LavaLook.ember_center(Vector3.ZERO, 0.1, 0.3, 0.5, 3.5)
+	check(b.y - a.y > 0.5 and c.y < b.y, "%s: an ember climbs (%.2f -> %.2f) and starts again (%.2f)" % [tag, a.y, b.y, c.y])
 
 
 func _gate_in(plan: SitePlan, rooms: Array) -> bool:
