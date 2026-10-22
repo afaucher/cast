@@ -519,7 +519,8 @@ in test C, so in the game it must not play over a new utterance (it is cut when 
 6. **Later, an output-aware gate:** while the Master bus peak (`AudioServer.get_bus_peak_volume_left_db`) is high,
    `SpeechGate` raises its threshold for that moment, so loud game sound isn't treated as voice. True echo
    cancellation (the game's own output as the reference signal) is the proper fix and also covers Steam voice chat; it
-   needs a native AEC (e.g. WebRTC's) and is out of scope here.
+   needs a native AEC (e.g. WebRTC's) and is out of scope here. Researched and measured on 2026-10-22:
+   `echo-cancellation-research.md` (the delay, drift and echo level on the user's PC, AEC vs ducking, a recommended path).
 7. **Keep the probe.** Every new cue goes through `mic_leak_probe.gd` (or a test made from it) before it ships: no cue
    may produce a cast alone, and the armed chime may never break one.
 8. **Beds and repeating cues (2026-10-21):** probe them under the whole utterance (probe D); no steady low tone in a bed
