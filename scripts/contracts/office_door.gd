@@ -1,10 +1,10 @@
 class_name OfficeDoor
 extends Node3D
 ## OFFICE DOOR (docs/design/exploration.md, "Decisions: map information, fog and doors", 2026-10-19): a door in
-## the ROOM WALL at a NARROW doorway, on Doorways' door line (the chord between the two jambs where the corridor's walls
-## end at the room), filling it jamb to jamb at the wall's height. Which doorways get one is DoorPlan's (SitePlan.doors);
-## SiteBuilder.spawn builds them. Its look is one of OfficeDoorModel's STYLES ("single" swing door with a wired-glass light
-## and a lever handle, "double" doors with push bars and a lit sign, a frosted glass "slider" suite front with a logo band).
+## the ROOM WALL at a NARROW doorway, on Doorways' door line (square across the corridor where its second wall ends: the
+## shortest span of the opening, user 2026-10-21), filling it jamb to jamb at the wall's height. Which doorways get one is
+## DoorPlan's (SitePlan.doors); SiteBuilder.spawn builds them. Its look is one of OfficeDoorModel's STYLES ("single" swing
+## door with a wired-glass light and a lever handle, "double" doors with push bars and a lit sign, a frosted glass "slider" suite front with a logo band).
 ##
 ## DECISIONS (user, 2026-10-19): "The double door is the feel I like." and "Gunmetal and tread plate.": the double door
 ## with a gunmetal frame is the default (DEFAULT_STYLE, OfficeDoorModel.FRAME), and a door's doorway gets the diamond

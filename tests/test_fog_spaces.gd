@@ -9,7 +9,7 @@ extends MonsterTestBase
 ## ASSERTED (what must hold):
 ##   1. one connected room is one space: every "room:N" tag's cells are in one space, and that space's floor is one
 ##      connected piece (the lava caves' archer isles, the fog link over the lava and the rim are left out: they share a
-##      space on purpose);
+##      space on purpose; so are the cells a door line puts on its hall side, Doorways.settle);
 ##   2. no untagged room bit (a cell only a climb reaches) ends up in a hall's or another room's space;
 ##   3. every doorway sits at its opening: on floor, at that floor's height, next to a corridor cell and a cell of its room.
 ##   4b. no room has a neck (WAIST below): the generator's opening keeps lobed rooms one blob;
@@ -230,12 +230,18 @@ static func top(m: HexMap, c: Vector2i) -> Vector3:
 func _audit(label: String, m: HexMap, skip: Dictionary) -> Array:
 	var fog := RoomFog.build(m)
 	var cells := standable(m, fog, skip)
+	# (the cells a door line puts in the space on its own side, Doorways.settle: a door stands square across its corridor
+	# where the corridor's second wall ends, 2026-10-21, so a bit of a room can be on the hall side of it, or the reverse)
+	var raw := Doorways.spaces(m)
+	var settled := {}
+	for c: Vector2i in Doorways.settle(m, (raw["cell_space"] as Dictionary).duplicate(), Doorways.find(m, raw)):
+		settled[c] = true
 	# 1. a room is one space, in one piece
 	var frag: Array[String] = []
 	var rooms := {}
 	for c: Vector2i in m.cells:
 		var tag: String = m.cells[c].tag
-		if tag.begins_with("room:") and not skip.has(c):
+		if tag.begins_with("room:") and not skip.has(c) and not settled.has(c):
 			if not rooms.has(tag):
 				rooms[tag] = {}
 			(rooms[tag] as Dictionary)[fog.space_of_cell(c)] = true
@@ -254,7 +260,7 @@ func _audit(label: String, m: HexMap, skip: Dictionary) -> Array:
 	var stray: Array[String] = []
 	for c: Vector2i in m.cells:
 		var cell: HexMap.Cell = m.cells[c]
-		if cell.type == HexMap.Tile.WALL or cell.tag != "" or not fog.cell_space.has(c):
+		if cell.type == HexMap.Tile.WALL or cell.tag != "" or not fog.cell_space.has(c) or settled.has(c):
 			continue
 		var votes := {}
 		for d in Hex.DIRS:

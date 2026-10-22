@@ -145,6 +145,13 @@ Spells stay mainly about combat. These are small extras that cost little:
   stands on the chord between the corridor's two jambs, at the wall's height. Built from hex parts they "looked even
   more off". The **double door** (cream leaves, push bars, lit green sign) with a **gunmetal** frame is the default.
   Only narrow corridors get doors; wide hallways always meet their room open; opening a door is a noise.
+- **Door span (2026-10-21):** the user: "normal doors would be placed perpendicular to the hall, or at least prioritize
+  the shortest span". The jambs' chord ran diagonally across flared or oblique mouths (up to 5.2 across a 3.0
+  corridor). A door now stands **square across the corridor** (its width, 3.0, the shortest cut) at the first spot from
+  the room where both corridor walls run on past it: one jamb where the corridor's second wall ends, the other on the
+  opposite corridor wall (both on the room's wall line where the room meets the corridor square on). Fog spaces follow
+  the door line (`Doorways.settle`), so the floor in front of a shut door is the room's. Sheet:
+  `door_spans/sheet.png`; `tests/test_door_span.gd` holds it over 90 floors.
 - **Doorway floor (2026-10-19):** the cells the door line passes through get a **diamond tread-plate threshold**, with
   the room's floor on one side and the corridor's on the other. Open archways keep their floors as they are, for now.
 - **Fog look (2026-10-19, played in the fog lab):** look **A, black void**: unknown spaces are the background, next
