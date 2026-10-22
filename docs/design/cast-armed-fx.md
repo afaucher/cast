@@ -18,6 +18,46 @@ voice channel of its treatment C, cut down to the moment the user asked for: the
 
 ![comparison sheet](cast_armed/sheet.png)
 
+## Playtest: option C in the game (2026-10-22)
+
+**The user (2026-10-22):** "Let's play test C, but I'm not sure about if the circle should change color or not."
+
+So option C (the floor rune and the hand glow) is wired into the game for **your own hero**, with a live A/B on the colour
+question. Nothing goes over the network yet: other players see only the release, as before.
+
+- **The code:** `scripts/fx/cast_tell.gd` (`CastTell`). `game.gd` attaches one per floor, after `MoveFeelTag`.
+- **What drives it:** the real voice pipeline.
+  - `VoiceCaster.trigger_heard` arms it.
+  - `spell_spoken` recognises the spell.
+  - `Hero.spell_cast` releases it. Online the release waits `NetCasts.LEAD`, until the cast lands.
+  - A spell word with no cast is a refusal (cooldown, out of components, not slotted), and so is a repeat the recognizer
+    `ignored`: the rune cracks.
+  - `spell_fizzled` cracks it.
+  - The new `VoiceCaster.trigger_dropped` (from `Incantation.trigger_dropped`) fades it quietly. It fires for a "cast"
+    buried in chatter or whose window runs out with no fizzle.
+  - A safety timeout of 2.8 s fades a tell that no event ends.
+- **The A/B modes:**
+  - **colour:** the rune floods with the spell's colour on recognition, its chalk turns solid, and the release is in colour.
+  - **neutral:** the rune stays chalk white until it is gone. Only the release flash is coloured: the hand flash and the
+    shock ring.
+  - **off:** today's game; nothing is built or drawn.
+- **Switching modes:**
+  - `--cast-tell colour|neutral|off` sets the mode. Boot reads it once per run, and it is a menu flag, so the menu still
+    opens.
+  - F11 in the gym cycles colour, neutral and off. The corner dev tag and the gym panel's status line show the mode.
+  - The playtest default is **colour**.
+- **Solo timing:** the spell word and the cast arrive in the same frame, so the colour mode's flood shows mostly in the
+  0.3 s release. Online the flood gets the 0.2 s before the cast lands.
+- **Cost:** two persistent quads (the rune decal and the hand glow). They are built on the first trigger and hidden when
+  idle, and the shader parameters are set by StringName, so nothing is allocated per frame. The shock ring at the release
+  is the existing `Fx.ring`.
+- **Draw order:** the rune draws at render priority -2, under the gym's hit-area overlay (10).
+- **Colours:** the spell colours are converted to linear before they reach the shader.
+- **The hand glow:** it sits on the held component, which is in the free hand for all three heroes. Without a component it
+  sits on Wick's wand tip, else at chest height.
+- **What it doesn't touch:** hero posing, and audio ducking.
+- **Test:** `tests/test_cast_tell.gd` checks both modes, off, the real typed pipeline and Incantation's drop.
+
 ## 1. What has to be true
 
 - **It reads at the game camera.** That is yaw 45, pitch -56, ortho 24 at 1920x1080, so 45 px per world unit. Heroes are
