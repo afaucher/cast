@@ -449,6 +449,9 @@ The user: **"Gasket's primary attack is better. What about the secondary?"** Mea
 The user played the 7-frame whirl: **"It's too fast! It doesn't read as a spin it is so fast."** (The table above is that
 first version.) Now:
 
+**Smash decided (user, 2026-10-22): "One handed smash is good and the disk size is perfect."** The one-handed
+overhead smash and its 0.6 disc stand.
+
 **Speed decided (user, 2026-10-22, after trying 20/25/30 in the gym with F10): "25 is fine."** 25 frames stays the
 default. The spin radius (2.1 vs 1.9) is still open.
 

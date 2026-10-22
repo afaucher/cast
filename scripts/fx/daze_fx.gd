@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ##   DazeFx.stars(top)            # a ring of little yellow stars to hang over a head at height `top`; the hero spins it
 ##   DazeFx.spin(stars, t)        # turn and bob the ring at time t
-##   DazeFx.callout(actor, top)   # the "*bonk*" word and a few sparks over the head, once, when the daze lands
+##   DazeFx.callout(actor, top)   # a few sparks over the head, once, when the daze lands (the "*bonk*" word is gone)
 ##
 ## The hero's model sways while the stars spin (Hero._process).
 
@@ -51,12 +51,12 @@ static func spin(ring: Node3D, t: float) -> void:
 		i += 1
 
 
-## The callout as the daze lands: "*bonk*" rising off the head, and a small spray of star-coloured sparks.
+## The callout as the daze lands: a small spray of star-coloured sparks off the head.
 static func callout(actor: Node3D, top: float) -> void:
 	if actor == null or not actor.is_inside_tree():
 		return
 	var head := actor.global_position + Vector3(0, top + 0.5, 0)
-	Fx.number(head, CALLOUT, CALLOUT_COLOR, 0.8)
+	# (no "*bonk*" word any more, the sparks and the stars carry it: user, 2026-10-22)
 	var sparks: Array[Color] = [STAR_COLOR, Color(1.0, 1.0, 0.85)]
 	Fx.burst(head - Vector3(0, 0.3, 0), sparks, 10, 2.2, 0.06, 0.4, 3.0, Vector3.UP, 110.0)
 
