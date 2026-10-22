@@ -33,8 +33,8 @@ triangles (was 1268). Checked:
   Measured from the head's vertices against his shoulder and upper-arm boulders: at rest and through the slam the jaw's
   back corner touches the shoulder boulder by about 1 cm (hidden: stone under stone). At the peak of the bowl's
   follow-through (`bowl_a` = `BOWL_FOLLOW`, the right arm swung up and in by `BOWL_IN` 0.45) the upper arm passes about
-  3.5 cm into the jaw's front corner for a few frames, with the arm in front of the chin. `BOWL_IN` 0.30 clears it; left
-  as is for the animation's owner to decide.
+  3.5 cm into the jaw's front corner for a few frames, with the arm in front of the chin. `BOWL_IN` 0.30 clears it. **Left
+  as is (user, 2026-10-22: "Leave the small clip, it's fine").**
 - **The garage's "after" face scuffs** (`FACE_SCUFFS` in `scripts/ui/backdrops/after_job.gd`, fitted to the face by
   `face_fit`): with the head tipped back, Rebar's old plaster spot landed on the end of his mouth. It moved onto the jaw
   beside it (at 0.22, -0.10, a strip 0.14 long); the soot smudge sits on the chin plate. `test_menu_backdrops` passes.
