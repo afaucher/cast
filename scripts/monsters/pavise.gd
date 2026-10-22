@@ -55,7 +55,8 @@ const BOLT_RANGE := 20.0
 const BOLT_SPEED := 30.0
 const BOLT_HEIGHT := 1.25          ## the bolt flies this high over the feet (a +2 ledge, 1.0, does not stop it)
 const AIM_TIME := 1.2
-const TRACK_TIME := 0.8            ## of AIM_TIME: the line tracks, then locks for the rest
+const SHOW_AIM_LINE := false       ## the red aim line on the floor (removed by the user, 2026-10-22; _update_line)
+const TRACK_TIME := 0.8           ## of AIM_TIME: the line tracks, then locks for the rest
 const AIM_START_DEG := 15.0        ## the mark within this of its facing before it starts aiming
 const LOCK_MAX_DEG := 20.0         ## the locked line stays within this of the shield's facing (it shoots through the notch)
 const RELOAD_TIME := 2.0
@@ -703,9 +704,15 @@ func _update_visual(delta: float) -> void:
 	_update_line()
 
 
-## The floor line: dashed toward the tracked victim as this screen shows it, solid along the locked line.
+## The floor line: dashed toward the tracked victim as this screen shows it, solid along the locked line. OFF (user,
+## 2026-10-22: "Lets remove the laser on the pavise"): the aim reads from the crossbowman's own pose; SHOW_AIM_LINE
+## brings it back.
 func _update_line() -> void:
 	if _fx == null or dead:
+		return
+	if not SHOW_AIM_LINE:
+		if _fx.showing():
+			_fx.clear()
 		return
 	if fire_at >= 0.0 and lock_dir != Vector3.ZERO:
 		_fx.aim(lock_origin, lock_origin + lock_dir * _line_reach(lock_origin, lock_dir, _lock_len), true)
