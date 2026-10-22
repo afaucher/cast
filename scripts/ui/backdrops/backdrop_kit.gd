@@ -192,7 +192,7 @@ static func decal_text(text: String, font_size: int, col: Color, pixel: float = 
 
 
 ## Pixel-tube neon lettering, one mesh per letter so they flicker (and die) one by one. Faces +Z.
-## `dead`: indices of burnt-out letters. Returns the root; width = text_width(text, pixel).
+## `dead`: indices of burnt-out letters. Returns the root; width = text_width(text, pixel). Letter i's mesh is "Letter<i>".
 static func neon(text: String, col: Color, pixel: float = 0.08, dead: Array = [], backing: bool = true) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Neon"
@@ -219,6 +219,7 @@ static func neon(text: String, col: Color, pixel: float = 0.08, dead: Array = []
 					var p := Vector3((float(c) - 2.0) * pixel, (3.0 - float(r)) * pixel, 0)
 					box(ls, Vector3(pixel * 1.02, pixel * 1.02, 0.05), p, glow(Color(0.25, 0.08, 0.05) if is_dead else col))
 		var mi := MeshInstance3D.new()
+		mi.name = "Letter%d" % i   # (by its index in `text`: the garage finds the dead H of "WE FIX HEXES" by it)
 		mi.mesh = ls.to_mesh(0.0)
 		var m := MonsterMaterial.make(0.0)
 		m.set_shader_parameter("glow_gain", 0.1 if is_dead else 2.2)

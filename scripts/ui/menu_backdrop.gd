@@ -20,6 +20,12 @@ extends Node3D
 ## at each hero's box (the model's own mesh bounds, in its space; the nearest hit wins), so a click on a hero picks it, and
 ## `set_hover(id)` gives the hero under the pointer a soft warm outline. No physics: plain ray-box maths.
 ##
+## THE GYM DOOR (user, 2026-10-22: "a way to trigger the gym from the main menu. Maybe clicking on the H in HEXES"): the neon
+## "WE FIX HEXES" over the van has a burnt-out H (`GYM_LETTER`). `door_at(screen_point)` casts the same ray at that letter's
+## box (its mesh bounds, a tube's width wider, in its own space), and `set_door_hover(true)` makes the dead tube sputter back
+## to life while the pointer is on it. Nothing else shows: no outline, no cursor, no words. The main menu opens the test gym
+## on a click (MainMenu.open_gym).
+##
 ## MOODS (`mood`, `set_mood()`):
 ##   dawn   cool light through the ceiling grate over warm work lights and torches (the default)
 ##   night  no grate light, a colour grade (cool, dark), the van's headlights on, the gate runs hotter
@@ -50,6 +56,13 @@ const HOVER_OUTLINE_W := 0.06        ## world units (the default is 0.035 under 
 const HOVER_GLOW := Color(1.0, 0.78, 0.5)
 const HOVER_GLOW_STRENGTH := 0.1
 const STEP_TIME := 0.85              ## seconds the crew takes to walk to new spots when the pick changes
+## The gym door: the neon's text, and the burnt-out letter that is the door (the H of HEXES).
+const HEXES_SIGN := "WE FIX HEXES"
+const HEXES_PIXEL := 0.036           ## the sign's tube size (Kit.neon's `pixel`)
+const GYM_LETTER := 7
+const DOOR_PAD := 1.5                ## the door's box: the letter's mesh bounds grown by this many tubes on each side
+const DOOR_GAIN := 4.5               ## the dead H's glow while it sputters (a live letter runs at 2.2, a dead one at 0.1)
+const DEAD_GAIN := 0.1
 
 const WALL_Z := -5.0                 ## the back wall's front face
 const WALL_X := 12.5                 ## side walls at +-this
@@ -139,6 +152,11 @@ var hovered := ""
 var _spots := {}                      ## id -> where the hero stands (or is walking to)
 var _boxes := {}                      ## id -> the model's mesh bounds, in its own space
 var _steps := {}                      ## id -> the Tween walking it to a new spot
+## The pointer is on the gym door (the dead H sputters).
+var door_hovered := false
+var _door: MeshInstance3D             ## the dead H's mesh
+var _door_box := AABB()               ## ... its box for picking, in its own space
+var _door_t := 0.0
 
 
 func _ready() -> void:
@@ -185,6 +203,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_place_camera(_t)
+	if door_hovered:
+		_door_t += delta
+		_door_mat().set_shader_parameter("glow_gain", door_gain(_door_t))
 
 
 ## The mood to show: the dev flag, else the morning after a bad job, else night by the local clock, else dawn.
@@ -312,6 +333,52 @@ func is_outlined(id: String) -> bool:
 		if mat != null and mat.has_meta(&"hover_was"):
 			return true
 	return false
+
+
+## Whether `screen_point` (viewport coordinates) is on the gym door, the dead H of "WE FIX HEXES": the camera's ray against the
+## letter's box (in its own space), as `hero_at` does for the heroes. Works at any window size or aspect (the camera's own
+## projection) and in every mood (the sign is the same in all three).
+func door_at(screen_point: Vector2) -> bool:
+	if camera == null or not camera.is_inside_tree() or _door == null or not _door.is_inside_tree():
+		return false
+	var inv := _door.global_transform.affine_inverse()
+	return _door_box.intersects_ray(inv * camera.project_ray_origin(screen_point), inv.basis * camera.project_ray_normal(screen_point)) != null
+
+
+## Where the gym door is on screen (the middle of the H), for tests and screenshots.
+func door_screen_point() -> Vector2:
+	if camera == null or _door == null:
+		return Vector2(-1, -1)
+	return camera.unproject_position(_door.global_transform * _door_box.get_center())
+
+
+## The pointer on the gym door: the dead H sputters back to life (and goes dark again when it leaves). Only the letter changes.
+func set_door_hover(on: bool) -> void:
+	if on == door_hovered or _door == null:
+		return
+	door_hovered = on
+	_door_t = 0.0
+	_door_mat().set_shader_parameter("glow_gain", door_gain(0.0) if on else DEAD_GAIN)
+
+
+## The dead H's glow `t` seconds after the pointer came onto it: a tube catching (a dark beat, a stutter, then a buzz with a
+## dropout now and then).
+static func door_gain(t: float) -> float:
+	if t < 0.06 or (t > 0.12 and t < 0.2):
+		return DEAD_GAIN
+	if t < 0.35:
+		return DOOR_GAIN * 0.6
+	var dropout := fmod(t * 2.7, 3.1) < 0.12
+	return DEAD_GAIN * 4.0 if dropout else DOOR_GAIN + 0.3 * sin(t * 41.0)
+
+
+## The glow the dead H shows now (tests).
+func door_glow() -> float:
+	return float(_door_mat().get_shader_parameter("glow_gain")) if _door != null else 0.0
+
+
+func _door_mat() -> ShaderMaterial:
+	return _door.material_override as ShaderMaterial
 
 
 ## The model of a hero id.
@@ -579,8 +646,13 @@ func _build_dressing() -> void:
 			_corn_sign_label = ch as Label3D
 	var neon := Kit.neon("CAST", Color(1.0, 0.62, 0.15), 0.11, [], true)
 	Kit.put(self, neon, Vector3(1.5, 5.4, WALL_Z + 0.12))
-	var neon2 := Kit.neon("WE FIX HEXES", Color(1.0, 0.86, 0.6), 0.036, [7], false)
+	var neon2 := Kit.neon(HEXES_SIGN, Color(1.0, 0.86, 0.6), HEXES_PIXEL, [GYM_LETTER], false)
 	Kit.put(self, neon2, Vector3(1.5, 4.55, WALL_Z + 0.12))
+	neon2.name = "HexesSign"
+	# the gym door: the burnt-out H (its box a little wider than the tubes, so a pointer near enough finds it)
+	_door = neon2.get_node_or_null("Letter%d" % GYM_LETTER) as MeshInstance3D
+	if _door != null:
+		_door_box = _door.get_aabb().grow(HEXES_PIXEL * DOOR_PAD)
 	var open_sign := Kit.neon("OPEN 24/7", Color(1.0, 0.18, 0.2), 0.06, [5], true)
 	Kit.put(self, open_sign, Vector3(-WALL_X + 0.1, 3.9, 4.0), 90.0)
 	# workbench with a monitor, barrels, crates, mail

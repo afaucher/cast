@@ -31,8 +31,9 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
   dummies, the movement course and a walk of every floor material, office rooms with doors, a hellgate, a pool and a moat with
   sharks, a sewer cluster with its gator and live wire, a lava cave, the elevator) and a dev panel: switch hero (F2), spawn any
   monster, prop, explosive, staff, spell component, gate or decor at the cursor (x1/x5/x10), infinite components, cooldowns
-  off, monster AI off (F4), god mode (F8), hit areas (F3), a hit log; F9 hides the panel. Ignored in a crew. See
-  `docs/design/test-gym.md`.
+  off, monster AI off (F4), god mode (F8), hit areas (F3), a hit log; F9 hides the panel. Ignored in a crew. Without a
+  command line (an exported build too): on the main menu, click the burnt-out **H** of the "WE FIX HEXES" neon over the van
+  (solo only; Esc > Main menu comes back). See `docs/design/test-gym.md`.
 
 The game opens on the **main menu** (arrows or Tab and Enter, or the mouse; Esc goes back):
 

@@ -1,4 +1,4 @@
-# Test gym (`--gym`)
+# Test gym (`--gym`, or the garage's dead H)
 
 A solo dev mode for trying any character, spell, monster or environment, and for combat tests, on one fixed map. User,
 2026-10-22: "a little test gym mode. You can directly switch which character you are. There is a button to spawn a thing of
@@ -14,6 +14,22 @@ and "you should be able to spawn spell components or have an infinite supply".
 .\run.ps1 --gym --spells heal,corn --no-mic           # other starting slots (default fireball, heal, damp, tentacles)
 .\run.ps1 --gym --no-fog --no-mic                     # the whole map shown
 ```
+
+### From the main menu (any build)
+
+User, 2026-10-22: "Lets add a way to trigger the gym from the main menu. Maybe clicking on the H in HEXES in the garage?"
+The neon "WE FIX HEXES" on the garage's back wall, over the van, has a burnt-out **H**. Click it: the gym opens exactly as
+`--gym` opens it (solo, the hero picked in the garage, the gym's spells and seed, the voice as set up, the default movement
+profile), with no command line, so it works in an exported build. The pointer on the H makes the dead tube sputter back to
+life (red, flickering); nothing else gives it away (no outline, no hand pointer, no words: it is the garage's secret, not a
+menu row). Esc > **Main menu** goes back to the menu; Abandon contract / F5 go to the job board, as from `--gym`.
+
+It does nothing while a crew is opening or open (Start a job waiting for its lobby, hosting, joined) or under a sub-screen:
+the gym is solo only. In code: `MenuBackdrop.door_at` (the camera's ray against the letter's box, as `hero_at` picks the
+heroes: any window size or aspect, every mood), `MainMenu.open_gym`, which hands the game the flag (`game.gd` `menu_args`,
+read by `launch_args()` in `_parse_args` as if typed; `reset_flow` and the menu forget it). `--menu-hover door` shows the
+sputter for a screenshot. `tests/test_gym_door.gd` checks the ray at five window sizes in all three moods, the hover, the
+click, the crew lock (a real in-process crew) and the game it opens.
 
 The gym is floor 1 of a contract rolled from its own seed (`GymMap.SEED`, unless `--seed` says otherwise), so the HUD, the
 work order, the elevator (E: down rebuilds the gym as floor 2, out ends the job), the voice and every key work as on a real

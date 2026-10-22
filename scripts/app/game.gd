@@ -108,7 +108,8 @@ extends Node3D
 ##                       F6 / F7 switch them live). In a crew the host's profile is everyone's.
 ##   --gym [--gym-tour <dir>]  dev, solo: the test gym (GymMap's one map of every environment, GymDev's panel: switch hero,
 ##                       spawn anything, infinite components, AI / god / hit-area toggles, a hit log; docs/design/test-gym.md).
-##                       Ignored in a crew. --gym-tour saves its screenshot sheet to <dir> and quits
+##                       Ignored in a crew. --gym-tour saves its screenshot sheet to <dir> and quits. The main menu
+##                       hands --gym in too (the garage's dead H: MainMenu.open_gym, `menu_args`), with no command line
 ##   --cast-tell off|colour|neutral  the "cast armed" tell on your own hero (CastTell, docs/design/cast-armed-fx.md, playtest):
 ##                       a rune under your feet and a glow at your hand from "cast" until the spell goes off; colour (the
 ##                       default) floods it with the spell's colour on recognition, neutral keeps it white until the release,
@@ -179,6 +180,9 @@ static var _fade_in := false        ## the next scene fades in from black (arriv
 static var _board_seed := -1        ## the job board's seed while a contract is being set up, so backing out of the
                                     ## license screen shows the same three offers; -1 = deal a new board
 static var _board_note := ""        ## online host: the line the next board shows everyone ("c1 abandoned the job")
+## Flags the main menu adds to the command line for the game scenes that follow (the garage's gym door: ["--gym"], so the
+## gym opens in an exported build with no command line). `_parse_args` reads `launch_args()`; reset_flow forgets them.
+static var menu_args := PackedStringArray()
 
 var opts := {}
 ## Test seam for "Abandon contract" / "Main menu": called with "" (reload the board) or a scene path.
@@ -317,6 +321,14 @@ static func reset_flow() -> void:
 	_dev_released = false
 	_fade_in = false
 	_board_note = ""
+	menu_args = PackedStringArray()
+
+
+## The command line's user args plus the flags the main menu asked for (menu_args).
+static func launch_args() -> PackedStringArray:
+	var args := OS.get_cmdline_user_args()
+	args.append_array(menu_args)
+	return args
 
 
 func _exit_tree() -> void:
@@ -358,7 +370,7 @@ func _exit_tree() -> void:
 
 
 func _parse_args() -> void:
-	var args := OS.get_cmdline_user_args()
+	var args := launch_args()
 	for i in args.size():
 		var a: String = args[i]
 		var nxt: String = args[i + 1] if i + 1 < args.size() else ""

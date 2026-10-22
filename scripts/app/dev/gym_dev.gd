@@ -21,6 +21,7 @@ extends Node
 ## grounded_anim spin through SpinSweep.DEV_SPEEDS. F11 cycles the cast tell's mode (colour / neutral / off: CastTell).
 
 const GAME := preload("res://scripts/app/game.gd")
+const FLAG := "--gym"              ## the command line's flag; the main menu's gym door (the garage's dead H) hands it in too
 const DEFAULT_SPELLS := "fireball,heal,damp,tentacles"
 const STAGE_DUMMIES := 3
 const PACK_BUDGET := 14
@@ -49,9 +50,10 @@ var _stats_t := 0.0
 
 
 ## --gym: the flag, the gym's spells (the license is skipped) and its seed, unless the command line names them. Not in a
-## crew: the gym is solo only (GameDev refuses it in a shared run).
+## crew: the gym is solo only (GameDev refuses it in a shared run). `args` is game.gd's launch_args(): the command line plus
+## what the main menu asked for (MainMenu.open_gym), so an exported build opens it with no command line at all.
 static func parse(args: PackedStringArray, opts: Dictionary) -> void:
-	if not args.has("--gym"):
+	if not args.has(FLAG):
 		return
 	opts["gym"] = true
 	var crew := args.has("--net-host") or args.has("--net-join") or args.has("--net-wait")

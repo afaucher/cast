@@ -22,10 +22,15 @@ extends Node
 ## menu is up joins at once (nothing to lose here; in a job the game asks first, M7).
 ## Keyboard (arrows / Tab / Enter) and mouse; Esc voids a sub-screen's form, which then goes back here (FormVoid,
 ## form-rules.md §6). On this screen Esc does nothing: the main menu has nothing to void. Everything is built in code.
+## The garage hides a door (user, 2026-10-22): a click on the burnt-out H of the "WE FIX HEXES" neon (the backdrop's `door_at`;
+## the pointer on it makes the dead tube sputter, nothing more) opens the TEST GYM solo, as `--gym` does (open_gym: the picked
+## hero, the gym's spells, the voice as set up; docs/design/test-gym.md). Like the pick, it is locked while a crew is opening or
+## open, and off the main screen.
 ##
 ## Dev flags (after `--`; see Boot): --no-mic, --menu-screen main|voice|settings, --menu-shot <png>
 ## [--menu-after s], --menu-say <text>, --menu-void (void the sub-screen just before the shot and hold the stamp),
-## --backdrop-hero <id> (pick this hero for this run, unsaved), --menu-hover <id> (outline that hero, for a picture),
+## --backdrop-hero <id> (pick this hero for this run, unsaved), --menu-hover <id> (outline that hero, or `door`: the gym
+## door's sputter, for a picture),
 ## --menu-focus-file (focus the personnel file's NAME line, for a picture);
 ## online: --net-join <ip[:port]> (README "Online play").
 
@@ -93,6 +98,7 @@ var _strip: Control = null   ## the blank strip above the ads (the notice, or th
 
 func _ready() -> void:
 	InputSetup.ensure_actions()
+	GAME_SCRIPT.menu_args = PackedStringArray()   # (back on the menu: the gym door's flag is spent; a job started here is a job)
 	var args := OS.get_cmdline_user_args()
 	if args.has("--no-mic"):
 		use_mic = false
@@ -116,7 +122,9 @@ func _ready() -> void:
 	if backdrop_enabled and DisplayServer.get_name() != "headless":
 		_fade_in()
 	var hover := Boot.arg_value(args, "--menu-hover")
-	if hover != "" and backdrop != null:
+	if hover == "door" and backdrop != null:
+		backdrop.set_door_hover.call_deferred(true)   # (dev: a screenshot of the gym door's sputter)
+	elif hover != "" and backdrop != null:
 		backdrop.set_hover.call_deferred(hover)   # (dev: a screenshot of the hover outline)
 	var shot := Boot.arg_value(args, "--menu-shot")
 	if shot != "":
@@ -129,11 +137,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		void_screen()
 		get_viewport().set_input_as_handled()
 		return
-	# The garage: a click on a hero picks it (the paper's own rows took their clicks already).
+	# The garage: a click on a hero picks it, one on the dead H opens the gym (the paper's own rows took their clicks already).
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		var id := garage_hero_at((event as InputEventMouseButton).position)
+		var at := (event as InputEventMouseButton).position
+		var id := garage_hero_at(at)
 		if id != "":
 			pick_hero(id)
+			get_viewport().set_input_as_handled()
+		elif garage_door_at(at) and open_gym():
 			get_viewport().set_input_as_handled()
 		return
 	# Without the personnel file, keyboard and controller pick here: Left / Right on the menu step through the crew.
@@ -174,10 +185,19 @@ func _over_paper(point: Vector2) -> bool:
 	return false
 
 
+## Whether `point` is on the garage's gym door (the dead H of "WE FIX HEXES"), and it can open now (as `can_pick`). A hero
+## in front of it wins.
+func garage_door_at(point: Vector2) -> bool:
+	if backdrop == null or not can_pick() or _over_paper(point) or backdrop.hero_at(point) != "":
+		return false
+	return backdrop.door_at(point)
+
+
 func _hover_at(point: Vector2) -> void:
 	var id := garage_hero_at(point)
 	if backdrop != null:
 		backdrop.set_hover(id)
+		backdrop.set_door_hover(id == "" and garage_door_at(point))   # (the H sputters; the pointer stays an arrow)
 	_set_pointer(id != "")
 
 
@@ -248,6 +268,21 @@ func start_game() -> void:
 	_play_solo("%s: solo only" % NetSession.STEAM_OFF)
 
 
+## The garage's gym door: the test gym, solo, exactly as `--gym` opens it (the menu hands the game the flag: game.gd
+## `menu_args`, so it works in an exported build with no command line): the picked hero, the gym's own spells and seed, the
+## voice and settings as set up here, the default movement profile. The pause menu's "Main menu" comes back here (and
+## forgets the flag: reset_flow); "Abandon contract" / F5 go to the job board as from `--gym`. False (and nothing happens)
+## while a crew is opening or open, or off the main screen: the gym is solo only.
+func open_gym() -> bool:
+	if not can_pick() or _entering:
+		return false
+	Session.offline_note = ""
+	GAME_SCRIPT.reset_flow()
+	GAME_SCRIPT.menu_args = PackedStringArray([GymDev.FLAG])
+	_go(Boot.GAME_SCENE)
+	return true
+
+
 ## The job board, offline. `note` says why it's solo (the board shows it).
 func _play_solo(note: String) -> void:
 	Session.offline_note = note
@@ -287,6 +322,7 @@ func show_screen(which: String) -> void:
 	_close_sub_screens()
 	if backdrop != null:
 		backdrop.set_hover("")
+		backdrop.set_door_hover(false)
 	_set_pointer(false)
 	match which:
 		"voice":

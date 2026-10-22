@@ -439,7 +439,10 @@ environment from the generator's pieces (hex rooms and halls cut like DungeonGen
 record in CaveGen's shape, PoolGeo's pools) and plans it with the real planners (fixed themes, no packs); `GymDev`
 (`scripts/app/dev/gym_dev.gd`, with `scripts/app/dev/gym/`) is its driver: the character switch (`Hero.become`), the spawn
 panel built from the registries (`GymSpawns`), the tools and the hit log. GameDev swaps it in at `_dev_floor`; nothing in the
-generator calls it (the golden floors do not move). `tests/test_gym.gd`.
+generator calls it (the golden floors do not move). `tests/test_gym.gd`. The main menu opens it too, with no command line
+(any build): a click on the dead H of the garage's "WE FIX HEXES" neon (`MenuBackdrop.door_at`, `MainMenu.open_gym`) puts
+`--gym` in `game.gd`'s `menu_args`, which `launch_args()` adds to the command line for `_parse_args` until `reset_flow`;
+`tests/test_gym_door.gd`.
 
 Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
 To keep that clean:

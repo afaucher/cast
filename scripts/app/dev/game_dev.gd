@@ -28,10 +28,10 @@ var gym: GymDev = null                   ## --gym: the test gym's driver (its pa
 
 func _parse_args() -> void:
 	super()
-	SewerDev.parse(OS.get_cmdline_user_args(), opts)
-	GymDev.parse(OS.get_cmdline_user_args(), opts)
-	LavaDev.parse(OS.get_cmdline_user_args(), opts)
-	var args := OS.get_cmdline_user_args()
+	var args := launch_args()   # (the command line, plus the main menu's gym door: menu_args)
+	SewerDev.parse(args, opts)
+	GymDev.parse(args, opts)
+	LavaDev.parse(args, opts)
 	var i := args.find("--shot-seq")
 	if i >= 0 and i + 1 < args.size():
 		opts["shot_seq"] = maxi(1, int(args[i + 1]))

@@ -10,7 +10,8 @@ extends Node
 ##   --menu-after <s>    menu: seconds before --menu-shot fires (default 1.5)
 ##   --menu-say <text>   menu: inject this text into the voice setup's "Try it" (screenshots)
 ##   --menu-void         menu: void the open sub-screen just before --menu-shot, holding the VOID stamp (screenshots)
-##   --menu-hover <h>    menu: outline this hero in the garage as if the pointer were on it (screenshots)
+##   --menu-hover <h>    menu: outline this hero in the garage as if the pointer were on it, or `door`: the gym door's
+##                       sputter (the neon's dead H; screenshots)
 ##   --menu-focus-file   menu: open with the personnel file's NAME line in focus (screenshots)
 ##   --backdrop-mood <m> menu: force the garage backdrop's mood, dawn | night | after (default: from the clock and the last contract)
 ##   --backdrop-hero <h> menu: pick this hero for this run without saving it (it stands in front in the garage and the
