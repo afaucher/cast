@@ -434,6 +434,12 @@ map as it is). `NetFloor`'s map text has a `cave=` line and skips the lava cells
 after activation and while a crust lasts; a late joiner gets the live crust sources in the game's part of the join snapshot.
 `tests/test_lava_gen.gd`, `test_net_lava.gd`, `test_lava_cave.gd`; `docs/design/lava-playtest.md`, "As built: caves on real
 floors". The hand-authored prototype caves (`--lava-cave N`, `LavaCave`) run on the same `LavaField` and lava rule.
+**The test gym (`--gym`, dev, solo; `docs/design/test-gym.md`):** `GymMap` (`scripts/world/gym/`) builds one fixed map of every
+environment from the generator's pieces (hex rooms and halls cut like DungeonGen's, a sewer record SewerPlanner floods, a cave
+record in CaveGen's shape, PoolGeo's pools) and plans it with the real planners (fixed themes, no packs); `GymDev`
+(`scripts/app/dev/gym_dev.gd`, with `scripts/app/dev/gym/`) is its driver: the character switch (`Hero.become`), the spawn
+panel built from the registries (`GymSpawns`), the tools and the hit log. GameDev swaps it in at `_dev_floor`; nothing in the
+generator calls it (the golden floors do not move). `tests/test_gym.gd`.
 
 Midpoint walls (see `HexMap` above): the generator rings everything with WALL cells as before, then `cut_walls()`.
 To keep that clean:

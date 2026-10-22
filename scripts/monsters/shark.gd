@@ -469,6 +469,8 @@ func _laser_target() -> Actor:
 
 
 func _tick_hunt(delta: float, k: float, rooted: bool) -> void:
+	if not is_instance_valid(target):
+		target = null   # (none, or freed under it, not killed: the test gym's "clear monsters")
 	if not _biteable(target):
 		_hunt_out += delta
 		if _hunt_out >= HUNT_GIVE_UP or target == null or not is_instance_valid(target) or target.dead:

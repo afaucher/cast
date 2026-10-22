@@ -106,7 +106,11 @@ extends Node3D
 ##                       In a crew every window needs it (run.ps1 -Crew passes it to all).
 ##   --move-feel today|grounded|shuffle, --physics-interp on|off   dev: the movement-feel profile and the judder check (MoveFeel;
 ##                       F6 / F7 switch them live). In a crew the host's profile is everyone's.
-## Keys: F6 next movement profile, F7 physics interpolation (MoveFeelTag), F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
+##   --gym [--gym-tour <dir>]  dev, solo: the test gym (GymMap's one map of every environment, GymDev's panel: switch hero,
+##                       spawn anything, infinite components, AI / god / hit-area toggles, a hit log; docs/design/test-gym.md).
+##                       Ignored in a crew. --gym-tour saves its screenshot sheet to <dir> and quits
+## Keys: F6 next movement profile, F7 physics interpolation (MoveFeelTag), (--gym only: F2 hero, F3 hit areas, F4 monster AI,
+## F8 god mode, F9 the gym's panel, G / middle-click spawn at the cursor: GymDev), F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
 ##

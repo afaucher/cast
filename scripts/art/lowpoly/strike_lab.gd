@@ -451,34 +451,13 @@ func _draw_area(h: Hero) -> void:
 	_line(h, _circle(Vector2.ZERO, h.radius, 24), Color(0.9, 0.9, 0.95, 0.8), 0.02)
 
 
-## The area's outline in hero space (x side, y forward), grown by `grow`.
+## The area's outline in hero space (x side, y forward), grown by `grow` (HitAreaShape: the test gym's overlay draws the same).
 func _outline(area: Dictionary, grow: float) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	if str(area["shape"]) == "lane":
-		var r := float(area["radius"]) + grow
-		var near := float(area["near"])
-		var far := float(area["far"])
-		for k in 13:
-			var a := PI * k / 12.0
-			pts.append(Vector2(r * cos(a), near - r * sin(a)))
-		for k in 13:
-			var a := PI * k / 12.0
-			pts.append(Vector2(-r * cos(a), far + r * sin(a)))
-		return pts
-	var reach := float(area["reach"]) + grow
-	var half := deg_to_rad(float(area["arc"]) * 0.5)
-	pts.append(Vector2.ZERO)
-	for k in 25:
-		var a := -half + 2.0 * half * k / 24.0
-		pts.append(Vector2(sin(a), cos(a)) * reach)
-	return pts
+	return HitAreaShape.outline(area, grow)
 
 
 static func _circle(c: Vector2, r: float, n: int) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for k in n:
-		pts.append(c + Vector2(cos(TAU * k / n), sin(TAU * k / n)) * r)
-	return pts
+	return HitAreaShape.circle(c, r, n)
 
 
 func _world(h: Hero, p: Vector2, y: float = 0.03) -> Vector3:

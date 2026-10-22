@@ -14,7 +14,8 @@ extends "res://scripts/app/game.gd"
 ## built"); --sewer-floor --to-sewer head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built"); and (LavaDev.parse)
 ## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md);
 ## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z --walk-path x0,z0,x1,z1 (frame sequences for flicker hunts:
-## _take_shot_later).
+## _take_shot_later); and (GymDev.parse) --gym: the test gym (GymMap's floor and GymDev's panel, solo only:
+## docs/design/test-gym.md).
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -22,11 +23,13 @@ var _stage_center := Vector2i(1 << 20, 1 << 20)   ## --stage-ledge tower center
 var _sewer_layout: Dictionary = {}       ## --sewer: the layout being played (SewerLayouts.build)
 var _sewer_view: SewerView = null         ## ... its water and look
 var _sewer_staged: Dictionary = {}       ## ... what SewerDev.stage put on it (gators, wires, monsters, scout)
+var gym: GymDev = null                   ## --gym: the test gym's driver (its panel, keys and tools)
 
 
 func _parse_args() -> void:
 	super()
 	SewerDev.parse(OS.get_cmdline_user_args(), opts)
+	GymDev.parse(OS.get_cmdline_user_args(), opts)
 	LavaDev.parse(OS.get_cmdline_user_args(), opts)
 	var args := OS.get_cmdline_user_args()
 	var i := args.find("--shot-seq")
@@ -54,8 +57,21 @@ func _sewer() -> int:
 	return int(opts.get("sewer", 0)) if not _dev_released else 0
 
 
-## The game's floor hook: --sewer swaps the generated floor for the layout's map and plan (before the world is built).
+## --gym: the test gym (GymMap) instead of the floor. Solo only: a shared run ignores the flag (every machine of a crew
+## would need the gym's tools, and its spawns are this machine's own).
+func _gym() -> bool:
+	return bool(opts.get("gym", false)) and not _dev_released and not _shared
+
+
+## The game's floor hook: --sewer swaps the generated floor for the layout's map and plan (before the world is built); so
+## does --gym, with the test gym's.
 func _dev_floor() -> void:
+	if bool(opts.get("gym", false)) and _shared:
+		_log("--gym is solo only: ignored in a crew", Color(1.0, 0.6, 0.3))
+	if _gym():
+		map = GymMap.build_map()
+		_plan = GymMap.plan(map, _run, _floor_n())
+		return
 	if _sewer() <= 0:
 		return
 	_sewer_layout = SewerLayouts.build(_sewer())
@@ -121,6 +137,11 @@ func _sewer_populate() -> void:
 
 
 func _dev_on_floor_ready() -> void:
+	if _gym() and gym == null:
+		gym = GymDev.new()
+		gym.setup(self)
+		if opts.has("gym_tour"):
+			GymTour.new().run(self, gym, str(opts["gym_tour"]))   # (--gym-tour <dir>: the docs' screenshots, then quit)
 	_sewer_floor_ready()
 	_lava_floor_ready()
 	if _sewer() > 0 and opts.has("sewer_demo"):

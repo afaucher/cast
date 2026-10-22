@@ -217,6 +217,12 @@ func cooldown_total(id: String) -> float:
 	return base / SpellComponents.HELD_COOLDOWN_DIV if is_held(id) else base
 
 
+## Dev (the test gym's "cooldowns off", GymDev): every spell is ready now (the attacks keep theirs). The owner's call.
+func reset_spell_cooldowns() -> void:
+	for id: String in SpellBook.SPELLS:
+		_ready_at.erase(id)
+
+
 ## Cast a spell in one of this hero's slots. False if dead, not slotted, out of charges (emits
 ## spell_empty and spends nothing, no cooldown), on cooldown, or the spell refuses. A success spends 1 charge.
 func try_cast(id: String, power: float, aim: Vector3) -> bool:
