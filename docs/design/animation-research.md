@@ -461,7 +461,7 @@ first version.) Now:
 overhead smash and its 0.6 disc stand.
 
 **Speed decided (user, 2026-10-22, after trying 20/25/30 in the gym with F10): "25 is fine."** 25 frames stays the
-default. The spin radius (2.1 vs 1.9) is still open.
+default. **Radius decided (user, 2026-10-22): "Gasket spin radius is fine as is"**: 2.1, matching the wrench's sweep.
 
 - **A slower turn that reads**: a 3-frame twist back with a crouch (the wind-up), the full turn in **25 frames** (0.42 s,
   quick through the middle: a smoothstep), then a **stagger** (she overshoots by 0.35 rad and settles over 12 frames, a

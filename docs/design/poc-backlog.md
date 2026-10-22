@@ -175,6 +175,9 @@ anyone outside the team plays. **P2** = later.
   fluency toggle.
 - **P2** A post-run report: secrets found, crowns climbed, best spell, fumbles, and the
   corn count. Merge it into the results screen in §8.
+- **PARKED** The floating combat words (user, 2026-10-22: "park the 13 words"). BOOM!, LAVA! and *bonk* are already
+  gone. Still on screen, to review later: SLAM!, THUD!, AAAH!, POP! (corn and the goblin's rocket), FIRE!, FIZZLE, DUD,
+  DAMP, COFFEE!, crash..., DENTIST!, BAWK!, *pfft*. Numbers and money stay.
 
 ## 10. Networking and co-op (after the POC proves fun solo)
 
