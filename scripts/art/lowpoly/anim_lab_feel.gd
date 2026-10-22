@@ -1,6 +1,7 @@
 extends Node3D
 ## LOOK-DEV ONLY (docs/design/animation-research.md): the proposed procedural "feel" layer for a faceted hero model, used
-## by the animation lab (scripts/art/lowpoly/anim_lab.gd) and NOT wired into the game. It sits between Hero._visual (the
+## by the animation lab (scripts/art/lowpoly/anim_lab.gd) and NOT wired into the game (its lean, squash and strike-first
+## are in the game as HeroFeel, the grounded_anim profile: scripts/heroes/hero_feel.gd; strike_lab compares the profiles). It sits between Hero._visual (the
 ## yaw) and the LowPolyModel, takes the model's clock over (idle_enabled = false) and adds, from nothing but the hero's
 ## shown position, facing and the events every screen already sees:
 ##

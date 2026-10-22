@@ -391,6 +391,11 @@ Speeds as in C.
 **The user's blind A/B (2026-10-22): "Grounded is better. Not there yet."** Grounded beats today; more is needed on top of it
 (see the animation track, `animation-research.md`, and the gap table above for what is still missing).
 
+**Next A/B (2026-10-22): `grounded` vs `grounded_anim`.** The user picked "Animation B + strike-first" on top of grounded. It is
+a third profile, `grounded_anim` (grounded plus HeroFeel's lean and squash, the stride held while shoved or airborne, the
+strike-first melee and each hero's hit area reshaped to its weapon), and `--move-feel shuffle` now deals those two blind
+(`today` stays selectable by name; F6 by name cycles all three). See `animation-research.md`, "As built".
+
 The user (2026-10-21): "Let's try the package A grounded. Preferably so I can A/B." Built: the profile table, package A, the
 judder check, the lab, the log and the tests. **`today` is still the default**: nothing changes for normal play until the
 user picks.
@@ -398,7 +403,7 @@ user picks.
 #### How to A/B
 | Command | What it does |
 |---|---|
-| `.\run.ps1 --move-lab --move-feel shuffle --no-mic` | The lab (below), with `today` and `grounded` dealt in a random order as **"feel 1" / "feel 2"**. The tag says only the number; which is which is printed to the console and written in every log row. |
+| `.\run.ps1 --move-lab --move-feel shuffle --no-mic` | The lab (below), with `grounded` and `grounded_anim` (was: `today` and `grounded`, until 2026-10-22) dealt in a random order as **"feel 1" / "feel 2"**. The tag says only the number; which is which is printed to the console and written in every log row. |
 | `.\run.ps1 --move-lab --move-feel grounded --no-mic` | The lab, profiles named. `today` is the default. |
 | **F6** | The next profile (the tag in the lower left names it, or its number when blind, for about 2 s). In a crew it does nothing (the tag says "set by the host"). |
 | **F7** | Physics interpolation of your own heroes on / off (the judder check). `--physics-interp on` starts with it on. |

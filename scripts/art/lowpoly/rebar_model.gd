@@ -19,6 +19,15 @@ const ARM_FWD := 0.0          ## arms hang straight down so he reads upright fro
 
 ## The model is built at ~2.4 units; this scales it up so Rebar is ~1.35x the prototype hero.
 const MODEL_SCALE := 1.1
+## The CENTRED DOUBLE-FIST SLAM (the grounded_anim profile's strike, driven by HeroFeel through two kick channels):
+## `slam_w` (0..1) blends both arms from their hanging pose into the slam, `slam_a` is their forward swing (rad about the
+## shoulder): SLAM_UP both fists high over his head, SLAM_DOWN both fists down in front of him; the fists close together
+## on his centre line as they come down (SLAM_CLASP, the arms' inward yaw at the bottom).
+const SLAM_UP := 2.85
+const SLAM_DOWN := 0.62
+const SLAM_CLASP := 0.50
+const SLAM_BEND := 0.45        ## his torso bends forward this far (rad) at the bottom of the slam ...
+const SLAM_CROUCH := 0.22      ## ... and sinks this much (model units), so the fists come down to a grunt's head
 
 const PART_NAMES: Array[String] = ["body", "head", "vest", "belt", "arm_l", "arm_r", "glove_l", "glove_r", "leg_l", "leg_r"]
 
@@ -40,6 +49,7 @@ const DARK := Color(0.12, 0.08, 0.06)
 
 
 var _swing_next_right := true
+var _slam_bent := false          ## the slam bent the torso last frame (it is put back upright once)
 var _body_base_y := 1.55
 var _head_base_y := 1.24
 
@@ -47,9 +57,11 @@ var _head_base_y := 1.24
 func _init() -> void:
 	_setup_model("RebarModel", MODEL_SCALE)
 	ui_height = 2.95 * MODEL_SCALE
-	_arm_kick = {"arm_l": 0.0, "arm_r": 0.0}
-	hold_offset = Vector3(-0.42, 0.18, -0.40)   # on his left fist (both hands punch, but the left is the quieter)
-	hold_scale = 1.5
+	_arm_kick = {"arm_l": 0.0, "arm_r": 0.0, "slam_w": 0.0, "slam_a": 0.0}
+	# the held spell component: gripped in the palm of his left glove (glove-local; the knuckles are at z -0.38), half
+	# in the leather so it reads as held, about 0.55 across beside a 0.8 glove (it used to hang off the glove's outside)
+	hold_offset = Vector3(0.0, -0.20, -0.30)
+	hold_scale = 1.0
 	_build()
 
 
@@ -205,8 +217,18 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.5 * walk
 	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.5 * walk
 	var sway := breath * 0.015
-	(parts["arm_l"] as MeshInstance3D).rotation.x = ARM_FWD - stride * 0.28 * walk + sway + arm_kick("arm_l")
-	(parts["arm_r"] as MeshInstance3D).rotation.x = ARM_FWD + stride * 0.28 * walk - sway + arm_kick("arm_r")
+	var w := clampf(arm_kick("slam_w"), 0.0, 1.0)
+	var a := arm_kick("slam_a")
+	var down := w * clampf(inverse_lerp(SLAM_UP, SLAM_DOWN, a), 0.0, 1.0)
+	var clasp := SLAM_CLASP * down
+	if w > 0.0 or _slam_bent:
+		body.rotation.x = -SLAM_BEND * down * down   # (forward: the model faces -Z)
+		body.position.y -= SLAM_CROUCH * down
+		_slam_bent = w > 0.0
+	for s: int in [-1, 1]:
+		var side := "arm_l" if s < 0 else "arm_r"
+		var swing := ARM_FWD + s * (stride * 0.28 * walk - sway) + arm_kick(side)
+		(parts[side] as MeshInstance3D).rotation = Vector3(lerpf(swing, a, w), clasp * s, deg_to_rad(10.0 * s) * (1.0 - 0.6 * w))
 
 
 ## A quick heavy punch with alternating arms: wind back, slam forward, recover.

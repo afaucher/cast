@@ -1,6 +1,7 @@
 # Hero animation feel: research, diagnosis and look-dev
 
-Status: **[research]**, 2026-10-21. Nothing here is built into the game or decided. The user asked: "Lets look at a parallel
+Status: **[research]**, 2026-10-21. **2026-10-22: treatment B and strike-first are built into the game as the A/B profile
+`grounded_anim`, with each hero's hit area reshaped to its weapon; see "As built" (section 7.1).** The rest is not built or decided. The user asked: "Lets look at a parallel
 topic of how to animate our main characters to have better feel - so it feels like you are really controlling them."
 This doc covers ANIMATION: how the heroes' bodies respond to what the player does. Movement itself (speed curves, dodge,
 sprint, camera) is in `docs/design/movement-research.md`, written by a parallel agent; section 6 says where the two meet.
@@ -312,6 +313,118 @@ ffmpeg's palettegen. Neither script is committed.
    - Keep the stops at 3-4 frames: four players and dozens of imps means many hits (Sakurai's caution).
 4. **Later:** climb, drop and landing poses, the wading step, accessory springs (Wick's hat, Gasket's braids, Rebar's vest
    tape), and idle reactions (looking toward noise, a slump at low HP).
+
+### 7.1 As built: `grounded_anim` (2026-10-22)
+
+The user, after the blind A/B of package A: "Grounded is better. Not there yet." They picked **"Animation B +
+strike-first"** on top of grounded, then (same day) "We might want to rework the attack damage areas as part of this. For
+Gasket the attack area doesn't match the weapon" and "We might want to change the weapon animation to be more of a centered
+hammer strike." Built as a third MoveFeel profile, **`grounded_anim`** = grounded + B + strike-first + the reshaped hit
+areas. **`today` is still the default**; nothing changes in normal play until the user picks.
+
+#### How to A/B
+| Command | What |
+|---|---|
+| `.\run.ps1 --move-lab --move-feel shuffle --no-mic` | `grounded` and `grounded_anim` dealt blind as "feel 1" / "feel 2"; **F6** switches. |
+| `.\run.ps1 --move-lab --move-feel grounded_anim --no-mic` | Named (`today` and `grounded` too; F6 cycles today, grounded, grounded_anim). |
+| `.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded_anim` | A crew: the host's profile is everyone's (it rides the job), so the lean, the strike and the hit areas agree on every screen. |
+| `godot --path . --fixed-fps 60 --resolution 1920x1080 -- --scene res://scenes/strike_lab.tscn --hero gasket --clip attack --strike both --shot <png>` | The lab: one lane per profile, each played by the game's own code (`--clip startstop\|strafe\|attack`, `--zoom game`, `--frames-dir`). `--overlay` draws the hit area and the weapon's path top-down and prints the numbers. |
+
+#### What was built
+| Piece | Where | What |
+|---|---|---|
+| The profile | `MoveFeel` (`scripts/heroes/move_feel.gd`) | `grounded_anim`: grounded's keys plus `body`, `strike_first` and `melee_areas`. `BLIND` is what shuffle deals. |
+| The body (B) | `HeroFeel` (`scripts/heroes/hero_feel.gd`), ticked from `Hero._process` before `HeroGait` | A pivot node between `Hero._visual` and the model (added and removed as the profile switches). The lab's lean and squash, per hero, from the shown position: lean = smoothed velocity x `lean` + (quick - smoothed velocity) x `kick`, through a spring, clamped at 22 degrees; a shove tips the body back against the slide. Squash springs on a start (a stretch) and a stop (a squash sized by the speed just had). |
+| Stride held | `HeroGait`, `Gait.hold` | Under `body`, the stride clock stops while the hero is shoved or airborne (a hop, a fall): the legs keep their pose instead of walking on air. grounded is unchanged (its shove case still settles the legs). |
+| Strike first | `HeroFeel.STRIKES`, `Hero._swing_pose` | The swing's pose is a timeline of the model's kick channels: the weapon is at its impact on the frame the hit resolves (the click's frame), then a small lunge, a forward pitch and a squash; when the blow touched something, a **50 ms (3-frame) hit-stop of the attacker's pose only** (the simulation, the hero's motion, the damage and the cooldown are untouched). Puppets play it from the replayed `act`. |
+| The weapons | `WickModel` (`follow`), `GasketModel` (`smash_w`, `smash_a`), `RebarModel` (`slam_w`, `slam_a`) | New channels, at rest unless HeroFeel drives them (today's poses are unchanged). Wick's bash carries through to his right front. **Gasket: a centred overhead smash**: both hands on the handle, the wrench comes straight down on her centre line and the head lands about 1.9 ahead. **Rebar: a centred double-fist slam** (my call, since his alternating punches landed 0.8 ahead at his sides while his wedge reached 1.8 at 120 degrees): both fists come down together in front of him with a forward bend and a crouch. |
+| Hit areas | `Hero.melee_area`, `Combat.melee_lane` / `lane_targets` / `arc_targets`, `Fx.slam_lane` | Each kit's area under the profile. A lane is everything within `radius` of the segment from `near` to `far` ahead (near = far: a disc). The floor mark matches the area (`Fx.slam_lane`: the stadium plus a ring where the blow lands). The AI's prop check and its "turn the swing" use the area (`AllyBrain._area_clear`, `Hero.melee_half_angle`). |
+| Lab | `scripts/art/lowpoly/strike_lab.gd`, `scenes/strike_lab.tscn` | Built on the anim lab: lanes are profiles, `--strike follow\|wind\|both`, `--overlay`. |
+
+#### The numbers
+Body (measured, `test_move_feel_anim`, 60 Hz, a walk at 4.5 u/s through grounded's envelope):
+
+| | Wick | Gasket | Rebar |
+|---|---|---|---|
+| Tuning (lean / kick / spring f, zeta / squash x) | 0.032 / 0.075 / 2.6 Hz, 0.42 / 1.0 | 0.028 / 0.065 / 3.2 Hz, 0.50 / 1.2 | 0.018 / 0.045 / 1.7 Hz, 0.65 / 0.6 |
+| Lean at most (limit 22 deg) | 19.9 deg | 16.1 deg | 8.1 deg |
+| Into a start / back on a stop | 14.0 / 6.1 deg | 11.5 / 4.7 deg | 6.3 / 1.7 deg |
+| Stretch / squash (limit -16% / +20%) | -5% / +6% | -6% / +7% | -3% / +3% |
+| Strike: lunge, pitch kick | 0.16 u, 3.2 rad/s | 0.14 u, 2.6 rad/s | 0.10 u, 1.8 rad/s |
+
+Strike first: damage and the impact pose on the **same frame** for all three (the test allows +-1), a 3-frame hit-stop on a
+connecting blow, none on a miss. Today's impact came 14 (Wick), 17 (Gasket) and 18 (Rebar) frames after the damage (the
+overlay's measure: the weapon's farthest reach).
+
+**Gasket and Rebar's big shape: the follow-through ("follow"), picked.** Both were built (`--strike wind` is the 2-frame
+wind-up: the wrench or the fists go up over the head on frames 0-2 and land on frame 3). The wind-up reads a little more like
+a classic hammer blow in the strips, but its impact lands 3 frames after the number, which breaks strike-first's rule (the
+damage frame +-1); the follow-through lands on the damage frame and then lifts the wrench (or both fists) back over the head,
+so the big overhead silhouette is still on screen for about 0.3 s. Open question 3 below for the user.
+
+#### Hit areas: today vs proposed (a balance proposal, behind the profile)
+Measured with `strike_lab --overlay` (`docs/design/animation/ga_overlay_*.png`): the weapon's tracked points every frame
+of the swing (Gasket: the wrench head; Rebar: both gloves' knuckles; Wick: the bow's grip and tips), drawn on the floor
+(blue before the impact, white at it, orange after; faint above 1.6, over a grunt's head), with the area (filled) and the
+area a grunt (radius 0.38) can stand in and be hit (the thin outline). "Grunt hit area" is that second area's size.
+
+| Hero | Today's area (today, grounded) | Where today's weapon lands | Proposed area (grounded_anim) | Where the new weapon lands | Grunt hit area | Farthest hit (grunt centre) |
+|---|---|---|---|---|---|---|
+| Wick (bow bash) | wedge 1.3, 90 deg | 0.8 ahead, centred (inside) | **unchanged**: wedge 1.3, 90 deg | 0.9 ahead, the bow across his front +-0.8 (inside) | 2.22 -> 2.22 | 1.68 -> 1.68 |
+| Gasket (hammer) | wedge 1.5, 90 deg | **2.3 ahead, 0.9 to her right, 1.2 up: outside the wedge** (2% of the swing's low path inside it) | **lane** 0.6 -> 1.9 ahead, 0.25 wide each side (the shaft's line and the head's landing) | 1.9 ahead, centred, on the floor (inside) | 2.78 -> 2.88 (+4%) | 1.88 -> 2.53 (+0.65) |
+| Rebar (slam fist) | wedge 1.8, 120 deg | 0.8 ahead, 1.0 to the side (the punching fist; the wedge reaches 1.8) | **disc** of 0.85 centred 1.05 ahead (the shockwave where both fists land) | 1.0 ahead, centred, 0.8 up (inside) | 4.98 -> 4.75 (-5%) | 2.18 -> 2.28 (+0.10) |
+
+What changes in play: **damage, cooldowns and shoves are unchanged, so DPS is unchanged** (Wick 30, Gasket 43, Rebar 19
+per second on one target). Gasket trades width for reach: she hits a target up to 0.65 farther straight ahead but nothing
+more than 0.63 to the side of her line (today: anything within 45 degrees), so she aims her hammer and a crowd at her flanks
+is no longer hit. Rebar's area is a little smaller and rounder: about the same reach ahead, narrower at his far corners
+(today's wedge reached 60 degrees out to 1.8), still the whole front of him up close. The floor mark is the area in both
+cases. The AI uses the same areas (its swing distance is unchanged: every shape covers a target straight ahead from contact
+to the kit's reach).
+
+#### The held component sits in the hand (a bug fix, every profile)
+The user: "The other floating prop is the 'held in hand' spell which for Gasket at least just floats to the side." It did
+for all three: Gasket's hung 0.66 outside her left arm at 0.8 across, Rebar's off the outside of his left glove, and Wick's
+floated 0.34 above his right hand at torso size (gap 8: it hid the wand hand). Now each is gripped at the hand part's own
+transform and sized to the hand, so it follows every pose (walk, the swings, the cast, the lean, squash and strike-first):
+
+| Hero | Hand part | Grip (part-local) | Across (was) |
+|---|---|---|---|
+| Wick | the right fist (`hand`, the arm's aim point) | just under the knuckles, so the wand stands clear above | 0.35 (0.75) |
+| Gasket | `arm_l`, the bare fist at (0, -0.76, 0) | just past the knuckles; its scale undoes the sleeve's stretch in the smash | 0.45 (0.80) |
+| Rebar | `glove_l` | half in the palm, in front of the knuckles | 0.55 (0.83) |
+
+`test_move_feel_anim` holds it within 0.3 of the fist (0.45 of Rebar's glove centre) and at most 0.6 across through
+standing, walking, a swing and a cast, under today and grounded_anim. Before / after: `ga_held_<hero>.png` (`strike_lab
+--clip held`). The "cast armed" look (a floor rune / hand glow while speaking) is a separate look-dev track and not built here.
+
+#### Networking
+Nothing new on the wire. HeroFeel is cosmetic and declares every var LOCAL (`test_net_contract`); a puppet leans from its
+streamed position and plays a replayed swing strike-first (`test_net_move_feel_anim`, two processes: the client takes the
+host's `grounded_anim`, each screen leans the other's puppet up to 15-17 degrees, replays both of its swings, snapshots keep
+their size). The hit areas are part of the profile, which the host's job sets for the crew, so every machine resolves the
+same shape; a hero's hits are still resolved by its owner (`Combat._land_melee`, unchanged rules).
+
+#### Tests
+`test_move_feel_anim` (lean / squash bounds, the stride held while shoved and airborne, strike-first timing and hit-stop,
+the areas against today's wedge target by target, today and grounded untouched, a puppet, shuffle and the crew data),
+`test_net_move_feel_anim` (above). `test_move_feel_today`, `test_move_feel_grounded`, `test_net_move_feel`,
+`test_hero_combat`, `test_hero_kits` and `test_net_contract` pass unchanged.
+
+#### Evidence (`docs/design/animation/`)
+- `ga_overlay_wick.png`, `ga_overlay_gasket.png`, `ga_overlay_rebar.png`: the hit areas and the weapons' paths, top-down
+  (grounded | grounded_anim, and for Gasket and Rebar the wind-up variant).
+- `ga_<hero>_close.png` and `ga_<hero>_game.png`: start / stop, strafe and the melee, grounded against grounded_anim (the
+  melee also with the wind-up), close and at the game's zoom.
+- `ga_gif_<hero>_attack.gif`: the melee lanes side by side, at half speed.
+- `ga_held_<hero>.png`: the held component before and after the fix (today and grounded_anim each).
+
+#### Open questions (added)
+1. Blind: does `grounded_anim` feel better than `grounded`?
+2. Gasket's lane: a sharper, aimed hammer (proposed), or keep some width (a lane 0.35 wide, or a short wedge)?
+3. Follow-through (built) or the 2-frame wind-up (`--strike wind`: reads more like a hammer, lands 3 frames after the number)?
+4. Squash at 6-7% reads at the close zoom; at the game zoom only the lean reads. More (up to the 16-20% limits)?
+5. Should hit-stop scale with the blow (Gasket longer, Wick shorter) and skip in crowd fights (Sakurai's caution)?
 
 ---
 

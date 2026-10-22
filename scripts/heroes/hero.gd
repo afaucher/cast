@@ -136,6 +136,9 @@ var visual_override: Node3D = null
 var pace := 1.0
 var _motion: HeroMotion = null
 var _gait: HeroGait = null
+## grounded_anim (the animation track, animation-research.md "As built"): the lean, the squash and the strike-first swing,
+## drawn on every screen from the shown motion and the replayed swing (HeroFeel).
+var _feel: HeroFeel = null
 ## Physics interpolation of a hero this machine moves (MoveFeel.interp, F7): between physics ticks the node is drawn where
 ## it was a fraction of the way from the last tick to this one, and put back before the next tick (_interp_restore).
 var _ip_prev := Vector3.INF
@@ -152,6 +155,7 @@ func _init() -> void:
 	display_name = "Hero"
 	_motion = HeroMotion.new(self)
 	_gait = HeroGait.new(self)
+	_feel = HeroFeel.new(self)
 	process_physics_priority = 10   # (after its PlayerController / AllyBrain: a frame with no move() is a coast)
 
 
@@ -196,7 +200,7 @@ func net_fields() -> Dictionary:
 		"_ui_top": Net.LOCAL, "_daze_stars": Net.LOCAL, "_daze_shown": Net.LOCAL,
 		# Movement feel: the owner's walk (its result streams as the position) and this screen's drawing of it.
 		"pace": Net.PRIVATE, "_motion": Net.PRIVATE,
-		"_gait": Net.LOCAL, "_ip_prev": Net.LOCAL, "_ip_cur": Net.LOCAL, "_ip_shown": Net.LOCAL, "_ip_hooked": Net.LOCAL,
+		"_gait": Net.LOCAL, "_feel": Net.LOCAL, "_ip_prev": Net.LOCAL, "_ip_cur": Net.LOCAL, "_ip_shown": Net.LOCAL, "_ip_hooked": Net.LOCAL,
 	})
 	return f
 
@@ -442,13 +446,45 @@ func melee(dir: Vector3) -> bool:
 
 
 ## The swing itself (here, or replayed on another machine's puppet: Combat applies only what that machine resolves).
+## The area is melee_area(): today's wedge, or (grounded_anim) the shape of this hero's weapon, the same on every machine
+## because the crew plays the host's profile.
 func _melee_effect(dir: Vector3) -> void:
-	for foe in GameWorld.actors_in_radius(global_position, melee_reach, GameWorld.other_team(team)):
+	var area := melee_area()
+	var lane := str(area["shape"]) == "lane"
+	var far := float(area["far"]) if lane else 0.0
+	var reach := far + float(area["radius"]) if lane else float(area["reach"])
+	for foe in GameWorld.actors_in_radius(global_position, reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
-	if not Combat.melee_arc(self, dir, melee_reach, melee_arc, melee_damage, melee_shove).is_empty():
+	var touched := (Combat.lane_targets(self, dir, float(area["near"]), far, float(area["radius"])) if lane
+			else Combat.arc_targets(self, dir, float(area["reach"]), float(area["arc"])))
+	var hit := (Combat.melee_lane(self, dir, float(area["near"]), far, float(area["radius"]), melee_damage, melee_shove) if lane
+			else Combat.melee_arc(self, dir, float(area["reach"]), float(area["arc"]), melee_damage, melee_shove))
+	if not hit.is_empty():
 		MonsterSenses.noise(global_position, MonsterSenses.NOISE_MELEE, "melee")   # a blow that lands is heard
-	Fx.slash_arc(global_position, dir, melee_reach, melee_arc, hero_color.lightened(0.5))
-	_swing_pose()
+	if lane:
+		Fx.slam_lane(global_position, dir, float(area["near"]), far, float(area["radius"]), hero_color.lightened(0.5))
+	else:
+		Fx.slash_arc(global_position, dir, float(area["reach"]), float(area["arc"]), hero_color.lightened(0.5))
+	_swing_pose(not touched.is_empty())
+
+
+## This hero's primary hit area right now: {"shape": "arc", "reach", "arc"} (a wedge from the hero: the kit's own, and
+## every kit under today / grounded) or {"shape": "lane", "near", "far", "radius"} (Combat.melee_lane), from the active
+## MoveFeel profile's `melee_areas` (grounded_anim: each weapon's own shape, animation-research.md "As built").
+func melee_area() -> Dictionary:
+	var areas := MoveFeel.value("melee_areas") as Dictionary
+	if areas.has(kit_id):
+		return areas[kit_id]
+	return {"shape": "arc", "reach": melee_reach, "arc": melee_arc}
+
+
+## Half the angle (degrees, seen from the hero) the primary covers: half the wedge, or a lane's sideways reach at its far end
+## (the AI's "turn the swing to keep a priced prop out").
+func melee_half_angle() -> float:
+	var area := melee_area()
+	if str(area["shape"]) == "lane":
+		return rad_to_deg(atan2(float(area["radius"]), maxf(float(area["far"]), 0.01)))
+	return float(area["arc"]) * 0.5
 
 
 ## Another machine's hero attacked (NetCasts replays its `act` event on this puppet, at the moment the puppet shows): the
@@ -920,6 +956,7 @@ func _process(delta: float) -> void:
 	var target_yaw := atan2(-facing.x, -facing.z)
 	_visual_yaw = lerp_angle(_visual_yaw, target_yaw, clampf(TURN_RATE * delta, 0.0, 1.0))
 	_visual.rotation.y = _visual_yaw
+	_feel.tick(delta)   # (before the gait: the strike's kicks are set, or a hit-stop holds the pose, when the model is posed)
 	_gait.tick(delta)
 	if _draw_start >= 0.0:
 		if dead or is_helpless():
@@ -1027,7 +1064,11 @@ func _refresh_bar() -> void:
 		_bar.set_fraction(hp / max_hp, Color(0.25, 0.85, 0.75) if is_player and hp / max_hp > 0.5 else Color(0, 0, 0, 0))
 
 
-func _swing_pose() -> void:
+## The swing's pose. `connects`: the blow touched something. Under strike_first (grounded_anim) HeroFeel plays it (the
+## impact on this frame, then the follow-through, a hit-stop when it connects); otherwise the model's own swing.
+func _swing_pose(connects: bool = false) -> void:
+	if _feel.strike(connects):
+		return
 	if visual_override != null and visual_override.has_method("attack_swing"):
 		visual_override.call("attack_swing")
 	if _weapon == null:

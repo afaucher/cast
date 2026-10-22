@@ -78,6 +78,12 @@ func advance(raw: Vector3, dt: float) -> void:
 			plants += 1
 
 
+## The stride held where it is (the animation track's grounded_anim: shoved or airborne): the clock stops and the speed
+## keeps its value, so pose() redraws the legs as they were. advance() takes over again on the next frame of walking.
+func hold() -> void:
+	model.idle_enabled = false
+
+
 ## The share of a full stride the legs swing right now (0 standing, 1 at the model's walk_ref).
 func walk_amount() -> float:
 	return clampf(speed / float(_tu["walk_ref"]), 0.0, 1.0)

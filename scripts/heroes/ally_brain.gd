@@ -478,10 +478,10 @@ func _swing(foe: Actor, dir: Vector3) -> void:
 	if hero.cooldown_left(Hero.KEY_MELEE) > 0.0:
 		hero.face_point(foe.global_position)
 		return
-	var turn := maxf(0.0, hero.melee_arc * 0.5 - ARC_SLACK_DEG)
+	var turn := maxf(0.0, hero.melee_half_angle() - ARC_SLACK_DEG)
 	for k: float in [0.0, turn, -turn]:
 		var d := dir.rotated(Vector3.UP, deg_to_rad(k))
-		if _arc_clear(d, hero.melee_reach, hero.melee_arc):
+		if _area_clear(d):
 			hero.face_point(hero.global_position + d)
 			hero.melee(d)
 			return
@@ -521,6 +521,21 @@ func _hold(foe: Actor) -> void:
 			side = -side
 	_sidestep_dir = side
 	_sidestep_until = GameWorld.time + SIDESTEP_TIME
+
+
+## No priced prop inside this hero's primary swung along `dir` (Hero.melee_area: the wedge, or grounded_anim's lane).
+func _area_clear(dir: Vector3) -> bool:
+	var area := hero.melee_area()
+	if str(area["shape"]) != "lane":
+		return _arc_clear(dir, float(area["reach"]), float(area["arc"]))
+	var p0 := hero.global_position
+	var a0 := Vector2(p0.x + dir.x * float(area["near"]), p0.z + dir.z * float(area["near"]))
+	var a1 := Vector2(p0.x + dir.x * float(area["far"]), p0.z + dir.z * float(area["far"]))
+	for p in GameWorld.props_in_radius(p0, float(area["far"]) + float(area["radius"]) + PROP_MARGIN):
+		var q := Vector2(p.global_position.x, p.global_position.z)
+		if Geometry2D.get_closest_point_to_segment(q, a0, a1).distance_to(q) <= float(area["radius"]) + p.radius + PROP_MARGIN:
+			return false
+	return true
 
 
 ## No priced prop inside a swing of `reach` and `arc_deg` along `dir` (Combat.melee_arc's own test, a little wider).

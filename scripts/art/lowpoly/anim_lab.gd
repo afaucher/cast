@@ -201,10 +201,15 @@ func _step(f: int) -> void:
 	_aim_camera()
 
 
+## [duration s, the strip's sample times] of the clip playing (a lab built on this one can time its clips its own way).
+func _clip_def() -> Array:
+	return CLIPS[clip]
+
+
 func _loop() -> void:
-	var dur: float = CLIPS[clip][0]
+	var dur: float = _clip_def()[0]
 	while true:
-		for i in 3:
+		for i in heroes.size():
 			heroes[i].global_position = _lane_pos(i)
 			heroes[i].heal(heroes[i].max_hp)
 		for f in int(dur * 60.0) + 30:
@@ -240,8 +245,8 @@ func _crop(img: Image, i: int) -> Image:
 
 func _record() -> void:
 	await wait_frames(10)
-	var dur: float = CLIPS[clip][0]
-	var times: Array = CLIPS[clip][1]
+	var dur: float = _clip_def()[0]
+	var times: Array = _clip_def()[1]
 	var want := {}
 	for s: float in times:
 		want[int(roundf(s * 60.0))] = true
@@ -256,7 +261,7 @@ func _record() -> void:
 		var img := get_viewport().get_texture().get_image()
 		img.convert(Image.FORMAT_RGB8)
 		var lanes: Array[Image] = []
-		for i in 3:
+		for i in heroes.size():
 			lanes.append(_crop(img, i))
 		if want.has(f):
 			cells.append(lanes)
@@ -272,16 +277,17 @@ func _save_strip(cells: Array) -> void:
 	var k := 0.62 if zoom == "close" else 0.5
 	var cw := int(cells[0][0].get_width() * k)
 	var ch := int(cells[0][0].get_height() * k)
-	var sheet := Image.create(cw * cells.size(), ch * 3, false, Image.FORMAT_RGB8)
+	var rows: int = (cells[0] as Array).size()
+	var sheet := Image.create(cw * cells.size(), ch * rows, false, Image.FORMAT_RGB8)
 	for col in cells.size():
-		for row in 3:
+		for row in rows:
 			var im: Image = (cells[col][row] as Image).duplicate()
 			im.resize(cw, ch, Image.INTERPOLATE_LANCZOS if zoom == "close" else Image.INTERPOLATE_NEAREST)
 			sheet.blit_rect(im, Rect2i(0, 0, cw, ch), Vector2i(col * cw, row * ch))
 	# thin dark separators
 	for col in range(1, cells.size()):
-		sheet.fill_rect(Rect2i(col * cw - 1, 0, 2, ch * 3), Color(0.05, 0.05, 0.07))
-	for row in range(1, 3):
+		sheet.fill_rect(Rect2i(col * cw - 1, 0, 2, ch * rows), Color(0.05, 0.05, 0.07))
+	for row in range(1, rows):
 		sheet.fill_rect(Rect2i(0, row * ch - 1, cw * cells.size(), 2), Color(0.05, 0.05, 0.07))
 	print("strip ", shot_path, " ", sheet.save_png(shot_path), " ", sheet.get_size())
 
@@ -290,8 +296,8 @@ func _save_gif_frame(lanes: Array[Image], n: int) -> void:
 	var s := 0.5 if zoom == "close" else 0.5
 	var cw := int(lanes[0].get_width() * s)
 	var ch := int(lanes[0].get_height() * s)
-	var im := Image.create(cw * 3, ch, false, Image.FORMAT_RGB8)
-	for i in 3:
+	var im := Image.create(cw * lanes.size(), ch, false, Image.FORMAT_RGB8)
+	for i in lanes.size():
 		var c := lanes[i].duplicate() as Image
 		c.resize(cw, ch, Image.INTERPOLATE_BILINEAR)
 		im.blit_rect(c, Rect2i(0, 0, cw, ch), Vector2i(i * cw, 0))
