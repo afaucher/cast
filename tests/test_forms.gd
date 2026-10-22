@@ -324,6 +324,8 @@ func _check_use_prompt_node() -> void:
 	add_child(p)
 	await frames(2)
 	check(not p.wanted and p.alpha == 0.0 and not p._sprite.visible, "starts hidden")
+	check(p._sprite.no_depth_test and p._sprite.render_priority > FogView.PASS_PRIORITY,
+			"drawn over the fog's full-screen pass (a door's prompt was fogged over: user, 2026-10-21)")
 	p.show_at(Vector3(1, 2, 3), "E", "Clock out")
 	check(p.key == "E" and p.verb == "Clock out" and p.is_showing(), "shows its key and verb")
 	check(p.global_position.is_equal_approx(Vector3(1, 2, 3)), "floats at the given point")

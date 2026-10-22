@@ -58,7 +58,8 @@ func _ready() -> void:
 	_sprite.shaded = false
 	_sprite.double_sided = true
 	_sprite.no_depth_test = true
-	_sprite.render_priority = 20
+	# above the fog's full-screen pass (FogView: 100), so a door's prompt is never fogged over (user, 2026-10-21)
+	_sprite.render_priority = FogView.PASS_PRIORITY + 10
 	_sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 	_sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_sprite.visible = false

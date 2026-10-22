@@ -45,6 +45,8 @@ enum { LOOK_VOID, LOOK_BLUEPRINT, LOOK_SMOKE }
 
 const LOOK_NAMES := ["A black void", "B blueprint", "C smoke"]
 const UPDATE_EVERY := 0.1          ## seconds between RoomFog updates
+const PASS_PRIORITY := 100         ## the fog's full-screen pass draws after the world; what must stay readable over it
+                                   ## (the use prompt) draws above this
 const FADE_TIME := 0.35            ## a space's look fades between states over this long
 const THIN_CELLS := 4              ## a doorway thins the smoke this many cells deep
 const DYNAMIC_GROUPS := ["monsters", "employees", "component_pickups", "chickens", "sharks"]
@@ -121,7 +123,7 @@ func setup(m: HexMap, f: RoomFog, camera: Camera3D) -> void:
 		_shader.code = SHADER
 	_mat = ShaderMaterial.new()
 	_mat.shader = _shader
-	_mat.render_priority = 100
+	_mat.render_priority = PASS_PRIORITY
 	_mat.set_shader_parameter("cells", _cells_tex)
 	_mat.set_shader_parameter("dyn", _dyn_tex)
 	_mat.set_shader_parameter("look", look)
