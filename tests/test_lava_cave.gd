@@ -13,17 +13,37 @@ extends MonsterTestBase
 ##   - an AI ally following the leader over a bridge, onto a crust and back never stands on the lava and keeps up;
 ##   - fog is symmetric between the spaces a crew walks: from every walkway cell the walkway beside it shows, both ways;
 ##     the two walkways of the causeway are one space; every doorway sits on its rock, not on the lava bed.
+## Every body's position stays FINITE through all of it, every physics frame (2026-10-22: a dev probe that put the player
+## over the void wrote NAN, ground_level's answer there, into its height; the game's own callers all check is_nan, and this
+## watches that the shoves, pull-backs, sinks, melts, walks and follows never make one).
+
+
+var _not_finite: Array[String] = []   ## the first bodies seen at a non-finite position (the watch)
+var _watched := 0
 
 
 func setup() -> void:
 	timeout_sec = 240.0
+	get_tree().physics_frame.connect(_watch_finite)
 	_check_layouts()
 	await _check_shoves()
 	await _check_crust()
 	_check_spans()
 	await _check_ally_follow()
 	_check_fog_symmetry()
+	get_tree().physics_frame.disconnect(_watch_finite)
+	check(_watched > 1000, "the finite-position watch ran (%d frames)" % _watched)
+	check(_not_finite.is_empty(), "every body's position stays finite over the lava: %s" % ", ".join(_not_finite))
 	finish()
+
+
+func _watch_finite() -> void:
+	_watched += 1
+	if GameWorld.root == null or not is_instance_valid(GameWorld.root) or not GameWorld.root.is_inside_tree():
+		return
+	for a in GameWorld.actors():
+		if not a.global_position.is_finite() and _not_finite.size() < 5:
+			_not_finite.append("%s at frame %d" % [a.display_name if a.display_name != "" else str(a.name), _watched])
 
 
 func _check_layouts() -> void:
@@ -82,6 +102,18 @@ func _check_shoves() -> void:
 	check(GameWorld.map.is_walkable_cell(under), "the hero is pulled back onto rock (%s)" % under)
 	near(hp0 - hero.hp, 15.0, 1.6, "15 damage (the pull's 5 and the lava's 10; plus a burn tick at most): %.1f" % (hp0 - hero.hp))
 	check(Burning.is_burning(hero), "and it burns")
+	# a body PUT DOWN over the lava (a teleport: a dev flag, a probe) stands on nothing; the ground check sends it back
+	var lava_cell := Hex.from_world(Hex.to_world(cell) + off * Hex.SQRT3 * 2.0)
+	check(not GameWorld.map.has_cell(lava_cell), "two cells off the bridge is lava (void)")
+	var dropped := add_hero(cell, float(GameWorld.map.get_cell(cell).level))
+	await frames(2)
+	dropped.global_position = Vector3(Hex.to_world(lava_cell).x, dropped.global_position.y, Hex.to_world(lava_cell).z)
+	dropped.snap_to_ground()
+	check(dropped.global_position.is_finite(), "snapping a body over the void leaves its height as it was")
+	dropped.lose_ground()
+	await wait_until(func() -> bool: return not dropped.is_shoved(), 240)
+	check(dropped.global_position.is_finite() and GameWorld.map.is_walkable_cell(Hex.from_world(dropped.global_position)),
+			"a body put down over the lava is pulled back onto rock, at a finite position (%s)" % dropped.global_position)
 	world.free()
 	world = null
 

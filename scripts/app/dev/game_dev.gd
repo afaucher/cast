@@ -1205,10 +1205,8 @@ func _take_shot_later(path: String, after: float) -> void:
 			var k := float(n) / maxf(1.0, float(int(opts["shot_seq"]) - 1))
 			var wx := lerpf(walk[0], walk[2], k)
 			var wz := lerpf(walk[1], walk[3], k)
-			var wl := map.ground_level(Vector3(wx, 0, wz))
-			if wl < -20 or wl > 40:
-				wl = 2
-			player.global_position = Vector3(wx, float(wl) * Hex.LEVEL_HEIGHT, wz)
+			var wh := map.ground_height(Vector3(wx, 0, wz))   # (NAN over the void: there the height stays as it was)
+			player.global_position = Vector3(wx, player.global_position.y if is_nan(wh) else wh, wz)
 			rig.snap()
 		for _f in every:
 			if mk != null:
