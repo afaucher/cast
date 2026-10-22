@@ -434,7 +434,7 @@ static func puff_texture() -> GradientTexture2D:
 const FACE_SCUFFS := {
 	"WickModel": {"on": "face", "at": Vector2(0.09, -0.14), "len": 0.08, "smudges": [Vector3(-0.085, -0.09, 0.04)]},
 	"GasketModel": {"on": "top", "at": Vector2(0.09, -0.09), "len": 0.15, "smudges": [Vector3(-0.17, -0.08, 0.045)]},
-	"RebarModel": {"on": "face", "at": Vector2(0.155, -0.112), "len": 0.155, "smudges": [Vector3(-0.15, -0.255, 0.055)]},
+	"RebarModel": {"on": "face", "at": Vector2(0.22, -0.10), "len": 0.14, "smudges": [Vector3(-0.15, -0.255, 0.055)]},
 }
 const SMUDGE := Color(0.3, 0.26, 0.23)   ## soot on skin or stone: dark, but well off the eyes' near-black (or it reads as an eye)
 const PLASTER_W := 0.3        ## a plaster strip's width, as a share of its length

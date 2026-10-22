@@ -35,10 +35,9 @@ triangles (was 1268). Checked:
   follow-through (`bowl_a` = `BOWL_FOLLOW`, the right arm swung up and in by `BOWL_IN` 0.45) the upper arm passes about
   3.5 cm into the jaw's front corner for a few frames, with the arm in front of the chin. `BOWL_IN` 0.30 clears it; left
   as is for the animation's owner to decide.
-- **The garage's "after" face scuffs** (`dress_crew` in `scripts/ui/backdrops/after_job.gd`) are placed on the head mesh bounds' front plane. With
-  the lantern that plane is the chin, so the plaster lands on the chin plate and the soot smudges up at eye height float
-  in front of the face. They need to follow the face (the skull front is at head-local z -0.23, the chin at about -0.44
-  after the tip-back) rather than the bounds.
+- **The garage's "after" face scuffs** (`FACE_SCUFFS` in `scripts/ui/backdrops/after_job.gd`, fitted to the face by
+  `face_fit`): with the head tipped back, Rebar's old plaster spot landed on the end of his mouth. It moved onto the jaw
+  beside it (at 0.22, -0.10, a strip 0.14 long); the soot smudge sits on the chin plate. `test_menu_backdrops` passes.
 
 ## 1. Why he read this way (before)
 
