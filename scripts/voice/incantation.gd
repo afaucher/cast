@@ -15,6 +15,8 @@ extends RefCounted
 ##   {"kind": "ignored", "spell": id, "heard": "...", "reason": "repeat"}
 ## And one signal, `trigger_armed(token)`: a trigger word was heard and a cast now waits for its spell word (once per
 ## trigger, even when the spell word arrives in the same hypothesis; VoiceCaster.trigger_heard, the "cast heard" cue).
+## And `trigger_dropped(token)`: an armed trigger was let go with NO event (chatter that merely contained the trigger, a
+## buried trigger's window running out, a reset), so a cast tell can fade (VoiceCaster.trigger_dropped, CastTell).
 ##
 ## ---------------------------------------------------------------------------
 ## DESIGN (measured with Windows TTS clips through the real zipformer-hot model;
@@ -314,6 +316,7 @@ const TUNING := {
 const STRICTNESS := ["strict", "loose", "chaos"]
 
 signal trigger_armed(token: String)
+signal trigger_dropped(token: String)
 
 var _cfg: Dictionary
 var _spell_ids: PackedStringArray
@@ -465,7 +468,7 @@ func is_order_word(tok: String) -> bool:
 ## Forget everything (between levels, tests).
 func reset() -> void:
 	_end_utterance()
-	_pending = {}
+	_drop_pending()
 	_last_fire = {}
 	_last_final_t = -1e9
 	_pending_name = {}
@@ -1091,7 +1094,7 @@ func _finish_utterance(events: Array) -> void:
 			else:
 				_pending["after_prev"] = after
 		elif same_utt and not after.is_empty():
-			_pending = {}  # chatter that merely contains the trigger word
+			_drop_pending()  # chatter that merely contains the trigger word
 	_end_utterance()
 
 
@@ -1113,7 +1116,16 @@ func _expire(t: float, events: Array) -> void:
 	if bool(_pending["at_start"]):
 		_fizzle_pending(events)
 	else:
-		_pending = {}
+		_drop_pending()
+
+
+## Let an armed trigger go with no event (no fizzle: chatter, a buried trigger's window, a reset): trigger_dropped.
+func _drop_pending() -> void:
+	if _pending.is_empty():
+		return
+	var token := str(_pending.get("token", ""))
+	_pending = {}
+	trigger_dropped.emit(token)
 
 
 func _fizzle_pending(events: Array) -> void:

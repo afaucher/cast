@@ -28,12 +28,13 @@ const GAME_SCENE := "res://scenes/game.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Flags that belong to the menu and do not mean "jump into the game".
 const MENU_FLAGS: Array[String] = ["--menu", "--menu-shot", "--menu-screen", "--menu-say", "--menu-after", "--menu-void", "--menu-hover", "--menu-focus-file", "--backdrop-mood", "--backdrop-hero", "--settings-file", "--no-mic",
-	"--net-join", "--net-port", "--net-link", "--net-name"]
+	"--net-join", "--net-port", "--net-link", "--net-name", "--cast-tell"]
 
 
 func _ready() -> void:
 	InputSetup.ensure_actions()
 	MoveFeel.boot()   # (--move-feel, --physics-interp: read once per run)
+	CastTell.boot()   # (--cast-tell: read once per run, so the gym's F11 survives the floor changes)
 	var args := OS.get_cmdline_user_args()
 	var i := args.find("--run-test")
 	if i >= 0 and i + 1 < args.size():

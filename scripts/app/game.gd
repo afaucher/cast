@@ -109,8 +109,12 @@ extends Node3D
 ##   --gym [--gym-tour <dir>]  dev, solo: the test gym (GymMap's one map of every environment, GymDev's panel: switch hero,
 ##                       spawn anything, infinite components, AI / god / hit-area toggles, a hit log; docs/design/test-gym.md).
 ##                       Ignored in a crew. --gym-tour saves its screenshot sheet to <dir> and quits
+##   --cast-tell off|colour|neutral  the "cast armed" tell on your own hero (CastTell, docs/design/cast-armed-fx.md, playtest):
+##                       a rune under your feet and a glow at your hand from "cast" until the spell goes off; colour (the
+##                       default) floods it with the spell's colour on recognition, neutral keeps it white until the release,
+##                       off is today. F11 in the gym cycles it
 ## Keys: F6 next movement profile, F7 physics interpolation (MoveFeelTag), (--gym only: F2 hero, F3 hit areas, F4 monster AI,
-## F8 god mode, F9 the gym's panel, G / middle-click spawn at the cursor: GymDev), F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
+## F8 god mode, F9 the gym's panel, F11 the cast tell's mode, G / middle-click spawn at the cursor: GymDev), F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
 ##
@@ -1208,6 +1212,7 @@ func _start() -> void:
 	_dev_on_floor_ready()
 	rig.aim_source = controller.aim_point   # (a movement feel's camera lead leans a little toward the aim)
 	MoveFeelTag.attach(self, player, MoveLab.gates() if _move_lab() else {})   # (F6 / F7 and the passive move log)
+	CastTell.attach(self, player, voice, controller.aim_point)   # (the "cast armed" tell on your own hero; --cast-tell, F11 in the gym)
 	_enter_barrier()
 	if not await _dev_after_barrier():
 		return

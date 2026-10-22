@@ -43,6 +43,9 @@ signal trigger_word_changed(word: String)
 ## The trigger word was heard and a cast is armed, waiting for its spell word (Incantation.trigger_armed): once per
 ## trigger, typed lines included. `word` is the token as heard ("CAST", "CASTS").
 signal trigger_heard(word: String)
+## An armed trigger was let go with no fizzle (Incantation.trigger_dropped: a "cast" buried in chatter, its window run out):
+## the cast tell fades (CastTell).
+signal trigger_dropped(word: String)
 ## New speech began: the gate's voice onset on the raw input (SpeechGate.voice_start_sample, ~50 ms into the voice,
 ## before the recognizer hears it), or with the gate off the recognizer's own voice tracker. Sounds that must not play
 ## over the player's next words stop here.
@@ -391,6 +394,7 @@ func _ensure_incantation() -> void:
 func _rebuild() -> void:
 	_inc = Incantation.new(_spells if not _spells.is_empty() else default_spells(), tuning)
 	_inc.trigger_armed.connect(func(token: String) -> void: trigger_heard.emit(token))
+	_inc.trigger_dropped.connect(func(token: String) -> void: trigger_dropped.emit(token))
 	_utt_events.clear()
 	_last_text = ""
 	if _listener != null:

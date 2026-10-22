@@ -70,7 +70,7 @@ func build(entries: Array[Dictionary], kits: Array[String], spells: Array[String
 	box.add_theme_constant_override("separation", 4)
 	scroll.add_child(box)
 	var title := Label.new()
-	title.text = "TEST GYM   F9 hide  F2 hero  F3 areas  F4 AI  F8 god  F10 spin speed\nbutton: spawn at the ring  G / middle-click: at the cursor"
+	title.text = "TEST GYM   F9 hide  F2 hero  F3 areas  F4 AI  F8 god  F10 spin speed  F11 cast tell\nbutton: spawn at the ring  G / middle-click: at the cursor"
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
 	box.add_child(title)
 	status_label = Label.new()

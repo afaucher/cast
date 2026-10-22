@@ -228,6 +228,18 @@ func _check_game() -> void:
 			break
 	check(int(gym.stats.totals("you")["hits"]) > 0, "the hit log counts the player's swing (%s)" % str(gym.stats.totals("you")))
 	check(gym.stats.text().contains("You dealt"), "the readout")
+	# the cast tell (CastTell): on the player, F11 cycles its mode and the corner tag says which
+	var tell := g.get_node_or_null("CastTell") as CastTell
+	check(tell != null and tell.hero == player, "the cast tell is on the player")
+	var was := CastTell.mode
+	CastTell.mode = CastTell.COLOUR
+	gym.cycle_cast_tell()
+	eq(CastTell.mode, CastTell.NEUTRAL_MODE, "F11: colour -> neutral")
+	var tag := g.get_node_or_null("MoveFeelTag") as MoveFeelTag
+	check(tag != null and tag.label.text == CastTell.label(), "the dev tag shows the cast tell's mode")
+	gym.cycle_cast_tell()
+	eq(CastTell.mode, CastTell.OFF, "F11: neutral -> off")
+	CastTell.mode = was
 	# spells: the slot picker and infinite components
 	gym.set_slot(0, "corn")
 	eq(player.slot_spell(0), "corn", "the slot picker puts corn in slot 1")

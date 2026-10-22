@@ -18,7 +18,7 @@ extends Node
 ##     and taken per minute)
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
 ## Movement profiles work as anywhere (F6 / F7; `--gym --move-feel grounded_anim`). F10 ("Spin speed") cycles Gasket's
-## grounded_anim spin through SpinSweep.DEV_SPEEDS.
+## grounded_anim spin through SpinSweep.DEV_SPEEDS. F11 cycles the cast tell's mode (colour / neutral / off: CastTell).
 
 const GAME := preload("res://scripts/app/game.gd")
 const DEFAULT_SPELLS := "fireball,heal,damp,tentacles"
@@ -340,6 +340,16 @@ func cycle_spin_speed() -> void:
 			"" if MoveFeel.on("strike_first") else "  [needs --move-feel grounded_anim]"])
 
 
+## F11: the cast tell's mode, colour -> neutral -> off (CastTell, docs/design/cast-armed-fx.md): the panel's status line and
+## the corner dev tag (MoveFeelTag's, as F6) say which.
+func cycle_cast_tell() -> void:
+	CastTell.cycle()
+	_status(CastTell.label())
+	var tag := game.get_node_or_null("MoveFeelTag") as MoveFeelTag if game != null else null
+	if tag != null:
+		tag.show_tag(CastTell.label())
+
+
 ## Every hero at full health; a downed one gets up (Hero.become, full: as a joiner arrives).
 func heal_crew() -> void:
 	for h in heroes():
@@ -438,6 +448,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				panel.visible = not panel.visible
 			KEY_F10:
 				cycle_spin_speed()
+			KEY_F11:
+				cycle_cast_tell()
 			KEY_G:
 				if selected != "":
 					spawn(selected, cursor_point())
