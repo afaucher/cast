@@ -131,6 +131,17 @@ static func heal_radius(pos: Vector3, radius: float, amount: float, team: int) -
 	return out
 
 
+## The staff (henchmen included) within radius of pos: [[employee, hp healed], ...], each healed where it resolves (the
+## host). A heal is for the crew AND the people they came to rescue (user, 2026-10-21: "Healing should work on henchmen
+## too"); not the rest of the neutral team (props, gators).
+static func heal_staff(pos: Vector3, radius: float, amount: float) -> Array:
+	var out := []
+	for a in GameWorld.actors_in_radius(pos, radius, GameWorld.TEAM_NEUTRAL):
+		if a is Employee and not a.dead and Net.resolves(a):
+			out.append([a, a.heal(amount)])
+	return out
+
+
 ## Damage everyone of `team` (-1 = everyone) within radius of pos, with
 ## linear falloff to `edge_mult` at the rim. Returns the actors hit.
 ## `shove` > 0 also pushes each one that far straight out from `pos` (falling off like the damage). `decider` (an explosive

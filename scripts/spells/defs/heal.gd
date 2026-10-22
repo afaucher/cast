@@ -30,12 +30,17 @@ static func heal_amount(power: float) -> float:
 static func cast(caster: Actor, power: float, pos: Vector3, _start: float, _extra: Dictionary) -> Node:
 	var col := SpellBook.color_of("heal")
 	var amount := heal_amount(power)
-	for a in GameWorld.actors_in_radius(pos, HEAL_RADIUS, caster.team):
+	var staff: Array[Actor] = []
+	for n in GameWorld.actors_in_radius(pos, HEAL_RADIUS, GameWorld.TEAM_NEUTRAL):
+		if n is Employee and not n.dead:
+			staff.append(n)
+	for a in GameWorld.actors_in_radius(pos, HEAL_RADIUS, caster.team) + staff:
 		if Teeth.cancel_on(a):   # the dentist: a heal pulls the teeth before they pop (on every screen: the pop is off everywhere)
 			Fx.number(a.global_position + Vector3(0, 3.0, 0), "DENTIST!", SpellBook.color_of("teeth"), 1.0)
 		var sparkle: Array[Color] = [Color(0.7, 1.0, 0.75), col]
 		Fx.burst(a.global_position + Vector3.UP * 0.2, sparkle, 12, 1.4, 0.07, 1.0, -1.5, Vector3.UP, 35.0)
-	for e: Array in Combat.heal_radius(pos, HEAL_RADIUS, amount, caster.team):   # (online: each hero's owner heals it, once)
+	# the crew, and the staff (henchmen too: Combat.heal_staff); online each is healed once, where it resolves
+	for e: Array in Combat.heal_radius(pos, HEAL_RADIUS, amount, caster.team) + Combat.heal_staff(pos, HEAL_RADIUS, amount):
 		var a: Actor = e[0]
 		if float(e[1]) > 0.5:
 			Fx.number(a.global_position + Vector3(0, 2.4, 0), "+%d" % int(roundf(float(e[1]))), Fx.NUMBER_HEAL, 1.1)

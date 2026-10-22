@@ -46,7 +46,11 @@ func setup() -> void:
 	dummy.max_hp = 100.0
 	GameWorld.spawn(dummy, Vector3(1.5, 0, 1.5))
 	dummy.hp = 40.0
+	var hench := Employee.spawn(Vector2i(1, 0), {"style": "henchman", "name": "Gary"})
+	hench.hp = 10.0
 	check(SpellBook.cast("heal", caster, 1.0, Vector3.ZERO), "heal casts")
+	check(hench.hp > 10.0, "a henchman in the radius is healed too (%.1f; user, 2026-10-21)" % hench.hp)
+	hench.queue_free()
 	var full_heal := HealSpell.heal_amount(1.0)
 	near(full_heal, 35.0, 0.001, "35 at full power")
 	near(caster.hp, 40.0 + full_heal, 0.01, "caster healed")
