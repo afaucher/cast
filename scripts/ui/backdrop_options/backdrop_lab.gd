@@ -10,6 +10,10 @@ extends LabBase
 ## --hero <id>       garage: the hero in front, wick | gasket | rebar (default: the player's hero, Wick)
 ## --board           garage: lay the real JobBoard over it, as the game does (backdrop_behind), for screenshots
 ## --board-seed <n>  with --board: the board's seed (default 7); the offers are ContractBoard.offers(seed)
+## --soot <id>       garage, after mood: none | soot (the hood fire's soot, After.SOOT_STYLES; default After.SOOT)
+## --close <id>      garage: a close-up of that hero's face, seen from the menu camera's side (the scuffs, the slump);
+##                   `van`: the van's cab and nose (the soot)
+## --side            with --close: from the hero's right instead, at head height (the face's depth, the head's pitch)
 ## --van <id>        storefront only: real (default) | stand-in
 ## --clean           no overlay (no PROTOTYPE tag, no mock menu panel): for use behind HTML mockups
 ## --shot <png>      save a screenshot after --shot-after seconds (default 2) and quit
@@ -41,6 +45,7 @@ func _ready() -> void:
 			if opts.has("mood"):
 				garage.mood = str(opts["mood"])
 			garage.featured_hero = arg(args, "--hero", "")
+			garage.soot = arg(args, "--soot", garage.soot)
 			backdrop = garage
 		_:
 			var script: GDScript = load(STOREFRONT)
@@ -50,7 +55,10 @@ func _ready() -> void:
 	add_child(backdrop)
 	if option == "garage" and args.has("--board"):
 		_real_board(ContractBoard.offers(int(arg(args, "--board-seed", "7"))))
-	if not args.has("--clean") and not args.has("--board"):
+	var close := arg(args, "--close", "")
+	if option == "garage" and close != "":
+		_close_up(backdrop as MenuBackdrop, close, args.has("--side"))
+	elif not args.has("--clean") and not args.has("--board"):
 		_overlay()
 	if shot_path != "":
 		_shot_later(shot_path, float(arg(args, "--shot-after", "2")))
@@ -64,6 +72,36 @@ func _real_board(offers: Array[ContractRun]) -> void:
 	var board := JobBoard.new(offers)
 	board.backdrop_behind = true
 	layer.add_child(board)
+
+
+## Park the garage's camera in front of a hero's head (it stops swaying; the crew keeps idling).
+func _close_up(garage: MenuBackdrop, id: String, side: bool) -> void:
+	if id == "van":
+		garage.set_process(false)
+		garage.camera.h_offset = 0.0
+		garage.camera.fov = 34.0
+		var nose := garage.van.global_transform * Vector3(0.0, 1.0, 1.4)
+		garage.camera.global_position = nose + (MenuBackdrop.CAM_POS - nose).normalized() * 6.5
+		garage.camera.look_at(nose)
+		return
+	var m := garage.hero_model(id)
+	if m == null:
+		push_warning("backdrop_lab: unknown --close %s" % id)
+		return
+	garage.set_process(false)
+	var cam := garage.camera
+	cam.h_offset = 0.0
+	cam.fov = 30.0
+	var head := m.get_part("head")
+	var look := head.global_position
+	var from: Vector3
+	if side:
+		from = look + m.global_basis.x.normalized() * 2.6 * m.scale.x
+	else:
+		var to_cam := (MenuBackdrop.CAM_POS - look)
+		from = look + to_cam.normalized() * 1.9 * m.scale.x
+	cam.global_position = from
+	cam.look_at(look)
 
 
 func _shot_later(path: String, after: float) -> void:

@@ -6,10 +6,10 @@ extends RefCounted
 ## It has to read as a disaster at a glance, and stay funny without explaining itself:
 ##   - CORN: a giant smug cob wedged in the van roof, whole cobs lying about (kernel-bumped, husked, one scorched),
 ##     one planted in the floor, kernels and popcorn in clumps, loose husk leaves. Never a word about corn but the sign.
-##   - DAMAGE: big char-black scorch marks (brown halo) on the floor and up the back wall, a popped hood with a small fire
-##     and a thick smoke column and a door hanging crooked, a failing work lamp.
+##   - DAMAGE: a popped hood with a small fire and a thick smoke column (soft soot round the nose only if SOOT says so),
+##     a door hanging crooked, a failing work lamp.
 ##   - STORY: an invoice nailed to the wall stamped PAST DUE, the corn sign reading a big red 0, an extinguisher on its
-##     side in a puddle of foam, the crew scuffed, sooty, patched and slumping.
+##     side in a puddle of foam, the crew scuffed, sooty, patched (on their faces) and slumping (feet planted).
 ##
 ## No class_name on purpose (like the backdrop kit): the backdrop preloads this file.
 
@@ -20,12 +20,10 @@ const KERNEL_DEEP := Color(0.95, 0.64, 0.07)
 const KERNEL_PALE := Color(1.0, 0.90, 0.42)
 const POP := Color(1.0, 0.95, 0.80)
 const CHAR := Color(0.05, 0.045, 0.045)
-const SCORCH_RIM := Color(0.36, 0.20, 0.10)
 const HUSK := Color(0.34, 0.62, 0.20)
 const HUSK_DRY := Color(0.58, 0.50, 0.24)
 const STEM := Color(0.46, 0.52, 0.20)
 const SOOT_RED := Color(0.78, 0.07, 0.05)
-const EMBER := Color(1.0, 0.38, 0.06)
 const EXT_RED := Color(0.80, 0.10, 0.08)
 const FOAM := Color(0.94, 0.96, 1.0)
 const PLASTER := Color(0.95, 0.90, 0.76)
@@ -134,52 +132,84 @@ static func loose_leaf(s: LowPoly.Soup, pos: Vector3, yaw: float, length: float,
 			_xf(pos + Vector3(0.0, 0.04, 0.0), Vector3(84.0, yaw, 0.0)))
 
 
-# --- Scorch -----------------------------------------------------------------------------------------
+# --- Soot -------------------------------------------------------------------------------------------
 
-## A scorch mark flat on the floor: a brown halo, a char-black core, a few glowing embers and streaks flung outward.
-static func scorch_floor(s: LowPoly.Soup, pos: Vector3, rx: float, rz: float, yaw: float, seed_value: int, streaks: int = 6) -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value
-	var halo := LowPoly.cylinder(1.0, 1.0, 0.012, 12, SCORCH_RIM, seed_value, 0.0, 1, 0.12).jitter(0.16, seed_value, Vector3(1.0, 0.0, 1.0))
-	s.merge(halo, _xf(pos + Vector3(0.0, 0.052, 0.0), Vector3(0.0, yaw, 0.0), Vector3(rx * 1.5, 1.0, rz * 1.5)))
-	var mid := LowPoly.cylinder(1.0, 1.0, 0.012, 11, Color(0.16, 0.10, 0.065), seed_value + 1, 0.0, 1, 0.1).jitter(0.2, seed_value + 1, Vector3(1.0, 0.0, 1.0))
-	s.merge(mid, _xf(pos + Vector3(0.0, 0.058, 0.0), Vector3(0.0, yaw + 20.0, 0.0), Vector3(rx * 0.95, 1.0, rz * 0.95)))
-	var core := LowPoly.cylinder(1.0, 1.0, 0.012, 10, Color(0.07, 0.06, 0.055), seed_value + 2, 0.0, 1, 0.1).jitter(0.22, seed_value + 2, Vector3(1.0, 0.0, 1.0))
-	s.merge(core, _xf(pos + Vector3(0.0, 0.064, 0.0), Vector3(0.0, yaw + 47.0, 0.0), Vector3(rx * 0.6, 1.0, rz * 0.6)))
-	for i in streaks:
-		var ang := rng.randf() * TAU
-		var slen := rng.randf_range(0.9, 1.5) * maxf(rx, rz) * 1.55
-		var dir := Vector3(sin(ang), 0.0, cos(ang))
-		var w := rng.randf_range(0.12, 0.26)
-		s.merge(LowPoly.frustum(Vector2(w, 0.012), Vector2(w * 0.12, 0.012), slen, CHAR if i % 2 == 0 else Color(0.11, 0.07, 0.05), seed_value + 10 + i, 0.0, 1, Vector2.ZERO, 0.06),
-				_xf(pos + Vector3(0.0, 0.06, 0.0) + dir * (maxf(rx, rz) * 0.5 + slen * 0.5), Vector3(90.0, rad_to_deg(ang), 0.0)))
-	for i in 7:
-		var a := rng.randf() * TAU
-		var r := sqrt(rng.randf()) * 0.62
-		var p := pos + Vector3(cos(a) * r * rx, 0.07, sin(a) * r * rz)
-		s.merge(LowPoly.box(Vector3(0.07, 0.02, 0.06) * rng.randf_range(0.8, 1.6), Kit.glow(EMBER if i % 2 == 0 else Color(1.0, 0.62, 0.15)), Kit.n(), 0.0, 1, 0.0),
-				LowPoly.at(p, Vector3(0.0, rng.randf() * 180.0, 0.0)))
+## The fire's marks. They used to be big char-black splats with a brown rim and black spikes flung out (four on the floor,
+## one up the back wall behind the van, a charred post): huge, hard-edged and far from the small hood fire, they read as a
+## hole, not as soot. Now: "none" (the default: the smoke, the popped hood and the glow tell the fire) or "soot": soft
+## sooty gradients where the hood fire would leave them (the floor under the van's nose, a stain up the van's flank from
+## the hood seam). Switch here (the lab: `--soot none|soot`).
+const SOOT_NONE := "none"
+const SOOT_SOFT := "soot"
+const SOOT_STYLES: Array[String] = [SOOT_NONE, SOOT_SOFT]
+const SOOT := SOOT_NONE
+const SOOT_INK := Color(0.045, 0.038, 0.034)
 
 
-## A scorch mark flat on a wall (facing +Z) at `pos`: a halo, a black core, flame-lick streaks climbing the wall.
-static func scorch_wall(s: LowPoly.Soup, pos: Vector3, rx: float, ry: float, seed_value: int, licks: int = 7) -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value
-	var halo := LowPoly.cylinder(1.0, 1.0, 0.012, 13, SCORCH_RIM, seed_value, 0.0, 1, 0.12).jitter(0.14, seed_value, Vector3(1.0, 0.0, 1.0))
-	s.merge(halo, _xf(pos, Vector3(90.0, 0.0, 0.0), Vector3(rx * 1.3, 1.0, ry * 1.3)))
-	var core := LowPoly.cylinder(1.0, 1.0, 0.012, 11, CHAR, seed_value + 1, 0.0, 1, 0.1).jitter(0.2, seed_value + 1, Vector3(1.0, 0.0, 1.0))
-	s.merge(core, _xf(pos + Vector3(0.0, 0.0, 0.016), Vector3(90.0, 0.0, 0.0), Vector3(rx * 0.86, 1.0, ry * 0.86)))
-	for i in licks:
-		var fx := (float(i) / float(licks - 1) - 0.5) * 2.0
-		var h := ry * rng.randf_range(1.2, 2.1) * (1.0 - absf(fx) * 0.45)
-		var w := rng.randf_range(0.28, 0.5)
-		var lean := fx * 7.0 + rng.randf_range(-5.0, 5.0)
-		var base := pos + Vector3(fx * rx * 0.8, ry * 0.3, 0.02)
-		var up := Vector3(-sin(deg_to_rad(lean)), cos(deg_to_rad(lean)), 0.0)
-		s.merge(LowPoly.frustum(Vector2(w * 1.45, 0.012), Vector2(w * 0.1, 0.012), h * 1.12, SCORCH_RIM, seed_value + 20 + i, 0.0, 1, Vector2.ZERO, 0.08),
-				_xf(base + up * h * 0.56, Vector3(0.0, 0.0, lean)))
-		s.merge(LowPoly.frustum(Vector2(w, 0.012), Vector2(w * 0.08, 0.012), h, CHAR, seed_value + 40 + i, 0.0, 1, Vector2.ZERO, 0.06),
-				_xf(base + up * h * 0.5 + Vector3(0.0, 0.0, 0.016), Vector3(0.0, 0.0, lean)))
+## The hood fire's soot, in the van's own space (`root` has the van's transform: nose +Z, camera side -X, the hood fire
+## at about (0, 1.3, 1.93)): a soft patch on the floor round the nose, a stain rising from the hood seam up the camera
+## side. Unshaded alpha gradients (a darkening, no edge, no rim); nothing moves.
+static func soot(root: Node3D) -> void:
+	var holder := Node3D.new()
+	holder.name = "Soot"
+	root.add_child(holder)
+	# the floor: under and in front of the nose, wider than deep, fading out well before the crew
+	var floor_q := _soot_quad(Vector2(2.6, 2.6), soot_texture(611, false, 0.8))
+	floor_q.name = "FloorSoot"
+	floor_q.position = Vector3(-1.1, 0.075, 2.3)
+	floor_q.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	holder.add_child(floor_q)
+	# the flank: from the hood seam (the front of the camera side, at the hood line) up over the cab side, drifting back
+	# (the quad's +x points to the nose: a positive roll leans its top toward the rear)
+	var side_q := _soot_quad(Vector2(0.8, 1.05), soot_texture(613, true, 0.85))
+	side_q.name = "FlankSoot"
+	side_q.position = Vector3(-1.075, 1.12, 1.66)
+	side_q.rotation_degrees = Vector3(0.0, -90.0, 12.0)
+	holder.add_child(side_q)
+
+
+static func _soot_quad(size: Vector2, tex: Texture2D) -> MeshInstance3D:
+	var q := QuadMesh.new()
+	q.size = size
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.albedo_color = SOOT_INK
+	m.albedo_texture = tex
+	q.material = m
+	var mi := MeshInstance3D.new()
+	mi.mesh = q
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## A soft soot gradient (white, the alpha is the soot): a blob, or a `plume` (narrow and dense at the bottom, widening and
+## thinning as it rises), its edge broken up by a seeded noise. `peak` is the densest alpha.
+static func soot_texture(seed_value: int, plume: bool, peak: float) -> ImageTexture:
+	var size := 96
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var noise := FastNoiseLite.new()
+	noise.seed = seed_value
+	noise.frequency = 0.06
+	noise.fractal_octaves = 3
+	for py in size:
+		for px in size:
+			var u := (float(px) + 0.5) / float(size) * 2.0 - 1.0      # -1 .. 1, left to right
+			var v := 1.0 - (float(py) + 0.5) / float(size) * 2.0      # -1 .. 1, bottom to top
+			var r: float
+			var dense := 1.0
+			if plume:
+				var t := (v + 1.0) * 0.5                               # 0 at the bottom .. 1 at the top
+				var width := lerpf(0.35, 0.95, sqrt(t))
+				r = maxf(absf(u) / width, absf(v + 0.1) / 0.95)
+				dense = lerpf(1.0, 0.45, t)
+			else:
+				r = Vector2(u, v).length()
+			var nz := noise.get_noise_2d(float(px), float(py)) * 0.5 + 0.5
+			var a := (1.0 - smoothstep(0.15, 1.0, r + (nz - 0.5) * 0.35)) * dense * (0.75 + 0.25 * nz)
+			img.set_pixel(px, py, Color(1.0, 1.0, 1.0, clampf(a * peak, 0.0, 1.0)))
+	return ImageTexture.create_from_image(img)
 
 
 # --- The van -----------------------------------------------------------------------------------------
@@ -217,24 +247,11 @@ static func van_damage(root: Node3D) -> void:
 
 # --- The room ---------------------------------------------------------------------------------------
 
-## The mess: scorch marks (floor and back wall), cobs, kernels, husks, the extinguisher in its foam. `van_at` is the
-## van's position; `wall_z` the back wall's front face.
-static func mess(root: Node3D, van_at: Vector3, wall_z: float) -> void:
+## The mess: cobs, kernels, husks, the extinguisher in its foam (the fire's soot is `soot`). `van_at` is the van's
+## position.
+static func mess(root: Node3D, van_at: Vector3) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9
-	var sc := LowPoly.Soup.new(31, 0.05)
-	# floor: a blast crater in front of the van, one under the nose, a couple more
-	scorch_floor(sc, van_at + Vector3(0.9, 0.0, 3.6), 2.2, 1.35, 8.0, 301, 7)
-	scorch_floor(sc, van_at + Vector3(3.1, 0.0, 0.6), 1.5, 1.2, -20.0, 311, 5)
-	scorch_floor(sc, van_at + Vector3(-1.6, 0.0, 1.7), 1.1, 0.8, 30.0, 321, 4)
-	scorch_floor(sc, van_at + Vector3(5.0, 0.0, 4.0), 1.2, 0.8, 12.0, 331, 4)
-	# the back wall: a big blast behind the van, flame licks climbing toward the neon
-	scorch_wall(sc, Vector3(van_at.x + 1.0, 3.3, wall_z + 0.03), 2.8, 1.8, 341, 9)
-	# ... and up the timber post in front of it, charred from the floor to the neon
-	sc.merge(LowPoly.box(Vector3(0.52, 3.8, 0.012), Color(0.14, 0.09, 0.06), 361, 0.0, 1, 0.08), LowPoly.at(Vector3(3.6, 1.9, wall_z + 0.505)))
-	sc.merge(LowPoly.box(Vector3(0.52, 2.2, 0.012), CHAR, 362, 0.0, 1, 0.06), LowPoly.at(Vector3(3.6, 1.1, wall_z + 0.51)))
-	scorch_wall(sc, Vector3(van_at.x + 5.2, 0.7, wall_z + 0.03), 1.1, 0.7, 351, 4)
-	root.add_child(Kit.mesh(sc, 0.0, "Scorch"))
 	# corn, husks, foam
 	var s := LowPoly.Soup.new(77, 0.07)
 	lay_cob(s, van_at + Vector3(-0.2, 0.0, 5.2), 1.0, 0.17, 100.0, 1101)
@@ -408,8 +425,26 @@ static func puff_texture() -> GradientTexture2D:
 
 # --- The crew ---------------------------------------------------------------------------------------
 
-## Scuff the crew up: sooty (greyer, a touch darker) and a plaster and a smudge on each face. Returns the nodes added (the
-## caller frees them when the mood changes). The models' own parts are only re-tinted (see `clean_crew`).
+## Where the after mood scuffs each hero, in the head part's own space (the model faces -Z, +X is its right, the cheek the
+## front spot turns to the camera): the crossed plasters ("at", a strip's "len") and a soot smudge or two (x, y, size).
+## "on" says which way they are pasted: "face" (at = x, y on the face, found along +Z) or "top" (at = x, z on the crown,
+## found looking down: Gasket's face is all goggles, brows and beard, so her plasters go on a bump on her head). How deep
+## each piece sits is found on the head itself (`face_fit`): the face's front is NOT the head mesh's front (a nose and a
+## brow stand ~0.1 proud of it), and pasting at the mesh's bounds left the plasters floating in front of the faces.
+const FACE_SCUFFS := {
+	"WickModel": {"on": "face", "at": Vector2(0.09, -0.14), "len": 0.08, "smudges": [Vector3(-0.085, -0.09, 0.04)]},
+	"GasketModel": {"on": "top", "at": Vector2(0.09, -0.09), "len": 0.15, "smudges": [Vector3(-0.17, -0.08, 0.045)]},
+	"RebarModel": {"on": "face", "at": Vector2(0.155, -0.112), "len": 0.155, "smudges": [Vector3(-0.15, -0.255, 0.055)]},
+}
+const SMUDGE := Color(0.3, 0.26, 0.23)   ## soot on skin or stone: dark, but well off the eyes' near-black (or it reads as an eye)
+const PLASTER_W := 0.3        ## a plaster strip's width, as a share of its length
+const PLASTER_T := 0.014      ## its thickness
+const SCUFF_GAP := 0.003      ## air between the face and the back of a plaster or smudge
+
+
+## Scuff the crew up: sooty (greyer, a touch darker) and a plaster and a smudge on each face, pasted ON the face (under the
+## head part, so they follow every nod). Returns the nodes added (the caller frees them when the mood changes). The models'
+## own parts are only re-tinted (see `clean_crew`).
 static func dress_crew(crew: Array) -> Array[Node]:
 	var added: Array[Node] = []
 	for entry in crew:
@@ -420,22 +455,177 @@ static func dress_crew(crew: Array) -> Array[Node]:
 		var head := m.get_part("head")
 		if head == null or head.mesh == null:
 			continue
-		var bb := head.mesh.get_aabb()
-		var s := LowPoly.Soup.new(Kit.n(), 0.02)
-		var z := bb.position.z - 0.004
-		var cx := bb.position.x + bb.size.x * 0.7
-		var cy := bb.position.y + bb.size.y * 0.3
-		s.merge(LowPoly.box(Vector3(bb.size.x * 0.42, bb.size.y * 0.13, 0.02), PLASTER, Kit.n(), 0.0, 1, 0.02), _xf(Vector3(cx, cy, z), Vector3(0.0, 0.0, 38.0)))
-		s.merge(LowPoly.box(Vector3(bb.size.x * 0.42, bb.size.y * 0.13, 0.02), PLASTER, Kit.n(), 0.0, 1, 0.02), _xf(Vector3(cx, cy, z - 0.002), Vector3(0.0, 0.0, -38.0)))
-		s.merge(LowPoly.boulder(Vector3(bb.size.x * 0.2, bb.size.y * 0.1, 0.012), 0, 0.2, Color(0.1, 0.09, 0.09), Kit.n(), 0.03), LowPoly.at(Vector3(bb.position.x + bb.size.x * 0.28, bb.position.y + bb.size.y * 0.62, z)))
-		s.merge(LowPoly.boulder(Vector3(bb.size.x * 0.17, bb.size.y * 0.08, 0.012), 0, 0.2, Color(0.12, 0.1, 0.1), Kit.n(), 0.03), LowPoly.at(Vector3(bb.position.x + bb.size.x * 0.42, bb.position.y + bb.size.y * 0.16, z)))
+		var spot: Dictionary = FACE_SCUFFS.get(str(m.name), _default_scuffs(head.mesh.get_aabb()))
+		var faces := head.mesh.get_faces()
+		var s := LowPoly.Soup.new(Kit.n(), 0.0)
+		var at: Vector2 = spot["at"]
+		var length := float(spot["len"])
+		var w := length * PLASTER_W
+		var fit := paste_fit(faces, str(spot.get("on", "face")), at, plaster_half(length), PLASTER_T)
+		s.merge(LowPoly.box(Vector3(length, w, PLASTER_T), PLASTER, Kit.n(), 0.0, 1, 0.0), fit * _xf(Vector3.ZERO, Vector3(0.0, 0.0, 38.0)))
+		s.merge(LowPoly.box(Vector3(length, w, PLASTER_T), PLASTER.darkened(0.04), Kit.n(), 0.0, 1, 0.0), fit * _xf(Vector3(0.0, 0.0, -PLASTER_T * 0.6), Vector3(0.0, 0.0, -38.0)))
+		for sm: Vector3 in spot["smudges"]:
+			var sz := sm.z
+			var sfit := face_fit(faces, Vector2(sm.x, sm.y), Vector2(sz, sz * 0.7), 0.01)
+			s.merge(LowPoly.boulder(Vector3(sz, sz * 0.6, 0.005), 0, 0.25, SMUDGE, Kit.n(), 0.0), sfit * _xf(Vector3.ZERO, Vector3(0.0, 0.0, 14.0)))
 		var mi := MeshInstance3D.new()
 		mi.name = "FaceScuffs"
 		mi.mesh = s.to_mesh()
 		mi.material_override = LowPolyMaterial.make(0.0)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		head.add_child(mi)
 		added.append(mi)
 	return added
+
+
+## A head nobody tuned: a cheek right of centre, a little below the middle.
+static func _default_scuffs(bb: AABB) -> Dictionary:
+	var c := bb.get_center()
+	return {"on": "face", "at": Vector2(c.x + bb.size.x * 0.25, c.y - bb.size.y * 0.15), "len": bb.size.x * 0.3,
+		"smudges": [Vector3(c.x - bb.size.x * 0.25, c.y - bb.size.y * 0.1, bb.size.x * 0.12)]}
+
+
+## Half the footprint of the crossed plasters (two strips `length` long crossing at +-38 degrees), on the surface.
+static func plaster_half(length: float) -> Vector2:
+	var w := length * PLASTER_W
+	var a := deg_to_rad(38.0)
+	return Vector2(0.5 * length * cos(a) + 0.5 * w * sin(a), 0.5 * length * sin(a) + 0.5 * w * cos(a))
+
+
+## Turns the head so its crown faces -Z (x stays x, z becomes y): `face_fit` then pastes onto the top of the head.
+const _CROWN := Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+
+
+## `face_fit` on the face ("face": at = x, y) or on the crown ("top": at = x, z), in the head's own space.
+static func paste_fit(faces: PackedVector3Array, on: String, at: Vector2, half: Vector2, thickness: float) -> Transform3D:
+	if on != "top":
+		return face_fit(faces, at, half, thickness)
+	var turned := PackedVector3Array()
+	turned.resize(faces.size())
+	for i in faces.size():
+		turned[i] = _CROWN * faces[i]
+	return Transform3D(_CROWN.inverse(), Vector3.ZERO) * face_fit(turned, at, half, thickness)
+
+
+## The transform that pastes a flat piece `thickness` deep onto a face (a mesh's triangles, `get_faces()`) at `at` (x, y in
+## the mesh's space), covering +-`half`: the face's depth is sampled over that footprint (rays along +Z from the front), a
+## plane is fitted through the samples so the piece follows the face's slope (a bevel, a cheek turning away), and the piece
+## is moved out until nothing of the face pokes through it. The piece's own x / y lie on the face, its z points into it.
+static func face_fit(faces: PackedVector3Array, at: Vector2, half: Vector2, thickness: float) -> Transform3D:
+	var pts: Array[Vector3] = []
+	for iy in 3:
+		for ix in 3:
+			var p := at + Vector2((float(ix) - 1.0) * half.x, (float(iy) - 1.0) * half.y)
+			var z := face_depth(faces, p)
+			if z < INF:
+				pts.append(Vector3(p.x - at.x, p.y - at.y, z))
+	if pts.is_empty():
+		return Transform3D(Basis.IDENTITY, Vector3(at.x, at.y, 0.0))
+	# least squares z = a + b x + c y over the samples (x, y relative to `at`)
+	var sx := 0.0
+	var sy := 0.0
+	var sz := 0.0
+	var sxx := 0.0
+	var syy := 0.0
+	var sxy := 0.0
+	var sxz := 0.0
+	var syz := 0.0
+	for q in pts:
+		sx += q.x
+		sy += q.y
+		sz += q.z
+		sxx += q.x * q.x
+		syy += q.y * q.y
+		sxy += q.x * q.y
+		sxz += q.x * q.z
+		syz += q.y * q.z
+	var n := float(pts.size())
+	var m := Basis(Vector3(n, sx, sy), Vector3(sx, sxx, sxy), Vector3(sy, sxy, syy))   # (symmetric: columns = rows)
+	var abc := Vector3(sz / n, 0.0, 0.0)
+	if absf(m.determinant()) > 1e-9:
+		abc = m.inverse() * Vector3(sz, sxz, syz)
+	# move the plane out to the front-most sample (a sample in front of the plane would poke through the piece)
+	var proud := 0.0
+	for q in pts:
+		proud = maxf(proud, (abc.x + abc.y * q.x + abc.z * q.y) - q.z)
+	var zc := abc.x - proud
+	var into := Vector3(-abc.y, -abc.z, 1.0).normalized()
+	var x_axis := (Vector3.RIGHT - into * into.x).normalized()
+	var y_axis := into.cross(x_axis)
+	return Transform3D(Basis(x_axis, y_axis, into), Vector3(at.x, at.y, zc) - into * (thickness * 0.5 + SCUFF_GAP))
+
+
+## The front-most depth (smallest z) of the mesh at (x, y), INF when no triangle covers it.
+static func face_depth(faces: PackedVector3Array, p: Vector2) -> float:
+	var best := INF
+	for i in range(0, faces.size() - 2, 3):
+		var a := faces[i]
+		var b := faces[i + 1]
+		var c := faces[i + 2]
+		var d := (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
+		if absf(d) < 1e-9:
+			continue
+		var l1 := ((b.y - c.y) * (p.x - c.x) + (c.x - b.x) * (p.y - c.y)) / d
+		var l2 := ((c.y - a.y) * (p.x - c.x) + (a.x - c.x) * (p.y - c.y)) / d
+		var l3 := 1.0 - l1 - l2
+		if l1 < -1e-5 or l2 < -1e-5 or l3 < -1e-5:
+			continue
+		best = minf(best, l1 * a.z + l2 * b.z + l3 * c.z)
+	return best
+
+
+## The slump after a bad job, laid over a model's own idle every frame (it processes after the models, `process_priority`):
+## the torso stoops a little and goes askew, the head hangs, and the feet stay planted. (It used to tilt the whole model
+## about its feet: 12 degrees on Rebar, the tallest and nearest, threw his head ~0.7 forward and down toward the camera.)
+## Built per model by the backdrop under its mood node; leaving the tree puts the parts back.
+class Slump extends Node:
+	var model: LowPolyModel
+	var stoop := 0.0        ## rad, the torso forward (about its own pivot, at the hips)
+	var droop := 0.0        ## rad, the head down
+	var roll := 0.0         ## rad, the torso askew
+	var _laid := {}         ## part name -> [the rotation written, the model's own rotation under it]
+
+	func _init() -> void:
+		name = "Slump"
+		process_priority = 100   # after the models' own _process (their idle writes the parts first)
+
+	func _ready() -> void:
+		lay()
+
+	func _process(_delta: float) -> void:
+		lay()
+
+	## Lay the slump over the parts' current pose (also callable right after placing, so the first frame is already slumped).
+	func lay() -> void:
+		if model == null or not is_instance_valid(model):
+			return
+		_lay("body", Vector3(-stoop, 0.0, roll))
+		_lay("head", Vector3(-droop, 0.0, 0.0))
+
+	## The model's own rotation of a part, without the slump (tests).
+	func own_rotation(part: String) -> Vector3:
+		var p := model.get_part(part) if model != null else null
+		if p == null:
+			return Vector3.ZERO
+		var w: Array = _laid.get(part, [])
+		return w[1] if w.size() == 2 and p.rotation.is_equal_approx(w[0]) else p.rotation
+
+	func _lay(part: String, add: Vector3) -> void:
+		var p := model.get_part(part)
+		if p == null:
+			return
+		var base := own_rotation(part)   # (an idle that sets the part every frame wrote a fresh pose; one that leaves it keeps the last)
+		p.rotation = base + add
+		_laid[part] = [p.rotation, base]
+
+	func _exit_tree() -> void:
+		if model == null or not is_instance_valid(model):
+			return
+		for part: String in _laid.keys():
+			var p := model.get_part(part)
+			if p != null:
+				p.rotation = own_rotation(part)
+		_laid.clear()
 
 
 ## Undo dress_crew's tint.

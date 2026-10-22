@@ -24,8 +24,8 @@ extends Node3D
 ##   dawn   cool light through the ceiling grate over warm work lights and torches (the default)
 ##   night  no grate light, a colour grade (cool, dark), the van's headlights on, the gate runs hotter
 ##   after  the morning after a bad job (scripts/ui/backdrops/after_job.gd): a giant corn cob wedged in the van roof, the hood
-##          popped over a small fire and a smoke column, scorch marks on the floor and up the wall, cobs, kernels and husks
-##          about, an invoice stamped PAST DUE, a failing work lamp, the crew sooty, patched and slumping
+##          popped over a small fire and a smoke column (soft soot round the nose if `soot` says so), cobs, kernels and
+##          husks about, an invoice stamped PAST DUE, a failing work lamp, the crew sooty, patched and slumping
 ## Left empty, the mood comes from context (`pick_mood()`): `--backdrop-mood dawn|night|after` wins; otherwise
 ## "after" when the last finished contract went badly (LastContract.was_bad), "night" when the local clock is
 ## between 20:00 and 05:00, else "dawn".
@@ -80,8 +80,10 @@ const CAB_ORDER: Array[String] = ["gasket", "wick", "rebar"]
 ## Camera slide (Camera3D.h_offset, world units, sideways without turning) that moves the picture toward the right so the
 ## clipboard on the left third does not sit on the van.
 const FRAME_SHIFT := -2.7
-## Roll (degrees) of each hero's slump after a bad job, so the three do not lean the same way.
-const SLUMP_ROLL := {"wick": 5.0, "gasket": -4.0, "rebar": 3.0}
+## Each hero's slump after a bad job (After.Slump, over the model's own idle; radians): x the torso's stoop forward, y the
+## head hanging, z the torso askew (not all the same way). The feet stay planted: the models themselves stand upright.
+## (Wick's head hangs least: any more and his hat brim hides his face from the menu camera.)
+const SLUMP := {"wick": Vector3(0.1, 0.03, 0.06), "gasket": Vector3(0.1, 0.16, -0.05), "rebar": Vector3(0.07, 0.14, 0.04)}
 const SWAY_DEG := 3.2                ## the camera orbits its focus by +- this
 const SWAY_SPEED := 0.12             ## rad/s: a full sway takes ~52 s
 
@@ -100,6 +102,9 @@ var mood := ""
 var featured_hero := ""
 ## The number on the "JOBS SINCE LAST CORN INCIDENT" sign: finished contracts in a row that were not bad
 ## (LastContract.clean_jobs). After a bad job it is 0, and the "after" mood pastes a huge red 0 over it whatever it says.
+## The after mood's soot from the hood fire (After.SOOT_STYLES: "none" or "soot"; After.SOOT is the game's). Set before
+## add_child (the lab's `--soot`).
+var soot := After.SOOT
 var corn_jobs := LastContract.clean_jobs():
 	set(v):
 		corn_jobs = v
@@ -527,10 +532,9 @@ func _place(id: String, offset: Vector3, yaw: float, animate: bool = false) -> v
 	var spot := VAN_AT + offset
 	var turn := deg_to_rad(_face_yaw + yaw)
 	_spots[id] = spot
-	# after a bad job they slump: the weight forward onto the feet, a little askew
-	var slump := mood == "after"
-	m.rotation.x = deg_to_rad(-12.0) if slump else 0.0
-	m.rotation.z = deg_to_rad(SLUMP_ROLL.get(id, 4.0)) if slump else 0.0
+	# upright on their feet in every mood (the after mood's slump is in the torso and head: After.Slump)
+	m.rotation.x = 0.0
+	m.rotation.z = 0.0
 	var old: Tween = _steps.get(id)
 	if old != null and old.is_valid():
 		old.kill()
@@ -750,7 +754,7 @@ static func _tone_curve(top: Color) -> GradientTexture1D:
 
 
 ## "After a bad job" (the pieces are in after_job.gd): the corn bomb in the van roof and the popped hood over a fire, smoke
-## columns, scorch marks, cobs and kernels, the invoice, the red 0, a failing lamp, the crew scuffed up.
+## columns, the soot if any (`soot`), cobs and kernels, the invoice, the red 0, a failing lamp, the crew scuffed up and slumped.
 func _after_job() -> void:
 	# the van's own pieces: the side door hangs off its track
 	van.door.rotation = Vector3(deg_to_rad(-5.0), 0.0, deg_to_rad(8.0))
@@ -760,7 +764,9 @@ func _after_job() -> void:
 	vroot.transform = _van_holder.transform * van.transform
 	_mood_root.add_child(vroot)
 	After.van_damage(vroot)
-	After.mess(_mood_root, VAN_AT, WALL_Z)
+	After.mess(_mood_root, VAN_AT)
+	if soot == After.SOOT_SOFT:
+		After.soot(vroot)
 	# smoke: a thick column from under the hood, a thinner one from the hole in the roof
 	var hood_smoke := After.smoke("Smoke", 70, 0.4, 1.5, 2.2, 0.8, 1.3)
 	hood_smoke.position = vroot.transform * Vector3(0.0, 1.45, 1.95)
@@ -802,3 +808,17 @@ func _after_job() -> void:
 		_corn_sign_label.modulate = After.SOOT_RED
 		After.corn_sign_zero(_mood_root, _corn_sign_node, "0")
 	_crew_extras = After.dress_crew([wick, gasket, rebar])
+	for id in HEROES:
+		var sl := After.Slump.new()
+		sl.name = "Slump_" + id
+		sl.model = hero_model(id)
+		var amount: Vector3 = SLUMP.get(id, Vector3(0.08, 0.15, 0.0))
+		sl.stoop = amount.x
+		sl.droop = amount.y
+		sl.roll = amount.z
+		_mood_root.add_child(sl)
+
+
+## The after mood's slump on a hero (null in the other moods), for tests and the lab.
+func slump_of(id: String) -> Node:
+	return _mood_root.get_node_or_null("Slump_" + id) if _mood_root != null else null

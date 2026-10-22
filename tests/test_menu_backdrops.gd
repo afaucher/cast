@@ -15,6 +15,8 @@ func setup() -> void:
 	await _check_garage_moods()
 	await _check_garage_switching()
 	await _check_garage_hero()
+	await _check_after_crew()
+	await _check_after_soot()
 	await _check_garage_cost()
 	LastContract.clear()
 	finish()
@@ -130,7 +132,7 @@ func _check_garage_moods() -> void:
 		var mood_root := g.get_node_or_null("Mood")
 		check(mood_root != null, "%s: the mood node exists" % m)
 		check((mood_root != null and mood_root.get_node_or_null("Smoke") != null) == (m == "after"), "%s: smoke only after a bad job" % m)
-		check((mood_root != null and mood_root.get_node_or_null("AfterMess") != null) == (m == "after"), "%s: corn and scorch only after a bad job" % m)
+		check((mood_root != null and mood_root.get_node_or_null("AfterMess") != null) == (m == "after"), "%s: corn only after a bad job" % m)
 		check(mood_root != null and mood_root.find_children("*", "SpotLight3D", true, false).size() == 1, "%s: one overhead spot (the grate by day, the work lamp at night)" % m)
 		# the corn sign
 		check(g.corn_jobs == 0, "the corn counter reads 0 (nothing recorded)")
@@ -205,6 +207,115 @@ func _check_garage_hero() -> void:
 	g.set_featured_hero("bogus")
 	eq(g.featured_hero, "rebar", "an unknown hero is refused")
 	g.queue_free()
+	await frames(2)
+
+
+## After a bad job: the crew stands upright on its feet (the slump is a stoop and a hung head, not the whole model pitched
+## toward the camera, which threw Rebar's head ~0.7 forward), and the plasters and smudges sit ON each head, not in front
+## of it (they were pasted at the head mesh's bounds, a nose and a brow ~0.1 proud of the face). Every hero in front.
+const AfterJob := preload("res://scripts/ui/backdrops/after_job.gd")
+const MAX_HEAD_SHIFT := 0.3      ## how far the slump may move a head forward or sideways of where it stands at dawn
+const MAX_HEAD_TILT := 20.0      ## degrees between a head's up and the world's up
+const MAX_SCUFF_GAP := 0.03      ## air between a plaster and the face under it
+
+
+func _check_after_crew() -> void:
+	for front in MenuBackdrop.HEROES:
+		var dawn := _garage("dawn")
+		dawn.set_featured_hero(front)
+		await frames(3)
+		var heads := {}
+		for id in MenuBackdrop.HEROES:
+			heads[id] = dawn.hero_model(id).get_part("head").global_position
+		dawn.queue_free()
+		await frames(2)
+		var g := _garage("after")
+		g.set_featured_hero(front)
+		await frames(3)
+		for id in MenuBackdrop.HEROES:
+			var m := g.hero_model(id)
+			var tag := "%s (%s in front)" % [id, front]
+			near(m.rotation.x, 0.0, 0.0001, "%s: the model is not pitched (feet planted)" % tag)
+			near(m.rotation.z, 0.0, 0.0001, "%s: the model is not rolled" % tag)
+			check(g.slump_of(id) != null, "%s: slumps" % tag)
+			var head := m.get_part("head")
+			var shift: Vector3 = head.global_position - heads[id]
+			check(Vector2(shift.x, shift.z).length() < MAX_HEAD_SHIFT, "%s: the head moves %.2f from its dawn spot (< %.2f)" % [tag, Vector2(shift.x, shift.z).length(), MAX_HEAD_SHIFT])
+			check(shift.y < 0.0, "%s: the head hangs a little lower than at dawn (%.3f)" % [tag, shift.y])
+			var tilt := rad_to_deg(head.global_basis.y.normalized().angle_to(Vector3.UP))
+			check(tilt < MAX_HEAD_TILT and tilt > 2.0, "%s: the head is bowed, not buried (%.1f deg)" % [tag, tilt])
+			if front == id:
+				_check_scuffs(m, tag)
+		# back to dawn: the slump lets go of the parts
+		g.set_mood("dawn")
+		await frames(2)
+		for id in MenuBackdrop.HEROES:
+			var head := g.hero_model(id).get_part("head")
+			check(head.get_node_or_null("FaceScuffs") == null, "%s: the plasters come off at dawn" % id)
+			var tilt := rad_to_deg(head.global_basis.y.normalized().angle_to(Vector3.UP))
+			check(tilt < 8.0, "%s: upright again at dawn (%.1f deg)" % [id, tilt])
+		g.queue_free()
+		await frames(2)
+
+
+## The plasters and smudges of one hero: under its head part (they follow every nod), inside the head's outline, and
+## resting on the face (or the crown) with at most MAX_SCUFF_GAP of air, never sunk into it.
+func _check_scuffs(m: LowPolyModel, tag: String) -> void:
+	var head := m.get_part("head")
+	var scuffs := head.get_node_or_null("FaceScuffs") as MeshInstance3D
+	check(scuffs != null, "%s: scuffs on the head part" % tag)
+	if scuffs == null:
+		return
+	var hb := head.mesh.get_aabb().grow(0.01)
+	var sb := scuffs.transform * scuffs.mesh.get_aabb()
+	check(sb.position.x >= hb.position.x and sb.end.x <= hb.end.x and sb.position.y >= hb.position.y and sb.end.y <= hb.end.y,
+		"%s: the scuffs stay inside the head's outline (%s in %s)" % [tag, sb, hb])
+	var spot: Dictionary = AfterJob.FACE_SCUFFS[str(m.name)]
+	var on := str(spot["on"])
+	var at: Vector2 = spot["at"]
+	var head_faces := head.mesh.get_faces()
+	var scuff_faces := scuffs.mesh.get_faces()
+	if on == "top":
+		var turn := Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))   # (the crown toward -Z, as AfterJob pastes it)
+		for i in head_faces.size():
+			head_faces[i] = turn * head_faces[i]
+		for i in scuff_faces.size():
+			scuff_faces[i] = turn * scuff_faces[i]
+	# over the whole plaster footprint: the plaster's front is in front of the face, by its thickness and a little air
+	var half := AfterJob.plaster_half(float(spot["len"]))
+	for p: Vector2 in [at, at + Vector2(half.x * 0.3, 0.0), at - Vector2(half.x * 0.3, 0.0), at + Vector2(0.0, half.y * 0.3), at - Vector2(0.0, half.y * 0.3)]:
+		var face_z := AfterJob.face_depth(head_faces, p)
+		var plaster_z := AfterJob.face_depth(scuff_faces, p)
+		check(face_z < INF and plaster_z < INF, "%s: face and plaster both at %s" % [tag, p])
+		if face_z == INF or plaster_z == INF:
+			continue
+		var gap := face_z - plaster_z
+		check(gap > AfterJob.PLASTER_T * 0.5 and gap < AfterJob.PLASTER_T * 2.0 + MAX_SCUFF_GAP,
+			"%s: the plaster rests on the %s at %s (front %.3f before it)" % [tag, on, p, gap])
+
+
+## The hood fire's marks: none by default (the old black splats are gone), the soft soot only when asked for.
+func _check_after_soot() -> void:
+	check(AfterJob.SOOT_STYLES.has(AfterJob.SOOT), "the default soot style is a known one")
+	var g := _garage("after")
+	await frames(2)
+	eq(g.soot, AfterJob.SOOT, "the garage takes the default soot style")
+	check(g.find_children("Scorch", "", true, false).is_empty(), "no scorch splats")
+	eq(g.find_children("Soot", "", true, false).size(), 1 if AfterJob.SOOT == AfterJob.SOOT_SOFT else 0, "soot only when the style asks for it")
+	g.queue_free()
+	await frames(2)
+	var s := MenuBackdrop.new()
+	s.mood = "after"
+	s.soot = AfterJob.SOOT_SOFT
+	add_child(s)
+	await frames(2)
+	var soot := s.find_children("Soot", "", true, false)
+	eq(soot.size(), 1, "soot: one holder")
+	if soot.size() == 1:
+		eq(soot[0].find_children("*", "MeshInstance3D", true, false).size(), 2, "soot: the floor patch and the flank stain")
+	s.set_mood("dawn")
+	check(s.find_children("Soot", "", true, false).is_empty(), "soot: gone at dawn")
+	s.queue_free()
 	await frames(2)
 
 
