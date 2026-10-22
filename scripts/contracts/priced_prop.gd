@@ -318,10 +318,12 @@ func last_culprit() -> Node:
 	return _last_source.get_ref() as Node
 
 
+## Only this screen's own hero shows a tag (user, 2026-10-21: "Lets only show tags for our own hero"): AI teammates and
+## other players' heroes walking past do not.
 func _hero_near() -> bool:
 	for n in get_tree().get_nodes_in_group("actors"):
-		var a := n as Actor
-		if a == null or a.dead or a.team != GameWorld.TEAM_HEROES:
+		var a := n as Hero
+		if a == null or a.dead or not a.is_player:
 			continue
 		if GameWorld.flat_distance(a.global_position, global_position) <= TAG_RANGE:
 			return true

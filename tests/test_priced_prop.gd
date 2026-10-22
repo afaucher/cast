@@ -242,8 +242,11 @@ func setup() -> void:
 	check(not statue2.tag_shown() and statue2.tag_alpha() < 0.01, "no hero around: no tag")
 	eq(statue2.tag_text(), "Gold toilet – $15,000", "tag text")
 	var walker := _hero(Vector3(2.6, 0, 0), "Wick")
+	await frames(20)
+	check(not statue2.tag_shown(), "an AI teammate within 3 does not show it (only our own hero: user, 2026-10-21)")
+	walker.is_player = true
 	await frames(40)
-	check(statue2.tag_shown() and statue2.tag_alpha() > 0.95, "a hero within 3: tag fades in (%.2f)" % statue2.tag_alpha())
+	check(statue2.tag_shown() and statue2.tag_alpha() > 0.95, "our own hero within 3: tag fades in (%.2f)" % statue2.tag_alpha())
 	check(statue2.tag_label.visible, "and is visible")
 	walker.global_position = Vector3(6.0, 0, 0)
 	await frames(45)
