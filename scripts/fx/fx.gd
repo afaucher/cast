@@ -408,9 +408,9 @@ static func _on_shove_impact(kind: String, pos: Vector3, amount: float, actor: A
 		"void":
 			number(pos + Vector3(0, 2.4, 0), "AAAH!", Color(0.8, 0.6, 1.0), 0.8)
 		"lava":
-			# a lava cave's lava (Actor._enter_void): a hot splash where it went in, and the hero's "LAVA!" (the pull's
-			# 15 shows as its damage number). On this machine: the actor's owner runs the shove (LavaField splashes for the
-			# monsters other screens see sink).
+			# a lava cave's lava (Actor._enter_void): a hot splash where it went in and a shake for a hero (the pull's 15
+			# shows as its damage number; no "LAVA!" word: user, 2026-10-22). On this machine: the actor's owner runs the
+			# shove (LavaField splashes for the monsters other screens see sink).
 			var hot: Array[Color] = [Color(1.0, 0.36, 0.05), Color(1.0, 0.82, 0.3), Color(1.0, 0.25, 0.05)]
 			var at := pos
 			var map := GameWorld.map
@@ -418,7 +418,6 @@ static func _on_shove_impact(kind: String, pos: Vector3, amount: float, actor: A
 				at.y = float(map.cave.get("lava_y", at.y))
 			burst(at + Vector3.UP * 0.1, hot, 26, 4.5, 0.14, 0.8, 7.0, Vector3.UP, 55.0, true)   # (the sizzle: LavaField)
 			if actor.team == GameWorld.TEAM_HEROES:
-				number(pos + Vector3(0, 2.6 + actor.radius, 0), "LAVA!", Color(1.0, 0.5, 0.2), 0.9)
 				shake(0.15)
 
 

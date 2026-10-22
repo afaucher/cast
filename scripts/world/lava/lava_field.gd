@@ -98,7 +98,7 @@ func _hook(a: Actor) -> void:
 
 
 ## Something went into the lava on this machine (its owner ran the lava rule: Actor._enter_void): the sizzle. Fx draws the
-## splash and the hero's "LAVA!".
+## splash (no word over the hero any more).
 func _on_impact(kind: String, pos: Vector3, _amount: float) -> void:
 	if kind == "lava" and active:
 		Sfx.play_at("lava_sizzle", Vector3(pos.x, float(map.cave.get("lava_y", -1.0)) + 0.1, pos.z))
