@@ -117,7 +117,10 @@ func coast(delta: float) -> void:
 		input_live = false
 		return
 	if vel.length() > 0.0005 or input_live:
+		var f := hero.facing
 		_step(Vector3.ZERO, delta)
+		hero.facing = f   # (the stop slide carries the body on but does not turn it: whoever steered last chose the facing,
+		# e.g. an AI archer that stopped backing off to face and shoot; turning it to the slide flipped it 180 for a frame)
 
 
 ## The envelope, then the walk at the new velocity.

@@ -26,6 +26,17 @@ extends Node
 ## of the lane waits there rather than cutting back across it toward its slot (out and back in, every other frame, was
 ## the same shake), and it keeps to the side it chose while it steps out.
 ##
+## LEASHES COMMIT (user, test gym 2026-10-22: "Rebar (AI) vibrates wildly when stuck against the dummy walker. Wick (AI) does
+## so when the enemy gets close."): every leash (LEASH from the leader, HOLD_LEASH from a "go" spot, ATTACK_LEASH from the
+## speaker) used to be one line: a step past it dropped the fight, the walk back toward the slot crossed it again, and the
+## fight came back, every few frames, so Rebar punching a walker away from him and Wick backing off a grunt each shook in
+## place at the line, turning 180 degrees (and grounded_anim's lean kicking) five times a second. Past a leash the ally now
+## goes back until it is LEASH_RETURN inside it before it fights again (`_leash_ok`), and Wick backing off stops short of the
+## leash and stands his ground there (shoots, or swings when it is that close: cornered) instead of backing out through it.
+## Wick's kiting commits the same way: once a foe is inside RANGED_MIN he backs off until it is KITE_SLACK past it, rather
+## than backing off one frame and turning to shoot the next (his facing swung 180 degrees every frame at 3.5 units), and once
+## cornered he stands until that kiting is over.
+##
 ## RESTRAINT (combat-variety-research.md A1, combat-proposals.md 1.0 / 1.4; the default, with no order): the ally follows
 ## and supports, it never leads. It only joins a fight already started (a monster ALERT, or chasing / attacking anyone but
 ## another monster; a hellgate once the crew has dented it), REACT_MIN..MAX seconds after it first sees that monster in
@@ -57,10 +68,13 @@ const BLOCK_AHEAD := 3.4       ## an ally this far ahead of a moving leader, ins
 const BLOCK_LANE := 1.25       ## half-width of the leader's lane
 const HEADING_MIN_STEP := 0.012   ## the leader moved at least this far this frame: it is walking
 const ENGAGE_RANGE := 9.0      ## only fight monsters this close to the leader
-const LEASH := 8.0             ## never chase farther than this from the leader
+const LEASH := 8.0             ## never chase farther than this from the leader ...
+const LEASH_RETURN := 2.0      ## ... and once past a leash, come this far back inside it before fighting again
+const CORNER_MARGIN := 0.6     ## a ranged ally backs off no closer than this to its leash: then it stands and fights
 const MELEE_STOP := 1.25       ## melee ally closes to this distance
 const RANGED_MIN := 3.5
 const RANGED_MAX := 7.0
+const KITE_SLACK := 1.0        ## a ranged ally backing off keeps at it until the foe is this much past RANGED_MIN
 const REPATH_INTERVAL := 0.6
 const WAYPOINT_REACHED := 0.35
 const PROBE_STEP := 0.4
@@ -127,6 +141,9 @@ var _foe: Actor = null            ## the monster it is fighting (kept while it s
 var _react_at: Dictionary = {}    ## monster instance id -> when this ally may engage it (the reaction delay)
 var _rng := RandomNumberGenerator.new()
 var _clear_side := 0.0            ## stepping out of the leader's lane to this side (+1 / -1 across its heading), 0 when not
+var _leashed := false            ## went past a leash: going back inside it (LEASH_RETURN) before fighting again
+var _kiting := false              ## a ranged ally backing off a foe that came inside RANGED_MIN (until KITE_SLACK past it)
+var _standing := false            ## ... and cornered at its leash while it does: it stands its ground until the kiting ends
 var _roomy_cell := Vector2i(1 << 20, 1 << 20)   ## the formation slot's cell last frame (kept while a crowd moves; NO PACING)
 
 
@@ -154,7 +171,7 @@ func net_fields() -> Dictionary:
 		"order": Net.PRIVATE, "order_point": Net.PRIVATE, "order_by": Net.PRIVATE, "_arrived": Net.PRIVATE,
 		"_quiet_since": Net.PRIVATE, "_foe": Net.PRIVATE, "_react_at": Net.PRIVATE,
 		"_rng": Net.PRIVATE,      # the reaction delays: a generator seeded from the floor, rolled on the host only
-		"_clear_side": Net.PRIVATE, "_roomy_cell": Net.PRIVATE,
+		"_clear_side": Net.PRIVATE, "_roomy_cell": Net.PRIVATE, "_leashed": Net.PRIVATE, "_kiting": Net.PRIVATE, "_standing": Net.PRIVATE,
 	}
 
 
@@ -187,6 +204,9 @@ func give_order(kind: String, by: Hero, point: Vector3 = Vector3.INF) -> String:
 		return ""
 	_foe = null
 	_arrived = false
+	_leashed = false
+	_kiting = false
+	_standing = false
 	_quiet_since = -1.0
 	_path.clear()
 	_repath_at = 0.0
@@ -231,7 +251,7 @@ func _tick_go(delta: float) -> void:
 		_arrived = true
 	var foe: Actor = null
 	if _arrived:
-		if d <= HOLD_LEASH:
+		if _leash_ok(d, HOLD_LEASH):
 			foe = _pick_restrained(order_point, HOLD_RANGE)
 	else:
 		foe = _pick_restrained(order_point, 0.0)   # (range 0: self-defence only)
@@ -244,7 +264,7 @@ func _tick_go(delta: float) -> void:
 ## "attack": fight anything near, no restraint; when nothing near has been fighting for ATTACK_QUIET, follow the speaker.
 func _tick_attack(delta: float) -> void:
 	var foe: Actor = null
-	if leader == null or leader.dead or GameWorld.flat_distance(hero.global_position, leader.global_position) <= ATTACK_LEASH:
+	if leader == null or leader.dead or _leash_ok(GameWorld.flat_distance(hero.global_position, leader.global_position), ATTACK_LEASH):
 		foe = _pick_free(hero.global_position, ATTACK_RANGE)
 	if foe != null:
 		_quiet_since = -1.0
@@ -297,6 +317,17 @@ func set_heading(dir: Vector3) -> void:
 		_heading = dir.normalized()
 
 
+## True while this ally may fight at `dist` from what its `leash` is measured from. Past the leash it stops and goes back,
+## and only fights again once it is LEASH_RETURN inside it (LEASHES COMMIT in the header).
+func _leash_ok(dist: float, leash: float) -> bool:
+	if _leashed:
+		_leashed = dist > leash - LEASH_RETURN
+	elif dist > leash:
+		_leashed = true
+		_foe = null
+	return not _leashed
+
+
 func _anchor() -> Vector3:
 	return leader.global_position if leader and not leader.dead else hero.global_position
 
@@ -304,7 +335,7 @@ func _anchor() -> Vector3:
 ## No order: under the restraint baseline, the best monster already in the fight near the leader (see the header); without
 ## it (tests), the old eager pick. Nothing while we are too far out.
 func _pick_target() -> Actor:
-	if leader and not leader.dead and GameWorld.flat_distance(hero.global_position, leader.global_position) > LEASH:
+	if leader and not leader.dead and not _leash_ok(GameWorld.flat_distance(hero.global_position, leader.global_position), LEASH):
 		return null
 	if not restraint:
 		return _pick_eager(_anchor(), ENGAGE_RANGE)
@@ -445,10 +476,15 @@ func _fight(foe: Actor, delta: float) -> void:
 	var d := to.length()
 	var dir := to.normalized() if d > 0.001 else hero.facing
 	if prefers_ranged:
+		_kiting = d < RANGED_MIN + (KITE_SLACK if _kiting else 0.0)
+		_standing = _kiting and _standing
 		if d < hero.melee_reach - 0.2:
 			_swing(foe, dir)
-		elif d < RANGED_MIN:
-			hero.move(-dir, delta)
+		elif _kiting:
+			# (once cornered it stays so: the leader taking a step must not swap standing and backing off every frame)
+			_standing = _standing or _cornered(-dir, delta)
+			if not _standing:
+				hero.move(-dir, delta)
 			hero.face_point(foe.global_position)
 			if _has_los(foe):
 				_shoot(foe, dir, d)
@@ -464,6 +500,17 @@ func _fight(foe: Actor, delta: float) -> void:
 			_move_toward(foe.global_position, delta)
 			if d <= hero.melee_reach - 0.2:
 				_swing(foe, dir)
+
+
+## A ranged ally backing off along `away` would come within CORNER_MARGIN of its leash (the leader's, or under "go" the spot's):
+## it stands its ground there instead (LEASHES COMMIT in the header).
+func _cornered(away: Vector3, delta: float) -> bool:
+	var anchor := order_point if order == "go" else (leader.global_position if leader != null and not leader.dead else Vector3.INF)
+	if anchor == Vector3.INF:
+		return false
+	var leash := HOLD_LEASH if order == "go" else (ATTACK_LEASH if order == "attack" else LEASH)
+	var next := hero.global_position + away * maxf(hero.effective_speed() * delta, PROBE_STEP)
+	return GameWorld.flat_distance(next, anchor) > leash - CORNER_MARGIN
 
 
 # --- The client's property ---------------------------------------------------------------------
