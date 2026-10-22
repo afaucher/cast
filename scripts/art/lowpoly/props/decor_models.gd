@@ -242,7 +242,7 @@ static func _weight_bench(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(0.5, 0.05, 0.1), Vector3(0, 0.025, -0.55), PropModels.IRON)
 	_b(s, Vector3(0.5, 0.05, 0.1), Vector3(0, 0.025, 0.3), PropModels.IRON)
 	for sx: float in [-0.28, 0.28]:
-		_b(s, Vector3(0.06, 0.62, 0.06), Vector3(sx, 0.55, 0.6), PropModels.IRON_LT)
+		_b(s, Vector3(0.06, 0.81, 0.06), Vector3(sx, 0.455, 0.6), PropModels.IRON_LT)   # (on its foot: it stood 0.19 above it)
 		_b(s, Vector3(0.06, 0.05, 0.3), Vector3(sx, 0.025, 0.6), PropModels.IRON_LT)
 	_c(s, 0.03, 0.03, 1.2, 6, Vector3(0, 0.86, 0.6), PropModels.IRON_LT, Vector3(0, 0, 90))
 	for sx: float in [-0.5, -0.43, 0.43, 0.5]:
@@ -277,10 +277,12 @@ static func _chains_cage(s: LowPoly.Soup, _p: Dictionary) -> void:
 	var bars: Array[Vector2] = [Vector2(-0.55, -0.55), Vector2(0, -0.55), Vector2(0.55, -0.55), Vector2(-0.55, 0.0), Vector2(0.55, 0.0), Vector2(-0.55, 0.55), Vector2(0.55, 0.55)]
 	for b in bars:
 		_c(s, 0.035, 0.035, 1.72, 5, Vector3(b.x, 0.95, b.y), PropModels.IRON_LT)
-	# the front bars were bent wide open by whatever was inside
-	_rod(s, Vector3(-0.27, 0.1, 0.55), Vector3(-0.62, 1.15, 0.95), 0.035, 0.03, 5, PropModels.IRON_LT)
-	_rod(s, Vector3(0.0, 0.1, 0.55), Vector3(-0.15, 1.2, 1.0), 0.035, 0.03, 5, PropModels.IRON_LT)
-	_rod(s, Vector3(0.27, 0.1, 0.55), Vector3(0.62, 1.1, 0.9), 0.035, 0.03, 5, PropModels.IRON_LT)
+	# the front bars were bent wide open by whatever was inside: bowed out between the base and the top frame (they ended
+	# in the air in front of the cage)
+	for b: Array in [[-0.27, Vector3(-0.6, 0.95, 0.9)], [0.0, Vector3(-0.12, 1.0, 1.0)], [0.27, Vector3(0.6, 0.9, 0.88)]]:
+		var x: float = b[0]
+		_rod(s, Vector3(x, 0.1, 0.55), b[1], 0.035, 0.035, 5, PropModels.IRON_LT)
+		_rod(s, b[1], Vector3(x, 1.8, 0.55), 0.035, 0.035, 5, PropModels.IRON_LT)
 	for hy: float in [0.5, 1.2]:
 		_b(s, Vector3(1.14, 0.05, 0.05), Vector3(0, hy, -0.55), PropModels.IRON)
 		_b(s, Vector3(0.05, 0.05, 1.14), Vector3(-0.55, hy, 0), PropModels.IRON)
@@ -548,7 +550,10 @@ static func _outfall(s: LowPoly.Soup, p: Dictionary) -> void:
 
 
 static func _pipe_bundle(s: LowPoly.Soup, p: Dictionary) -> void:
+	# SewerProps builds it with its back on z = 0; a wall piece's back is its footprint's back (the wall pose's)
+	var first := s.verts.size()
 	SewerProps._pipe_bundle(s, float(p.get("length", 4.0)), p.get("col", SewerProps.RUST))
+	PropModels.shift(s, first, Vector3(0, 0, -footprint("pipe_bundle").y * 0.5))
 
 
 static func _grate(s: LowPoly.Soup, p: Dictionary) -> void:

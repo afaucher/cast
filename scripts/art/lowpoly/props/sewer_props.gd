@@ -547,7 +547,7 @@ static func _pump(s: LowPoly.Soup, col: Color) -> void:
 	PropModels.cyl(s, 0.14, 0.14, 0.06, 8, Vector3(0.28, 1.0, 0.1), RUST_DK)
 	PropModels.cyl(s, 0.09, 0.09, 0.04, 10, Vector3(0.0, 0.85, 0.32), Color(0.9, 0.9, 0.85), Vector3(90, 0, 0))
 	PropModels.box(s, Vector3(0.012, 0.07, 0.01), Vector3(0.02, 0.87, 0.35), Color(0.8, 0.1, 0.1), Vector3(0, 0, -40))
-	PropModels.box(s, Vector3(1.0, 0.06, 0.04), Vector3(0, 0.22, 0.47), HAZARD)
+	PropModels.box(s, Vector3(1.0, 0.06, 0.04), Vector3(0, 0.15, 0.45), HAZARD)   # (on the skid's edge: it hovered over it)
 	PropModels.box(s, Vector3(0.06, 0.12, 0.06), Vector3(-0.44, 0.92, 0.1), g(Color(0.3, 1.0, 0.3)))
 
 

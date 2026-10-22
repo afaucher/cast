@@ -468,15 +468,18 @@ func _fancy_wall(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(3.22, 0.03, 0.32), Vector3(0, 3.52, FRONT - 0.18), BRASS)
 	_gauge(s, Vector3(0, 3.28, FRONT + 0.03), 0.74, 0.0, BRASS, true)
 	# "LIFT" in brass letters on the band, either side of the fan
-	_label("LIFT", 80, 0.0055, BRASS, Vector3(-1.75, 3.09, FRONT + 0.005))
-	_label("LIFT", 80, 0.0055, BRASS, Vector3(1.75, 3.09, FRONT + 0.005))
+	# (sized to sit between the band's brass trims: at 0.0055 the letters ran under both)
+	_label("LIFT", 80, 0.0041, BRASS, Vector3(-1.75, 3.09, FRONT + 0.005))
+	_label("LIFT", 80, 0.0041, BRASS, Vector3(1.75, 3.09, FRONT + 0.005))
 	# the shaft behind: brass-capped rails and a slim crosshead with the cables (it reads as a lift from above)
 	for sgn in [-1.0, 1.0]:
 		_b(s, Vector3(0.1, 4.3, 0.1), Vector3(sgn * 1.5, 2.15, -CAR_DEPTH + 0.02), MARBLE_K)
 		_b(s, Vector3(0.14, 0.08, 0.14), Vector3(sgn * 1.5, 4.32, -CAR_DEPTH + 0.02), BRASS)
 	_b(s, Vector3(2.0 * CAR_HALF - 0.1, 0.12, 0.12), Vector3(0, 3.3, cz - 0.1), BRASS_DK)
+	# a slim head beam across the rails' tops: the cables run up to it (they ended in the air over the crown)
+	_b(s, Vector3(3.0, 0.1, 0.08), Vector3(0, 4.2, -CAR_DEPTH + 0.02), MARBLE_K)
 	for x in [-0.08, 0.08]:
-		_rod(s, Vector3(x, 3.35, cz - 0.1), Vector3(x, 4.3, -CAR_DEPTH + 0.05), 0.012, HAZ_K, 4)
+		_rod(s, Vector3(x, 3.35, cz - 0.1), Vector3(x, 4.2, -CAR_DEPTH + 0.03), 0.012, HAZ_K, 4)
 	# the ceiling lamp: a glowing deco bowl hanging under the crosshead
 	_cyl(s, 0.22, 0.1, 0.12, 8, Vector3(0, 3.02, cz - 0.1), _g(LAMP_WARM))
 	_cyl(s, 0.24, 0.24, 0.03, 8, Vector3(0, 3.09, cz - 0.1), BRASS)
@@ -561,8 +564,9 @@ func _service_column(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.06, 0.3, 0.06), Vector3(0, 3.78, SHAFT_APOTHEM + 0.12), STEEL_DK)
 	var left := _side(4, FRAME_TOP, SHAFT_APOTHEM + 0.095)
 	var right := _side(0, FRAME_TOP, SHAFT_APOTHEM + 0.095)
-	_label("FREIGHT", 56, 0.0042, HAZ_K, left[0], left[1])
-	_label("ONLY", 56, 0.0042, HAZ_K, right[0], right[1])   # "FREIGHT ONLY" (user, 2026-10-21; was CREW ONLY)
+	# (sized to the beams' 0.2 height: at 0.0042 the letters ran over their edges)
+	_label("FREIGHT", 56, 0.0032, HAZ_K, left[0], left[1])
+	_label("ONLY", 56, 0.0032, HAZ_K, right[0], right[1])   # "FREIGHT ONLY" (user, 2026-10-21; was CREW ONLY)
 	# the call post at the front-right with the call box and the clipboard
 	var cp := _corner(0) + Vector3(0.75, 0, 0.55)
 	_b(s, Vector3(0.1, 1.5, 0.1), cp + Vector3(0, 0.75, 0), FRAME_Y)

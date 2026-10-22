@@ -34,7 +34,7 @@ const PULSE_EVERY := 1.5
 const PULSE_FOR := 6.0
 const ARC_LIFE := 0.22
 const LINKS := 9
-const HANG_END := Vector3(0.15, 0.45, 0.9)   ## the cable's end before the break (model space: PropModels' panel)
+const HANG_END := Vector3(0.15, 0.45, 0.9 + PropModelsScript.PANEL_BACK)   ## the cable's end before the break (model space: PropModels' panel)
 
 var panel: PricedProp = null         ## the panel it hangs from (spawn data)
 var drop_point := Vector3.ZERO       ## where the cable lands in the water (spawn data, world)

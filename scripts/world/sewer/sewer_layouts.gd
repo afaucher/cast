@@ -271,6 +271,9 @@ static func _dry_foot(m: HexMap, pos: Vector2, yaw: float, foot: Vector2) -> boo
 
 ## A decor piece: `y` is where the model's origin stands (NAN: on the ground under it).
 static func _decor(L: Dictionary, kind: String, pos: Vector2, yaw: float, params: Dictionary = {}, y: float = NAN) -> void:
+	if kind == "pipe_bundle":
+		# the layouts give the spot of its back on the wall; its model's origin is its footprint's middle (DECOR "d")
+		pos += Vector2(sin(deg_to_rad(yaw)), cos(deg_to_rad(yaw))) * DecorModels.footprint(kind).y * 0.5
 	(L["decor"] as Array).append({"kind": kind, "pos": pos, "yaw": yaw, "params": params, "y": y})
 
 

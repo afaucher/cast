@@ -33,8 +33,12 @@ const OBSIDIAN := Color(0.12, 0.10, 0.15)
 
 ## The sewer's lab models (scripts/art/lowpoly/props/sewer_props.gd): the sump pump and the electrical panel are built there.
 const SewerProps := preload("res://scripts/art/lowpoly/props/sewer_props.gd")
+## The electrical panel hangs on the wall: its junction box (SewerProps, built with its back on z = 0) moves back by this
+## much so its back is the footprint's back (PricedProp "foot" depth 0.35), which the wall pose puts against the wall face.
+## (It stood a footprint half-depth off the wall: user, 2026-10-21, "this box on the wall is not on the wall".)
+const PANEL_BACK := -0.175
 ## Where the electrical panel's cable leaves the box (model space): LiveWire drops the live cable from here.
-const PANEL_CABLE_ROOT := Vector3(0.0, 1.05, 0.2)
+const PANEL_CABLE_ROOT := Vector3(0.0, 1.05, 0.2 + PANEL_BACK)
 
 const HAZARD_YELLOW := Color(1.0, 0.8, 0.12)
 const DRUM_RED := Color(0.7, 0.15, 0.1)
@@ -278,6 +282,7 @@ static func _gold_toilet(s: LowPoly.Soup) -> void:
 
 
 static func _projector(s: LowPoly.Soup) -> void:
+	var first := s.verts.size()
 	# walnut cart
 	box(s, Vector3(0.9, 0.08, 0.6), Vector3(0, 0.75, 0), WOOD)
 	for lx in [-0.38, 0.38]:
@@ -299,6 +304,14 @@ static func _projector(s: LowPoly.Soup) -> void:
 	cyl(s, 0.24, 0.24, 0.05, 8, Vector3(-0.2, 1.3, -0.05), IRON_LT, Vector3(0, 0, 90))
 	cyl(s, 0.24, 0.24, 0.05, 8, Vector3(0.2, 1.3, -0.05), IRON_LT, Vector3(0, 0, 90))
 	cyl(s, 0.04, 0.04, 0.5, 5, Vector3(0, 1.3, -0.05), GOLD, Vector3(0, 0, 90))
+	# the cart stands back against the wall: its back (the reels, -0.3) at the footprint's back (-0.45, the wall pose's)
+	shift(s, first, Vector3(0, 0, -0.14))
+
+
+## Move everything a builder added to `s` since vertex `first` by `by` (a model whose back must meet its footprint's back).
+static func shift(s: LowPoly.Soup, first: int, by: Vector3) -> void:
+	for i in range(first, s.verts.size()):
+		s.verts[i] += by
 
 
 static func _zen_fountain(s: LowPoly.Soup) -> void:
@@ -334,9 +347,13 @@ static func _server_rack(s: LowPoly.Soup) -> void:
 		box(s, Vector3(0.42, 0.04, 0.02), Vector3(-0.1, y - 0.04, 0.39), Color(0.2, 0.2, 0.24))
 		for j in 4:
 			box(s, Vector3(0.045, 0.045, 0.03), Vector3(0.18 + 0.055 * float(j), y + 0.03, 0.385), glow(leds[(i + j) % leds.size()]))
-	# cables hanging out of the side
-	rod(s, Vector3(0.43, 1.6, 0.2), Vector3(0.56, 1.0, 0.45), 0.03, 0.03, 5, Color(0.9, 0.35, 0.15))
-	rod(s, Vector3(0.43, 1.5, 0.1), Vector3(0.55, 0.9, 0.3), 0.03, 0.03, 5, Color(0.2, 0.55, 0.95))
+	# cables hanging out of the side: they sag down it and trail on the floor (they stuck out stiff and ended in the air)
+	for c: Array in [[Vector3(0.43, 1.6, 0.2), 0.27, Color(0.9, 0.35, 0.15)], [Vector3(0.43, 1.5, 0.08), 0.17, Color(0.2, 0.55, 0.95)]]:
+		var top: Vector3 = c[0]
+		var z: float = c[1]
+		var pts: Array[Vector3] = [top, Vector3(0.49, top.y - 0.45, z), Vector3(0.51, 0.04, z + 0.08), Vector3(0.62, 0.03, z + 0.22)]
+		for k in pts.size() - 1:
+			rod(s, pts[k], pts[k + 1], 0.03, 0.03, 5, c[2])
 
 
 static func _crystal_lamp(s: LowPoly.Soup) -> void:
@@ -616,10 +633,11 @@ static func _shark_tank(s: LowPoly.Soup) -> void:
 	# the shark swimming at the front glass
 	ball(s, Vector3(0.52, 0.16, 0.14), Vector3(-0.04, 0.88, 0.3), Color(0.55, 0.6, 0.68), 1, 0.08)
 	ball(s, Vector3(0.44, 0.07, 0.12), Vector3(-0.04, 0.82, 0.33), Color(0.92, 0.94, 0.96), 1, 0.06)
-	rod(s, Vector3(0.45, 0.9, 0.3), Vector3(0.72, 1.1, 0.3), 0.1, 0.02, 4, Color(0.5, 0.55, 0.62))
-	rod(s, Vector3(0.45, 0.88, 0.3), Vector3(0.74, 0.62, 0.3), 0.09, 0.02, 4, Color(0.5, 0.55, 0.62))
+	# (the tail and the pectoral fin stay inside the tank: they poked out through its side and its front glass)
+	rod(s, Vector3(0.45, 0.9, 0.34), Vector3(0.65, 1.08, 0.36), 0.08, 0.02, 4, Color(0.5, 0.55, 0.62))
+	rod(s, Vector3(0.45, 0.88, 0.34), Vector3(0.65, 0.66, 0.36), 0.075, 0.02, 4, Color(0.5, 0.55, 0.62))
 	rod(s, Vector3(-0.05, 1.0, 0.3), Vector3(-0.15, 1.38, 0.3), 0.08, 0.0, 4, Color(0.5, 0.55, 0.62))
-	rod(s, Vector3(-0.1, 0.82, 0.38), Vector3(-0.1, 0.62, 0.5), 0.06, 0.0, 4, Color(0.5, 0.55, 0.62))
+	rod(s, Vector3(-0.1, 0.82, 0.38), Vector3(-0.1, 0.62, 0.43), 0.06, 0.0, 4, Color(0.5, 0.55, 0.62))
 	ball(s, Vector3(0.04, 0.04, 0.04), Vector3(-0.4, 0.94, 0.42), Color(0.02, 0.02, 0.03), 0, 0.0)
 	box(s, Vector3(0.16, 0.025, 0.02), Vector3(-0.42, 0.8, 0.42), glow(Color(1.0, 0.25, 0.2)))
 	# the fin cutting the surface, as a classic
@@ -794,4 +812,8 @@ static func _sump_pump(s: LowPoly.Soup) -> void:
 
 
 static func _electrical_panel(s: LowPoly.Soup) -> void:
+	var first := s.verts.size()
 	SewerProps._junction_box(s, Vector3(0.15, -0.55, 0.9), false)
+	shift(s, first, Vector3(0.0, 0.0, PANEL_BACK))
+	# a dark mounting plate behind the box, reaching the wall face (the pose leaves ThemeGeo.GAP behind the footprint)
+	box(s, Vector3(0.66, 0.81, 0.06), Vector3(0, 1.4, PANEL_BACK - 0.03), IRON)

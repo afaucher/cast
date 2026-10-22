@@ -465,6 +465,13 @@ Each kind declares itself in one table row; the modules that need a fact read it
   blocks, weight, and `model` (a `DecorModels` builder, `static func _x(s: LowPoly.Soup, params: Dictionary)`), or
   `node_model` (built on its own nodes, the neon sign), an optional `after` hook (`func(root, params)`: animation,
   labels), `flat` (a floor decal) and `breakable` (smashes like a crate, `BreakableCrate`).
+- **Fit rules for every model** (`tests/test_prop_fit.gd`, `PropFitCheck`): a model's origin is its footprint's middle, so a
+  piece placed against a wall (`"place": "wall"`) has its back at z = -depth / 2 (the wall pose puts that GAP off the wall
+  face; a sub-model built with its back on z = 0 moves back with `PropModels.shift`); a Label3D's lettering lies on a face of
+  its model, inside its edges and under no trim (size the text to the face, never the face's words); a rod, pipe or cable
+  ends on something (another part or the floor) unless the test's ENDS_ALLOW names it. Pictures: `tools/prop_sheet.tscn`
+  (every model, game angle and side, a wall slab behind wall pieces) and `tools/site_walls.tscn` (wall pieces on generated
+  floors, how far each stands off its wall).
 - **A room theme:** a row in `RoomThemeDefs.THEMES` (name, site, min_cells, priced, hazards, recipe, light, and
   `note_word`, `floor_mat`, optional `wall_mat` and `pool_look`) and its id in `POOLS`. `FloorMaterials`, `PoolGeo.look_of`
   and `NoteFacts.theme_word` read the row; notes, materials and pools are in the floor plan, so changing a shipped
