@@ -102,6 +102,8 @@ static func wall_poses(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, kind: String, jit
 				continue
 			if not ctx.fits(room, pose["pos"], pose["yaw"], sz.x, sz.y):
 				continue
+			if not corner and bool(RoomThemeDefs.decor(kind).get("backed", false)) and not _backed(ctx, pose, sz):
+				continue
 			pose["walls"] = ctx.wall_dirs(c).size()
 			pose["cam"] = ThemeGeo.facing(float(pose["yaw"])).dot(ThemeGeo.CAMERA_DIR)
 			pose["score"] = 2.0 * float(pose["cam"]) + ctx.rng.randf() * 1.3     # the far walls first, but not only them
@@ -111,6 +113,28 @@ static func wall_poses(ctx: ThemeCtx, room: ThemeCtx.RoomInfo, kind: String, jit
 	if corner:
 		out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["walls"]) > int(b["walls"]))
 	return out
+
+
+## A "backed" wall piece (a DECOR row flag: the pipe run) needs wall behind its WHOLE length, not just at its anchor cell:
+## a hex wall is a sawtooth and a long straight piece can run past where the wall turns away, its end standing in the open
+## (user, 2026-10-21). Behind each of five points along its back there must be wall within BACKED_REACH (the sawtooth's
+## notches are deeper than a straight line).
+static func _backed(ctx: ThemeCtx, pose: Dictionary, sz: Vector2) -> bool:
+	for i in 5:
+		var lx := (float(i) / 4.0 - 0.5) * (sz.x - 0.3)
+		var found := false
+		var back := 0.1
+		while back <= BACKED_REACH and not found:
+			var p := ThemeGeo.local_to_world(pose["pos"], float(pose["yaw"]), lx, -(sz.y * 0.5 + back))
+			var cell: HexMap.Cell = ctx.map.get_cell(ThemeGeo.cell_of(p))
+			found = cell != null and cell.type == HexMap.Tile.WALL
+			back += 0.15
+		if not found:
+			return false
+	return true
+
+
+const BACKED_REACH := 1.2
 
 
 ## One piece against a wall, back to the wall, facing into the room.

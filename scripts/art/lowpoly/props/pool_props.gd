@@ -307,16 +307,42 @@ static func _valve(s: LowPoly.Soup) -> void:
 		PropModels.box(s, Vector3(0.5, 0.04, 0.04), Vector3(0, 0.55, 0), Color(0.8, 0.15, 0.12), Vector3(0, rad_to_deg(a) * 0.5, 0))
 
 
-## A run of fat pipes along +X at the foot of a wall, with flanges and a glowing gauge.
+## A run of fat pipes along +X at the foot of a wall (the wall behind, -Z), with flanges and a glowing gauge. Nothing ends
+## in the air (user, 2026-10-21): both pipes turn back into the wall at the left end, and at the right end the upper one
+## turns into the wall while the lower one drops into the floor through a valve.
 static func _pipe_run(s: LowPoly.Soup, length: float) -> void:
+	var hl := length * 0.5
 	for k in 2:
 		var y := 0.35 + 0.42 * float(k)
-		PropModels.rod(s, Vector3(-length * 0.5, y, 0), Vector3(length * 0.5, y, 0), 0.14, 0.14, 7, STEEL if k == 0 else Color(0.3, 0.5, 0.35))
+		var col := STEEL if k == 0 else Color(0.3, 0.5, 0.35)
+		PropModels.rod(s, Vector3(-hl, y, 0), Vector3(hl, y, 0), 0.14, 0.14, 7, col)
 		for i in int(length / 1.2) + 1:
-			var x := -length * 0.5 + 0.2 + float(i) * 1.2
+			var x := -hl + 0.2 + float(i) * 1.2
 			PropModels.cyl(s, 0.19, 0.19, 0.08, 7, Vector3(x, y, 0), STEEL_DK, Vector3(0, 0, 90))
+		# the ends: an elbow, then into the wall (or, the lower pipe's right end, down into the floor)
+		for sx: float in [-1.0, 1.0]:
+			PropModels.ball(s, Vector3(0.16, 0.16, 0.16), Vector3(sx * hl, y, 0), col, 0, 0.0)
+			if sx > 0.0 and k == 0:
+				PropModels.rod(s, Vector3(hl, y, 0), Vector3(hl, 0.0, 0), 0.14, 0.14, 7, col)
+				PropModels.cyl(s, 0.21, 0.21, 0.05, 7, Vector3(hl, 0.025, 0), STEEL_DK)
+				_pipe_valve(s, Vector3(hl, 0.17, 0.0))
+			else:
+				PropModels.rod(s, Vector3(sx * hl, y, 0), Vector3(sx * hl, y, -0.55), 0.14, 0.14, 7, col)
+				PropModels.cyl(s, 0.19, 0.19, 0.06, 7, Vector3(sx * hl, y, -0.22), STEEL_DK, Vector3(90, 0, 0))
 	PropModels.cyl(s, 0.14, 0.14, 0.06, 8, Vector3(0.3, 0.77, 0.16), Color(0.9, 0.9, 0.85), Vector3(90, 0, 0))
 	PropModels.box(s, Vector3(0.02, 0.1, 0.02), Vector3(0.32, 0.8, 0.2), g(Color(1.0, 0.25, 0.15)), Vector3(0, 0, -35))
+
+
+## A red handwheel on the vertical drop at `at`, facing the room (+Z) on a short stem.
+static func _pipe_valve(s: LowPoly.Soup, at: Vector3) -> void:
+	var red := Color(0.75, 0.14, 0.1)
+	var wc := at + Vector3(0, 0, 0.26)
+	PropModels.box(s, Vector3(0.05, 0.05, 0.14), at + Vector3(0, 0, 0.18), STEEL_DK)
+	for i in 6:
+		var a := TAU * float(i) / 6.0
+		PropModels.box(s, Vector3(0.12, 0.035, 0.035), wc + Vector3(cos(a), sin(a), 0) * 0.13, red, Vector3(0, 0, rad_to_deg(a) + 90.0))
+	PropModels.box(s, Vector3(0.24, 0.028, 0.028), wc, red)
+	PropModels.box(s, Vector3(0.024, 0.24, 0.024), wc, red)
 
 
 ## A steel lab bench with glowing flasks and a monitor.

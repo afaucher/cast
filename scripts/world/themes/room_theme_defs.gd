@@ -297,7 +297,7 @@ const DECOR := {
 	"specimen_tank": {"place": "corner", "orient": "face_center", "w": 1.5, "d": 1.5, "h": 2.1, "blocks": true, "weight": 1.0, "model": "_specimen_tank"},
 	"lab_bench": {"place": "wall", "orient": "away_from_wall", "w": 1.85, "d": 0.8, "h": 1.45, "blocks": true, "weight": 1.0, "model": "_lab_bench"},
 	"lab_console": {"place": "wall", "orient": "away_from_wall", "w": 1.55, "d": 1.0, "h": 1.9, "blocks": true, "weight": 1.0, "model": "_lab_console"},
-	"pipe_run": {"place": "wall", "orient": "away_from_wall", "w": 3.4, "d": 0.45, "h": 1.0, "blocks": false, "weight": 0.5, "model": "_pipe_run"},
+	"pipe_run": {"place": "wall", "orient": "away_from_wall", "w": 3.4, "d": 0.45, "h": 1.0, "blocks": false, "weight": 0.5, "model": "_pipe_run", "backed": true},
 	"hazard_sign": {"place": "group", "orient": "face_target", "w": 0.9, "d": 0.3, "h": 1.85, "blocks": false, "weight": 0.3, "model": "_hazard_sign"},
 	"moat_bridge": {"place": "group", "orient": "face_target", "w": 1.4, "d": 2.3, "h": 0.2, "blocks": false, "weight": 0.5, "model": "_moat_bridge"},
 	"shark_fin": {"place": "ring", "orient": "free", "w": 0.4, "d": 0.8, "h": 0.6, "blocks": false, "weight": 0.2, "model": "_shark_fin", "after": "_fin_after"},
