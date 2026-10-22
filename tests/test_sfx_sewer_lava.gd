@@ -279,13 +279,14 @@ func _check_wading() -> void:
 		Sfx._last.clear()
 		await frames(1)
 	eq(_n("wade_step"), n, "walking on dry floor: no wading steps")
-	# a plain actor (a monster, an employee) wading: no steps (heroes only)
+	# a plain actor (a monster, an employee) wading splashes too (user, 2026-10-21: "should probably play for all
+	# characters, not just the player")
 	var other := add_hero(Vector2i(0, -4), -1.0)
 	for i in 120:
 		other.global_position = a + Vector3(0.0, 0.0, 0.05 * float(i))
 		Sfx._last.clear()
 		await frames(1)
-	eq(_n("wade_step"), n, "a non-hero wading makes no steps")
+	check(_n("wade_step") > n, "a non-hero wading makes steps too")
 
 
 # --- lava ---------------------------------------------------------------------------------------------------------------------

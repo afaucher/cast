@@ -24,7 +24,7 @@ const SPEED_MULT := 0.75          ## walking speed while wading
 const REFRESH := 2.0
 const META_IN := "wading"         ## LOCAL bookkeeping on the actor: it was in the water last frame
 const RIPPLE_NAME := "WadeRipple"
-## A hero's wading step sound (Sfx "wade_step", cosmetic) every this many units it walks in the water: about two a second
+## A wader's step sound (Sfx "wade_step", cosmetic; heroes, monsters, staff) every this many units it walks in the water: about two a second
 ## at a wading walk (4.5 x SPEED_MULT), none while it stands.
 const STEP_EVERY := 1.5
 const META_STEP := "wade_step"    ## LOCAL, on a wading hero: [its position last frame, units walked since the last step]
@@ -58,8 +58,7 @@ static func tick() -> void:
 		var wet := is_wading(a)
 		var was := a.has_meta(META_IN)
 		_ripple(a, wet, map)
-		if a is Hero:
-			_step(a, wet)
+		_step(a, wet)   # every wader's steps, not only the heroes' (user, 2026-10-21)
 		if wet:
 			if not was:
 				a.set_meta(META_IN, true)
@@ -71,8 +70,8 @@ static func tick() -> void:
 				Wet.douse(a, DampSpell.DAMP_SOAK)   # stepped out: wet for the full damp time from now
 
 
-## A hero's wading steps (cosmetic, every machine, from the shown position): a soft splash every STEP_EVERY units it walks
-## in the water.
+## An actor's wading steps (cosmetic, every machine, from the shown position): a soft splash every STEP_EVERY units it
+## walks in the water.
 static func _step(a: Actor, on: bool) -> void:
 	if not on:
 		if a.has_meta(META_STEP):

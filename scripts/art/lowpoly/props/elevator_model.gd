@@ -377,7 +377,7 @@ func _service_wall(s: LowPoly.Soup) -> void:
 	_cyl(s, 0.38, 0.38, 0.06, 12, Vector3(0, 3.36, FRONT + 0.03), STEEL_LT, Vector3(90, 0, 0))
 	_gauge(s, Vector3(0, 3.36, FRONT + 0.065), 0.30, 0.0, Color(0.92, 0.9, 0.82), false)
 	_label("FREIGHT", 64, 0.0052, HAZ_Y, Vector3(-1.55, 3.42, FRONT + 0.005))
-	_label("CREW ONLY", 64, 0.0048, HAZ_Y, Vector3(1.6, 3.42, FRONT + 0.005))
+	_label("ONLY", 64, 0.0052, HAZ_Y, Vector3(1.6, 3.42, FRONT + 0.005))   # "FREIGHT ONLY" (user, 2026-10-21; was CREW ONLY)
 	# the shaft above: guide rails on the back wall, a headframe beam with the sheave, cables down to the crosshead
 	for sgn in [-1.0, 1.0]:
 		_b(s, Vector3(0.12, 4.9, 0.12), Vector3(sgn * 1.5, 2.45, -CAR_DEPTH + 0.02), STEEL_LT)
@@ -562,7 +562,7 @@ func _service_column(s: LowPoly.Soup) -> void:
 	var left := _side(4, FRAME_TOP, SHAFT_APOTHEM + 0.095)
 	var right := _side(0, FRAME_TOP, SHAFT_APOTHEM + 0.095)
 	_label("FREIGHT", 56, 0.0042, HAZ_K, left[0], left[1])
-	_label("CREW ONLY", 56, 0.0036, HAZ_K, right[0], right[1])
+	_label("ONLY", 56, 0.0042, HAZ_K, right[0], right[1])   # "FREIGHT ONLY" (user, 2026-10-21; was CREW ONLY)
 	# the call post at the front-right with the call box and the clipboard
 	var cp := _corner(0) + Vector3(0.75, 0, 0.55)
 	_b(s, Vector3(0.1, 1.5, 0.1), cp + Vector3(0, 0.75, 0), FRAME_Y)

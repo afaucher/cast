@@ -89,9 +89,10 @@ const CUES := {
 	## The breaker trips: the cable dies (LiveWire, the end of PULSE_FOR).
 	"wire_fizzle": {"file": "wire_fizzle.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.04,
 		"max_voices": 2, "min_gap": 0.3, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
-	## A hero's step in the water (Wading: one per STEP_EVERY units walked wading, every machine from the shown position).
-	"wade_step": {"file": "wade_step.wav", "bus": "World", "volume_db": -14.0, "pitch_jitter": 0.15,
-		"max_voices": 4, "min_gap": 0.07, "positional": true, "unit_size": 6.0, "max_distance": 30.0},
+	## A step in the water, anyone's (Wading: one per STEP_EVERY units walked wading, every machine from the shown position).
+	## -24 dB (was -14: too loud, user 2026-10-21); more voices now that monsters and staff splash too.
+	"wade_step": {"file": "wade_step.wav", "bus": "World", "volume_db": -24.0, "pitch_jitter": 0.15,
+		"max_voices": 6, "min_gap": 0.07, "positional": true, "unit_size": 6.0, "max_distance": 30.0},
 	## The bubbling bed near lava (LavaField: a 4 s play at one of the two lava spots nearest the ear every ~1.7 s, so plays
 	## overlap). Quiet, all under 600 Hz, and ducked while you speak (duck_db).
 	"lava_bubble": {"file": "lava_bubble.wav", "bus": "World", "volume_db": -16.0, "pitch_jitter": 0.08, "duck_db": -10.0,
