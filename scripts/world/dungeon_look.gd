@@ -98,8 +98,7 @@ static func add_pools(parent: Node3D, map: HexMap) -> Node3D:
 		l.shadow_enabled = false
 		holder.add_child(l)
 
-	_marker_light(map, holder, "start", HexMapView.START_COLOR)
-	if map.elevator.is_empty():
+	if map.elevator.is_empty():   # (no start light: the start hex is unmarked, user 2026-10-21)
 		_marker_light(map, holder, "exit", HexMapView.EXIT_COLOR)   # (an elevator lights its own car and sill instead)
 	return holder
 

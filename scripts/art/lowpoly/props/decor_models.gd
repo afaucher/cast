@@ -342,22 +342,31 @@ static func _wet_floor_sign(s: LowPoly.Soup, _p: Dictionary) -> void:
 	_b(s, Vector3(0.5, 0.82, 0.04), Vector3(0, 0.45, -0.12), yel.darkened(0.15), Vector3(12, 0, 0))
 	_b(s, Vector3(0.56, 0.06, 0.18), Vector3(0, 0.88, 0.0), yel.darkened(0.2))
 	_b(s, Vector3(0.5, 0.04, 0.36), Vector3(0, 0.02, 0.0), yel.darkened(0.3))
-	# the slipping stick-figure on the front panel
-	_ball(s, Vector3(0.05, 0.05, 0.03), Vector3(0.04, 0.78, 0.17), PropModels.OBSIDIAN, 0, 0.1)
-	_b(s, Vector3(0.07, 0.2, 0.025), Vector3(0.0, 0.62, 0.165), PropModels.OBSIDIAN, Vector3(-12, 0, 24))
-	_b(s, Vector3(0.05, 0.2, 0.025), Vector3(-0.1, 0.46, 0.15), PropModels.OBSIDIAN, Vector3(-12, 0, -40))
-	_b(s, Vector3(0.05, 0.18, 0.025), Vector3(0.08, 0.45, 0.15), PropModels.OBSIDIAN, Vector3(-12, 0, 20))
+	# the slipping stick-figure on the front panel's face (it floated ~6 cm off it; user, 2026-10-21)
+	_ball(s, Vector3(0.05, 0.05, 0.03), _wet_front(0.04, 0.34, 0.036), PropModels.OBSIDIAN, 0, 0.1)
+	_b(s, Vector3(0.07, 0.2, 0.025), _wet_front(0.0, 0.17, 0.034), PropModels.OBSIDIAN, Vector3(-12, 0, 24))
+	_b(s, Vector3(0.05, 0.2, 0.025), _wet_front(-0.1, 0.01, 0.034), PropModels.OBSIDIAN, Vector3(-12, 0, -40))
+	_b(s, Vector3(0.05, 0.18, 0.025), _wet_front(0.08, 0.0, 0.034), PropModels.OBSIDIAN, Vector3(-12, 0, 20))
 
 
+## A point on the wet-floor sign's front face: `v` up the 12-degree panel from its centre (0, 0.45, 0.12), `d` out from its
+## mid-plane (the face is at d = 0.02).
+static func _wet_front(x: float, v: float, d: float) -> Vector3:
+	var t := deg_to_rad(12.0)
+	return Vector3(x, 0.45, 0.12) + Vector3(0, cos(t), -sin(t)) * v + Vector3(0, sin(t), cos(t)) * d
+
+
+## WET / FLOOR under the figure, on the face and inside the panel's 0.5 width (at 40 px it sat just behind the face, and
+## only FLOOR's ends showed past the panel's sides; user, 2026-10-21).
 static func _wet_label() -> Label3D:
 	var l := Label3D.new()
 	l.text = "WET\nFLOOR"
-	l.font_size = 40
+	l.font_size = 20
 	l.pixel_size = 0.0065
 	l.shaded = false
 	l.modulate = Color(0.08, 0.06, 0.04)
 	l.outline_size = 0
-	l.position = Vector3(0, 0.31, 0.15)
+	l.position = _wet_front(0, -0.24, 0.023)
 	l.rotation_degrees = Vector3(-12, 0, 0)
 	return l
 

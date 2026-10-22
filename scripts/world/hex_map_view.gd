@@ -10,8 +10,8 @@ extends Node3D
 ## ledges, ziggurats, pillars) read as wooden CRATES, stairs as warm wood planks. Cliff
 ## sides keep a subtle band at every height level (count them to judge step / climb /
 ## blocked) plus a faint glow down the column corners; pits get an amber glow at the
-## bottom. The "start" / "exit" cells get cyan-green / magenta glowing seams + a ring (the exit only on a map without an
-## elevator: the elevator's sill strip and car light mark its landing).
+## bottom. The "exit" cell gets magenta glowing seams + a ring, only on a map without an elevator (the elevator's sill
+## strip and car light mark its landing). The "start" cell is unmarked (the van or the elevator is the start).
 ##
 ## Midpoint walls (HexMap.cut_walls): a cut cell is drawn in two parts. Its floor kites are a floor tile (the
 ## same inset top, bevel and seam, but only along its hex edges: the floor runs flush into the wall line) and its
@@ -34,7 +34,6 @@ const BEVEL_DROP := 0.035        ## how far the bevel falls below the top
 const SEAM_DROP := 0.07          ## depth of the glowing seam surface below the top
 
 const SEAM_COLOR := Color(1.0, 0.40, 0.07)
-const START_COLOR := Color(0.2, 1.0, 0.72)
 const EXIT_COLOR := Color(1.0, 0.28, 1.0)
 
 enum Surf { FLOOR_TOP, WALL_TOP, CRATE_TOP, STAIRS_TOP, CLIFF, WALL_SIDE, CRATE_SIDE, STAIRS_SIDE, SEAM, POOL, CHANNEL }
@@ -830,11 +829,9 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 		rim = col.lerp(Color(0.95, 0.52, 0.22), 0.45 * sg)
 		rim_glow = 0.5 * sg
 		seam = _scaled(seam, sg)
-		if cell.tag == "start":
-			col = col.lerp(Color(0.4, 1.0, 0.8), 0.14)
-			rim = col.lerp(START_COLOR, 0.55)
-			seam = START_COLOR
-		elif cell.tag == "exit" and _map.elevator.is_empty():   # (an elevator marks its own landing: sill and car light)
+		# (no start marker: the van or the elevator is where the crew stands; on floors 2-3 the start cell is just a spot,
+		# so a glowing hex there meant nothing: user, 2026-10-21)
+		if cell.tag == "exit" and _map.elevator.is_empty():   # (an elevator marks its own landing: sill and car light)
 			col = col.lerp(Color(1.0, 0.5, 1.0), 0.14)
 			rim = col.lerp(EXIT_COLOR, 0.55)
 			seam = EXIT_COLOR
@@ -877,8 +874,8 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 			_side_quad(side_b, p0, p1, y_bot + gh, y_bot, n, 0.0, 1.0, side_col, SEAM_DROP, 0.0, 0.6)
 		else:
 			_side_quad(side_b, p0, p1, y_top, y_bot, n, 0.0, 1.0, side_col, SEAM_DROP)
-	if not is_wall and (cell.tag == "start" or (cell.tag == "exit" and _map.elevator.is_empty())):
-		_add_ring(center, y + 0.02, START_COLOR if cell.tag == "start" else EXIT_COLOR)
+	if not is_wall and cell.tag == "exit" and _map.elevator.is_empty():
+		_add_ring(center, y + 0.02, EXIT_COLOR)
 
 
 ## Thin glowing hex ring just above a cell top (start / exit marker).
