@@ -13,7 +13,8 @@ extends "res://scripts/app/game.gd"
 ## scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built"; --sewer N in a crew too since "Phase 2 as
 ## built"); --sewer-floor --to-sewer head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built"); and (LavaDev.parse)
 ## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md);
-## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z (frame sequences for flicker hunts: _take_shot_later).
+## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z --walk-path x0,z0,x1,z1 (frame sequences for flicker hunts:
+## _take_shot_later).
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -40,6 +41,10 @@ func _parse_args() -> void:
 	if d >= 0 and d + 1 < args.size():
 		var xz := args[d + 1].split(",")
 		opts["cam_drift"] = Vector3(float(xz[0]), 0.0, float(xz[1]) if xz.size() > 1 else 0.0)
+	var w := args.find("--walk-path")
+	if w >= 0 and w + 1 < args.size() and args[w + 1].split(",").size() == 4:
+		var wq := args[w + 1].split(",")
+		opts["walk_path"] = PackedFloat32Array([float(wq[0]), float(wq[1]), float(wq[2]), float(wq[3])])
 
 
 ## --sewer N: the sewer layout to build, or 0. In a crew (sewer phase 2) every window needs the same flag (run.ps1 -Crew
@@ -1175,7 +1180,9 @@ func _sewer_focus(at: Vector3) -> void:
 ## for flicker hunts (diff the frames). After --shot-after it saves N frames K rendered frames apart as <png>_000.png ...
 ## and prints the camera per frame. --shadow-mask also saves each frame again with the key light's shadow off
 ## (<png>_000_ns.png: the pixels darker in the first are the shadow); --cam-drift moves the camera x,z world units per
-## saved frame, steadily, while the crew stands (2026-10-22 wall-shadow flicker hunt).
+## saved frame, steadily, while the crew stands; --walk-path x0,z0,x1,z1 puts the player at evenly spaced points from
+## x0,z0 to x1,z1, one per saved frame, the camera snapped to it (2026-10-22 wall-shadow hunt: the line in the lab where the
+## ground shadows went off, test_shadow_casters).
 func _take_shot_later(path: String, after: float) -> void:
 	if not opts.has("shot_seq"):
 		super(path, after)
@@ -1192,7 +1199,17 @@ func _take_shot_later(path: String, after: float) -> void:
 	var stem := path.get_basename()
 	var every := int(opts.get("shot_every", 1))
 	var key := find_child("KeyLight", true, false) as DirectionalLight3D
+	var walk: PackedFloat32Array = opts.get("walk_path", PackedFloat32Array())
 	for n in int(opts["shot_seq"]):
+		if not walk.is_empty():
+			var k := float(n) / maxf(1.0, float(int(opts["shot_seq"]) - 1))
+			var wx := lerpf(walk[0], walk[2], k)
+			var wz := lerpf(walk[1], walk[3], k)
+			var wl := map.ground_level(Vector3(wx, 0, wz))
+			if wl < -20 or wl > 40:
+				wl = 2
+			player.global_position = Vector3(wx, float(wl) * Hex.LEVEL_HEIGHT, wz)
+			rig.snap()
 		for _f in every:
 			if mk != null:
 				mk.global_position += drift / float(every)
@@ -1206,7 +1223,7 @@ func _take_shot_later(path: String, after: float) -> void:
 			get_viewport().get_texture().get_image().save_png("%s_%03d_ns.png" % [stem, n])
 			key.shadow_enabled = true
 		var cam := get_viewport().get_camera_3d()
-		print("[shot-seq] %03d  frame %d  cam %s  hero %s" % [n, Engine.get_frames_drawn(),
-			str(cam.global_position) if cam != null else "-", str(player.global_position) if player != null else "-"])
+		print("[shot-seq] %03d  frame %d  cam %s  hero %s" % [n, Engine.get_frames_drawn(), str(cam.global_position) if cam != null else "-",
+			str(player.global_position) if player != null else "-"])
 	print("[game] screenshot sequence saved: ", stem, "_*.png")
 	get_tree().quit()

@@ -57,6 +57,16 @@ Contract sites can be either type: a **luxury bunker** (billionaire client) or a
 - **Particles:** embers drifting up from seams, dust motes in light pools, steam from vents, and
   purple sparks around nests. All on the CPU, cheap and sparse.
 - **Audio** (later): ventilation hum, distant growls, a tinny elevator jazz loop, and imp giggles near nests.
+- **The key light's shadows stay on wherever you stand** (user playtest 2026-10-22, the movement lab: "there was a line on
+  the ground that if I crossed it the shadows went away"). The cause was Godot's *tighter shadow caster culling*
+  (`rendering/lights_and_shadows/tighter_shadow_caster_culling`, on by default): with our orthographic camera it built a
+  wrong caster hull for the key light's cascade at some camera positions and dropped the whole terrain (one mesh: every
+  wall, pillar and step) from the shadow pass, so every terrain shadow went off as the camera crossed a line (in the lab at
+  the player's x 45.25, z 0) and came back crossing back; only the actors' shadows stayed. `project.godot` turns it off (the
+  plain light-frustum cull still runs; the key light is the floor's one shadowed light). Found by walking the player
+  through the lab with `--shot-seq N --shadow-mask --walk-path x0,z0,x1,z1` (GameDev): the shadow fell from ~7300 to ~1300
+  pixels between two points 0.5 m apart and is continuous with the culling off. `test_shadow_casters` holds the setting.
+  Before and after: `wall_shadows/line_before_after.png`.
 
 ## 4. The surface the contract came through
 The first room is the **service entrance**: hazard tape, a dispatcher's job card pinned to the wall,
