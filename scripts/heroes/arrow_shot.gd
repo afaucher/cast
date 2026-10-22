@@ -36,7 +36,9 @@ static func shoot(shooter: Actor, dir: Vector3, dmg: float, spd: float, rng: flo
 	a.size = 0.12 if is_drawn else 0.09
 	a.hit_radius = 0.2
 	a.hits_props = true   # an arrow chips (and can break) the priced prop it runs into
-	GameWorld.spawn(a, Combat.chest(shooter) + a.direction * 0.5)
+	var pos := Combat.chest(shooter) + a.direction * 0.5
+	GameWorld.spawn(a, pos)
+	Sfx.play_at("bow_shot", pos)
 	return a
 
 
@@ -89,6 +91,7 @@ func _strike(a: Actor, pos: Vector3) -> void:
 	_hit_ids[a.get_instance_id()] = true
 	hits.append(a)
 	pierce -= 1
+	Sfx.play_at("hit_arrow", pos)
 	Fx.attach_hit_feedback(a)
 	if Net.resolves_hit(a, source):   # (online: the arrow flies on every screen; the archer's machine decides the hit)
 		a.apply_damage(ExplosiveProp.shot_damage(a, damage), source)   # (an arrow punctures an explosive prop: it lights)
@@ -100,6 +103,8 @@ func _strike(a: Actor, pos: Vector3) -> void:
 
 ## The arrow ends (range, terrain or its last hit). Hits were already dealt in _strike().
 func _impact(_hit: Actor, pos: Vector3) -> void:
+	if _travelled < max_range and hits.is_empty():
+		Sfx.play_at("hit_arrow", pos)
 	if target_team == GameWorld.TEAM_MONSTERS:
 		MonsterSenses.noise(pos, MonsterSenses.NOISE_ARROW, "arrow")   # the thunk (only this machine's monsters hear)
 	impacted.emit(pos, hits.back() if not hits.is_empty() else null)

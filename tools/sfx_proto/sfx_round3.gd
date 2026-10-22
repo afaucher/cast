@@ -15,6 +15,11 @@ const K_UI := "kenney_interface-sounds/"
 const K_RPG := "kenney_rpg-audio/"
 const FIREWORK := "freesound/336008__rudmer_rotteveel__whistle-and-explosion-single_firework.wav"
 const FIRE_SPELL := "freesound/442871__qubodup__fire-spell.wav"
+const BOW_DRAWN := "freesound/490556__paveroux__bow-drawn.ogg"
+const USER_IMP := "user/imp_raw.wav"
+const USER_CLIMB := "user/climb_raw.wav"
+const USER_OUCH_1 := "user/ouch1_raw.wav"
+const USER_OUCH_2 := "user/ouch2_raw.wav"
 
 ## cue -> the recordings it is made from ("synth" = generated here).
 const SOURCES := {
@@ -46,12 +51,33 @@ const SOURCES := {
 	"lava_crust_v2": [K_IMPACT + "impactSoft_heavy_000.ogg"],
 	"lava_crack_v1": [K_IMPACT + "impactMining_000.ogg", K_IMPACT + "impactMining_002.ogg", K_IMPACT + "impactMining_004.ogg"],
 	"lava_sizzle_v1": [K_IMPACT + "impactSoft_heavy_000.ogg"],
-	# footsteps (the movement feel "grounded", 2026-10-21): Kenney's footsteps, only their low heel
+	# footsteps, jumps, climbs, falls, ouch, imps, and default attacks/hits (2026-10-22)
 	"step_hard_v1": [K_IMPACT + "footstep_concrete_001.ogg"],
 	"step_soft_v1": [K_IMPACT + "footstep_carpet_001.ogg"],
 	"step_wood_v1": [K_IMPACT + "footstep_wood_001.ogg"],
 	"step_metal_v1": [K_IMPACT + "footstep_concrete_003.ogg", K_IMPACT + "impactMetal_light_002.ogg"],
 	"land_thud_v1": [K_IMPACT + "impactSoft_heavy_000.ogg", K_IMPACT + "footstep_concrete_002.ogg"],
+	"fall_heavy_v1": [K_IMPACT + "impactPunch_heavy_000.ogg", K_IMPACT + "footstep_concrete_002.ogg", K_IMPACT + "impactPlank_medium_000.ogg"],
+	"jump_v1": [K_RPG + "cloth1.ogg", K_IMPACT + "footstep_concrete_001.ogg"],
+	"climb_v1": [USER_CLIMB, K_RPG + "cloth1.ogg"],
+	"ouch_v1": [USER_OUCH_1, K_IMPACT + "impactPunch_medium_001.ogg"],
+	"ouch_2_v1": [USER_OUCH_2, K_IMPACT + "impactPunch_medium_001.ogg"],
+	"imp_yip_v1": [USER_IMP],
+	"imp_chatter_v1": [USER_IMP],
+	"imp_hurt_v1": [USER_IMP],
+	"swing_light_v1": [K_RPG + "knifeSlice.ogg", K_RPG + "cloth2.ogg"],
+	"swing_heavy_v1": [K_RPG + "cloth3.ogg", K_RPG + "knifeSlice.ogg", K_IMPACT + "impactSoft_heavy_000.ogg"],
+	"swing_spin_v1": [K_RPG + "cloth3.ogg", K_RPG + "knifeSlice.ogg", K_IMPACT + "impactSoft_heavy_000.ogg"],
+	"bow_shot_v1": [BOW_DRAWN, K_RPG + "knifeSlice.ogg", K_IMPACT + "impactWood_light_000.ogg"],
+	"boulder_roll_v1": [K_IMPACT + "impactMining_001.ogg"],
+	"slam_ground_v1": [K_IMPACT + "impactPunch_heavy_001.ogg", K_IMPACT + "impactMining_000.ogg", K_IMPACT + "impactMining_004.ogg"],
+	"hit_body_v1": [K_IMPACT + "impactPunch_medium_000.ogg", K_IMPACT + "impactSoft_medium_001.ogg"],
+	"hit_heavy_v1": [K_IMPACT + "impactPunch_heavy_002.ogg", K_IMPACT + "impactWood_heavy_001.ogg"],
+	"hit_arrow_v1": [K_RPG + "chop.ogg", K_IMPACT + "impactWood_light_001.ogg"],
+	"hit_shield_v1": [K_IMPACT + "impactMetal_heavy_001.ogg", K_IMPACT + "impactWood_heavy_000.ogg"],
+	"prop_dent_v1": [K_IMPACT + "impactWood_medium_001.ogg", K_IMPACT + "impactPlank_medium_002.ogg"],
+	"prop_break_v1": [K_IMPACT + "impactWood_heavy_002.ogg", K_IMPACT + "impactPlank_medium_001.ogg", K_IMPACT + "impactPlank_medium_003.ogg"],
+	"mailbox_break_v1": [K_IMPACT + "impactMetal_heavy_003.ogg", K_RPG + "metalPot2.ogg", K_IMPACT + "impactPlank_medium_000.ogg"],
 }
 
 
@@ -207,13 +233,6 @@ func _firework_v1() -> PackedFloat32Array:
 
 
 # ---------------------------------------------------------------- sewers and lava (2026-10-21)
-# The sounds of the sewer (gator, goo imps, the live wire, wading) and the lava (its bed, the damp crust, the crack before
-# it melts, the sizzle of a hero pulled out). The packs have no water recording, so the water is synth: short band-passed
-# noise grains (a slosh) and tiny high droplets. Mic rules (audio-plan.md §4, and "Sewers and lava" there for the probe
-# rounds that shaped these; the unchosen versions are in its history): short or front-loaded, never a hiss held through
-# a spell word; anything sustained keeps 300 Hz-4.5 kHz nearly empty and has NO steady low tone (the gate splits an
-# utterance over one); no pitch glide inside the speech band (the bubbles glide under 300 Hz, the droplets above 2.5 kHz
-# and for a few ms).
 
 ## Water droplets: tiny "plinks" (a sine rising half again as it dies, 12-35 ms), `per_sec` on average, f_lo..f_hi Hz,
 ## fading out across `length`.
@@ -246,8 +265,7 @@ func _slosh(o: PackedFloat32Array, start: float, length: float, per_sec: float, 
 
 
 ## A splash of `size` (0..1) at `start`: the slap (high-passed noise, a few ms), the wet body (slosh), a low plunge under
-## 100 Hz for the big ones, and droplets falling back. `slap` scales the slap and `lo` is the lowest slosh grain: the
-## gator's splashes take a soft slap (0.1) and the slosh above 1.8 kHz, so a big splash on someone's "cast" leaves the "k".
+## 100 Hz for the big ones, and droplets falling back.
 func _splash_at(o: PackedFloat32Array, start: float, size: float, amp: float, slap: float = 0.5, lo: float = 700.0) -> void:
 	_add_filtered_noise(o, start, 0.08 + 0.1 * size, func(_k: float) -> float: return 1200.0, 0.7, 2, amp * slap, 0.002,
 			0.012 + 0.025 * size)
@@ -267,9 +285,6 @@ static func _thud(file: String, hz: float, length: float = -1.0) -> PackedFloat3
 
 # --- the gator (scripts/monsters/gator.gd) ---------------------------------------------------------------------------------
 
-## The nip's wind-up (NIP_WINDUP 0.5 s; gator-look.md's "hiss swells"), 0.55 s: a "khh" up front (0.12 s, above 3.8 kHz),
-## then only a faint 9 kHz breath, and a throat rattle (52 and 104 Hz fluttering at 23 Hz, under 300 Hz) swelling to the
-## bite. (A held hiss, v1 and v2, masked the start of a spell word said over it.)
 func _gator_hiss_v3() -> PackedFloat32Array:
 	var o := _buf(0.55)
 	_add_noise(o, 0.0, 0.12, func(_k: float) -> float: return 3800.0, 0.8, 2, 0.9,
@@ -284,8 +299,6 @@ func _gator_hiss_v3() -> PackedFloat32Array:
 	return _normalize(o, -3.0)
 
 
-## The bite: the jaws' clack (Kenney impactWood_light_000, up 2 semitones), a sharp tooth click on it (metalLatch's first
-## 50 ms, above 3 kHz), a soft thud of the head (impactSoft_medium_000, low-passed) and a spatter of droplets. 0.25 s.
 func _gator_snap_v1() -> PackedFloat32Array:
 	var clack := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_light_000.ogg"), -45.0, 0.0), 2.0)
 	clack = Rec.fade(Rec.cut(clack, 0.0, 0.16), 0.0, 0.1)
@@ -298,9 +311,6 @@ func _gator_snap_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(s, 0.0, 0.06), -1.0)
 
 
-## In or out of the water, 0.75 s: a big splash (a soft slap, the slosh above 1.8 kHz, a plunge under 100 Hz, droplets) on
-## a soft heavy thud (impactSoft_heavy_000, low-passed): the weight low, the wet high. (v1's slap and slosh down to 700 Hz,
-## right on someone's "cast", was heard as "PAST".)
 func _gator_splash_v2() -> PackedFloat32Array:
 	var o := _buf(0.75)
 	_splash_at(o, 0.0, 0.85, 1.0, 0.1, 1800.0)
@@ -308,9 +318,6 @@ func _gator_splash_v2() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(s, 0.0, 0.12), -2.0)
 
 
-## Its death, 1.0 s: one big splash (the plain splash's), then the thrash in the low end only, three tail slaps
-## (impactSoft_medium 000/002, low-passed at 250 Hz) under falling droplets. (Five splashes in a row, v1-v2, kept the
-## 1-4 kHz band busy through a spell word: "CAST VEAL".)
 func _gator_thrash_v4() -> PackedFloat32Array:
 	var o := _buf(1.0)
 	_splash_at(o, 0.0, 0.9, 1.0, 0.1, 1800.0)
@@ -327,9 +334,6 @@ func _gator_thrash_v4() -> PackedFloat32Array:
 
 # --- the goo imp (goo_imp.gd, goo_ball.gd, goo_patch.gd) ------------------------------------------------------------------
 
-## The throw, a wet lob (0.24 s): a "shlup" of wet grains as the ball leaves the hand with a small low "pok" under 200 Hz,
-## and a short airy whoosh at 8.5 kHz falling away from the start. (v1's 6 kHz whoosh, held for 0.28 s, was heard alone as
-## "YES".)
 func _goo_throw_v2() -> PackedFloat32Array:
 	var o := _buf(0.24)
 	_slosh(o, 0.0, 0.07, 400.0, 900.0, 3500.0, 1.0, func(k: float) -> float: return minf(k * 6.0, 1.0) * pow(1.0 - k, 1.2))
@@ -341,8 +345,6 @@ func _goo_throw_v2() -> PackedFloat32Array:
 	return _normalize(o, -4.0)
 
 
-## The ball splats on the floor or on someone (0.42 s): a dense squelch of wet grains, a second thinner one, droplets, on a
-## low soft body (impactSoft_heavy_000's first 0.3 s, low-passed at 300 Hz).
 func _goo_splat_v1() -> PackedFloat32Array:
 	var o := _buf(0.42)
 	_slosh(o, 0.0, 0.14, 500.0, 600.0, 3500.0, 1.0, func(k: float) -> float: return pow(1.0 - k, 1.4))
@@ -352,7 +354,6 @@ func _goo_splat_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(s, 0.0, 0.08), -2.0)
 
 
-## The ball falls in the water: a small splash (0.5 s).
 func _goo_splash_v1() -> PackedFloat32Array:
 	var o := _buf(0.5)
 	_splash_at(o, 0.0, 0.35, 1.0)
@@ -360,8 +361,6 @@ func _goo_splash_v1() -> PackedFloat32Array:
 	return _normalize(o, -3.0)
 
 
-## A goo patch lit by a fireball: a WHOOMPH (0.75 s). A short suck of air (noise under 600 Hz swelling for 0.09 s), then
-## qubodup's "Fire Spell" (442871) pitched down 6 semitones and low-passed at 2 kHz, a soft heavy thump under it.
 func _goo_ignite_v1() -> PackedFloat32Array:
 	var o := _buf(0.1)
 	_add_noise(o, 0.0, 0.1, func(_k: float) -> float: return 600.0, 0.7, 0, 1.0, func(k: float) -> float: return k * k)
@@ -372,8 +371,6 @@ func _goo_ignite_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(s, 0.0, 0.1), -1.0)
 
 
-## A goo patch washed away by damp: a fizz (0.65 s). A wet "pss" at once (above 5 kHz), then a fine fizz (crackle above
-## 4 kHz, a 7.5 kHz band) and droplets dying away. Front-loaded and high.
 func _goo_wash_v1() -> PackedFloat32Array:
 	var o := _buf(0.65)
 	_add_noise(o, 0.0, 0.18, func(_k: float) -> float: return 5000.0, 0.8, 2, 0.8,
@@ -390,9 +387,6 @@ func _goo_wash_v1() -> PackedFloat32Array:
 
 # --- the live wire (scripts/world/sewer/live_wire.gd) ----------------------------------------------------------------------
 
-## The panel breaks (0.6 s): electrical snaps over the first quarter second, slowing (each a 6 ms high-passed click and a
-## recorded glitch, Kenney Interface glitch_001/003 above 1.5 kHz), the cover's tinny clack (impactMetal_light_000 up 3
-## semitones), then a sizzle dying away.
 func _wire_spark_v1() -> PackedFloat32Array:
 	var glitches: Array[PackedFloat32Array] = [Rec.highpass(Rec.load_mono(K_UI + "glitch_001.ogg"), 1500.0, 2),
 			Rec.highpass(Rec.load_mono(K_UI + "glitch_003.ogg"), 1500.0, 2)]
@@ -416,12 +410,6 @@ func _wire_spark_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(o, 0.0, 0.05), -2.0)
 
 
-## NOT IN THE GAME (a candidate: audio-plan.md "Sewers and lava", the user's call). A buzz while the live wire's cable lies
-## in the water (from its landing for LiveWire.PULSE_FOR: 6 s, one play). No tones: noise under 160 Hz chopped at 120 Hz
-## (a mains rattle without a pitch), a 7 kHz band chopped the same, a sparse high crackle; the speech band notched out. The
-## best of five buzzes in the probe, and still not clean: fine at a quiet, ducked leak (D 0.1 ducked 10/10) but it masks
-## "cast" at a loud one (D 3/10 at 0.4, C 3/6). A steady 60/120/180 Hz hum (v1-v3) split "cast <spell>" in two; the 7 kHz
-## band alone (v5) babbled words by itself.
 func _wire_buzz_v4() -> PackedFloat32Array:
 	var dur := 6.0
 	var o := _buf(dur)
@@ -436,8 +424,6 @@ func _wire_buzz_v4() -> PackedFloat32Array:
 	return _normalize(o, -6.0)
 
 
-## A shock (the first and each pulse, 0.45 s): a CRACK (a 6 ms broadband snap, a high-passed tail of 40 ms), dense high
-## crackle, a low "thoom" in the water (75 -> 55 Hz) and the hum flaring for 0.3 s. The loud part is the first 50 ms.
 func _wire_shock_v1() -> PackedFloat32Array:
 	var hi := _buf(0.45)
 	_add_filtered_noise(hi, 0.0, 0.01, func(_k: float) -> float: return 1000.0, 0.7, 2, 1.0, 0.0003, 0.003)
@@ -455,9 +441,6 @@ func _wire_shock_v1() -> PackedFloat32Array:
 	return _normalize(o, -1.0)
 
 
-## The breaker trips and the cable dies (0.8 s): the hum and a narrow 8.5 kHz "bzz" cutting in and out with growing gaps,
-## falling away, a snap at each cut, a last small pop and a thin high tail. (v1's wider 6.5 kHz band read as sibilants:
-## "cast fireball" over it was heard as "CAST BY HER BALL".)
 func _wire_fizzle_v2() -> PackedFloat32Array:
 	var o := _buf(0.8)
 	var gate := func(k: float) -> float: return minf(k * 20.0, 1.0) * minf((1.0 - k) * 20.0, 1.0)
@@ -477,8 +460,6 @@ func _wire_fizzle_v2() -> PackedFloat32Array:
 
 # --- wading (scripts/world/wading.gd) --------------------------------------------------------------------------------------
 
-## One soft step in knee-deep water (0.26 s): a slosh of wet grains as the foot pushes through, a dull low "plunk" under
-## 200 Hz, two or three droplets. Short and quiet: frequent cues are struck, not sung (audio-plan.md §4 rule 2).
 func _wade_step_v1() -> PackedFloat32Array:
 	var o := _buf(0.26)
 	_slosh(o, 0.0, 0.16, 260.0, 500.0, 3000.0, 1.0, func(k: float) -> float: return minf(k * 6.0, 1.0) * pow(1.0 - k, 1.5))
@@ -491,9 +472,6 @@ func _wade_step_v1() -> PackedFloat32Array:
 
 # --- lava (scripts/world/lava/) ---------------------------------------------------------------------------------------------
 
-## The bubbling bed near lava (4 s; LavaField plays it again a little before it ends, so plays overlap). All under ~600 Hz:
-## a rumble (noise under 110 Hz breathing slowly), thick "blorps" (a sine rising from 55-85 Hz to twice that as it dies,
-## under 300 Hz), each with a soft low "pok" as it bursts. Faded in and out so overlapping plays cross.
 func _lava_bubble_v1() -> PackedFloat32Array:
 	var dur := 4.0
 	var o := _buf(dur)
@@ -512,9 +490,6 @@ func _lava_bubble_v1() -> PackedFloat32Array:
 	return _normalize(o, -3.0)
 
 
-## Damp crusts the lava (one per crust, 1.3 s): the fuse's shape. A "TSSH" of steam (0.12 s, above 3.5 kHz), then at once
-## a narrow 7.5 kHz sizzle dying over the second, sparse crackle, and the rock settling under it (impactSoft_heavy_000
-## low-passed at 160 Hz). (v1's steam, still loud as the spell word starts, masked the "h": "CAST YALE".)
 func _lava_crust_v2() -> PackedFloat32Array:
 	var o := _buf(1.3)
 	_add_noise(o, 0.0, 0.12, func(_k: float) -> float: return 3500.0, 0.8, 2, 1.0,
@@ -528,9 +503,6 @@ func _lava_crust_v2() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(o, 0.0, 0.15), -2.0)
 
 
-## The crust is about to give (its last LavaField.CRUST_WARN, 2 s): rock cracking faster and louder. Seven cracks (the first
-## 0.14 s of Kenney's pick-on-rock hits, impactMining_000/002/004, 0-4 semitones down, each with a "crk" of grit snaps
-## above 2 kHz that laptop speakers carry) coming closer together, over a groan of noise under 90 Hz swelling. 2.05 s.
 func _lava_crack_v1() -> PackedFloat32Array:
 	var o := _buf(2.05)
 	_add_noise(o, 0.0, 2.05, func(_k: float) -> float: return 90.0, 0.8, 0, 1.0,
@@ -545,7 +517,6 @@ func _lava_crack_v1() -> PackedFloat32Array:
 		hit = Rec.normalize(Rec.fade(Rec.cut(hit, 0.0, 0.14), 0.0, 0.08), -1.0)
 		var lvl := -9.0 + 8.0 * float(i) / float(at.size() - 1)
 		o = Rec.mix(o, hit, at[i], lvl - 3.0)
-		# the "crk": three or four grit snaps in 30 ms, above 2 kHz (impulses, so they mask nothing for long)
 		var grit := _buf(0.06)
 		for j in _rng.randi_range(3, 4):
 			_add_filtered_noise(grit, float(j) * _rng.randf_range(0.006, 0.011), 0.02, func(_k: float) -> float: return 2000.0,
@@ -554,9 +525,6 @@ func _lava_crack_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(o, 0.0, 0.05), -2.0)
 
 
-## A hero pulled back out of the lava (and anything that falls in): a hot "TSST" (0.95 s). A low wet splut
-## (impactSoft_heavy_000's first 0.35 s, low-passed) with a burst above 3 kHz on it at once, then a fierce sizzle (a 6 kHz
-## band and dense crackle above 4 kHz) dying over 0.8 s, two low bubbles under 150 Hz.
 func _lava_sizzle_v1() -> PackedFloat32Array:
 	var o := _buf(0.95)
 	_add_noise(o, 0.0, 0.12, func(_k: float) -> float: return 3000.0, 0.8, 2, 1.0,
@@ -574,44 +542,261 @@ func _lava_sizzle_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(o, 0.0, 0.12), -1.5)
 
 
-# --- footsteps (the movement feel "grounded": scripts/heroes/hero_gait.gd; docs/design/movement-research.md "As built") --------
+# --- footsteps, jumps, climbs, falls, ouch, imps, and default attacks/hits (2026-10-22) -----------------------------------
 
-## One dry footstep on a material (0.12 s): a Kenney footstep cut to its heel strike, low-passed so it stays a thump under
-## the speech band's consonants (they repeat under every utterance a walking player speaks: audio-plan.md §4 rules 2 and 8).
+## One dry footstep on a material (0.13 s): Kenney footstep cut to its heel strike, 1-pole low-pass so surface transient
+## reads clearly while staying gentle under speech.
 static func _step(file: String, lp: float, semis: float = 0.0) -> PackedFloat32Array:
-	var s := Rec.trim(Rec.load_mono(K_IMPACT + file), -40.0, 0.002)
-	s = Rec.cut(s, 0.0, 0.12)
+	var s := Rec.trim(Rec.load_mono(K_IMPACT + file), -42.0, 0.002)
+	s = Rec.cut(s, 0.0, 0.13)
 	if semis != 0.0:
 		s = Rec.pitch(s, semis)
-	s = Rec.lowpass(s, lp, 2)
-	return Rec.normalize(Rec.fade(s, 0.001, 0.05), -3.0)
+	s = Rec.lowpass(s, lp, 1)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.045), -1.5)
 
 
-## Concrete, slate, tile, marble, stone, basalt: a hard heel.
+## Concrete, slate, tile, marble, stone, basalt: a crisp heel.
 func _step_hard_v1() -> PackedFloat32Array:
-	return _step("footstep_concrete_001.ogg", 1400.0, -1.0)
+	return _step("footstep_concrete_001.ogg", 2800.0, -0.5)
 
 
-## Carpet and rubber: a soft, dull pat.
+## Carpet and rubber: a soft pat.
 func _step_soft_v1() -> PackedFloat32Array:
-	return _step("footstep_carpet_001.ogg", 900.0)
+	return _step("footstep_carpet_001.ogg", 1600.0)
 
 
 ## Wood: a hollow knock.
 func _step_wood_v1() -> PackedFloat32Array:
-	return _step("footstep_wood_001.ogg", 1500.0)
+	return _step("footstep_wood_001.ogg", 3000.0)
 
 
-## Diamond plate: the hard heel and a faint tinny ring under 2.2 kHz.
+## Diamond plate: the hard heel and a faint metallic ring under 3.2 kHz.
 func _step_metal_v1() -> PackedFloat32Array:
-	var heel := _step("footstep_concrete_003.ogg", 1400.0, -1.0)
-	var ring := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_light_002.ogg"), -40.0, 0.0), 0.0, 0.14), 2200.0, 2)
+	var heel := _step("footstep_concrete_003.ogg", 2600.0, -0.5)
+	var ring := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_light_002.ogg"), -40.0, 0.0), 0.0, 0.14), 3200.0, 2)
 	ring = Rec.fade(ring, 0.001, 0.06)
-	return Rec.normalize(Rec.mix(heel, Rec.normalize(ring, -1.0), 0.004, -9.0), -3.0)
+	return Rec.normalize(Rec.mix(heel, Rec.normalize(ring, -1.0), 0.003, -7.0), -1.5)
 
 
-## A landing from two levels or more (0.25 s): a soft body thud under 300 Hz and both heels at once.
+## A landing from 1-2 levels (0.25 s): a soft body thud under 300 Hz and both heels at once.
 func _land_thud_v1() -> PackedFloat32Array:
 	var body := _thud("impactSoft_heavy_000.ogg", 300.0, 0.25)
-	var heel := _step("footstep_concrete_002.ogg", 1200.0, -2.0)
+	var heel := _step("footstep_concrete_002.ogg", 1600.0, -2.0)
 	return Rec.normalize(Rec.fade(Rec.mix(Rec.normalize(body, -1.0), heel, 0.0, -5.0), 0.0, 0.08), -2.0)
+
+
+## A heavy landing from 3+ levels or a shove landing (0.28 s): sub-bass punch, heel impact, and floor thud.
+func _fall_heavy_v1() -> PackedFloat32Array:
+	var sub := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_000.ogg"), -45.0, 0.0), -4.0)
+	sub = Rec.lowpass(Rec.cut(sub, 0.0, 0.28), 260.0, 2)
+	var heel := _step("footstep_concrete_002.ogg", 1800.0, -3.0)
+	var plank := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactPlank_medium_000.ogg"), -45.0, 0.0), 0.0, 0.20), 1400.0, 2)
+	var s := Rec.mix(Rec.normalize(sub, -1.0), heel, 0.0, -3.0)
+	s = Rec.mix(s, Rec.normalize(plank, -1.0), 0.012, -5.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.09), -1.0)
+
+
+## A +1 step hop (0.12 s): cloth rustle + toe push-off.
+func _jump_v1() -> PackedFloat32Array:
+	var cloth := Rec.cut(Rec.trim(Rec.load_mono(K_RPG + "cloth1.ogg"), -42.0, 0.002), 0.0, 0.12)
+	var toe := _step("footstep_concrete_001.ogg", 1800.0, 2.5)
+	var s := Rec.mix(Rec.normalize(cloth, -2.0), toe, 0.0, -3.0)
+	return Rec.normalize(Rec.fade(s, 0.002, 0.04), -2.5)
+
+
+## A +2 climb / mantle (0.125 s): user's Recording (4) trimmed to 0.595..0.720 s, high-passed at 140 Hz, with a light cloth scuff.
+func _climb_v1() -> PackedFloat32Array:
+	var raw := Rec.load_mono(USER_CLIMB)
+	var clean := Rec.highpass(Rec.cut(raw, 0.595, 0.720), 140.0, 2)
+	clean = Rec.normalize(Rec.fade(clean, 0.004, 0.018), -2.0)
+	var scuff := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_RPG + "cloth1.ogg"), -40.0, 0.002), 0.0, 0.11), 2200.0, 1)
+	return Rec.normalize(Rec.mix(clean, Rec.normalize(scuff, -1.0), 0.0, -11.0), -2.0)
+
+
+## Hero / Employee hurt ("ouch" 1): user's Recording (5) trimmed to 0.195..0.335 s, high-passed at 140 Hz, over a low body thump.
+func _ouch_v1() -> PackedFloat32Array:
+	var raw := Rec.load_mono(USER_OUCH_1)
+	var vox := Rec.highpass(Rec.cut(raw, 0.195, 0.335), 140.0, 2)
+	vox = Rec.fade(vox, 0.004, 0.018)
+	var body := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_medium_001.ogg"), -45.0, 0.0), 0.0, 0.13), 260.0, 2)
+	var s := Rec.mix(Rec.normalize(vox, -1.0), Rec.normalize(body, -1.0), 0.0, -6.0)
+	return Rec.normalize(Rec.fade(s, 0.002, 0.02), -1.5)
+
+
+## Hero / Employee hurt ("ouch" 2): user's Recording (6) trimmed to 0.340..0.485 s, high-passed at 140 Hz, over a low body thump.
+func _ouch_2_v1() -> PackedFloat32Array:
+	var raw := Rec.load_mono(USER_OUCH_2)
+	var vox := Rec.highpass(Rec.cut(raw, 0.340, 0.485), 140.0, 2)
+	vox = Rec.fade(vox, 0.004, 0.018)
+	var body := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_medium_001.ogg"), -45.0, 0.0), 0.0, 0.13), 260.0, 2)
+	var s := Rec.mix(Rec.normalize(vox, -1.0), Rec.normalize(body, -1.0), 0.0, -6.0)
+	return Rec.normalize(Rec.fade(s, 0.002, 0.02), -1.5)
+
+
+static func _imp_slice(t0: float, t1: float) -> PackedFloat32Array:
+	var s := Rec.cut(Rec.load_mono(USER_IMP), t0, t1)
+	s = Rec.highpass(s, 180.0, 2)
+	s = Rec.fade(s, 0.004, 0.015)
+	return Rec.normalize(s, -2.0)
+
+
+## Swarmer imp bite wind-up: user's Recording (3) burst 1 (0.440..0.565 s).
+func _imp_yip_v1() -> PackedFloat32Array:
+	return _imp_slice(0.440, 0.565)
+
+
+## Goo imp throw tell: user's Recording (3) burst 2 (0.825..0.975 s).
+func _imp_chatter_v1() -> PackedFloat32Array:
+	return _imp_slice(0.825, 0.975)
+
+
+## Imp hurt squeak: user's Recording (3) burst 3 (1.280..1.400 s).
+func _imp_hurt_v1() -> PackedFloat32Array:
+	return _imp_slice(1.280, 1.400)
+
+
+## Fast melee swing (Wick bow bash, monster melee): crisp air slice + cloth snap.
+func _swing_light_v1() -> PackedFloat32Array:
+	var sw := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "knifeSlice.ogg"), -45.0, 0.003), -3.0)
+	sw = Rec.lowpass(Rec.cut(sw, 0.0, 0.16), 3200.0, 1)
+	var cloth := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_RPG + "cloth2.ogg"), -42.0, 0.0), 0.0, 0.12), 1800.0, 1)
+	var s := Rec.mix(Rec.normalize(sw, -1.0), Rec.normalize(cloth, -1.0), 0.0, -6.0)
+	return Rec.normalize(Rec.fade(s, 0.008, 0.04), -2.0)
+
+
+## Heavy blunt melee swing (Gasket hammer, Rebar punch): deep air-displacement whoosh + heavy cloth snap + low body weight
+## (no metallic blade scrape).
+func _swing_heavy_v1() -> PackedFloat32Array:
+	var cloth := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "cloth3.ogg"), -42.0, 0.002), -3.0)
+	cloth = Rec.lowpass(Rec.cut(cloth, 0.0, 0.20), 1800.0, 1)
+	var rush := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "knifeSlice.ogg"), -45.0, 0.003), -4.0)
+	rush = Rec.lowpass(Rec.cut(rush, 0.0, 0.19), 1300.0, 2)
+	var weight := _thud("impactSoft_heavy_000.ogg", 220.0, 0.18)
+	var air := _buf(0.21)
+	_add_noise(air, 0.0, 0.20, func(k: float) -> float: return 620.0 - 380.0 * k, 1.3, 1, 0.85,
+			func(k: float) -> float: return sin(PI * pow(k, 0.75)))
+	var s := Rec.mix(Rec.normalize(air, -1.0), Rec.normalize(cloth, -1.0), 0.0, -2.0)
+	s = Rec.mix(s, Rec.normalize(rush, -1.0), 0.01, -3.5)
+	s = Rec.mix(s, Rec.normalize(weight, -1.0), 0.02, -4.0)
+	return Rec.normalize(Rec.fade(s, 0.010, 0.045), -1.5)
+
+
+## Gasket's 360° wrench spin: double rotational heavy whoosh.
+func _swing_spin_v1() -> PackedFloat32Array:
+	var a := _swing_heavy_v1()
+	var b := Rec.pitch(a, 2.0)
+	var s := Rec.mix(a, b, 0.13, -1.0)
+	return Rec.normalize(Rec.fade(s, 0.008, 0.05), -1.5)
+
+
+## Bow & crossbow release (Wick, Archer, Pavise): taut bowstring twang + wood flex + arrow zip.
+func _bow_shot_v1() -> PackedFloat32Array:
+	var bow := Rec.trim(Rec.load_mono(BOW_DRAWN), -42.0, 0.002)
+	var twang := Rec.pitch(Rec.cut(bow, maxf(0.0, bow.size() / float(RATE) - 0.22)), 5.0)
+	twang = Rec.lowpass(Rec.cut(twang, 0.0, 0.16), 2800.0, 1)
+	var zip := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "knifeSlice.ogg"), -45.0, 0.0), 4.0)
+	zip = Rec.lowpass(Rec.cut(zip, 0.0, 0.14), 3800.0, 1)
+	var wood := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_light_000.ogg"), -45.0, 0.0), 0.0, 0.08), 1600.0, 1)
+	var s := Rec.mix(Rec.normalize(wood, -1.0), Rec.normalize(twang, -1.0), 0.0, -2.0)
+	s = Rec.mix(s, Rec.normalize(zip, -1.0), 0.015, -2.0)
+	return Rec.normalize(Rec.fade(s, 0.002, 0.04), -1.5)
+
+
+## Rebar's sandstone boulder launch: stony thud + low rolling rumble.
+func _boulder_roll_v1() -> PackedFloat32Array:
+	var hit := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_001.ogg"), -45.0, 0.0), -5.0)
+	hit = Rec.lowpass(Rec.cut(hit, 0.0, 0.24), 1200.0, 2)
+	var roll := _buf(0.38)
+	_add_noise(roll, 0.0, 0.36, func(k: float) -> float: return 190.0 - 60.0 * k, 1.1, 0, 0.9,
+			func(k: float) -> float: return minf(k * 12.0, 1.0) * pow(1.0 - k, 1.3) * (0.75 + 0.25 * sin(TAU * 14.0 * k)))
+	var s := Rec.mix(Rec.normalize(hit, -1.0), Rec.normalize(roll, -1.0), 0.0, -2.0)
+	return Rec.normalize(Rec.fade(s, 0.003, 0.07), -1.5)
+
+
+## Ground slam (Brute slam, Gasket ground smash): sub punch + twin rock impacts.
+func _slam_ground_v1() -> PackedFloat32Array:
+	var punch := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_001.ogg"), -45.0, 0.0), -5.0)
+	punch = Rec.lowpass(Rec.cut(punch, 0.0, 0.32), 260.0, 2)
+	var rock1 := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_000.ogg"), -45.0, 0.0), -2.0)
+	rock1 = Rec.lowpass(Rec.cut(rock1, 0.0, 0.22), 2200.0, 1)
+	var rock2 := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_004.ogg"), -45.0, 0.0), -4.0)
+	rock2 = Rec.lowpass(Rec.cut(rock2, 0.0, 0.24), 1800.0, 1)
+	var s := Rec.mix(Rec.normalize(punch, -1.0), Rec.normalize(rock1, -1.0), 0.0, -2.0)
+	s = Rec.mix(s, Rec.normalize(rock2, -1.0), 0.025, -4.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.08), -1.0)
+
+
+## Default body hit (< 22 dmg): punchy medium impact.
+func _hit_body_v1() -> PackedFloat32Array:
+	var p := Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_medium_000.ogg"), -45.0, 0.001)
+	p = Rec.lowpass(Rec.cut(p, 0.0, 0.14), 2200.0, 1)
+	var soft := Rec.trim(Rec.load_mono(K_IMPACT + "impactSoft_medium_001.ogg"), -45.0, 0.0)
+	soft = Rec.lowpass(Rec.cut(soft, 0.0, 0.15), 1400.0, 1)
+	var s := Rec.mix(Rec.normalize(p, -1.0), Rec.normalize(soft, -1.0), 0.0, -3.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.04), -1.5)
+
+
+## Heavy body hit (>= 22 dmg, wall slam, boulder hit): deep heavy punch + wood crunch.
+func _hit_heavy_v1() -> PackedFloat32Array:
+	var p := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_002.ogg"), -45.0, 0.001), -2.0)
+	p = Rec.lowpass(Rec.cut(p, 0.0, 0.22), 2000.0, 1)
+	var w := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_heavy_001.ogg"), -45.0, 0.0), -3.0)
+	w = Rec.lowpass(Rec.cut(w, 0.0, 0.18), 1200.0, 1)
+	var s := Rec.mix(Rec.normalize(p, -1.0), Rec.normalize(w, -1.0), 0.0, -3.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.05), -1.0)
+
+
+## Arrow / bolt thunk into target or wall.
+func _hit_arrow_v1() -> PackedFloat32Array:
+	var ch := Rec.trim(Rec.load_mono(K_RPG + "chop.ogg"), -45.0, 0.001)
+	ch = Rec.lowpass(Rec.cut(ch, 0.0, 0.14), 2800.0, 1)
+	var w := Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_light_001.ogg"), -45.0, 0.0)
+	w = Rec.lowpass(Rec.cut(w, 0.0, 0.10), 2200.0, 1)
+	var s := Rec.mix(Rec.normalize(ch, -1.0), Rec.normalize(w, -1.0), 0.0, -3.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.035), -1.5)
+
+
+## Pavise shield block: heavy wood + metal clank.
+func _hit_shield_v1() -> PackedFloat32Array:
+	var m := Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_heavy_001.ogg"), -45.0, 0.001)
+	m = Rec.lowpass(Rec.cut(m, 0.0, 0.18), 3000.0, 1)
+	var w := Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_heavy_000.ogg"), -45.0, 0.0)
+	w = Rec.lowpass(Rec.cut(w, 0.0, 0.18), 1600.0, 1)
+	var s := Rec.mix(Rec.normalize(w, -1.0), Rec.normalize(m, -1.0), 0.0, -2.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.05), -1.5)
+
+
+## Priced prop dented (non-lethal): wood/plank knock.
+func _prop_dent_v1() -> PackedFloat32Array:
+	var w := Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_medium_001.ogg"), -45.0, 0.001)
+	w = Rec.lowpass(Rec.cut(w, 0.0, 0.16), 2600.0, 1)
+	var pl := Rec.trim(Rec.load_mono(K_IMPACT + "impactPlank_medium_002.ogg"), -45.0, 0.0)
+	pl = Rec.lowpass(Rec.cut(pl, 0.0, 0.16), 2000.0, 1)
+	var s := Rec.mix(Rec.normalize(w, -1.0), Rec.normalize(pl, -1.0), 0.01, -4.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.04), -1.5)
+
+
+## Priced prop broken: staggered multi-plank crash.
+func _prop_break_v1() -> PackedFloat32Array:
+	var heavy := Rec.trim(Rec.load_mono(K_IMPACT + "impactWood_heavy_002.ogg"), -45.0, 0.001)
+	heavy = Rec.lowpass(Rec.cut(heavy, 0.0, 0.24), 2600.0, 1)
+	var p1 := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPlank_medium_001.ogg"), -45.0, 0.0), 2.0)
+	p1 = Rec.lowpass(Rec.cut(p1, 0.0, 0.18), 2800.0, 1)
+	var p2 := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPlank_medium_003.ogg"), -45.0, 0.0), -2.0)
+	p2 = Rec.lowpass(Rec.cut(p2, 0.0, 0.20), 2400.0, 1)
+	var s := Rec.mix(Rec.normalize(heavy, -1.0), Rec.normalize(p1, -1.0), 0.035, -2.5)
+	s = Rec.mix(s, Rec.normalize(p2, -1.0), 0.095, -4.0)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.06), -1.0)
+
+
+## Mail package broken: hollow cardboard/tin pop.
+func _mailbox_break_v1() -> PackedFloat32Array:
+	var m := Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_heavy_003.ogg"), -45.0, 0.001)
+	m = Rec.lowpass(Rec.cut(m, 0.0, 0.24), 3200.0, 1)
+	var pot := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "metalPot2.ogg"), -45.0, 0.0), -2.0)
+	pot = Rec.lowpass(Rec.cut(pot, 0.0, 0.22), 2800.0, 1)
+	var plank := Rec.trim(Rec.load_mono(K_IMPACT + "impactPlank_medium_000.ogg"), -45.0, 0.0)
+	plank = Rec.lowpass(Rec.cut(plank, 0.0, 0.18), 1800.0, 1)
+	var s := Rec.mix(Rec.normalize(m, -1.0), Rec.normalize(plank, -1.0), 0.0, -3.0)
+	s = Rec.mix(s, Rec.normalize(pot, -1.0), 0.055, -3.5)
+	return Rec.normalize(Rec.fade(s, 0.001, 0.06), -1.0)

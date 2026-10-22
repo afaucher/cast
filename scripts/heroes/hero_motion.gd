@@ -262,6 +262,7 @@ func _start_hop(from: float, to: float) -> void:
 	hop_to = to
 	hop_t = 0.0
 	hops += 1
+	Sfx.play_at("jump", hero.global_position)
 
 
 static func _stairs(map: HexMap, p: Vector3) -> bool:
@@ -299,6 +300,7 @@ func _ledge_ahead(wish: Vector3) -> bool:
 			mantle_hold = float(kits.get(hero.kit_id, MoveFeel.num("mantle_hold")))
 			vel = Vector3.ZERO
 			hero.climbing = true
+			Sfx.play_at("climb", hero.global_position)
 			return true
 		d += 0.05
 	return false

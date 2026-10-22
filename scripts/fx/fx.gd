@@ -285,6 +285,7 @@ static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, ra
 static func ground_smash(pos: Vector3, radius: float) -> void:
 	if not _world_ready():
 		return
+	Sfx.play_at("slam_ground", pos)
 	var map: HexMap = GameWorld.map
 	var g := map.ground_height(pos) if map != null else NAN
 	if not is_nan(g):
@@ -354,7 +355,14 @@ static func auto_hit_feedback() -> void:
 static func _on_actor_damaged(amount: float, _source: Node, actor: Actor) -> void:
 	if not is_instance_valid(actor) or not actor.is_inside_tree():
 		return
-	var head := actor.global_position + Vector3(GameWorld.fx_rng.randf_range(-0.25, 0.25), 2.0 + actor.radius, 0)
+	var pos := actor.global_position
+	if not (actor is PricedProp):
+		Sfx.play_at("hit_heavy" if amount >= 22.0 else "hit_body", pos)
+	if actor is Hero or actor.is_in_group("employees"):
+		Sfx.play_at("ouch" if GameWorld.fx_rng.randf() < 0.5 else "ouch_2", pos)
+	elif str(actor.get("kind")) in ["swarmer", "goo_imp"]:
+		Sfx.play_at("imp_hurt", pos)
+	var head := pos + Vector3(GameWorld.fx_rng.randf_range(-0.25, 0.25), 2.0 + actor.radius, 0)
 	var col := NUMBER_HERO_HIT if actor.team == GameWorld.TEAM_HEROES else NUMBER_MONSTER_HIT
 	number(head, str(int(roundf(amount))), col, 1.0)
 	flash(actor)
@@ -375,10 +383,12 @@ static func _on_shove_impact(kind: String, pos: Vector3, amount: float, actor: A
 	var dust: Array[Color] = [Color(0.8, 0.72, 0.58), Color(0.6, 0.52, 0.42)]
 	match kind:
 		"slam":
+			Sfx.play_at("hit_heavy", pos)
 			burst(pos + Vector3.UP * 0.7, dust, 14, 3.0, 0.1, 0.5, 4.0, Vector3.UP, 120.0, false)
 			number(pos + Vector3(0, 2.6 + actor.radius, 0), "SLAM!", Color(1.0, 0.8, 0.3), 0.8)
 			shake(0.12)
 		"land":
+			Sfx.play_at("fall_heavy" if amount > 0.0 else "land_thud", pos)
 			burst(pos + Vector3.UP * 0.1, dust, 12, 3.5, 0.11, 0.55, 3.0, Vector3.UP, 85.0, false)
 			ring(pos, 0.9, Color(0.9, 0.8, 0.6, 0.6), 0.35, 0.0, false, 0.3)
 			if amount > 0.0:

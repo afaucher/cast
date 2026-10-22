@@ -50,7 +50,7 @@ const OFF := {
 	"gravity": 0.0,         ## u/s^2 on a walked-off drop (0: today's eased settle)
 	"land_slow": 1.0,       ## a landing from LAND_BIG_LEVELS or more keeps this share of the walking speed (then ramps back)
 	"gait": false,          ## the legs from the distance walked, hips toward the motion, lean, landing squash (HeroGait)
-	"footsteps": false,     ## a dry footstep per stride (the floor's material)
+	"footsteps": true,      ## a dry footstep per stride (the floor's material; on in every profile)
 	"dust": false,          ## dust puffs on a start, a hard stop, a sharp turn and a big landing
 	"cam_lead": 0.0,        ## world units the camera leads along the walking velocity
 	"cam_lead_time": 0.35,  ## seconds the lead's velocity is smoothed over

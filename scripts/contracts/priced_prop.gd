@@ -356,6 +356,7 @@ func _on_damaged(amount: float, source: Node) -> void:
 	if dead or hp <= 0.0 or _model == null:
 		return
 	# A little wobble and a few chips; a prop that is only dented is free, but it should look hurt.
+	Sfx.play_at("prop_dent", global_position)
 	if _wobble != null and _wobble.is_valid():
 		_wobble.kill()
 	_model.rotation = Vector3.ZERO
@@ -498,6 +499,7 @@ func _on_death() -> void:
 
 func _break_fx() -> void:
 	var c := global_position
+	Sfx.play_at("prop_break", c)
 	var h := model_height()
 	var big := clampf(float(price) / 15000.0, 0.0, 1.0)
 	PropDebris.burst(c + Vector3.UP * h * 0.45, PropModels.palette(kind), 12 + int(10.0 * big), 0.9 + 0.5 * big)

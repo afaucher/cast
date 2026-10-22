@@ -262,8 +262,10 @@ func _strike() -> void:
 
 ## The archer's arrow: an ordinary Projectile that hits heroes, breakables and the priced props it runs into.
 func _fire_arrow(dir: Vector3, dmg: float) -> Projectile:
-	var p := Projectile.fire(self, Combat.chest(self) + dir * 0.45, dir, dmg, ARROW_SPEED, ARROW_RANGE)
+	var pos := Combat.chest(self) + dir * 0.45
+	var p := Projectile.fire(self, pos, dir, dmg, ARROW_SPEED, ARROW_RANGE)
 	p.hits_props = true
+	Sfx.play_at("bow_shot", pos)
 	return p
 
 

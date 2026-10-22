@@ -57,15 +57,20 @@ func net_fields() -> Dictionary:
 
 ## One rendered frame (Hero._process, after the body's yaw).
 func tick(delta: float) -> void:
-	if not MoveFeel.on("gait") or hero.dead or not hero.is_inside_tree() or delta <= 0.0:
+	if (not MoveFeel.on("gait") and not MoveFeel.on("footsteps")) or hero.dead or not hero.is_inside_tree() or delta <= 0.0:
 		stop()
 		return
 	var model := hero.visual_override
-	if gait != null and gait.model != model:
-		stop()
-	if gait == null and model != null and Gait.supports(model, hero.kit_id):
-		gait = Gait.new(model as LowPolyModel, hero.kit_id)
-		_plants = gait.plants
+	if not MoveFeel.on("gait"):
+		if gait != null:
+			gait.release(not hero.dead)
+			gait = null
+	else:
+		if gait != null and gait.model != model:
+			stop()
+		if gait == null and model != null and Gait.supports(model, hero.kit_id):
+			gait = Gait.new(model as LowPolyModel, hero.kit_id)
+			_plants = gait.plants
 	var pos := hero.global_position
 	if _prev == Vector3.INF:
 		_prev = pos
@@ -183,9 +188,12 @@ func _landing(pos: Vector3) -> void:
 	elif not _grounded and not _air_shoved:
 		var levels := (_air_top - pos.y) / Hex.LEVEL_HEIGHT
 		if levels >= MoveFeel.LAND_BIG_LEVELS - 0.1:
-			thuds += 1
-			var cols: Array[Color] = [DUST[0], DUST[1]]
-			Fx.burst(pos + Vector3.UP * 0.08, cols, 10, 2.6, 0.09, 0.45, 3.0, Vector3.UP, 85.0, false)
-			Fx.ring(pos, 0.75, Color(0.9, 0.8, 0.6, 0.5), 0.3, 0.0, false, 0.3)
+			if MoveFeel.on("dust"):
+				thuds += 1
+				var cols: Array[Color] = [DUST[0], DUST[1]]
+				Fx.burst(pos + Vector3.UP * 0.08, cols, 10, 2.6, 0.09, 0.45, 3.0, Vector3.UP, 85.0, false)
+				Fx.ring(pos, 0.75, Color(0.9, 0.8, 0.6, 0.5), 0.3, 0.0, false, 0.3)
+			Sfx.play_at("fall_heavy" if levels >= 2.8 else "land_thud", pos)
+		elif levels >= 0.85:
 			Sfx.play_at("land_thud", pos)
 	_grounded = on

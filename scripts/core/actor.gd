@@ -403,7 +403,10 @@ func move(dir: Vector3, delta: float) -> bool:
 			mv = HexMap.Move.OK   # already stranded over the void (an old save of that corner, a crust gone): walk out
 		if mv == HexMap.Move.BLOCKED or (mv == HexMap.Move.CLIMB and not _climb_allowed()):
 			continue
+		var was_climbing := climbing
 		climbing = mv == HexMap.Move.CLIMB
+		if climbing and not was_climbing:
+			Sfx.play_at("climb", global_position)
 		var s: Vector3 = attempt * (climb_speed_factor if climbing else 1.0)
 		global_position = from + s
 		moved = true

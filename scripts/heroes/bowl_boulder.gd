@@ -47,6 +47,7 @@ static func launch(src: Actor, dir: Vector3, spd: float = 7.0, rng: float = 9.0,
 		var g := GameWorld.map.ground_height(start)
 		start.y = src.global_position.y if is_nan(g) else g
 	GameWorld.spawn(b, start)
+	Sfx.play_at("boulder_roll", start)
 	return b
 
 
@@ -149,6 +150,7 @@ func _check_hits() -> void:
 		if Combat.shielded(a, global_position - direction * 2.0, Combat.HIT_SHOT, source):
 			_stop()   # (a bonk on a pavise's planks: the boulder crumbles, nothing moves)
 			return
+		Sfx.play_at("hit_heavy", a.global_position)
 		if not Combat.resolves(a, source):
 			continue   # (online: the boulder rolls on every screen; the victim decides a hero, the bowler the rest)
 		var push := (side.normalized() * 0.85 + direction * 0.5).normalized()

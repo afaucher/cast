@@ -334,6 +334,7 @@ func _hand_out(what: String, here: Vector3, culprit: Node) -> void:
 
 ## A short pop: cardboard chips fly, a puff of dust.
 func _break_fx(here: Vector3) -> void:
+	Sfx.play_at("mailbox_break", here)
 	var h := PackageModels.height_of(size_kind)
 	PropDebris.burst(here + Vector3.UP * h * 0.5, PackageModels.palette(), 8, 0.55)
 	var dust: Array[Color] = [Color(0.82, 0.74, 0.6), Color(0.62, 0.54, 0.42)]

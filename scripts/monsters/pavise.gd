@@ -201,6 +201,7 @@ func shield_up() -> bool:
 
 ## Combat.shielded: a hit stopped on the planks, on this screen (`decided`: this machine resolved it, so nothing applied).
 func show_block(_from_point: Vector3, hit_kind: String, decided: bool, source: Node) -> void:
+	Sfx.play_at("hit_shield", global_position)
 	blocks_shown += 1
 	if decided:
 		blocks_decided += 1
@@ -580,6 +581,7 @@ func _fire_bolt(origin: Vector3, dir: Vector3) -> Projectile:
 			hit.shove(p.direction, BOLT_SHOVE, src)
 	var b := Fx.make_projectile(self, origin, dir, BOLT_DAMAGE, BOLT_SPEED, BOLT_RANGE, BOLT_COLOR, 0.13, on_hit)
 	b.hits_props = true   # (it stops at the first hero, prop or box in its line)
+	Sfx.play_at("bow_shot", origin)
 	bolts_fired += 1
 	last_bolt = b
 	return b

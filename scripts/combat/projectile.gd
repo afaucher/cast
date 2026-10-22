@@ -94,8 +94,11 @@ func _physics_process(delta: float) -> void:
 func _impact(hit: Actor, pos: Vector3) -> void:
 	# A shield facing the shot (the Pavise, Combat.shielded): it stops on the planks and does nothing; an arrow or a bolt
 	# sticks. The follow-ups see no hit (a fireball still bursts where it stopped, in front of the shield).
-	if hit and Combat.shielded(hit, pos - direction * 3.0, Combat.HIT_ARROW if hits_props else Combat.HIT_SHOT, source):
+	var blocked := hit != null and Combat.shielded(hit, pos - direction * 3.0, Combat.HIT_ARROW if hits_props else Combat.HIT_SHOT, source)
+	if blocked:
 		hit = null
+	if hits_props and not blocked and (hit != null or _travelled < max_range):
+		Sfx.play_at("hit_arrow", pos)
 	if hit and Net.resolves_hit(hit, source):   # (online: the shot flies on every screen; one machine decides the hit; a
 		hit.apply_damage(ExplosiveProp.shot_damage(hit, damage), source)   # client's hit on the host's prop or monster becomes a request: Net.route_hit)
 	if on_hit.is_valid():

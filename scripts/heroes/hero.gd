@@ -457,6 +457,7 @@ func melee(dir: Vector3) -> bool:
 ## The area is melee_area(): today's wedge, or (grounded_anim) the shape of this hero's weapon, the same on every machine
 ## because the crew plays the host's profile.
 func _melee_effect(dir: Vector3) -> void:
+	Sfx.play_at("swing_heavy" if kit_id in ["gasket", "rebar"] else "swing_light", global_position)
 	var area := melee_area()
 	var lane := str(area["shape"]) == "lane"
 	var far := float(area["far"]) if lane else 0.0
@@ -734,6 +735,7 @@ func _spin() -> bool:
 
 
 func _spin_effect(dir: Vector3) -> void:
+	Sfx.play_at("swing_spin", global_position)
 	var reach := float(spin_area()["reach"])
 	for foe in GameWorld.actors_in_radius(global_position, reach, GameWorld.other_team(team)):
 		Fx.attach_hit_feedback(foe)
@@ -775,6 +777,7 @@ func _bolt(dir: Vector3) -> bool:
 
 
 func _bolt_effect(dir: Vector3) -> void:
+	Sfx.play_at("swing_light", global_position)
 	var on_hit := func(_p: Projectile, hit: Actor, pos: Vector3) -> void:
 		if hit:
 			Fx.attach_hit_feedback(hit)

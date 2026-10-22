@@ -203,6 +203,7 @@ func _update_visual(delta: float) -> void:
 func _spawn_shockwave(pos: Vector3) -> void:
 	if GameWorld.root == null:
 		return
+	Sfx.play_at("slam_ground", pos)
 	var holder := Node3D.new()
 	GameWorld.root.add_child(holder)
 	holder.global_position = pos + Vector3.UP * 0.1

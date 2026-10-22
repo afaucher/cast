@@ -81,8 +81,6 @@ const CUES := {
 	## The live wire's panel breaks (LiveWire._on_broken, from the panel's obj.break on every machine): sparks.
 	"wire_spark": {"file": "wire_spark.wav", "bus": "World", "volume_db": -3.0, "pitch_jitter": 0.05,
 		"max_voices": 2, "min_gap": 0.2, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
-	## (No buzz while the wire is live: every sustained buzz tried failed the mic-leak probe, audio-plan.md "Sewers and
-	## lava"; the pulses' cracks carry it.)
 	## Each shock and pulse of the live wire (LiveWire._shock_fx): the crack.
 	"wire_shock": {"file": "wire_shock.wav", "bus": "World", "volume_db": -2.0, "pitch_jitter": 0.05,
 		"max_voices": 3, "min_gap": 0.1, "positional": true, "unit_size": 14.0, "max_distance": 70.0},
@@ -90,9 +88,8 @@ const CUES := {
 	"wire_fizzle": {"file": "wire_fizzle.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.04,
 		"max_voices": 2, "min_gap": 0.3, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
 	## A step in the water, anyone's (Wading: one per STEP_EVERY units walked wading, every machine from the shown position).
-	## -24 dB (was -14: too loud, user 2026-10-21); more voices now that monsters and staff splash too.
-	"wade_step": {"file": "wade_step.wav", "bus": "World", "volume_db": -24.0, "pitch_jitter": 0.15,
-		"max_voices": 6, "min_gap": 0.07, "positional": true, "unit_size": 6.0, "max_distance": 30.0},
+	"wade_step": {"file": "wade_step.wav", "bus": "World", "volume_db": -22.0, "pitch_jitter": 0.15,
+		"max_voices": 6, "min_gap": 0.07, "positional": true, "unit_size": 6.5, "max_distance": 30.0},
 	## The bubbling bed near lava (LavaField: a 4 s play at one of the two lava spots nearest the ear every ~1.7 s, so plays
 	## overlap). Quiet, all under 600 Hz, and ducked while you speak (duck_db).
 	"lava_bubble": {"file": "lava_bubble.wav", "bus": "World", "volume_db": -16.0, "pitch_jitter": 0.08, "duck_db": -10.0,
@@ -106,19 +103,67 @@ const CUES := {
 	## Something lands in the lava (LavaField._on_impact: a hero pulled back out, a monster sinking): the sizzle.
 	"lava_sizzle": {"file": "lava_sizzle.wav", "bus": "World", "volume_db": -3.0, "pitch_jitter": 0.06,
 		"max_voices": 3, "min_gap": 0.1, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
-	# --- footsteps (the movement feel "grounded", 2026-10-21; audio-plan.md "Footsteps"): HeroGait, one per foot plant of any
-	## hero on any screen (from the shown motion), on the floor's material; quiet and close (they repeat under speech).
-	"step_hard": {"file": "step_hard.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
-		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
-	"step_soft": {"file": "step_soft.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
-		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
-	"step_wood": {"file": "step_wood.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
-		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
-	"step_metal": {"file": "step_metal.wav", "bus": "World", "volume_db": -27.0, "pitch_jitter": 0.1,
-		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 5.0, "max_distance": 26.0},
-	## A hero lands on foot from two levels or more (HeroGait._landing, every screen).
-	"land_thud": {"file": "land_thud.wav", "bus": "World", "volume_db": -14.0, "pitch_jitter": 0.06,
-		"max_voices": 3, "min_gap": 0.1, "positional": true, "unit_size": 8.0, "max_distance": 40.0},
+	# --- footsteps, jumps, climbs, falls, ouch, imps, and default attacks/hits (2026-10-22) -------------------------------
+	"step_hard": {"file": "step_hard.wav", "bus": "World", "volume_db": -16.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 7.5, "max_distance": 32.0},
+	"step_soft": {"file": "step_soft.wav", "bus": "World", "volume_db": -18.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 7.5, "max_distance": 32.0},
+	"step_wood": {"file": "step_wood.wav", "bus": "World", "volume_db": -16.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 7.5, "max_distance": 32.0},
+	"step_metal": {"file": "step_metal.wav", "bus": "World", "volume_db": -16.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 7.5, "max_distance": 32.0},
+	## A hero lands on foot from 1-2 levels (HeroGait._landing, every screen).
+	"land_thud": {"file": "land_thud.wav", "bus": "World", "volume_db": -11.0, "pitch_jitter": 0.06,
+		"max_voices": 3, "min_gap": 0.08, "positional": true, "unit_size": 8.0, "max_distance": 40.0},
+	## A heavy fall landing (3+ levels or shove hard landing).
+	"fall_heavy": {"file": "fall_heavy.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.06,
+		"max_voices": 3, "min_gap": 0.1, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
+	## A +1 step hop (HeroMotion._start_hop).
+	"jump": {"file": "jump.wav", "bus": "World", "volume_db": -12.0, "pitch_jitter": 0.08,
+		"max_voices": 4, "min_gap": 0.06, "positional": true, "unit_size": 7.5, "max_distance": 35.0},
+	## A +2 climb / mantle (HeroMotion._ledge_ahead, Actor.move).
+	"climb": {"file": "climb.wav", "bus": "World", "volume_db": -10.0, "pitch_jitter": 0.08,
+		"max_voices": 4, "min_gap": 0.12, "positional": true, "unit_size": 8.0, "max_distance": 38.0},
+	## Hero or Employee hurt ("ouch", two user-recorded takes).
+	"ouch": {"file": "ouch.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.08,
+		"max_voices": 4, "min_gap": 0.08, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
+	"ouch_2": {"file": "ouch_2.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.08,
+		"max_voices": 4, "min_gap": 0.08, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
+	## Imp vocal cues (user's Recording 3): swarmer bite wind-up, goo imp throw tell, imp hurt squeak.
+	"imp_yip": {"file": "imp_yip.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.12,
+		"max_voices": 4, "min_gap": 0.08, "positional": true, "unit_size": 8.5, "max_distance": 42.0},
+	"imp_chatter": {"file": "imp_chatter.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.12,
+		"max_voices": 4, "min_gap": 0.08, "positional": true, "unit_size": 8.5, "max_distance": 42.0},
+	"imp_hurt": {"file": "imp_hurt.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.12,
+		"max_voices": 4, "min_gap": 0.06, "positional": true, "unit_size": 8.5, "max_distance": 42.0},
+	## Default attack swings, shots, boulder launch, and ground slams.
+	"swing_light": {"file": "swing_light.wav", "bus": "World", "volume_db": -10.0, "pitch_jitter": 0.1,
+		"max_voices": 5, "min_gap": 0.04, "positional": true, "unit_size": 8.0, "max_distance": 40.0},
+	"swing_heavy": {"file": "swing_heavy.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.08,
+		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 8.5, "max_distance": 42.0},
+	"swing_spin": {"file": "swing_spin.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.06,
+		"max_voices": 3, "min_gap": 0.08, "positional": true, "unit_size": 9.0, "max_distance": 45.0},
+	"bow_shot": {"file": "bow_shot.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.08,
+		"max_voices": 5, "min_gap": 0.04, "positional": true, "unit_size": 9.0, "max_distance": 45.0},
+	"boulder_roll": {"file": "boulder_roll.wav", "bus": "World", "volume_db": -5.0, "pitch_jitter": 0.06,
+		"max_voices": 3, "min_gap": 0.08, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
+	"slam_ground": {"file": "slam_ground.wav", "bus": "World", "volume_db": -2.0, "pitch_jitter": 0.06,
+		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
+	## Default hits, blocks, and prop/package breaks.
+	"hit_body": {"file": "hit_body.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.03, "positional": true, "unit_size": 9.0, "max_distance": 45.0},
+	"hit_heavy": {"file": "hit_heavy.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.08,
+		"max_voices": 5, "min_gap": 0.04, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
+	"hit_arrow": {"file": "hit_arrow.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.1,
+		"max_voices": 6, "min_gap": 0.03, "positional": true, "unit_size": 9.0, "max_distance": 45.0},
+	"hit_shield": {"file": "hit_shield.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.08,
+		"max_voices": 4, "min_gap": 0.04, "positional": true, "unit_size": 11.0, "max_distance": 55.0},
+	"prop_dent": {"file": "prop_dent.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.08,
+		"max_voices": 5, "min_gap": 0.04, "positional": true, "unit_size": 9.0, "max_distance": 45.0},
+	"prop_break": {"file": "prop_break.wav", "bus": "World", "volume_db": -2.0, "pitch_jitter": 0.06,
+		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
+	"mailbox_break": {"file": "mailbox_break.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.08,
+		"max_voices": 4, "min_gap": 0.04, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
 }
 ## Cues with a "duck_db" (the long beds) go down by it while the local player speaks (audio-plan.md §4 rule 4, built for
 ## those cues only): down in DUCK_ATTACK, held DUCK_HOLD after the voice stops, back up over DUCK_RELEASE.

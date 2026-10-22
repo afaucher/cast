@@ -8,14 +8,15 @@
 # Logs: test_logs\<name>.log / .err.log. A test passes only with exit code 0,
 # the ">>> [TEST PASSED] <name> <<<" marker, AND no "SCRIPT ERROR" in its output.
 #
-# NET TESTS (docs/design/networking-build-plan.md §3): a test whose source declares `const PEERS := N` runs
+# NET TESTS (docs/design/networking-build-plan.md Â§3): a test whose source declares `const PEERS := N` runs
 # as N headless processes over ENet on localhost: a host, then N-1 clients, each with
 #   --run-test X --net-role host|client --net-index i --net-port P --net-peers N --net-link L
 # once per link preset in its `const LINKS := [...]` (default "off" and "coast"). Each run gets its own port
 # (28000 + 10 * slot). Logs: test_logs\<name>.<link>.host.log, .c1.log, ... A run passes only if EVERY
 # process exits 0, the host log has the PASS marker and no log has a SCRIPT ERROR; every process of a run is
-# killed at its timeout. Net runs go after the parallel batch, at most 2 at a time, so a starved CPU can't
-# fake lag (they measure real-time clocks). They run in real time (--max-fps 60, not --fixed-fps).
+# killed at its timeout. Net runs go after the --fixed-fps parallel batch, up to $netMax at a time alongside
+# the real-time voice suite, so a starved CPU can't fake lag (they measure real-time clocks). They run in
+# real time (--max-fps 60, not --fixed-fps).
 param(
     [string]$TestName = "",
     [switch]$TestAll,
@@ -55,7 +56,8 @@ function Start-Test([string]$Name) {
 }
 
 function Finish-Test($r, [int]$Limit = $TimeoutSec) {
-    if (-not $r.Proc.WaitForExit($Limit * 1000)) { try { $r.Proc.Kill() } catch {}; $r.Proc.WaitForExit() }
+    $left = [Math]::Max(0, [int](($Limit - $r.Watch.Elapsed.TotalSeconds) * 1000))
+    if (-not $r.Proc.WaitForExit($left)) { try { $r.Proc.Kill() } catch {}; $r.Proc.WaitForExit() }
     $out = $r.Out.Result; $err = $r.Err.Result
     Set-Content -Path "$logDir\$($r.Name).log" -Value $out
     Set-Content -Path "$logDir\$($r.Name).err.log" -Value $err
@@ -139,36 +141,66 @@ function Finish-NetRun($run) {
 
 # --- Schedule ------------------------------------------------------------------------------------
 
-$names = if ($TestAll) { Get-ChildItem "$PSScriptRoot\tests\test_*.gd" | ForEach-Object { $_.BaseName } } else { @($TestName) }
-$max = [Math]::Max(2, [Math]::Min(8, [Environment]::ProcessorCount - 2))
+$names = if ($TestAll) { Get-ChildItem "$PSScriptRoot\tests\test_*.gd" | ForEach-Object { $_.BaseName } } else { @($TestName -split '[\s,]+' | Where-Object { $_ -ne "" }) }
+$max = [Math]::Max(2, [Math]::Min(12, [Environment]::ProcessorCount - 8))
+$netMax = [Math]::Max(2, [Math]::Min(6, [int]([Environment]::ProcessorCount / 5)))
 $running = @(); $failed = @(); $total = 0
-# Real-time audio tests feed the speech model on a wall-clock schedule; under a
-# parallel batch the recognizer thread starves and borderline clips flip. They
-# run one at a time, after everything else, with the box otherwise idle.
-$serialNames = @("test_voice_audio", "test_voice_triggers", "test_voice_noise", "test_voice_orders")
+# Real-time audio tests feed the speech model on a wall-clock schedule; under the
+# --fixed-fps parallel batch the recognizer thread starves and borderline clips
+# flip. They run after the --fixed-fps batch, in parallel with each other and the
+# --max-fps 60 net runs (4 recognizers x 2 threads + 6 net runs fits easily in 32 logical CPUs).
+$voiceNames = @("test_voice_audio", "test_voice_orders", "test_voice_triggers", "test_voice_noise")
 $netRuns = @()
 foreach ($n in $names) {
     $spec = Get-NetSpec $n
     if ($spec -ne $null) { foreach ($l in $spec.Links) { $netRuns += [PSCustomObject]@{ Name = $n; Peers = $spec.Peers; Link = $l } } }
 }
 $netNames = @($netRuns | ForEach-Object { $_.Name } | Select-Object -Unique)
-$parallel = @($names | Where-Object { $serialNames -notcontains $_ -and $netNames -notcontains $_ })
-$serial = @($names | Where-Object { $serialNames -contains $_ })
+$parallel = @($names | Where-Object { $voiceNames -notcontains $_ -and $netNames -notcontains $_ })
+$voice = @($names | Where-Object { $voiceNames -contains $_ })
 foreach ($n in $parallel) {
-    while (@($running | Where-Object { -not $_.Proc.HasExited }).Count -ge $max) { Start-Sleep -Milliseconds 100 }
+    while ($true) {
+        $done = @($running | Where-Object { $_.Proc.HasExited -or $_.Watch.Elapsed.TotalSeconds -gt $TimeoutSec })
+        foreach ($r in $done) {
+            $total += 1
+            if (-not (Finish-Test $r)) { $failed += $r.Name }
+            $running = @($running | Where-Object { $_ -ne $r })
+        }
+        if ($running.Count -lt $max) { break }
+        Start-Sleep -Milliseconds 100
+    }
     $running += Start-Test $n
 }
 foreach ($r in $running) { $total += 1; if (-not (Finish-Test $r)) { $failed += $r.Name } }
 
-# Net runs: at most 2 at a time.
+# Launch the real-time voice suite in parallel (after the --fixed-fps CPU burst) so it overlaps with net runs.
+$voiceRunning = @()
+if ($voice.Count -gt 0) {
+    $clipDir = Join-Path $PSScriptRoot "tests\voice_clips"
+    $makeClips = Join-Path $PSScriptRoot "tools\make_voice_clips.ps1"
+    if ((Test-Path $makeClips) -and (-not (Test-Path (Join-Path $clipDir "manifest.csv")) -or -not (Test-Path (Join-Path $clipDir "triggers.csv")))) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $makeClips -OutDir $clipDir | Out-Null
+    }
+    if ((Test-Path $makeClips) -and (-not (Test-Path (Join-Path $clipDir "orders.csv")))) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $makeClips -OutDir $clipDir -OrdersOnly | Out-Null
+    }
+    foreach ($n in $voice) { $voiceRunning += Start-Test $n }
+}
+
+# Net runs: up to $netMax at a time, while $voiceRunning also progresses in the background.
 if ($netRuns.Count -gt 0) {
     $netWatch = [Diagnostics.Stopwatch]::StartNew()
     $queue = [System.Collections.ArrayList]@($netRuns)
     $active = @()
     while ($queue.Count -gt 0 -or $active.Count -gt 0) {
-        while ($queue.Count -gt 0 -and $active.Count -lt 2) {
+        while ($queue.Count -gt 0 -and $active.Count -lt $netMax) {
             $next = $queue[0]; $queue.RemoveAt(0)
             $active += Start-NetRun $next.Name $next.Peers $next.Link
+        }
+        foreach ($vr in @($voiceRunning | Where-Object { $_.Proc.HasExited })) {
+            $total += 1
+            if (-not (Finish-Test $vr ([Math]::Max($TimeoutSec, 900)))) { $failed += $vr.Name }
+            $voiceRunning = @($voiceRunning | Where-Object { $_ -ne $vr })
         }
         $doneRun = $active | Where-Object { (Test-NetRunExited $_) -or $_.Watch.Elapsed.TotalSeconds -gt $NetTimeoutSec } | Select-Object -First 1
         if ($doneRun -eq $null) { Start-Sleep -Milliseconds 100; continue }
@@ -176,14 +208,13 @@ if ($netRuns.Count -gt 0) {
         if (-not (Finish-NetRun $doneRun)) { $failed += $doneRun.Label }
         $active = @($active | Where-Object { $_ -ne $doneRun })
     }
-    Write-Host "  net runs: $($netRuns.Count) in $($netWatch.Elapsed.TotalSeconds.ToString('F1')) s (2 at a time)" -ForegroundColor DarkCyan
+    Write-Host "  net runs: $($netRuns.Count) in $($netWatch.Elapsed.TotalSeconds.ToString('F1')) s ($netMax at a time)" -ForegroundColor DarkCyan
 }
 
-foreach ($n in $serial) {
-    $r = Start-Test $n
+foreach ($vr in $voiceRunning) {
     $total += 1
-    # The audio suite replays every clip at real-time pace: ~5 min alone.
-    if (-not (Finish-Test $r ([Math]::Max($TimeoutSec, 900)))) { $failed += $r.Name }
+    # The audio suite replays every clip at real-time pace: ~9.5 min alone.
+    if (-not (Finish-Test $vr ([Math]::Max($TimeoutSec, 900)))) { $failed += $vr.Name }
 }
 
 if ($failed.Count -gt 0) { Write-Host "$($failed.Count) of $total test(s) FAILED: $($failed -join ', ')" -ForegroundColor Red; exit 1 }
