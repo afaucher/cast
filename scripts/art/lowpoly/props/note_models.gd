@@ -50,7 +50,8 @@ static func build(format: String, accent: Color = Color(0.5, 0.5, 0.55)) -> Node
 	root.add_child(mi)
 	match format:
 		"sign":
-			root.add_child(_label("NOTICE", Vector3(0, 0.68, 0.155), Vector3(-12, 0, 0), 34))
+			# on the face, between the band and the lines, and narrower than the panel (34 ran off its edges)
+			root.add_child(_label("NOTICE", sign_front(0, 0.17, 0.023), Vector3(-SIGN_TILT, 0, 0), 22))
 		"voicemail":
 			var blink := MeshInstance3D.new()
 			blink.name = "Blink"
@@ -120,17 +121,30 @@ static func _report(s: LowPoly.Soup) -> void:
 	_b(s, Vector3(0.1, 0.009, 0.07), Vector3(-0.06, 0.462, 0.2), RED.darkened(0.2), rot)
 
 
+## A point on the sign's tilted front face: `v` up the panel from its centre, `d` out from its mid-plane (the panel is
+## 0.04 thick, so its face is at d = 0.02). Everything on the face sits on it (the band, the lines and NOTICE used to
+## float in front of it: user, 2026-10-21).
+static func sign_front(x: float, v: float, d: float) -> Vector3:
+	var up := Vector3(0, cos(deg_to_rad(SIGN_TILT)), -sin(deg_to_rad(SIGN_TILT)))
+	var out := Vector3(0, sin(deg_to_rad(SIGN_TILT)), cos(deg_to_rad(SIGN_TILT)))
+	return SIGN_CENTRE + Vector3(x, 0, 0) + up * v + out * d
+
+
+const SIGN_TILT := 12.0
+const SIGN_CENTRE := Vector3(0, 0.48, 0.13)
+
+
 static func _sign(s: LowPoly.Soup) -> void:
 	var white := Color(0.96, 0.96, 0.94)
-	_b(s, Vector3(0.56, 0.9, 0.04), Vector3(0, 0.48, 0.13), white, Vector3(-12, 0, 0))
-	_b(s, Vector3(0.56, 0.9, 0.04), Vector3(0, 0.48, -0.13), white.darkened(0.1), Vector3(12, 0, 0))
-	# the hazard band across the top of the front panel
+	_b(s, Vector3(0.56, 0.9, 0.04), SIGN_CENTRE, white, Vector3(-SIGN_TILT, 0, 0))
+	_b(s, Vector3(0.56, 0.9, 0.04), Vector3(0, 0.48, -0.13), white.darkened(0.1), Vector3(SIGN_TILT, 0, 0))
+	# the hazard band across the top of the front panel, inside its edges, on its face
 	for i in 6:
-		var x := -0.235 + 0.094 * float(i)
-		_b(s, Vector3(0.094, 0.1, 0.012), Vector3(x, 0.84, 0.205), HAZARD if i % 2 == 0 else INK, Vector3(-12, 0, 0))
+		var x := -0.225 + 0.09 * float(i)
+		_b(s, Vector3(0.09, 0.1, 0.012), sign_front(x, 0.34, 0.027), HAZARD if i % 2 == 0 else INK, Vector3(-SIGN_TILT, 0, 0))
 	# text lines under NOTICE
 	for i in 3:
-		_b(s, Vector3(0.38 - 0.08 * float(i % 2), 0.035, 0.01), Vector3(0, 0.5 - 0.1 * float(i), 0.17 + 0.021 * float(i)), INK, Vector3(-12, 0, 0))
+		_b(s, Vector3(0.38 - 0.08 * float(i % 2), 0.035, 0.01), sign_front(0, 0.0 - 0.1 * float(i), 0.026), INK, Vector3(-SIGN_TILT, 0, 0))
 	_b(s, Vector3(0.6, 0.06, 0.2), Vector3(0, 0.95, 0.0), white.darkened(0.2))
 	_b(s, Vector3(0.56, 0.04, 0.4), Vector3(0, 0.02, 0.0), INK.lightened(0.15))
 
