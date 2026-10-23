@@ -160,6 +160,7 @@ func _check_melee() -> void:
 	var east := _prop("server_rack", Vector3(1.3, 0, 0))
 	var west := _prop("server_rack", Vector3(-1.3, 0, 0))
 	check(spinner.shoot(Vector3.RIGHT), "the spin fires")
+	await frames(SpinSweep.ANTICIPATION + SpinSweep.TURN_FRAMES + 2)   # (grounded_anim, the default: a timed sweep, SpinSweep)
 	check(east.hp < east.max_hp and west.hp < west.max_hp, "the spin chips the props all around")
 	# A monster's swing leaves props alone (it strikes at heroes; only the crew's weapons hit the client's property).
 	_fresh()

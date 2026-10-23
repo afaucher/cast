@@ -181,7 +181,7 @@ func setup() -> void:
 	HeroFactory.make_ally(d2, leader, false, 2.4)
 	var e1 := _dummy(Vector3(1.3, 0, 0))
 	var e2 := _dummy(Vector3(-0.6, 0, 1.2))
-	await frames(3)
+	await frames(3 + SpinSweep.ANTICIPATION + SpinSweep.TURN_FRAMES)   # (grounded_anim, the default: a timed sweep, SpinSweep)
 	check(d2.cooldown_left(Hero.KEY_RANGED) > 0.5, "the ally brain spins with two enemies in reach")
 	check(_hd(e1, Vector3(1.3, 0, 0)) > 0.3, "and the enemies are shoved")
 	_fresh()

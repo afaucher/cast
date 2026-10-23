@@ -388,26 +388,42 @@ Speeds as in C.
 
 ### 5.3 As built: package A "grounded" as an A/B profile (2026-10-21)
 
+**Decided (user, 2026-10-23): "For movement profile - the new one is better."** `grounded_anim` is the **default**:
+normal play, an exported build, the arena, the test gym and a crew all play it with no flag (`MoveFeel.DEFAULT`; a host
+with no flag sends it with the job, so the crew plays it too). `--move-feel today|grounded|grounded_anim` still names one
+(`today`'s own regression, `test_move_feel_today`, selects it by name and still matches its trace). The A/B is concluded:
+**F6 (the profile cycle) and F7 (the judder smoothing) are gone from normal play**, and the blind shuffle went with them
+(`--move-feel shuffle` now warns and plays the default). Following the user's rule for experiments, "For the future - lets put
+experiments in the gym menu instead of adding keybindings.", both are now pickers in the test gym's panel ("Experiments":
+Movement today / grounded / grounded_anim, Smoothing off / on; `test-gym.md`). `--physics-interp on|off` stays a flag.
+What the smoothing does is unchanged and it stays **off** by default.
+
+**Considered and parked (user, 2026-10-23): always-on smoothing.** The user first asked "Turn the hero smoothing on by
+default for everyone and remove the toggle.", then "Lets park that for now." So the smoothing stays off by default, a flag
+and a gym picker, until that decision is taken up again (question 1 below).
+
 **The user's blind A/B (2026-10-22): "Grounded is better. Not there yet."** Grounded beats today; more is needed on top of it
 (see the animation track, `animation-research.md`, and the gap table above for what is still missing).
 
 **Next A/B (2026-10-22): `grounded` vs `grounded_anim`.** The user picked "Animation B + strike-first" on top of grounded. It is
 a third profile, `grounded_anim` (grounded plus HeroFeel's lean and squash, the stride held while shoved or airborne, the
-strike-first melee and each hero's hit area reshaped to its weapon), and `--move-feel shuffle` now deals those two blind
-(`today` stays selectable by name; F6 by name cycles all three). See `animation-research.md`, "As built".
+strike-first melee and each hero's hit area reshaped to its weapon), and `--move-feel shuffle` dealt those two blind
+(`today` stayed selectable by name; F6 by name cycled all three) until the decision of 2026-10-23 above. See `animation-research.md`, "As built".
 
 The user (2026-10-21): "Let's try the package A grounded. Preferably so I can A/B." Built: the profile table, package A, the
-judder check, the lab, the log and the tests. **`today` is still the default**: nothing changes for normal play until the
-user picks.
+judder check, the lab, the log and the tests. `today` was the default until the user picked (2026-10-23, above).
 
-#### How to A/B
+#### How to try the profiles
+(Until 2026-10-23 this was the A/B: `--move-feel shuffle` dealt the pair blind as "feel 1" / "feel 2", F6 switched profile
+and F7 the smoothing. Those went when the user decided, above.)
+
 | Command | What it does |
 |---|---|
-| `.\run.ps1 --move-lab --move-feel shuffle --no-mic` | The lab (below), with `grounded` and `grounded_anim` (was: `today` and `grounded`, until 2026-10-22) dealt in a random order as **"feel 1" / "feel 2"**. The tag says only the number; which is which is printed to the console and written in every log row. |
-| `.\run.ps1 --move-lab --move-feel grounded --no-mic` | The lab, profiles named. `today` is the default. |
-| **F6** | The next profile (the tag in the lower left names it, or its number when blind, for about 2 s). In a crew it does nothing (the tag says "set by the host"). |
-| **F7** | Physics interpolation of your own heroes on / off (the judder check). `--physics-interp on` starts with it on. |
-| `.\run.ps1 --seed 7 --contract 0 --spells heal,corn --move-feel grounded` | Any real floor (F6 / F7 work there too, and in the arena, `--scene res://scenes/arena.tscn`). |
+| `.\run.ps1 --move-lab --no-mic` | The lab (below) under the default, `grounded_anim`. |
+| `.\run.ps1 --move-lab --move-feel today --no-mic` | The lab under a named profile (`today`, `grounded`, `grounded_anim`). A tag in the lower left names a non-default profile for about 2 s. |
+| `.\run.ps1 --gym --no-mic` | The test gym: its panel's "Experiments" pick the profile and the smoothing live (`test-gym.md`). |
+| `--physics-interp on` | Starts with the judder smoothing of your own heroes on (default off). |
+| `.\run.ps1 --seed 7 --contract 0 --spells heal,corn --move-feel grounded` | Any real floor (and the arena, `--scene res://scenes/arena.tscn`). |
 | `.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded` | Two windows: how a teammate's grounded walk reads on a puppet. |
 
 The flags work in any order; MoveFeel reads them once per run (`Boot`, the game and the arena call `MoveFeel.boot`).
@@ -415,14 +431,14 @@ The flags work in any order; MoveFeel reads them once per run (`Boot`, the game 
 #### What was built
 | Piece | Where | What |
 |---|---|---|
-| The table | `scripts/heroes/move_feel.gd` (`MoveFeel`) | Profiles `today` (every key at its "off" value: the old code paths run) and `grounded`. The flag, F6's cycle, shuffle, the crew rule. Every hero, the camera and the AI read the active profile here. |
+| The table | `scripts/heroes/move_feel.gd` (`MoveFeel`) | Profiles `today` (every key at its "off" value: the old code paths run), `grounded` and `grounded_anim` (`DEFAULT`). The flag, the gym's `pick`, the crew rule. Every hero, the camera and the AI read the active profile here. |
 | The walk | `scripts/heroes/hero_motion.gd` (`HeroMotion`), `Hero.move` | The envelope, the hop, the mantle, gravity. On the machine that moves the hero only. `today`: `Hero.move` is the old walk. |
 | The feet | `scripts/heroes/hero_gait.gd` (`HeroGait`) on `scripts/art/lowpoly/gait.gd` (`Gait`) | Stride and legs, footsteps, dust, the big landing. Every screen, from the shown motion. |
 | Camera | `CameraRig._lead` | The lead. |
 | Allies | `AllyBrain._follow`, `_move_toward` | The arrival slowdown and the catch-up (`Hero.pace`). |
-| Judder | `Hero._interp_show` / `_interp_restore` | F7 (below). |
+| Judder | `Hero._interp_show` / `_interp_restore` | `MoveFeel.interp` (below): `--physics-interp`, the gym's Smoothing picker. |
 | Lab | `scripts/heroes/move_lab.gd` (`MoveLab`), `--move-lab` | The course, as floor 1 of a contract. |
-| Tag, keys, log | `scripts/heroes/move_feel_tag.gd`, `scripts/heroes/move_log.gd` | F6 / F7, the tag, `user://move_lab.csv`. |
+| Tag, log | `scripts/heroes/move_feel_tag.gd`, `scripts/heroes/move_log.gd` | The tag (no keys since 2026-10-23), `user://move_lab.csv`. |
 
 **The stride is shared with the animation track.** `animation-research.md`'s lab (`anim_lab_feel.gd`, level 1) already had
 a stride matched to the ground and legs turned toward the travel. That logic now lives in `Gait`, and both the lab's lane B
@@ -455,7 +471,7 @@ grounded **24.2 s** (the mantle's hold and the landing recovery).
 `probe_move_judder` (not in the suite: `Godot --path . --headless --fixed-fps <hz> -- --run-test probe_move_judder`) walks a
 hero at full speed and reads, every rendered frame, where it is drawn and where the camera is:
 
-| Refresh | F7 off: frames the hero does not move | off: jump against the camera | F7 on: frames still | on: jump |
+| Refresh | off: frames the hero does not move | off: jump against the camera | on: frames still | on: jump |
 |---|---|---|---|---|
 | 60 Hz | 0 of 240 | 0.9 px | 0 | 0.9 px (identical) |
 | 120 Hz | **120 of 240** | **2.1 px** | 0 | 0.5 px |
@@ -465,7 +481,8 @@ hero at full speed and reads, every rendered frame, where it is drawn and where 
 So on a 60 Hz monitor interpolation changes nothing (it only adds one physics tick, 16 ms, of drawing delay). On a 120-165 Hz
 monitor, with it off, your own hero stands still on half or more of the frames and steps about 2 px against the smoothly
 following camera every tick: a fine, constant stutter. With it on, the steps are perfectly even. **It is not the default**
-(the user decides, after trying F7 on their own monitor; question 1 below).
+(always-on was considered and parked, 2026-10-23; try it with the gym's Smoothing picker or `--physics-interp on`; question
+1 below).
 
 How it works: not Godot's global `physics_interpolation` (a lot of the game moves things in `_process`: puppets, the camera,
 the models' parts, Fx). Instead a hero this machine moves is drawn between its last two physics positions
@@ -478,19 +495,19 @@ changes where the hero really is.
 - **Nothing new on the wire.** The envelope, hops, mantle and falls are the owner's motion and stream as a walk; the mantle
   sets the already-streamed `climbing` flag. Puppets get their stride, footsteps, dust and landing thud on every screen from
   the shown motion (`HeroGait`, like Wading's splashes). The snapshots keep their size (`test_net_move_feel`).
-- **The host's profile is everyone's.** It rides the job (`crew.job` gets `feel: {id, blind}`; a late joiner gets the job
-  too), as §5.2 recommends: a puppet's stride, hop and landing are drawn with the profile THAT screen has, so the crew must
-  agree; an A/B in a crew should compare like with like; and a later profile with a dodge is gameplay every machine must
-  agree on. F6 is off while crewed. Interpolation (F7) is each machine's own: it only changes how that screen draws its own
-  heroes.
+- **The host's profile is everyone's.** It rides the job (`crew.job` gets `feel: {id}`; a late joiner gets the job too;
+  a host with no flag sends `grounded_anim`), as §5.2 recommends: a puppet's stride, hop and landing are drawn with the
+  profile THAT screen has, so the crew must agree; and a later profile with a dodge is gameplay every machine must agree on.
+  A client's own flag or pick does nothing while crewed. The smoothing is each machine's own: it only changes how that
+  screen draws its own heroes.
 - Declared per AGENTS.md: `Hero.pace` and `_motion` PRIVATE, `_gait` and the interpolation state LOCAL; `HeroMotion` is in
   `test_net_contract`'s `NET_SCRIPTS` (all PRIVATE); `HeroGait` declares its LOCAL vars. No allowlist was widened.
 
 #### What is logged
 `user://move_lab.csv` (`%APPDATA%\Godot\app_userdata\Cast\move_lab.csv`), passive, never in tests: one **period** row per
-stretch played on one profile (closed by F6 / F7 or leaving the floor) and, in the lab, one **lap** row per START-to-FINISH.
-Columns: time, session, scene (lab | floor), mode (today | grounded | shuffle), label (what the tag showed), profile (the real
-one), interp, event, seconds, distance, laps, lap_s (the lap, or the period's best), hits and damage taken, edge_stops (walking
+stretch played on one profile (closed by a gym experiment's switch or leaving the floor) and, in the lab, one **lap** row
+per START-to-FINISH. Columns: time, session, scene (lab | floor), mode (today | grounded | grounded_anim), label (the
+profile's name; "feel N" when the blind shuffle still existed), profile, interp, event, seconds, distance, laps, lap_s (the lap, or the period's best), hits and damage taken, edge_stops (walking
 stopped at a pit's or the lava's edge), starts, stops, reversals, refresh_hz (the monitor's) and fps.
 
 #### The lab (`--move-lab`)
@@ -504,11 +521,12 @@ finish pad.
 #### Tests
 `test_move_feel_today` (today against a trace recorded before any profile existed: every frame of a course with steps, a
 climb, a reversal, a wall push, the lava edge, wading, coffee, the bow and a drop, the player and an AI ally),
-`test_move_feel_grounded` (the numbers above, the profiles, shuffle and the log), `test_move_lab` (the course and a lap per
-profile) and `test_net_move_feel` (two processes on the lab, `off` and `coast`).
+`test_move_feel_grounded` (the numbers above, the default, the flags, the gym's pick and the log), `test_move_lab` (the
+course and a lap per profile: today 23.9 s, grounded and grounded_anim 24.2 s), `test_gym` (the Experiments pickers) and
+`test_net_move_feel` (two processes on the lab, `off` and `coast`).
 
 #### Open questions (added)
-- Which feels better, blind? (The CSV keeps the laps per profile; the user's feel is the answer.)
+- ~~Which feels better, blind?~~ Answered 2026-10-23: `grounded_anim` (the user: "the new one is better").
 - The stop slide is 0.12 u at 60 Hz. Longer (`stop` 0.09 gives 0.17 u)?
 - Lane assist for keys (package A's last row) was not built: try it as its own toggle?
 - The lean and landing squash are the animation track's: try them on top of grounded next?

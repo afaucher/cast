@@ -186,6 +186,7 @@ func _check_hits() -> void:
 	var gasket := _hero(Vector3(0, 0, 0), "Gasket", "spin")
 	var spun := _decor("crate_stack", Vector2(1.3, 0.0)).breakable()
 	check(gasket.shoot(Vector3.RIGHT), "the spin fires")
+	await frames(SpinSweep.ANTICIPATION + SpinSweep.TURN_FRAMES + 2)   # (grounded_anim, the default: a timed sweep, SpinSweep)
 	check(_broke(spun), "Gasket's spin breaks a crate stack")
 	# Rebar's bowl
 	_fresh()

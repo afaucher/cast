@@ -9,7 +9,7 @@ extends TestCase
 ##   - the hit areas: each hero's grounded_anim area (the weapon's shape) against today's wedge, which grounded keeps;
 ##   - grounded and today are untouched (no body layer, the model's own swing, the kit's wedge);
 ##   - a puppet (a hero another machine moves) leans from its shown motion and plays a replayed swing strike-first;
-##   - shuffle deals grounded and grounded_anim; today stays selectable by name;
+##   - grounded_anim is the default (the user, 2026-10-23); today and grounded stay selectable by name;
 ##   - (every profile) the held spell component stays in the hero's hand and hand-sized through walk, swing and cast.
 ## It prints the measured numbers ([anim] lines) for the doc.
 
@@ -310,7 +310,7 @@ func _spin_sweep() -> void:
 		await get_tree().process_frame
 		var head := (m.parts["weapon"] as Node3D).global_transform * Vector3(0, 1.43, 0) - h.global_position
 		head.y = 0.0
-		if head.length() < 1.0 or i > SpinSweep.ANTICIPATION + SpinSweep.turn_frames() - 3:
+		if head.length() < 1.0 or i > SpinSweep.ANTICIPATION + SpinSweep.TURN_FRAMES - 3:
 			continue   # (only while the wrench is out and on its way round: at rest its head is over her shoulder, and at the
 			           # end it comes round to where it started)
 		for d in dummies:
@@ -329,9 +329,9 @@ func _spin_sweep() -> void:
 			worst = maxi(worst, absi(int(hit_at[id]) - int(best[id][1])))
 			last = maxi(last, int(hit_at[id]) - click)
 	print("[anim] spin sweep: 8 dummies, hits within %d frame(s) of the head passing them, the last %d frames after the click (turn %d + wind-up %d)" % [
-		worst, last, SpinSweep.turn_frames(), SpinSweep.ANTICIPATION])
+		worst, last, SpinSweep.TURN_FRAMES, SpinSweep.ANTICIPATION])
 	check(worst <= 1, "each dummy is hit within a frame of the wrench head passing it (%d)" % worst)
-	check(last >= SpinSweep.turn_frames() - 4 and last <= SpinSweep.ANTICIPATION + SpinSweep.turn_frames() + 1, "the hits run round the whole turn (the last at %d frames)" % last)
+	check(last >= SpinSweep.TURN_FRAMES - 4 and last <= SpinSweep.ANTICIPATION + SpinSweep.TURN_FRAMES + 1, "the hits run round the whole turn (the last at %d frames)" % last)
 	for d in dummies:
 		d.queue_free()
 
@@ -441,7 +441,7 @@ func _others() -> void:
 	check(h2._feel.active(), "grounded_anim: the layer is on")
 	MoveFeel.set_mode(MoveFeel.GROUNDED)
 	await frames(2)
-	check(not h2._feel.active() and h2.visual_override.get_parent() == h2._visual, "F6 away: the model is back under the Visual")
+	check(not h2._feel.active() and h2.visual_override.get_parent() == h2._visual, "switched away: the model is back under the Visual")
 	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
 
 
@@ -513,23 +513,12 @@ func _fist(m: LowPolyModel, kit: String) -> Vector3:
 
 func _profiles() -> void:
 	MoveFeel.reset()
-	var seen := {}
-	for s in 20:
-		MoveFeel.set_mode(MoveFeel.SHUFFLE, s)
-		seen[MoveFeel.active()] = true
-		check(MoveFeel.active() in MoveFeel.BLIND, "shuffle deals only the blind pair")
-		MoveFeel.cycle()
-		seen[MoveFeel.active()] = true
-	eq(seen.size(), 2, "shuffle deals grounded and grounded_anim")
-	check(seen.has(MoveFeel.GROUNDED) and seen.has(MoveFeel.GROUNDED_ANIM), "... those two")
-	MoveFeel.set_mode(MoveFeel.TODAY)
-	eq(MoveFeel.active(), MoveFeel.TODAY, "today is still selectable by name")
-	MoveFeel.cycle()
-	MoveFeel.cycle()
-	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "F6 by name: today, grounded, grounded_anim")
-	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
-	eq(MoveFeel.crew_data(), {"id": "grounded_anim", "blind": false}, "the host sends grounded_anim with the job")
+	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "grounded_anim is the default")
+	for prof: String in MoveFeel.ORDER:
+		MoveFeel.set_mode(prof)
+		eq(MoveFeel.active(), prof, "%s is selectable by name" % prof)
 	MoveFeel.reset()
+	eq(MoveFeel.crew_data(), {"id": "grounded_anim"}, "the host sends grounded_anim with the job")
 	MoveFeel.apply_crew({"feel": {"id": "grounded_anim", "blind": true}})
-	eq(MoveFeel.crew_id, "grounded_anim", "a client takes the host's grounded_anim")
+	eq(MoveFeel.crew_id, "grounded_anim", "a client takes the host's grounded_anim (an old job's blind flag is ignored)")
 	MoveFeel.reset()

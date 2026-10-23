@@ -1,6 +1,6 @@
 class_name CastTell
 extends Node3D
-## THE CAST TELL (docs/design/cast-armed-fx.md, option C "rune + hand", PLAYTEST): from the moment the recognizer hears the
+## THE CAST TELL (docs/design/cast-armed-fx.md, option C "rune + hand", the game's since 2026-10-23): from the moment the recognizer hears the
 ## trigger word ("cast": VoiceCaster.trigger_heard) until the spell goes off, a chalk rune circle draws itself in on the
 ## floor under YOUR hero and follows the feet, and a small glow sits at the casting hand (the held component's fist, else
 ## Wick's wand tip). Then:
@@ -12,11 +12,13 @@ extends Node3D
 ##   - the window runs out after "cast ..." (spell_fizzled): it cracks and greys out (SpellBook.fizzle's puff as ever).
 ##   - a "cast" buried in chatter quietly expires (VoiceCaster.trigger_dropped): it fades.
 ##
-## The colour A/B (the user, 2026-10-22: "I'm not sure about if the circle should change color or not"):
-##   colour    the rune floods with the spell's colour on recognition (solid lines; the release is in colour)
-##   neutral   the rune stays chalk white through to the release; only the release flash (shock ring, hand) is coloured
-##   off       today: nothing is built or drawn
-## `--cast-tell off|colour|neutral` (default colour for the playtest), F11 in the gym cycles it (GymDev).
+## The colour A/B (the user, 2026-10-22: "I'm not sure about if the circle should change color or not") is settled (the
+## user, 2026-10-23: "For colors - color is fine actually. It works better then I expected. Lets remove the keybinding."):
+## colour is the game's tell in normal play, exported builds and crews, with no flag. The gym's F11 went.
+##   colour    (the default) the rune floods with the spell's colour on recognition (solid lines; the release is in colour)
+##   neutral   (flag only) the rune stays chalk white through to the release; only the release flash is coloured
+##   off       nothing is built or drawn (the game before the tell)
+## `--cast-tell off|colour|neutral` (Boot, once per run).
 ##
 ## YOUR OWN HERO ONLY: no network event yet (other players see only the release, as today). Cosmetic and LOCAL: no
 ## gameplay state, no randomness (the crack is a hash in the shader). Cheap: two persistent quads (the rune decal and the
@@ -182,7 +184,7 @@ void fragment() {
 
 enum Phase { IDLE, ARMED, RELEASE, CANCEL }
 
-## The playtest's mode (`--cast-tell`, F11 in the gym). Static: it outlives the scene reload between floors.
+## The mode (`--cast-tell`; colour without it). Static: it outlives the scene reload between floors.
 static var mode := COLOUR
 static var _rune_sh: Shader
 static var _glow_sh: Shader
@@ -226,22 +228,6 @@ static func boot() -> void:
 	var v := Boot.arg_value(OS.get_cmdline_user_args(), "--cast-tell")
 	if v != "" and not set_mode(v):
 		push_warning("--cast-tell: off, colour or neutral (got '%s')" % v)
-
-
-## The next mode (colour -> neutral -> off -> colour); returns it.
-static func cycle() -> String:
-	mode = MODES[(MODES.find(mode) + 1) % MODES.size()]
-	return mode
-
-
-## What the dev tag says.
-static func label() -> String:
-	match mode:
-		COLOUR:
-			return "cast tell: colour (the rune takes the spell's colour)"
-		NEUTRAL_MODE:
-			return "cast tell: neutral (white until the release)"
-	return "cast tell: off"
 
 
 ## Put the tell on `parent` for the local `h`, driven by `caster`'s signals (a VoiceCaster, or any object with

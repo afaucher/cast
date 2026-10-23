@@ -40,9 +40,17 @@ func _polar(dist: float, deg: float) -> Vector3:
 
 func setup() -> void:
 	_test_hp_and_data()
+	# The kit's own wedge and its climb rates are what `today` plays (grounded keeps the wedge; grounded_anim, the default,
+	# reshapes the areas and grounded / grounded_anim mantle a +2: test_move_feel_anim, test_move_feel_grounded), so these
+	# two run under `today` by name.
+	MoveFeel.reset()
+	MoveFeel.set_mode(MoveFeel.TODAY)
 	await _test_primaries()
+	MoveFeel.reset()
 	await _test_arrow()
+	MoveFeel.set_mode(MoveFeel.TODAY)
 	await _test_climb()
+	MoveFeel.reset()
 	await _test_shove_mult()
 	await _test_proto_and_models()
 	await _test_hud_bars()

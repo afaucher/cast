@@ -363,8 +363,8 @@ and the cooldown, then spends 1 charge), `cooldown_left(id) -> float`, `cooldown
 numbers and the drop table; `Monster._on_death` rolls the drops; `ComponentPickup` is the world prop).
 The player-controlled hero has `is_player = true`.
 `PlayerController` reads input. `AllyBrain` drives AI allies.
-How a hero walks follows the active movement profile (`MoveFeel`, `docs/design/movement-research.md` "As built"): with
-`today` (the default) `Hero.move` is the plain walk; with `grounded` the owner's walk is `HeroMotion` (envelope, hop, mantle,
+How a hero walks follows the active movement profile (`MoveFeel`, `docs/design/movement-research.md` "As built"; the
+default is `grounded_anim` since 2026-10-23, `MoveFeel.DEFAULT`): with `today` `Hero.move` is the plain walk; with `grounded` the owner's walk is `HeroMotion` (envelope, hop, mantle,
 fall) and every screen draws the stride, footsteps and dust from the shown motion (`HeroGait`, on `Gait`, which the animation
 lab shares). `grounded_anim` adds the body lean and squash and the strike-first swing (`HeroFeel`, a pivot between
 `Hero._visual` and the model, also from the shown motion and the replayed swing) and each kit's own hit area

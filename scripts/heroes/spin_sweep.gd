@@ -2,7 +2,7 @@ class_name SpinSweep
 extends Node3D
 ## Gasket's spin under a profile with `strike_first` (grounded_anim): a TIMED sweep. The wrench head starts out at her right
 ## and goes once round her (counter-clockwise seen from above) on a fixed schedule (angle_at): a short twist back
-## (ANTICIPATION), then the turn over turn_frames(). Each target is hit when the head passes ITS angle, once per spin; a
+## (ANTICIPATION), then the turn over TURN_FRAMES. Each target is hit when the head passes ITS angle, once per spin; a
 ## teammate the head passes is shoved, as by today's spin. (The user, 2026-10-22, on the 7-frame whirl: "It's too fast! It
 ## doesn't read as a spin it is so fast."; the hits had all landed on the click.)
 ##
@@ -13,14 +13,11 @@ extends Node3D
 ## The look (the whirl, the dust it drags round) is HeroFeel's, reading the same schedule.
 
 const ANTICIPATION := 3         ## frames of twist back before the head moves forward
-const TURN_FRAMES := 25         ## frames for the full turn (0.42 s): the pick of DEV_SPEEDS
-const DEV_SPEEDS: Array[int] = [20, 25, 30]   ## what the test gym's F10 cycles through (quick, the pick, slow)
+## Frames for the full turn (0.42 s). Settled (the user, 2026-10-23: "Lets settle the spin speed and remove the
+## keybinding."): 25 of the 20 / 25 / 30 the gym tried live; the dev override and its key went with it.
+const TURN_FRAMES := 25
 const TWIST := 0.45             ## rad the wrench is drawn back during the anticipation
 const F := 1.0 / 60.0
-
-## A dev override of TURN_FRAMES (0: the game's): the strike lab (--spin-frames) and the test gym (F10, "Spin speed", solo
-## only) try others live. Never set in play.
-static var dev_frames := 0
 
 var source: Hero = null
 var start_dir := Vector3.RIGHT  ## the head's direction at angle 0 (the hero's right when it spun)
@@ -34,13 +31,9 @@ var _prev := -INF
 var _heard := false
 
 
-static func turn_frames() -> int:
-	return dev_frames if dev_frames > 0 else TURN_FRAMES
-
-
 ## Seconds from the spin's start to the end of the turn.
 static func duration() -> float:
-	return float(ANTICIPATION + turn_frames()) * F
+	return float(ANTICIPATION + TURN_FRAMES) * F
 
 
 ## The head's angle past its start (rad, counter-clockwise from above) `t` seconds after the spin started: back to -TWIST
@@ -49,7 +42,7 @@ static func angle_at(t: float) -> float:
 	var a := ANTICIPATION * F
 	if t <= a:
 		return -TWIST * smoothstep(0.0, a, t)
-	var u := clampf((t - a) / (turn_frames() * F), 0.0, 1.0)
+	var u := clampf((t - a) / (TURN_FRAMES * F), 0.0, 1.0)
 	return lerpf(-TWIST, TAU, u * u * (3.0 - 2.0 * u))
 
 

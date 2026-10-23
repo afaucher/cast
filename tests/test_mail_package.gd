@@ -180,7 +180,8 @@ func _check_hits() -> void:
 	var around_a := _box(Vector3(1.0, 0, 0))
 	var around_b := _box(Vector3(-1.0, 0, 0.6))
 	check(gasket.shoot(Vector3.RIGHT), "the spin fires")
-	check(around_a.dead and around_b.dead, "Gasket's spin breaks the boxes around him")
+	await frames(SpinSweep.ANTICIPATION + SpinSweep.TURN_FRAMES + 2)   # (grounded_anim, the default: a timed sweep, SpinSweep)
+	check(_broke(around_a) and _broke(around_b), "Gasket's spin breaks the boxes around him")
 	# A monster's swing breaks one too (it only strikes at heroes, the box just stands in the arc).
 	_fresh()
 	var victim := _hero(Vector3(0, 0, 0), "Wick")

@@ -320,20 +320,24 @@ The user, after the blind A/B of package A: "Grounded is better. Not there yet."
 strike-first"** on top of grounded, then (same day) "We might want to rework the attack damage areas as part of this. For
 Gasket the attack area doesn't match the weapon" and "We might want to change the weapon animation to be more of a centered
 hammer strike." Built as a third MoveFeel profile, **`grounded_anim`** = grounded + B + strike-first + the reshaped hit
-areas. **`today` is still the default**; nothing changes in normal play until the user picks.
+areas.
 
-#### How to A/B
+**Decided (user, 2026-10-23): "For movement profile - the new one is better."** `grounded_anim` is the game's default
+profile (normal play, exported builds, crews); the blind shuffle and the F6 / F7 keys went, and the test gym's panel picks
+a profile instead (`movement-research.md` §5.3, `test-gym.md`).
+
+#### How to try it
 | Command | What |
 |---|---|
-| `.\run.ps1 --move-lab --move-feel shuffle --no-mic` | `grounded` and `grounded_anim` dealt blind as "feel 1" / "feel 2"; **F6** switches. |
-| `.\run.ps1 --move-lab --move-feel grounded_anim --no-mic` | Named (`today` and `grounded` too; F6 cycles today, grounded, grounded_anim). |
+| `.\run.ps1 --move-lab --no-mic` | The lab under `grounded_anim`, the default. |
+| `.\run.ps1 --move-lab --move-feel grounded --no-mic` | Another profile named (`today`, `grounded`); or the gym's "Experiments" picker, live. |
 | `.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded_anim` | A crew: the host's profile is everyone's (it rides the job), so the lean, the strike and the hit areas agree on every screen. |
 | `godot --path . --fixed-fps 60 --resolution 1920x1080 -- --scene res://scenes/strike_lab.tscn --hero gasket --clip attack --strike both --shot <png>` | The lab: one lane per profile, each played by the game's own code (`--clip startstop\|strafe\|attack`, `--zoom game`, `--frames-dir`). `--overlay` draws the hit area and the weapon's path top-down and prints the numbers. |
 
 #### What was built
 | Piece | Where | What |
 |---|---|---|
-| The profile | `MoveFeel` (`scripts/heroes/move_feel.gd`) | `grounded_anim`: grounded's keys plus `body`, `strike_first` and `melee_areas`. `BLIND` is what shuffle deals. |
+| The profile | `MoveFeel` (`scripts/heroes/move_feel.gd`) | `grounded_anim` (`DEFAULT` since 2026-10-23): grounded's keys plus `body`, `strike_first` and `melee_areas`. |
 | The body (B) | `HeroFeel` (`scripts/heroes/hero_feel.gd`), ticked from `Hero._process` before `HeroGait` | A pivot node between `Hero._visual` and the model (added and removed as the profile switches). The lab's lean and squash, per hero, from the shown position: lean = smoothed velocity x `lean` + (quick - smoothed velocity) x `kick`, through a spring, clamped at 22 degrees; a shove tips the body back against the slide. Squash springs on a start (a stretch) and a stop (a squash sized by the speed just had). |
 | Stride held | `HeroGait`, `Gait.hold` | Under `body`, the stride clock stops while the hero is shoved or airborne (a hop, a fall): the legs keep their pose instead of walking on air. grounded is unchanged (its shove case still settles the legs). |
 | Strike first | `HeroFeel.STRIKES`, `Hero._swing_pose` | The swing's pose is a timeline of the model's kick channels: the weapon is at its impact on the frame the hit resolves (the click's frame), then a small lunge, a forward pitch and a squash; when the blow touched something, a **50 ms (3-frame) hit-stop of the attacker's pose only** (the simulation, the hero's motion, the damage and the cooldown are untouched). Puppets play it from the replayed `act`. |
@@ -461,7 +465,9 @@ first version.) Now:
 overhead smash and its 0.6 disc stand.
 
 **Speed decided (user, 2026-10-22, after trying 20/25/30 in the gym with F10): "25 is fine."** 25 frames stays the
-default. **Radius decided (user, 2026-10-22): "Gasket spin radius is fine as is"**: 2.1, matching the wrench's sweep.
+default. **Settled (user, 2026-10-23): "Lets settle the spin speed and remove the keybinding."** `SpinSweep.TURN_FRAMES` is
+25 and nothing overrides it: the gym's F10 and "Spin speed" button, the 20 / 30 options (`DEV_SPEEDS`, `dev_frames`) and the
+strike lab's `--spin-frames` are gone. **Radius decided (user, 2026-10-22): "Gasket spin radius is fine as is"**: 2.1, matching the wrench's sweep.
 
 - **A slower turn that reads**: a 3-frame twist back with a crouch (the wind-up), the full turn in **25 frames** (0.42 s,
   quick through the middle: a smoothstep), then a **stagger** (she overshoots by 0.35 rad and settles over 12 frames, a
@@ -476,9 +482,9 @@ default. **Radius decided (user, 2026-10-22): "Gasket spin radius is fine as is"
   machine for its hero). Nothing new on the wire; `SpinSweep` is in `test_net_contract`'s scripts (all SPAWN / LOCAL).
 - Kept: the radius 2.1 (not decided), the white effects (dust dragged round under the head, a pale ring at the end), and
   a 1-frame hold each time the head passes a target (at most 3 per spin).
-- **Try the speed in the gym** (the user: "Rather than render a GIF, can we just test in the gym?"): `.\run.ps1 --gym
-  --move-feel grounded_anim`, play Gasket (F2), RMB; **F10** (or the panel's "Spin speed") cycles the turn through 20 /
-  **25** / 30 frames live (`SpinSweep.DEV_SPEEDS`; 25 is the pick). No GIF was rendered for this version.
+- **Tried in the gym** (the user: "Rather than render a GIF, can we just test in the gym?"): until 2026-10-23, F10 (or the
+  panel's "Spin speed") cycled the turn through 20 / **25** / 30 frames live; 25 was kept and the control removed. No GIF
+  was rendered for this version.
 
 #### Networking
 Nothing new on the wire. HeroFeel is cosmetic and declares every var LOCAL (`test_net_contract`); a puppet leans from its
@@ -489,7 +495,7 @@ same shape; a hero's hits are still resolved by its owner (`Combat._land_melee`,
 
 #### Tests
 `test_move_feel_anim` (lean / squash bounds, the stride held while shoved and airborne, strike-first timing and hit-stop,
-the areas against today's wedge target by target, today and grounded untouched, a puppet, shuffle and the crew data),
+the areas against today's wedge target by target, today and grounded untouched, a puppet, the default and the crew data),
 `test_net_move_feel_anim` (above). `test_move_feel_today`, `test_move_feel_grounded`, `test_net_move_feel`,
 `test_hero_combat`, `test_hero_kits` and `test_net_contract` pass unchanged.
 

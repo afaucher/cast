@@ -10,7 +10,7 @@ and "you should be able to spawn spell components or have an infinite supply".
 ```powershell
 .\run.ps1 --gym --no-mic                              # the gym, voice off (type a cast with Enter: "cast fireball")
 .\run.ps1 --gym                                       # with the mic
-.\run.ps1 --gym --move-feel grounded_anim --no-mic    # under a movement profile (F6 / F7 switch it live, as anywhere)
+.\run.ps1 --gym --move-feel today --no-mic            # under another movement profile (default grounded_anim)
 .\run.ps1 --gym --spells heal,corn --no-mic           # other starting slots (default fireball, heal, damp, tentacles)
 .\run.ps1 --gym --no-fog --no-mic                     # the whole map shown
 ```
@@ -45,11 +45,14 @@ the job board as usual.
 | **F4** | monster AI on / off (off: they stand like dummies; hits and shoves still land) |
 | **F8** | god mode for the crew (no damage taken) |
 | **F9** | hide / show the panel |
-| **F10** | Gasket's spin speed under `grounded_anim` (the timed sweep): a full turn in 20 / **25** / 30 frames, live (the panel's "Spin speed" too; `animation-research.md` "Gasket's spin, a timed sweep") |
-| **F11** | the cast tell's mode (the "cast armed" rune + hand glow on your hero, `cast-armed-fx.md`): **colour** (the rune takes the spell's colour when the spell word is recognised) / **neutral** (it stays white until the release) / **off** (today). The corner tag and the panel's status line say which. `--cast-tell colour|neutral|off` sets it at launch, in the gym or in normal play |
 | **G**, middle-click | spawn the last picked kind at the cursor |
 
-F1 (voice panel), F5, F6 / F7 (movement feel), Esc and 1-4 (ready a slot) are the game's as ever.
+F1 (voice panel), F5, Esc and 1-4 (ready a slot) are the game's as ever.
+
+**Experiments go in the panel, not on keys** (the user, 2026-10-23: "For the future - lets put experiments in the gym menu
+instead of adding keybindings."). Removed that day: F10 (Gasket's spin speed: settled at 25 frames, "Lets settle the spin
+speed and remove the keybinding."), F11 (the cast tell's mode: colour is the game's, "color is fine actually ... Lets remove
+the keybinding."), and the game's F6 / F7 (the movement profile and the judder smoothing: now the panel's Experiments, below).
 
 ## The panel
 
@@ -63,6 +66,11 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
   charges. **No cooldown**: spells are ready at once (the attacks keep theirs). **Refill spells**: once, when Infinite is off.
 - **Tools**: AI, God, Areas (F4 / F8 / F3), Heal crew (the downed get up), Clear monsters (all but the map's own sharks and
   gator), Clear spawned (everything the panel put down), Spawn pack (a mixed floor-3 pack), Reset log.
+- **Experiments**: a picker per live A/B (`GymDev.experiments()`; a new one is a row there, never a key):
+  - **Movement**: today / grounded / **grounded_anim** (the default since 2026-10-23; `MoveFeel.pick`), live. The corner tag
+    and the status line name it; the passive move log starts a new stretch.
+  - **Smoothing**: **off** / on: the judder smoothing of your own heroes (`MoveFeel.interp`, as `--physics-interp`; what
+    it does is unchanged, `movement-research.md` §5.3 "The judder check").
 - **Spawn count**: x1 / x5 / x10.
 - **Monsters**: every `MonsterDefs` kind. Factory kinds (grunt, archer, brute, swarmer, goblin, pavise, water boy, goo imp,
   and any new kind with a model) stand on free cells; **sharks** (regular, laser, imp) go into the pool under the ring (else
@@ -101,14 +109,15 @@ Every room is a fog space; the lobby and the halls between the zones are wide (o
 
 ![The panel over the arena](test_gym/gym_panel.png)
 
-The pictures: `.\run.ps1 --gym --no-mic --no-fog --move-feel grounded_anim --gym-tour <abs dir>` (GymTour: each view, the
+The pictures: `.\run.ps1 --gym --no-mic --no-fog --gym-tour <abs dir>` (GymTour: each view, the
 sheet and the panel, then it quits).
 
 ## Code
 
-`GymMap` (the map and the plan), `GymDev` (`scripts/app/dev/gym_dev.gd`: the driver: keys, the switch, the tools),
+`GymMap` (the map and the plan), `GymDev` (`scripts/app/dev/gym_dev.gd`: the driver: keys, the switch, the tools, the
+experiments),
 `scripts/app/dev/gym/`: `GymSpawns` (the spawn list and the spawners), `GymPanel`, `GymStats`, `GymOverlay` (the hit areas,
 drawn with `HitAreaShape`, which the strike lab's overlay shares), `GymTour`. GameDev's hooks: `_parse_args` (`GymDev.parse`),
 `_dev_floor` (the map and plan), `_dev_on_floor_ready` (the driver). `tests/test_gym.gd` builds the map and checks every
 environment is there and reachable, that the spawn list covers every registry entry, spawns one of each and steps the world,
-and switches through every hero. The golden floors do not move: nothing in the generator calls the gym.
+switches the experiments and switches through every hero. The golden floors do not move: nothing in the generator calls the gym.

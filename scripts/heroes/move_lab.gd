@@ -1,7 +1,7 @@
 class_name MoveLab
 extends RefCounted
 ## The movement lab (`--move-lab`; docs/design/movement-research.md §5.2 and "As built"): a hand-built floor laid out for
-## feel, played as floor 1 of a contract like the `--lava-cave` prototype (so F6 / F7, the crew, the AI allies, the HUD and
+## feel, played as floor 1 of a contract like the `--lava-cave` prototype (so --move-feel, the crew, the AI allies, the HUD and
 ## the voice all work as on a real floor). West to east, one lap from START to FINISH:
 ##   1. the start pad (concrete)
 ##   2. a slalom of three pillars (carpet): starts, stops, turns

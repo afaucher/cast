@@ -56,7 +56,7 @@ func _drive(h: Hero, pc: PlayerController, dir: Vector3, frames: int, ys: Array 
 func setup() -> void:
 	timeout_sec = 120.0
 	MoveFeel.reset()
-	MoveFeel.set_mode(MoveFeel.GROUNDED)
+	MoveFeel.set_mode(MoveFeel.GROUNDED)   # (named: the default is grounded_anim)
 	root = Node3D.new()
 	add_child(root)
 	await _envelope()
@@ -309,61 +309,68 @@ func _puppet() -> void:
 
 func _profiles() -> void:
 	MoveFeel.reset()
-	eq(MoveFeel.active(), MoveFeel.TODAY, "the default is today")
-	MoveFeel.set_mode(MoveFeel.SHUFFLE, 7)
-	var first := MoveFeel.active()
-	eq(MoveFeel.label(), "feel 1", "shuffle is blind")
-	check(MoveFeel.cycle(), "F6 switches solo")
-	eq(MoveFeel.label(), "feel 2", "the next is feel 2")
-	check(MoveFeel.active() != first, "... and it is the other profile")
-	MoveFeel.cycle()
-	eq(MoveFeel.active(), first, "and back")
-	var seen := {}
-	for s in 20:
-		MoveFeel.set_mode(MoveFeel.SHUFFLE, s)
-		seen[MoveFeel.active()] = true
-	eq(seen.size(), 2, "shuffle deals either profile first")
-	MoveFeel.set_mode(MoveFeel.GROUNDED)
-	eq(MoveFeel.crew_data(), {"id": "grounded", "blind": false}, "the host sends its profile with the job")
-	MoveFeel.set_mode(MoveFeel.TODAY)
-	MoveFeel.apply_crew({"feel": {"id": "grounded", "blind": true}})
-	eq(MoveFeel.active(), MoveFeel.TODAY, "a crew's profile only counts in a crew (solo here)")
-	# the log: one row per stretch, with the real profile and what the tag showed
+	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "the default is grounded_anim (the user, 2026-10-23)")
+	eq(MoveFeel.DEFAULT, MoveFeel.GROUNDED_ANIM, "MoveFeel.DEFAULT")
+	check(not MoveFeel.interp, "the judder smoothing is off by default")
+	MoveFeel.boot(PackedStringArray(["--move-feel", "today"]))
+	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "boot reads the flags once per run (reset() counts as the read)")
+	MoveFeel._booted = false
+	MoveFeel.boot(PackedStringArray(["--move-feel", "today", "--physics-interp", "on"]))
+	eq(MoveFeel.active(), MoveFeel.TODAY, "--move-feel today still plays today")
+	check(MoveFeel.interp, "--physics-interp on")
 	MoveFeel.reset()
-	MoveFeel.set_mode(MoveFeel.SHUFFLE, 3)
+	MoveFeel._booted = false
+	MoveFeel.boot(PackedStringArray([]))
+	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "no flag: grounded_anim (an exported build)")
+	MoveFeel.set_mode("shuffle")
+	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "an unknown profile (the old shuffle) plays the default")
+	check(MoveFeel.pick(MoveFeel.GROUNDED), "the gym's picker switches solo")
+	eq(MoveFeel.active(), MoveFeel.GROUNDED, "... to grounded")
+	eq(MoveFeel.switches, 1, "a switch is counted")
+	check(not MoveFeel.pick("bogus"), "an unknown pick is refused")
+	eq(MoveFeel.crew_data(), {"id": "grounded"}, "the host sends its profile with the job")
+	MoveFeel.reset()
+	eq(MoveFeel.crew_data(), {"id": "grounded_anim"}, "a host with no flag sends grounded_anim")
+	MoveFeel.set_mode(MoveFeel.TODAY)
+	MoveFeel.apply_crew({"feel": {"id": "grounded"}})
+	eq(MoveFeel.active(), MoveFeel.TODAY, "a crew's profile only counts in a crew (solo here)")
+	# the log: one row per stretch, with the profile
+	MoveFeel.reset()
+	MoveFeel.set_mode(MoveFeel.GROUNDED)
 	var hp: Array = _hero(_row([2, 2, 2, 2, 2, 2]))
 	var log := MoveLog.new()
 	log.player = hp[0]
 	root.add_child(log)
 	await _drive(hp[0], hp[1], Vector3.RIGHT, 50)
-	var real := MoveFeel.active()
-	MoveFeel.cycle()
+	MoveFeel.pick(MoveFeel.GROUNDED_ANIM)
 	log.switched()
 	eq(log.rows.size(), 1, "a switch writes the stretch's row")
 	var cells := log.rows[0].split(",")
-	eq(cells[4], "feel 1", "the label column is blind")
-	eq(cells[5], real, "the profile column is the real one")
+	eq(cells[4], "grounded", "the label column names the profile")
+	eq(cells[5], "grounded", "the profile column")
 	eq(cells[7], "period", "a period row")
 	check(float(cells[9]) > 1.0, "distance walked is logged (%s)" % cells[9])
-	# F6 and F7 through the tag: the profile, the tag's text (blind), the interpolation, a log row each
+	# the tag: names a flag's profile at the start, nothing for the default; no keys switch anything any more
 	MoveFeel.reset()
-	MoveFeel.set_mode(MoveFeel.SHUFFLE, 5)
 	var tag := MoveFeelTag.attach(root, hp[0])
-	await frames(30)
-	var was := MoveFeel.active()
+	await frames(2)
+	check(tag.label.modulate.a < 0.01, "the default profile shows no tag")
 	var f6 := InputEventKey.new()
 	f6.physical_keycode = KEY_F6
 	f6.pressed = true
-	tag._unhandled_input(f6)
-	check(MoveFeel.active() != was, "F6 switches the profile")
-	eq(tag.label.text, "feel 2", "the tag shows only the number (blind)")
+	tag.propagate_call("_unhandled_input", [f6])
 	var f7 := InputEventKey.new()
 	f7.physical_keycode = KEY_F7
 	f7.pressed = true
-	tag._unhandled_input(f7)
-	check(MoveFeel.interp, "F7 turns interpolation on")
-	eq(tag.label.text, "interp on", "the tag says so")
-	MoveFeel.interp = false
+	tag.propagate_call("_unhandled_input", [f7])
+	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "F6 no longer switches the profile")
+	check(not MoveFeel.interp, "F7 no longer turns the smoothing on")
+	tag.queue_free()
+	MoveFeel.set_mode(MoveFeel.TODAY)
+	var tag2 := MoveFeelTag.attach(root, hp[0])
+	await frames(2)
+	eq(tag2.label.text, "today", "a flag's profile is named at the start")
+	tag2.queue_free()
 	# the camera leads along the walk and a little toward the aim, at most cam_lead_max
 	MoveFeel.reset()
 	MoveFeel.set_mode(MoveFeel.GROUNDED)

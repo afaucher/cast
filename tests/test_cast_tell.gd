@@ -1,6 +1,6 @@
 extends TestCase
 ## The cast tell (CastTell, docs/design/cast-armed-fx.md, option C on your own hero), driven headless by a stand-in caster
-## that emits VoiceCaster's signals, in both A/B modes:
+## that emits VoiceCaster's signals, in colour (the default) and the neutral flag value:
 ##   - the trigger arms it: the rune draws in under the hero and follows the feet, the hand glows;
 ##   - the spell word + the cast: the RELEASE, then nothing drawn; online it waits NetCasts.LEAD for the landing;
 ##     colour mode floods the rune with the spell's colour on recognition (linear in the shader), neutral keeps it white
@@ -31,6 +31,7 @@ var _mode_was := CastTell.COLOUR
 func setup() -> void:
 	timeout_sec = 60.0
 	_mode_was = CastTell.mode
+	eq(CastTell.mode, CastTell.COLOUR, "colour is the default, with no flag (the user, 2026-10-23)")
 	var map := HexMap.new()
 	for c in Hex.range_cells(Vector2i.ZERO, 6):
 		map.set_cell(c, 0)
@@ -184,10 +185,9 @@ func _check_fizzle_and_drop() -> void:
 func _check_modes() -> void:
 	check(CastTell.set_mode("color") and CastTell.mode == CastTell.COLOUR, "\"color\" is accepted")
 	check(not CastTell.set_mode("purple"), "an unknown mode is refused")
-	eq(CastTell.cycle(), CastTell.NEUTRAL_MODE, "F11 cycles colour -> neutral")
-	eq(CastTell.cycle(), CastTell.OFF, "-> off")
-	eq(CastTell.cycle(), CastTell.COLOUR, "-> colour")
-	check(CastTell.label().contains("colour"), "the dev tag names the mode")
+	check(CastTell.set_mode("neutral") and CastTell.mode == CastTell.NEUTRAL_MODE, "neutral stays a flag value")
+	check(CastTell.set_mode("off") and CastTell.mode == CastTell.OFF, "off is a flag value")
+	CastTell.mode = CastTell.COLOUR
 
 
 func _check_off() -> void:

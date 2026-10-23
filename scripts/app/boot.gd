@@ -35,7 +35,7 @@ const MENU_FLAGS: Array[String] = ["--menu", "--menu-shot", "--menu-screen", "--
 func _ready() -> void:
 	InputSetup.ensure_actions()
 	MoveFeel.boot()   # (--move-feel, --physics-interp: read once per run)
-	CastTell.boot()   # (--cast-tell: read once per run, so the gym's F11 survives the floor changes)
+	CastTell.boot()   # (--cast-tell: read once per run; colour without it)
 	var args := OS.get_cmdline_user_args()
 	var i := args.find("--run-test")
 	if i >= 0 and i + 1 < args.size():

@@ -104,18 +104,19 @@ extends Node3D
 ##   --move-lab          dev: the movement lab (MoveLab, docs/design/movement-research.md "As built") instead of the generated
 ##                       floor: a lap of slalom, steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen.
 ##                       In a crew every window needs it (run.ps1 -Crew passes it to all).
-##   --move-feel today|grounded|shuffle, --physics-interp on|off   dev: the movement-feel profile and the judder check (MoveFeel;
-##                       F6 / F7 switch them live). In a crew the host's profile is everyone's.
+##   --move-feel today|grounded|grounded_anim, --physics-interp on|off   dev: the movement-feel profile (default grounded_anim)
+##                       and the judder smoothing (default off) (MoveFeel; the gym's panel switches both live). In a crew
+##                       the host's profile is everyone's.
 ##   --gym [--gym-tour <dir>]  dev, solo: the test gym (GymMap's one map of every environment, GymDev's panel: switch hero,
-##                       spawn anything, infinite components, AI / god / hit-area toggles, a hit log; docs/design/test-gym.md).
-##                       Ignored in a crew. --gym-tour saves its screenshot sheet to <dir> and quits. The main menu
-##                       hands --gym in too (the garage's dead H: MainMenu.open_gym, `menu_args`), with no command line
-##   --cast-tell off|colour|neutral  the "cast armed" tell on your own hero (CastTell, docs/design/cast-armed-fx.md, playtest):
-##                       a rune under your feet and a glow at your hand from "cast" until the spell goes off; colour (the
-##                       default) floods it with the spell's colour on recognition, neutral keeps it white until the release,
-##                       off is today. F11 in the gym cycles it
-## Keys: F6 next movement profile, F7 physics interpolation (MoveFeelTag), (--gym only: F2 hero, F3 hit areas, F4 monster AI,
-## F8 god mode, F9 the gym's panel, F11 the cast tell's mode, G / middle-click spawn at the cursor: GymDev), F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
+##                       spawn anything, infinite components, AI / god / hit-area toggles, a hit log, the experiments;
+##                       docs/design/test-gym.md). Ignored in a crew. --gym-tour saves its screenshot sheet to <dir> and
+##                       quits. The main menu hands --gym in too (the garage's dead H: MainMenu.open_gym, `menu_args`)
+##   --cast-tell off|colour|neutral  the "cast armed" tell on your own hero (CastTell, docs/design/cast-armed-fx.md): a rune
+##                       under your feet and a glow at your hand from "cast" until the spell goes off; colour (the default)
+##                       floods it with the spell's colour on recognition, neutral keeps it white until the release, off
+##                       has none
+## Keys: (--gym only: F2 hero, F3 hit areas, F4 monster AI, F8 god mode, F9 the gym's panel, G / middle-click spawn at the
+## cursor: GymDev; experiments go in the gym's panel, not on keys), F1 debug panel, F5 back to the job board (abandons the contract), Esc pause menu (Resume / Abandon
 ## contract / Main menu; Esc on the job board goes to the main menu), Enter = type an incantation.
 ## Reached from the main menu's Start (scenes/main_menu.tscn); Boot skips the menu when these dev flags are used.
 ##
@@ -957,7 +958,7 @@ func _start_lava() -> void:
 	if _lava_cave() > 0:
 		_log("lava cave %d: %s (%s)" % [_lava_cave(), LavaCave.layout(_lava_cave())["name"], LavaCave.layout(_lava_cave())["blurb"]], Color(1.0, 0.6, 0.3))
 	elif _move_lab():
-		_log("movement lab: profile %s (F6 next, F7 interpolation %s)" % [MoveFeel.label(), "on" if MoveFeel.interp else "off"], Color(1.0, 0.6, 0.3))
+		_log("movement lab: profile %s (--move-feel), smoothing %s (--physics-interp)" % [MoveFeel.label(), "on" if MoveFeel.interp else "off"], Color(1.0, 0.6, 0.3))
 	else:
 		_log("lava cave: %s, %s look, chambers %s (entry %s), %d isles, %d archers%s" % [map.cave["pattern"], map.cave.get("look", "magma"),
 			", ".join(map.cave["rooms"]), (map.cave["entry"] as Dictionary)["room"], (map.cave["isles"] as Array).size(),
@@ -1223,8 +1224,8 @@ func _start() -> void:
 	SewerCalls.attach(self, map, _site.wires, _heroes, func() -> Hero: return player, fog, _banner)   # (dispatch's sewer calls; cosmetic)
 	_dev_on_floor_ready()
 	rig.aim_source = controller.aim_point   # (a movement feel's camera lead leans a little toward the aim)
-	MoveFeelTag.attach(self, player, MoveLab.gates() if _move_lab() else {})   # (F6 / F7 and the passive move log)
-	CastTell.attach(self, player, voice, controller.aim_point)   # (the "cast armed" tell on your own hero; --cast-tell, F11 in the gym)
+	MoveFeelTag.attach(self, player, MoveLab.gates() if _move_lab() else {})   # (the profile's dev tag and the passive move log)
+	CastTell.attach(self, player, voice, controller.aim_point)   # (the "cast armed" tell on your own hero; --cast-tell)
 	_enter_barrier()
 	if not await _dev_after_barrier():
 		return

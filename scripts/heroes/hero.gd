@@ -141,7 +141,7 @@ var _gait: HeroGait = null
 var _feel: HeroFeel = null
 ## grounded_anim: Gasket's spin under way (SpinSweep), or null.
 var _sweep: SpinSweep = null
-## Physics interpolation of a hero this machine moves (MoveFeel.interp, F7): between physics ticks the node is drawn where
+## Physics interpolation of a hero this machine moves (MoveFeel.interp: --physics-interp, the gym's Smoothing): between physics ticks the node is drawn where
 ## it was a fraction of the way from the last tick to this one, and put back before the next tick (_interp_restore).
 var _ip_prev := Vector3.INF
 var _ip_cur := Vector3.ZERO
@@ -1001,7 +1001,7 @@ func _process(delta: float) -> void:
 	_update_daze_visuals(delta)
 
 
-# --- Physics interpolation (MoveFeel.interp, F7; docs/design/movement-research.md "As built", the judder check) -------------
+# --- Physics interpolation (MoveFeel.interp; docs/design/movement-research.md "As built", the judder check) -------------
 
 ## Draw this hero between its last two physics positions (Engine.get_physics_interpolation_fraction), when this machine
 ## moves it. Its true position is put back at the start of the next physics tick (_interp_restore), before anything

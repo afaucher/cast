@@ -18,20 +18,24 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
 - **Lava caves:** a supervillain's floors 2-3, and floor 2 of other clients with a hellgate in it, can roll a lava cave
   (`.\run.ps1 --seed 31 --floor 2 --spells damp,fireball --no-mic --to-lava entry`); `--lava-floor` forces one (solo or every
   window of a crew). See `docs/design/lava-playtest.md`, "As built: caves on real floors".
-- **Movement feel A/B (dev):** `.\run.ps1 --move-lab --move-feel shuffle --no-mic` plays the movement lab (a lap of slalom,
-  steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen) with `grounded` and `grounded_anim` (grounded
-  plus the body lean / squash, strike-first melee and each hero's hit area reshaped to its weapon:
-  `docs/design/animation-research.md`, "As built") dealt blind as "feel 1" / "feel 2"; **F6** switches profile, **F7** physics
-  interpolation. `--move-feel today|grounded|grounded_anim` names one (the
-  default is `today`, the game as it was), `--physics-interp on` starts with interpolation. Works on any floor and in the
-  arena too; in a crew the host's profile is everyone's (`.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded`). Every
-  stretch and lap is logged to `%APPDATA%\Godot\app_userdata\Cast\move_lab.csv`. See `docs/design/movement-research.md`,
-  "As built".
-- **Test gym (dev, solo):** `.un.ps1 --gym --no-mic` plays one fixed map with every environment (an arena with training
+- **Movement feel (dev):** the game plays `grounded_anim` by default (the user's pick, 2026-10-23: grounded movement plus the
+  body lean / squash, strike-first melee and each hero's hit area reshaped to its weapon; `docs/design/animation-research.md`,
+  "As built"), exported builds and crews included. `--move-feel today|grounded|grounded_anim` names another for a run (`today`
+  is the game before the movement work), `--physics-interp on` turns on the judder smoothing of your own heroes (default off).
+  No keys switch them in play any more; the test gym's panel has both as "Experiments". `.\run.ps1 --move-lab --no-mic` plays
+  the movement lab (a lap of slalom, steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen). In a crew
+  the host's profile is everyone's (`.\run.ps1 -Crew 2 --net-wait 2 --move-lab --move-feel grounded`). Every stretch and lap is
+  logged to `%APPDATA%\Godot\app_userdata\Cast\move_lab.csv`. See `docs/design/movement-research.md`, §5.3.
+- **Cast tell:** from "cast" until the spell goes off, a rune under your hero and a glow at the hand, flooding with the
+  spell's colour on recognition: the default since 2026-10-23. `--cast-tell neutral|off` for the white-until-release
+  variant or none. See `docs/design/cast-armed-fx.md`.
+- **Test gym (dev, solo):** `.
+un.ps1 --gym --no-mic` plays one fixed map with every environment (an arena with training
   dummies, the movement course and a walk of every floor material, office rooms with doors, a hellgate, a pool and a moat with
   sharks, a sewer cluster with its gator and live wire, a lava cave, the elevator) and a dev panel: switch hero (F2), spawn any
   monster, prop, explosive, staff, spell component, gate or decor at the cursor (x1/x5/x10), infinite components, cooldowns
-  off, monster AI off (F4), god mode (F8), hit areas (F3), a hit log; F9 hides the panel. Ignored in a crew. Without a
+  off, monster AI off (F4), god mode (F8), hit areas (F3), a hit log, and the experiments (movement profile, judder
+  smoothing: pickers, not keys); F9 hides the panel. Ignored in a crew. Without a
   command line (an exported build too): on the main menu, click the burnt-out **H** of the "WE FIX HEXES" neon over the van
   (solo only; Esc > Main menu comes back). See `docs/design/test-gym.md`.
 
