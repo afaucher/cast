@@ -457,7 +457,7 @@ func melee(dir: Vector3) -> bool:
 ## The area is melee_area(): today's wedge, or (grounded_anim) the shape of this hero's weapon, the same on every machine
 ## because the crew plays the host's profile.
 func _melee_effect(dir: Vector3) -> void:
-	Sfx.play_at("swing_heavy" if kit_id in ["gasket", "rebar"] else "swing_light", global_position)
+	Sfx.play_at("swing_heavy" if kit_id == "gasket" else ("slam_ground" if kit_id == "rebar" else "swing_light"), global_position)
 	var area := melee_area()
 	var lane := str(area["shape"]) == "lane"
 	var far := float(area["far"]) if lane else 0.0

@@ -55,7 +55,7 @@ const SOURCES := {
 	"step_hard_v1": [K_IMPACT + "footstep_concrete_001.ogg"],
 	"step_soft_v1": [K_IMPACT + "footstep_carpet_001.ogg"],
 	"step_wood_v1": [K_IMPACT + "footstep_wood_001.ogg"],
-	"step_metal_v1": [K_IMPACT + "footstep_concrete_003.ogg", K_IMPACT + "impactMetal_light_002.ogg"],
+	"step_metal_v1": [K_IMPACT + "footstep_concrete_003.ogg", K_IMPACT + "impactTin_medium_000.ogg"],
 	"land_thud_v1": [K_IMPACT + "impactSoft_heavy_000.ogg", K_IMPACT + "footstep_concrete_002.ogg"],
 	"fall_heavy_v1": [K_IMPACT + "impactPunch_heavy_000.ogg", K_IMPACT + "footstep_concrete_002.ogg", K_IMPACT + "impactPlank_medium_000.ogg"],
 	"jump_v1": [K_RPG + "cloth1.ogg", K_IMPACT + "footstep_concrete_001.ogg"],
@@ -66,11 +66,11 @@ const SOURCES := {
 	"imp_chatter_v1": [USER_IMP],
 	"imp_hurt_v1": [USER_IMP],
 	"swing_light_v1": [K_RPG + "knifeSlice.ogg", K_RPG + "cloth2.ogg"],
-	"swing_heavy_v1": [K_RPG + "cloth3.ogg", K_RPG + "knifeSlice.ogg", K_IMPACT + "impactSoft_heavy_000.ogg"],
-	"swing_spin_v1": [K_RPG + "cloth3.ogg", K_RPG + "knifeSlice.ogg", K_IMPACT + "impactSoft_heavy_000.ogg"],
+	"swing_heavy_v1": [K_IMPACT + "impactPunch_heavy_002.ogg", K_IMPACT + "impactMetal_heavy_001.ogg", K_IMPACT + "impactMining_000.ogg"],
+	"swing_spin_v1": [K_RPG + "cloth3.ogg", K_RPG + "cloth1.ogg"],
 	"bow_shot_v1": [BOW_DRAWN, K_RPG + "knifeSlice.ogg", K_IMPACT + "impactWood_light_000.ogg"],
 	"boulder_roll_v1": [K_IMPACT + "impactMining_001.ogg"],
-	"slam_ground_v1": [K_IMPACT + "impactPunch_heavy_001.ogg", K_IMPACT + "impactMining_000.ogg", K_IMPACT + "impactMining_004.ogg"],
+	"slam_ground_v1": [K_IMPACT + "impactPunch_heavy_001.ogg", K_IMPACT + "impactMining_001.ogg", K_IMPACT + "impactPunch_heavy_000.ogg"],
 	"hit_body_v1": [K_IMPACT + "impactPunch_medium_000.ogg", K_IMPACT + "impactSoft_medium_001.ogg"],
 	"hit_heavy_v1": [K_IMPACT + "impactPunch_heavy_002.ogg", K_IMPACT + "impactWood_heavy_001.ogg"],
 	"hit_arrow_v1": [K_RPG + "chop.ogg", K_IMPACT + "impactWood_light_001.ogg"],
@@ -570,12 +570,15 @@ func _step_wood_v1() -> PackedFloat32Array:
 	return _step("footstep_wood_001.ogg", 3000.0)
 
 
-## Diamond plate: the hard heel and a faint metallic ring under 3.2 kHz.
+## Diamond plate (4A): dry boot heel + short 38 ms damped dead-plate thud (<1800 Hz), zero bell ring.
 func _step_metal_v1() -> PackedFloat32Array:
-	var heel := _step("footstep_concrete_003.ogg", 2600.0, -0.5)
-	var ring := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_light_002.ogg"), -40.0, 0.0), 0.0, 0.14), 3200.0, 2)
-	ring = Rec.fade(ring, 0.001, 0.06)
-	return Rec.normalize(Rec.mix(heel, Rec.normalize(ring, -1.0), 0.003, -7.0), -1.5)
+	var heel := Rec.trim(Rec.load_mono(K_IMPACT + "footstep_concrete_003.ogg"), -42.0, 0.002)
+	heel = Rec.lowpass(Rec.cut(heel, 0.0, 0.068), 2200.0, 1)
+	var tin := Rec.trim(Rec.load_mono(K_IMPACT + "impactTin_medium_000.ogg"), -42.0, 0.0)
+	tin = Rec.lowpass(Rec.cut(tin, 0.0, 0.038), 1800.0, 2)
+	tin = Rec.fade(tin, 0.001, 0.020)
+	var s := Rec.mix(Rec.normalize(heel, -1.0), Rec.normalize(tin, -1.0), 0.002, -9.0)
+	return Rec.normalize(Rec.fade(s, 0.002, 0.022), -2.0)
 
 
 ## A landing from 1-2 levels (0.25 s): a soft body thud under 300 Hz and both heels at once.
@@ -664,29 +667,42 @@ func _swing_light_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(s, 0.008, 0.04), -2.0)
 
 
-## Heavy blunt melee swing (Gasket hammer, Rebar punch): deep air-displacement whoosh + heavy cloth snap + low body weight
-## (no metallic blade scrape).
+## Gasket's overhead wrench smash (2A): short downward swing whoosh into a weighty punch + damped low iron/rock smash.
 func _swing_heavy_v1() -> PackedFloat32Array:
-	var cloth := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "cloth3.ogg"), -42.0, 0.002), -3.0)
-	cloth = Rec.lowpass(Rec.cut(cloth, 0.0, 0.20), 1800.0, 1)
-	var rush := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "knifeSlice.ogg"), -45.0, 0.003), -4.0)
-	rush = Rec.lowpass(Rec.cut(rush, 0.0, 0.19), 1300.0, 2)
-	var weight := _thud("impactSoft_heavy_000.ogg", 220.0, 0.18)
-	var air := _buf(0.21)
-	_add_noise(air, 0.0, 0.20, func(k: float) -> float: return 620.0 - 380.0 * k, 1.3, 1, 0.85,
-			func(k: float) -> float: return sin(PI * pow(k, 0.75)))
-	var s := Rec.mix(Rec.normalize(air, -1.0), Rec.normalize(cloth, -1.0), 0.0, -2.0)
-	s = Rec.mix(s, Rec.normalize(rush, -1.0), 0.01, -3.5)
-	s = Rec.mix(s, Rec.normalize(weight, -1.0), 0.02, -4.0)
-	return Rec.normalize(Rec.fade(s, 0.010, 0.045), -1.5)
+	var whoosh := _buf(0.09)
+	_add_noise(whoosh, 0.0, 0.085, func(k: float) -> float: return 680.0 - 380.0 * k, 1.3, 1, 0.85,
+			func(k: float) -> float: return sin(PI * k))
+	var punch := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_002.ogg"), -45.0, 0.0), -3.0)
+	punch = Rec.lowpass(Rec.cut(punch, 0.0, 0.21), 1600.0, 1)
+	var metal := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMetal_heavy_001.ogg"), -45.0, 0.0), -5.0)
+	metal = Rec.lowpass(Rec.cut(metal, 0.0, 0.18), 1100.0, 2)
+	var rock := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_000.ogg"), -45.0, 0.0), -3.0)
+	rock = Rec.lowpass(Rec.cut(rock, 0.0, 0.19), 1800.0, 1)
+	var hit := Rec.mix(Rec.normalize(punch, -1.0), Rec.normalize(metal, -1.0), 0.0, -3.5)
+	hit = Rec.mix(hit, Rec.normalize(rock, -1.0), 0.005, -3.0)
+	var s := Rec.mix(Rec.normalize(whoosh, -3.0), Rec.normalize(hit, -1.0), 0.045, 0.0)
+	return Rec.normalize(Rec.fade(s, 0.003, 0.05), -1.0)
 
 
-## Gasket's 360° wrench spin: double rotational heavy whoosh.
+## Gasket's 360° wrench spin (1A): continuous 480 ms full-circle Doppler air whirl + coat whip, zero impact thud.
 func _swing_spin_v1() -> PackedFloat32Array:
-	var a := _swing_heavy_v1()
-	var b := Rec.pitch(a, 2.0)
-	var s := Rec.mix(a, b, 0.13, -1.0)
-	return Rec.normalize(Rec.fade(s, 0.008, 0.05), -1.5)
+	var o := _buf(0.48)
+	_add_noise(o, 0.0, 0.46,
+		func(k: float) -> float:
+			return 210.0 + 320.0 * sin(PI * k) + 130.0 * sin(TAU * k),
+		1.25, 1, 0.9,
+		func(k: float) -> float:
+			var env := sin(PI * pow(k, 0.8))
+			var rot_mod := 0.76 + 0.24 * sin(TAU * k - 0.5)
+			return env * rot_mod
+	)
+	var cloth1 := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "cloth3.ogg"), -42.0, 0.002), -3.0)
+	cloth1 = Rec.lowpass(Rec.cut(cloth1, 0.0, 0.24), 1500.0, 1)
+	var cloth2 := Rec.pitch(Rec.trim(Rec.load_mono(K_RPG + "cloth1.ogg"), -42.0, 0.002), -2.0)
+	cloth2 = Rec.lowpass(Rec.cut(cloth2, 0.0, 0.22), 1600.0, 1)
+	var s := Rec.mix(Rec.normalize(o, -1.0), Rec.normalize(cloth1, -1.0), 0.02, -4.0)
+	s = Rec.mix(s, Rec.normalize(cloth2, -1.0), 0.22, -5.0)
+	return Rec.normalize(Rec.fade(s, 0.018, 0.065), -1.5)
 
 
 ## Bow & crossbow release (Wick, Archer, Pavise): taut bowstring twang + wood flex + arrow zip.
@@ -713,17 +729,21 @@ func _boulder_roll_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(s, 0.003, 0.07), -1.5)
 
 
-## Ground slam (Brute slam, Gasket ground smash): sub punch + twin rock impacts.
+## Rebar's stone-gloved pound / Brute ground slam (3A): short downward fist rush into a deep, dry stone-and-leather pound.
 func _slam_ground_v1() -> PackedFloat32Array:
-	var punch := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_001.ogg"), -45.0, 0.0), -5.0)
-	punch = Rec.lowpass(Rec.cut(punch, 0.0, 0.32), 260.0, 2)
-	var rock1 := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_000.ogg"), -45.0, 0.0), -2.0)
-	rock1 = Rec.lowpass(Rec.cut(rock1, 0.0, 0.22), 2200.0, 1)
-	var rock2 := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_004.ogg"), -45.0, 0.0), -4.0)
-	rock2 = Rec.lowpass(Rec.cut(rock2, 0.0, 0.24), 1800.0, 1)
-	var s := Rec.mix(Rec.normalize(punch, -1.0), Rec.normalize(rock1, -1.0), 0.0, -2.0)
-	s = Rec.mix(s, Rec.normalize(rock2, -1.0), 0.025, -4.0)
-	return Rec.normalize(Rec.fade(s, 0.001, 0.08), -1.0)
+	var rush := _buf(0.08)
+	_add_noise(rush, 0.0, 0.075, func(k: float) -> float: return 520.0 - 280.0 * k, 1.2, 1, 0.7,
+			func(k: float) -> float: return sin(PI * k))
+	var sub := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_001.ogg"), -45.0, 0.0), -5.0)
+	sub = Rec.lowpass(Rec.cut(sub, 0.0, 0.22), 240.0, 2)
+	var stone := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactMining_001.ogg"), -45.0, 0.0), -6.0)
+	stone = Rec.lowpass(Rec.cut(stone, 0.0, 0.20), 950.0, 2)
+	var glove := Rec.pitch(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_000.ogg"), -45.0, 0.0), -3.0)
+	glove = Rec.lowpass(Rec.cut(glove, 0.0, 0.16), 1300.0, 1)
+	var impact := Rec.mix(Rec.normalize(sub, -1.0), Rec.normalize(stone, -1.0), 0.0, -1.5)
+	impact = Rec.mix(impact, Rec.normalize(glove, -1.0), 0.0, -2.5)
+	var s := Rec.mix(Rec.normalize(rush, -4.0), Rec.normalize(impact, -1.0), 0.035, 0.0)
+	return Rec.normalize(Rec.fade(s, 0.002, 0.05), -1.0)
 
 
 ## Default body hit (< 22 dmg): punchy medium impact.

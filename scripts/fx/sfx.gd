@@ -110,7 +110,7 @@ const CUES := {
 		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 7.5, "max_distance": 32.0},
 	"step_wood": {"file": "step_wood.wav", "bus": "World", "volume_db": -16.0, "pitch_jitter": 0.1,
 		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 7.5, "max_distance": 32.0},
-	"step_metal": {"file": "step_metal.wav", "bus": "World", "volume_db": -16.0, "pitch_jitter": 0.1,
+	"step_metal": {"file": "step_metal.wav", "bus": "World", "volume_db": -18.5, "pitch_jitter": 0.1,
 		"max_voices": 6, "min_gap": 0.04, "positional": true, "unit_size": 7.5, "max_distance": 32.0},
 	## A hero lands on foot from 1-2 levels (HeroGait._landing, every screen).
 	"land_thud": {"file": "land_thud.wav", "bus": "World", "volume_db": -11.0, "pitch_jitter": 0.06,
@@ -139,15 +139,15 @@ const CUES := {
 	## Default attack swings, shots, boulder launch, and ground slams.
 	"swing_light": {"file": "swing_light.wav", "bus": "World", "volume_db": -10.0, "pitch_jitter": 0.1,
 		"max_voices": 5, "min_gap": 0.04, "positional": true, "unit_size": 8.0, "max_distance": 40.0},
-	"swing_heavy": {"file": "swing_heavy.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.08,
+	"swing_heavy": {"file": "swing_heavy.wav", "bus": "World", "volume_db": -5.0, "pitch_jitter": 0.08,
 		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 8.5, "max_distance": 42.0},
-	"swing_spin": {"file": "swing_spin.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.06,
+	"swing_spin": {"file": "swing_spin.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.06,
 		"max_voices": 3, "min_gap": 0.08, "positional": true, "unit_size": 9.0, "max_distance": 45.0},
 	"bow_shot": {"file": "bow_shot.wav", "bus": "World", "volume_db": -8.0, "pitch_jitter": 0.08,
 		"max_voices": 5, "min_gap": 0.04, "positional": true, "unit_size": 9.0, "max_distance": 45.0},
 	"boulder_roll": {"file": "boulder_roll.wav", "bus": "World", "volume_db": -5.0, "pitch_jitter": 0.06,
 		"max_voices": 3, "min_gap": 0.08, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
-	"slam_ground": {"file": "slam_ground.wav", "bus": "World", "volume_db": -2.0, "pitch_jitter": 0.06,
+	"slam_ground": {"file": "slam_ground.wav", "bus": "World", "volume_db": -4.5, "pitch_jitter": 0.06,
 		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
 	## Default hits, blocks, and prop/package breaks.
 	"hit_body": {"file": "hit_body.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.1,

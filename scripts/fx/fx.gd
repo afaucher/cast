@@ -285,7 +285,6 @@ static func slam_lane(origin: Vector3, dir: Vector3, near: float, far: float, ra
 static func ground_smash(pos: Vector3, radius: float) -> void:
 	if not _world_ready():
 		return
-	Sfx.play_at("slam_ground", pos)
 	var map: HexMap = GameWorld.map
 	var g := map.ground_height(pos) if map != null else NAN
 	if not is_nan(g):
