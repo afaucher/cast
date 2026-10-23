@@ -7,7 +7,8 @@ extends TestCase
 ##      spaces; and every place is reachable on foot from the start (the isle only over a crust); the build is the same twice
 ##   2. the spawn list covers every registry entry (a new monster kind, prop, style, spell or decor gets its button)
 ##   3. in the real game (GameDev with --gym, under the grounded_anim profile): the panel is up, one of each entry spawns and the world runs on (god mode on),
-##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the slot picker and
+##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the experiments' pickers
+##      switch the movement profile and the smoothing, the slot picker and
 ##      infinite components keep a spell castable, and the player switches through every hero with the allies filling the rest
 
 const GAME := preload("res://scripts/app/game.gd")
@@ -197,8 +198,8 @@ func _check_registry() -> void:
 # --- 3. the gym in the game -------------------------------------------------------------------------------------------
 
 func _check_game() -> void:
-	MoveFeel.reset()
-	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)   # (the switch re-kits a hero under the lean / squash pivot and its own hit area)
+	MoveFeel.reset()   # (grounded_anim, the default: the switch re-kits a hero under the lean / squash pivot and its own hit area)
+	eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "grounded_anim is the default profile")
 	var g: Node3D = load("res://scripts/app/dev/game_dev.gd").new()
 	g.set("opts", {"no_mic": true, "gym": true, "spells": GymDev.DEFAULT_SPELLS, "seed": GymMap.SEED})
 	GAME.reset_flow()
@@ -228,18 +229,29 @@ func _check_game() -> void:
 			break
 	check(int(gym.stats.totals("you")["hits"]) > 0, "the hit log counts the player's swing (%s)" % str(gym.stats.totals("you")))
 	check(gym.stats.text().contains("You dealt"), "the readout")
-	# the cast tell (CastTell): on the player, F11 cycles its mode and the corner tag says which
+	# the cast tell (CastTell): on the player, in colour (the default; no key changes it any more)
 	var tell := g.get_node_or_null("CastTell") as CastTell
 	check(tell != null and tell.hero == player, "the cast tell is on the player")
-	var was := CastTell.mode
-	CastTell.mode = CastTell.COLOUR
-	gym.cycle_cast_tell()
-	eq(CastTell.mode, CastTell.NEUTRAL_MODE, "F11: colour -> neutral")
-	var tag := g.get_node_or_null("MoveFeelTag") as MoveFeelTag
-	check(tag != null and tag.label.text == CastTell.label(), "the dev tag shows the cast tell's mode")
-	gym.cycle_cast_tell()
-	eq(CastTell.mode, CastTell.OFF, "F11: neutral -> off")
-	CastTell.mode = was
+	eq(CastTell.mode, CastTell.COLOUR, "the cast tell is in colour")
+	# the experiments (the panel's pickers, not keys): the movement profile and the judder smoothing, live
+	var feel_pick := gym.panel.experiment("feel")
+	var smooth_pick := gym.panel.experiment("smoothing")
+	check(feel_pick != null and smooth_pick != null, "the panel has the movement and smoothing pickers")
+	if feel_pick != null and smooth_pick != null:
+		eq(feel_pick.get_item_text(feel_pick.selected), MoveFeel.GROUNDED_ANIM, "the movement picker shows grounded_anim")
+		eq(smooth_pick.get_item_text(smooth_pick.selected), "off", "the smoothing picker shows off")
+		var tag := g.get_node_or_null("MoveFeelTag") as MoveFeelTag
+		feel_pick.item_selected.emit(MoveFeel.ORDER.find(MoveFeel.TODAY))
+		eq(MoveFeel.active(), MoveFeel.TODAY, "picking today plays today")
+		check(tag != null and tag.label.text == "movement: today", "the dev tag says so")
+		smooth_pick.item_selected.emit(1)
+		check(MoveFeel.interp, "picking on turns the smoothing on")
+		eq(smooth_pick.get_item_text(smooth_pick.selected), "on", "the picker shows it")
+		gym.set_experiment("smoothing", "off")
+		check(not MoveFeel.interp, "and off again")
+		gym.set_experiment("feel", MoveFeel.GROUNDED_ANIM)
+		eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "back to grounded_anim")
+		eq(feel_pick.get_item_text(feel_pick.selected), MoveFeel.GROUNDED_ANIM, "the picker follows")
 	# spells: the slot picker and infinite components
 	gym.set_slot(0, "corn")
 	eq(player.slot_spell(0), "corn", "the slot picker puts corn in slot 1")

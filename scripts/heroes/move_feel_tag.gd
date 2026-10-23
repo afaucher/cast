@@ -1,9 +1,10 @@
 class_name MoveFeelTag
 extends CanvasLayer
-## The movement-feel A/B on screen (docs/design/movement-research.md "As built"): F6 switches the profile (MoveFeel.cycle),
-## F7 physics interpolation, and a small dev tag in the corner names the profile for SHOW_FOR seconds after a switch (and
-## at the start). Blind (shuffle) it says only "feel 1" / "feel 2". It is the arena's and the floor's dev tag, not a form
-## (form-rules.md does not apply). It also carries the passive MoveLog for the local player.
+## The movement profile's dev tag (docs/design/movement-research.md "As built"): a small tag in the corner names the
+## profile for SHOW_FOR seconds at the start when a flag picked one other than the default (MoveFeel.DEFAULT), and shows
+## what the test gym's experiments switch (GymDev). No keys: the A/B is concluded (movement-research.md §5.3). It is the
+## arena's and the floor's dev tag, not a form (form-rules.md does not apply). It also carries the passive MoveLog for the
+## local player.
 
 const SHOW_FOR := 1.8
 const FADE := 0.4
@@ -24,7 +25,7 @@ static func attach(parent: Node, player: Hero, lab: Dictionary = {}) -> MoveFeel
 	t.move_log.player = player
 	t.move_log.lab = lab
 	t.add_child(t.move_log)
-	t.show_tag(MoveFeel.label() if MoveFeel.active() != MoveFeel.TODAY or MoveFeel.blind() else "")
+	t.show_tag(MoveFeel.label() if MoveFeel.active() != MoveFeel.DEFAULT else "")
 	return t
 
 
@@ -58,20 +59,3 @@ func show_tag(text: String) -> void:
 	label.text = text
 	_shown = SHOW_FOR
 
-
-func _unhandled_input(event: InputEvent) -> void:
-	var k := event as InputEventKey
-	if k == null or not k.pressed or k.echo:
-		return
-	if k.physical_keycode == KEY_F6:
-		get_viewport().set_input_as_handled()
-		if MoveFeel.cycle():
-			move_log.switched()
-			show_tag(MoveFeel.label())
-		else:
-			show_tag("feel: set by the host")
-	elif k.physical_keycode == KEY_F7:
-		get_viewport().set_input_as_handled()
-		MoveFeel.toggle_interp()
-		move_log.switched()
-		show_tag("interp %s" % ("on" if MoveFeel.interp else "off"))

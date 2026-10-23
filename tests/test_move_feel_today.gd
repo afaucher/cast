@@ -3,7 +3,9 @@ extends TestCase
 ## (docs/design/movement-research.md, "As built"). A scripted walk over a course with every kind of ground (a +1 step and a
 ## +2 climb, a reversal, a wall push, a lava edge slide, wading, coffee, a bow draw, a 3-level drop) and an AI ally following
 ## is replayed through the real PlayerController and AllyBrain, and every physics frame's positions must match the trace
-## recorded from the code BEFORE the movement profiles were added (tests/golden/move_today.txt).
+## recorded from the code BEFORE the movement profiles were added (tests/golden/move_today.txt). `today` is no longer the
+## default (grounded_anim is, 2026-10-23), so the test selects it by name; the trace is the simulated position (read at
+## the start of each physics frame; MoveFeel.interp is off), never a drawn one.
 ##
 ## Re-record only when `today` is MEANT to change (it should not: it is the A/B baseline):
 ##   $env:CAST_MOVE_RECORD = "1"; .\test_runner.ps1 -TestName test_move_feel_today; Remove-Item Env:CAST_MOVE_RECORD
@@ -71,9 +73,12 @@ static func script_steps() -> Array:
 
 func setup() -> void:
 	timeout_sec = 120.0
+	MoveFeel.reset()
+	MoveFeel.set_mode(MoveFeel.TODAY)   # (named: the game's default is grounded_anim since 2026-10-23)
 	root = Node3D.new()
 	add_child(root)
 	var lines := await run_trace(get_tree(), root)
+	MoveFeel.reset()
 	if OS.get_environment("CAST_MOVE_RECORD") == "1":
 		var f := FileAccess.open(PATH, FileAccess.WRITE)
 		check(f != null, "can write %s" % PATH)

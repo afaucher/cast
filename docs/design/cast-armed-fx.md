@@ -4,7 +4,7 @@
 Maybe the player's hand glows or there's a rune on the floor that follows the player until they cast. The latter might
 make more sense because none of the players actually have a wand. Let's look at options."
 
-Everything here is **[proposal]**. Nothing is in the game. The five options are mocked in a lab only:
+The five options below were a **[proposal]** mocked in a lab; option C is now in the game (next section). The lab:
 
 - The lab is `scenes/cast_fx_lab.tscn` (`scripts/fx/cast_fx_lab.gd`).
 - The mock effect is `scripts/fx/cast_armed_fx.gd` (`CastArmedFx`, styles `rune`, `hand`, `rune_hand`, `glyph` and
@@ -18,12 +18,17 @@ voice channel of its treatment C, cut down to the moment the user asked for: the
 
 ![comparison sheet](cast_armed/sheet.png)
 
-## Playtest: option C in the game (2026-10-22)
+## Option C in the game (playtest 2026-10-22, decided 2026-10-23)
 
 **The user (2026-10-22):** "Let's play test C, but I'm not sure about if the circle should change color or not."
 
+**Decided (user, 2026-10-23): "For colors - color is fine actually. It works better then I expected. Lets remove the
+keybinding."** The tell in **colour** mode is the game's default in normal play, exported builds and crews (no flag needed;
+`CastTell.mode` starts as colour). The gym's F11 is gone. `--cast-tell neutral|off` stays as a flag (neutral was trivial to
+keep). Experiments now go in the gym's panel, not on keys (the user, same day).
+
 So option C (the floor rune and the hand glow) is wired into the game for **your own hero**, with a live A/B on the colour
-question. Nothing goes over the network yet: other players see only the release, as before.
+question (now settled: colour). Nothing goes over the network yet: other players see only the release, as before.
 
 - **The code:** `scripts/fx/cast_tell.gd` (`CastTell`). `game.gd` attaches one per floor, after `MoveFeelTag`.
 - **What drives it:** the real voice pipeline.
@@ -36,16 +41,13 @@ question. Nothing goes over the network yet: other players see only the release,
   - The new `VoiceCaster.trigger_dropped` (from `Incantation.trigger_dropped`) fades it quietly. It fires for a "cast"
     buried in chatter or whose window runs out with no fizzle.
   - A safety timeout of 2.8 s fades a tell that no event ends.
-- **The A/B modes:**
+- **The modes** (colour is the default):
   - **colour:** the rune floods with the spell's colour on recognition, its chalk turns solid, and the release is in colour.
   - **neutral:** the rune stays chalk white until it is gone. Only the release flash is coloured: the hand flash and the
     shock ring.
-  - **off:** today's game; nothing is built or drawn.
-- **Switching modes:**
-  - `--cast-tell colour|neutral|off` sets the mode. Boot reads it once per run, and it is a menu flag, so the menu still
-    opens.
-  - F11 in the gym cycles colour, neutral and off. The corner dev tag and the gym panel's status line show the mode.
-  - The playtest default is **colour**.
+  - **off:** no tell; nothing is built or drawn.
+- **Switching modes:** `--cast-tell colour|neutral|off` sets the mode. Boot reads it once per run, and it is a menu flag,
+  so the menu still opens. The default is **colour**. (Until 2026-10-23, F11 in the gym cycled the three.)
 - **Solo timing:** the spell word and the cast arrive in the same frame, so the colour mode's flood shows mostly in the
   0.3 s release. Online the flood gets the 0.2 s before the cast lands.
 - **Cost:** two persistent quads (the rune decal and the hand glow). They are built on the first trigger and hidden when
@@ -56,7 +58,8 @@ question. Nothing goes over the network yet: other players see only the release,
 - **The hand glow:** it sits on the held component, which is in the free hand for all three heroes. Without a component it
   sits on Wick's wand tip, else at chest height.
 - **What it doesn't touch:** hero posing, and audio ducking.
-- **Test:** `tests/test_cast_tell.gd` checks both modes, off, the real typed pipeline and Incantation's drop.
+- **Test:** `tests/test_cast_tell.gd` checks colour as the default, colour and neutral, off, the real typed pipeline and
+  Incantation's drop; `test_gym` that the tell is on the player in colour.
 
 ## 1. What has to be true
 

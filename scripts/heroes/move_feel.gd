@@ -1,37 +1,35 @@
 class_name MoveFeel
 extends RefCounted
-## Movement-feel profiles (docs/design/movement-research.md §5.2 and "As built"): one data table, like HeroKit, so two
-## ways of moving can be tried side by side. `today` is the game exactly as it was (every key at its OFF value: the old
-## code paths run, frame for frame: test_move_feel_today holds it to a recorded trace); `grounded` is package A;
-## `grounded_anim` is grounded plus the animation track's treatment B (a lean that leads the velocity, squash on start and
-## stop, the stride held while shoved or airborne: HeroFeel) and the strike-first melee with each hero's hit area reshaped
-## to its weapon (docs/design/animation-research.md "As built"). Every hero, the camera and the AI allies read the ACTIVE
-## profile here; nothing else stores a copy.
+## Movement-feel profiles (docs/design/movement-research.md §5.2, "As built" and §5.3): one data table, like HeroKit.
+## `today` is the game as it was before the movement work (every key at its OFF value: the old code paths run, frame for
+## frame: test_move_feel_today holds it to a recorded trace); `grounded` is package A; `grounded_anim` is grounded plus the
+## animation track's treatment B (a lean that leads the velocity, squash on start and stop, the stride held while shoved
+## or airborne: HeroFeel) and the strike-first melee with each hero's hit area reshaped to its weapon
+## (docs/design/animation-research.md "As built"). Every hero, the camera and the AI allies read the ACTIVE profile here;
+## nothing else stores a copy.
 ##
-##   --move-feel today|grounded|grounded_anim|shuffle   (default today: normal play stays as it was until the user picks)
+## THE DEFAULT is grounded_anim (the user, 2026-10-23: "For movement profile - the new one is better."): normal play, an
+## exported build and a crew's job all play it with no flag. The A/B is concluded, so no key switches profiles in play any
+## more (the user: "lets put experiments in the gym menu instead of adding keybindings"): the test gym's panel picks the
+## profile and the judder smoothing (GymDev, "Experiments").
+##
+##   --move-feel today|grounded|grounded_anim   (default grounded_anim) this run's profile, solo or as a crew's host
 ##   --physics-interp on|off              (default off) the owned heroes drawn between physics ticks (Hero, "judder")
-##   F6  next profile (the tag names it for a moment; in shuffle the tag says only "feel 1" / "feel 2": blind)
-##   F7  physics interpolation on / off
-##
-## SHUFFLE (the blind A/B): the BLIND profiles (grounded and grounded_anim: the question being asked now) are dealt in a
-## random order as "feel 1", "feel 2"; the run starts on feel 1 and F6 moves to the next (today stays selectable by name). Which is which is printed when the order is dealt and written with every row of user://move_lab.csv
-## (MoveLog), never shown on screen.
 ##
 ## A CREW (networking): the HOST's profile is everyone's. It goes out with the job (CrewFlow.host_pick puts `feel` in
-## crew.job, which a late joiner gets too) like the seed: spawn data for the run, nothing streamed. A client's own flag
-## and F6 are ignored while it is in a crew (F6 says "set by the host"). The reasons: a puppet's stride, hop and landing
-## are drawn on every screen from the shown motion with the profile THAT screen has, so the crew must agree on it; an A/B
-## in a crew compares like with like; and a later profile with a dodge is gameplay every machine must agree on.
-## Physics interpolation is each machine's own (it only changes how this screen draws its own heroes).
+## crew.job, which a late joiner gets too) like the seed: spawn data for the run, nothing streamed. A client's own flag is
+## ignored while it is in a crew. The reasons: a puppet's stride, hop and landing are drawn on every screen from the shown
+## motion with the profile THAT screen has, so the crew must agree on it; and a later profile with a dodge is gameplay
+## every machine must agree on. Physics interpolation is each machine's own (it only changes how this screen draws its own
+## heroes).
 
 const TODAY := "today"
 const GROUNDED := "grounded"
 const GROUNDED_ANIM := "grounded_anim"
-const SHUFFLE := "shuffle"
-## The real profiles, in F6 order.
+## The profile with no flag (normal play, exported builds, a host's job).
+const DEFAULT := GROUNDED_ANIM
+## The real profiles (the gym's picker lists them in this order).
 const ORDER: Array[String] = [TODAY, GROUNDED, GROUNDED_ANIM]
-## The profiles shuffle deals (the A/B asked now: user, 2026-10-22, "Animation B + strike-first" on top of grounded).
-const BLIND: Array[String] = [GROUNDED, GROUNDED_ANIM]
 
 ## What every key means when a profile does not set it: the game as it was (`today` sets nothing).
 const OFF := {
@@ -104,19 +102,15 @@ const PROFILES := {
 ## A landing from this many levels or more is a big one (dust, a thud, the landing slowdown).
 const LAND_BIG_LEVELS := 2
 
-## What the command line (or a test) asked for: today, grounded or shuffle.
-static var mode := TODAY
+## What the command line (or a test, or the gym's picker) asked for.
+static var mode := DEFAULT
 ## The profile this machine plays when it is not in a crew.
-static var local_id := TODAY
-## Shuffle: the profiles in their dealt order ("feel 1" is blind_order[0]) and where F6 is.
-static var blind_order: Array[String] = []
-static var blind_index := 0
-## The host's profile for the crew's run ("" = none: this machine's own), and whether it was blind.
+static var local_id := DEFAULT
+## The host's profile for the crew's run ("" = none: this machine's own).
 static var crew_id := ""
-static var crew_blind := false
-## Physics interpolation of this machine's own heroes (F7, --physics-interp).
+## Physics interpolation of this machine's own heroes (--physics-interp, the gym's "Smoothing").
 static var interp := false
-## Times the profile changed this run (F6), for the log.
+## Times the profile changed this run (the gym's picker), for the log.
 static var switches := 0
 static var _booted := false
 
@@ -137,38 +131,20 @@ static func boot(args: PackedStringArray = OS.get_cmdline_user_args()) -> void:
 ## Back to the defaults (tests).
 static func reset() -> void:
 	_booted = true
-	mode = TODAY
-	local_id = TODAY
-	blind_order.clear()
-	blind_index = 0
+	mode = DEFAULT
+	local_id = DEFAULT
 	crew_id = ""
-	crew_blind = false
 	interp = false
 	switches = 0
 
 
-## today | grounded | grounded_anim | shuffle (anything else is today).
-static func set_mode(m: String, seed_value: int = -1) -> void:
-	if m == SHUFFLE:
-		mode = SHUFFLE
-		var rng := RandomNumberGenerator.new()
-		if seed_value >= 0:
-			rng.seed = seed_value
-		else:
-			rng.randomize()
-		blind_order = BLIND.duplicate()
-		for k in range(blind_order.size() - 1, 0, -1):
-			var r := rng.randi_range(0, k)
-			var tmp := blind_order[k]
-			blind_order[k] = blind_order[r]
-			blind_order[r] = tmp
-		blind_index = 0
-		local_id = blind_order[0]
-		print("[move] shuffle: %s" % ", ".join(blind_order.map(func(id: String) -> String: return "feel %d = %s" % [blind_order.find(id) + 1, id])))
-		return
-	mode = m if PROFILES.has(m) else TODAY
-	local_id = mode
-	blind_order.clear()
+## today | grounded | grounded_anim (anything else warns and plays the default).
+static func set_mode(m: String) -> void:
+	if not PROFILES.has(m):
+		push_warning("--move-feel: today, grounded or grounded_anim (got '%s'); playing %s" % [m, DEFAULT])
+		m = DEFAULT
+	mode = m
+	local_id = m
 
 
 ## The profile every hero on this machine plays right now.
@@ -178,20 +154,9 @@ static func active() -> String:
 	return local_id
 
 
-## Blind: the tag must not name the profile.
-static func blind() -> bool:
-	if crew_id != "" and Net.crewed():
-		return crew_blind
-	return mode == SHUFFLE
-
-
-## What the tag shows: the profile's name, or "feel N" when blind.
+## What the dev tag shows: the profile's name.
 static func label() -> String:
-	if not blind():
-		return active()
-	if crew_id != "" and Net.crewed():
-		return "feel (host's)"
-	return "feel %d" % (blind_index + 1)
+	return active()
 
 
 ## A key of the active profile (OFF's value when the profile does not set it).
@@ -208,28 +173,21 @@ static func num(key: String) -> float:
 	return float(value(key))
 
 
-## F6: the next profile. False (nothing changes) in a crew: the host's profile is everyone's.
-static func cycle() -> bool:
-	if Net.crewed():
+## The gym's picker: play `id` from now on. False (nothing changes) for an unknown id, or in a crew, where the host's
+## profile is everyone's.
+static func pick(id: String) -> bool:
+	if Net.crewed() or not PROFILES.has(id):
 		return false
-	if mode == SHUFFLE and not blind_order.is_empty():
-		blind_index = (blind_index + 1) % blind_order.size()
-		local_id = blind_order[blind_index]
-	else:
-		local_id = ORDER[(ORDER.find(local_id) + 1) % ORDER.size()]
-		mode = local_id
-	switches += 1
+	if id != local_id:
+		switches += 1
+	mode = id
+	local_id = id
 	return true
-
-
-## F7.
-static func toggle_interp() -> void:
-	interp = not interp
 
 
 ## The host: what goes out with the job (crew.job).
 static func crew_data() -> Dictionary:
-	return {"id": local_id, "blind": mode == SHUFFLE}
+	return {"id": local_id}
 
 
 ## A client (or a late joiner): the host's profile for this run.
@@ -238,4 +196,3 @@ static func apply_crew(job: Dictionary) -> void:
 	if d == null or not PROFILES.has(str(d.get("id", ""))):
 		return
 	crew_id = str(d["id"])
-	crew_blind = bool(d.get("blind", false))

@@ -1,6 +1,6 @@
 extends NetGameTest
 ## `grounded_anim` in a crew (MoveFeel, HeroFeel; docs/design/animation-research.md "As built"): two processes, `off` and
-## `coast`, on the movement lab. The host plays grounded_anim, the client's own flag says today:
+## `coast`, on the movement lab. The host plays grounded_anim (the default: no flag), the client's own flag says today:
 ##   - the client plays the host's profile (it rides the job), so both screens agree on the lean, the strike and the hit areas;
 ##   - each screen leans the other's puppet from its shown motion (HeroFeel on a puppet) with nothing new on the wire (the
 ##     snapshots keep their size);
@@ -13,8 +13,7 @@ const WALK := 5.0
 
 
 func run_host() -> void:
-	MoveFeel.reset()
-	MoveFeel.set_mode(MoveFeel.GROUNDED_ANIM)
+	MoveFeel.reset()   # (no flag: grounded_anim, the default, rides the job)
 	if not await enter_floor(SEED, 1, {"move_lab": true}):
 		MoveFeel.reset()
 		return
@@ -45,7 +44,8 @@ func run_host() -> void:
 
 
 func run_client() -> void:
-	MoveFeel.reset()   # (its own flag: today)
+	MoveFeel.reset()
+	MoveFeel.set_mode(MoveFeel.TODAY)   # (its own flag: today)
 	if not await enter_floor(SEED, 1, {"move_lab": true}):
 		return
 	if not await wait_sync():

@@ -1,12 +1,13 @@
 class_name MoveLog
 extends Node
 ## Passive movement numbers per profile (docs/design/movement-research.md §5.2 and "As built"; the user's data rule: no
-## questions mid-play). One row to user://move_lab.csv for every stretch played on one profile (written when F6 / F7
-## switches, and when the scene ends) and, in the lab (--move-lab), one per lap. Test runs don't write.
+## questions mid-play). One row to user://move_lab.csv for every stretch played on one profile (written when the gym's
+## experiments switch the profile or the smoothing, and when the scene ends) and, in the lab (--move-lab), one per lap.
+## Test runs don't write.
 ##
 ## Columns: time (wall clock), session (one id per run of the game), scene (lab | floor | arena), mode (today | grounded |
-## shuffle), label (what the tag showed: the name, or "feel N" when blind), profile (the real one, so a blind run can be
-## read afterwards), interp (on | off), event (period | lap), seconds, distance (units walked), laps, lap_s (this lap, or
+## grounded_anim), label (what the tag showed; the profile's name since the blind shuffle went, 2026-10-23), profile (the
+## one played), interp (on | off), event (period | lap), seconds, distance (units walked), laps, lap_s (this lap, or
 ## the best lap of the period), hits (taken), damage (taken), edge_stops (stopped walking at a pit's or lava's edge),
 ## starts, stops, reversals, refresh_hz (the monitor's), fps (the average frame rate over the stretch).
 
@@ -49,7 +50,7 @@ func _exit_tree() -> void:
 	_row("period", -1.0)
 
 
-## The profile or the interpolation changed (F6 / F7): close the stretch and start the next.
+## The profile or the interpolation changed (the gym's experiments): close the stretch and start the next.
 func switched() -> void:
 	_row("period", -1.0)
 	_begin()

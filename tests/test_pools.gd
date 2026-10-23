@@ -496,7 +496,11 @@ func _check_ai() -> void:
 		await get_tree().physics_frame
 	check(m.water_at(Vector3(c.x, 0, c.y)), "the pool lies between the two sides")
 	check(GameWorld.flat_distance(leader.global_position, Vector3(side_b.x, 0, side_b.y)) < 0.5, "the leader waded across")
-	check(GameWorld.flat_distance(ally.global_position, leader.global_position) < 4.5, "the ally followed the leader across (%.1f)" % GameWorld.flat_distance(ally.global_position, leader.global_position))
+	# (its formation slot is about 4.5 from the leader, snapped to dry floor, and the ally settles within SLOT_REACHED of it:
+	# 4.8 from the leader under grounded_anim, the default; under 4.5 under today)
+	var ally_flat := Vector2(ally.global_position.x, ally.global_position.z)
+	check((ally_flat - c).dot(nrm) < 0.0, "the ally crossed to the leader's side of the pool")
+	check(GameWorld.flat_distance(ally.global_position, leader.global_position) < 5.5, "the ally followed the leader across (%.1f)" % GameWorld.flat_distance(ally.global_position, leader.global_position))
 	check(not m.water_at(ally.global_position), "... and out of the water again")
 	print("pools: the ally %s on its way across" % ("waded" if waded else "walked round the pool"))
 	leader.queue_free()

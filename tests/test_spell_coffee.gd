@@ -147,7 +147,7 @@ func _speed_and_attack_rate() -> void:
 	var d0 := _walk(base, 1.0)
 	var d1 := _walk(hasted, 1.0)
 	var d2 := _walk(slowed, 1.0)
-	near(d0, base.move_speed, 0.05, "a normal hero walks %.1f in a second" % d0)
+	near(d0, base.move_speed, 0.15, "a normal hero walks %.1f in a second (the default profile's start envelope costs about 0.1)" % d0)
 	near(d1 / d0, 1.6, 0.03, "hasted: +60%% (%.2f)" % (d1 / d0))
 	near(d2 / d0, 0.7, 0.03, "crashed: -30%% (%.2f)" % (d2 / d0))
 	# Wick's draw (the bow, half speed while drawn) is hasted too: the draw time divides by the attack rate.

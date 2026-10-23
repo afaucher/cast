@@ -17,8 +17,9 @@ extends Node
 ##     monsters, clear what the panel put down, a mixed pack, teleports, and the HIT LOG (GymStats: hits, and damage dealt
 ##     and taken per minute)
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
-## Movement profiles work as anywhere (F6 / F7; `--gym --move-feel grounded_anim`). F10 ("Spin speed") cycles Gasket's
-## grounded_anim spin through SpinSweep.DEV_SPEEDS. F11 cycles the cast tell's mode (colour / neutral / off: CastTell).
+##   - the EXPERIMENTS (GymPanel's pickers; the user, 2026-10-23: "lets put experiments in the gym menu instead of adding
+##     keybindings"): the movement profile (MoveFeel: today / grounded / grounded_anim, the default) and the judder
+##     smoothing (MoveFeel.interp, off by default), live. A new A/B goes here, not on a key.
 
 const GAME := preload("res://scripts/app/game.gd")
 const FLAG := "--gym"              ## the command line's flag; the main menu's gym door (the garage's dead H) hands it in too
@@ -91,8 +92,8 @@ func setup(g: Node) -> void:
 		[["infinite", "Infinite", infinite], ["no_cooldowns", "No cooldown", no_cooldowns], ["ai", "AI", ai_on],
 			["god", "God", god], ["areas", "Areas", false]],
 		[["heal", "Heal crew"], ["refill", "Refill spells"], ["clear", "Clear monsters"], ["clear_spawned", "Clear spawned"], ["pack", "Spawn pack"],
-			["reset_log", "Reset log"], ["spin_speed", "Spin speed"]],
-		GOTO)
+			["reset_log", "Reset log"]],
+		GOTO, experiments())
 	panel.spawn_pressed.connect(func(id: String) -> void: spawn(id, ring_point()))
 	panel.hero_pressed.connect(switch_to)
 	panel.slot_picked.connect(set_slot)
@@ -100,6 +101,7 @@ func setup(g: Node) -> void:
 	panel.action_pressed.connect(act)
 	panel.count_picked.connect(func(n: int) -> void: count = n)
 	panel.goto_pressed.connect(go_to)
+	panel.experiment_picked.connect(set_experiment)
 	GameWorld.actor_spawned.connect(_on_spawned)
 	_bind()
 	stage()
@@ -327,29 +329,36 @@ func act(nm: String) -> void:
 			_status("a pack of %d" % made.size())
 		"reset_log":
 			stats.reset()
-		"spin_speed":
-			cycle_spin_speed()
 
 
-## F10 / "Spin speed": Gasket's spin under grounded_anim (SpinSweep) turns at the next of SpinSweep.DEV_SPEEDS, live, so
-## the user can feel them (the user, 2026-10-22: "Rather than render a GIF, can we just test in the gym?"). Dev only.
-func cycle_spin_speed() -> void:
-	var speeds := SpinSweep.DEV_SPEEDS
-	var cur := SpinSweep.turn_frames()
-	SpinSweep.dev_frames = speeds[(speeds.find(cur) + 1) % speeds.size()]
-	var n := SpinSweep.turn_frames()
-	_status("spin: a full turn in %d frames (%.2f s)%s%s" % [n, n / 60.0, "  (the pick)" if n == SpinSweep.TURN_FRAMES else "",
-			"" if MoveFeel.on("strike_first") else "  [needs --move-feel grounded_anim]"])
+## The panel's experiments: [name, label, values, current].
+static func experiments() -> Array:
+	return [["feel", "Movement", MoveFeel.ORDER, MoveFeel.active()],
+		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"]]
 
 
-## F11: the cast tell's mode, colour -> neutral -> off (CastTell, docs/design/cast-armed-fx.md): the panel's status line and
-## the corner dev tag (MoveFeelTag's, as F6) say which.
-func cycle_cast_tell() -> void:
-	CastTell.cycle()
-	_status(CastTell.label())
+## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
+## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
+## log starts a new stretch.
+func set_experiment(nm: String, value: String) -> void:
+	var text := ""
+	match nm:
+		"feel":
+			if not MoveFeel.pick(value):
+				return
+			text = "movement: %s" % MoveFeel.label()
+		"smoothing":
+			MoveFeel.interp = value == "on"
+			text = "smoothing %s" % ("on" if MoveFeel.interp else "off")
+		_:
+			return
+	panel.set_experiment(nm, value)
+	_status(text)
 	var tag := game.get_node_or_null("MoveFeelTag") as MoveFeelTag if game != null else null
 	if tag != null:
-		tag.show_tag(CastTell.label())
+		tag.show_tag(text)
+		if tag.move_log != null:
+			tag.move_log.switched()
 
 
 ## Every hero at full health; a downed one gets up (Hero.become, full: as a joiner arrives).
@@ -448,10 +457,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				set_toggle("god", not god)
 			KEY_F9:
 				panel.visible = not panel.visible
-			KEY_F10:
-				cycle_spin_speed()
-			KEY_F11:
-				cycle_cast_tell()
 			KEY_G:
 				if selected != "":
 					spawn(selected, cursor_point())

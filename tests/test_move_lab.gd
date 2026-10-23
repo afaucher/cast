@@ -2,15 +2,19 @@ extends TestCase
 ## The movement lab's course (MoveLab, `--move-lab`; docs/design/movement-research.md "As built"): the map has what the doc
 ## lists (a slalom, a +1 stair run, a 3-level drop, a +2 ledge, a one-wide bridge over lava, a wading pool, a cut-wall
 ## corridor, a pen with a gate), and a hero walks a whole lap from START to FINISH on foot under each profile (today: the
-## slow +2 climb; grounded: hops, the mantle, falls), never over the lava. Prints each profile's lap time for the doc.
+## slow +2 climb; grounded and grounded_anim, the default: hops, the mantle, falls), never over the lava. Prints each
+## profile's lap time for the doc.
 
 const DT := 1.0 / 60.0
 
 var root: Node3D
 
 
+func _init() -> void:
+	timeout_sec = 120.0   # (game time, set before TestCase starts its timer in _ready: three laps, one per profile)
+
+
 func setup() -> void:
-	timeout_sec = 120.0
 	MoveFeel.reset()
 	root = Node3D.new()
 	add_child(root)
@@ -34,10 +38,10 @@ func setup() -> void:
 	check(plan.rooms.has("room:0"), "one room")
 	check(not plan.van.is_empty(), "the work van parks on the start pad (its arrival holds the crew until the shared start)")
 	var laps := {}
-	for feel: String in [MoveFeel.TODAY, MoveFeel.GROUNDED]:
+	for feel: String in MoveFeel.ORDER:
 		MoveFeel.set_mode(feel)
 		laps[feel] = await _lap()
-	print("[lab] lap START -> FINISH on foot: today %.2f s, grounded %.2f s" % [laps["today"], laps["grounded"]])
+	print("[lab] lap START -> FINISH on foot: today %.2f s, grounded %.2f s, grounded_anim %.2f s" % [laps["today"], laps["grounded"], laps["grounded_anim"]])
 	MoveFeel.reset()
 	finish()
 
@@ -82,9 +86,10 @@ func _lap() -> float:
 	check(not over, "%s: never over the lava or a pit" % MoveFeel.active())
 	check(waded, "%s: waded through the pool" % MoveFeel.active())
 	near(top, (MoveLab.LEVEL + 3) * Hex.LEVEL_HEIGHT, 0.2, "%s: up the stair run to the top" % MoveFeel.active())
-	if MoveFeel.active() == MoveFeel.GROUNDED:
-		check(h._motion.hops >= 3, "grounded: the stair run is hopped (%d hops)" % h._motion.hops)
-		check(h._motion.mantles >= 1, "grounded: the ledge is mantled (%d)" % h._motion.mantles)
-		check(h._motion.landings >= 2, "grounded: the drops are fallen (%d landings)" % h._motion.landings)
+	if MoveFeel.active() != MoveFeel.TODAY:
+		var f := MoveFeel.active()
+		check(h._motion.hops >= 3, "%s: the stair run is hopped (%d hops)" % [f, h._motion.hops])
+		check(h._motion.mantles >= 1, "%s: the ledge is mantled (%d)" % [f, h._motion.mantles])
+		check(h._motion.landings >= 2, "%s: the drops are fallen (%d landings)" % [f, h._motion.landings])
 	world.queue_free()
 	return lap

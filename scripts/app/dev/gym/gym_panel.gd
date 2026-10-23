@@ -2,8 +2,9 @@ class_name GymPanel
 extends CanvasLayer
 ## The test gym's dev panel (`--gym`, docs/design/test-gym.md): a plain Godot panel on the right of the screen (a dev tool,
 ## not one of the game's trade forms), built at runtime from what GymDev hands it: the heroes (HeroKit), the spell slots'
-## pickers, the toggles and actions, the spawn count, a button for every GymSpawns entry (grouped, each group folds), the
-## teleports and the hit log. F9 hides it. It only emits; GymDev does the work.
+## pickers, the toggles and actions, the EXPERIMENTS (a picker per live A/B: the user, 2026-10-23, "lets put experiments in
+## the gym menu instead of adding keybindings"), the spawn count, a button for every GymSpawns entry (grouped, each group
+## folds), the teleports and the hit log. F9 hides it. It only emits; GymDev does the work.
 
 signal spawn_pressed(id: String)
 signal hero_pressed(kit: String)
@@ -12,6 +13,7 @@ signal toggled(name: String, on: bool)
 signal action_pressed(name: String)
 signal count_picked(n: int)
 signal goto_pressed(spot: String)
+signal experiment_picked(name: String, value: String)
 
 const LAYER := 55                  ## over the HUD (10) and the voice panel (50), under the game's screens (60)
 const WIDTH := 380.0
@@ -32,6 +34,7 @@ var _count_buttons := {}          ## n -> Button
 var _spawn_buttons := {}          ## entry id -> Button
 var _slot_options: Array[OptionButton] = []
 var _slot_ids: Array[String] = []  ## the pickers' items after the empty one
+var _experiments := {}            ## name -> [OptionButton, its values]
 var _selected := ""
 
 
@@ -41,8 +44,9 @@ func _init() -> void:
 
 
 ## Build it. `entries`: GymSpawns.entries(); `kits`: the heroes; `spells`: what a slot may hold; `toggles`: [[name, label,
-## on]]; `actions`: [[name, label]]; `spots`: the teleports' names.
-func build(entries: Array[Dictionary], kits: Array[String], spells: Array[String], toggles: Array, actions: Array, spots: Array) -> void:
+## on]]; `actions`: [[name, label]]; `spots`: the teleports' names; `experiments`: [[name, label, values, current]].
+func build(entries: Array[Dictionary], kits: Array[String], spells: Array[String], toggles: Array, actions: Array, spots: Array,
+		experiments: Array = []) -> void:
 	_root = PanelContainer.new()
 	_root.name = "Root"
 	_root.anchor_left = 1.0
@@ -70,7 +74,7 @@ func build(entries: Array[Dictionary], kits: Array[String], spells: Array[String
 	box.add_theme_constant_override("separation", 4)
 	scroll.add_child(box)
 	var title := Label.new()
-	title.text = "TEST GYM   F9 hide  F2 hero  F3 areas  F4 AI  F8 god  F10 spin speed  F11 cast tell\nbutton: spawn at the ring  G / middle-click: at the cursor"
+	title.text = "TEST GYM   F9 hide  F2 hero  F3 areas  F4 AI  F8 god\nbutton: spawn at the ring  G / middle-click: at the cursor"
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
 	box.add_child(title)
 	status_label = Label.new()
@@ -107,6 +111,26 @@ func build(entries: Array[Dictionary], kits: Array[String], spells: Array[String
 	for a: Array in actions:
 		var an := str(a[0])
 		_button(tools, str(a[1]), func() -> void: action_pressed.emit(an))
+	# the experiments: a label and a picker each
+	if not experiments.is_empty():
+		var ex := _grid(box, "experiments", "Experiments", 2)
+		for e: Array in experiments:
+			var en := str(e[0])
+			var values: Array = e[2]
+			var lab := Label.new()
+			lab.text = str(e[1])
+			lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			ex.add_child(lab)
+			var ob := OptionButton.new()
+			ob.name = "Experiment_" + en
+			ob.focus_mode = Control.FOCUS_NONE
+			ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			for v: Variant in values:
+				ob.add_item(str(v))
+			ob.item_selected.connect(func(k: int) -> void: experiment_picked.emit(en, str(values[k])))
+			ex.add_child(ob)
+			_experiments[en] = [ob, values]
+			set_experiment(en, str(e[3]))
 	# the count
 	var counts := _grid(box, "count", "Spawn count", COUNTS.size())
 	var group := ButtonGroup.new()
@@ -209,6 +233,21 @@ func set_selected(id: String) -> void:
 	_selected = id
 	if _spawn_buttons.has(id):
 		(_spawn_buttons[id] as Button).modulate = Color(0.6, 1.0, 0.6)
+
+
+## Show an experiment's value in its picker (no signal).
+func set_experiment(nm: String, value: String) -> void:
+	if not _experiments.has(nm):
+		return
+	var ob: OptionButton = _experiments[nm][0]
+	var k := (_experiments[nm][1] as Array).find(value)
+	if k >= 0 and ob.selected != k:
+		ob.select(k)
+
+
+## The experiment's picker (tests).
+func experiment(nm: String) -> OptionButton:
+	return _experiments[nm][0] if _experiments.has(nm) else null
 
 
 ## Show the hero's slots in the pickers (no signal).
