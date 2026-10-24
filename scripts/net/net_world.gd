@@ -926,6 +926,8 @@ func _show_world(t_r: float, delta: float) -> void:
 		if sh.kind != GATE:
 			var st := sh.interp.sample(t_r)
 			if st != null:
+				var jumped := sh.interp.take_teleport()
+				_session.note_moved(sh.shown if sh.applied else null, st, jumped)   # (the telemetry's snap_m)
 				sh.render_t = t_r
 				sh.shown = st
 				if sh.kind == MONSTER:
@@ -934,7 +936,7 @@ func _show_world(t_r: float, delta: float) -> void:
 					NetWorldCodec.write_runtime(sh.node, st)
 				else:
 					NetWorldCodec.write_employee(sh.node as Employee, st)
-				if sh.interp.take_teleport() or not sh.applied:
+				if jumped or not sh.applied:
 					sh.applied = true
 					sh.node.reset_physics_interpolation()
 		sh.node.call("net_tick", delta)

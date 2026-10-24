@@ -10,6 +10,7 @@ extends NetGameTest
 ##   decides); after a window the host's hits sheet holds a row per player: the host's seat, c1's (filed from c1) and c2's
 ##   (no hits, but minutes on the floor), each with the hits, the monster's kind and hits per minute; the host's session
 ##   totals have all three.
+## - PUPPET CORRECTIONS: the 1 Hz sheet's snap_m is measured on every machine on the floor (filed on the host) and small.
 
 const PEERS := 3
 const SEED := 13
@@ -124,6 +125,26 @@ func run_host() -> void:
 		check(float(zs["floor_s"]) > 0.5, "c2's seat: time on the floor counted with no hits (%.1f s)" % float(zs["floor_s"]))
 		check(float(str(cs["per_min"])) >= 0.0, "hits per minute are computed")
 	print("[M7] hits sheet: %s" % str(seats))
+
+	# 4. The 1 Hz sheet's puppet corrections on a floor: every machine shows puppets (the host: c1's and c2's heroes; a
+	# client: the other heroes and the monsters), and on this link they stay on course.
+	var cols1 := NetTelemetry.COLUMNS
+	var snaps := {}   # from -> [m, ...]
+	await until(func() -> bool:
+		snaps.clear()
+		for r: Array in _sheet_rows(Session.telemetry.path):
+			if r.size() == cols1.size() and str(r[cols1.find("snap_m")]) != "":
+				var who := str(r[cols1.find("from")])
+				if not snaps.has(who):
+					snaps[who] = []
+				(snaps[who] as Array).append(float(str(r[cols1.find("snap_m")])))
+		return [1, c1, c2].all(func(p: int) -> bool: return (snaps.get(str(p), []) as Array).size() >= 3), 6.0)
+	for p in [1, c1, c2]:
+		var list: Array = snaps.get(str(p), [])
+		if check(list.size() >= 2, "peer %d's rows measure puppet corrections on the floor (%d rows)" % [p, list.size()]):
+			list.sort()
+			var med: float = list[int(list.size() / 2.0)]
+			check(med < 0.5, "peer %d's puppets stay on course (median worst-of-second %.2f m, max %.2f m)" % [p, med, list[list.size() - 1]])
 	for p in [c1, c2]:
 		command(p, "end")
 	check(await wait_done(2, 30.0), "both clients are done")

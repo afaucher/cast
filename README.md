@@ -108,7 +108,9 @@ quits (`--shot-after S` to change it); `run.ps1 -ShotDir <dir>` gives each windo
 
 **Network telemetry** is passive: one CSV row a second per machine in `%APPDATA%\Godot\app_userdata\Cast\net\`
 (the host's file also holds every client's rows; `net_casts_*` has every cast and how late it landed on each machine,
-`net_hits_*` the hits per player per minute). Read a gap as "missing", never as zero.
+`net_hits_*` the hits per player per minute). Each second's row also has its worst moments: `silence_ms` (the longest
+time nothing arrived from the other side), `frame_ms` (the longest frame) and `snap_m` (the biggest puppet correction):
+sort by them to find a freeze. Read a gap as "missing", never as zero.
 
 **Play logs** (passive, every real play, never tests), in `%APPDATA%\Godot\app_userdata\Cast\`: `play_log.csv`
 (each contract, each floor's time and how it ended, the money), `combat_log.csv` (first hits, kills, fights, noise,

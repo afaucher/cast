@@ -16,6 +16,15 @@ extends RefCounted
 ## packets that arrived), bytes per second, pending reliable bytes (blank: SteamMultiplayerPeer does not expose
 ## the connection's status), and hits taken (M4: hits this machine's own heroes took in that second). `link` is the
 ## crew's simulated link (M7: the host's Settings > Diagnostics choice, or a dev flag).
+## Three worst-of-the-second columns for spotting a freeze (all measured on this machine over that second):
+##   silence_ms  the longest stretch with nothing received from the other side (the host: its quietest client), including
+##               one still going at the sample. About the sender's rate when all is well: ~35-85 ms on a floor (snapshots),
+##               up to ~500 ms on the board (only pings and rows). A stretch that spans rows shows in each, growing (1517
+##               then 1651 is one 1.65 s stretch). Blank with nobody to hear from.
+##   frame_ms    this machine's longest frame (a hitch here is lag to everyone, and shows up as silence too).
+##   snap_m      the biggest puppet correction: how far a puppet (a hero, or a host-owned actor on a client) was shown off the
+##               course it was on the frame before (NetSession.off_course), in metres; teleports aside. Smooth motion is
+##               centimetres. Blank when no puppet was shown that second.
 ##
 ## Two more sheets (M7), same rules (every machine writes its own, a client's rows are filed on the host under `from`,
 ## reliably this time: they are rare and must not go missing):
@@ -32,7 +41,7 @@ const COLUMNS: Array[String] = [
 	"t", "role", "from", "seat", "crew",
 	"rtt_ms", "rtt_min_ms", "jitter_ms", "clock_fix_ms", "quality",
 	"bytes_out", "bytes_in", "pkts_out", "pkts_in", "events_out", "events_in", "gaps", "stale",
-	"link", "link_held", "link_dropped", "pending_rel", "hits",
+	"link", "link_held", "link_dropped", "pending_rel", "hits", "silence_ms", "frame_ms", "snap_m",
 ]
 const CAST_COLUMNS: Array[String] = [
 	"t", "role", "from", "seat", "kind", "cast", "spell", "power", "source", "label",

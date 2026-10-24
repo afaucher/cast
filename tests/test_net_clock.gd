@@ -9,10 +9,15 @@ extends NetTest
 ## - telemetry CSVs appear for the host and both clients; the host's file holds the clients' rows (under
 ##   `from`), and their RTT matches the link: about 90 ms of simulated round trip under coast (plus a frame
 ##   of polling at each hop), a few ms with no link.
+## - the freeze columns: every row has its longest frame (frame_ms); a client's rows have its longest silence from the host
+##   (silence_ms: about the 0.5 s ping cadence off a floor) and no puppet correction (snap_m blank: no floor). Then c1
+##   freezes for FREEZE_MS (its main thread blocked, as a hitch): c1's own rows show the frame and the silence it caused, and
+##   the host's rows show the silence from c1. The correction's math (NetSession.off_course) is checked here too.
 
 const PEERS := 3
 const SETTLE := 3.0     ## seconds after joining before the clock is judged
 const MEASURE := 1.5    ## seconds of measuring after that
+const FREEZE_MS := 1500
 
 
 func run_host() -> void:
@@ -63,6 +68,57 @@ func run_host() -> void:
 			check(rtt > 85.0 and rtt < 170.0, "client %s: RTT about 90 ms plus jitter under coast (%.1f ms)" % [who, rtt])
 		else:
 			check(rtt < 40.0, "client %s: RTT is small with no link (%.1f ms)" % [who, rtt])
+
+	# The freeze columns, before any freeze.
+	var col_sil := NetTelemetry.COLUMNS.find("silence_ms")
+	var col_frame := NetTelemetry.COLUMNS.find("frame_ms")
+	var col_snap := NetTelemetry.COLUMNS.find("snap_m")
+	var silences := {}   # client -> [ms, ...]
+	var frames_ok := true
+	for k in range(1, rows.size()):
+		var row: PackedStringArray = rows[k]
+		if row.size() != NetTelemetry.COLUMNS.size():
+			continue
+		frames_ok = frames_ok and row[col_frame].is_valid_float() and float(row[col_frame]) > 0.0
+		if row[col_snap] != "":
+			_fail("a row has a puppet correction with no floor up (%s)" % row[col_snap])
+		if row[col_role] == "client":
+			if not silences.has(row[col_from]):
+				silences[row[col_from]] = []
+			(silences[row[col_from]] as Array).append(float(row[col_sil]) if row[col_sil].is_valid_int() else -1.0)
+	check(frames_ok, "every row has this machine's longest frame")
+	eq(silences.size(), 2, "both clients' rows have a silence column")
+	for who: String in silences:
+		var list: Array = silences[who]
+		check(not list.has(-1.0), "client %s: every row measures the silence from the host" % who)
+		var med := _median(list.duplicate())
+		check(med > 0.0 and med < 1000.0, "client %s: its usual silence is about the ping cadence off a floor (median %.0f ms)" % [who, med])
+
+	# The correction's math: a puppet carried on along its velocity is on course; one put 2 m aside snapped 2 m.
+	var a := NetHeroState.new()
+	a.t = 10.0
+	a.pos = Vector3(1.0, 0.0, 1.0)
+	a.vel = Vector2(3.0, 0.0)
+	var b := NetHeroState.new()
+	b.t = 10.5
+	b.pos = Vector3(2.5, 0.4, 1.0)
+	near(NetSession.off_course(a, b), 0.0, 0.001, "on course: carried on at its velocity (height ignored)")
+	b.pos = Vector3(2.5, 0.0, 3.0)
+	near(NetSession.off_course(a, b), 2.0, 0.001, "a 2 m snap off its course")
+
+	# c1 freezes (its main thread blocked): its frame and silence show it, and so does the host's silence from c1.
+	var c1 := _peer_named("c1")
+	var from_freeze := wall()
+	command(c1, "freeze")
+	if check(await wait_reports("froze", 1, 15.0), "c1 froze and reports its rows"):
+		var fr: Dictionary = reported(c1, "froze")
+		check(float(fr["frame_max"]) >= FREEZE_MS * 0.9, "c1's longest frame shows the freeze (%.0f ms)" % float(fr["frame_max"]))
+		check(float(fr["silence_max"]) >= FREEZE_MS * 0.9, "c1's silence from the host shows it (%.0f ms)" % float(fr["silence_max"]))
+		var host_heard := 0.0
+		for row: PackedStringArray in _read_csv(tel.path).slice(1):
+			if row.size() == NetTelemetry.COLUMNS.size() and row[col_role] == "host" and row[col_sil].is_valid_int():
+				host_heard = maxf(host_heard, float(row[col_sil]))
+		check(host_heard >= FREEZE_MS * 0.9, "the host's silence shows c1 going quiet (%.0f ms, %.1f s after the freeze)" % [host_heard, wall() - from_freeze])
 	check(await wait_done(2), "both clients are done")
 	Session.leave()
 
@@ -93,6 +149,29 @@ func run_client() -> void:
 	report("clock", {"max_err_ms": max_err, "backwards_ms": backwards, "samples": Session.clock.samples,
 		"rtt_min_ms": Session.clock.rtt_min_ms, "jitter_ms": Session.clock.jitter_ms,
 		"telemetry": tel != null and FileAccess.file_exists(tel.path) and tel.rows_written >= 2})
+	if index != 1:
+		return
+	var cmd := await wait_command(20.0)
+	if not check(str(cmd.get("cmd", "")) == "freeze", "c1 is told to freeze"):
+		return
+	OS.delay_msec(FREEZE_MS)   # (a hitch: nothing runs, nothing is sent or read)
+	await sleep(2.5)
+	var frame_max := 0.0
+	var silence_max := 0.0
+	var rows := _read_csv(Session.telemetry.path)
+	var cols: PackedStringArray = rows[0]
+	for row: PackedStringArray in rows.slice(1):
+		if row.size() == cols.size():
+			frame_max = maxf(frame_max, float(row[cols.find("frame_ms")]))
+			silence_max = maxf(silence_max, float(row[cols.find("silence_ms")]))
+	report("froze", {"frame_max": frame_max, "silence_max": silence_max})
+
+
+func _peer_named(n: String) -> int:
+	for p: int in Session.roster:
+		if str(Session.roster[p]["name"]) == n:
+			return p
+	return 0
 
 
 static func _median(values: Array) -> float:

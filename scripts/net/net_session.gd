@@ -43,7 +43,8 @@ extends Node
 ## late-join snapshot) and into an AI's seat (SeatHandover).
 ##
 ## CLOCK: NetClock, pinged over unreliable packets; `host_time()` is the shared clock.
-## TELEMETRY: NetTelemetry, one row a second, clients' rows collected on the host. M7 adds two passive sheets: every cast
+## TELEMETRY: NetTelemetry, one row a second, clients' rows collected on the host (with the second's worst silence from the
+## other side, longest frame and biggest puppet correction: `_heard`, `note_moved`). M7 adds two passive sheets: every cast
 ## (`note_cast`: sent with its voice onset and recognition latency, applied on every machine) and hits taken per player per
 ## minute (`note_hit`, every HITS_WINDOW); a client's rows reach the host as reliable `tele.cast` / `tele.hits` events.
 ##
@@ -162,6 +163,11 @@ var join: NetJoin = null
 var orders: NetOrders = null
 ## Hits this machine's own heroes took since the last telemetry row (the `hits` column, M4).
 var hits_taken := 0
+## The worst of this second, for the next telemetry row: the longest silence that ended (ms), the longest frame (ms) and
+## the biggest puppet correction (m; -1 = no puppet shown).
+var silence_ms := 0.0
+var frame_ms := 0.0
+var snap_m := -1.0
 ## The crew's simulated link (M7): the host decides, every machine applies it to what it receives.
 var link_preset := "off"
 ## Host: take the crew's link from Settings > Diagnostics when the crew opens. Only the game's own Session does (its flags
@@ -544,6 +550,22 @@ func note_hit(a: Node, dealt: float, source: Node) -> void:
 	by[src] = int(by.get(src, 0)) + 1
 
 
+## A puppet was shown at `st` this frame after `prev` (null: its first frame), `jumped` a teleport (NetSnapshot, NetWorld):
+## the telemetry's snap_m.
+func note_moved(prev: NetHeroState, st: NetHeroState, jumped: bool) -> void:
+	if prev == null or jumped:
+		return
+	snap_m = maxf(snap_m, off_course(prev, st))
+
+
+## How far (horizontally, metres) `st` is shown from where `prev` was heading: prev's position carried on at prev's velocity
+## over the time between them. Smooth motion is centimetres; a snap to where the owner says it really is shows here.
+static func off_course(prev: NetHeroState, st: NetHeroState) -> float:
+	var dt := maxf(st.t - prev.t, 0.0)
+	var ahead := prev.pos + Vector3(prev.vel.x * dt, 0.0, prev.vel.y * dt)
+	return Vector2(st.pos.x - ahead.x, st.pos.z - ahead.z).length()
+
+
 func _row(columns: Array[String], fields: Dictionary) -> Array:
 	var e := local_entry()
 	var base := {"t": "%.3f" % host_time(), "role": "host" if hosting else "client", "from": local_id(), "seat": int(e.get("seat", 0))}
@@ -876,7 +898,7 @@ func _on_invite(lobby_id: int, friend_id: int = 0) -> void:
 func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 	if state == State.OFFLINE:
 		return
-	_last_heard[from] = Time.get_ticks_usec()
+	_heard(from)
 	if kind.begins_with("sys."):
 		if hosting:
 			_host_sys(from, kind, data)
@@ -1034,7 +1056,7 @@ func _set_roster(entries: Array) -> void:
 func _on_packet(from: int, type: int, seq: int, stamp_ms: int, payload: PackedByteArray) -> void:
 	if state == State.OFFLINE:
 		return
-	_last_heard[from] = Time.get_ticks_usec()
+	_heard(from)
 	if state != State.ONLINE:
 		return
 	match type:
@@ -1072,6 +1094,7 @@ func _process(_delta: float) -> void:
 	if state == State.ONLINE:
 		if _last_frame_usec > 0:
 			_count_exposure(float(now - _last_frame_usec) / 1e6)
+			frame_ms = maxf(frame_ms, float(now - _last_frame_usec) / 1000.0)
 		_last_frame_usec = now
 		if _next_hits_usec == 0:
 			_next_hits_usec = now + int(hits_window * 1e6)
@@ -1122,6 +1145,15 @@ func _host_watch(now: int) -> void:
 
 # --- Telemetry ---------------------------------------------------------------------------------------
 
+## A message from `from` arrived: the silence it ends (the telemetry's silence_ms, from a crew member only), then the time it
+## was heard (the HOST_SILENCE / CLIENT_SILENCE watch).
+func _heard(from: int) -> void:
+	var now := Time.get_ticks_usec()
+	if state == State.ONLINE and _last_heard.has(from) and roster.has(from) and from != local_id():
+		silence_ms = maxf(silence_ms, float(now - int(_last_heard[from])) / 1000.0)
+	_last_heard[from] = now
+
+
 func _open_telemetry() -> void:
 	if not telemetry_enabled:
 		return
@@ -1130,6 +1162,9 @@ func _open_telemetry() -> void:
 	if not telemetry.open("host" if hosting else "client"):
 		telemetry = null
 	_next_row_usec = Time.get_ticks_usec() + 1000000
+	silence_ms = 0.0
+	frame_ms = 0.0
+	snap_m = -1.0
 
 
 func _telemetry_row() -> void:
@@ -1137,6 +1172,13 @@ func _telemetry_row() -> void:
 	var arrived := int(c["packets_in"])
 	var expected := arrived + maxi(int(c["gaps"]) - int(c["stale"]), 0)
 	var e := local_entry()
+	# The silence: the longest that ended this second, or one still going (the host: its quietest client).
+	var now := Time.get_ticks_usec()
+	var others := 0
+	for p: int in roster:
+		if p != local_id() and _last_heard.has(p):
+			others += 1
+			silence_ms = maxf(silence_ms, float(now - int(_last_heard[p])) / 1000.0)
 	var row: Array = [
 		"%.3f" % host_time(), "host" if hosting else "client", local_id(), int(e.get("seat", 0)), roster.size(),
 		"" if hosting else "%.1f" % clock.rtt_ms, "" if hosting else "%.1f" % clock.rtt_min_ms,
@@ -1144,8 +1186,12 @@ func _telemetry_row() -> void:
 		"%.3f" % (float(arrived) / float(expected) if expected > 0 else 1.0),
 		c["bytes_out"], c["bytes_in"], c["packets_out"], c["packets_in"], c["events_out"], c["events_in"], c["gaps"], c["stale"],
 		link_preset, wire.link.held(), wire.link.dropped, "", hits_taken,
+		"%d" % roundi(silence_ms) if others > 0 else "", "%.1f" % frame_ms, "%.2f" % snap_m if snap_m >= 0.0 else "",
 	]
 	hits_taken = 0
+	silence_ms = 0.0
+	frame_ms = 0.0
+	snap_m = -1.0
 	telemetry.write_row(row)
 	if not hosting:
 		wire.send_packet(1, NetWire.T_ROW, var_to_bytes(row))
