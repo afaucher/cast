@@ -8,7 +8,8 @@ extends TestCase
 ##   2. the spawn list covers every registry entry (a new monster kind, prop, style, spell or decor gets its button)
 ##   3. in the real game (GameDev with --gym, under the grounded_anim profile): the panel is up, one of each entry spawns and the world runs on (god mode on),
 ##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the experiments' pickers
-##      switch the movement profile, the smoothing, the monsters' walk (old / new) and their war cries (off / A / B / C),
+##      switch the movement profile, the smoothing, the monsters' walk (old / new), their war cries (off / A / B / C) and
+##      the elbow study's arms (old / ik),
 ##      the hallway packs come down the arena-lobby hall at the player, the War cry button makes the nearest monster of each
 ##      kind yell once, the slot picker and
 ##      infinite components keep a spell castable, and the player switches through every hero with the allies filling the rest
@@ -360,6 +361,35 @@ func _check_game() -> void:
 		gym.set_experiment("war_cries", "A")
 		eq(Monster.war_cry, "A", "back to A")
 		eq(cry_pick.get_item_text(cry_pick.selected), "A", "the picker follows")
+	# the elbow study (docs/design/animation-research.md, "Elbow IK study"): old / ik, live; the skeletons and Gasket rebuild
+	# their arms on their next pose
+	var elbow_pick := gym.panel.experiment("elbows")
+	if check(elbow_pick != null, "the panel has the Elbows picker"):
+		eq(elbow_pick.get_item_text(elbow_pick.selected), "old", "the Elbows picker shows old (the default)")
+		check(not LowPolyModel.elbow_ik, "today's arms by default")
+		var grunt: GruntModel = null
+		for m: Monster in mix:
+			if m.model is GruntModel:
+				grunt = m.model as GruntModel
+		var gasket: GasketModel = null
+		for h: Hero in gym.heroes():
+			if h.visual_override is GasketModel:
+				gasket = h.visual_override as GasketModel
+		elbow_pick.item_selected.emit(1)
+		check(LowPolyModel.elbow_ik, "picking ik gives the IK arms")
+		await frames(3)
+		if check(grunt != null, "a skeleton in the mix"):
+			check(grunt.has_part("fore_r") and grunt.get_part("weapon").get_parent() == grunt.get_part("fore_r"),
+					"a skeleton's arms split at the elbow, the sword in the forearm's fist")
+		if gasket != null:
+			check(gasket.has_part("fore_l") and gasket.has_part("fore_r"), "Gasket's arms split at the elbow")
+		gym.set_experiment("elbows", "old")
+		check(not LowPolyModel.elbow_ik, "and old again")
+		eq(elbow_pick.get_item_text(elbow_pick.selected), "old", "the picker follows")
+		await frames(3)
+		if grunt != null:
+			check(not grunt.has_part("fore_r") and grunt.get_part("weapon").get_parent() == grunt.get_part("arm_r"),
+					"the skeleton's one-piece arms are back")
 	var before := {}
 	for m: Monster in mix:
 		before[m] = m.cries
@@ -400,4 +430,5 @@ func _check_game() -> void:
 	MoveFeel.reset()
 	MonsterModel.active_walk = true
 	Monster.war_cry = "A"
+	LowPolyModel.elbow_ik = false
 

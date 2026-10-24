@@ -28,6 +28,15 @@ var hold_offset := Vector3.ZERO            ## prop position relative to the host
 
 var cycle_k := 1.0                         ## the idle / walk clock's rate (a monster's walk unsync)
 
+## THE ELBOW STUDY (docs/design/animation-research.md, "Elbow IK study (2026-10-24)"): models with split arms (Gasket, the
+## grunt) can pose them with TwoBoneIK, an upper arm and a forearm meeting at a bending elbow, instead of today's one-piece
+## arms. A look: every machine poses its own copy. false (the default) keeps today's arms; the gym's "Elbows" picker
+## (GymDev's Experiments) switches it, live (a model rebuilds its arms on its next pose).
+static var elbow_ik := false
+## -1 follows elbow_ik; 0 today's arms, 1 the IK arms whatever the switch says (the elbow lab shows both side by side).
+var elbow_pick := -1
+var _elbows_on := false                    ## the arms are built split (upper arm + forearm) right now
+
 var _mat: ShaderMaterial
 var _t := 0.0
 var _last_pos := Vector3.ZERO
@@ -143,6 +152,64 @@ func _kick_arm(key: String, windup: float, punch: float, t_wind: float, t_hit: f
 	tw.tween_method(func(v: float) -> void: _arm_kick[key] = v, 0.0, windup, t_wind).set_trans(Tween.TRANS_SINE)
 	tw.tween_method(func(v: float) -> void: _arm_kick[key] = v, windup, punch, t_hit).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_method(func(v: float) -> void: _arm_kick[key] = v, punch, 0.0, t_back).set_trans(Tween.TRANS_BACK)
+
+
+# ------------------------------------------------------------------ elbows (the IK study)
+
+## True when this model's arms should be the IK arms now (elbow_pick, else the elbow_ik switch).
+func elbows_wanted() -> bool:
+	return elbow_ik if elbow_pick < 0 else elbow_pick == 1
+
+
+## True while the arms are built split. A model with IK arms calls _sync_elbows() first thing in its apply_idle.
+func elbows_on() -> bool:
+	return _elbows_on
+
+
+## Rebuild the arms when the switch changed since the last pose (models with IK arms override _build_arms). Returns
+## whether the IK arms are on.
+func _sync_elbows() -> bool:
+	var want := elbows_wanted()
+	if want != _elbows_on:
+		_elbows_on = want
+		_build_arms(want)
+	return want
+
+
+## Subclass: (re)build the arm parts, split into "arm_*" (the upper arm) and "fore_*" (the forearm, under it) when `split`,
+## else today's one-piece "arm_*"; move whatever hung on the old arm (a weapon, the held item) onto the new one.
+func _build_arms(_split: bool) -> void:
+	pass
+
+
+## Unregister and free part `part_name` (if built), with whatever still hangs on it: move what you keep off it first.
+func _drop_part(part_name: String) -> void:
+	var p := parts.get(part_name) as Node3D
+	if p == null:
+		return
+	parts.erase(part_name)
+	p.get_parent().remove_child(p)
+	p.queue_free()
+
+
+## Lay an IK arm: `upper` hangs from its pivot (the shoulder, in its parent's space) and `fore` hangs under it from the
+## elbow, both soups down their local -Y, upper l1 and fore l2 long. The hand reaches `hand` (the upper's parent space),
+## the elbow bent toward `pole` (TwoBoneIK.solve). A hand out of reach stretches both bones evenly up to `max_stretch`
+## (1.0: none, the hand stops short). Returns where the hand ends up.
+func pose_ik_arm(upper: Node3D, fore: Node3D, hand: Vector3, l1: float, l2: float, pole: Vector3, max_stretch: float = 1.0) -> Vector3:
+	var sh := upper.position
+	var k := clampf(sh.distance_to(hand) / ((l1 + l2) * TwoBoneIK.REACH), 1.0, maxf(max_stretch, 1.0))
+	var j := TwoBoneIK.solve(sh, hand, l1 * k, l2 * k, pole)
+	var ub := TwoBoneIK.bone_basis(sh, j[0], pole)
+	var fb := TwoBoneIK.bone_basis(j[0], j[1], pole)
+	fore.position = Vector3(0.0, -l1, 0.0)
+	if k > 1.0:
+		upper.basis = Basis(ub.x, ub.y * k, ub.z)   # (stretched down its own length; the forearm undoes it, then stretches)
+		fore.basis = upper.basis.inverse() * Basis(fb.x, fb.y * k, fb.z)
+	else:
+		upper.basis = ub
+		fore.basis = ub.transposed() * fb
+	return j[1]
 
 
 ## Downed: greyed out; the hero lies the whole model down.

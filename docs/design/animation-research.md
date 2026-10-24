@@ -514,6 +514,158 @@ the areas against today's wedge target by target, today and grounded untouched, 
 4. Squash at 6-7% reads at the close zoom; at the game zoom only the lean reads. More (up to the 16-20% limits)?
 5. Should hit-stop scale with the blow (Gasket longer, Wick shorter) and skip in crowd fights (Sakurai's caution)?
 
+### 7.2 Elbow IK study (2026-10-24)
+The user: **"Looking to see if an IK solver for elbows would make animations look better."** This section reports a
+prototype you can try in the gym, what it costs, and a recommendation. It is not adopted: today's arms stay the default.
+
+#### What I found
+No arm in the game bends at the elbow. Every arm is one rigid mesh. It is placed in one of two ways:
+
+| Model | Arm | How the hand is placed | How far today's arm stretches (sleeve length / rest) |
+|---|---|---|---|
+| Wick | one piece (an elbow patch is painted on) | **target**: both sleeves aim at a point (bow grip, string, wand) | bow draw: drawing arm **0.56**, bow arm **1.30** (at the clamp); bash 1.16 |
+| Gasket | one piece | right: **target** (the wrench's grip); left: rotation | right: cast **0.38**, wind-up **0.49**, old slam kick **1.59**, spin 0.70, smash top 0.88, bottom 1.14 |
+| Rebar | one piece (two boulders: upper arm, forearm); glove under it | rotation | none (the arms are rigid; the slam, the bowl and the punch swing them straight) |
+| Grunt | one piece (bones and an elbow knob, a slight bend built in) | rotation | none (always straight, whatever the pose) |
+| Archer, Pavise, Goblin | one piece | **target** (`aim_limb`: bow, crossbow, hands) | 0.76-1.24 across rest, wind-up, strike and cry |
+| Brute | one piece, fist under it | rotation | none |
+| Swarmer, Water Boy, Goo Imp | short stubs | rotation | none |
+| Gator | **already two pieces** per leg, its elbow placed by hand (`_leg_points`) | target | none |
+
+The stretch is measured: each sleeve's `scale.y` in each pose (`pose_preview`, or the kick that drives the pose). A
+sleeve under 1 is squashed (the hand came in toward the shoulder and the arm got shorter). Over 1, the arm got longer.
+
+So there are two different problems:
+- **Target-placed arms squash and stretch.** A hand brought up by the shoulder (Gasket's cast, Wick's draw) gives a
+  stubby arm at 40-56 % of its length. A hand pushed far out gives a rubber arm. An elbow fixes the first: the arm keeps
+  its length and folds.
+- **Rotation-placed arms are always straight.** A sword carried, cocked or raised, a fist pumped or a walking arm all
+  look like a stick pivoting at the shoulder. An elbow makes these read as gestures. The animator also has to say where
+  the hand goes, because a rotation alone does not say how much to bend.
+
+#### What the prototype does
+- **`TwoBoneIK`** (`scripts/art/lowpoly/two_bone_ik.gd`, 65 lines, pure functions). `solve(root, target, l1, l2, pole)`
+  uses the law of cosines and returns the elbow and the hand.
+  - A target out of reach is clamped onto the line toward it, at 99.9 % of the chain's length, so the elbow never flips.
+  - A target too close is clamped out to the folded chain.
+  - The pole is a direction. The elbow sticks out along the pole's part that is across the shoulder-to-hand line.
+  - `bone_basis` lays a part that hangs down its -Y along a bone, with no twist.
+  - `arm_pole(side, dir)` is the bend hint for an arm: the elbow goes out to the side, back while the hand is low, and
+    forward once the hand is up by the head (a raised sword or wrench).
+  - `flexed(shoulder, rotation, hand, flex)` turns a rotation-posed arm into a hand target: the hand the rotation gives,
+    drawn in toward the shoulder by a flex per pose.
+- **`LowPolyModel.pose_ik_arm(upper, fore, hand, l1, l2, pole, max_stretch)`** lays the two parts. A hand out of reach
+  can stretch both bones evenly up to `max_stretch`.
+  - `LowPolyModel.elbow_ik` is the switch, false by default.
+  - A model rebuilds its arms on its next pose when the switch changes (`_sync_elbows` / `_build_arms`).
+  - `elbow_pick` lets one model ignore the switch, so the lab can show both kinds side by side.
+- **Gasket**: each arm is split at the elbow into `arm_*` (the upper arm) and `fore_*` (the forearm).
+  - The parts are in the same faceted style and material. A lump fills the elbow: the coat sleeve on the right, a bare
+    elbow on the left above the bandaged forearm.
+  - Her right fist goes to the wrench's grip, the same target the old sleeve aimed at. It can stretch to 1.15 for the
+    smash's bottom. Past that, for example the old `today` slam kick at 1.59, the wrench comes in to the fist.
+  - Her left arm uses its old rotations as a target, drawn in 2 %, and 15 % at the walk's forward swing.
+  - The held component moves to the left forearm's fist.
+- **The grunt**: the same split. The sword rides in the forearm's fist with exactly today's blade angle in every pose.
+  The flex per pose is:
+  - carried: 0.30, the sword held in close with a bent elbow;
+  - wind-up: 0.40, cocked behind the skull;
+  - strike: 0.02, flung out;
+  - war cry: 0.06 for the sword arm and 0.30 for the free fist, which is pumped.
+- **Networking: none.** It is a look. Every machine poses its own copy from the same poses as today. The models are
+  cosmetic (`scripts/art/`) and declare no `net_fields`. The only new state is the static switch and two plain vars per
+  model (`elbow_pick`, `_elbows_on`).
+
+#### How to try it
+- **The gym**: Experiments, then **Elbows: old / ik**, live. Gasket (the panel's hero buttons) and every skeleton rebuild
+  their arms on the next frame. Watch a skeleton walk, wind up and yell (the War cry button), and cast with Gasket.
+- **The lab** (stills, not adopted):
+  `godot --path . --resolution 1920x1080 -- --scene res://scenes/elbow_lab.tscn --shot <abs.png>`.
+  Left to right: Gasket today, Gasket IK, the grunt today, the grunt IK.
+  - Poses: rest, walk, wind-up, strike, overhead (Gasket's smash top, the grunt's war cry) and cast. The grunt has no cast,
+    so its cry repeats.
+  - Each pose comes at the game camera (`_game.png`, a x3 crop) and at the same angle zoomed (`_close.png`).
+  - `--bench N` prints the cost numbers below.
+
+#### The cost
+- **Per frame**, timed with `elbow_lab --bench 200` (headless, 200 models in the tree, 120 frames, two runs):
+
+  | Model | Today | IK | IK adds |
+  |---|---|---|---|
+  | Gasket | 5.4-7.0 µs | 17-18 µs | 11-12 µs |
+  | Grunt | 6.9-7.0 µs | 19-22 µs | 12-16 µs |
+
+  Both arms are solved in GDScript. A floor with 30 skeletons pays about 0.4-0.5 ms a frame. It is cheap enough, but
+  not free.
+- **Drawing**: two more parts per model, so four more draw calls (each part draws its colour and its outline). Gasket
+  goes from 11 to 13 parts and the grunt from 9 to 11. Both stay inside their triangle and node budgets.
+- **Code per model**:
+
+  | Change | Size |
+  |---|---|
+  | Shared code (`TwoBoneIK` and the `LowPolyModel` helpers) | 65 + 67 lines, written once |
+  | Gasket | +78 / -7 lines |
+  | Grunt | +70 / -5 lines |
+  | Each later model | 60-80 lines |
+
+  For each later model, the 60-80 lines cover:
+  - two soups (the upper arm and the forearm, split from the old arm soup);
+  - `_build_arms` (rebuild and move the weapon or the held item);
+  - the IK branch at the end of `apply_idle`;
+  - for a rotation-posed arm, a flex per pose to tune by eye.
+
+  Models whose hands are already targets (Wick, the archer, the pavise, the goblin) are the cheapest: their
+  `aim_limb` / `_aim_arm` call becomes `pose_ik_arm`.
+
+#### What improves, and what does not (`test_logs/elbow_ik/`, stills; no GIFs)
+- **Clearly better:**
+  - **The grunt's war cry**: the free fist is pumped with a bent elbow instead of a stick held up. It reads at the game
+    zoom.
+  - **The grunt's wind-up**: the sword is cocked behind the skull with the elbow up and out, instead of a straight arm
+    raised. It reads at the game zoom.
+  - **The grunt's walk**: the arms swing with a bend at the forward swing, which suits the rattle-march.
+  - **Gasket's cast** (0.38 today) **and the wrench wind-up** (0.49): the sleeve no longer shrinks into a stub. Her elbow
+    folds out to the right.
+- **Little or no difference:**
+  - Gasket's smash, top and bottom. The fist is near full reach, so the arm is almost straight either way.
+  - Gasket's walk and rest. Her stubby arms are hidden behind the beard and coat from the steep camera.
+  - Every strike. A strike is a flung-out arm, which is straight either way.
+- **Worse, or a trade-off:**
+  - A pose authored with a rubber arm (the `today` profile's slam kick puts the fist 1.6 arm-lengths out) can't be
+    reached. The wrench comes in by 0.27, so that silhouette is a little shorter. The default `grounded_anim` smash is
+    within reach.
+  - Each part has its own outline, so the elbow joint shows an ink line where the two parts meet. At the game zoom it is
+    one or two pixels.
+- **At the game camera** (ortho 24, pitch -56°, a hero 55-75 px tall), the elbow reads on long, thin limbs such as the
+  skeleton's bones. On short, chunky ones (Gasket's sleeves, Rebar's boulders) it hardly reads at all.
+
+#### Recommendation: adopt for some models, not everywhere
+- **Adopt** where a hand is already placed by a target and the sleeve squashes today, and on thin-limbed monsters:
+  - **Wick** first. His bow draw squashes the drawing arm to 0.56 and holds the bow arm at the 1.30 clamp. A draw is the
+    pose an elbow is made for, and his limbs are thin.
+  - Then the **grunt** (as built), the **archer** (also a draw), the **pavise** and the **goblin**.
+- **Gasket**: optional. It only fixes the cast and the wind-up stub, and it barely reads through the beard.
+- **Not worth it**:
+  - **Rebar**: straight-armed slams and punches, boulder arms, the glove hides the wrist.
+  - The **brute**.
+  - The stub-armed small monsters.
+  - The **gator**: it already has a hand-placed elbow. `TwoBoneIK.solve` could replace that code, but nothing would look
+    different.
+- **If adopted**, do it per model, behind this switch, and settle each in the gym before the switch goes. Before adopting
+  it widely, cut the cost: solve only on-screen models, or solve once per frame for a pose that has not changed.
+
+#### Tests
+- `test_elbow_ik`:
+  - The solver reaches 200 seeded reachable targets exactly, with both bones at their lengths.
+  - It clamps a far target onto the line and a near one out to the folded chain, never a NaN.
+  - The elbow follows the pole and flips with it.
+  - The bone basis is a rotation along the bone.
+  - Gasket and the grunt build and pose with the IK arms: the fist meets the grip, the blade keeps today's angle, the
+    elbow bends where it should, and both stay inside their budgets.
+  - Switching back gives today's arms with the wrench where it was.
+- `test_gym` covers the Elbows picker live, both ways, on a skeleton of the mix and on Gasket.
+- The models' own tests pass unchanged with the default (old) arms.
+
 ---
 
 ## 8. Sources

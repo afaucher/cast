@@ -73,6 +73,19 @@ const SMASH_ARM_L := Vector3(-0.45, 0.0, deg_to_rad(-26.0))   ## the left arm's 
 ## undoes any stretch of the sleeve.
 const HOLD_GRIP := Vector3(0.0, -0.86, -0.09)
 const HOLD_SCALE := 0.9
+## THE IK ARMS (the elbow study, LowPolyModel.elbow_ik; off by default): each arm split at the elbow into "arm_*" (the
+## upper arm, from the shoulder) and "fore_*" (the forearm, under it), laid by TwoBoneIK. The right fist is the wrench's
+## grip, where the old sleeve was aimed, so the right arm reaches it with a bent elbow instead of a stretched sleeve (up to
+## R_STRETCH when the smash puts the fist out of reach; past that the wrench comes in to the fist). The left arm keeps its old rotations as a hand target, drawn in a
+## little (L_FLEX, more on the walk's forward swing) so the elbow is never locked.
+const R_L1 := 0.32                  ## right: shoulder to elbow ...
+const R_L2 := 0.30                  ## ... and elbow to fist (ARM_LEN in all)
+const R_STRETCH := 1.15
+const L_L1 := 0.42                  ## left: shoulder to elbow (the rolled-up sleeve's end) ...
+const L_L2 := 0.34                  ## ... and elbow to the bare fist (0.76 in all)
+const L_FIST := Vector3(0.0, -0.76, 0.0)
+const L_FLEX := 0.02
+const IK_HOLD_GRIP := Vector3(0.0, -0.44, -0.09)   ## HOLD_GRIP in the forearm's space (the fist at (0, -0.34, 0))
 
 var _body_base_y := BODY_Y
 
@@ -98,9 +111,8 @@ func _build() -> void:
 	_add_part("belt", _belt_soup(), body, Vector3(0, 0.05, 0))
 	for s in [-1, 1]:
 		var side := "l" if s < 0 else "r"
-		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z))
-		arm.rotation = Vector3(0.10, 0.0, deg_to_rad(10.0 * s))   # hangs at her sides, splayed clear of the belly
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(0.22 * s, HIP_Y, 0.0))
+	_build_arms(false)
 	var weapon := _add_part("weapon", _wrench_soup(), body, WEAPON_REST_POS)
 	weapon.rotation = WEAPON_REST_ROT
 	apply_idle(0.0)
@@ -202,6 +214,56 @@ func _arm_soup(side: int) -> LowPoly.Soup:
 	return s
 
 
+## The arms: today's one-piece sleeves, or (`split`, the IK arms) an upper arm and a forearm each. A held item moves over.
+func _build_arms(split: bool) -> void:
+	var body := parts["body"] as Node3D
+	var keep := hold_anchor
+	if keep != null:
+		keep.get_parent().remove_child(keep)
+	for side: String in ["l", "r"]:
+		_drop_part("fore_" + side)
+		_drop_part("arm_" + side)
+	for s: int in [-1, 1]:
+		var side := "l" if s < 0 else "r"
+		var at := Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z)
+		if split:
+			var upper := _add_part("arm_" + side, _upper_arm_soup(s), body, at)
+			_add_part("fore_" + side, _forearm_soup(s), upper, Vector3(0.0, -(L_L1 if s < 0 else R_L1), 0.0))
+		else:
+			var arm := _add_part("arm_" + side, _arm_soup(s), body, at)
+			arm.rotation = Vector3(0.10, 0.0, deg_to_rad(10.0 * s))   # hangs at her sides, splayed clear of the belly
+	hold_offset = IK_HOLD_GRIP if split else HOLD_GRIP
+	if keep != null:
+		_hold_host().add_child(keep)
+		keep.position = hold_offset
+
+
+## The IK arms' upper arm: the shoulder pad and the sleeve down to the elbow, a lump at the elbow so the bend has no gap.
+func _upper_arm_soup(side: int) -> LowPoly.Soup:
+	var s := LowPoly.boulder(Vector3(0.19, 0.16, 0.19), 0, 0.18, COAT_LIGHT, 101 + side, 0.08)   # shoulder pad
+	if side < 0:
+		s.merge(LowPoly.frustum(Vector2(0.34, 0.34), Vector2(0.28, 0.28), 0.40, COAT, 103 + side, 0.03, 2, Vector2.ZERO, 0.08), LowPoly.at(Vector3(0, -0.24, 0)))
+		s.merge(LowPoly.boulder(Vector3(0.15, 0.13, 0.15), 0, 0.15, SKIN_DARK, 111, 0.06), LowPoly.at(Vector3(0, -L_L1, 0)))   # bare elbow
+	else:
+		s.merge(LowPoly.frustum(Vector2(0.31, 0.31), Vector2(0.28, 0.28), 0.30, COAT, 103 + side, 0.03, 2, Vector2.ZERO, 0.08), LowPoly.at(Vector3(0, -0.19, 0)))
+		s.merge(LowPoly.boulder(Vector3(0.165, 0.15, 0.165), 0, 0.15, COAT, 112, 0.08), LowPoly.at(Vector3(0, -R_L1, 0)))   # elbow
+	return s
+
+
+## The IK arms' forearm, from the elbow: the bandaged forearm and bare fist (left), the sleeve's end and the fur cuff
+## (right; the fist is the wrench's).
+func _forearm_soup(side: int) -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(113 + side, 0.07)
+	if side < 0:
+		for i in 3:
+			s.merge(LowPoly.cylinder(0.145, 0.145, 0.12, 8, BANDAGE if i % 2 == 0 else BANDAGE_DARK, 105 + i, 0.012), LowPoly.at(Vector3(0, -0.10 - i * 0.075, 0.0)))
+		s.merge(LowPoly.boulder(Vector3(0.14, 0.13, 0.14), 0, 0.15, SKIN, 109, 0.06), LowPoly.at(Vector3(0, -L_L2, 0)))
+	else:
+		s.merge(LowPoly.frustum(Vector2(0.34, 0.34), Vector2(0.31, 0.31), 0.16, COAT, 114, 0.03, 2, Vector2.ZERO, 0.08), LowPoly.at(Vector3(0, -0.06, 0)))
+		s.merge(LowPoly.cylinder(0.19, 0.20, 0.16, 8, FUR, 110, 0.02), LowPoly.at(Vector3(0, -0.20, 0)))   # fur cuff
+	return s
+
+
 ## Stubby leg: dark trouser, brown boot with a fur tuft at the top and a pushed-forward toe.
 ## Pivot at the hip.
 func _leg_soup(side: int) -> LowPoly.Soup:
@@ -237,7 +299,7 @@ func _wrench_soup() -> LowPoly.Soup:
 
 ## A held component rides in her bare left fist.
 func _hold_host() -> Node3D:
-	return parts["arm_l"] as Node3D
+	return parts["fore_l" if parts.has("fore_l") else "arm_l"] as Node3D
 
 
 # ------------------------------------------------------------------ animation
@@ -245,6 +307,7 @@ func _hold_host() -> Node3D:
 ## Pose the idle / walk cycle at time t: breathing, a slow head nod, stomping legs, swinging left arm,
 ## and the weapon: rest pose plus the swing / spin kicks, with the right sleeve aimed at the fist.
 func apply_idle(t: float, speed: float = 0.0) -> void:
+	var ik := _sync_elbows()
 	var walk := clampf(speed / 4.0, 0.0, 1.0)
 	var breath := sin(t * 1.9)
 	var stride := sin(t * 8.0)
@@ -255,8 +318,7 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.55 * walk
 	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.55 * walk
 	var arm_l := parts["arm_l"] as MeshInstance3D
-	arm_l.rotation = Vector3(0.10 - stride * 0.30 * walk + breath * 0.015, 0.0, deg_to_rad(-10.0))
-	arm_l.scale = Vector3.ONE
+	var rot_l := Vector3(0.10 - stride * 0.30 * walk + breath * 0.015, 0.0, deg_to_rad(-10.0))
 
 	# weapon: k > 0 winds the wrench up behind her, k < 0 slams it forward; spin holds it out sideways
 	var k := arm_kick("weapon")
@@ -277,11 +339,20 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 		var fist := SMASH_FIST_UP.lerp(SMASH_FIST_DOWN, s) + Vector3(0.04, 0.10, -0.12) * sin(s * PI)   # (an arc, not a chord)
 		pos = pos.lerp(fist, w)
 		rot = rot.lerp(Vector3(a, SMASH_YAW, 0.0), w)
-		arm_l.rotation = arm_l.rotation.lerp(SMASH_ARM_L, w * (0.4 + 0.6 * s))
+		rot_l = rot_l.lerp(SMASH_ARM_L, w * (0.4 + 0.6 * s))
 	var weapon := parts["weapon"] as MeshInstance3D
 	weapon.position = pos
 	weapon.rotation = rot
-	_aim_right_arm(pos)
+	if ik:
+		var hand_l := TwoBoneIK.flexed(arm_l.position, Basis.from_euler(rot_l), L_FIST, L_FLEX + 0.45 * clampf(rot_l.x - 0.10, 0.0, 0.5))
+		pose_ik_arm(arm_l, parts["fore_l"] as Node3D, hand_l, L_L1, L_L2, TwoBoneIK.arm_pole(-1, (hand_l - arm_l.position).normalized()))
+		var arm_r := parts["arm_r"] as Node3D
+		# (a fist out of even the stretched reach, as in the old slam's kick, brings the wrench in to it)
+		weapon.position = pose_ik_arm(arm_r, parts["fore_r"] as Node3D, pos, R_L1, R_L2, TwoBoneIK.arm_pole(1, (pos - arm_r.position).normalized()), R_STRETCH)
+	else:
+		arm_l.rotation = rot_l
+		arm_l.scale = Vector3.ONE
+		_aim_right_arm(pos)
 	if hold_anchor != null:
 		hold_anchor.scale = Vector3(hold_scale, hold_scale / maxf(arm_l.scale.y, 0.01), hold_scale)
 
