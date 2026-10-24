@@ -10,6 +10,11 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
 ## Play
 
 - **Exe:** `build\windows\Cast.exe` (made by `.\build.ps1`). Keep the DLLs and `Cast.pck` beside it.
+- **Playtest logs:** a playtester double-clicks `Pack_logs.bat` beside `Cast.exe`. It zips their logs from
+  `%APPDATA%\Godot\app_userdata\Cast` (godot.log, voice/play/combat logs, net sheets, settings) into
+  `Cast_logs_v<version>_<date_time>.zip` next to the game (`tools/release/pack_logs.ps1`).
+- **Linux:** no native build. Linux and Steam Deck players run the Windows build through Proton (decided 2026-10-24:
+  "Use Proton instead", over downloading Linux templates and building hero_listen for Linux in Docker).
 - **From source:** `.\run.ps1`.
 - **Sewer slice (dev):** `.\run.ps1 --sewer 2 --spells damp,fireball --no-mic` plays a hand-built sewer floor (layouts 1-5)
   with its gator and a live wire; see `docs/design/sewer-concept.md`, "Phase 1 as built". In a crew, `.\run.ps1 -Crew 2

@@ -72,6 +72,8 @@ foreach ($f in @("Cast.exe", "Cast.pck", "libhero_listen.windows.template_releas
 Set-Content -Path (Join-Path $outDir "version.txt") -Value $buildVersion
 # Steam needs its app id next to the exe when launched outside the Steam client (480 = Spacewar, dev only).
 if (Test-Path "$PSScriptRoot\steam_appid.txt") { Copy-Item "$PSScriptRoot\steam_appid.txt" -Destination $outDir }
+# The playtest log packer: double-click Pack_logs.bat to zip this PC's logs next to the exe (tools/release/pack_logs.ps1).
+foreach ($f in @("Pack_logs.bat", "pack_logs.ps1")) { Copy-Item (Join-Path "$PSScriptRoot\tools\release" $f) -Destination $outDir -Force }
 
 # --- Package -------------------------------------------------------------------------------------
 # Lessons from bridge-to-friendship's build.ps1: Compress-Archive silently skips a file it cannot open
