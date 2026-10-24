@@ -126,13 +126,14 @@ func show_fizzle(heard: String, reason: String = "") -> void:
 	_show_toast(t, Color(0.75, 0.75, 0.8))
 
 
+## "You have no Ember horn": the spell is not slotted (never picked up, or its last component was spent).
 func show_unknown_spell(id: String) -> void:
-	_show_toast("You don't know %s!" % SpellBook.spell_name(id), COLOR_DANGER)
+	_show_toast("You have no %s" % SpellBook.component_name(id), COLOR_DANGER)
 
 
-## "Out of Ember horn": the spell has no charges left (the cast fizzled, no cooldown was spent).
+## "You have no Ember horn": the spell has no charges left (the cast fizzled, no cooldown was spent).
 func show_out_of_component(id: String) -> void:
-	_show_toast("Out of %s" % SpellBook.component_name(id), COLOR_DANGER)
+	_show_toast("You have no %s" % SpellBook.component_name(id), COLOR_DANGER)
 
 
 ## "+3 Ember horn" in the spell's color; `slot` >= 0 adds where it went when it filled a new slot.
