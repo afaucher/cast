@@ -89,7 +89,7 @@ func _hooks() -> void:
 			peak_wind = maxf(peak_wind, mod._wind)
 			peak_swing = maxf(peak_swing, mod._swing)
 			peak_tint = maxf(peak_tint, _tint_k(mod))
-			swell = maxf(swell, m._visual.scale.x)
+			swell = maxf(swell, m._visual.scale.x / m.size_k)   # (the swell on top of its size jitter)
 			if peak_wind > 0.8 and peak_swing > 0.5 and peak_tint > 0.2 and swell > 1.0 and i > 30:
 				break
 		print("  %s: windup %.2f swing %.2f tint %.2f swell %.3f" % [kind, peak_wind, peak_swing, peak_tint, swell])
@@ -145,7 +145,7 @@ func _proto() -> void:
 		var swelled := false
 		for i in 300:
 			await get_tree().physics_frame
-			swelled = swelled or m._visual.scale.x > 1.05
+			swelled = swelled or m._visual.scale.x / m.size_k > 1.05   # (the swell on top of its size jitter)
 		check(swelled, "%s primitive body still swells in its windup" % kind)
 		m.apply_damage(9999.0, hero)
 		await frames(90)

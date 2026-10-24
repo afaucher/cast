@@ -8,7 +8,8 @@ extends TestCase
 ##   2. the spawn list covers every registry entry (a new monster kind, prop, style, spell or decor gets its button)
 ##   3. in the real game (GameDev with --gym, under the grounded_anim profile): the panel is up, one of each entry spawns and the world runs on (god mode on),
 ##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the experiments' pickers
-##      switch the movement profile and the smoothing, the slot picker and
+##      switch the movement profile, the smoothing and the crowd variety's three parts, the hallway packs come down the
+##      arena-lobby hall at the player, the slot picker and
 ##      infinite components keep a spell castable, and the player switches through every hero with the allies filling the rest
 
 const GAME := preload("res://scripts/app/game.gd")
@@ -252,6 +253,18 @@ func _check_game() -> void:
 		gym.set_experiment("feel", MoveFeel.GROUNDED_ANIM)
 		eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "back to grounded_anim")
 		eq(feel_pick.get_item_text(feel_pick.selected), MoveFeel.GROUNDED_ANIM, "the picker follows")
+	# the crowd variety's switches (playtest feedback 2026-10-24 item 4): on by default, each one off and on again
+	for ex: String in ["path_jitter", "speed_spread", "size_jitter"]:
+		var pick := gym.panel.experiment(ex)
+		if not check(pick != null, "the panel has the %s picker" % ex):
+			continue
+		eq(pick.get_item_text(pick.selected), "on", "%s is on by default" % ex)
+		check(_crowd_on(ex), "... in the game too")
+		pick.item_selected.emit(0)
+		check(not _crowd_on(ex), "picking off turns %s off" % ex)
+		gym.set_experiment(ex, "on")
+		check(_crowd_on(ex), "and on again")
+		eq(pick.get_item_text(pick.selected), "on", "the picker follows")
 	# spells: the slot picker and infinite components
 	gym.set_slot(0, "corn")
 	eq(player.slot_spell(0), "corn", "the slot picker puts corn in slot 1")
@@ -310,6 +323,32 @@ func _check_game() -> void:
 			still += 1
 	check(still > 5, "monster AI off: they stand (%d)" % still)
 	gym.set_toggle("ai", true)
+	# the hallway packs: twelve skeletons at the far end of the arena-lobby hall, the crew at its arena end, sent at the player
+	gym.clear_monsters()
+	await frames(2)
+	var lk := GymDev.hall_link()
+	var hall := gym.hall_pack(false)
+	eq(hall.size(), GymDev.HALL_COUNT, "Hallway x12: twelve skeletons")
+	check(Hex.distance(player.current_cell(), lk["door_a"] as Vector2i) <= 1, "the crew at the hall's arena end")
+	var d0 := {}
+	for m: Monster in hall:
+		check(m.kind == "grunt" and Hex.distance(m.current_cell(), lk["door_b"] as Vector2i) <= 4, "a skeleton at the far end (%s)" % m.current_cell())
+		check(m.state == Monster.State.CHASE and m.target == player, "... sent at the player")
+		d0[m] = GameWorld.flat_distance(m.global_position, player.global_position)
+	await frames(120)
+	var closer := 0
+	for m: Monster in hall:
+		if is_instance_valid(m) and GameWorld.flat_distance(m.global_position, player.global_position) < float(d0[m]) - 3.0:
+			closer += 1
+	check(closer >= GymDev.HALL_COUNT - 2, "they come down the hall (%d of %d)" % [closer, hall.size()])
+	gym.clear_monsters()
+	await frames(2)
+	var mix := gym.hall_pack(true)
+	var kinds := {}
+	for m: Monster in mix:
+		kinds[m.kind] = int(kinds.get(m.kind, 0)) + 1
+	eq(mix.size(), GymDev.HALL_COUNT, "Hallway mix: twelve")
+	check(kinds.has("brute") and kinds.has("swarmer") and kinds.has("grunt"), "skeletons, a brute and imps (%s)" % str(kinds))
 	gym.act("pack")
 	await frames(10)
 	var n := gym.clear_monsters()
@@ -338,3 +377,15 @@ func _check_game() -> void:
 	await frames(2)
 	GAME.reset_flow()
 	MoveFeel.reset()
+
+
+## A crowd-variety switch (Monster's statics) by its experiment's name.
+func _crowd_on(ex: String) -> bool:
+	match ex:
+		"path_jitter":
+			return Monster.path_jitter_on
+		"speed_spread":
+			return Monster.speed_spread_on
+		"size_jitter":
+			return Monster.size_jitter_on
+	return false

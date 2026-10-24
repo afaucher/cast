@@ -19,7 +19,11 @@ extends Node
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
 ##   - the EXPERIMENTS (GymPanel's pickers; the user, 2026-10-23: "lets put experiments in the gym menu instead of adding
 ##     keybindings"): the movement profile (MoveFeel: today / grounded / grounded_anim, the default) and the judder
-##     smoothing (MoveFeel.interp, off by default), live. A new A/B goes here, not on a key.
+##     smoothing (MoveFeel.interp, off by default), live; the crowd variety (playtest feedback 2026-10-24 item 4: path
+##     jitter, speed spread, size jitter: Monster's statics, on by default), each on / off. A new A/B goes here, not on a key.
+##   - the HALLWAY PACKS (to A/B the crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
+##     (the gym's longest straight run) and the crew at its arena end, and sends them at the player; "Hallway mix" is the same
+##     with a brute and imps among them
 
 const GAME := preload("res://scripts/app/game.gd")
 const FLAG := "--gym"              ## the command line's flag; the main menu's gym door (the garage's dead H) hands it in too
@@ -28,6 +32,13 @@ const STAGE_DUMMIES := 3
 const PACK_BUDGET := 14
 const GOD_ID := "gym_god"
 const STATS_EVERY := 0.25
+## The hallway packs: the hall from the arena to the lobby (GymMap.LINKS), the crew at its arena end, the pack at the far end.
+const HALL_FROM := "arena"
+const HALL_TO := "lobby"
+const HALL_COUNT := 12
+const HALL_MIX: Array[String] = ["brute", "grunt", "grunt", "swarmer", "swarmer", "grunt", "grunt", "swarmer", "swarmer",
+		"grunt", "grunt", "grunt"]
+const HALL_LEASH := 40.0           ## (a hall pack chases down the hall and into the arena: no leash home on the way)
 const GOTO: Array[String] = ["arena", "lobby", "course_pad", "course_top", "course_end", "cinema", "throne", "pool", "moat",
 		"barracks", "sewer_a", "sewer_c", "cave_a", "isle_shore", "cave_b"]
 
@@ -92,7 +103,7 @@ func setup(g: Node) -> void:
 		[["infinite", "Infinite", infinite], ["no_cooldowns", "No cooldown", no_cooldowns], ["ai", "AI", ai_on],
 			["god", "God", god], ["areas", "Areas", false]],
 		[["heal", "Heal crew"], ["refill", "Refill spells"], ["clear", "Clear monsters"], ["clear_spawned", "Clear spawned"], ["pack", "Spawn pack"],
-			["reset_log", "Reset log"]],
+			["hall", "Hallway x12"], ["hall_mix", "Hallway mix"], ["reset_log", "Reset log"]],
 		GOTO, experiments())
 	panel.spawn_pressed.connect(func(id: String) -> void: spawn(id, ring_point()))
 	panel.hero_pressed.connect(switch_to)
@@ -327,21 +338,75 @@ func act(nm: String) -> void:
 			var made := GymSpawns.spawn_pack(ring_point(), PACK_BUDGET)
 			spawned.append_array(made)
 			_status("a pack of %d" % made.size())
+		"hall", "hall_mix":
+			_status("a hallway pack of %d" % hall_pack(nm == "hall_mix").size())
 		"reset_log":
 			stats.reset()
+
+
+## A hallway pack (the crowd variety's A/B): HALL_COUNT skeletons (`mixed`: HALL_MIX, a brute and imps among them) on the
+## free cells nearest the far end of the arena-lobby hall, the crew moved to its arena end, and every one sent at the
+## player. Returns the monsters.
+func hall_pack(mixed: bool) -> Array[Node]:
+	var made: Array[Node] = []
+	var map := GameWorld.map
+	var link := hall_link()
+	if map == null or link.is_empty():
+		return made
+	var dir: Vector2i = Hex.DIRS[int(link["dir"])]
+	if game != null:
+		game.call("_teleport_crew", link["door_a"] as Vector2i)
+	var far: Vector2i = link["door_b"]
+	var cells := GymSpawns.cells_near(map, Hex.to_world(far + dir), HALL_COUNT)
+	for i in cells.size():
+		var m := MonsterFactory.spawn(HALL_MIX[i % HALL_MIX.size()] if mixed else "grunt", cells[i])
+		if m == null:
+			continue
+		m.leash_range = HALL_LEASH
+		made.append(m)
+	spawned.append_array(made)
+	var p := player()
+	if p != null:
+		for m in made:
+			(m as Monster).aggro(p)
+	return made
+
+
+## The arena-lobby hall's row of GymMap.layout()["links"]: {a, b, dir, n, lanes, door_a (the arena's end), door_b}.
+static func hall_link() -> Dictionary:
+	for lk: Dictionary in (GymMap.layout()["links"] as Array):
+		if str(lk["a"]) == HALL_FROM and str(lk["b"]) == HALL_TO:
+			return lk
+	return {}
 
 
 ## The panel's experiments: [name, label, values, current].
 static func experiments() -> Array:
 	return [["feel", "Movement", MoveFeel.ORDER, MoveFeel.active()],
-		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"]]
+		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"],
+		["path_jitter", "Path jitter", ["off", "on"], "on" if Monster.path_jitter_on else "off"],
+		["speed_spread", "Speed spread", ["off", "on"], "on" if Monster.speed_spread_on else "off"],
+		["size_jitter", "Size jitter", ["off", "on"], "on" if Monster.size_jitter_on else "off"]]
 
 
 ## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
-## log starts a new stretch.
+## log starts a new stretch. "path_jitter", "speed_spread" and "size_jitter" turn a part of the crowd variety on or off
+## (Monster's statics, live; the status line says which).
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
+	if nm in ["path_jitter", "speed_spread", "size_jitter"]:
+		var on := value == "on"
+		match nm:
+			"path_jitter":
+				Monster.path_jitter_on = on
+			"speed_spread":
+				Monster.speed_spread_on = on
+			"size_jitter":
+				Monster.size_jitter_on = on
+		panel.set_experiment(nm, value)
+		_status("%s %s" % [nm.replace("_", " "), value])
+		return
 	match nm:
 		"feel":
 			if not MoveFeel.pick(value):
