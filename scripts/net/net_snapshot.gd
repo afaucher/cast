@@ -324,10 +324,12 @@ func _show_puppets(now: float, delta: float) -> void:
 		var st := pp.interp.sample(t_r)
 		if st == null:
 			continue
+		var jumped := pp.interp.take_teleport()
+		_session.note_moved(pp.shown if pp.applied else null, st, jumped)   # (the telemetry's snap_m)
 		pp.render_t = t_r
 		pp.shown = st
 		NetCodec.write_hero(pp.hero, st)
-		if pp.interp.take_teleport() or not pp.applied:
+		if jumped or not pp.applied:
 			pp.applied = true
 			pp.hero.reset_physics_interpolation()
 

@@ -128,7 +128,9 @@ main menu with **"The host clocked out"** within about 6 seconds.
    (`role` = client): `rtt_ms` should sit around 100-180 ms (the simulated 90 ms plus Steam's real route) and stay
    **flat** from the first minute to the last; `jitter_ms` flat; `quality` near 0.98; `bytes_in` / `bytes_out` flat.
    A column that climbs over the 20 minutes is the thing to report. (`pending_rel` is blank: Steam's peer does not
-   expose it.)
+   expose it.) For a freeze or a rubber-band, sort by the last three columns: `silence_ms` (nothing heard from the other
+   side for that long; 35-85 ms on a floor is normal), `frame_ms` (this PC hitched: a host hitch is lag for everyone) and
+   `snap_m` (a teammate or monster jumped that far on this screen; centimetres is normal).
 4. **A**: Settings > Diagnostics back to **Off**.
 
 ## 8. Voice per player (checklist item 7)

@@ -344,7 +344,14 @@ yet (there is no shared floor in M0): see "Changes for M1".
 `clock_fix_ms` (correction still being slewed in), `quality` (share of unreliable packets that arrived), `bytes_out`,
 `bytes_in`, `pkts_out`, `pkts_in`, `events_out`, `events_in`, `gaps`, `stale`, `link`, `link_held`, `link_dropped`,
 `pending_rel` (blank: needs Steam's connection status, which `SteamMultiplayerPeer` doesn't expose; M7), `hits` (blank
-until M4). Under `coast` the clients' rows read 100-150 ms RTT: 90 ms of link plus about a frame of polling per hop.
+until M4), and three worst-of-the-second columns for spotting a freeze (added after the 2026-10-23 playtest):
+`silence_ms` (the longest stretch with nothing received from the other side, the host's quietest client for the host,
+including one still going at the sample; about 35-85 ms on a floor, up to ~500 ms on the board where only pings and
+rows flow; a stretch across rows shows in each, growing), `frame_ms` (this machine's longest frame: a host hitch is lag
+to everyone, and shows as silence too) and `snap_m` (the biggest puppet correction: how far a hero or host-owned puppet
+was shown off the course it was on the frame before, `NetSession.off_course`, teleports aside; centimetres when smooth,
+blank with no puppet shown). Under `coast` the clients' rows read 100-150 ms RTT: 90 ms of link plus about a frame of
+polling per hop.
 
 **Main menu (built as proposed).** 01 Start a job · *crew can join* (Steam: `Session.host_steam()`, then the job board;
 no Steam, or the lobby fails: solo, and the board's crew strip says why), 02 Join a crew · *first crew hiring*
