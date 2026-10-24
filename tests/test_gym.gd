@@ -253,18 +253,9 @@ func _check_game() -> void:
 		gym.set_experiment("feel", MoveFeel.GROUNDED_ANIM)
 		eq(MoveFeel.active(), MoveFeel.GROUNDED_ANIM, "back to grounded_anim")
 		eq(feel_pick.get_item_text(feel_pick.selected), MoveFeel.GROUNDED_ANIM, "the picker follows")
-	# the crowd variety's switches (playtest feedback 2026-10-24 item 4): on by default, each one off and on again
-	for ex: String in ["path_jitter", "speed_spread", "size_jitter"]:
-		var pick := gym.panel.experiment(ex)
-		if not check(pick != null, "the panel has the %s picker" % ex):
-			continue
-		eq(pick.get_item_text(pick.selected), "on", "%s is on by default" % ex)
-		check(_crowd_on(ex), "... in the game too")
-		pick.item_selected.emit(0)
-		check(not _crowd_on(ex), "picking off turns %s off" % ex)
-		gym.set_experiment(ex, "on")
-		check(_crowd_on(ex), "and on again")
-		eq(pick.get_item_text(pick.selected), "on", "the picker follows")
+	# the crowd variety's switches are gone (settled 2026-10-24: always on)
+	for ex: String in ["path_jitter", "speed_spread", "size_jitter", "walk_unsync"]:
+		check(gym.panel.experiment(ex) == null, "no %s picker any more" % ex)
 	# spells: the slot picker and infinite components
 	gym.set_slot(0, "corn")
 	eq(player.slot_spell(0), "corn", "the slot picker puts corn in slot 1")
@@ -378,14 +369,3 @@ func _check_game() -> void:
 	GAME.reset_flow()
 	MoveFeel.reset()
 
-
-## A crowd-variety switch (Monster's statics) by its experiment's name.
-func _crowd_on(ex: String) -> bool:
-	match ex:
-		"path_jitter":
-			return Monster.path_jitter_on
-		"speed_spread":
-			return Monster.speed_spread_on
-		"size_jitter":
-			return Monster.size_jitter_on
-	return false

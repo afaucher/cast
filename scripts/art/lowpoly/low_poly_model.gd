@@ -26,6 +26,8 @@ var hold_anchor: Node3D = null
 var hold_scale := 1.0                      ## scale of a held prop in this model's space
 var hold_offset := Vector3.ZERO            ## prop position relative to the host part
 
+var cycle_k := 1.0                         ## the idle / walk clock's rate (a monster's walk unsync)
+
 var _mat: ShaderMaterial
 var _t := 0.0
 var _last_pos := Vector3.ZERO
@@ -111,13 +113,18 @@ func _hold_host() -> Node3D:
 func _process(delta: float) -> void:
 	if not idle_enabled or not is_inside_tree():
 		return
-	_t += delta
+	_t += delta * cycle_k
 	var gp := global_position
 	var moved := Vector2(gp.x - _last_pos.x, gp.z - _last_pos.z).length()
 	_last_pos = gp
 	var spd := moved / maxf(delta, 0.0001)
 	_speed = lerpf(_speed, minf(spd, 6.0), clampf(delta * 10.0, 0.0, 1.0))
 	apply_idle(_t, _speed)
+
+
+## Move the idle / walk clock `seconds` ahead (a monster's walk unsync: a pack spawned together does not stride in step).
+func offset_clock(seconds: float) -> void:
+	_t += seconds
 
 
 ## Pose the idle / walk cycle at time t. Subclasses override.

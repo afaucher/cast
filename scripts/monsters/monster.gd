@@ -81,36 +81,36 @@ const EDGE_CONFIRM := 1.0         ## ... and a "?" confirms after this long inst
 const TAUNT_TIME := 4.0
 
 # --- Crowd variety (playtest feedback 2026-10-24, item 4: packs coming down a hallway in one single-file line) -----------
-# Three small differences per monster, so a pack spreads into clumps and gaps instead of a conga line:
+# Four small differences per monster, so a pack spreads into clumps and gaps instead of a conga line:
 #   PATH JITTER  its own sideways lane off its path's cell centres (+/- LANE_MAX), drifting to a new one every
 #                LANE_EVERY_MIN-MAX s. Applied across the direction of travel on intermediate waypoints only (never the goal,
 #                never within LANE_NEAR of it, easing in over LANE_FADE: an attack approach is exact, and the crowd round a
 #                hero is not pushed sideways into its neighbours), and only where the side it leans to is open
 #                floor on the same level (no wall, ledge, climb, stairs or set piece within the lane + its radius +
-#                LANE_CLEAR): a door, a 1-cell corridor or a climb takes it to 0.
+#                LANE_CLEAR; half the lane where the full one does not fit): a door, a 1-cell corridor or a climb takes it to 0.
 #   SPEED SPREAD a fixed pace_k in 1 +/- PACE_SPREAD on its walking speed (effective_speed), except PACE_FIXED kinds.
 #   SIZE JITTER  a look: its Visual (never its radius or hit areas) at 1 +/- SIZE_SPREAD, from its net id (every machine
 #                knows it, so every screen shows the same size), except SIZE_FIXED kinds.
+#   WALK UNSYNC  a look: its walk's clock (the bob and its model's stride) starts at its own point and runs at 1 +/- GAIT_SPREAD,
+#                from its net id like the size, so a pack that spawned together does not stride in step.
 # Path and pace are the host's gameplay: rolled on the monster's own generator (_jit_rng), seeded from the floor's seed and
-# its spawn order, so they take no GameWorld.rng draw (the floor's dice and every golden stay as they were). The statics
-# are the gym's A/B switches (GymDev's Experiments); all three are on in the game.
-const LANE_MAX := 0.3
+# its spawn order, so they take no GameWorld.rng draw (the floor's dice and every golden stay as they were). Settled in the
+# gym, 2026-10-24 (on +/- 0.3: "Do the wider jitter. The current is better then none but not quite enough"; then "0.6 looks
+# good", and of the rest "They all look good. Lets make those the defaults").
+const LANE_MAX := 0.6             ## the widest lane, world units
 const LANE_EVERY_MIN := 2.0
 const LANE_EVERY_MAX := 4.0
-const LANE_SLIDE := 0.3           ## world units / s a lane drifts toward its next value (no sidestep)
+const LANE_SLIDE := 1.0           ## lane fractions / s a lane drifts toward its next value (no sidestep: 0.6 u/s at 0.6)
 const LANE_CLEAR := 0.3           ## open floor kept beyond the body on the side it leans to
 const LANE_NEAR := 3.0            ## no lane within this of the goal (the approach and the attack are exact) ...
 const LANE_FADE := 3.0            ## ... and it eases in over this much farther out (the full lane beyond 6)
 const PACE_SPREAD := 0.08
 const SIZE_SPREAD := 0.07
+const GAIT_SPREAD := 0.1
+const GAIT_CLOCK_SPAN := 4.0      ## seconds a model's idle / walk clock may start ahead (covers its slowest cycle)
 ## The goblin scout's flight is tuned against the heroes' 4.5 (its RUN_SPEED 5.0); the shark and the gator steer themselves.
 const PACE_FIXED: Array[String] = ["goblin", "shark", "gator"]
 const SIZE_FIXED: Array[String] = ["shark", "gator"]
-static var path_jitter_on := true
-static var speed_spread_on := true
-static var size_jitter_on := true
-## _on_stuck calls in this process (tests and the gym: the no-progress rate with and without the lanes).
-static var stuck_events := 0
 static var _spawn_seq := 0
 static var _seq_floor := -1
 
@@ -196,6 +196,8 @@ var _lane_key := 0                ## the waypoint (prev, cell, next, side) _lane
 var _lane_dir := Vector3.ZERO     ## that waypoint's unit side, ZERO where it may not lean
 var size_k := 1.0                 ## its look's scale (1.0 for SIZE_FIXED kinds)
 var _size_id := 0                 ## the id size_k was derived from (0: not yet)
+var gait_k := 1.0                 ## its walk clock's rate (walk unsync; 1.0 when off)
+var _gait_id := 0                 ## the id its walk clock was set from (0: not yet)
 
 # Visuals
 var model: MonsterModel = null    ## faceted body (null when use_proto_visuals or an unknown kind)
@@ -261,7 +263,7 @@ func _seed_variety() -> void:
 	_spawn_n = _spawn_seq
 	_jit_rng.seed = hash([s, _spawn_n, kind, "crowd"])
 	pace_k = 1.0 if PACE_FIXED.has(kind) else 1.0 + _jit_rng.randf_range(-PACE_SPREAD, PACE_SPREAD)
-	_lane_goal = _jit_rng.randf_range(-LANE_MAX, LANE_MAX)
+	_lane_goal = _jit_rng.randf_range(-1.0, 1.0)
 	_lane = _lane_goal
 	_lane_t = _jit_rng.randf_range(LANE_EVERY_MIN, LANE_EVERY_MAX)
 
@@ -275,7 +277,7 @@ static func size_for(id: int) -> float:
 ## Its size now: from its net id (every machine has it: seed-built at the barrier, a runtime spawn from the host's event),
 ## from its spawn order offline. Re-derived when the id arrives.
 func _size_now() -> float:
-	if not size_jitter_on or SIZE_FIXED.has(kind):
+	if SIZE_FIXED.has(kind):
 		return 1.0
 	var id := NetFloor.id_of(self)
 	if id <= 0:
@@ -286,10 +288,34 @@ func _size_now() -> float:
 	return size_k
 
 
+## Its walk clock for net id `id`: [start, rate], the start 0..1 of a cycle and the rate 1 +/- GAIT_SPREAD (a hash, no dice).
+static func gait_for(id: int) -> Vector2:
+	var h := hash([id, "monster_gait"])
+	var u := float(h & 0xFFFF) / 65535.0
+	var v := float((h >> 16) & 0xFFFF) / 65535.0
+	return Vector2(u, 1.0 + (v * 2.0 - 1.0) * GAIT_SPREAD)
+
+
+## Walk unsync: once its id is known (its spawn order offline), start its bob and its model's walk clock at its own point and
+## run them at its own rate (again when its net id arrives).
+func _sync_gait() -> void:
+	var id := NetFloor.id_of(self)
+	if id <= 0:
+		id = -_spawn_n
+	if id == _gait_id:
+		return
+	_gait_id = id
+	var g := gait_for(id)
+	gait_k = g.y
+	_walk_phase = g.x * TAU
+	if model != null:
+		model.cycle_k = g.y
+		model.offset_clock(g.x * GAIT_CLOCK_SPAN)
+
+
 ## Walking speed: Actor's times its pace (speed spread). The gator has its own; the shark never walks.
 func effective_speed() -> float:
-	var v := super()
-	return v * pace_k if speed_spread_on else v
+	return super() * pace_k
 
 
 ## Who may write each var (see Net); Actor's come from super(). Monster AI runs on the host only,
@@ -330,7 +356,7 @@ func net_fields() -> Dictionary:
 		# a look every machine derives from the net id (size_for), so it never travels.
 		"pace_k": Net.PRIVATE, "_jit_rng": Net.PRIVATE, "_lane": Net.PRIVATE, "_lane_goal": Net.PRIVATE,
 		"_lane_t": Net.PRIVATE, "_lane_key": Net.PRIVATE, "_lane_dir": Net.PRIVATE,
-		"_spawn_n": Net.LOCAL, "size_k": Net.LOCAL, "_size_id": Net.LOCAL,
+		"_spawn_n": Net.LOCAL, "size_k": Net.LOCAL, "_size_id": Net.LOCAL, "gait_k": Net.LOCAL, "_gait_id": Net.LOCAL,
 		# Presentation: models, bars, materials, animation phases.
 		"model": Net.LOCAL, "_visual": Net.LOCAL, "_bar": Net.LOCAL, "_bar_mat": Net.LOCAL,
 		"_mats": Net.LOCAL, "_flash_t": Net.LOCAL, "_tint_key": Net.LOCAL,
@@ -1080,7 +1106,7 @@ func _nav_to(goal: Vector3, delta: float) -> bool:
 	if _path_i >= _path.size():
 		return _steer_to(goal, delta)
 	_tick_lane(delta)
-	var lean := clampf((GameWorld.flat_distance(global_position, goal) - LANE_NEAR) / LANE_FADE, 0.0, 1.0) if path_jitter_on else 0.0
+	var lean := clampf((GameWorld.flat_distance(global_position, goal) - LANE_NEAR) / LANE_FADE, 0.0, 1.0)
 	var wp_cell := _path[_path_i]
 	var wp := goal if wp_cell == goal_cell else _waypoint(_path_i, lean)
 	if wp_cell != goal_cell and GameWorld.flat_distance(global_position, wp) < 0.3:
@@ -1100,20 +1126,25 @@ func _waypoint(i: int, lean: float) -> Vector3:
 	return c + lane_offset(_path[i - 1], _path[i], _path[i + 1]) * lean
 
 
-## The lane's offset at cell `c` on the way from `prev` to `nxt`: across the direction of travel, or ZERO where the side it
-## leans to is not open floor on the same level (judged once per waypoint and side, for the widest lane).
+## The lane's offset at cell `c` on the way from `prev` to `nxt` (`_lane` is a fraction of LANE_MAX): across the direction
+## of travel, narrowed to what fits on that side, ZERO where nothing does (judged once per waypoint and side).
 func lane_offset(prev: Vector2i, c: Vector2i, nxt: Vector2i) -> Vector3:
 	var side := 1 if _lane > 0.0 else -1
 	var key := hash([prev, c, nxt, side])
 	if key != _lane_key:
 		_lane_key = key
-		_lane_dir = _lane_side(prev, c, nxt, float(side))
-	return _lane_dir * absf(_lane)
+		_lane_dir = Vector3.ZERO
+		for f: float in [1.0, 0.5]:   # the widest lane if it fits, else half of it
+			var s := _lane_side(prev, c, nxt, float(side), LANE_MAX * f)
+			if s != Vector3.ZERO:
+				_lane_dir = s * f
+				break
+	return _lane_dir * absf(_lane) * LANE_MAX
 
 
-## The unit side to lean to at `c` (ZERO when it may not): both steps flat (no climb, drop or stairs), and beyond the
-## widest lane plus the body plus LANE_CLEAR on that side: no wall, set piece or shut door, a full cell on the same level.
-func _lane_side(prev: Vector2i, c: Vector2i, nxt: Vector2i, sgn: float) -> Vector3:
+## The unit side to lean `width` to at `c` (ZERO when it may not): both steps flat (no climb, drop or stairs), and beyond
+## `width` plus the body plus LANE_CLEAR on that side: no wall, set piece or shut door, a full cell on the same level.
+func _lane_side(prev: Vector2i, c: Vector2i, nxt: Vector2i, sgn: float, width: float) -> Vector3:
 	var map := GameWorld.map
 	if map == null:
 		return Vector3.ZERO
@@ -1129,7 +1160,7 @@ func _lane_side(prev: Vector2i, c: Vector2i, nxt: Vector2i, sgn: float) -> Vecto
 	t = t.normalized()
 	var side := Vector3(-t.z, 0.0, t.x) * sgn
 	var cw := Hex.to_world(c)
-	var reach := cw + side * (LANE_MAX + radius + LANE_CLEAR)
+	var reach := cw + side * (width + radius + LANE_CLEAR)
 	var rc := Hex.from_world(reach)
 	if rc != c:
 		var rcell := map.get_cell(rc)
@@ -1138,7 +1169,7 @@ func _lane_side(prev: Vector2i, c: Vector2i, nxt: Vector2i, sgn: float) -> Vecto
 	var lv := map.ground_level(reach)
 	if is_nan(lv) or absf(lv - float(cell.level)) > 0.01:
 		return Vector3.ZERO   # (pool water, a wall's top, a drop)
-	if map.blocks_point(reach) or map.blocks_point(cw + side * LANE_MAX, radius + LANE_CLEAR) or map.crosses_solid(cw, reach, radius):
+	if map.blocks_point(reach) or map.blocks_point(cw + side * width, radius + LANE_CLEAR) or map.crosses_solid(cw, reach, radius):
 		return Vector3.ZERO
 	return side
 
@@ -1148,7 +1179,7 @@ func _tick_lane(delta: float) -> void:
 	_lane_t -= delta
 	if _lane_t <= 0.0:
 		_lane_t = _jit_rng.randf_range(LANE_EVERY_MIN, LANE_EVERY_MAX)
-		_lane_goal = _jit_rng.randf_range(-LANE_MAX, LANE_MAX)
+		_lane_goal = _jit_rng.randf_range(-1.0, 1.0)
 	_lane = move_toward(_lane, _lane_goal, LANE_SLIDE * delta)
 
 
@@ -1163,7 +1194,6 @@ func _steer_to(pos: Vector3, delta: float) -> bool:
 
 
 func _on_stuck() -> void:
-	stuck_events += 1
 	_stuck_n += 1
 	_repath_t = 0.0
 	_path_age = 99.0
@@ -1346,8 +1376,9 @@ func _update_visual(delta: float) -> void:
 
 	var moved := (global_position - _prev_pos).length_squared() > 0.000001
 	_prev_pos = global_position
+	_sync_gait()
 	if moved:
-		_walk_phase += delta * walk_freq
+		_walk_phase += delta * walk_freq * gait_k
 	_bob = lerpf(_bob, absf(sin(_walk_phase)) * walk_bob if moved else 0.0, clampf(12.0 * delta, 0.0, 1.0))
 	_visual.position.y = _bob
 	var s := (1.0 + windup_scale * _telegraph) * _size_now()   # (size jitter: the look only, never radius or hit areas)

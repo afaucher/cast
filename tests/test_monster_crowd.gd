@@ -2,18 +2,19 @@ extends MonsterTestBase
 ## Crowd variety (playtest feedback 2026-10-24, item 4: packs coming down a hallway in one single-file line; Monster's
 ## "Crowd variety"):
 ##   1. SPEED SPREAD: every monster's pace_k is within 1 +/- 8%, spread out, fixed for its life, and its walking speed is
-##      move_speed x pace_k; the goblin keeps its own pace; the same floor seed and spawn order give the same paces; off
-##      in the gym's switch means move_speed again;
+##      move_speed x pace_k; the goblin keeps its own pace; the same floor seed and spawn order give the same paces;
 ##   2. SIZE JITTER: size_for(id) is within 1 +/- 7%, the same for the same id, and the Visual shows it (from the net id, or
-##      the spawn order offline) while the radius and the model's own scale stay as they were; the switch turns it off;
+##      the spawn order offline) while the radius and the model's own scale stay as they were;
+##   2b. WALK UNSYNC: gait_for(id) rates within 1 +/- 10% and starts over the whole cycle; a pack spawned together walks on
+##      clocks of its own;
 ##   3. PATH JITTER, ON A SMALL MAP: a 1-cell corridor, a wall beside the lane and a climb all take the lane to 0; open
 ##      floor takes the full lane, square across the direction of travel;
 ##   4. PATH JITTER, EVERYWHERE IN THE GYM: every waypoint (every cell, straight on and turning, either side) is either 0
-##      or a point at most 0.3 off its centre, square across the way, with the body clear of every wall and on the cell's
-##      own level;
-##   5. NO MORE STICKING: hallway packs on the gym's map (12 skeletons down the wide hall, the mixed pack, a narrow hall,
-##      the course's pillars, steps and ledges), all three parts off and then on: the no-progress nudges (_on_stuck) per
-##      monster-minute do not rise; prints the counts and the pack's spread in the hall.
+##      or a point at most LANE_MAX off its centre, square across the way, with the body clear of every wall and on the
+##      cell's own level;
+##   5. NO STICKING: hallway packs on the gym's map (12 skeletons down the wide hall, the mixed pack, a narrow hall, the
+##      course's pillars, steps and ledges): the no-progress nudges (_on_stuck) stay under ROUTE_MAX en route and
+##      TARGET_RATE_MAX round the hero; prints the counts and the pack's spread in the hall.
 
 const SEED := 7
 const RUN_FRAMES := 1200          ## 20 s a scenario
@@ -24,21 +25,14 @@ func _init() -> void:
 
 
 func setup() -> void:
-	_all(true)
 	await _pace()
 	await _size()
+	await _gait()
 	_lanes_small()
 	_lanes_gym()
 	await _stuck()
-	_all(true)
 	NetRegistry.clear()
 	finish()
-
-
-func _all(on: bool) -> void:
-	Monster.path_jitter_on = on
-	Monster.speed_spread_on = on
-	Monster.size_jitter_on = on
 
 
 # --- 1. speed spread ---------------------------------------------------------------------------------------------------
@@ -74,9 +68,6 @@ func _pace() -> void:
 		near(ms[i].pace_k, paces[i], 0.0, "the pace is fixed for its life")
 	var gob := MonsterFactory.spawn("goblin", Vector2i(-6, 0))
 	near(gob.pace_k, 1.0, 0.0, "the goblin scout keeps its own pace")
-	Monster.speed_spread_on = false
-	near(ms[0].effective_speed(), ms[0].move_speed, 0.0001, "speed spread off: move_speed again")
-	Monster.speed_spread_on = true
 	# The same floor (seed and world) and spawn order: the same paces; no GameWorld.rng draw for them.
 	new_world(flat_map(8))
 	var again := _spawn_grunts(40)
@@ -114,19 +105,42 @@ func _size() -> void:
 	near(m.radius, r, 0.0, "the radius (collision, hit areas) is unchanged")
 	if m.model != null:
 		check(m.model.scale.is_equal_approx(model_scale), "the model keeps its own scale")
-	Monster.size_jitter_on = false
-	await frames(2)
-	near(m._visual.scale.x, 1.0, 0.0001, "size jitter off: full size")
-	Monster.size_jitter_on = true
-	await frames(2)
-	near(m._visual.scale.x, Monster.size_for(10042), 0.0001, "and back on")
 	NetRegistry.clear()
+
+
+# --- 2b. walk unsync ---------------------------------------------------------------------------------------------------
+
+func _gait() -> void:
+	new_world(flat_map(6))
+	var lo := INF
+	var hi := -INF
+	var starts := {}
+	for id in range(1, 3001):
+		var g := Monster.gait_for(id)
+		lo = minf(lo, g.y)
+		hi = maxf(hi, g.y)
+		starts[int(g.x * 10.0)] = true
+	check(lo >= 1.0 - Monster.GAIT_SPREAD - 0.0001 and hi <= 1.0 + Monster.GAIT_SPREAD + 0.0001, "walk rates within +/- 10%")
+	check(starts.size() >= 10, "walk starts spread over the whole cycle")
+	eq(Monster.gait_for(10042), Monster.gait_for(10042), "the same id, the same walk")
+	# A pack spawned on the same frame: each model's walk clock starts at its own point and runs at its own rate.
+	var pack := _spawn_grunts(4)
+	await frames(3)
+	var clocks := {}
+	for m in pack:
+		if m.model == null:
+			continue
+		var g := Monster.gait_for(-m._spawn_n)
+		near(m.gait_k, g.y, 0.0, "offline: the walk comes from its spawn order")
+		near(m.model.cycle_k, g.y, 0.0, "... and its model runs at that rate")
+		clocks[snappedf(m.model._t, 0.01)] = true
+	check(clocks.size() == pack.size() or pack[0].model == null, "a pack spawned together is not in step (%d clocks)" % clocks.size())
 
 
 # --- 3. path jitter on a small map -------------------------------------------------------------------------------------
 
 func _offset(m: Monster, lane: float, prev: Vector2i, c: Vector2i, nxt: Vector2i) -> Vector3:
-	m._lane = lane
+	m._lane = lane / Monster.LANE_MAX   # (the lane is a fraction of the widest)
 	return m.lane_offset(prev, c, nxt)
 
 
@@ -277,40 +291,31 @@ const EN_ROUTE := 4.0
 const STUCK_SEEDS := [7, 23]
 
 
+## The limits, from the comparison with the crowd variety off (2026-10-24, lanes of 0.3: en route 0.13 -> 0.00 nudges per
+## monster-minute, round the hero 1.13 -> 1.09): the lanes must not make monsters stick on the way, nor much round the hero.
+const ROUTE_MAX := 2                ## nudges en route, all scenarios and seeds together
+const TARGET_RATE_MAX := 2.5        ## nudges round the hero per monster-minute
+
+
 func _stuck() -> void:
-	var rows := []
-	var sums := {false: {"route": 0, "target": 0, "min": 0.0}, true: {"route": 0, "target": 0, "min": 0.0}}
+	var sums := {"route": 0, "target": 0, "min": 0.0}
+	print("  hallway packs, %d seeds each:" % STUCK_SEEDS.size())
 	for sc: Array in _scenarios():
-		var res := {}
-		for on in [false, true]:
-			_all(on)
-			var acc := {"route": 0, "target": 0, "min": 0.0, "arrived": 0, "spread": 0.0, "gaps": 0.0}
-			for s: int in STUCK_SEEDS:
-				var r := await _run(sc, s)
-				for k: String in ["route", "target", "arrived"]:
-					acc[k] = int(acc[k]) + int(r[k])
-				for k: String in ["min", "spread", "gaps"]:
-					acc[k] = float(acc[k]) + float(r[k]) / (1.0 if k == "min" else float(STUCK_SEEDS.size()))
-			res[on] = acc
-			for k: String in ["route", "target", "min"]:
-				sums[on][k] += acc[k]
-		rows.append([sc[0], res])
-	_all(true)
-	print("  hallway packs, %d seeds each, all three parts off / on:" % STUCK_SEEDS.size())
-	for r: Array in rows:
-		var off: Dictionary = r[1][false]
-		var on: Dictionary = r[1][true]
-		print("  %-17s nudges en route %d / %d, at the hero %2d / %2d; arrived %2d / %2d; in the hall at 6 s: across %.2f / %.2f, spacing sd %.2f / %.2f" % [
-			r[0], off["route"], on["route"], off["target"], on["target"], off["arrived"], on["arrived"], off["spread"], on["spread"],
-			off["gaps"], on["gaps"]])
-	var m_off := maxf(float(sums[false]["min"]), 0.001)
-	var m_on := maxf(float(sums[true]["min"]), 0.001)
-	print("  nudges per monster-minute: en route off %.2f, on %.2f; at the hero off %.2f, on %.2f" % [sums[false]["route"] / m_off,
-		sums[true]["route"] / m_on, sums[false]["target"] / m_off, sums[true]["target"] / m_on])
-	check(int(sums[true]["route"]) <= int(sums[false]["route"]) + 1, "the lanes do not make monsters stick on the way (%d -> %d)" % [
-		sums[false]["route"], sums[true]["route"]])
-	check(float(sums[true]["target"]) / m_on <= float(sums[false]["target"]) / m_off * 2.0 + 0.5,
-		"nor round the hero (%d -> %d)" % [sums[false]["target"], sums[true]["target"]])
+		var acc := {"route": 0, "target": 0, "min": 0.0, "arrived": 0, "spread": 0.0, "gaps": 0.0}
+		for s: int in STUCK_SEEDS:
+			var r := await _run(sc, s)
+			for k: String in ["route", "target", "arrived"]:
+				acc[k] = int(acc[k]) + int(r[k])
+			for k: String in ["min", "spread", "gaps"]:
+				acc[k] = float(acc[k]) + float(r[k]) / (1.0 if k == "min" else float(STUCK_SEEDS.size()))
+		for k: String in ["route", "target", "min"]:
+			sums[k] += acc[k]
+		print("  %-17s nudges en route %d, at the hero %2d; arrived %2d; in the hall at 6 s: across %.2f, spacing sd %.2f" % [
+			sc[0], acc["route"], acc["target"], acc["arrived"], acc["spread"], acc["gaps"]])
+	var mins := maxf(float(sums["min"]), 0.001)
+	print("  nudges per monster-minute: en route %.2f, at the hero %.2f" % [sums["route"] / mins, sums["target"] / mins])
+	check(int(sums["route"]) <= ROUTE_MAX, "the lanes do not make monsters stick on the way (%d nudges)" % sums["route"])
+	check(float(sums["target"]) / mins <= TARGET_RATE_MAX, "nor much round the hero (%.2f a monster-minute)" % [sums["target"] / mins])
 
 
 ## One hallway run on floor seed `s`: the pack at sc[2], a stand-in hero at sc[3], everyone sent at it for RUN_FRAMES.
@@ -334,7 +339,6 @@ func _run(sc: Array, s: int) -> Dictionary:
 		ms.append(m)
 	for m in ms:
 		m.aggro(hero)
-	var stuck0 := Monster.stuck_events
 	var route := 0
 	var target := 0
 	var seen := {}
@@ -362,7 +366,6 @@ func _run(sc: Array, s: int) -> Dictionary:
 	for m in ms:
 		if is_instance_valid(m) and not m.dead and fdist(m, hero) < 3.5:
 			arrived += 1
-	eq(route + target, Monster.stuck_events - stuck0, "(every nudge counted)")
 	return {"route": route, "target": target, "min": alive_frames / 60.0 / 60.0, "arrived": arrived, "spread": spread, "gaps": gaps}
 
 

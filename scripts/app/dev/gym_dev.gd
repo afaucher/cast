@@ -19,9 +19,8 @@ extends Node
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
 ##   - the EXPERIMENTS (GymPanel's pickers; the user, 2026-10-23: "lets put experiments in the gym menu instead of adding
 ##     keybindings"): the movement profile (MoveFeel: today / grounded / grounded_anim, the default) and the judder
-##     smoothing (MoveFeel.interp, off by default), live; the crowd variety (playtest feedback 2026-10-24 item 4: path
-##     jitter, speed spread, size jitter: Monster's statics, on by default), each on / off. A new A/B goes here, not on a key.
-##   - the HALLWAY PACKS (to A/B the crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
+##     smoothing (MoveFeel.interp, off by default), live. A new A/B goes here, not on a key; its switch goes once it is settled.
+##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
 ##     (the gym's longest straight run) and the crew at its arena end, and sends them at the player; "Hallway mix" is the same
 ##     with a brute and imps among them
 
@@ -383,30 +382,14 @@ static func hall_link() -> Dictionary:
 ## The panel's experiments: [name, label, values, current].
 static func experiments() -> Array:
 	return [["feel", "Movement", MoveFeel.ORDER, MoveFeel.active()],
-		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"],
-		["path_jitter", "Path jitter", ["off", "on"], "on" if Monster.path_jitter_on else "off"],
-		["speed_spread", "Speed spread", ["off", "on"], "on" if Monster.speed_spread_on else "off"],
-		["size_jitter", "Size jitter", ["off", "on"], "on" if Monster.size_jitter_on else "off"]]
+		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"]]
 
 
 ## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
-## log starts a new stretch. "path_jitter", "speed_spread" and "size_jitter" turn a part of the crowd variety on or off
-## (Monster's statics, live; the status line says which).
+## log starts a new stretch.
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
-	if nm in ["path_jitter", "speed_spread", "size_jitter"]:
-		var on := value == "on"
-		match nm:
-			"path_jitter":
-				Monster.path_jitter_on = on
-			"speed_spread":
-				Monster.speed_spread_on = on
-			"size_jitter":
-				Monster.size_jitter_on = on
-		panel.set_experiment(nm, value)
-		_status("%s %s" % [nm.replace("_", " "), value])
-		return
 	match nm:
 		"feel":
 			if not MoveFeel.pick(value):

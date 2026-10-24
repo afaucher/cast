@@ -22,7 +22,14 @@ The user: "Playtest feedback - just record then we can decide how to react".
      2-4 s; none at the goal, in a 1-cell hall, a door or a climb), a fixed pace of +/- 8% (not the goblin) and a look scale
      of +/- 7% from its net id (`Monster`, "Crowd variety"). The gym's Experiments switch each on / off (all on in the game);
      "Hallway x12" and "Hallway mix" send a pack down the arena-lobby hall (`GymDev.hall_pack`). `test_monster_crowd`.
-   - Decision: pending.
+   - Tuned (2026-10-24): "More path jitter, and lets see if we can unsync their footsteps/walk animation as well", then on
+     +/- 0.3: "Do the wider jitter. The current is better then none but not quite enough". The lane is now +/- 0.6
+     (`Monster.LANE_MAX`; half of it where the full width does not fit). Walk unsync: each monster's bob and model stride
+     start at their own point of the cycle and run at +/- 10%, from its net id (`Monster.gait_for`), so a pack spawned
+     together no longer strides in step.
+   - Decision (2026-10-24): keep all four, always on. "0.6 looks good"; "They all look good. Lets make those the defaults";
+     "Clean up the flags" (the gym switches and Monster's on/off statics are gone; the hallway pack buttons stay). Still
+     open from this item: the war cries and a more active walk (batch 2), and the origin gate's spawn rate.
 5. **Spells without the wake word.** "Can we do spells without the wake word?"
    - Today: the voice setup screen's "chaos" strictness already casts any spell word anywhere, no trigger
      (`Incantation`, "chaos"); the playtest ran "loose", the default. Chaos also casts on chatter ("brush your teeth",
