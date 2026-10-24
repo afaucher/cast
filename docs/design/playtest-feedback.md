@@ -18,3 +18,8 @@ The user: "Playtest feedback - just record then we can decide how to react".
 4. **Swarms flocking down hallways.** "We need to figure out how to break up swarms of enemies a bit flocking down
    hallways. It makes it very repetitive. Especially at the origin gate with high spawn rates."
    - Decision: pending.
+5. **Spells without the wake word.** "Can we do spells without the wake word?"
+   - Today: the voice setup screen's "chaos" strictness already casts any spell word anywhere, no trigger
+     (`Incantation`, "chaos"); the playtest ran "loose", the default. Chaos also casts on chatter ("brush your teeth",
+     "I need coffee"), flagged accidental in the voice log.
+   - Decision: pending.
