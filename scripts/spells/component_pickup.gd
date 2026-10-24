@@ -17,6 +17,8 @@ var spell_id := ""
 var charges := SpellComponents.PICKUP_CHARGES
 ## Seconds until it vanishes if nobody takes it (blinks for the last SpellComponents.PICKUP_FADE). 0 = never.
 var lifetime := SpellComponents.PICKUP_LIFETIME
+## A monster dropped it (SpellComponents.drop_for): it counts toward FLOOR_DROP_CAP while it lies here.
+var from_monster := false
 
 var _prop: Node3D
 var _glow: MeshInstance3D
@@ -159,6 +161,8 @@ func _ready() -> void:
 func net_fields() -> Dictionary:
 	return {
 		"spell_id": Net.SPAWN, "lifetime": Net.SPAWN,
+		# The host's drop cap counts its own pickups; a client's copy never needs it.
+		"from_monster": Net.PRIVATE,
 		# What is left on the floor: every screen shows the count, and a collected or swapped pickup vanishes.
 		"charges": Net.OWNER, "_used": Net.OWNER,
 		# Each machine ages it from the spawn time, for the fade-out blink.

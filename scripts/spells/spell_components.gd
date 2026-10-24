@@ -19,7 +19,7 @@ const COLLECT_RADIUS := 0.8      ## a hero this close picks it up automatically
 const SWAP_RADIUS := 1.2         ## a hero this close (slots full) can press E to swap it in
 const LABEL_RADIUS := 4.0        ## the floating name label shows when a player is this close
 const DROP_SCATTER := 0.55       ## several drops from one kill fan out this far
-const FLOOR_DROP_CAP := 5        ## at most this many monster-dropped pickups per floor (GameWorld.floor_drops counts them)
+const FLOOR_DROP_CAP := 5        ## at most this many monster-dropped pickups lying on the floor at a time (floor_pickups)
 const PICKUP_LIFETIME := 60.0    ## an uncollected pickup vanishes after this many seconds ...
 const PICKUP_FADE := 5.0         ## ... and blinks for the last this-many seconds
 
@@ -71,15 +71,16 @@ static func drop_charges(kind: String, id: String) -> int:
 
 
 ## Called when a monster dies: roll its drops and put the pickups on the floor around it. At most
-## FLOOR_DROP_CAP pickups per floor (the dice are always rolled, so the rng stream does not depend on
-## the cap; only the pickups past the cap are left out).
+## FLOOR_DROP_CAP monster-dropped pickups lie on the floor at a time: one taken or expired makes room again
+## (the user, 2026-10-24: "Lets change it to no more then 5 per-floor at a time"; it was 5 per floor in all).
+## The dice are always rolled, so the rng stream does not depend on the cap; only the pickups past it are left out.
 static func drop_for(monster: Actor) -> Array[ComponentPickup]:
 	var out: Array[ComponentPickup] = []
 	if monster == null or GameWorld.root == null:
 		return out
 	var kind := str(monster.get("kind")) if "kind" in monster else ""
 	var ids := roll_drops(kind, GameWorld.rng)
-	var room_left := maxi(0, FLOOR_DROP_CAP - GameWorld.floor_drops)
+	var room_left := maxi(0, FLOOR_DROP_CAP - floor_pickups())
 	if ids.size() > room_left:
 		ids.resize(room_left)
 	for i in ids.size():
@@ -89,6 +90,19 @@ static func drop_for(monster: Actor) -> Array[ComponentPickup]:
 			offset = Vector3(cos(a), 0.0, sin(a)) * DROP_SCATTER
 		var p := ComponentPickup.drop(ids[i], drop_charges(kind, ids[i]), monster.global_position + offset)
 		if p != null:
+			p.from_monster = true
 			out.append(p)
-			GameWorld.floor_drops += 1
 	return out
+
+
+## Monster-dropped pickups lying on the floor now (not yet taken or expired): what FLOOR_DROP_CAP limits. Mail's and
+## a swapped-out spell's pickups do not count.
+static func floor_pickups() -> int:
+	if GameWorld.root == null or not GameWorld.root.is_inside_tree():
+		return 0
+	var n := 0
+	for node in GameWorld.root.get_tree().get_nodes_in_group("component_pickups"):
+		var p := node as ComponentPickup
+		if p != null and p.from_monster and not p._used and not p.is_queued_for_deletion():
+			n += 1
+	return n

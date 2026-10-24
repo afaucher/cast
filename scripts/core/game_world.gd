@@ -18,7 +18,6 @@ var root: Node3D = null      ## parent for actors, projectiles, zones, fx
 var rng := RandomNumberGenerator.new()
 ## Cosmetic randomness (debris, shake, bob phase). Never decides anything that matters in co-op.
 var fx_rng := RandomNumberGenerator.new()
-var floor_drops := 0         ## component pickups monsters dropped on this floor (SpellComponents.FLOOR_DROP_CAP)
 var time := 0.0              ## game clock (seconds of physics time); use for cooldowns/durations
 
 
@@ -35,7 +34,6 @@ func net_fields() -> Dictionary:
 		"root": Net.LOCAL,
 		"rng": Net.PRIVATE,        # each owner's roll stream; results are replicated, not rolls
 		"fx_rng": Net.LOCAL,
-		"floor_drops": Net.OWNER,
 		"time": Net.OWNER,
 	}
 
@@ -44,7 +42,6 @@ func begin(new_map: HexMap, new_root: Node3D, seed_value: int = 0) -> void:
 	map = new_map
 	root = new_root
 	rng.seed = seed_value
-	floor_drops = 0
 
 
 func end() -> void:

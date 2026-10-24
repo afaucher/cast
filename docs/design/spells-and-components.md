@@ -100,9 +100,11 @@ it dies.
 
 Drops are rare on purpose: not every creature drops every spell, and the floor should not fill up with
 pickups. Two more tunables in `SpellComponents` keep it that way:
-- **Per-floor cap** (`FLOOR_DROP_CAP` = 5): at most 5 monster-dropped pickups per floor. `GameWorld.floor_drops`
-  counts them and `GameWorld.begin()` (a floor loading) resets it. The dice are always rolled, so the rng
-  stream (and a floor's drops for a given seed) is the same whatever the cap does.
+- **Floor cap** (`FLOOR_DROP_CAP` = 5): at most 5 monster-dropped pickups lying on the floor at a time
+  (`SpellComponents.floor_pickups()` counts the live ones on the host). One taken or expired makes room for the next
+  drop; mail's and a swapped-out spell's pickups do not count. Until 2026-10-24 it was 5 per floor in all, which left a
+  crew with nothing to cast late in a floor; the user: "Lets change it to no more then 5 per-floor at a time". The dice
+  are always rolled, so the rng stream is the same whatever the cap does.
 - **Despawn** (`PICKUP_LIFETIME` = 60 s, `PICKUP_FADE` = 5 s): an uncollected pickup blinks for its last 5 s
   (faster for the last 2) and then vanishes. A spell you swapped out for another is the exception: it is
   dropped with lifetime 0 (never despawns), so no charges are ever lost to a swap.

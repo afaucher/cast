@@ -452,23 +452,36 @@ func _kill_brutes(n: int) -> Array[String]:
 	return ids
 
 
-## At most FLOOR_DROP_CAP pickups drop on a floor; the count resets when a floor loads; it is repeatable.
+## At most FLOOR_DROP_CAP monster-dropped pickups lie on the floor at a time: one taken or expired makes room for the next
+## drop; mail and swapped-out spells do not count; it is repeatable.
 func _test_drop_cap() -> void:
 	_clear_pickups()
-	eq(SpellComponents.FLOOR_DROP_CAP, 5, "five drops a floor at most")
+	eq(SpellComponents.FLOOR_DROP_CAP, 5, "five monster drops on the floor at a time")
 	GameWorld.begin(_flat_map(), root, 4242)
-	eq(GameWorld.floor_drops, 0, "a loaded floor starts at zero drops")
+	eq(SpellComponents.floor_pickups(), 0, "a loaded floor starts with none")
 	var first := await _kill_brutes(60)
 	eq(first.size(), SpellComponents.FLOOR_DROP_CAP, "60 brutes drop exactly the cap (%s)" % str(first))
-	eq(GameWorld.floor_drops, SpellComponents.FLOOR_DROP_CAP, "the floor counts its drops")
-	check(_pickups().size() <= SpellComponents.FLOOR_DROP_CAP, "no more than the cap lie on the floor")
-	_clear_pickups()
-	# More kills after the cap drop nothing at all.
+	eq(SpellComponents.floor_pickups(), SpellComponents.FLOOR_DROP_CAP, "the floor counts them")
+	# While the cap's pickups lie there, more kills drop nothing.
 	var more := await _kill_brutes(10)
-	eq(more.size(), 0, "past the cap nothing drops")
-	# The next floor loads: the count resets, and the same seed rolls the same drops.
+	eq(more.size(), 0, "at the cap nothing more drops")
+	# One expires (or is taken): room for one more.
+	_pickups()[0].consume()
+	await frames(1)
+	eq(SpellComponents.floor_pickups(), SpellComponents.FLOOR_DROP_CAP - 1, "a pickup gone makes room")
+	var refill := await _kill_brutes(30)
+	eq(refill.size(), 1, "so the next drop comes again, one (%s)" % str(refill))
+	# Pickups that are not monster drops (mail, a spell swapped out) do not count.
+	_clear_pickups()
+	await frames(1)
+	for i in SpellComponents.FLOOR_DROP_CAP:
+		ComponentPickup.drop("heal", 3, Hex.to_world(Vector2i(i - 2, 3)))
+	eq(SpellComponents.floor_pickups(), 0, "other pickups do not count")
+	check((await _kill_brutes(20)).size() > 0, "and monsters still drop beside them")
+	# The next floor with the same seed rolls the same drops.
+	_clear_pickups()
+	await frames(1)
 	GameWorld.begin(_flat_map(), root, 4242)
-	eq(GameWorld.floor_drops, 0, "the count resets on the next floor")
 	var again := await _kill_brutes(60)
 	eq(again, first, "deterministic with the same seed")
 	_clear_pickups()

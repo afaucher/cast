@@ -285,24 +285,32 @@ func _check_contents() -> void:
 			pop_found = true
 			eq(lbl.text, "+%s crypto" % PricedProp.money(money.crypto_amount), "the floating text")
 	check(pop_found, "a floating '+$... crypto' pop appears")
-	# A component drop: a real pickup, outside the monsters' per-floor cap.
+	# A component drop: a real pickup, outside the monsters' drop cap.
 	_fresh()
-	GameWorld.floor_drops = 3
+	var counted_before := SpellComponents.floor_pickups()
 	var pickups_before := get_tree().get_nodes_in_group("component_pickups").size()
 	var parcel := _box(Vector3(1, 0, 1), {"contents": "component", "seed": 5})
 	parcel.apply_damage(5.0, null)
-	eq(GameWorld.floor_drops, 3, "a component from mail does not count toward the drop cap")
+	eq(SpellComponents.floor_pickups(), counted_before, "a component from mail does not count toward the drop cap")
 	check(parcel.pickup != null and is_instance_valid(parcel.pickup), "a pickup was left")
 	eq(get_tree().get_nodes_in_group("component_pickups").size(), pickups_before + 1, "exactly one new pickup")
 	check(SpellBook.has_spell(parcel.component_id) and parcel.pickup.spell_id == parcel.component_id, "it is a real spell's component")
 	eq(parcel.pickup.charges, SpellComponents.PICKUP_CHARGES, "a normal 3-charge pickup")
 	eq(Ledger.lines.size(), 0, "no money for a component")
-	# The cap itself still applies to monsters at the same time.
-	GameWorld.floor_drops = SpellComponents.FLOOR_DROP_CAP
+	# With the monster cap full, mail still drops.
+	var fillers: Array[ComponentPickup] = []
+	for i in SpellComponents.FLOOR_DROP_CAP:
+		var f := ComponentPickup.drop("heal", 3, Vector3(4.0 + i, 0, 4))
+		if f != null:
+			f.from_monster = true
+			fillers.append(f)
+	eq(SpellComponents.floor_pickups(), counted_before + fillers.size(), "(the monster cap is full)")
 	var again := _box(Vector3(-1, 0, 1), {"contents": "component", "seed": 6})
 	again.apply_damage(5.0, null)
 	check(again.pickup != null, "even with the monster cap full, mail still drops a component")
-	eq(GameWorld.floor_drops, SpellComponents.FLOOR_DROP_CAP, "and the counter is untouched")
+	eq(SpellComponents.floor_pickups(), counted_before + fillers.size(), "and the count is untouched")
+	for f in fillers:
+		f.consume()
 	# Decorative contents: bits of the right kind, flaps every time, nothing on the invoice.
 	_fresh()
 	var skulls := _box(Vector3(-3, 0, 0), {"contents": "skulls", "seed": 1})
