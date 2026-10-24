@@ -80,4 +80,19 @@ func setup() -> void:
 	var hit := PlayerController.ray_to_ground(origin, dir, 0.0, GameWorld.map)
 	near(hit.x, target.x, 0.05, "ray refined onto the raised cell (x)")
 	near(hit.y, target.y, 0.05, "ray refined onto the raised cell (y)")
+
+	# Off a pillar (playtest feedback 2026-10-24 item 1): a player's hero on top of a +5 cell walks off it, any height; an AI
+	# hero (an ally) keeps the 3-level drop limit its paths are built for.
+	GameWorld.begin(_row_map([5, 0, 0, 0]), root)
+	var top := HeroFactory.spawn_hero(Vector2i(0, 0), "Stuck", Color.WHITE)
+	top.is_player = true
+	await _walk(top, Vector3.RIGHT, 2.0)
+	check(top.current_cell() != Vector2i(0, 0), "a player's hero jumps down off a +5 pillar (now in %s)" % top.current_cell())
+	top.queue_free()
+	GameWorld.begin(_row_map([5, 0, 0, 0]), root)
+	var ally := HeroFactory.spawn_hero(Vector2i(0, 0), "Ally", Color.GRAY)
+	ally.is_player = false
+	await _walk(ally, Vector3.RIGHT, 2.0)
+	eq(ally.current_cell(), Vector2i(0, 0), "an AI hero keeps the drop limit")
+	ally.queue_free()
 	finish()

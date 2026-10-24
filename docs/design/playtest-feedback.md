@@ -9,7 +9,11 @@ The user: "Playtest feedback - just record then we can decide how to react".
 
 1. **Climbable pillars you can't get down from.** "Players can climb pillars which they cannot then jump down. Lets bring
    these into alignment and have a debug key to unstick."
-   - Decision: pending.
+   - Decision (2026-10-24): "For pillars, can we just allow the player to jump from any height they can climb?" A player's
+     hero now walks off any drop (`Hero._max_drop`, `HexMap.movement_check`'s `max_drop`); AI allies and monsters keep the
+     3-level limit their paths are built for. No unstick key needed for this. Still open: how the user climbed "like 5
+     levels" (the climb rule is +2 at a time; walking past a lone +5 pillar at 432 angles never got on top, so it is
+     something next to it: a ledge, a platform or a terrace step, or the mantle).
 2. **Tentacles for crowd control.** "Tentacles - most useful in hallways to break up a rush. Maybe like a wall or a push
    from the player outward for better crowd control."
    - Decision: pending.
