@@ -157,8 +157,8 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var pump := stride * (1.0 * walk + 0.35 * g)
 	var al := a if walk < 0.01 else a - pump
 	var ar := a if walk < 0.01 else a + pump
-	(parts["arm_l"] as MeshInstance3D).rotation = Vector3(lerpf(al, -2.7, cr), 0.0, -0.45 - 0.55 * w - 0.45 * cr)
-	(parts["arm_r"] as MeshInstance3D).rotation = Vector3(lerpf(ar, -2.7, cr), 0.0, 0.45 + 0.55 * w + 0.45 * cr)
+	(parts["arm_l"] as MeshInstance3D).rotation = Vector3(lerpf(al, 2.7, cr), 0.0, -0.45 - 0.55 * w - 0.45 * cr)
+	(parts["arm_r"] as MeshInstance3D).rotation = Vector3(lerpf(ar, 2.7, cr), 0.0, 0.45 + 0.55 * w + 0.45 * cr)
 	(parts["tail"] as MeshInstance3D).rotation = Vector3(0.25 * w + 0.25 * cr, sin(t * 4.5) * 0.35 + stride * (0.3 * walk + 0.25 * g) + wob * 0.3 * g, 0.0)
 
 

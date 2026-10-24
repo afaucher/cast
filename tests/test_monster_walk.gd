@@ -115,6 +115,7 @@ func _check_cry(kind: String, m: MonsterModel) -> void:
 	m._cry = 1.0
 	var cry := _pose(m, true, 0.6, 0.0)
 	check(_dist(rest, cry) > 0.3, "%s: the war cry is a clearly different pose (%.2f)" % [kind, _dist(rest, cry)])
+	_check_arms_forward(kind, m)
 	m.windup(1.0)
 	var wound := _pose(m, true, 0.6, 0.0)
 	m._cry = 0.0
@@ -133,6 +134,28 @@ func _check_cry(kind: String, m: MonsterModel) -> void:
 	m.war_cry()
 	check(not m.is_crying(), "%s: no cry when downed" % kind)
 	m.set_downed(false)
+
+
+## The cry raises the arms in FRONT (the user, 2026-10-24: "lets have the arms move foward instead of spin backwards"):
+## on the way up, an arm's far end never swings behind its shoulder, nor further back than it rested (the model faces -Z).
+func _check_arms_forward(kind: String, m: MonsterModel) -> void:
+	for arm_name: String in ["arm_l", "arm_r"]:
+		if not m.parts.has(arm_name):
+			continue
+		var arm := m.parts[arm_name] as MeshInstance3D
+		var aabb := arm.mesh.get_aabb()
+		var tip := Vector3(aabb.get_center().x, aabb.position.y, aabb.get_center().z)
+		m._cry = 0.0
+		m.apply_idle(0.6, 0.0)
+		var limit := maxf((arm.transform * tip - arm.position).z, 0.0) + 0.15
+		var worst := -INF
+		for i in range(1, 11):
+			m._cry = i / 10.0
+			m.apply_idle(0.6, 0.0)
+			worst = maxf(worst, (arm.transform * tip - arm.position).z - limit)
+		check(worst <= 0.0, "%s %s: the cry raises it in front, never behind (%.2f past the limit at worst)" % [kind, arm_name, worst])
+	m._cry = 1.0
+	m.apply_idle(0.6, 0.0)
 
 
 func _check_pavise(p: PaviseModel) -> void:

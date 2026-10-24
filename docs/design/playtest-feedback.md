@@ -42,7 +42,11 @@ The user: "Playtest feedback - just record then we can decide how to react".
      listening sheet); A plays until picked. The gym's Experiments: "Monster walk" old / new and "War cries" off / A / B /
      C; the panel's "War cry" button makes the nearest monster of each kind yell. `test_monster_walk`,
      `test_monster_war_cry`, `test_net_monster_step2`.
-   - Decision: pending (batch 2: the walk, the cries, the candidates).
+   - Batch 2 in the gym (2026-10-24): "I don't like the audio. I will record one. But lets have the arms move foward
+     instead of spin backwards. That looks weird." None of the A/B/C candidates is kept: the user records a cry (A plays
+     as a placeholder until then). The cry pose now raises the arms up in front (the skeleton, brute, imp and goo imp
+     swung them up behind; the archer's bow and fist rise in front too); `test_monster_walk` checks no arm swings behind.
+   - Decision: pending (the walk; the cry's sound waits for the user's recording).
 5. **Spells without the wake word.** "Can we do spells without the wake word?"
    - Today: the voice setup screen's "chaos" strictness already casts any spell word anywhere, no trigger
      (`Incantation`, "chaos"); the playtest ran "loose", the default. Chaos also casts on chatter ("brush your teeth",
