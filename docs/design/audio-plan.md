@@ -218,6 +218,45 @@ at a walk, under the whole utterance):
 
 The metal step babbles the most alone (its ring); if a player reports phantom words on diamond plate, drop its ring first.
 
+## War cries (2026-10-24)
+
+Playtest feedback item 4, batch 2 (`playtest-feedback.md`): monster packs coming down a hall felt monotonous, so a pack yells
+when it first spots the crew, and now and then a charging monster yells (`Monster`, "War cries": one yeller per pack, a
+cooldown per area, a rare roll while charging). All 3D on the World bus, all cosmetic: every machine yells from the
+monster state it already sees. Recipes in `tools/sfx_proto/sfx_round3.gd` ("war cries"), rendered by `render_game_sfx.gd`
+like every cue (so the gym can switch them live). The only voices on disk are the user's own takes (`user/`: the two
+"ouch"es, the climb's "hup", the imp's yips), so the cries are those pitched, granular-stretched, rasped and driven, or a
+formant synth, with Kenney bone clacks and thumps and the portal rumble (Freesound 657653, LilMati) layered in. No
+downloads.
+
+**Listening sheet.** Pick one per row by its number and letter ("1A, 2C, 3B"). The game plays **A** until you pick; the
+gym's Experiments "War cries" picker (off / A / B / C) switches it live, the panel's "War cry" button makes the nearest
+monster of each kind yell, and "Hallway x12" / "Hallway mix" show a pack's cry and the charging ones. The files are the
+game's cues (`assets/audio/sfx/cry_*.wav`, rendered by `tools/render_sfx.ps1`); a copy to listen to is written by
+`make_sfx.gd -- <out_dir> cry_grunt_a cry_grunt_b ...` (this round's: the worktree's `test_logs/war_cries/`).
+
+| # | File | What it is |
+|---|---|---|
+| 1A | `cry_grunt_a.wav` | Skeleton "rattle howl": the "ouch" 5 semitones down, stretched into a hoarse hollow "OWWW" that lifts and falls, over a bone rattle speeding up (0.57 s) |
+| 1B | `cry_grunt_b.wav` | Skeleton "dry shriek": a sharp clatter of bones, then a fleshless synth hiss rising "ah" to "ee" with a 55 Hz rasp (0.71 s) |
+| 1C | `cry_grunt_c.wav` | Skeleton "jaw-clack bark": the jaw clacking fast, then a barked hollow "HAH!" (the climb "hup", driven) (0.61 s) |
+| 2A | `cry_brute_a.wav` | Brute "roar": the "ouch" an octave down, stretched and overdriven into a "RROOAARR" with a growl flutter, a chest thump under it (0.77 s) |
+| 2B | `cry_brute_b.wav` | Brute "chest-beat bellow": two fist thumps on its chest, then a deep synth "AWWW" bellow, driven (1.15 s) |
+| 2C | `cry_brute_c.wav` | Brute "demon growl": the portal rumble swelling under a guttural "HRRAAH" (the "hup" 10 semitones down, stretched, driven) (0.95 s) |
+| 3A | `cry_swarmer_a.wav` | Imp "shriek": the first yip pitched up and held into an "EEEE!" with a fast trill, rising at the end (0.32 s) |
+| 3B | `cry_swarmer_b.wav` | Imp "cackle": five quick "hee"s chopped from the yip, each a little higher (0.41 s) |
+| 3C | `cry_swarmer_c.wav` | Imp "chitter-screech": a fast trilling synth squeal breaking into the third yip, pitched up (0.36 s) |
+| 4 | `cry_monster.wav` | Everyone else (archer, pavise, goo imp, Water Boy): a short gruff "RAH!" (the other "ouch", down and driven) on a low breath (0.42 s) |
+
+**Mic-leak probe (2026-10-24)**, `mic_leak_probe.tscn` with the ten recipes: **A** (alone, peak 0.5): no cast from any;
+filler words everywhere (they are voices): the skeletons "OH"/"OR", the brutes "AH"/"UM", the imps "HERE", "WHAT" and 3B a
+babble ("YOU DIDN'T YOU DID IT"), the shared cry "HOW". **C** (a "cast <spell>" said over the cue starting with the voice,
+peak 0.4, voices a0 and b0, 6 casts each): 1A 6/6, 1B 3/6, 1C 5/6, 2A 6/6, 2B 3/6, 2C 6/6, 3A 5/6, 3B 2/6, 3C 4/6, 4 6/6.
+The B candidates mask a spell word most (1B "CAST VEAL", 2B "CAST A LIAR LONG", 3B "YESTERFUEL"); the defaults (A and 4)
+are 23/24. C is the worst case (a loud leak over the word's very start); the cries are rare (one per pack's sighting per
+6 s an area, and a couple while a hallway charges), so if a B is picked, the cost is an occasional missed cast while a
+cry plays.
+
 The user's ask (2026-10-18): basic audio. Find out whether good open-license sounds exist or whether we can make them
 procedurally, track every source for attribution, and pick the top 10 sounds that make the game more fun and read
 better ("a sound when cast is activated", "spells pffting").

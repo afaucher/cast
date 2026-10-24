@@ -114,6 +114,39 @@ const SIZE_FIXED: Array[String] = ["shark", "gator"]
 static var _spawn_seq := 0
 static var _seq_floor := -1
 
+# --- War cries (playtest feedback 2026-10-24, item 4, batch 2) -----------------------------------------------------------
+# A look and a sound, never gameplay: every machine yells from what it sees of the monster's `state` (the host's own AI,
+# or the 3 state bits a puppet gets in the stream), so it needs no event of its own.
+#   FIRST SIGHT  a monster turning from resting (IDLE, SUSPICIOUS, ALERT, SEARCH) to fighting (CHASE, ATTACK), or born
+#                fighting (a gate's burst, CRY_BORN), is a sighting. The sightings within CRY_GATHER of each other and
+#                CRY_PACK_RADIUS of it are one pack's: only the one with the lowest key (its net id: the same monster on every
+#                machine; its spawn order offline) yells, and no other first-sight cry within CRY_PACK_RADIUS for
+#                CRY_PACK_COOLDOWN s (a burst of 7, or the pack-mates that join a beat later, stay quiet).
+#   CHARGING     a chasing monster that moved rolls every CHARGE_ROLL_EVERY s on a shared clock (host_time online) with a
+#                hash of its key and the roll's number (the same roll on every machine, no dice): CHARGE_CHANCE to yell,
+#                unless it yelled in CHARGE_SELF_COOLDOWN s or anything yelled within CHARGE_AREA in CHARGE_AREA_COOLDOWN s.
+# The yell: the model's war_cry() pose (weapon or arms up for about half a second) and the kind's cue (war_cry_cue).
+# Frozen monsters (aggro_range 0) and CRY_SKIP kinds never yell. `war_cry` is the gym's "War cries" picker (off: no cries
+# at all; A / B / C: the sound candidate, A until the user picks).
+const CRY_SKIP: Array[String] = ["shark", "gator", "jockey", "goblin"]
+## Kinds with their own cry candidates (cue cry_<voice>_<a|b|c>); every other kind yells the shared cry_monster.
+const CRY_VOICES: Array[String] = ["grunt", "brute", "swarmer"]
+const CRY_PICKS: Array[String] = ["off", "A", "B", "C"]
+const CRY_GATHER := 0.15          ## sightings this close in time are one pack's (a pack wakes in one host frame)
+const CRY_PACK_RADIUS := 12.0
+const CRY_PACK_COOLDOWN := 6.0
+const CRY_BORN := 0.5             ## a monster first seen fighting this young was born fighting (a gate's burst): a sighting
+const CHARGE_ROLL_EVERY := 1.5
+const CHARGE_CHANCE := 0.06
+const CHARGE_SELF_COOLDOWN := 10.0
+const CHARGE_AREA := 10.0
+const CHARGE_AREA_COOLDOWN := 4.0
+static var war_cry := "A"
+## Recent yells on this machine: Vector4(x, z, GameWorld.time, 1 first sight / 0 charging). Plain values, pruned as they age.
+static var _cry_log: Array[Vector4] = []
+## Recent sightings: Vector4(x, z, GameWorld.time, key).
+static var _sightings: Array[Vector4] = []
+
 # --- Tunables (kinds set these in _init) --------------------------------------------
 var kind := "monster"
 var can_climb := true
@@ -199,6 +232,14 @@ var _size_id := 0                 ## the id size_k was derived from (0: not yet)
 var gait_k := 1.0                 ## its walk clock's rate (walk unsync; 1.0 when off)
 var _gait_id := 0                 ## the id its walk clock was set from (0: not yet)
 
+# War cries (see the constants; all of it a look on this machine)
+var cries := 0                    ## times it yelled on this machine (tests, the gym)
+var _cry_seen := -1               ## the state the war cry last saw (-1: not looked yet)
+var _cry_born := 0.0              ## GameWorld.time it came into the world
+var _cry_sight_at := -INF         ## its sighting waiting for CRY_GATHER to pass (-INF: none)
+var _cried_at := -INF
+var _charge_roll := -1            ## the shared clock's last charging roll it judged
+
 # Visuals
 var model: MonsterModel = null    ## faceted body (null when use_proto_visuals or an unknown kind)
 var _visual: Node3D = null
@@ -248,6 +289,7 @@ func _ready() -> void:
 	_retarget_t = GameWorld.rng.randf() * RETARGET_INTERVAL
 	_look_t = GameWorld.rng.randf_range(LOOK_MIN, LOOK_MAX)
 	_prev_pos = global_position
+	_cry_born = GameWorld.time
 	_seed_variety()
 
 
@@ -357,6 +399,9 @@ func net_fields() -> Dictionary:
 		"pace_k": Net.PRIVATE, "_jit_rng": Net.PRIVATE, "_lane": Net.PRIVATE, "_lane_goal": Net.PRIVATE,
 		"_lane_t": Net.PRIVATE, "_lane_key": Net.PRIVATE, "_lane_dir": Net.PRIVATE,
 		"_spawn_n": Net.LOCAL, "size_k": Net.LOCAL, "_size_id": Net.LOCAL, "gait_k": Net.LOCAL, "_gait_id": Net.LOCAL,
+		# War cries: every machine yells from the state it sees (no event); the key is the net id every machine has.
+		"cries": Net.LOCAL, "_cry_seen": Net.LOCAL, "_cry_born": Net.LOCAL, "_cry_sight_at": Net.LOCAL, "_cried_at": Net.LOCAL,
+		"_charge_roll": Net.LOCAL,
 		# Presentation: models, bars, materials, animation phases.
 		"model": Net.LOCAL, "_visual": Net.LOCAL, "_bar": Net.LOCAL, "_bar_mat": Net.LOCAL,
 		"_mats": Net.LOCAL, "_flash_t": Net.LOCAL, "_tint_key": Net.LOCAL,
@@ -1376,6 +1421,7 @@ func _update_visual(delta: float) -> void:
 
 	var moved := (global_position - _prev_pos).length_squared() > 0.000001
 	_prev_pos = global_position
+	_tick_war_cry(moved)
 	_sync_gait()
 	if moved:
 		_walk_phase += delta * walk_freq * gait_k
@@ -1398,6 +1444,129 @@ func _update_visual(delta: float) -> void:
 	if model != null:
 		model.windup(_telegraph)
 	_pose(delta, moved)
+
+
+# --- War cries (see the constants) --------------------------------------------------------------------------------------
+
+## Yell now: the model's war cry pose and the kind's cue (silent with the picker off). `first_sight`: a pack's first-sight
+## cry (it holds the pack's cooldown). Cosmetic, this machine only. The gym's audition button calls it directly; with the
+## picker off nothing else does.
+func yell(first_sight: bool = false) -> void:
+	if dead:
+		return
+	var now := GameWorld.time
+	_cried_at = now
+	cries += 1
+	_cry_log.append(Vector4(global_position.x, global_position.z, now, 1.0 if first_sight else 0.0))
+	if model != null:
+		model.war_cry()
+	var cue := war_cry_cue(kind)
+	if cue != "":
+		Sfx.play_at(cue, global_position)
+
+
+## The cue `kind` yells with the picker as it is ("" when off): cry_<grunt|brute|swarmer>_<a|b|c>, or the shared cry_monster.
+static func war_cry_cue(k: String) -> String:
+	if war_cry == "off" or not CRY_PICKS.has(war_cry):
+		return ""
+	return "cry_%s_%s" % [k, war_cry.to_lower()] if CRY_VOICES.has(k) else "cry_monster"
+
+
+## True if this kind ever yells (not a CRY_SKIP kind, not frozen).
+func can_yell() -> bool:
+	return not CRY_SKIP.has(kind) and not is_frozen()
+
+
+## Its key among a pack (lowest yells): its net id, the same on every machine; its spawn order offline.
+func cry_key() -> int:
+	var id := NetFloor.id_of(self)
+	return id if id > 0 else _spawn_n
+
+
+## A charging roll: true when roll number `n` of key `key` yells (a hash: the same answer on every machine).
+static func charge_roll_hits(key: int, n: int) -> bool:
+	return float(hash([key, n, "charge_cry"]) & 0xFFFF) / 65536.0 < CHARGE_CHANCE
+
+
+## Forget every yell and sighting (a new floor; tests).
+static func reset_war_cries() -> void:
+	_cry_log.clear()
+	_sightings.clear()
+
+
+## Each frame from _update_visual (the host's physics, a puppet's net_tick): judge a sighting, or a charging roll.
+func _tick_war_cry(moved: bool) -> void:
+	var was := _cry_seen
+	_cry_seen = state
+	if dead or war_cry == "off" or not can_yell():
+		return
+	var now := GameWorld.time
+	_prune_cries(now)
+	var fighting := state == State.CHASE or state == State.ATTACK
+	if fighting and (was == State.IDLE or was == State.SUSPICIOUS or was == State.ALERT or was == State.SEARCH
+			or (was < 0 and now - _cry_born <= CRY_BORN)):
+		_cry_sight_at = now
+		_sightings.append(Vector4(global_position.x, global_position.z, now, float(cry_key())))
+	if _cry_sight_at > -INF:
+		if now - _cry_sight_at < CRY_GATHER:
+			return
+		var at := _cry_sight_at
+		_cry_sight_at = -INF
+		if fighting and _first_of_pack(at) and not _yelled_near(CRY_PACK_RADIUS, CRY_PACK_COOLDOWN, true):
+			yell(true)
+		return
+	if state != State.CHASE or not moved:
+		return
+	var clock := Session.host_time() if Net.online() else now
+	var key := cry_key()
+	var phase := float(hash([key, "charge_phase"]) & 0xFFFF) / 65536.0 * CHARGE_ROLL_EVERY
+	var n := int(floor((clock + phase) / CHARGE_ROLL_EVERY))
+	if n == _charge_roll:
+		return
+	var first := _charge_roll < 0
+	_charge_roll = n
+	if first or now - _cried_at < CHARGE_SELF_COOLDOWN or not charge_roll_hits(key, n):
+		return
+	if _yelled_near(CHARGE_AREA, CHARGE_AREA_COOLDOWN, false):
+		return
+	yell(false)
+
+
+## True if, among the sightings within CRY_GATHER of `at` and CRY_PACK_RADIUS of it, its key is the lowest.
+func _first_of_pack(at: float) -> bool:
+	var me := float(cry_key())
+	var r2 := CRY_PACK_RADIUS * CRY_PACK_RADIUS
+	for s in _sightings:
+		if absf(s.z - at) > CRY_GATHER or s.w >= me:
+			continue
+		var dx := s.x - global_position.x
+		var dz := s.y - global_position.z
+		if dx * dx + dz * dz <= r2:
+			return false
+	return true
+
+
+## True if anything yelled within `radius` in the last `cooldown` s (`sight_only`: first-sight cries only).
+func _yelled_near(radius: float, cooldown: float, sight_only: bool) -> bool:
+	var now := GameWorld.time
+	var r2 := radius * radius
+	for c in _cry_log:
+		if now - c.z > cooldown or (sight_only and c.w < 0.5):
+			continue
+		var dx := c.x - global_position.x
+		var dz := c.y - global_position.z
+		if dx * dx + dz * dz <= r2:
+			return true
+	return false
+
+
+## Drop yells and sightings older than any cooldown (or from a clock that started over: a new world).
+static func _prune_cries(now: float) -> void:
+	var keep := maxf(CRY_PACK_COOLDOWN, CHARGE_AREA_COOLDOWN) + 1.0
+	while not _cry_log.is_empty() and (now - _cry_log[0].z > keep or _cry_log[0].z > now + 0.001):
+		_cry_log.remove_at(0)
+	while not _sightings.is_empty() and (now - _sightings[0].z > CRY_GATHER * 4.0 + 1.0 or _sightings[0].z > now + 0.001):
+		_sightings.remove_at(0)
 
 
 # --- Puppet (M3): on a client the host's monster is SHOWN, not simulated ------------------------------------

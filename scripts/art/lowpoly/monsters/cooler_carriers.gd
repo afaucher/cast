@@ -420,12 +420,16 @@ class WaterboyModel extends CarrierModel:
 		if _downed:
 			return
 		var walk := clampf(speed / 3.5, 0.0, 1.0)
+		# The active walk (MonsterModel.gait_k): a hustle behind the truck, the hips rolling over each step and the head
+		# bobbing. The war cry (cry_k): it straightens and the whistle comes up, as for the pour.
+		var g := gait_k(walk)
+		var cr := cry_k()
 		var stride := sin(t * 8.0)
-		var h := heal_k
+		var h := maxf(heal_k, cr)
 		var body := parts["body"] as MeshInstance3D
-		body.position.y = HIP_Y + sin(t * 2.2) * 0.01 - absf(stride) * 0.03 * walk
-		body.rotation = Vector3(0.28 - 0.18 * h, 0.0, 0.0)      # leaning into the truck; straightens to blow the whistle
-		(parts["head"] as MeshInstance3D).rotation = Vector3(-0.25 + 0.10 * h, 0.0, 0.0)
+		body.position = Vector3(stride * 0.025 * g, HIP_Y + sin(t * 2.2) * 0.01 - absf(stride) * 0.03 * walk - absf(stride) * 0.02 * g, body.position.z)
+		body.rotation = Vector3(0.28 - 0.18 * h + 0.06 * g, stride * 0.05 * g, -stride * 0.06 * g)      # leaning into the truck; straightens to blow the whistle
+		(parts["head"] as MeshInstance3D).rotation = Vector3(-0.25 + 0.10 * h - absf(stride) * 0.08 * g - 0.15 * cr, 0.0, stride * 0.07 * g)
 		var truck := parts["truck"] as MeshInstance3D
 		var tx := truck.transform
 		var bx := body.transform.affine_inverse()

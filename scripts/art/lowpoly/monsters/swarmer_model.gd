@@ -123,31 +123,43 @@ func _tail_soup() -> LowPoly.Soup:
 
 # ------------------------------------------------------------------ animation
 
+## The walk (active walk, MonsterModel.gait_k): a scurry. Low and pitched forward, bouncing off every footfall, its pot
+## belly wobbling side to side at half the step, the head bobbing and darting, the arms pumping and the tail whipping.
+## The war cry (cry_k): a little hop with both arms flung up, the ears up and the head back.
 func apply_idle(t: float, speed: float = 0.0) -> void:
 	if _downed:
 		return
 	var walk := clampf(speed / 5.0, 0.0, 1.0)
+	var g := gait_k(walk)
+	var cr := cry_k()
 	var breath := sin(t * 3.2)
 	var stride := sin(t * 19.0)
+	var wob := sin(t * 9.5)                       # the belly's waddle, one per two steps
 	var w := wind_e()
 	var sw := _swing
 	var body := parts["body"] as MeshInstance3D
-	body.position = Vector3(0.0, BODY_Y + breath * 0.012 + absf(stride) * 0.07 * walk - 0.11 * w + 0.03 * sw, -0.14 * sw)
-	body.rotation = Vector3(0.40 * w - 0.65 * sw - 0.15 * walk, stride * 0.12 * walk, sin(t * 2.3) * 0.03)
-	(parts["head"] as MeshInstance3D).rotation = Vector3(-0.30 * w + 0.15 * sw + sin(t * 2.0) * 0.04, sin(t * 1.6) * 0.12 * (1.0 - w), 0.0)
-	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.95 * walk - 0.55 * w + 0.5 * sw
-	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.95 * walk - 0.55 * w + 0.5 * sw
-	var flap := sin(t * 5.0) * 0.12 + stride * 0.15 * walk
-	(parts["ear_l"] as MeshInstance3D).rotation = Vector3(0.0, 0.0, flap - 0.25 * w)
-	(parts["ear_r"] as MeshInstance3D).rotation = Vector3(0.0, 0.0, -flap + 0.25 * w)
+	body.position = Vector3(wob * 0.035 * g, BODY_Y + breath * 0.012 + absf(stride) * 0.07 * walk - 0.11 * w + 0.03 * sw
+			- 0.07 * g + absf(stride) * 0.06 * g + 0.10 * cr, -0.14 * sw)
+	body.rotation = Vector3(0.40 * w - 0.65 * sw - 0.15 * walk - 0.22 * g + 0.25 * cr, stride * 0.12 * walk + wob * 0.10 * g,
+			sin(t * 2.3) * 0.03 + wob * 0.16 * g)
+	(parts["head"] as MeshInstance3D).rotation = Vector3(-0.30 * w + 0.15 * sw + sin(t * 2.0) * 0.04 + 0.22 * g + absf(stride) * 0.10 * g + 0.45 * cr,
+			sin(t * 1.6) * 0.12 * (1.0 - w) + sin(t * 7.0) * 0.12 * g, -wob * 0.12 * g)
+	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * (0.95 * walk + 0.15 * g) - 0.55 * w + 0.5 * sw - 0.25 * g
+	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * (0.95 * walk + 0.15 * g) - 0.55 * w + 0.5 * sw - 0.25 * g
+	var flap := sin(t * 5.0) * 0.12 + stride * (0.15 * walk + 0.15 * g)
+	(parts["ear_l"] as MeshInstance3D).rotation = Vector3(0.0, 0.0, flap - 0.25 * w + 0.20 * g - 0.45 * cr)
+	(parts["ear_r"] as MeshInstance3D).rotation = Vector3(0.0, 0.0, -flap + 0.25 * w - 0.20 * g + 0.45 * cr)
 	# arms: clawing forward and out; spread wide when coiled; thrust forward on the bite
 	var claw := sin(t * 4.0) * 0.12
 	var a := -0.85 + claw + stride * 0.5 * walk
 	a = lerpf(a, 0.35, w)
 	a = lerpf(a, -1.85, sw)
-	(parts["arm_l"] as MeshInstance3D).rotation = Vector3(a if walk < 0.01 else a - stride * 1.0 * walk, 0.0, -0.45 - 0.55 * w)
-	(parts["arm_r"] as MeshInstance3D).rotation = Vector3(a if walk < 0.01 else a + stride * 1.0 * walk, 0.0, 0.45 + 0.55 * w)
-	(parts["tail"] as MeshInstance3D).rotation = Vector3(0.25 * w, sin(t * 4.5) * 0.35 + stride * 0.3 * walk, 0.0)
+	var pump := stride * (1.0 * walk + 0.35 * g)
+	var al := a if walk < 0.01 else a - pump
+	var ar := a if walk < 0.01 else a + pump
+	(parts["arm_l"] as MeshInstance3D).rotation = Vector3(lerpf(al, -2.7, cr), 0.0, -0.45 - 0.55 * w - 0.45 * cr)
+	(parts["arm_r"] as MeshInstance3D).rotation = Vector3(lerpf(ar, -2.7, cr), 0.0, 0.45 + 0.55 * w + 0.45 * cr)
+	(parts["tail"] as MeshInstance3D).rotation = Vector3(0.25 * w + 0.25 * cr, sin(t * 4.5) * 0.35 + stride * (0.3 * walk + 0.25 * g) + wob * 0.3 * g, 0.0)
 
 
 func _slump() -> void:

@@ -5,7 +5,9 @@ extends NetGameTest
 ##   alarm woke walking in on ALERT (their streamed state);
 ## - AN ARCHER'S PRACTICE SHOT: the host's archer shoots a priced prop; the client plays the arrow (the puppet's visual),
 ##   the prop's dent arrives once (8 HP, from the host: obj.hurt), the client sends no hit request of its own (the visual
-##   never decides a hit on a host-owned prop) and its own hero is untouched.
+##   never decides a hit on a host-owned prop) and its own hero is untouched;
+## - A PACK'S WAR CRY (playtest feedback item 4, batch 2): the host's resting pack spots the host's hero and one member
+##   yells; the client's puppets of the pack yell from their streamed state, once, by the same member (no event).
 
 const PEERS := 2
 const SEED := 21
@@ -14,6 +16,7 @@ var _phases: Array = []
 var _volleys := 0
 var _arrows := 0
 var _scout: Node = null
+var _cry_before := {}             ## client: the watched pack's ids -> their cries before the host's sighting
 
 
 func run_host() -> void:
@@ -94,6 +97,35 @@ func run_host() -> void:
 		eq(int(pr["dents"]), 1, "... exactly one dent (no double hit)")
 		eq(int(pr["requests"]), 0, "the client's visual arrow sent no hit request")
 		near(float(pr["me1"]), float(pr["me0"]), 0.001, "and its own hero was not hit")
+
+	# 3. A pack's war cry (playtest feedback item 4, batch 2): the host's resting pack spots the host's hero; one member
+	# yells on the host, and on the client the puppets yell from their streamed state: once, by the same member.
+	var pack := _resting_pack(25.0)
+	if check(pack.size() >= 2, "a resting pack far from the crew (%d)" % pack.size()):
+		var lead: Monster = pack[0]
+		var ids: Array = pack.map(func(m: Monster) -> int: return NetFloor.id_of(m))
+		command(c1, "cry_watch", {"ids": ids})
+		await sleep(0.6)
+		var before := {}
+		for m: Monster in pack:
+			before[m] = m.cries
+		lead.aggro(my_hero())   # (its pack-mates wake with it: _alert_pack)
+		var fighting := 0
+		for m: Monster in pack:
+			if m.state == Monster.State.CHASE or m.state == Monster.State.ATTACK:
+				fighting += 1
+		eq(fighting, pack.size(), "the host's whole pack wakes to fight")
+		await sleep(1.5)   # (the yell, and the stream reaching the client; far from the crew they soon give up the chase)
+		var host_yelled: Array = []
+		for m: Monster in pack:
+			if m.cries > int(before[m]):
+				host_yelled.append(NetFloor.id_of(m))
+		eq(host_yelled.size(), 1, "one member of the host's pack yelled (%s)" % str(host_yelled))
+		command(c1, "cry_report")
+		check(await wait_reports("cry", 1, 20.0), "the client reports its puppets' cries")
+		var cr: Dictionary = reported(c1, "cry")
+		print("[step2] war cry: the host's pack of %d yelled %s, the client's puppets %s" % [pack.size(), str(host_yelled), str(cr["yelled"])])
+		eq(str(cr["yelled"]), str(host_yelled), "the client's puppets yelled once, by the same member")
 	command(c1, "end")
 	check(await wait_done(1, 30.0), "the client is done")
 
@@ -142,6 +174,19 @@ func run_client() -> void:
 						last = prop.hp
 				report("practice", {"arrows": _arrows, "hp0": hp0, "hp1": prop.hp if prop != null else -1.0, "dents": dents,
 					"requests": int(Session.objects.stats.get("hits_out", 0)) - req0, "me0": me0, "me1": me.hp})
+			"cry_watch":
+				_cry_before = {}
+				for id: Variant in (cmd["ids"] as Array):
+					var m := NetRegistry.node(int(id)) as Monster
+					if m != null:
+						_cry_before[int(id)] = m.cries
+			"cry_report":
+				var yelled: Array = []
+				for id: int in _cry_before:
+					var m := NetRegistry.node(id) as Monster
+					if m != null and m.cries > int(_cry_before[id]):
+						yelled.append(id)
+				report("cry", {"yelled": yelled})
 			_:
 				running = false
 
@@ -187,6 +232,32 @@ func _resting_far_monster(far: float) -> Monster:
 			best = m
 			break
 	return best
+
+
+## A resting pack at least `far` from every hero (host): a lead that can yell and the monsters its aggro wakes with it
+## (Monster._alert_pack's rule), at least two of them; [] when there is none.
+func _resting_pack(far: float) -> Array[Monster]:
+	for id in NetRegistry.ids():
+		var lead := NetRegistry.node(id) as Monster
+		if lead == null or lead.dead or not lead.can_yell() or lead.state != Monster.State.IDLE:
+			continue
+		var ok := true
+		for seat in [1, 2, 3]:
+			var h := hero_at(seat)
+			if h != null and GameWorld.flat_distance(h.global_position, lead.global_position) < far:
+				ok = false
+		if not ok:
+			continue
+		var out: Array[Monster] = [lead]
+		for id2 in NetRegistry.ids():
+			var m := NetRegistry.node(id2) as Monster
+			if m == null or m == lead or m.dead or not m.is_passive() or m.state == Monster.State.RETURN:
+				continue
+			if GameWorld.flat_distance(m.global_position, lead.global_position) <= lead.alert_radius:
+				out.append(m)
+		if out.size() >= 2:
+			return out
+	return []
 
 
 func _walkable_near(p: Vector3, ring: int) -> Vector3:

@@ -11,6 +11,7 @@ extends LowPolyModel
 ##   windup(t)             0..1 attack telegraph pose (sword up, bow drawn, fists up, crouch). Hold it
 ##                         every frame from Monster._telegraph; windup(0.0) returns to the rest pose.
 ##   attack_swing()        the strike: a quick snap out of the telegraph and back (call at strike time).
+##   war_cry()             the yell: weapon or arms up and the head back for about half a second (Monster.yell).
 ##   set_downed(true)      death: glow off, greyed, limbs go slack (Monster still topples the Visual).
 ##   set_tint(colour, k)   additive hit flash / windup pulse (replaces Monster._apply_tint's materials).
 ##   set_fade(a)           1 -> 0 at the end of the death tween (the model shrinks away).
@@ -36,6 +37,17 @@ extends LowPolyModel
 
 const SWING_TIME := 0.30
 const GLOW_GAIN := 1.8
+## The war cry's pose (war_cry()): up in CRY_UP s, held CRY_HOLD, down over CRY_DOWN (about half a second in all).
+const CRY_UP := 0.12
+const CRY_HOLD := 0.30
+const CRY_DOWN := 0.22
+
+## THE ACTIVE WALK (playtest feedback 2026-10-24, item 4, batch 2): on top of each kind's stride, a walking monster sways
+## and shifts its weight, leans into its speed, swings its arms (or weapon) against its legs and bobs its head, each kind
+## in its own character (apply_idle; gait_k). It is a look: every machine animates its own copy from the movement it sees,
+## on the model's own clock (_t, unsynced per monster by Monster's walk unsync). The gym's "Monster walk" picker switches
+## it (GymDev's Experiments); on in the game.
+static var active_walk := true
 
 ## Monster.kind this model is for ("grunt", "archer", "brute", "swarmer").
 var monster_kind := "monster"
@@ -45,6 +57,8 @@ var glow_flare := 0.5
 
 var _wind := 0.0               ## windup(t), 0..1
 var _swing := 0.0              ## attack_swing(): 1 right at the strike, easing to 0
+var _cry := 0.0                ## war_cry(): 0 -> 1 -> 0 over about half a second
+var _cry_tween: Tween
 var _downed := false
 var _glow_now := GLOW_GAIN
 var _base_scale := Vector3.ONE
@@ -93,6 +107,45 @@ func _set_swing(v: float) -> void:
 	_refresh()
 
 
+## The war cry (Monster.yell): weapon or arms thrown up and the head back for about half a second, so the yell reads
+## without sound. Each kind poses it in apply_idle from cry_k(); a wind-up or a strike takes over from it.
+func war_cry() -> void:
+	if _downed:
+		return
+	if _cry_tween != null and _cry_tween.is_valid():
+		_cry_tween.kill()
+	if not is_inside_tree():
+		_set_cry(1.0)
+		return
+	_cry_tween = create_tween()
+	_cry_tween.tween_method(_set_cry, _cry, 1.0, CRY_UP).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_cry_tween.tween_interval(CRY_HOLD)
+	_cry_tween.tween_method(_set_cry, 1.0, 0.0, CRY_DOWN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+func _set_cry(v: float) -> void:
+	_cry = v
+	_refresh()
+
+
+## True while the war cry's pose is up.
+func is_crying() -> bool:
+	return _cry > 0.001
+
+
+## The war cry's weight in the pose now, 0..1 (TRANS_BACK may overshoot a little): none in a wind-up or a strike.
+func cry_k() -> float:
+	return clampf(_cry, 0.0, 1.1) * (1.0 - clampf(wind_e() + _swing, 0.0, 1.0))
+
+
+## The active walk's weight at walk share `walk` (0..1 of the kind's walking speed): 0 standing and with the old walk, and
+## it gives way to a wind-up or a strike (so their poses are exactly what they were).
+func gait_k(walk: float) -> float:
+	if not active_walk:
+		return 0.0
+	return clampf(walk, 0.0, 1.0) * (1.0 - clampf(wind_e() + _swing, 0.0, 1.0))
+
+
 ## Eyes / cracks flare a little in the telegraph and the strike (enemy language).
 func _update_glow() -> void:
 	if _downed:
@@ -116,8 +169,11 @@ func set_downed(downed: bool) -> void:
 	if downed:
 		_wind = 0.0
 		_swing = 0.0
+		_cry = 0.0
 		if _swing_tween != null and _swing_tween.is_valid():
 			_swing_tween.kill()
+		if _cry_tween != null and _cry_tween.is_valid():
+			_cry_tween.kill()
 		_slump()
 	else:
 		apply_idle(_t, 0.0)
@@ -134,15 +190,19 @@ func set_fade(a: float) -> void:
 	scale = _base_scale * maxf(a, 0.001)
 
 
-## Frozen pose for the lab / screenshots: kind is "rest", "windup" (k = telegraph) or "swing" (k = swing).
+## Frozen pose for the lab / screenshots: kind is "rest", "windup" (k = telegraph), "swing" (k = swing) or "cry" (k = the war
+## cry's pose).
 func pose_preview(kind: String, k: float = 1.0) -> void:
 	_wind = 0.0
 	_swing = 0.0
+	_cry = 0.0
 	match kind:
 		"windup":
 			_wind = clampf(k, 0.0, 1.0)
 		"swing":
 			_swing = clampf(k, 0.0, 1.0)
+		"cry":
+			_cry = clampf(k, 0.0, 1.0)
 	_update_glow()
 	apply_idle(0.6, 0.0)
 

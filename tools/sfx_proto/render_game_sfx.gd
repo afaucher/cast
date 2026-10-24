@@ -66,6 +66,17 @@ const GAME_CUES := {
 	"prop_dent": "prop_dent_v1",
 	"prop_break": "prop_break_v1",
 	"mailbox_break": "mailbox_break_v1",
+	# war cries (2026-10-24): every candidate is rendered, so the gym's "War cries" picker can switch them live
+	"cry_grunt_a": "cry_grunt_a",
+	"cry_grunt_b": "cry_grunt_b",
+	"cry_grunt_c": "cry_grunt_c",
+	"cry_brute_a": "cry_brute_a",
+	"cry_brute_b": "cry_brute_b",
+	"cry_brute_c": "cry_brute_c",
+	"cry_swarmer_a": "cry_swarmer_a",
+	"cry_swarmer_b": "cry_swarmer_b",
+	"cry_swarmer_c": "cry_swarmer_c",
+	"cry_monster": "cry_monster",
 }
 
 

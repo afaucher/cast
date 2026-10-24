@@ -30,6 +30,19 @@ The user: "Playtest feedback - just record then we can decide how to react".
    - Decision (2026-10-24): keep all four, always on. "0.6 looks good"; "They all look good. Lets make those the defaults";
      "Clean up the flags" (the gym switches and Monster's on/off statics are gone; the hallway pack buttons stay). Still
      open from this item: the war cries and a more active walk (batch 2), and the origin gate's spawn rate.
+   - Building batch 2 (2026-10-24): the user, "Lets do 3 - crowd batch 2". A more active walk: on each kind's stride, a
+     walking monster sways and shifts its weight, leans into its speed, swings its arms or weapon against its legs and bobs
+     its head, in character (the skeleton a jaunty rattle-march, the brute a heavy lumber, the imp a low bouncy scurry, the
+     archer a stalk with the bow up, the pavise a braced shuffle, the goblin, goo imp and Water Boy lighter versions;
+     `MonsterModel.gait_k`), on its own unsynced clock; wind-ups and strikes are untouched. War cries: a pack's first sight
+     of the crew makes ONE member yell (the lowest net id among the pack's sightings; one per 12 units per 6 s), and a
+     charging monster yells now and then (a 6% roll every 1.5 s on the shared clock; 10 s cooldown each, 4 s per area), with
+     a ~0.5 s arms-up pose; every machine yells from the monster state it sees (no event; `Monster`, "War cries"). Sounds:
+     three candidates each for the skeleton, the brute and the imp, one shared cry (audio-plan.md "War cries", the
+     listening sheet); A plays until picked. The gym's Experiments: "Monster walk" old / new and "War cries" off / A / B /
+     C; the panel's "War cry" button makes the nearest monster of each kind yell. `test_monster_walk`,
+     `test_monster_war_cry`, `test_net_monster_step2`.
+   - Decision: pending (batch 2: the walk, the cries, the candidates).
 5. **Spells without the wake word.** "Can we do spells without the wake word?"
    - Today: the voice setup screen's "chaos" strictness already casts any spell word anywhere, no trigger
      (`Incantation`, "chaos"); the playtest ran "loose", the default. Chaos also casts on chatter ("brush your teeth",

@@ -371,6 +371,9 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 		return
 	var walk := clampf(speed / 2.2, 0.0, 1.0)
 	var run := clampf((speed - 2.6) / 2.4, 0.0, 1.0)
+	# The active walk (MonsterModel.gait_k): on his patrol amble only (the sprint and the poses are his own), a sly
+	# side-to-side shuffle under the rack and a nodding head.
+	var g := gait_k(walk) * (1.0 - run) * (1.0 - alert_k) * (1.0 - cower_k) * (1.0 - look_k)
 	var w := wind_e()
 	var sw := _swing
 	var al := alert_k * alert_k * (3.0 - 2.0 * alert_k)
@@ -384,14 +387,14 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 
 	# body: hunched amble, a forward-leaning sprint, crouch to light, hop on the alert, curl up to cower
 	var body := parts["body"] as MeshInstance3D
-	body.position = Vector3(0.0, HIP_Y + breath * 0.01 + absf(stride) * (0.03 * walk + 0.06 * run) - 0.11 * w + 0.12 * al - 0.20 * cw, -0.05 * sw)
-	body.rotation = Vector3(-0.08 * walk - 0.38 * run - 0.22 * w + 0.22 * al + 0.10 * lk - 0.45 * cw - 0.30 * sw,
+	body.position = Vector3(stride * 0.03 * g, HIP_Y + breath * 0.01 + absf(stride) * (0.03 * walk + 0.06 * run) - 0.11 * w + 0.12 * al - 0.20 * cw, -0.05 * sw)
+	body.rotation = Vector3(-0.08 * walk - 0.38 * run - 0.22 * w + 0.22 * al + 0.10 * lk - 0.45 * cw - 0.30 * sw - 0.06 * g,
 			stride * 0.08 * walk + stride * 0.10 * run + 0.25 * sweep - 0.30 * w,
-			sin(t * 1.1) * 0.015 + stride * 0.04 * walk)
+			sin(t * 1.1) * 0.015 + stride * 0.04 * walk + stride * 0.07 * g)
 	var head := parts["head"] as MeshInstance3D
-	head.rotation = Vector3(sin(t * 1.4) * 0.03 + 0.30 * run + 0.30 * al + 0.20 * w - 0.25 * cw + 0.1 * sw,
+	head.rotation = Vector3(sin(t * 1.4) * 0.03 + 0.30 * run + 0.30 * al + 0.20 * w - 0.25 * cw + 0.1 * sw + absf(stride) * 0.10 * g,
 			0.75 * sweep + 1.3 * glance - 0.95 * w,
-			sin(t * 0.9) * 0.04 * (1.0 - al))
+			sin(t * 0.9) * 0.04 * (1.0 - al) - stride * 0.08 * g)
 
 	# ears: droopy and twitchy on patrol, straight up on the alert, swept back in a sprint, flat when cowering
 	var twitch := sin(t * 3.3) * 0.06 + sin(t * 8.0 + 1.0) * 0.03 * lk

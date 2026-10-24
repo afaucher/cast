@@ -529,6 +529,12 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	if _downed:
 		return
 	var walk := clampf(speed / 2.5, 0.0, 1.0)
+	# The walk (active walk, MonsterModel.gait_k), carried: a braced shuffle. Crouched behind the pavise on short steps,
+	# the body rocking over each planted foot and the shield and shouldered bow jostling with it as one (a rigid rock, so
+	# the bow never cuts the boards), the skull peering over the top. The war cry (cry_k): the crossbow thrust up over the
+	# shield, the skull back, the jaw wide.
+	var g := gait_k(walk)
+	var cr := cry_k()
 	var breath := sin(t * 2.0)
 	var stride := sin(t * 7.0)
 	var w := aim_k * aim_k * (3.0 - 2.0 * aim_k)
@@ -545,7 +551,7 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var hand_r_local := REAR_GRIP
 	leg_l.position = Vector3(-LEG_X, HIP_Y, 0.0)
 	leg_r.position = Vector3(LEG_X, HIP_Y, 0.0)
-	(parts["jaw"] as MeshInstance3D).rotation.x = -0.06 - 0.05 * (0.5 + 0.5 * sin(t * 1.7)) - 0.25 * w
+	(parts["jaw"] as MeshInstance3D).rotation.x = -0.06 - 0.05 * (0.5 + 0.5 * sin(t * 1.7)) - 0.25 * w - 0.6 * cr
 	match _state:
 		"planted":
 			body.position = Vector3(0, BODY_Y - CROUCH + breath * 0.008, 0)
@@ -562,14 +568,26 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 				hand_r_local = Vector3(0.20, 0.15, 0.15)   # on the crank handle
 		"carried", "broken":
 			var bob := absf(stride) * 0.03 * walk
-			body.position = Vector3(0, BODY_Y + breath * 0.01 - bob, 0)
-			body.rotation = Vector3(-0.05 - 0.05 * walk, stride * 0.06 * walk, 0.0)
-			head.rotation = Vector3(sin(t * 1.3) * 0.03 + sin(t * 14.0) * 0.012 * walk, 0.0, 0.0)
-			leg_l.rotation = Vector3(stride * 0.6 * walk, 0.0, 0.0)
-			leg_r.rotation = Vector3(-stride * 0.6 * walk, 0.0, 0.0)
+			var crouch := 0.05 * g
+			body.position = Vector3(stride * 0.03 * g, BODY_Y + breath * 0.01 - bob - crouch - absf(stride) * 0.02 * g, 0)
+			body.rotation = Vector3(-0.05 - 0.05 * walk - 0.06 * g + 0.10 * cr, stride * 0.06 * walk, -stride * 0.07 * g)
+			head.rotation = Vector3(sin(t * 1.3) * 0.03 + sin(t * 14.0) * 0.012 * walk + absf(stride) * 0.08 * g + 0.40 * cr, 0.0, stride * 0.08 * g)
+			var step := stride * (0.6 * walk - 0.2 * g)              # short shuffling steps, knees bent
+			leg_l.rotation = Vector3(step + 0.15 * g, 0.0, 0.0)
+			leg_r.rotation = Vector3(-step + 0.15 * g, 0.0, 0.0)
+			leg_l.position.y -= crouch * 0.5
+			leg_r.position.y -= crouch * 0.5
 			prop.rotation = Vector3(-0.04, 0.0, 0.0)
 			shield_xf = Transform3D(Basis(Vector3.UP, -0.10) * Basis(Vector3.RIGHT, 0.05), Vector3(-0.04, 0.12 - bob * 1.5, -SHIELD_Z + 0.06))
 			bow_xf = _bow_carry_xf(stride * walk)
+			if cr > 0.0:
+				# the cry: the bow thrust up over the shield's top, nose high (it only rises, away from the boards)
+				bow_xf = Transform3D(Basis(Vector3.RIGHT, 0.55 * cr) * bow_xf.basis, bow_xf.origin + Vector3(0.0, 0.40 * cr, 0.10 * cr))
+			if g > 0.0:
+				# the shuffle's jostle: the shield and the shouldered bow rock and bounce together, as one rigid piece
+				var rock := Transform3D(Basis(Vector3.BACK, -stride * 0.05 * g), Vector3(stride * 0.03 * g, -absf(stride) * 0.03 * g - crouch, 0.0))
+				shield_xf = rock * shield_xf
+				bow_xf = rock * bow_xf
 			hand_l = shield_xf * Vector3(0.0, H * 0.55, TH * 0.5 + 0.08)
 		_:
 			# "left" / "dropped": exposed, staggered back off its pavise, the bow held low in both hands

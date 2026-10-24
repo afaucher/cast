@@ -193,29 +193,41 @@ func _leg_soup(side: int) -> LowPoly.Soup:
 
 # ------------------------------------------------------------------ animation
 
+## The walk (active walk, MonsterModel.gait_k): a heavy lumber. Its whole bulk rolls from foot to foot (a big side-to-side
+## shift and roll), the shoulders roll against the hips, it hunches into its speed and drops on each footfall, and the
+## arms hang and swing late, like weights, with the fists dangling. The war cry (cry_k): both fists flung up and out, the
+## chest swelling, the head thrown back.
 func apply_idle(t: float, speed: float = 0.0) -> void:
 	if _downed:
 		return
 	var walk := clampf(speed / 2.6, 0.0, 1.0)
+	var g := gait_k(walk)
+	var cr := cry_k()
 	var breath := sin(t * 1.5)
 	var stride := sin(t * 6.0)
+	var lag := sin(t * 6.0 - 0.7)                 # the arms swing late, like weights
+	var fall := absf(stride)
 	var w := wind_e()
 	var sw := _swing
 	var body := parts["body"] as MeshInstance3D
-	body.position.y = BODY_Y + breath * 0.02 - absf(stride) * 0.07 * walk + 0.10 * w - 0.20 * sw
-	body.scale = Vector3(1.0 + breath * 0.008, 1.0 + breath * 0.014, 1.0)
-	body.rotation = Vector3(-0.10 + 0.34 * w - 0.34 * sw - 0.06 * walk, stride * 0.08 * walk, stride * 0.05 * walk)
-	(parts["head"] as MeshInstance3D).rotation = Vector3(sin(t * 1.1) * 0.03 + 0.20 * w - 0.20 * sw - 0.05 * walk, 0.0, 0.0)
-	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.45 * walk - 0.15 * sw
-	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.45 * walk - 0.15 * sw
+	body.position = Vector3(stride * 0.12 * g, BODY_Y + breath * 0.02 - fall * 0.07 * walk + 0.10 * w - 0.20 * sw - fall * 0.06 * g - 0.05 * g + 0.06 * cr, 0.0)
+	body.scale = Vector3(1.0 + breath * 0.008 + 0.04 * cr, 1.0 + breath * 0.014 + 0.05 * cr, 1.0 + 0.03 * cr)
+	body.rotation = Vector3(-0.10 + 0.34 * w - 0.34 * sw - 0.06 * walk - 0.10 * g + 0.22 * cr,
+			stride * 0.08 * walk + stride * 0.12 * g, stride * 0.05 * walk + stride * 0.10 * g)
+	(parts["head"] as MeshInstance3D).rotation = Vector3(sin(t * 1.1) * 0.03 + 0.20 * w - 0.20 * sw - 0.05 * walk + fall * 0.08 * g + 0.06 * g + 0.40 * cr,
+			-stride * 0.10 * g, -stride * 0.12 * g)
+	(parts["leg_l"] as MeshInstance3D).rotation = Vector3(stride * (0.45 * walk + 0.10 * g) - 0.15 * sw, 0.0, -0.05 * g)
+	(parts["leg_r"] as MeshInstance3D).rotation = Vector3(-stride * (0.45 * walk + 0.10 * g) - 0.15 * sw, 0.0, 0.05 * g)
 	var sway := breath * 0.012
 	for s: int in [-1, 1]:
 		var side := "l" if s < 0 else "r"
-		var a := -stride * 0.28 * walk * float(s) + sway - 0.05
+		var a := -stride * 0.28 * walk * float(s) + sway - 0.05 - lag * 0.30 * g * float(s)
+		a = lerpf(a, -2.55, cr)         # the cry: fists flung up and out
 		a = lerpf(a, -2.75, w)          # fists up and slightly back, overhead
 		a = lerpf(a, -0.70, sw)         # ... and crashing down
-		(parts["arm_" + side] as MeshInstance3D).rotation = Vector3(a, 0.0, (0.20 - 0.10 * w - 0.05 * sw) * float(s))
-		(parts["fist_" + side] as MeshInstance3D).rotation.x = 0.35 * w - 0.4 * sw
+		var out := 0.20 - 0.10 * w - 0.05 * sw + 0.10 * g * (0.5 + 0.5 * lag * float(s)) + 0.45 * cr
+		(parts["arm_" + side] as MeshInstance3D).rotation = Vector3(a, 0.0, out * float(s))
+		(parts["fist_" + side] as MeshInstance3D).rotation.x = 0.35 * w - 0.4 * sw + 0.25 * g * lag * float(s) + 0.3 * cr
 
 
 func _slump() -> void:
@@ -223,5 +235,5 @@ func _slump() -> void:
 	(parts["head"] as MeshInstance3D).rotation = Vector3(-0.45, 0.0, 0.0)
 	(parts["arm_l"] as MeshInstance3D).rotation = Vector3(0.1, 0.0, -0.5)
 	(parts["arm_r"] as MeshInstance3D).rotation = Vector3(0.1, 0.0, 0.5)
-	(parts["leg_l"] as MeshInstance3D).rotation.x = 0.0
-	(parts["leg_r"] as MeshInstance3D).rotation.x = 0.0
+	(parts["leg_l"] as MeshInstance3D).rotation = Vector3.ZERO
+	(parts["leg_r"] as MeshInstance3D).rotation = Vector3.ZERO

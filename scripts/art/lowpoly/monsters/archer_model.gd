@@ -206,26 +206,37 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	if _downed:
 		return
 	var walk := clampf(speed / 3.5, 0.0, 1.0)
+	# The walk (active walk, MonsterModel.gait_k): a stalk. Crouched lower and leaning in, long careful steps that roll
+	# the hips from side to side while the hooded head stays level and fixed ahead, the bow carried up and ready across
+	# the body with the draw hand near the string. The war cry (cry_k): the bow raised high overhead and shaken, the
+	# other fist up, the hood thrown back.
+	var g := gait_k(walk)
+	var cr := cry_k()
 	var breath := sin(t * 1.8)
 	var stride := sin(t * 7.5)
 	var w := wind_e()
 	var sw := _swing
 	var draw := smoothstep(0.25, 1.0, _wind)
 	var body := parts["body"] as MeshInstance3D
-	body.position.y = BODY_Y + breath * 0.012 - absf(stride) * 0.035 * walk
-	body.rotation = Vector3(0.06 * w - 0.05 * walk + 0.10 * sw, stride * 0.05 * walk, sin(t * 1.1) * 0.012 + stride * 0.03 * walk)
-	(parts["head"] as MeshInstance3D).rotation = Vector3(sin(t * 1.3) * 0.03 - 0.10 * w + 0.05 * sw, 0.0, 0.0)
-	(parts["hood"] as MeshInstance3D).rotation.x = sin(t * 2.1 + 1.0) * 0.025 - 0.04 * walk
-	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.55 * walk
-	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.55 * walk
+	body.position = Vector3(stride * 0.03 * g, BODY_Y + breath * 0.012 - absf(stride) * 0.035 * walk - 0.07 * g, 0.0)
+	var lean := -0.16 * g
+	body.rotation = Vector3(0.06 * w - 0.05 * walk + 0.10 * sw + lean + 0.18 * cr, stride * 0.05 * walk + stride * 0.06 * g,
+			sin(t * 1.1) * 0.012 + stride * 0.03 * walk + stride * 0.06 * g)
+	(parts["head"] as MeshInstance3D).rotation = Vector3(sin(t * 1.3) * 0.03 - 0.10 * w + 0.05 * sw - lean * 0.8 + 0.40 * cr,
+			-stride * 0.06 * g, -stride * 0.06 * g)
+	(parts["hood"] as MeshInstance3D).rotation.x = sin(t * 2.1 + 1.0) * 0.025 - 0.04 * walk - 0.05 * g + 0.20 * cr
+	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * (0.55 * walk + 0.15 * g) + 0.10 * g
+	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * (0.55 * walk + 0.15 * g) + 0.10 * g
 
-	# the bow hand (left): carried low and slanted, lifts to aim; the shot kicks it back
-	var grip := GRIP_REST.lerp(GRIP_AIM, w)
-	grip.y += breath * 0.01 + absf(stride) * 0.03 * walk
+	# the bow hand (left): carried low and slanted (up and ready on the stalk), lifts to aim; the shot kicks it back
+	var grip := GRIP_REST.lerp(GRIP_AIM, 0.35 * g)
+	grip = grip.lerp(Vector3(-0.30, 1.05, -0.20), cr)
+	grip = grip.lerp(GRIP_AIM, w)
+	grip.y += breath * 0.01 + absf(stride) * 0.03 * walk + sin(t * 26.0) * 0.03 * cr
 	grip.z += 0.07 * sw
 	var bow := parts["weapon"] as MeshInstance3D
 	bow.position = grip
-	bow.rotation = Vector3(0.0 + 0.30 * sw, 0.0, lerpf(0.55, 0.0, w))
+	bow.rotation = Vector3(0.0 + 0.30 * sw, 0.0, lerpf(lerpf(lerpf(0.55, 0.30, g), 0.15, cr), 0.0, w))
 	aim_limb(parts["arm_l"] as MeshInstance3D, Vector3(grip.x, grip.y + 0.04, grip.z + 0.02), ARM_LEN)
 
 	# the string and the nocked arrow, and the draw hand following the nock
@@ -234,6 +245,8 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var nock := Vector3(grip.x, grip.y + 0.03, grip.z + BOW_BULGE + BOW_PULL * draw)
 	var hand := HAND_REST + Vector3(0.0, breath * 0.01, 0.0)
 	hand.z += 0.10 * stride * walk
+	hand = hand.lerp(Vector3(0.06, 0.16, -0.30), 0.5 * g)           # near the string on the stalk
+	hand = hand.lerp(Vector3(0.40, 0.92, -0.12), cr)                # the cry: the fist up
 	hand = hand.lerp(nock + Vector3(0.0, -0.02, 0.0), smoothstep(0.0, 0.5, _wind))
 	hand = hand.lerp(Vector3(0.52, 0.50, 0.16), clampf(sw * 1.5, 0.0, 1.0))
 	aim_limb(parts["arm_r"] as MeshInstance3D, hand, ARM_LEN)

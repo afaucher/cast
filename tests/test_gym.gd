@@ -8,8 +8,9 @@ extends TestCase
 ##   2. the spawn list covers every registry entry (a new monster kind, prop, style, spell or decor gets its button)
 ##   3. in the real game (GameDev with --gym, under the grounded_anim profile): the panel is up, one of each entry spawns and the world runs on (god mode on),
 ##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the experiments' pickers
-##      switch the movement profile, the smoothing and the crowd variety's three parts, the hallway packs come down the
-##      arena-lobby hall at the player, the slot picker and
+##      switch the movement profile, the smoothing, the monsters' walk (old / new) and their war cries (off / A / B / C),
+##      the hallway packs come down the arena-lobby hall at the player, the War cry button makes the nearest monster of each
+##      kind yell once, the slot picker and
 ##      infinite components keep a spell castable, and the player switches through every hero with the allies filling the rest
 
 const GAME := preload("res://scripts/app/game.gd")
@@ -340,6 +341,35 @@ func _check_game() -> void:
 		kinds[m.kind] = int(kinds.get(m.kind, 0)) + 1
 	eq(mix.size(), GymDev.HALL_COUNT, "Hallway mix: twelve")
 	check(kinds.has("brute") and kinds.has("swarmer") and kinds.has("grunt"), "skeletons, a brute and imps (%s)" % str(kinds))
+	# the monsters' walk and war cries (playtest feedback item 4, batch 2): two pickers, live, and the War cry button
+	var walk_pick := gym.panel.experiment("walk")
+	var cry_pick := gym.panel.experiment("war_cries")
+	if check(walk_pick != null and cry_pick != null, "the panel has the monster walk and war cry pickers"):
+		eq(walk_pick.get_item_text(walk_pick.selected), "new", "the monster walk picker shows new (the default)")
+		eq(cry_pick.get_item_text(cry_pick.selected), "A", "the war cry picker shows A (the default)")
+		walk_pick.item_selected.emit(0)
+		check(not MonsterModel.active_walk, "picking old plays the old walk")
+		gym.set_experiment("walk", "new")
+		check(MonsterModel.active_walk, "and new again")
+		eq(walk_pick.get_item_text(walk_pick.selected), "new", "the picker follows")
+		cry_pick.item_selected.emit(Monster.CRY_PICKS.find("C"))
+		eq(Monster.war_cry, "C", "picking C plays candidate C")
+		eq(Monster.war_cry_cue("brute"), "cry_brute_c", "... the brute's C")
+		cry_pick.item_selected.emit(Monster.CRY_PICKS.find("off"))
+		eq(Monster.war_cry, "off", "and off")
+		gym.set_experiment("war_cries", "A")
+		eq(Monster.war_cry, "A", "back to A")
+		eq(cry_pick.get_item_text(cry_pick.selected), "A", "the picker follows")
+	var before := {}
+	for m: Monster in mix:
+		before[m] = m.cries
+	gym.act("cry")
+	var yelled := {}
+	for m: Monster in mix:
+		if m.cries > int(before[m]):
+			yelled[m.kind] = int(yelled.get(m.kind, 0)) + m.cries - int(before[m])
+	eq(yelled, {"brute": 1, "grunt": 1, "swarmer": 1}, "the War cry button: one monster of each kind yells once")
+	check(gym.panel.status_label.text.begins_with("war cry (A)"), "the status line says so (%s)" % gym.panel.status_label.text)
 	gym.act("pack")
 	await frames(10)
 	var n := gym.clear_monsters()
@@ -368,4 +398,6 @@ func _check_game() -> void:
 	await frames(2)
 	GAME.reset_flow()
 	MoveFeel.reset()
+	MonsterModel.active_walk = true
+	Monster.war_cry = "A"
 

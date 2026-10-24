@@ -71,6 +71,10 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
     and the status line name it; the passive move log starts a new stretch.
   - **Smoothing**: **off** / on: the judder smoothing of your own heroes (`MoveFeel.interp`, as `--physics-interp`; what
     it does is unchanged, `movement-research.md` §5.3 "The judder check").
+  - **Monster walk**: old / **new** (playtest feedback item 4, batch 2): the monsters' active walk (`MonsterModel.active_walk`).
+  - **War cries**: off / **A** / B / C: the monsters' war cries and which sound candidate they yell (`Monster.war_cry`;
+    audio-plan.md "War cries"). The **War cry** button makes the nearest monster of each kind yell once, to audition them;
+    "Hallway x12" and "Hallway mix" show a pack's cry and the charging ones.
 - **Spawn count**: x1 / x5 / x10.
 - **Monsters**: every `MonsterDefs` kind. Factory kinds (grunt, archer, brute, swarmer, goblin, pavise, water boy, goo imp,
   and any new kind with a model) stand on free cells; **sharks** (regular, laser, imp) go into the pool under the ring (else

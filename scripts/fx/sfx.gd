@@ -164,6 +164,30 @@ const CUES := {
 		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
 	"mailbox_break": {"file": "mailbox_break.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.08,
 		"max_voices": 4, "min_gap": 0.04, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
+	# --- war cries (2026-10-24, playtest feedback item 4, batch 2; audio-plan.md "War cries"): Monster.yell on every machine
+	# from the state it sees. Three candidates each for the skeleton, the brute and the imp (the gym's "War cries" picker
+	# plays A, B or C until the user picks) and one shared cry for every other kind. Rare by design (a pack's first sight,
+	# an occasional charge), so a little louder than a swing.
+	"cry_grunt_a": {"file": "cry_grunt_a.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.07,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
+	"cry_grunt_b": {"file": "cry_grunt_b.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.07,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
+	"cry_grunt_c": {"file": "cry_grunt_c.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.07,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
+	"cry_brute_a": {"file": "cry_brute_a.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.05,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
+	"cry_brute_b": {"file": "cry_brute_b.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.05,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
+	"cry_brute_c": {"file": "cry_brute_c.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.05,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
+	"cry_swarmer_a": {"file": "cry_swarmer_a.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.10,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 9.0, "max_distance": 48.0},
+	"cry_swarmer_b": {"file": "cry_swarmer_b.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.10,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 9.0, "max_distance": 48.0},
+	"cry_swarmer_c": {"file": "cry_swarmer_c.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.10,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 9.0, "max_distance": 48.0},
+	"cry_monster": {"file": "cry_monster.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.08,
+		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
 }
 ## Cues with a "duck_db" (the long beds) go down by it while the local player speaks (audio-plan.md §4 rule 4, built for
 ## those cues only): down in DUCK_ATTACK, held DUCK_HOLD after the voice stops, back up over DUCK_RELEASE.

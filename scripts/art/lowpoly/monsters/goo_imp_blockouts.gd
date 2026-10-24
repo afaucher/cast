@@ -183,25 +183,38 @@ class ImpBody extends MonsterModel:
 
 	# ------------------------------------------------------------------ animation
 
+	## The walk (active walk, MonsterModel.gait_k): a wet waddle. Its belly rolls from foot to foot, it pitches forward,
+	## the gills flutter and the tail swings with each step, the hands bob with the ball. The war cry (cry_k): both arms
+	## up (the ball held high), the head back.
 	func apply_idle(t: float, speed: float = 0.0) -> void:
 		if _downed:
 			return
 		var walk := clampf(speed / 5.0, 0.0, 1.0)
+		var g := gait_k(walk)
+		var cr := cry_k()
 		var breath := sin(t * 3.0)
 		var stride := sin(t * 17.0)
+		var wob := sin(t * 8.5)
 		var w := wind_e()
 		var sw := _swing
 		var body := parts["body"] as MeshInstance3D
-		body.position = Vector3(0.0, BODY_Y + breath * 0.012 + absf(stride) * 0.06 * walk - 0.04 * w, 0.0)
-		body.rotation = Vector3(-0.22 * w + 0.45 * sw - 0.12 * walk, 0.35 * w - 0.45 * sw, sin(t * 2.1) * 0.03)
-		(parts["head"] as MeshInstance3D).rotation = Vector3(0.10 * w - 0.10 * sw + sin(t * 1.8) * 0.04, -0.25 * w + 0.3 * sw, 0.0)
+		body.position = Vector3(wob * 0.03 * g, BODY_Y + breath * 0.012 + absf(stride) * 0.06 * walk - 0.04 * w - 0.03 * g + 0.06 * cr, 0.0)
+		body.rotation = Vector3(-0.22 * w + 0.45 * sw - 0.12 * walk - 0.14 * g + 0.20 * cr, 0.35 * w - 0.45 * sw + wob * 0.08 * g,
+				sin(t * 2.1) * 0.03 + wob * 0.15 * g)
+		(parts["head"] as MeshInstance3D).rotation = Vector3(0.10 * w - 0.10 * sw + sin(t * 1.8) * 0.04 + absf(stride) * 0.10 * g + 0.12 * g + 0.40 * cr,
+				-0.25 * w + 0.3 * sw, -wob * 0.12 * g)
 		(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.9 * walk - 0.35 * w + 0.3 * sw
 		(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.9 * walk + 0.30 * w - 0.4 * sw
-		var flap := sin(t * 4.0) * 0.12
-		(parts["gill_l"] as MeshInstance3D).rotation = Vector3(0.0, -flap - 0.2 * w, 0.0)
-		(parts["gill_r"] as MeshInstance3D).rotation = Vector3(0.0, flap + 0.2 * w, 0.0)
-		(parts["tail"] as MeshInstance3D).rotation = Vector3(0.2 * w, sin(t * 4.0) * 0.3, 0.0)
+		var flap := sin(t * 4.0) * 0.12 + stride * 0.15 * g
+		(parts["gill_l"] as MeshInstance3D).rotation = Vector3(0.0, -flap - 0.2 * w - 0.3 * cr, 0.0)
+		(parts["gill_r"] as MeshInstance3D).rotation = Vector3(0.0, flap + 0.2 * w + 0.3 * cr, 0.0)
+		(parts["tail"] as MeshInstance3D).rotation = Vector3(0.2 * w, sin(t * 4.0) * 0.3 + wob * 0.35 * g, 0.0)
 		_pose_arms(t, walk, w, sw)
+		if g > 0.0 or cr > 0.0:
+			for s: int in [-1, 1]:
+				var arm := parts["arm_l" if s < 0 else "arm_r"] as MeshInstance3D
+				arm.rotation.x = lerpf(arm.rotation.x + stride * 0.15 * g * float(s), -2.6, cr)   # (a small swing: the hands hold the ball)
+				arm.rotation.z += 0.30 * cr * float(s)
 
 	## The arms: the left one out for balance (forward on the throw), the right one holding the ball: low at rest, drawn
 	## back over the head on the windup, flung forward on the swing.

@@ -154,36 +154,49 @@ func _sword_soup() -> LowPoly.Soup:
 
 # ------------------------------------------------------------------ animation
 
+## The walk (active walk, MonsterModel.gait_k): a jaunty rattle-march. A springy hop as each foot passes under it, the
+## pelvis swinging over the planted foot, high knees, a big arm swing against the legs with the sword bouncing on the
+## shoulder, the skull nodding and the jaw clacking. The war cry (cry_k): the sword thrust up overhead, the free fist up,
+## the skull thrown back with its jaw wide.
 func apply_idle(t: float, speed: float = 0.0) -> void:
 	if _downed:
 		return
 	var walk := clampf(speed / 4.0, 0.0, 1.0)
+	var g := gait_k(walk)
+	var cr := cry_k()
 	var breath := sin(t * 2.0)
 	var stride := sin(t * 8.5)
+	var hop := pow(absf(cos(t * 8.5)), 3.0)      # 1 as a foot passes under the body
 	var w := wind_e()
 	var sw := _swing
 	var body := parts["body"] as MeshInstance3D
-	body.position.y = BODY_Y + breath * 0.012 - absf(stride) * 0.04 * walk - 0.05 * sw
-	body.rotation = Vector3(0.14 * w - 0.24 * sw - 0.06 * walk, stride * 0.10 * walk - 0.25 * sw, 0.0)
+	body.position = Vector3(stride * 0.035 * g, BODY_Y + breath * 0.012 - absf(stride) * 0.04 * walk - 0.05 * sw + 0.045 * hop * g, 0.0)
+	body.rotation = Vector3(0.14 * w - 0.24 * sw - 0.06 * walk - 0.10 * g + 0.14 * cr,
+			stride * 0.10 * walk - 0.25 * sw + stride * 0.10 * g, -stride * 0.09 * g)
 	var head := parts["head"] as MeshInstance3D
-	head.rotation = Vector3(sin(t * 1.3) * 0.03 + 0.12 * w - 0.12 * sw + sin(t * 17.0) * 0.012 * walk, 0.0, 0.0)
+	head.rotation = Vector3(sin(t * 1.3) * 0.03 + 0.12 * w - 0.12 * sw + sin(t * 17.0) * 0.012 * walk + 0.12 * hop * g + 0.10 * g + 0.45 * cr,
+			-stride * 0.08 * g, stride * 0.10 * g)
 	var jaw := parts["jaw"] as MeshInstance3D
-	jaw.rotation.x = -0.05 - 0.04 * (0.5 + 0.5 * sin(t * 1.7)) - 0.50 * w - 0.55 * sw - 0.1 * walk * absf(stride)
-	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * 0.7 * walk - 0.35 * sw
-	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * 0.7 * walk + 0.25 * sw
+	jaw.rotation.x = -0.05 - 0.04 * (0.5 + 0.5 * sin(t * 1.7)) - 0.50 * w - 0.55 * sw - 0.1 * walk * absf(stride) \
+			- 0.14 * g * absf(sin(t * 17.0)) - 0.65 * cr * (0.8 + 0.2 * sin(t * 40.0))
+	(parts["leg_l"] as MeshInstance3D).rotation.x = stride * (0.7 * walk + 0.25 * g) - 0.35 * sw
+	(parts["leg_r"] as MeshInstance3D).rotation.x = -stride * (0.7 * walk + 0.25 * g) + 0.25 * sw
 	var sway := breath * 0.02
 	var arm_l := parts["arm_l"] as MeshInstance3D
-	arm_l.rotation = Vector3(-stride * 0.5 * walk + sway - 0.7 * w + 0.6 * sw, 0.0, -0.15 - 0.2 * w)
+	var al := -stride * (0.5 * walk + 0.45 * g) + sway - 0.7 * w + 0.6 * sw
+	arm_l.rotation = Vector3(lerpf(al, -2.65, cr), 0.0, -0.15 - 0.2 * w - 0.12 * g - 0.25 * cr)
 	# sword arm + blade: a is the arm's pitch, b the blade's own pitch in world terms (0 = straight up)
-	var a_rest := -0.55 + stride * 0.35 * walk + sway
-	var b_rest := -0.30
+	var a_rest := -0.55 + stride * (0.35 * walk + 0.30 * g) + sway
+	var b_rest := -0.30 - 0.18 * hop * g
+	a_rest = lerpf(a_rest, -2.85 + sin(t * 30.0) * 0.06, cr)    # the cry: the sword thrust up, shaking
+	b_rest = lerpf(b_rest, 0.05, cr)
 	var a := lerpf(a_rest, -2.55, w)
 	var b := lerpf(b_rest, 0.95, w)
 	a = lerpf(a, -0.95, sw)
 	b = lerpf(b, -1.75, sw)
 	var arm_r := parts["arm_r"] as MeshInstance3D
-	arm_r.rotation = Vector3(a, 0.0, 0.32 - 0.2 * w)
-	(parts["weapon"] as MeshInstance3D).rotation = Vector3(b - a, 0.0, -0.45 * (1.0 - w))
+	arm_r.rotation = Vector3(a, 0.0, 0.32 - 0.2 * w + 0.10 * g - 0.15 * cr)
+	(parts["weapon"] as MeshInstance3D).rotation = Vector3(b - a, 0.0, -0.45 * (1.0 - w) * (1.0 - cr))
 
 
 func _slump() -> void:

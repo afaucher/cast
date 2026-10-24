@@ -19,7 +19,10 @@ extends Node
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
 ##   - the EXPERIMENTS (GymPanel's pickers; the user, 2026-10-23: "lets put experiments in the gym menu instead of adding
 ##     keybindings"): the movement profile (MoveFeel: today / grounded / grounded_anim, the default) and the judder
-##     smoothing (MoveFeel.interp, off by default), live. A new A/B goes here, not on a key; its switch goes once it is settled.
+##     smoothing (MoveFeel.interp, off by default), live; the monsters' walk (MonsterModel.active_walk: old / new, the
+##     default) and their war cries (Monster.war_cry: off / A / B / C, the sound candidate; A by default). A new A/B goes
+##     here, not on a key; its switch goes once it is settled.
+##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
 ##     (the gym's longest straight run) and the crew at its arena end, and sends them at the player; "Hallway mix" is the same
 ##     with a brute and imps among them
@@ -102,7 +105,7 @@ func setup(g: Node) -> void:
 		[["infinite", "Infinite", infinite], ["no_cooldowns", "No cooldown", no_cooldowns], ["ai", "AI", ai_on],
 			["god", "God", god], ["areas", "Areas", false]],
 		[["heal", "Heal crew"], ["refill", "Refill spells"], ["clear", "Clear monsters"], ["clear_spawned", "Clear spawned"], ["pack", "Spawn pack"],
-			["hall", "Hallway x12"], ["hall_mix", "Hallway mix"], ["reset_log", "Reset log"]],
+			["hall", "Hallway x12"], ["hall_mix", "Hallway mix"], ["cry", "War cry"], ["reset_log", "Reset log"]],
 		GOTO, experiments())
 	panel.spawn_pressed.connect(func(id: String) -> void: spawn(id, ring_point()))
 	panel.hero_pressed.connect(switch_to)
@@ -339,8 +342,32 @@ func act(nm: String) -> void:
 			_status("a pack of %d" % made.size())
 		"hall", "hall_mix":
 			_status("a hallway pack of %d" % hall_pack(nm == "hall_mix").size())
+		"cry":
+			var kinds := cry_each()
+			_status("war cry (%s): %s" % [Monster.war_cry, ", ".join(kinds)] if not kinds.is_empty() else "war cry: no monster to yell")
 		"reset_log":
 			stats.reset()
+
+
+## The WAR CRY button: the living monster of each kind nearest the player yells once (Monster.yell; the "War cries"
+## picker's candidate, silent when it is off). Returns the kinds that yelled, sorted.
+func cry_each() -> Array[String]:
+	var p := player()
+	var at := p.global_position if p != null else ring_point()
+	var best := {}
+	for a in GameWorld.actors():
+		var m := a as Monster
+		if m == null or m.dead or Monster.CRY_SKIP.has(m.kind):
+			continue
+		var d := GameWorld.flat_distance(at, m.global_position)
+		if not best.has(m.kind) or d < float(best[m.kind][1]):
+			best[m.kind] = [m, d]
+	var kinds: Array[String] = []
+	for k: String in best:
+		(best[k][0] as Monster).yell()
+		kinds.append(k)
+	kinds.sort()
+	return kinds
 
 
 ## A hallway pack (the crowd variety's A/B): HALL_COUNT skeletons (`mixed`: HALL_MIX, a brute and imps among them) on the
@@ -382,14 +409,31 @@ static func hall_link() -> Dictionary:
 ## The panel's experiments: [name, label, values, current].
 static func experiments() -> Array:
 	return [["feel", "Movement", MoveFeel.ORDER, MoveFeel.active()],
-		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"]]
+		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"],
+		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"],
+		["war_cries", "War cries", Monster.CRY_PICKS, Monster.war_cry]]
 
 
 ## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
-## log starts a new stretch.
+## log starts a new stretch. "walk" plays the monsters' old or new walk (MonsterModel.active_walk) and "war_cries" the cry
+## candidate (Monster.war_cry: off, A, B or C), live; the status line says which.
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
+	if nm == "walk" or nm == "war_cries":
+		if nm == "walk":
+			if value != "old" and value != "new":
+				return
+			MonsterModel.active_walk = value == "new"
+			text = "monster walk: %s" % value
+		else:
+			if not Monster.CRY_PICKS.has(value):
+				return
+			Monster.war_cry = value
+			text = "war cries: %s" % value
+		panel.set_experiment(nm, value)
+		_status(text)
+		return
 	match nm:
 		"feel":
 			if not MoveFeel.pick(value):
