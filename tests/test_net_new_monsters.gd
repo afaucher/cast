@@ -7,8 +7,10 @@ extends NetGameTest
 ##   pavise keeps every HP. From the flank c1's arrow lands: the host takes exactly one arrow's damage, and c1 shows it;
 ## - THE PULSE, THE HOST DECIDES: a water boy pours on a hurt grunt beside it (its tell is the monsters' wind-up event):
 ##   the host heals the grunt once (+15); c1 shows the rings from the event and the grunt's HP from the stream;
+## - SIZE JITTER (playtest feedback 2026-10-24 item 4): c1 shows every monster (the floor's and the runtime spawns) at the size
+##   the host shows it, from its net id (Monster.size_for), never a roll;
 ## - THE LATE JOINER: c2 joins the floor afterwards and sees both kinds alive, the pavise with its planted shield and its
-##   HP as the host has them;
+##   HP as the host has them, and every monster at the host's size;
 ## - nothing tripped the OWNER-write guard on any machine.
 
 const PEERS := 3
@@ -110,6 +112,21 @@ func run_host() -> void:
 		eq(int(pr["pulses"]), 1, "c1 showed the rings once (from the wind-up event)")
 		near(float(pr["g_hp"]), g.hp, 0.15, "c1 shows the grunt's healed HP")
 
+	# 3b. Size jitter (playtest feedback 2026-10-24 item 4): c1 shows every monster at the size the host does, the seed-built
+	# ones and the runtime spawns alike (it comes from the net id, never from a roll).
+	var sids: Array = []
+	var hsizes: Array = []
+	for id in NetRegistry.ids():
+		var mm := NetRegistry.node(id) as Monster
+		if mm != null and not mm.dead:
+			sids.append(id)
+			hsizes.append(mm._size_now())
+	check(sids.size() >= 3 and sids.has(pid) and sids.has(NetFloor.id_of(g)), "monsters to compare (%d)" % sids.size())
+	check(hsizes.any(func(k: float) -> bool: return absf(k - 1.0) > 0.005), "the host shows them at their own sizes")
+	command(c1, "sizes", {"ids": sids})
+	if check(await wait_reports("sizes", 1, 10.0), "c1 reports the sizes"):
+		_same_sizes(reported(c1, "sizes") as Dictionary, sids, hsizes, "c1")
+
 	# 4. The late joiner.
 	raise_flag("join")
 	if not check(await until(func() -> bool: return Session.roster.size() == 3, 30.0), "c2 joins the crew on the job"):
@@ -117,9 +134,10 @@ func run_host() -> void:
 	var c2 := peer_named("c2")
 	if not check(await wait_reports("checkout", 1, 30.0), "c2 opened its license checkout"):
 		return
-	command(c2, "sign", {"spells": JOINER_SPELLS, "pavise": pid, "wb": NetFloor.id_of(wb)})
+	command(c2, "sign", {"spells": JOINER_SPELLS, "pavise": pid, "wb": NetFloor.id_of(wb), "sizes": sids})
 	if check(await wait_reports("arrived", 1, 40.0), "c2 arrived"):
 		var ar: Dictionary = reported(c2, "arrived")
+		_same_sizes(ar["sizes"] as Dictionary, sids, hsizes, "the late joiner c2")
 		check(bool(ar["pavise"]), "c2: the pavise is there")
 		eq(str(ar["pavise_kind"]), "pavise", "... as a pavise")
 		eq(int(ar["shield"]), Pavise.Shield.PLANTED, "... with its shield planted (the snapshot's shields)")
@@ -161,6 +179,9 @@ func run_client() -> void:
 				check(my_hero().fire_arrow(to, false), "c1 shot")
 				await sleep(1.0)
 				report(str(cmd["key"]), {"decided": pv.blocks_decided, "stuck": pv.stuck, "hp": pv.hp})
+			"sizes":
+				await sleep(0.3)
+				report("sizes", _sizes(cmd["ids"] as Array))
 			"hp":
 				await sleep(0.4)
 				var n := NetRegistry.node(int(cmd["id"])) as Actor
@@ -204,12 +225,41 @@ func _late_joiner() -> void:
 		"pavise": pv != null and not pv.dead, "pavise_kind": pv.kind if pv != null else "", "pavise_hp": pv.hp if pv != null else -1.0,
 		"shield": int(pv.get("shield_state")) if pv != null else -1,
 		"water_boy": wb != null and not wb.dead, "wb_kind": wb.kind if wb != null else "",
+		"sizes": _sizes(sign_cmd["sizes"] as Array),
 	})
 	await wait_command(30.0)
 	report("end", {"guard": Net.guard_hits.size()})
 
 
 # --- Helpers ---------------------------------------------------------------------------------------------------------
+
+## A client: the size each monster in `ids` is shown at here: {"k": its size_k, "shown": its Visual's scale without the
+## wind-up swell} per id, in order (-1 when it is not here).
+func _sizes(ids: Array) -> Dictionary:
+	var k: Array = []
+	var shown: Array = []
+	for id: Variant in ids:
+		var m := NetRegistry.node(int(id)) as Monster
+		k.append(m.size_k if m != null else -1.0)
+		shown.append(m._visual.scale.x / (1.0 + m.windup_scale * m._telegraph) if m != null else -1.0)
+	return {"k": k, "shown": shown}
+
+
+## Host: a client's sizes (_sizes) against the host's own, monster by monster.
+func _same_sizes(r: Dictionary, ids: Array, host: Array, who: String) -> void:
+	var k: Array = r.get("k", [])
+	var shown: Array = r.get("shown", [])
+	if not eq(k.size(), ids.size(), "%s reports a size for every monster" % who):
+		return
+	var off := 0
+	for i in ids.size():
+		if absf(float(k[i]) - float(host[i])) > 0.0001 or absf(float(shown[i]) - float(host[i])) > 0.001:
+			off += 1
+			if off <= 3:
+				check(false, "%s shows monster %d at %.4f (drawn %.4f), the host at %.4f" % [who, int(ids[i]), float(k[i]), float(shown[i]), float(host[i])])
+	eq(off, 0, "%s shows all %d monsters at the host's sizes (from their net ids)" % [who, ids.size()])
+	print("  sizes: %s shows %d monsters at the host's sizes (%d of them off 1.0)" % [who, ids.size() - off,
+		host.filter(func(v: float) -> bool: return absf(v - 1.0) > 0.005).size()])
 
 func _freeze_world() -> void:
 	for id in NetRegistry.ids():

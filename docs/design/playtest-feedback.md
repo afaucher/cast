@@ -17,6 +17,11 @@ The user: "Playtest feedback - just record then we can decide how to react".
    - Decision: pending.
 4. **Swarms flocking down hallways.** "We need to figure out how to break up swarms of enemies a bit flocking down
    hallways. It makes it very repetitive. Especially at the origin gate with high spawn rates."
+   - Building (2026-10-24): batch 1 of 2 (the user: "Sounds good" to path jitter, size jitter and speed spread first, then
+     the walk and war cries). Each monster gets its own sideways lane off its path's cell centres (+/- 0.3, a new one every
+     2-4 s; none at the goal, in a 1-cell hall, a door or a climb), a fixed pace of +/- 8% (not the goblin) and a look scale
+     of +/- 7% from its net id (`Monster`, "Crowd variety"). The gym's Experiments switch each on / off (all on in the game);
+     "Hallway x12" and "Hallway mix" send a pack down the arena-lobby hall (`GymDev.hall_pack`). `test_monster_crowd`.
    - Decision: pending.
 5. **Spells without the wake word.** "Can we do spells without the wake word?"
    - Today: the voice setup screen's "chaos" strictness already casts any spell word anywhere, no trigger
