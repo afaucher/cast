@@ -268,7 +268,8 @@ cue arms and the voice orders it gives; D runs the clucks repeating under the wh
 - **Nothing to fix for arming.** The cost is the masking above: a flock pecking near the player while they speak can
   break a cast now and then. Not changed (the takes are the user's): the fixes, in order of cost, are the cluck's level
   (-9 to about -15 dB, where the realistic leak is under 0.1), dropping `chicken_cluck_4` from the pool, turning on
-  `duck_db` for the clucks (and the cries) once ducking comes back, or fewer idle clucks.
+  `duck_db` for the clucks (and the cries) once ducking comes back, or fewer idle clucks. The user, 2026-10-25: "Leave the
+  clucks as they are for now" (-9 dB, all five in the pool).
 
 The user's ask (2026-10-18): basic audio. Find out whether good open-license sounds exist or whether we can make them
 procedurally, track every source for attribution, and pick the top 10 sounds that make the game more fun and read
