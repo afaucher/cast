@@ -244,8 +244,9 @@ const TUNING := {
 		"cast": {
 			"cast": 1.0, "caste": 1.0, "kast": 1.0, "casts": 0.95,
 			"cass": 0.85, "cats": 0.8, "cost": 0.75, "cash": 0.65,
-			# The voice log to 2026-10-24: "GASTE CORN", "GAS CORN" (corn's mention rule caught them as accidental).
-			"gaste": 0.9, "gas": 0.75,
+			# The voice log to 2026-10-24: "GASTE CORN" (corn's mention rule caught it as accidental). Not "gas": it is how the
+			# model streams "GASKET", so every "Gasket go" armed a cast (test_voice_orders).
+			"gaste": 0.9,
 		},
 		"summon": {"summon": 1.0, "some in": 0.9, "sum in": 0.9, "summons": 0.95, "summoned": 0.9},
 		"pickle": {"pickle": 1.0, "pickles": 0.95},

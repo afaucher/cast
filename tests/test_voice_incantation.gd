@@ -223,7 +223,7 @@ func _test_power_scoring() -> void:
 func _test_log_aliases() -> void:
 	for pair: Array in [["cast he", "heal"], ["cast tenacles", "tentacles"], ["cast temicals", "tentacles"], ["cast stamp", "damp"],
 			["cast fibal", "fireball"], ["cast fibrel", "fireball"], ["cast fireb", "fireball"], ["gaste corn", "corn"],
-			["gas fireball", "fireball"], ["gaste heal", "heal"]]:
+			["gaste heal", "heal"]]:
 		var cs := _say(pair[0])
 		eq(cs.size(), 1, "'%s' casts" % pair[0])
 		if cs.size() == 1:
@@ -232,7 +232,7 @@ func _test_log_aliases() -> void:
 	check(fire.size() == 1 and float(fire[0]["power"]) > 0.8, "'cast fire' is a strong fireball now (%s)" % str(fire))
 	for word in ["he", "fire", "stamp", "tenacles", "fibal"]:
 		eq(_say(word, {"strictness": "chaos"}).size(), 0, "bare '%s' never casts, even in chaos" % word)
-	for text in ["he said so", "he is here", "gas station", "the gas is on"]:
+	for text in ["he said so", "he is here", "gas station", "the gas is on", "gas fireball"]:
 		eq(_say(text).size(), 0, "chatter '%s' casts nothing" % text)
 	var evs := _run(_inc(), [[1.0, "CAST HE", true], [1.04, "CAST HEEL", true]], 3.5)
 	var cs := _casts(evs)
