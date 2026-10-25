@@ -112,7 +112,7 @@ func _test_homophone_and_compound() -> void:
 	var fire := _casts(inc2.feed("CAST FIRE", true, 1.3))
 	eq(fire.size(), 1, "cast fire at final")
 	if fire.size() == 1:
-		near(fire[0]["power"], 0.7, 0.01, "fire power")
+		near(fire[0]["power"], 0.84, 0.01, "fire power (0.84 since the voice log, 2026-10-24)")
 	eq(_say("CASTCORN").size(), 1, "castcorn split")
 	eq(_say("caste corn").size(), 1, "caste is cast")
 	var cass := _say("cass eel")
@@ -214,6 +214,31 @@ func _test_power_scoring() -> void:
 	for text in ["cast heal", "cast hail", "cast healing now please", "cass heel", "kast armour"]:
 		for c in _say(text):
 			check(c["power"] > 0.0 and c["power"] <= 1.0, "range " + text)
+	_test_log_aliases()
+
+
+## The aliases added from the voice log (2026-10-24): each casts after the trigger, none casts bare even in chaos, and a cut-off
+## "CAST HE" casts heal at once (the user: "It's getting repeated because it didn't fire"); a "CAST HEEL" right after is the
+## same heal, not a second one.
+func _test_log_aliases() -> void:
+	for pair: Array in [["cast he", "heal"], ["cast tenacles", "tentacles"], ["cast temicals", "tentacles"], ["cast stamp", "damp"],
+			["cast fibal", "fireball"], ["cast fibrel", "fireball"], ["cast fireb", "fireball"], ["gaste corn", "corn"],
+			["gas fireball", "fireball"], ["gaste heal", "heal"]]:
+		var cs := _say(pair[0])
+		eq(cs.size(), 1, "'%s' casts" % pair[0])
+		if cs.size() == 1:
+			eq(cs[0]["spell"], pair[1], "'%s' is %s" % [pair[0], pair[1]])
+	var fire := _say("cast fire")
+	check(fire.size() == 1 and float(fire[0]["power"]) > 0.8, "'cast fire' is a strong fireball now (%s)" % str(fire))
+	for word in ["he", "fire", "stamp", "tenacles", "fibal"]:
+		eq(_say(word, {"strictness": "chaos"}).size(), 0, "bare '%s' never casts, even in chaos" % word)
+	for text in ["he said so", "he is here", "gas station", "the gas is on"]:
+		eq(_say(text).size(), 0, "chatter '%s' casts nothing" % text)
+	var evs := _run(_inc(), [[1.0, "CAST HE", true], [1.04, "CAST HEEL", true]], 3.5)
+	var cs := _casts(evs)
+	eq(cs.size(), 1, "a cut-off 'CAST HE' then 'CAST HEEL' is one heal")
+	if cs.size() == 1:
+		check(float(cs[0]["power"]) >= 0.75, "... fired on the first half, at a good strength (%.2f)" % float(cs[0]["power"]))
 
 
 func _test_fizzles() -> void:

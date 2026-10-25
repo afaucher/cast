@@ -17,7 +17,9 @@ const ROW := {
 const VOICE := {
 	"fireball": 1.0, "fire ball": 1.0, "fireballs": 0.9, "fire balls": 0.9,
 	"fire bowl": 0.9, "fire bull": 0.85, "fire bald": 0.85, "fire ball's": 0.9,
-	"fire": 0.7,
+	# "fire" alone was 22 of 90 fireballs in the voice log to 2026-10-24 (cast at 70%): 0.84 keeps it just under
+	# bare_min_q, so a bare "fire" still never casts. "fibal", "fibrel", "fireb": one miss each.
+	"fire": 0.84, "fibal": 0.75, "fibrel": 0.75, "fireb": 0.75,
 }
 
 const FIREBALL_SPEED := 11.0

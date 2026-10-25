@@ -18,6 +18,7 @@ const ROW := {
 const VOICE := {
 	"tentacles": 1.0, "tentacle": 1.0,
 	"headacles": 0.8, "headacle": 0.75, "headagle": 0.75, "acles": 0.75,
+	"tenacles": 0.8, "temicals": 0.7,   # the voice log to 2026-10-24: "TENACLES" 6 misses, "TEMICALS" 1
 }
 
 const TENTACLES_RADIUS_BASE := 2.2

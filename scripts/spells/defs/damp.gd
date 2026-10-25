@@ -17,6 +17,7 @@ const ROW := {
 ## The exact word (see the VINES / DAMP / COFFEE note in Incantation's header).
 const VOICE := {
 	"damp": 1.0,
+	"stamp": 0.75,   # "CAST STAMP" / "STAMP": 2 misses in the voice log to 2026-10-24
 }
 
 const DAMP_RADIUS_BASE := 4.0      ## a WIDE area

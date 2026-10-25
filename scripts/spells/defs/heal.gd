@@ -16,6 +16,9 @@ const ROW := {
 const VOICE := {
 	"heal": 1.0, "heel": 1.0, "he'll": 1.0, "heals": 0.9, "healing": 0.85,
 	"healer": 0.8, "eel": 0.8, "hail": 0.7, "hill": 0.6, "ill": 0.6,
+	# "heal" cut off: "CAST HE" 18 times in the voice log to 2026-10-24, so the player repeated it. It fires now (below
+	# bare_min_q: never bare). When the recognizer splits "heel" ("CAST HE" + "EL"), the heal goes off on the first half.
+	"he": 0.8,
 }
 
 const HEAL_RADIUS := 3.0
