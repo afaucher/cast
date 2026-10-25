@@ -248,7 +248,8 @@ func ground_height(p: Vector3) -> float:
 ## Can something standing at `from` move to the nearby point `to`?
 ## Meant for short hops (one frame of movement, or across one cell edge). A point on the wall side of a
 ## midpoint wall is BLOCKED; bodies with a radius use clip_move() / blocks_point() for the wall itself.
-func movement_check(from: Vector3, to: Vector3) -> int:
+## `max_drop` is the deepest drop allowed (a player's hero may jump down any height: Actor._max_drop).
+func movement_check(from: Vector3, to: Vector3, max_drop: float = DROP_LEVELS) -> int:
 	var a := ground_level(from)
 	var b := ground_level(to)
 	if is_nan(a) or is_nan(b):
@@ -256,7 +257,7 @@ func movement_check(from: Vector3, to: Vector3) -> int:
 	if wall_at(to):
 		return Move.BLOCKED
 	var d := b - a
-	if d > CLIMB_LEVELS or -d > DROP_LEVELS:
+	if d > CLIMB_LEVELS or -d > max_drop:
 		return Move.BLOCKED
 	if d > STEP_LEVELS:
 		return Move.CLIMB

@@ -230,7 +230,7 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 
 	# the bow hand (left): carried low and slanted (up and ready on the stalk), lifts to aim; the shot kicks it back
 	var grip := GRIP_REST.lerp(GRIP_AIM, 0.35 * g)
-	grip = grip.lerp(Vector3(-0.30, 1.05, -0.20), cr)
+	grip = grip.lerp(Vector3(-0.30, 1.05, -0.45), cr)            # the cry: the bow raised up in front
 	grip = grip.lerp(GRIP_AIM, w)
 	grip.y += breath * 0.01 + absf(stride) * 0.03 * walk + sin(t * 26.0) * 0.03 * cr
 	grip.z += 0.07 * sw
@@ -246,7 +246,7 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var hand := HAND_REST + Vector3(0.0, breath * 0.01, 0.0)
 	hand.z += 0.10 * stride * walk
 	hand = hand.lerp(Vector3(0.06, 0.16, -0.30), 0.5 * g)           # near the string on the stalk
-	hand = hand.lerp(Vector3(0.40, 0.92, -0.12), cr)                # the cry: the fist up
+	hand = hand.lerp(Vector3(0.40, 0.92, -0.40), cr)                # the cry: the fist up in front
 	hand = hand.lerp(nock + Vector3(0.0, -0.02, 0.0), smoothstep(0.0, 0.5, _wind))
 	hand = hand.lerp(Vector3(0.52, 0.50, 0.16), clampf(sw * 1.5, 0.0, 1.0))
 	aim_limb(parts["arm_r"] as MeshInstance3D, hand, ARM_LEN)

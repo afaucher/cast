@@ -37,14 +37,6 @@ const HIP_Y := 0.74
 const SHOULDER := Vector3(0.36, 0.60, 0.0)
 const HAND := Vector3(0.0, -0.65, -0.08)    ## arm-local fist centre (where the sword's grip sits)
 const LEG_X := 0.14
-## THE IK ARMS (the elbow study, LowPolyModel.elbow_ik; off by default): each arm split at its elbow into "arm_*" (the
-## upper arm) and "fore_*" (the forearm and hand, under it; the sword hangs in the right one's fist), laid by TwoBoneIK.
-## The hand targets are where today's rotations put the hand, drawn in toward the shoulder by a flex per pose: the sword
-## carried in close with a bent elbow, cocked behind the skull in the wind-up, the arm flung straight in the strike,
-## the free fist pumped in the war cry. The blade keeps exactly today's angle in every pose.
-const L1 := 0.31                ## shoulder to elbow ...
-const L2 := 0.34                ## ... and elbow to fist (|HAND| in all)
-const IK_HAND := Vector3(0.0, -L2, 0.0)    ## the fist in the forearm's space
 
 
 func _init() -> void:
@@ -65,32 +57,10 @@ func _build() -> void:
 	_add_part("tabard", _tabard_soup(), body, Vector3.ZERO)
 	for s: int in [-1, 1]:
 		var side := "l" if s < 0 else "r"
+		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z))
+		arm.rotation = Vector3(0.0, 0.0, 0.2 * s)
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(LEG_X * s, HIP_Y, 0.0))
-	_build_arms(false)
 	_add_part("weapon", _sword_soup(), parts["arm_r"] as Node3D, HAND)
-
-
-## The arms: today's one-piece bones, or (`split`, the IK arms) an upper arm and a forearm each. The sword moves over.
-func _build_arms(split: bool) -> void:
-	var body := parts["body"] as Node3D
-	var sword := parts.get("weapon") as Node3D
-	if sword != null:
-		sword.get_parent().remove_child(sword)
-	for side: String in ["l", "r"]:
-		_drop_part("fore_" + side)
-		_drop_part("arm_" + side)
-	for s: int in [-1, 1]:
-		var side := "l" if s < 0 else "r"
-		var at := Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z)
-		if split:
-			var upper := _add_part("arm_" + side, _upper_arm_soup(s), body, at)
-			_add_part("fore_" + side, _forearm_soup(s), upper, Vector3(0.0, -L1, 0.0))
-		else:
-			var arm := _add_part("arm_" + side, _arm_soup(s), body, at)
-			arm.rotation = Vector3(0.0, 0.0, 0.2 * s)
-	if sword != null:
-		(parts["fore_r" if split else "arm_r"] as Node3D).add_child(sword)
-		sword.position = IK_HAND if split else HAND
 
 
 ## Pelvis, spine, ribcage (dark cavity with pale rib bands), collar bones and neck.
@@ -158,22 +128,6 @@ func _arm_soup(side: int) -> LowPoly.Soup:
 	return s
 
 
-## The IK arms' upper arm: the shoulder joint, the bone and the elbow knob.
-func _upper_arm_soup(side: int) -> LowPoly.Soup:
-	var s := LowPoly.Soup.new(171 + side, 0.07)
-	limb(s, Vector3(0, -0.02, 0), Vector3(0, -0.30, 0), 0.062, 0.054, 5, BONE, 172 + side)
-	blob(s, Vector3(0, -L1, 0), Vector3(0.07, 0.07, 0.07), BONE_LIGHT, 174 + side, 0.15)
-	return s
-
-
-## The IK arms' forearm, from the elbow: the bone and the hand.
-func _forearm_soup(side: int) -> LowPoly.Soup:
-	var s := LowPoly.Soup.new(175 + side, 0.07)
-	limb(s, Vector3(0, -0.01, 0), Vector3(0, -0.29, 0), 0.054, 0.046, 5, BONE, 176 + side)
-	blob(s, IK_HAND, Vector3(0.08, 0.085, 0.08), BONE_LIGHT, 178 + side, 0.15)
-	return s
-
-
 ## Thigh, knee, shin, a chunky foot; pivot at the hip.
 func _leg_soup(side: int) -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(181 + side, 0.07)
@@ -207,7 +161,6 @@ func _sword_soup() -> LowPoly.Soup:
 func apply_idle(t: float, speed: float = 0.0) -> void:
 	if _downed:
 		return
-	var ik := _sync_elbows()
 	var walk := clampf(speed / 4.0, 0.0, 1.0)
 	var g := gait_k(walk)
 	var cr := cry_k()
@@ -231,34 +184,19 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var sway := breath * 0.02
 	var arm_l := parts["arm_l"] as MeshInstance3D
 	var al := -stride * (0.5 * walk + 0.45 * g) + sway - 0.7 * w + 0.6 * sw
-	var rot_l := Vector3(lerpf(al, -2.65, cr), 0.0, -0.15 - 0.2 * w - 0.12 * g - 0.25 * cr)
+	arm_l.rotation = Vector3(lerpf(al, 2.65, cr), 0.0, -0.15 - 0.2 * w - 0.12 * g - 0.25 * cr)
 	# sword arm + blade: a is the arm's pitch, b the blade's own pitch in world terms (0 = straight up)
 	var a_rest := -0.55 + stride * (0.35 * walk + 0.30 * g) + sway
 	var b_rest := -0.30 - 0.18 * hop * g
-	a_rest = lerpf(a_rest, -2.85 + sin(t * 30.0) * 0.06, cr)    # the cry: the sword thrust up, shaking
+	a_rest = lerpf(a_rest, 2.85 + sin(t * 30.0) * 0.06, cr)     # the cry: the sword thrust up in front, shaking
 	b_rest = lerpf(b_rest, 0.05, cr)
 	var a := lerpf(a_rest, -2.55, w)
 	var b := lerpf(b_rest, 0.95, w)
 	a = lerpf(a, -0.95, sw)
 	b = lerpf(b, -1.75, sw)
 	var arm_r := parts["arm_r"] as MeshInstance3D
-	var rot_r := Vector3(a, 0.0, 0.32 - 0.2 * w + 0.10 * g - 0.15 * cr)
-	var rot_w := Vector3(b - a, 0.0, -0.45 * (1.0 - w) * (1.0 - cr))
-	var weapon := parts["weapon"] as MeshInstance3D
-	if not ik:
-		arm_l.rotation = rot_l
-		arm_r.rotation = rot_r
-		weapon.rotation = rot_w
-		return
-	# the IK arms: today's hands, drawn in by each pose's flex; the blade keeps today's angle
-	var flex_l := lerpf(0.06 + 0.30 * clampf(al, 0.0, 0.8), 0.30, cr)
-	var flex_r := lerpf(lerpf(lerpf(0.30, 0.06, cr), 0.40, w), 0.02, sw)
-	var fore_r := parts["fore_r"] as Node3D
-	for e: Array in [[arm_l, parts["fore_l"], rot_l, flex_l, -1], [arm_r, fore_r, rot_r, flex_r, 1]]:
-		var upper := e[0] as Node3D
-		var hand := TwoBoneIK.flexed(upper.position, Basis.from_euler(e[2]), HAND, float(e[3]))
-		pose_ik_arm(upper, e[1] as Node3D, hand, L1, L2, TwoBoneIK.arm_pole(int(e[4]), (hand - upper.position).normalized()))
-	weapon.basis = (arm_r.basis * fore_r.basis).inverse() * Basis.from_euler(rot_r) * Basis.from_euler(rot_w)
+	arm_r.rotation = Vector3(a, 0.0, 0.32 - 0.2 * w + 0.10 * g - 0.15 * cr)
+	(parts["weapon"] as MeshInstance3D).rotation = Vector3(b - a, 0.0, -0.45 * (1.0 - w) * (1.0 - cr))
 
 
 func _slump() -> void:
@@ -268,8 +206,5 @@ func _slump() -> void:
 	(parts["arm_l"] as MeshInstance3D).rotation = Vector3(0.1, 0.0, -0.45)
 	(parts["arm_r"] as MeshInstance3D).rotation = Vector3(0.0, 0.0, 0.45)
 	(parts["weapon"] as MeshInstance3D).rotation = Vector3(1.9, 0.0, 0.0)
-	for side: String in ["l", "r"]:
-		if parts.has("fore_" + side):
-			(parts["fore_" + side] as Node3D).basis = Basis.IDENTITY   # (the IK arms hang straight)
 	(parts["leg_l"] as MeshInstance3D).rotation.x = 0.0
 	(parts["leg_r"] as MeshInstance3D).rotation.x = 0.0

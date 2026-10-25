@@ -222,7 +222,7 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	for s: int in [-1, 1]:
 		var side := "l" if s < 0 else "r"
 		var a := -stride * 0.28 * walk * float(s) + sway - 0.05 - lag * 0.30 * g * float(s)
-		a = lerpf(a, -2.55, cr)         # the cry: fists flung up and out
+		a = lerpf(a, 2.55, cr)          # the cry: fists flung up and out in front
 		a = lerpf(a, -2.75, w)          # fists up and slightly back, overhead
 		a = lerpf(a, -0.70, sw)         # ... and crashing down
 		var out := 0.20 - 0.10 * w - 0.05 * sw + 0.10 * g * (0.5 + 0.5 * lag * float(s)) + 0.45 * cr

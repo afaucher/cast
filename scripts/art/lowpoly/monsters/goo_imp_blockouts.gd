@@ -213,7 +213,7 @@ class ImpBody extends MonsterModel:
 		if g > 0.0 or cr > 0.0:
 			for s: int in [-1, 1]:
 				var arm := parts["arm_l" if s < 0 else "arm_r"] as MeshInstance3D
-				arm.rotation.x = lerpf(arm.rotation.x + stride * 0.15 * g * float(s), -2.6, cr)   # (a small swing: the hands hold the ball)
+				arm.rotation.x = lerpf(arm.rotation.x + stride * 0.15 * g * float(s), 2.6, cr)   # (a small swing: the hands hold the ball)
 				arm.rotation.z += 0.30 * cr * float(s)
 
 	## The arms: the left one out for balance (forward on the throw), the right one holding the ball: low at rest, drawn

@@ -398,7 +398,7 @@ func move(dir: Vector3, delta: float) -> bool:
 		# step at all: every move from it is blocked).
 		if map and is_nan(map.ground_height(from + attempt)):
 			continue
-		var mv := map.movement_check(from, probe) if map else HexMap.Move.OK
+		var mv := map.movement_check(from, probe, _max_drop()) if map else HexMap.Move.OK
 		if map and mv == HexMap.Move.BLOCKED and is_nan(map.ground_height(from)) and not is_nan(map.ground_height(probe)):
 			mv = HexMap.Move.OK   # already stranded over the void (an old save of that corner, a crust gone): walk out
 		if mv == HexMap.Move.BLOCKED or (mv == HexMap.Move.CLIMB and not _climb_allowed()):
@@ -866,6 +866,12 @@ func _separate() -> void:
 ## Override: may this actor cross a +2 climb ledge on foot? (Heroes: the kit's can_climb; Rebar can't.)
 func _climb_allowed() -> bool:
 	return true
+
+
+## Override: the deepest drop this actor may walk off, in levels (HexMap.movement_check). A player's hero jumps down from
+## anywhere (Hero); everyone else keeps HexMap.DROP_LEVELS, which their paths are built for.
+func _max_drop() -> float:
+	return HexMap.DROP_LEVELS
 
 
 ## Turn to face a world point (X/Z only).

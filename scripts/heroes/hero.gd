@@ -652,6 +652,12 @@ func _climb_allowed() -> bool:
 	return can_climb and not MoveFeel.on("mantle")
 
 
+## A player's hero may jump down from any height it got up to (playtest feedback 2026-10-24 item 1: "For pillars, can we
+## just allow the player to jump from any height they can climb?"). AI allies keep the paths' drop limit.
+func _max_drop() -> float:
+	return INF if is_player else super()
+
+
 ## Under an envelope the walk's own vertical rules replace the eased settle (HeroMotion.vertical); placing a hero
 ## (no delta) is unchanged.
 func snap_to_ground(delta: float = -1.0) -> void:
