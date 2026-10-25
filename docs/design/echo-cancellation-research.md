@@ -6,6 +6,18 @@ Voice Clarity / Audio enhancements off on the QuadCast (and whether NVIDIA Broad
 optional startup calibration chirp; downloading speexdsp (BSD-3); "Echo cancel" as a player setting or in Diagnostics.
 Ducking stays off meanwhile (`Sfx.ducking`).
 
+**2026-10-25, still parked.** Two quiet re-runs of `tools/echo_probe.gd` on speakers: the game's sound reached the mic
+at about the same level with Voice Clarity on (-38.2 dBFS, with typing) and off (-37.5 dBFS, quiet), so Windows is not
+cancelling for us (the game does not open the mic in communications mode); a linear canceller still removed only ~1 dB,
+and the delay moved between runs (2318 / 2448 / 3486 samples). The user then reframed the problem: "What you want to
+actually be cancelling is a players voice in discord being played", and "the audio we get from the game wouldn't include
+discord audio", so a canceller fed from the game's own mix cannot help with the real threat. With headphones there is no
+problem ("The issue is requiring players to use headphones"); last night's crew played on headphones (one same-spell pair
+across seats, 383 ms apart, was a coincidence). An external-voice probe was started and dropped ("This won't be
+helpful"). Options left for the Discord case: a reference of everything the PC plays (system loopback, native code), or
+accepting only the player's own voice (speaker verification, e.g. a sherpa-onnx speaker model). On calibration the user
+wants it to switch itself on once confident: "The ideal solution turns on once it has strong calibration."
+
 *[research] 2026-10-22. Nothing in the game changed. Two lab tools were added: `tools/echo_probe.gd` (plays sweeps,
 records the Master bus and the mic at once) and `tools/echo_probe_analyze.py` (delay, level, drift, and how much a
 linear canceller removes). The user asked: "knowing what we played, can we identify the feedback delay (if any) and use
