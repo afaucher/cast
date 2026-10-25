@@ -8,8 +8,8 @@ extends RefCounted
 ##   ChickenFx.feather_explosion(pos)   a chicken killed: feathers everywhere and a "BAWK!"
 ##   ChickenFx.poof(pos)                a chicken's time is up: a soft white puff and a few feathers drifting down
 ##
-## Sound (not built here; a separate Sfx system is coming): a cluck would hook in cast_cloud, a peck tick in peck, a squawk
-## in feather_explosion and a soft "pop" in poof.
+## Sound: the clucks are the chicken's own (Chicken.cluck: landing, each peck, now and then). A squawk in feather_explosion
+## and a soft "pop" in poof are not built yet.
 
 const WHITE := Color(0.98, 0.97, 0.93)
 const CREAM := Color(0.92, 0.88, 0.78)

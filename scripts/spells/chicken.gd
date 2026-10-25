@@ -21,6 +21,11 @@ extends Actor
 ## MONSTER-format entry, net_read / net_write: state, the peck wind-up, the peck count), announced the spawn (`world.spawn`, kind "chicken") and the death (`world.die`);
 ## on a client it is a puppet (net_show / net_tick) that plays the same pecks, feathers and poof. A client's hit on it is a
 ## request the host applies (Net.route_hit). A late joiner gets it as a runtime spawn plus the keyframe (NetEvents.LATE_JOIN).
+##
+## CLUCKS (cosmetic, every screen from the chicken it shows; audio-plan.md "War cries"): one as it lands (CLUCK_LAND after it
+## appears, so a flock's four are staggered), one on every peck (the host's, and a puppet's when its peck count moves), and
+## now and then by itself (every CLUCK_IDLE_MIN..CLUCK_IDLE_MAX s, rolled on GameWorld.fx_rng). The "chicken_cluck" cue's
+## voices and gap cap a whole flock, so four pecking stay a few clucks. None while it poofs.
 
 enum State { WANDER, RUN, PECK, FLAP, POOF }
 
@@ -51,6 +56,10 @@ const PAUSE_CHANCE := 0.22        ## ... and now and then a short stop (a scratc
 ## The crew's swings and shots hit chickens too (true), or only the monsters' do (false). GameWorld.hittable_in_radius.
 const WEAPONS_HIT := true
 const BAWK := Color(1.0, 0.93, 0.78)
+const CLUCK_CUE := "chicken_cluck"
+const CLUCK_LAND := Vector2(0.05, 0.45)   ## its landing cluck, this long (s, a random span) after it appears
+const CLUCK_IDLE_MIN := 2.0               ## then a cluck every CLUCK_IDLE_MIN..CLUCK_IDLE_MAX s (a peck starts the wait over)
+const CLUCK_IDLE_MAX := 5.0
 
 var state: int = State.WANDER
 ## Pecks so far (the other screens play a peck when it moves on: NetWorldCodec, like a monster's strikes).
@@ -79,6 +88,8 @@ var model: ChickenModel = null
 var _visual: Node3D = null
 var _poof_k := 0.0
 var _shown := false               ## a puppet has applied its first sample (a late joiner's first peck count is not a peck)
+var clucks := 0                   ## clucks this screen played or tried (Sfx may drop one to its cap; tests)
+var _cluck_t := 0.0               ## seconds to its next cluck by itself (the first: the landing cluck)
 
 
 ## The flock (the host, or solo): FLOCK chickens around `at`, each bursting out its own way. Rolls on GameWorld.rng (only
@@ -140,6 +151,7 @@ func _ready() -> void:
 	Fx.attach_hit_feedback(self)   # (a hit shows its number and the flash, like any actor's)
 	damaged.connect(_on_hurt)
 	_scan_t = GameWorld.fx_rng.randf() * SCAN_EVERY   # (re-rolled on the host's first frame; a puppet never scans)
+	_cluck_t = GameWorld.fx_rng.randf_range(CLUCK_LAND.x, CLUCK_LAND.y)
 
 
 ## Who may write each var (see Net). The host runs chickens: what the other screens draw (the state, the peck's wind-up,
@@ -153,6 +165,7 @@ func net_fields() -> Dictionary:
 		"_heading": Net.PRIVATE, "_turn_t": Net.PRIVATE, "_pause_t": Net.PRIVATE, "_stuck_t": Net.PRIVATE,
 		"_stuck_pos": Net.PRIVATE, "_flap_len": Net.PRIVATE,
 		"model": Net.LOCAL, "_visual": Net.LOCAL, "_poof_k": Net.LOCAL, "_shown": Net.LOCAL,
+		"clucks": Net.LOCAL, "_cluck_t": Net.LOCAL,
 	})
 	return f
 
@@ -318,6 +331,7 @@ func _tick_peck(_delta: float) -> void:
 		victim = _target
 		Combat.peck(self, victim)   # (a zero hit through the verb: a monster turns on us, everything else shrugs)
 	ChickenFx.peck(self, victim)
+	cluck()
 	_next_peck = GameWorld.time + scaled_cooldown(PECK_COOLDOWN) * GameWorld.rng.randf_range(0.85, 1.2)
 	var away := global_position - (_target.global_position if _valid(_target) else global_position + facing)
 	away.y = 0.0
@@ -383,6 +397,7 @@ func _valid(a: Actor) -> bool:
 # --- Look (every screen) ------------------------------------------------------------------------------------
 
 func _look(delta: float) -> void:
+	_tick_cluck(delta)
 	if _visual == null:
 		return
 	var yaw := atan2(-facing.x, -facing.z)
@@ -392,6 +407,23 @@ func _look(delta: float) -> void:
 	model.set_peck(_peck_t)
 	model.set_flap(state == State.FLAP or state == State.POOF)
 	model.set_swell(_poof_k)
+
+
+## A cluck (the "chicken_cluck" pool at the chicken): its landing, a peck, or now and then. Cosmetic, this screen only;
+## the next one by itself waits CLUCK_IDLE_MIN..CLUCK_IDLE_MAX again. None once it is dead or poofing.
+func cluck() -> void:
+	if dead or state == State.POOF:
+		return
+	clucks += 1
+	_cluck_t = GameWorld.fx_rng.randf_range(CLUCK_IDLE_MIN, CLUCK_IDLE_MAX)
+	Sfx.play_at(CLUCK_CUE, global_position)
+
+
+func _tick_cluck(delta: float) -> void:
+	_cluck_t -= delta
+	if _cluck_t <= 0.0:
+		cluck()
+		_cluck_t = maxf(_cluck_t, CLUCK_IDLE_MIN)   # (dead or poofing: no cluck, and no retry every frame)
 
 
 # --- Puppet (a client shows the host's chicken) ------------------------------------------------------------------
@@ -412,6 +444,7 @@ func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: 
 		pecks = peck_count
 		if _shown:
 			ChickenFx.peck(self, _shown_victim())
+			cluck()
 	_shown = true
 
 

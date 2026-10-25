@@ -8,6 +8,8 @@ extends TestCase
 ## - paper: a form opening plays it, so does a VOID going back and the spec sheet turning to another spell; a burst
 ##   of opens inside min_gap plays once;
 ## - pools: the cue's voice limit steals its oldest voice; jitter rolls GameWorld.fx_rng, never GameWorld.rng;
+## - file pools (a cue's "files": the war cries, the clucks): each play picks one of them on GameWorld.fx_rng, never the
+##   one it played last, every file gets played; a pool with some files missing plays the rest, with none it is silent;
 ## - ducking: the long beds (a duck_db: the lava's bubbling) go down while the local player speaks,
 ##   held a moment after, then come back; other cues keep their level (the sewer and lava hooks: test_sfx_sewer_lava);
 ## - GameSettings round-trips the Effects / Paperwork / Spell feedback volumes and apply() sets each bus by name.
@@ -27,6 +29,7 @@ func setup() -> void:
 	Sfx.enable_for_tests()
 	_check_missing_files()
 	await _check_pools()
+	await _check_file_pools()
 	_check_trigger_signal()
 	await _check_voice_cues()
 	await _check_ducking()
@@ -82,7 +85,10 @@ func _check_buses() -> void:
 	for cue: String in Sfx.CUES:
 		var c: Dictionary = Sfx.CUES[cue]
 		check(AudioServer.get_bus_index(str(c["bus"])) >= 0, "cue %s's bus %s exists" % [cue, c["bus"]])
-		for key in ["file", "volume_db", "pitch_jitter", "max_voices", "min_gap", "positional"]:
+		check(c.has("file") != c.has("files"), "cue %s has a file or a pool of files" % cue)
+		if c.has("files"):
+			check((c["files"] as Array).size() >= 2, "pool %s has two files or more" % cue)
+		for key in ["volume_db", "pitch_jitter", "max_voices", "min_gap", "positional"]:
 			check(c.has(key), "cue %s has %s" % [cue, key])
 		if bool(c["positional"]):
 			check(c.has("unit_size") and c.has("max_distance"), "3D cue %s has a distance" % cue)
@@ -97,17 +103,23 @@ func _check_buses() -> void:
 		check(bool(Sfx.CUES[cue]["positional"]), "%s is 3D" % cue)
 
 
-## Every game cue is rendered from a recipe that exists (tools/sfx_proto/render_game_sfx.gd).
+## Every game cue's file (each of a pool's) is rendered from a recipe that exists (tools/sfx_proto/render_game_sfx.gd).
 func _check_recipes() -> void:
 	var render: Script = load(RENDER)
 	var map: Dictionary = render.get_script_constant_map()["GAME_CUES"]
-	eq(map.keys().size(), Sfx.CUES.keys().size(), "one recipe per cue")
+	var files := 0
 	var synth: Object = (load(SYNTH) as Script).new()
 	for cue: String in Sfx.CUES:
-		check(map.has(cue), "cue %s has a render recipe" % cue)
-		eq(str(Sfx.CUES[cue]["file"]), cue + ".wav", "cue %s's file is <cue>.wav (what the render writes)" % cue)
-		if map.has(cue):
-			check(synth.has_method("_" + str(map[cue])), "recipe %s exists" % map[cue])
+		var names := Sfx.files_of(cue)
+		files += names.size()
+		if not Sfx.CUES[cue].has("files"):
+			eq(str(names[0]), cue + ".wav", "cue %s's file is <cue>.wav (what the render writes)" % cue)
+		for f: String in names:
+			var stem := f.get_basename()
+			check(f.get_extension() == "wav" and map.has(stem), "cue %s's %s has a render recipe" % [cue, f])
+			if map.has(stem):
+				check(synth.has_method("_" + str(map[stem])), "recipe %s exists" % map[stem])
+	eq(map.keys().size(), files, "one recipe per cue file")
 
 
 # --- headless and missing files ----------------------------------------------------------------------
@@ -170,6 +182,70 @@ func _check_pools() -> void:
 	Sfx.stop_cue("stamp", 0.0)
 	check(not Sfx.is_playing("stamp"), "stop_cue(.., 0) stops at once")
 	Sfx.stop_cue("fireball", 0.0)
+
+
+## A cue's "files": one at random per play (GameWorld.fx_rng), never the same twice running, every one heard; missing
+## files are left out, and with none the cue is silent.
+func _check_file_pools() -> void:
+	var pools := 0
+	for cue: String in Sfx.CUES:
+		if Sfx.CUES[cue].has("files"):
+			pools += 1
+	check(pools >= 5, "the war cries and the clucks are pools (%d)" % pools)
+	var cue := "chicken_cluck"
+	var n := Sfx.files_of(cue).size()
+	var tones: Array = []
+	for i in n:
+		tones.append(_tone(0.2))
+	Sfx.override_streams(cue, tones)
+	var rng_state := GameWorld.rng.state
+	var fx_state := GameWorld.fx_rng.state
+	var seen := {}
+	var last: AudioStream = null
+	var repeats := 0
+	var plays := 0
+	for i in 40:
+		Sfx._last.erase(cue)   # (past the min_gap without waiting: tests run faster than real time)
+		var p := Sfx.play_at(cue, Vector3(1, 0, 1))
+		if p == null:
+			continue
+		plays += 1
+		var st: AudioStream = p.get("stream")
+		seen[tones.find(st)] = true
+		if st == last:
+			repeats += 1
+		last = st
+	eq(plays, 40, "every play of the pool plays")
+	eq(seen.size(), n, "all %d files are heard (%s)" % [n, str(seen.keys())])
+	eq(repeats, 0, "never the same file twice running")
+	eq(GameWorld.rng.state, rng_state, "the pick never touches GameWorld.rng")
+	check(GameWorld.fx_rng.state != fx_state, "it rolls GameWorld.fx_rng")
+	Sfx.stop_cue(cue, 0.0)
+	# One file: always it.
+	Sfx.override_streams(cue, [tones[0]])
+	Sfx._last.erase(cue)
+	check(Sfx.play(cue) != null and Sfx.is_playing(cue), "a pool of one plays it")
+	Sfx.stop_cue(cue, 0.0)
+	# From disk: half the files there, half missing (a folder of copies of one rendered tone).
+	var tmp := "user://test_sfx_pool/"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(tmp))
+	var names := Sfx.files_of("cry_grunt")
+	var w := _tone(0.2)
+	w.save_to_wav(ProjectSettings.globalize_path(tmp + str(names[0])))
+	Sfx.dir = tmp
+	var have := Sfx.streams_of("cry_grunt")
+	eq(have.size(), 1, "a pool with a file missing keeps the one it has")
+	for i in 3:
+		Sfx._last.erase("cry_grunt")
+		check(Sfx.play_at("cry_grunt", Vector3.ZERO) != null, "... and plays it (%d)" % i)
+	Sfx.stop_cue("cry_grunt", 0.0)
+	eq(Sfx.streams_of("cry_brute").size(), 0, "a pool with none: no streams")
+	Sfx._last.erase("cry_brute")
+	check(Sfx.play_at("cry_brute", Vector3.ZERO) == null, "... and silent")
+	Sfx.dir = Sfx.DIR
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp + str(names[0])))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+	await frames(1)
 
 
 # --- voice hooks -----------------------------------------------------------------------------------

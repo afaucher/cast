@@ -8,13 +8,14 @@ extends Node
 ##   Sfx.stop_cue("fizzle")               # cut every voice of a cue (a short fade, no click)
 ##   Sfx.listen_to_voice(caster)          # the voice cues: cast heard, fizzle, and the fizzle cut on new speech
 ##
-## CUES is the table: the file under DIR, the bus (default_bus_layout.tres), volume_db, pitch_jitter (a +- fraction of
+## CUES is the table: the file under DIR (or "files", a pool: each play picks one of them at random on GameWorld.fx_rng,
+## never the one it played last), the bus (default_bus_layout.tres), volume_db, pitch_jitter (a +- fraction of
 ## the pitch, rolled on GameWorld.fx_rng), max_voices (the oldest voice of the cue is stolen past it), min_gap (seconds;
 ## a play sooner than that after the last one is dropped), positional, and for 3D cues unit_size / max_distance. A cue
 ## with a duck_db (a long bed: the lava's bubbling) goes down that many dB while the local player speaks (_tick_duck).
 ## ear() is where 3D sounds are heard from, for placing an ambient emitter near the player.
 ## The WAVs are rendered from the prototype recipes by tools/sfx_proto/render_game_sfx.gd and are not in git: a missing
-## file keeps its cue silent with one warning, never an error.
+## file keeps its cue silent with one warning, never an error (a pool plays the files it has).
 ##
 ## Headless (tests, the net test processes, a dedicated host) it is OFF: play() returns at once, nothing is loaded or
 ## built. Tests that need it call enable_for_tests().
@@ -164,30 +165,23 @@ const CUES := {
 		"max_voices": 4, "min_gap": 0.05, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
 	"mailbox_break": {"file": "mailbox_break.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.08,
 		"max_voices": 4, "min_gap": 0.04, "positional": true, "unit_size": 10.0, "max_distance": 50.0},
-	# --- war cries (2026-10-24, playtest feedback item 4, batch 2; audio-plan.md "War cries"): Monster.yell on every machine
-	# from the state it sees. Three candidates each for the skeleton, the brute and the imp (the gym's "War cries" picker
-	# plays A, B or C until the user picks) and one shared cry for every other kind. Rare by design (a pack's first sight,
-	# an occasional charge), so a little louder than a swing.
-	"cry_grunt_a": {"file": "cry_grunt_a.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.07,
+	# --- war cries and clucks (2026-10-25; audio-plan.md "War cries"): the user's own takes, each cue a pool (one file at
+	# random, never the same twice running). The cries: Monster.yell on every machine from the state it sees (a pack's first
+	# sight, now and then a charging one); the skeleton's are takes 6 and 7 as recorded, the brute's 5 semitones down and
+	# driven a little, the imp's 5 up, every other kind's 2 down. Rare by design, so a little louder than a swing.
+	"cry_grunt": {"files": ["cry_grunt_1.wav", "cry_grunt_2.wav"], "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.07,
 		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
-	"cry_grunt_b": {"file": "cry_grunt_b.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.07,
-		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
-	"cry_grunt_c": {"file": "cry_grunt_c.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.07,
-		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
-	"cry_brute_a": {"file": "cry_brute_a.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.05,
+	"cry_brute": {"files": ["cry_brute_1.wav", "cry_brute_2.wav"], "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.05,
 		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
-	"cry_brute_b": {"file": "cry_brute_b.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.05,
-		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
-	"cry_brute_c": {"file": "cry_brute_c.wav", "bus": "World", "volume_db": -4.0, "pitch_jitter": 0.05,
-		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 12.0, "max_distance": 60.0},
-	"cry_swarmer_a": {"file": "cry_swarmer_a.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.10,
+	"cry_swarmer": {"files": ["cry_swarmer_1.wav", "cry_swarmer_2.wav"], "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.10,
 		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 9.0, "max_distance": 48.0},
-	"cry_swarmer_b": {"file": "cry_swarmer_b.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.10,
-		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 9.0, "max_distance": 48.0},
-	"cry_swarmer_c": {"file": "cry_swarmer_c.wav", "bus": "World", "volume_db": -7.0, "pitch_jitter": 0.10,
-		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 9.0, "max_distance": 48.0},
-	"cry_monster": {"file": "cry_monster.wav", "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.08,
+	"cry_monster": {"files": ["cry_monster_1.wav", "cry_monster_2.wav"], "bus": "World", "volume_db": -6.0, "pitch_jitter": 0.08,
 		"max_voices": 2, "min_gap": 0.25, "positional": true, "unit_size": 10.0, "max_distance": 55.0},
+	## A chicken clucks (Chicken.cluck, every machine from the chicken it shows): as the flock lands, on each peck, and now
+	## and then. A flock of four pecking is capped by the voices and the gap, so it stays a few clucks, not a wall.
+	"chicken_cluck": {"files": ["chicken_cluck_1.wav", "chicken_cluck_2.wav", "chicken_cluck_3.wav", "chicken_cluck_4.wav",
+		"chicken_cluck_5.wav"], "bus": "World", "volume_db": -9.0, "pitch_jitter": 0.08,
+		"max_voices": 2, "min_gap": 0.18, "positional": true, "unit_size": 7.0, "max_distance": 38.0},
 }
 ## Cues with a "duck_db" (the long beds) go down by it while the local player speaks (audio-plan.md §4 rule 4, built for
 ## those cues only): down in DUCK_ATTACK, held DUCK_HOLD after the voice stops, back up over DUCK_RELEASE.
@@ -212,8 +206,9 @@ var dir := DIR:
 ## Times each cue has started (tests, debug).
 var played := {}
 
-var _streams := {}       ## cue -> AudioStream, or null once found missing (warned once)
+var _streams := {}       ## cue -> Array of its AudioStreams found on disk (empty once found missing, warned once)
 var _last := {}          ## cue -> Time.get_ticks_msec() of its last play
+var _picked := {}        ## a pool's cue -> the index of the file it played last (no immediate repeat)
 var _p2d: Array[AudioStreamPlayer] = []
 var _p3d: Array[AudioStreamPlayer3D] = []
 var _voice := {}         ## player -> [cue, started msec]
@@ -244,12 +239,18 @@ func disable_for_tests() -> void:
 	_duck_k = 0.0
 	_spoke_ms = -100000
 	_last.clear()
+	_picked.clear()
 	dir = DIR
 
 
-## Tests: play `stream` for `cue` instead of its file.
+## Tests: play `stream` for `cue` instead of its file (or its pool).
 func override_stream(cue: String, stream: AudioStream) -> void:
-	_streams[cue] = stream
+	_streams[cue] = [stream]
+
+
+## Tests: a pool of `streams` for `cue` instead of its files.
+func override_streams(cue: String, streams: Array) -> void:
+	_streams[cue] = streams.duplicate()
 
 
 ## Play a non-positional cue. Returns the player, or null (off, unknown, missing file, too soon).
@@ -287,18 +288,38 @@ func is_playing(cue: String) -> bool:
 	return false
 
 
-## The stream for `cue`: loaded on first use; null (warned once) when the file was never rendered.
+## The file names of `cue`: its "files" (a pool), or its one "file".
+static func files_of(cue: String) -> Array:
+	if not CUES.has(cue):
+		return []
+	var c: Dictionary = CUES[cue]
+	return (c["files"] as Array).duplicate() if c.has("files") else [str(c.get("file", ""))]
+
+
+## The stream for `cue` (a pool's first file): null when it was never rendered.
 func stream_of(cue: String) -> AudioStream:
+	var all := streams_of(cue)
+	return all[0] if not all.is_empty() else null
+
+
+## Every stream of `cue` found on disk, loaded on first use. A file never rendered is left out with one warning for the
+## cue; none found: empty (the cue stays silent).
+func streams_of(cue: String) -> Array:
 	if _streams.has(cue):
 		return _streams[cue]
-	var path := dir + str(CUES[cue]["file"]) if CUES.has(cue) else ""
-	var s: AudioStream = null
-	if path != "" and ResourceLoader.exists(path):
-		s = load(path) as AudioStream
-	if s == null:
-		push_warning("Sfx: no sound for '%s' (%s missing: run tools/render_sfx.ps1); it stays silent" % [cue, path])
-	_streams[cue] = s
-	return s
+	var found: Array = []
+	var missing: Array[String] = []
+	for f: String in files_of(cue):
+		var s: AudioStream = _load_stream(dir + f) if f != "" else null
+		if s != null:
+			found.append(s)
+		else:
+			missing.append(dir + f)
+	if not missing.is_empty():
+		push_warning("Sfx: no sound for '%s' (%s missing: run tools/render_sfx.ps1); %s" % [cue, ", ".join(missing),
+				"it stays silent" if found.is_empty() else "it plays the rest"])
+	_streams[cue] = found
+	return found
 
 
 ## The voice cues for the local player's caster: "cast heard" when a trigger arms, "order heard" for a voice order, the fizzle (unless the player is
@@ -323,7 +344,7 @@ func _start(cue: String, pos: Vector3) -> Node:
 	var now := Time.get_ticks_msec()
 	if _last.has(cue) and now - int(_last[cue]) < int(float(c.get("min_gap", 0.0)) * 1000.0):
 		return null
-	var s := stream_of(cue)
+	var s := _pick(cue)
 	if s == null:
 		return null
 	var positional := bool(c.get("positional", false)) and pos != Vector3.INF
@@ -344,6 +365,30 @@ func _start(cue: String, pos: Vector3) -> Node:
 	p.call("play")
 	played[cue] = int(played.get(cue, 0)) + 1
 	return p
+
+
+## An imported stream (the game's res:// files), else a WAV read straight off the disk (rendered but not imported yet, or a
+## test's folder under user://). Null when the file is not there.
+static func _load_stream(path: String) -> AudioStream:
+	if ResourceLoader.exists(path):
+		return load(path) as AudioStream
+	if path.get_extension().to_lower() == "wav" and FileAccess.file_exists(path):
+		return AudioStreamWAV.load_from_file(path)
+	return null
+
+
+## The stream to play for `cue`: its one file, or one of a pool's at random (GameWorld.fx_rng: a look, never gameplay),
+## never the one it played last. Null when it has none.
+func _pick(cue: String) -> AudioStream:
+	var all := streams_of(cue)
+	if all.size() <= 1:
+		return all[0] if not all.is_empty() else null
+	var last := int(_picked.get(cue, -1))
+	var i := GameWorld.fx_rng.randi_range(0, all.size() - (2 if last >= 0 and last < all.size() else 1))
+	if last >= 0 and last < all.size() and i >= last:
+		i += 1   # (every other file is equally likely)
+	_picked[cue] = i
+	return all[i]
 
 
 ## A free player of the kind, or the one to steal: the cue's oldest voice past its limit, else the oldest of all.

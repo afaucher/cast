@@ -10,7 +10,8 @@ const Synth = preload("res://tools/sfx_proto/sfx_round3.gd")
 const Rec = preload("res://tools/sfx_proto/sfx_rec.gd")
 
 const OUT_DIR := "res://assets/audio/sfx"
-## Game cue (Sfx.CUES, the file name) -> prototype recipe (sfx_round3.gd / sfx_synth.gd).
+## Game cue file (Sfx.CUES "file", or one of a pool's "files", without .wav) -> prototype recipe (sfx_round3.gd /
+## sfx_synth.gd).
 const GAME_CUES := {
 	"cast_heard": "cast_armed_v4a2",
 	"order_heard": "order_click_v1",
@@ -66,17 +67,20 @@ const GAME_CUES := {
 	"prop_dent": "prop_dent_v1",
 	"prop_break": "prop_break_v1",
 	"mailbox_break": "mailbox_break_v1",
-	# war cries (2026-10-24): every candidate is rendered, so the gym's "War cries" picker can switch them live
-	"cry_grunt_a": "cry_grunt_a",
-	"cry_grunt_b": "cry_grunt_b",
-	"cry_grunt_c": "cry_grunt_c",
-	"cry_brute_a": "cry_brute_a",
-	"cry_brute_b": "cry_brute_b",
-	"cry_brute_c": "cry_brute_c",
-	"cry_swarmer_a": "cry_swarmer_a",
-	"cry_swarmer_b": "cry_swarmer_b",
-	"cry_swarmer_c": "cry_swarmer_c",
-	"cry_monster": "cry_monster",
+	# war cries and clucks (2026-10-25): the user's takes; each Sfx cue is a pool of these files (Sfx.CUES "files")
+	"cry_grunt_1": "cry_grunt_1",
+	"cry_grunt_2": "cry_grunt_2",
+	"cry_brute_1": "cry_brute_1",
+	"cry_brute_2": "cry_brute_2",
+	"cry_swarmer_1": "cry_swarmer_1",
+	"cry_swarmer_2": "cry_swarmer_2",
+	"cry_monster_1": "cry_monster_1",
+	"cry_monster_2": "cry_monster_2",
+	"chicken_cluck_1": "chicken_cluck_1",
+	"chicken_cluck_2": "chicken_cluck_2",
+	"chicken_cluck_3": "chicken_cluck_3",
+	"chicken_cluck_4": "chicken_cluck_4",
+	"chicken_cluck_5": "chicken_cluck_5",
 }
 
 

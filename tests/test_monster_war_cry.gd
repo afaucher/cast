@@ -6,8 +6,8 @@ extends MonsterTestBase
 ##      first area yells again once CRY_PACK_COOLDOWN has passed;
 ##   3. BORN FIGHTING: a gate's burst of 7 (spawned and sent at the crew on one frame) yells once;
 ##   4. A PUPPET yells from the state it is shown (net_show, net_tick), the same rule: one per pack, the lowest key;
-##   5. THE SWITCH: "off" yells nothing; A / B / C pick each voice's cue, the other kinds the shared one; frozen monsters and
-##      the goblin scout never yell;
+##   5. THE CUES: the skeleton, the brute and the imp yell their own pool (cry_<kind>, the user's takes), the other kinds the
+##      shared cry_monster; there is no picker any more (settled 2026-10-25); frozen monsters and the goblin scout never yell;
 ##   6. CHARGING STAYS RARE: the roll's hash hits about CHARGE_CHANCE of the time, and a hallway of 12 chasing the crew for
 ##      10 s yells only a couple of times (four runs with different keys).
 
@@ -19,15 +19,13 @@ func _init() -> void:
 
 
 func setup() -> void:
-	Monster.war_cry = "A"
 	Monster.reset_war_cries()
 	await _first_sight()
 	await _born_fighting()
 	await _puppets()
-	await _switch()
+	await _cues()
 	_roll_rate()
 	await _hallways()
-	Monster.war_cry = "A"
 	Monster.reset_war_cries()
 	finish()
 
@@ -153,30 +151,40 @@ func _puppets() -> void:
 	await frames(2)
 
 
-# --- 5. the switch, the cues, who never yells -------------------------------------------------------------------------
+# --- 5. the cues, who never yells -------------------------------------------------------------------------------------
 
-func _switch() -> void:
-	for pick: String in ["A", "B", "C"]:
-		Monster.war_cry = pick
-		for voice: String in Monster.CRY_VOICES:
-			var cue := Monster.war_cry_cue(voice)
-			eq(cue, "cry_%s_%s" % [voice, pick.to_lower()], "%s: %s yells %s" % [pick, voice, cue])
-			check(Sfx.CUES.has(cue), "%s is a cue" % cue)
-		for other: String in ["archer", "pavise", "goo_imp", "water_boy"]:
-			eq(Monster.war_cry_cue(other), "cry_monster", "%s: %s yells the shared cry" % [pick, other])
-	check(Sfx.CUES.has("cry_monster"), "cry_monster is a cue")
-	Monster.war_cry = "off"
-	eq(Monster.war_cry_cue("grunt"), "", "off: no cue")
+func _cues() -> void:
+	for voice: String in Monster.CRY_VOICES:
+		var cue := Monster.war_cry_cue(voice)
+		eq(cue, "cry_" + voice, "%s yells %s" % [voice, cue])
+	for other: String in ["archer", "pavise", "goo_imp", "water_boy"]:
+		eq(Monster.war_cry_cue(other), "cry_monster", "%s yells the shared cry" % other)
+	for cue: String in ["cry_grunt", "cry_brute", "cry_swarmer", "cry_monster"]:
+		if check(Sfx.CUES.has(cue), "%s is a cue" % cue):
+			eq(Sfx.files_of(cue), ["%s_1.wav" % cue, "%s_2.wav" % cue], "%s is a pool of the user's two takes" % cue)
+	check(not (load("res://scripts/monsters/monster.gd") as Script).get_script_constant_map().has("CRY_PICKS"), "no cry picker any more")
 	new_world(flat_map(22))
 	Monster.reset_war_cries()
 	var hero := add_hero(Vector2i(-9, 0))
-	var pack := _pack("grunt", Vector2i(0, 0), 5)
+	# A yell plays its kind's pool (Sfx picks one of the takes).
+	Sfx.enable_for_tests()
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = 22050
+	var silence := PackedByteArray()
+	silence.resize(22050)
+	w.data = silence
+	for cue: String in ["cry_brute", "cry_monster"]:
+		Sfx.override_streams(cue, [w, w.duplicate()])
+	var brute := MonsterFactory.spawn("brute", Vector2i(4, -6))
+	var archer := MonsterFactory.spawn("archer", Vector2i(-4, -6))
 	await frames(2)
-	pack[0].aggro(hero)
-	await frames(20)
-	eq(_total(pack), 0, "off: a pack's first sight yells nothing")
-	_free(pack)
-	Monster.war_cry = "A"
+	brute.yell()
+	archer.yell()
+	eq(int(Sfx.played.get("cry_brute", 0)), 1, "a brute's yell plays cry_brute")
+	eq(int(Sfx.played.get("cry_monster", 0)), 1, "an archer's yell plays cry_monster")
+	Sfx.disable_for_tests()
+	_free([brute, archer])
 	var frozen := _pack("grunt", Vector2i(0, 10), 3)
 	for m in frozen:
 		m.aggro_range = 0.0

@@ -53,16 +53,14 @@ slosh, droplets), the hisses, the hum and the bubbling are synth; the recordings
 | `step_metal` | `step_metal_v1` | `footstep_concrete_003.ogg` and a faint `impactMetal_light_002.ogg` ring (Impact Sounds), low-passed | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
 | `land_thud` | `land_thud_v1` | `impactSoft_heavy_000.ogg` under 300 Hz and `footstep_concrete_002.ogg` (Impact Sounds) | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
 
-**War cries (2026-10-24).** Candidates (the user picks one per voice; audio-plan.md "War cries"); built in
-`tools/sfx_proto/sfx_round3.gd` ("war cries"). The voices are the user's own recordings (`third_party/user/`), processed.
+**War cries and clucks (2026-10-25).** The user's own recordings (`third_party/user/warcry_raw.wav`, takes 6 and 7, and
+`chicken_raw.wav`, all five clucks), each cut, scaled to a -1 dBFS peak and faded; built in `tools/sfx_proto/sfx_round3.gd`
+("war cries and clucks"). Each cue is a pool of these files (Sfx picks one per play).
 
-| Cue (file) | Recipe | Made from | Author | Licence | URL |
+| Cue (files) | Recipe | Made from | Author | Licence | URL |
 |---|---|---|---|---|---|
-| `cry_grunt_a` | `cry_grunt_a` | the user's "ouch" 2, pitched down and stretched; `impactWood_light_000/002.ogg` (Impact Sounds) as bone clacks | the user; Kenney (kenney.nl) | ours; CC0 1.0 | https://kenney.nl/assets/impact-sounds |
-| `cry_grunt_b` | `cry_grunt_b` | synth (a rasping formant hiss); `impactWood_light_001/003.ogg` (Impact Sounds) as bone clacks | Cast; Kenney (kenney.nl) | ours; CC0 1.0 | https://kenney.nl/assets/impact-sounds |
-| `cry_grunt_c` | `cry_grunt_c` | the user's climb "hup", pitched down and driven; `impactWood_light_000/004.ogg` (Impact Sounds) as jaw clacks | the user; Kenney (kenney.nl) | ours; CC0 1.0 | https://kenney.nl/assets/impact-sounds |
-| `cry_brute_a` | `cry_brute_a` | the user's "ouch" 2, an octave down, stretched and driven; `impactPunch_heavy_000.ogg` (Impact Sounds) | the user; Kenney (kenney.nl) | ours; CC0 1.0 | https://kenney.nl/assets/impact-sounds |
-| `cry_brute_b` | `cry_brute_b` | synth (a formant bellow); `impactPunch_heavy_000/001.ogg` (Impact Sounds) as chest thumps | Cast; Kenney (kenney.nl) | ours; CC0 1.0 | https://kenney.nl/assets/impact-sounds |
-| `cry_brute_c` | `cry_brute_c` | "Black Portal - Dark Dimension Rift" (657653), low-passed; the user's climb "hup", 10 semitones down | LilMati (Freesound); the user | CC0 1.0; ours | https://freesound.org/people/LilMati/sounds/657653/ |
-| `cry_swarmer_a` / `_b` / `_c` | the same | the user's imp yips (Recording 3), pitched, stretched or chopped; C with a synth squeal | the user; Cast | ours | `tools/sfx_proto/sfx_round3.gd` |
-| `cry_monster` | `cry_monster` | the user's "ouch" 1 and climb "hup", pitched down, stretched and driven | the user | ours | `tools/sfx_proto/sfx_round3.gd` |
+| `cry_grunt` (`cry_grunt_1`, `_2`) | the same | the user's war cry takes 6 and 7, as recorded | the user | ours | `tools/sfx_proto/sfx_round3.gd` |
+| `cry_brute` (`cry_brute_1`, `_2`) | the same | takes 6 and 7, 5 semitones down, a touch of overdrive | the user | ours | `tools/sfx_proto/sfx_round3.gd` |
+| `cry_swarmer` (`cry_swarmer_1`, `_2`) | the same | takes 6 and 7, 5 semitones up | the user | ours | `tools/sfx_proto/sfx_round3.gd` |
+| `cry_monster` (`cry_monster_1`, `_2`) | the same | takes 6 and 7, 2 semitones down | the user | ours | `tools/sfx_proto/sfx_round3.gd` |
+| `chicken_cluck` (`chicken_cluck_1` .. `_5`) | the same | the user's five clucks, as recorded | the user | ours | `tools/sfx_proto/sfx_round3.gd` |

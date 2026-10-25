@@ -20,7 +20,8 @@ const USER_IMP := "user/imp_raw.wav"
 const USER_CLIMB := "user/climb_raw.wav"
 const USER_OUCH_1 := "user/ouch1_raw.wav"
 const USER_OUCH_2 := "user/ouch2_raw.wav"
-const PORTAL_RIFT := "freesound/657653__lilmati__black-portal-dark-dimension-rift.wav"
+const USER_WARCRY := "user/warcry_raw.wav"
+const USER_CHICKEN := "user/chicken_raw.wav"
 
 ## cue -> the recordings it is made from ("synth" = generated here).
 const SOURCES := {
@@ -79,17 +80,20 @@ const SOURCES := {
 	"prop_dent_v1": [K_IMPACT + "impactWood_medium_001.ogg", K_IMPACT + "impactPlank_medium_002.ogg"],
 	"prop_break_v1": [K_IMPACT + "impactWood_heavy_002.ogg", K_IMPACT + "impactPlank_medium_001.ogg", K_IMPACT + "impactPlank_medium_003.ogg"],
 	"mailbox_break_v1": [K_IMPACT + "impactMetal_heavy_003.ogg", K_RPG + "metalPot2.ogg", K_IMPACT + "impactPlank_medium_000.ogg"],
-	# war cries (2026-10-24, playtest feedback item 4 batch 2; audio-plan.md "War cries"): three candidates per voice
-	"cry_grunt_a": [USER_OUCH_2, K_IMPACT + "impactWood_light_000.ogg", K_IMPACT + "impactWood_light_002.ogg"],
-	"cry_grunt_b": [K_IMPACT + "impactWood_light_001.ogg", K_IMPACT + "impactWood_light_003.ogg"],
-	"cry_grunt_c": [USER_CLIMB, K_IMPACT + "impactWood_light_000.ogg", K_IMPACT + "impactWood_light_004.ogg"],
-	"cry_brute_a": [USER_OUCH_2, K_IMPACT + "impactPunch_heavy_000.ogg"],
-	"cry_brute_b": [K_IMPACT + "impactPunch_heavy_000.ogg", K_IMPACT + "impactPunch_heavy_001.ogg"],
-	"cry_brute_c": [PORTAL_RIFT, USER_CLIMB],
-	"cry_swarmer_a": [USER_IMP],
-	"cry_swarmer_b": [USER_IMP],
-	"cry_swarmer_c": [USER_IMP],
-	"cry_monster": [USER_OUCH_1, USER_CLIMB],
+	# war cries (2026-10-25: the user's own takes, played as pools; audio-plan.md "War cries") and the chickens' clucks
+	"cry_grunt_1": [USER_WARCRY],
+	"cry_grunt_2": [USER_WARCRY],
+	"cry_brute_1": [USER_WARCRY],
+	"cry_brute_2": [USER_WARCRY],
+	"cry_swarmer_1": [USER_WARCRY],
+	"cry_swarmer_2": [USER_WARCRY],
+	"cry_monster_1": [USER_WARCRY],
+	"cry_monster_2": [USER_WARCRY],
+	"chicken_cluck_1": [USER_CHICKEN],
+	"chicken_cluck_2": [USER_CHICKEN],
+	"chicken_cluck_3": [USER_CHICKEN],
+	"chicken_cluck_4": [USER_CHICKEN],
+	"chicken_cluck_5": [USER_CHICKEN],
 }
 
 
@@ -834,55 +838,44 @@ func _mailbox_break_v1() -> PackedFloat32Array:
 	return Rec.normalize(Rec.fade(s, 0.001, 0.06), -1.0)
 
 
-# ---------------------------------------------------------------- war cries (2026-10-24; audio-plan.md "War cries")
-# Monster.yell: a pack's first sight of the crew, and now and then a charging monster. Three candidates for the skeleton,
-# the brute and the imp (the user picks by listening: "1A, 2B, 3C"), one shared cry for the other kinds. The only voices
-# on disk are the user's own takes (user/: the "ouch"es, the climb's "hup", the imp's yips), so each cry is one of them
-# pitched, stretched (a granular stretch: _stretch) and roughened (_rasp, _drive), or a formant synth, with Kenney bone
-# clacks and thumps and the Freesound portal rumble layered in. Each is about 0.4-1.1 s, front-loaded.
-
-## A granular time stretch: Hann grains of `grain` s laid every grain/2 s, read at 1/`factor` the speed (pitch kept).
-static func _stretch(src: PackedFloat32Array, factor: float, grain: float = 0.05) -> PackedFloat32Array:
-	var g := int(grain * RATE)
-	var hop_out := g / 2
-	var hop_in := float(hop_out) / factor
-	var n := int(src.size() * factor) + g
-	var out := PackedFloat32Array()
-	out.resize(n)
-	var win := PackedFloat32Array()
-	win.resize(g)
-	for i in g:
-		win[i] = 0.5 - 0.5 * cos(TAU * float(i) / float(g))
-	var o := 0
-	var r := 0.0
-	while o + g < n and int(r) + g < src.size():
-		var r0 := int(r)
-		for i in g:
-			out[o + i] += src[r0 + i] * win[i]
-		o += hop_out
-		r += hop_in
-	return out.slice(0, o + hop_out)
+# ---------------------------------------------------------------- war cries and clucks (2026-10-25; audio-plan.md "War cries")
+# The user's own takes (user/warcry_raw.wav, seven yells; user/chicken_raw.wav, five clucks), after the synthesized
+# candidates were turned down ("I don't like the audio. I will record one."). The user picked "war_cry_6 & war_cry_7 and
+# all the chicken sounds" (2026-10-25). Each is cut from WARCRY_PRE before the take to WARCRY_POST after, scaled to a
+# -1 dBFS peak first (the takes are quiet) and faded over TAKE_FADE; the voices are the two yells pitched (the brute down
+# with a little drive, the imp up, every other kind a touch down). Sfx plays each cue as a pool: one file at random.
+const TAKE_PRE := 0.06
+const TAKE_POST := 0.15
+const TAKE_FADE := 0.03
+## The two chosen yells in warcry_raw.wav (takes 6 and 7), seconds.
+const WARCRY_TAKES: Array[Vector2] = [Vector2(10.75, 11.23), Vector2(14.08, 14.65)]
+## The five clucks in chicken_raw.wav, seconds.
+const CLUCK_TAKES: Array[Vector2] = [Vector2(0.40, 0.53), Vector2(0.98, 1.23), Vector2(1.83, 1.93), Vector2(3.00, 3.12),
+	Vector2(3.62, 3.73)]
+const BRUTE_SEMIS := -5.0
+const SWARMER_SEMIS := 5.0
+const MONSTER_SEMIS := -2.0
 
 
-## A vibrato / pitch glide: read `src` at a speed of 2^(semis(k) / 12), k = 0..1 across the source (`semis` a Callable).
-static func _bend(src: PackedFloat32Array, semis: Callable) -> PackedFloat32Array:
-	var out := PackedFloat32Array()
-	var x := 0.0
-	var size := float(src.size())
-	while x < size - 1.0:
-		var j := int(x)
-		var fr := x - j
-		out.append(src[j] + (src[j + 1] - src[j]) * fr)
-		x += pow(2.0, float(semis.call(x / size)) / 12.0)
-	return out
+## A take: `span` of `path` padded by TAKE_PRE / TAKE_POST, normalised to -1 dBFS, then faded in and out over TAKE_FADE.
+static func _user_take(path: String, span: Vector2) -> PackedFloat32Array:
+	var s := Rec.cut(Rec.load_mono(path), maxf(span.x - TAKE_PRE, 0.0), span.y + TAKE_POST)
+	return Rec.fade(Rec.normalize(s, -1.0), TAKE_FADE, TAKE_FADE)
 
 
-## A throat rasp: amplitude chopped at `hz` (a growl's flutter), `depth` 0..1.
-static func _rasp(src: PackedFloat32Array, hz: float, depth: float) -> PackedFloat32Array:
-	var out := src.duplicate()
-	for i in out.size():
-		out[i] *= 1.0 - depth + depth * absf(sin(PI * hz * float(i) / RATE))
-	return out
+## War cry take `i` (0 or 1) pitched `semis`, back at -1 dBFS.
+static func _cry(i: int, semis: float = 0.0) -> PackedFloat32Array:
+	var s := _user_take(USER_WARCRY, WARCRY_TAKES[i])
+	return Rec.normalize(Rec.pitch(s, semis), -1.0) if semis != 0.0 else s
+
+
+## The brute: the take BRUTE_SEMIS down with a touch of drive (an overdriven copy 8 dB under it; the old brute roars were
+## all driven) and a little more chest.
+static func _brute(i: int) -> PackedFloat32Array:
+	var v := _cry(i, BRUTE_SEMIS)
+	var s := Rec.mix(v, _drive(v, 2.5), 0.0, -8.0)
+	s = Rec.peq(s, 160.0, 2.5, 1.0)
+	return Rec.normalize(Rec.fade(s, 0.0, TAKE_FADE), -1.0)
 
 
 ## Overdrive: tanh at `drive` (x the level).
@@ -893,173 +886,58 @@ static func _drive(src: PackedFloat32Array, drive: float) -> PackedFloat32Array:
 	return out
 
 
-## A hollow resonance (a feedback comb at `ms`): the skeleton's empty ribcage.
-static func _hollow(src: PackedFloat32Array, ms: float, fb: float) -> PackedFloat32Array:
-	var d := int(ms * 0.001 * RATE)
-	var out := src.duplicate()
-	for i in range(d, out.size()):
-		out[i] += fb * out[i - d]
-	return out
+## Skeleton (grunt): takes 6 and 7 as recorded.
+func _cry_grunt_1() -> PackedFloat32Array:
+	return _cry(0)
 
 
-## A vowel from a buzz: `src` through three band-passes (formants f1..f3, Hz) summed.
-static func _vowel(src: PackedFloat32Array, f1: float, f2: float, f3: float) -> PackedFloat32Array:
-	var a := Rec._svf(src, f1, 5.0, 1, 1)
-	var b := Rec._svf(src, f2, 6.0, 1, 1)
-	var c := Rec._svf(src, f3, 8.0, 1, 1)
-	var out := PackedFloat32Array()
-	out.resize(src.size())
-	for i in src.size():
-		out[i] = a[i] + 0.6 * b[i] + 0.3 * c[i]
-	return out
+func _cry_grunt_2() -> PackedFloat32Array:
+	return _cry(1)
 
 
-## `n` bone clacks (a Kenney light wood knock pitched up `semis`, short), each gap `accel` x the last: a rattle.
-static func _rattle(knock: String, n: int, gap: float, semis: float, accel: float = 0.85) -> PackedFloat32Array:
-	var k := Rec.highpass(Rec.cut(Rec.trim(Rec.load_mono(knock), -45.0, 0.0), 0.0, 0.06), 600.0, 1)
-	k = Rec.normalize(Rec.fade(Rec.pitch(k, semis), 0.0, 0.02), -1.0)
-	var out := PackedFloat32Array()
-	var t := 0.0
-	for i in n:
-		out = Rec.mix(out, Rec.pitch(k, float(i % 3) - 1.0), t, -float(i % 2) * 3.0)
-		t += gap
-		gap *= accel
-	return out
+## Brute: BRUTE_SEMIS down, a touch of drive.
+func _cry_brute_1() -> PackedFloat32Array:
+	return _brute(0)
 
 
-## A voice take cut to t0..t1, high-passed at `hp`, faded.
-static func _take(path: String, t0: float, t1: float, hp: float = 120.0) -> PackedFloat32Array:
-	return Rec.fade(Rec.highpass(Rec.cut(Rec.load_mono(path), t0, t1), hp, 2), 0.006, 0.03)
+func _cry_brute_2() -> PackedFloat32Array:
+	return _brute(1)
 
 
-## Grunt (skeleton) A, "rattle howl": the user's "ouch" 2 five semitones down and stretched x3 into a hoarse "OWWW" that
-## lifts and falls, a hollow ribcage ring on it, over a bone rattle that speeds up.
-func _cry_grunt_a() -> PackedFloat32Array:
-	var v := _stretch(Rec.pitch(_take(USER_OUCH_2, 0.33, 0.50), -5.0), 3.0)
-	v = _bend(v, func(k: float) -> float: return 1.5 * k - 2.0 * k * k + 0.4 * sin(k * 40.0))
-	v = Rec.lowpass(_rasp(_hollow(v, 5.5, 0.45), 38.0, 0.35), 3200.0, 1)
-	v = Rec.shape(v, func(k: float) -> float: return minf(1.0, k * 12.0) * (1.0 - k * k * 0.8))
-	var rat := _rattle(K_IMPACT + "impactWood_light_000.ogg", 9, 0.07, 7.0)
-	rat = Rec.mix(rat, _rattle(K_IMPACT + "impactWood_light_002.ogg", 5, 0.09, 9.0), 0.035, -4.0)
-	var s := Rec.mix(Rec.normalize(v, -1.0), Rec.normalize(rat, -1.0), 0.0, -7.0)
-	return Rec.normalize(Rec.fade(s, 0.003, 0.08), -1.0)
+## Imp (swarmer): SWARMER_SEMIS up.
+func _cry_swarmer_1() -> PackedFloat32Array:
+	return _cry(0, SWARMER_SEMIS)
 
 
-## Grunt B, "dry shriek": a throat with no flesh (synth: noise through "ah" -> "ee" formants rising, chopped at 55 Hz, a
-## thin buzz under it) after a sharp clatter of bones.
-func _cry_grunt_b() -> PackedFloat32Array:
-	var o := _buf(0.62)
-	_add_noise(o, 0.0, 0.62, func(k: float) -> float: return 700.0 + 900.0 * k, 4.0, 1, 0.9,
-			func(k: float) -> float: return minf(1.0, k * 10.0) * (1.0 - k) * (0.8 + 0.2 * sin(k * 60.0)))
-	_add_noise(o, 0.0, 0.62, func(k: float) -> float: return 1200.0 + 1400.0 * k, 6.0, 1, 0.6,
-			func(k: float) -> float: return minf(1.0, k * 8.0) * (1.0 - k))
-	_add_tone(o, 0.04, 0.55, func(k: float) -> float: return 310.0 + 160.0 * k + 25.0 * sin(k * 50.0), 0.25,
-			func(k: float) -> float: return minf(1.0, k * 6.0) * (1.0 - k) * (1.0 - k), 1)
-	var v := _hollow(_rasp(o, 55.0, 0.6), 4.0, 0.4)
-	var rat := _rattle(K_IMPACT + "impactWood_light_001.ogg", 6, 0.035, 8.0, 0.95)
-	rat = Rec.mix(rat, _rattle(K_IMPACT + "impactWood_light_003.ogg", 4, 0.05, 5.0), 0.02, -3.0)
-	var s := Rec.mix(Rec.normalize(rat, -1.0), Rec.normalize(Rec.lowpass(v, 4000.0, 1), -1.0), 0.09, -1.0)
-	return Rec.normalize(Rec.fade(s, 0.002, 0.08), -1.0)
+func _cry_swarmer_2() -> PackedFloat32Array:
+	return _cry(1, SWARMER_SEMIS)
 
 
-## Grunt C, "jaw-clack bark": the jaw clacking fast (eight double knocks), then a barked "HAH!" (the user's climb "hup"
-## three semitones down, stretched x1.6, hollow and driven).
-func _cry_grunt_c() -> PackedFloat32Array:
-	var clack := _rattle(K_IMPACT + "impactWood_light_000.ogg", 8, 0.045, 10.0, 1.0)
-	clack = Rec.mix(clack, _rattle(K_IMPACT + "impactWood_light_004.ogg", 8, 0.045, 6.0, 1.0), 0.022, -5.0)
-	var bark := _stretch(Rec.pitch(_take(USER_CLIMB, 0.575, 0.725), -3.0), 1.6)
-	bark = _drive(_hollow(bark, 6.0, 0.4), 2.2)
-	bark = Rec.lowpass(bark, 3500.0, 1)
-	var s := Rec.mix(Rec.normalize(clack, -2.0), Rec.normalize(bark, -1.0), 0.36, 0.0)
-	return Rec.normalize(Rec.fade(s, 0.002, 0.06), -1.0)
+## Every other kind (archer, pavise, goo imp, Water Boy): MONSTER_SEMIS down.
+func _cry_monster_1() -> PackedFloat32Array:
+	return _cry(0, MONSTER_SEMIS)
 
 
-## Brute A, "roar": the user's "ouch" 2 an octave down, stretched x2.6 and overdriven into a "RROOAARR" with a growl's
-## flutter at 32 Hz, a chest thump under its start.
-func _cry_brute_a() -> PackedFloat32Array:
-	var v := _stretch(Rec.pitch(_take(USER_OUCH_2, 0.33, 0.50, 80.0), -12.0), 2.6, 0.07)
-	v = _bend(v, func(k: float) -> float: return 1.0 * k - 1.6 * k * k)
-	v = _drive(_rasp(v, 32.0, 0.45), 3.0)
-	v = Rec.peq(Rec.lowpass(v, 2400.0, 2), 140.0, 5.0, 1.0)
-	v = Rec.shape(v, func(k: float) -> float: return minf(1.0, k * 8.0) * (1.0 - k * k * 0.9))
-	var thump := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_000.ogg"), -45.0, 0.0), 0.0, 0.22), 400.0, 2)
-	var s := Rec.mix(Rec.normalize(v, -1.0), Rec.normalize(thump, -1.0), 0.0, -4.0)
-	return Rec.normalize(Rec.fade(s, 0.003, 0.12), -1.0)
+func _cry_monster_2() -> PackedFloat32Array:
+	return _cry(1, MONSTER_SEMIS)
 
 
-## Brute B, "chest-beat bellow": two fist thumps on its chest, then a synth bellow (a buzz at 85 -> 62 Hz through an "aw"
-## vowel, a slow wobble, a breath of noise, driven).
-func _cry_brute_b() -> PackedFloat32Array:
-	var t1 := Rec.lowpass(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_000.ogg"), -45.0, 0.0), 0.0, 0.18), 600.0, 2)
-	var t2 := Rec.lowpass(Rec.pitch(Rec.cut(Rec.trim(Rec.load_mono(K_IMPACT + "impactPunch_heavy_001.ogg"), -45.0, 0.0), 0.0, 0.18), -2.0), 600.0, 2)
-	var saw := _buf(0.85)
-	_add_tone(saw, 0.0, 0.85, func(k: float) -> float: return 85.0 - 23.0 * k + 3.0 * sin(k * 30.0), 0.8,
-			func(k: float) -> float: return minf(1.0, k * 9.0) * (1.0 - k * k), 1)
-	_add_noise(saw, 0.0, 0.85, func(_k: float) -> float: return 900.0, 1.2, 1, 0.25,
-			func(k: float) -> float: return minf(1.0, k * 6.0) * (1.0 - k))
-	var bel := _vowel(saw, 520.0, 880.0, 2500.0)
-	bel = _drive(_rasp(bel, 28.0, 0.3), 2.5)
-	bel = Rec.mix(bel, Rec.normalize(Rec.lowpass(saw, 300.0, 2), -1.0), 0.0, -6.0)
-	var s := Rec.mix(Rec.normalize(t1, -1.0), Rec.normalize(t2, -1.0), 0.16, -1.0)
-	s = Rec.mix(s, Rec.normalize(bel, -1.0), 0.30, 0.0)
-	return Rec.normalize(Rec.fade(s, 0.002, 0.12), -1.0)
+## The chickens' clucks (Chicken: landing, pecks, now and then): the five takes as recorded.
+func _chicken_cluck_1() -> PackedFloat32Array:
+	return _user_take(USER_CHICKEN, CLUCK_TAKES[0])
 
 
-## Brute C, "demon growl": the portal rift's low rumble swelling under the user's climb "hup" ten semitones down,
-## stretched x3 and driven: a guttural "HRRAAH" from deep in the chest.
-func _cry_brute_c() -> PackedFloat32Array:
-	var rum := Rec.lowpass(Rec.cut(Rec.load_mono(PORTAL_RIFT), 0.3, 1.25), 500.0, 2)
-	rum = Rec.shape(rum, func(k: float) -> float: return minf(1.0, k * 4.0) * (1.0 - k))
-	var v := _stretch(Rec.pitch(_take(USER_CLIMB, 0.575, 0.725, 70.0), -10.0), 3.0, 0.07)
-	v = _drive(_rasp(v, 40.0, 0.5), 3.5)
-	v = Rec.lowpass(v, 2600.0, 2)
-	v = Rec.shape(v, func(k: float) -> float: return minf(1.0, k * 10.0) * (1.0 - k * k * 0.85))
-	var s := Rec.mix(Rec.normalize(rum, -1.0), Rec.normalize(v, -1.0), 0.05, 0.0)
-	return Rec.normalize(Rec.fade(s, 0.003, 0.12), -1.0)
+func _chicken_cluck_2() -> PackedFloat32Array:
+	return _user_take(USER_CHICKEN, CLUCK_TAKES[1])
 
 
-## Swarmer (imp) A, "shriek": the imp's first yip three semitones up, stretched x3.6 into a held "EEEE!" with a fast
-## trill, rising at the end.
-func _cry_swarmer_a() -> PackedFloat32Array:
-	var v := _stretch(Rec.pitch(_take(USER_IMP, 0.43, 0.57, 180.0), 3.0), 3.6, 0.035)
-	v = _bend(v, func(k: float) -> float: return 0.6 * sin(k * 70.0) + 2.5 * k * k)
-	v = Rec.shape(v, func(k: float) -> float: return minf(1.0, k * 14.0) * (1.0 - k * k * k))
-	return Rec.normalize(Rec.fade(v, 0.002, 0.04), -1.0)
+func _chicken_cluck_3() -> PackedFloat32Array:
+	return _user_take(USER_CHICKEN, CLUCK_TAKES[2])
 
 
-## Swarmer B, "cackle": five quick "hee"s chopped from the imp's first yip, each a little higher, the last one whole.
-func _cry_swarmer_b() -> PackedFloat32Array:
-	var src := Rec.pitch(_take(USER_IMP, 0.43, 0.57, 180.0), 2.0)
-	var s := PackedFloat32Array()
-	var t := 0.0
-	for i in 5:
-		var syl := Rec.cut(src, 0.01 + 0.012 * i, 0.075 + 0.012 * i) if i < 4 else Rec.cut(src, 0.0, 0.14)
-		syl = Rec.fade(Rec.pitch(syl, 1.2 * i), 0.004, 0.025)
-		s = Rec.mix(s, Rec.normalize(syl, -1.0 - (2.0 if i % 2 == 1 else 0.0)), t)
-		t += 0.085 - 0.004 * i
-	return Rec.normalize(Rec.fade(s, 0.002, 0.04), -1.0)
+func _chicken_cluck_4() -> PackedFloat32Array:
+	return _user_take(USER_CHICKEN, CLUCK_TAKES[3])
 
 
-## Swarmer C, "chitter-screech": a fast synth chitter (a squeal trilling 1.1 -> 1.7 kHz, chopped nine times) that breaks
-## into the imp's third yip four semitones up, rising.
-func _cry_swarmer_c() -> PackedFloat32Array:
-	var o := _buf(0.32)
-	_add_tone(o, 0.0, 0.32, func(k: float) -> float: return 1100.0 + 600.0 * k + 120.0 * sin(k * TAU * 24.0 * 0.32), 0.5,
-			func(k: float) -> float: return minf(1.0, k * 20.0) * (0.55 + 0.45 * absf(sin(k * PI * 9.0))), 0)
-	_add_noise(o, 0.0, 0.32, func(k: float) -> float: return 2400.0 + 1500.0 * k, 3.0, 1, 0.25,
-			func(k: float) -> float: return absf(sin(k * PI * 9.0)))
-	var yip := Rec.pitch(_take(USER_IMP, 1.27, 1.41, 180.0), 4.0)
-	yip = _bend(yip, func(k: float) -> float: return 2.0 * k)
-	var s := Rec.mix(Rec.normalize(o, -3.0), Rec.normalize(yip, -1.0), 0.26)
-	return Rec.normalize(Rec.fade(s, 0.002, 0.04), -1.0)
-
-
-## Every other kind (archer, pavise, goo imp, Water Boy): a short gruff "RAH!" (the user's "ouch" 1 four semitones down,
-## stretched x1.8, driven, falling) on a breath of the climb "hup" an octave down.
-func _cry_monster() -> PackedFloat32Array:
-	var v := _stretch(Rec.pitch(_take(USER_OUCH_1, 0.19, 0.34), -4.0), 1.8, 0.045)
-	v = _bend(v, func(k: float) -> float: return 1.0 * k - 2.0 * k * k)
-	v = Rec.lowpass(_drive(_rasp(v, 45.0, 0.3), 2.0), 3400.0, 1)
-	var low := Rec.lowpass(_stretch(Rec.pitch(_take(USER_CLIMB, 0.575, 0.725), -12.0), 1.5), 900.0, 2)
-	var s := Rec.mix(Rec.normalize(v, -1.0), Rec.normalize(low, -1.0), 0.0, -8.0)
-	return Rec.normalize(Rec.fade(s, 0.003, 0.08), -1.0)
+func _chicken_cluck_5() -> PackedFloat32Array:
+	return _user_take(USER_CHICKEN, CLUCK_TAKES[4])

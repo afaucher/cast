@@ -125,13 +125,11 @@ static var _seq_floor := -1
 #   CHARGING     a chasing monster that moved rolls every CHARGE_ROLL_EVERY s on a shared clock (host_time online) with a
 #                hash of its key and the roll's number (the same roll on every machine, no dice): CHARGE_CHANCE to yell,
 #                unless it yelled in CHARGE_SELF_COOLDOWN s or anything yelled within CHARGE_AREA in CHARGE_AREA_COOLDOWN s.
-# The yell: the model's war_cry() pose (weapon or arms up for about half a second) and the kind's cue (war_cry_cue).
-# Frozen monsters (aggro_range 0) and CRY_SKIP kinds never yell. `war_cry` is the gym's "War cries" picker (off: no cries
-# at all; A / B / C: the sound candidate, A until the user picks).
+# The yell: the model's war_cry() pose (weapon or arms up for about half a second) and the kind's cue (war_cry_cue: a pool
+# of the user's own takes, Sfx picks one). Frozen monsters (aggro_range 0) and CRY_SKIP kinds never yell.
 const CRY_SKIP: Array[String] = ["shark", "gator", "jockey", "goblin"]
-## Kinds with their own cry candidates (cue cry_<voice>_<a|b|c>); every other kind yells the shared cry_monster.
+## Kinds with their own cry (cue cry_<voice>); every other kind yells the shared cry_monster.
 const CRY_VOICES: Array[String] = ["grunt", "brute", "swarmer"]
-const CRY_PICKS: Array[String] = ["off", "A", "B", "C"]
 const CRY_GATHER := 0.15          ## sightings this close in time are one pack's (a pack wakes in one host frame)
 const CRY_PACK_RADIUS := 12.0
 const CRY_PACK_COOLDOWN := 6.0
@@ -141,7 +139,6 @@ const CHARGE_CHANCE := 0.06
 const CHARGE_SELF_COOLDOWN := 10.0
 const CHARGE_AREA := 10.0
 const CHARGE_AREA_COOLDOWN := 4.0
-static var war_cry := "A"
 ## Recent yells on this machine: Vector4(x, z, GameWorld.time, 1 first sight / 0 charging). Plain values, pruned as they age.
 static var _cry_log: Array[Vector4] = []
 ## Recent sightings: Vector4(x, z, GameWorld.time, key).
@@ -1448,9 +1445,8 @@ func _update_visual(delta: float) -> void:
 
 # --- War cries (see the constants) --------------------------------------------------------------------------------------
 
-## Yell now: the model's war cry pose and the kind's cue (silent with the picker off). `first_sight`: a pack's first-sight
-## cry (it holds the pack's cooldown). Cosmetic, this machine only. The gym's audition button calls it directly; with the
-## picker off nothing else does.
+## Yell now: the model's war cry pose and the kind's cue. `first_sight`: a pack's first-sight cry (it holds the pack's
+## cooldown). Cosmetic, this machine only. The gym's audition button calls it directly.
 func yell(first_sight: bool = false) -> void:
 	if dead:
 		return
@@ -1460,16 +1456,12 @@ func yell(first_sight: bool = false) -> void:
 	_cry_log.append(Vector4(global_position.x, global_position.z, now, 1.0 if first_sight else 0.0))
 	if model != null:
 		model.war_cry()
-	var cue := war_cry_cue(kind)
-	if cue != "":
-		Sfx.play_at(cue, global_position)
+	Sfx.play_at(war_cry_cue(kind), global_position)
 
 
-## The cue `kind` yells with the picker as it is ("" when off): cry_<grunt|brute|swarmer>_<a|b|c>, or the shared cry_monster.
+## The cue `kind` yells: cry_<grunt|brute|swarmer>, or the shared cry_monster (each a pool of takes).
 static func war_cry_cue(k: String) -> String:
-	if war_cry == "off" or not CRY_PICKS.has(war_cry):
-		return ""
-	return "cry_%s_%s" % [k, war_cry.to_lower()] if CRY_VOICES.has(k) else "cry_monster"
+	return "cry_" + k if CRY_VOICES.has(k) else "cry_monster"
 
 
 ## True if this kind ever yells (not a CRY_SKIP kind, not frozen).
@@ -1498,7 +1490,7 @@ static func reset_war_cries() -> void:
 func _tick_war_cry(moved: bool) -> void:
 	var was := _cry_seen
 	_cry_seen = state
-	if dead or war_cry == "off" or not can_yell():
+	if dead or not can_yell():
 		return
 	var now := GameWorld.time
 	_prune_cries(now)

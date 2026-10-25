@@ -48,6 +48,8 @@ stay, for turning it on for every cue later. The live wire's buzz stays out (it 
 
 **`Sfx`** (`scripts/fx/sfx.gd`, autoload; no `class_name`, no gameplay state, so it needs no `net_fields`):
 - `CUES` holds file, bus, `volume_db`, `pitch_jitter`, `max_voices`, `min_gap`, `positional`, `unit_size` and `max_distance`.
+  A cue may list `files` instead of `file` (2026-10-25, the war cries and the clucks): a pool, one file per play at random
+  on `GameWorld.fx_rng`, never the one it played last; a pool with files missing plays the rest (one warning).
 - `play(cue)`, `play_at(cue, pos)`, `stop_cue(cue, fade = 25 ms)`, `is_playing(cue)`, `listen_to_voice(caster)`.
   `attach` (loops) is not built: no cue loops yet.
 - Pools of up to 8 `AudioStreamPlayer`s and 16 `AudioStreamPlayer3D`s, built on first use. Past a cue's
@@ -55,7 +57,8 @@ stay, for turning it on for every cue later. The live wire's buzz stays out (it 
 - A play sooner than `min_gap` after the cue's last one is dropped (wall clock). Pitch jitter rolls `GameWorld.fx_rng`.
 - **Headless it is off**: nothing is loaded or built and every call returns at once (tests, net test processes).
   `enable_for_tests()` turns it on.
-- A missing WAV makes its cue silent with one warning, never an error, so a fresh clone runs and tests pass.
+- A missing WAV makes its cue silent with one warning, never an error, so a fresh clone runs and tests pass. A WAV that is
+  rendered but not imported yet is read straight off the disk (`AudioStreamWAV.load_from_file`).
 - The listener: the iso camera sits 60 units from the hero, which would flatten every distance. So once a 3D cue
   plays, `Sfx` keeps an `AudioListener3D` where the camera's view ray meets the followed point's height (the
   `CameraRig` origin), with the camera's rotation. Left and right then match the screen.
@@ -218,44 +221,54 @@ at a walk, under the whole utterance):
 
 The metal step babbles the most alone (its ring); if a player reports phantom words on diamond plate, drop its ring first.
 
-## War cries (2026-10-24)
+## War cries (2026-10-24) and clucks (2026-10-25)
 
 Playtest feedback item 4, batch 2 (`playtest-feedback.md`): monster packs coming down a hall felt monotonous, so a pack yells
 when it first spots the crew, and now and then a charging monster yells (`Monster`, "War cries": one yeller per pack, a
 cooldown per area, a rare roll while charging). All 3D on the World bus, all cosmetic: every machine yells from the
-monster state it already sees. Recipes in `tools/sfx_proto/sfx_round3.gd` ("war cries"), rendered by `render_game_sfx.gd`
-like every cue (so the gym can switch them live). The only voices on disk are the user's own takes (`user/`: the two
-"ouch"es, the climb's "hup", the imp's yips), so the cries are those pitched, granular-stretched, rasped and driven, or a
-formant synth, with Kenney bone clacks and thumps and the portal rumble (Freesound 657653, LilMati) layered in. No
-downloads.
+monster state it already sees.
 
-**Listening sheet.** Pick one per row by its number and letter ("1A, 2C, 3B"). The game plays **A** until you pick; the
-gym's Experiments "War cries" picker (off / A / B / C) switches it live, the panel's "War cry" button makes the nearest
-monster of each kind yell, and "Hallway x12" / "Hallway mix" show a pack's cry and the charging ones. The files are the
-game's cues (`assets/audio/sfx/cry_*.wav`, rendered by `tools/render_sfx.ps1`); a copy to listen to is written by
-`make_sfx.gd -- <out_dir> cry_grunt_a cry_grunt_b ...` (this round's: the worktree's `test_logs/war_cries/`).
+**The user's takes (2026-10-25).** The first round's synthesized candidates (A / B / C per voice, made from the "ouch"es,
+the climb's "hup" and the imp's yips) were turned down: "I don't like the audio. I will record one." The user recorded
+seven yells (`third_party/user/warcry_raw.wav`) and five clucks (`chicken_raw.wav`), and picked: "war_cry_6 & war_cry_7 and
+all the chicken sounds are good. A pool sounds good." So each cue is a **pool** (`Sfx.CUES` `files`: one file at random per
+play on `GameWorld.fx_rng`, never the same twice running). The recipes (`sfx_round3.gd`, "war cries and clucks") cut each
+take from 0.06 s before to 0.15 s after, scale it to a -1 dBFS peak first (the takes are quiet, -15 to -30 dBFS) and fade
+it over 30 ms; `render_game_sfx.gd` renders them like every cue. The cries are always on: the gym's "War cries" picker came
+out; its "War cry" button still makes the nearest monster of each kind yell.
 
-| # | File | What it is |
-|---|---|---|
-| 1A | `cry_grunt_a.wav` | Skeleton "rattle howl": the "ouch" 5 semitones down, stretched into a hoarse hollow "OWWW" that lifts and falls, over a bone rattle speeding up (0.57 s) |
-| 1B | `cry_grunt_b.wav` | Skeleton "dry shriek": a sharp clatter of bones, then a fleshless synth hiss rising "ah" to "ee" with a 55 Hz rasp (0.71 s) |
-| 1C | `cry_grunt_c.wav` | Skeleton "jaw-clack bark": the jaw clacking fast, then a barked hollow "HAH!" (the climb "hup", driven) (0.61 s) |
-| 2A | `cry_brute_a.wav` | Brute "roar": the "ouch" an octave down, stretched and overdriven into a "RROOAARR" with a growl flutter, a chest thump under it (0.77 s) |
-| 2B | `cry_brute_b.wav` | Brute "chest-beat bellow": two fist thumps on its chest, then a deep synth "AWWW" bellow, driven (1.15 s) |
-| 2C | `cry_brute_c.wav` | Brute "demon growl": the portal rumble swelling under a guttural "HRRAAH" (the "hup" 10 semitones down, stretched, driven) (0.95 s) |
-| 3A | `cry_swarmer_a.wav` | Imp "shriek": the first yip pitched up and held into an "EEEE!" with a fast trill, rising at the end (0.32 s) |
-| 3B | `cry_swarmer_b.wav` | Imp "cackle": five quick "hee"s chopped from the yip, each a little higher (0.41 s) |
-| 3C | `cry_swarmer_c.wav` | Imp "chitter-screech": a fast trilling synth squeal breaking into the third yip, pitched up (0.36 s) |
-| 4 | `cry_monster.wav` | Everyone else (archer, pavise, goo imp, Water Boy): a short gruff "RAH!" (the other "ouch", down and driven) on a low breath (0.42 s) |
+| Cue (pool) | Files | What it is | Level |
+|---|---|---|---|
+| `cry_grunt` | `cry_grunt_1`, `_2` | the skeleton: takes 6 (10.75-11.23 s, 0.69 s) and 7 (14.08-14.65 s, 0.78 s) as recorded | -6 |
+| `cry_brute` | `cry_brute_1`, `_2` | the two takes 5 semitones down (0.92 / 1.04 s), an overdriven copy 8 dB under, a little chest at 160 Hz | -4 |
+| `cry_swarmer` | `cry_swarmer_1`, `_2` | the imp: 5 semitones up (0.52 / 0.58 s) | -7 |
+| `cry_monster` | `cry_monster_1`, `_2` | archer, pavise, goo imp, Water Boy: 2 semitones down (0.77 / 0.88 s) | -6 |
+| `chicken_cluck` | `chicken_cluck_1` .. `_5` | the five clucks as recorded (0.31-0.46 s with the padding) | -9 |
 
-**Mic-leak probe (2026-10-24)**, `mic_leak_probe.tscn` with the ten recipes: **A** (alone, peak 0.5): no cast from any;
-filler words everywhere (they are voices): the skeletons "OH"/"OR", the brutes "AH"/"UM", the imps "HERE", "WHAT" and 3B a
-babble ("YOU DIDN'T YOU DID IT"), the shared cry "HOW". **C** (a "cast <spell>" said over the cue starting with the voice,
-peak 0.4, voices a0 and b0, 6 casts each): 1A 6/6, 1B 3/6, 1C 5/6, 2A 6/6, 2B 3/6, 2C 6/6, 3A 5/6, 3B 2/6, 3C 4/6, 4 6/6.
-The B candidates mask a spell word most (1B "CAST VEAL", 2B "CAST A LIAR LONG", 3B "YESTERFUEL"); the defaults (A and 4)
-are 23/24. C is the worst case (a loud leak over the word's very start); the cries are rare (one per pack's sighting per
-6 s an area, and a couple while a hallway charges), so if a B is picked, the cost is an occasional missed cast while a
-cry plays.
+**The clucks** (`Chicken.cluck`; every screen from the chicken it shows, the host's or a puppet): one per chicken as the
+flock lands (0.05-0.45 s after it appears, so a flock of four is staggered), one on every peck (the host's peck, a
+puppet's when its peck count moves), and one by itself every 2-5 s (fx_rng); none while it poofs. The cue's 2 voices and
+0.18 s gap cap a whole flock: in `test_chicken` four chickens pecking a grunt for 4 s asked for 13 clucks and played 4
+(their pecks fall together, so a round of pecks is one cluck).
+
+**Mic-leak probe (2026-10-25)**, `mic_leak_probe.tscn -- cry_grunt_1 ... chicken_cluck_5` (A now also lists the triggers a
+cue arms and the voice orders it gives; D runs the clucks repeating under the whole utterance):
+- **A (alone, peak 0.5, 3 plays, gate on and off): no cast, no armed trigger, no order from any of the 13.** They are
+  words to the recognizer: take 6 is heard as "I'LL GET YOU" / "AND GET YOU" (at every pitch), take 7 as "A DACK", "A
+  DARK", "A DICK"; the clucks "LOOK", "BUT", "POOH", "BOOK".
+- **C (a "cast <spell>" said over the cue starting with the voice, peak 0.4, voices a0 and b0, 6 casts each):** the clucks
+  **30/30**. The cries **39/48**: `cry_grunt_1` 5/6 ("CAST YALE"), `cry_grunt_2` 6/6, `cry_brute_1` 4/6, `cry_brute_2` 5/6,
+  `cry_swarmer_1` 6/6, `cry_swarmer_2` 3/6 ("CAN ASK FIREBALL"), `cry_monster_1` 6/6, `cry_monster_2` 4/6 ("CAST YOLK").
+  As with the first round, a voice over a voice's onset is the worst case; the cries are rare (a pack's sighting, once
+  per area per 6 s, and a couple while a hall charges).
+- **D (clucks repeating under the whole utterance, every 0.3 s, near the cue's cap):** at peak 0.4 **34/50**, 0.2
+  **45/50**, 0.1 **49/50**; the control 30/30. Per cluck at 0.4: `_1` 6/10, `_2` 9/10, `_3` 7/10, `_4` 4/10, `_5` 8/10
+  (`_4` is the worst: alone it babbles "HUMPH", "HE", "EH"). Every 0.6 s (a calmer flock): 34/50, 45/50, 45/50. A cluck
+  landing on "cast" or the spell word's start masks it ("CASTORN", "CAST MORN", "CAST YELL").
+- **Nothing to fix for arming.** The cost is the masking above: a flock pecking near the player while they speak can
+  break a cast now and then. Not changed (the takes are the user's): the fixes, in order of cost, are the cluck's level
+  (-9 to about -15 dB, where the realistic leak is under 0.1), dropping `chicken_cluck_4` from the pool, turning on
+  `duck_db` for the clucks (and the cries) once ducking comes back, or fewer idle clucks.
 
 The user's ask (2026-10-18): basic audio. Find out whether good open-license sounds exist or whether we can make them
 procedurally, track every source for attribution, and pick the top 10 sounds that make the game more fun and read

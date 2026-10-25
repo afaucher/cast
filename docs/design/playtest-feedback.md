@@ -50,6 +50,13 @@ The user: "Playtest feedback - just record then we can decide how to react".
      instead of spin backwards. That looks weird." None of the A/B/C candidates is kept: the user records a cry (A plays
      as a placeholder until then). The cry pose now raises the arms up in front (the skeleton, brute, imp and goo imp
      swung them up behind; the archer's bow and fist rise in front too); `test_monster_walk` checks no arm swings behind.
+   - The user's takes (2026-10-25): "war_cry_6 & war_cry_7 and all the chicken sounds are good. A pool sounds good." The
+     cries are now the user's recorded yells 6 and 7, played as pools (Sfx picks one at random, never the same twice
+     running): `cry_grunt` as recorded, `cry_brute` 5 semitones down with a touch of drive, `cry_swarmer` 5 up,
+     `cry_monster` 2 down (archer, pavise, goo imp, Water Boy). Always on: the gym's "War cries" picker came out (the
+     "War cry" button stays). The chickens cluck too (the user's five clucks, `chicken_cluck`): as the flock lands, on each
+     peck and now and then. Mic-leak results in audio-plan.md "War cries". `test_sfx`, `test_monster_war_cry`,
+     `test_chicken`, `test_gym`.
    - Decision: pending (the walk; the cry's sound waits for the user's recording).
 5. **Spells without the wake word.** "Can we do spells without the wake word?"
    - Today: the voice setup screen's "chaos" strictness already casts any spell word anywhere, no trigger

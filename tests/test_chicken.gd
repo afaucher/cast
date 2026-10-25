@@ -3,6 +3,8 @@ extends TestCase
 ## them". One cast makes four chickens that scatter from the aim point and live 12 s. They peck everyone for ZERO: a pecked
 ## monster turns on its chicken (and kills it), anything else just gets a "0". One or two hits from anything kill a
 ## chicken. The spell has a component (Chicken feather), drops from imps, and "chicken" is a castable word.
+## CLUCKS (the user's takes, 2026-10-25; Chicken.cluck): one per chicken as the flock lands (staggered), one on every peck (a
+## puppet's too), now and then by itself, none while it poofs, and the "chicken_cluck" pool's voices cap a pecking flock.
 
 var root: Node3D
 
@@ -60,6 +62,7 @@ func setup() -> void:
 	await _pecked_monster_turns_and_kills()
 	await _fragile()
 	await _component_and_charges()
+	await _clucks()
 	_word()
 	if root != null:
 		root.free()
@@ -85,6 +88,8 @@ func _numbers() -> void:
 	eq(f["pecks"], Net.OWNER, "its peck count rides the stream")
 	eq(f["_target"], Net.PRIVATE, "its AI is the host's")
 	eq(f["model"], Net.LOCAL, "its look is every screen's own")
+	eq(f["clucks"], Net.LOCAL, "its clucks are every screen's own")
+	eq(f["_cluck_t"], Net.LOCAL, "... and so is their clock")
 	eq(c.team, GameWorld.TEAM_NEUTRAL, "neutral: not a side in the fight")
 	c.free()
 
@@ -324,6 +329,131 @@ func _component_and_charges() -> void:
 	check(p != null, "a feather on the floor")
 	await frames(30)
 	eq(h.charges_of("chicken"), before - 1 + 3, "walking over it picks up three charges")
+
+
+# --- Clucks ---------------------------------------------------------------------------------------------------
+
+## A short tone (a cluck stand-in: the test needs no rendered audio).
+func _tone(seconds: float, hz: float) -> AudioStreamWAV:
+	var n := int(seconds * 22050.0)
+	var bytes := PackedByteArray()
+	bytes.resize(n * 2)
+	for i in n:
+		bytes.encode_s16(i * 2, int(2000.0 * sin(TAU * hz * float(i) / 22050.0)))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = 22050
+	w.data = bytes
+	return w
+
+
+func _cluck_voices() -> int:
+	var n := 0
+	for p: Node in Sfx._voice:
+		if Sfx._voice[p][0] == Chicken.CLUCK_CUE and p.get("playing"):
+			n += 1
+	return n
+
+
+func _clucks() -> void:
+	_fresh()
+	Sfx.enable_for_tests()
+	var pool: Array = []
+	for i in Sfx.files_of(Chicken.CLUCK_CUE).size():
+		pool.append(_tone(0.35, 300.0 + 80.0 * i))
+	Sfx.override_streams(Chicken.CLUCK_CUE, pool)
+	var cue: Dictionary = Sfx.CUES[Chicken.CLUCK_CUE]
+	eq(Sfx.files_of(Chicken.CLUCK_CUE).size(), 5, "the cluck is a pool of the user's five takes")
+	check(int(cue["max_voices"]) <= 2 and float(cue["min_gap"]) >= 0.15, "the cue caps a flock: %d voices, %.2f s apart" % [int(cue["max_voices"]), float(cue["min_gap"])])
+	# Landing: one cluck per chicken, staggered.
+	var caster := _hero(Vector3(-9, 0, 0))
+	check(SpellBook.cast("chicken", caster, 1.0, Vector3(3, 0, 2)), "chicken casts")
+	var flock := _chickens()
+	var landed := {}
+	for f in int((Chicken.CLUCK_LAND.y + 0.1) * 60.0):
+		await frames(1)
+		for c in flock:
+			if is_instance_valid(c) and c.clucks > 0 and not landed.has(c):
+				landed[c] = f
+	eq(landed.size(), Chicken.FLOCK, "every chicken clucks as the flock lands")
+	var firsts := {}
+	for c in landed:
+		firsts[landed[c]] = true
+	check(firsts.size() >= 2, "... staggered, not all at once (%s)" % str(landed.values()))
+	for c in flock:
+		eq(c.clucks, 1, "... once each")
+	check(int(Sfx.played.get(Chicken.CLUCK_CUE, 0)) >= 1, "the landing clucks play (%d)" % int(Sfx.played.get(Chicken.CLUCK_CUE, 0)))
+	for c in flock:
+		c.die()
+	await frames(2)
+	# Idle: a lone chicken with nothing to peck clucks every CLUCK_IDLE_MIN..MAX s.
+	var lone := _chicken(Vector3(6, 0, 6))
+	await frames(int(8.0 * 60.0))
+	var idle := lone.clucks - 1
+	print("  idle clucks in 8 s: %d" % idle)
+	check(idle >= 1 and idle <= int(8.0 / Chicken.CLUCK_IDLE_MIN), "now and then by itself (%d idle clucks in 8 s)" % idle)
+	lone.die()
+	# Pecks: four chickens round a frozen grunt, pecking for 4 s: a cluck on every peck, and never more voices than the cap.
+	var grunt := MonsterFactory.spawn("grunt", Hex.from_world(Vector3(-4, 0, -4)))
+	grunt.aggro_range = 0.0
+	grunt.max_hp = 100000.0
+	grunt.hp = grunt.max_hp
+	grunt.set_physics_process(false)   # (it stands: the chickens keep pecking)
+	await frames(2)
+	var birds: Array[Chicken] = []
+	for a in 4:
+		birds.append(_chicken(grunt.global_position + Vector3(cos(a * PI * 0.5), 0, sin(a * PI * 0.5)) * (grunt.radius + 0.6)))
+	await frames(30)   # (past their landing clucks)
+	var before := []
+	for b in birds:
+		before.append([b.clucks, b.pecks])
+	var played0 := int(Sfx.played.get(Chicken.CLUCK_CUE, 0))
+	var t0 := Time.get_ticks_msec()
+	var most := 0
+	for f in 240:
+		OS.delay_msec(16)   # (Sfx's gap is wall-clock and --fixed-fps runs faster than real time: pace it like the game)
+		await frames(1)
+		most = maxi(most, _cluck_voices())
+	var real_s := (Time.get_ticks_msec() - t0) / 1000.0
+	var pecks := 0
+	var clucks := 0
+	for i in birds.size():
+		if not is_instance_valid(birds[i]):
+			continue
+		var dp: int = birds[i].pecks - int(before[i][1])
+		var dc: int = birds[i].clucks - int(before[i][0])
+		pecks += dp
+		clucks += dc
+		check(dc >= dp, "chicken %d clucks on each peck (%d pecks, %d clucks)" % [i, dp, dc])
+	var played := int(Sfx.played.get(Chicken.CLUCK_CUE, 0)) - played0
+	print("  a flock pecking for 4 s: %d pecks, %d clucks asked, %d played (%.1f s real), at most %d at once" % [pecks, clucks, played, real_s, most])
+	check(pecks >= 8, "the flock pecks away (%d pecks)" % pecks)
+	check(most <= int(cue["max_voices"]), "never more than %d clucks at once (%d)" % [int(cue["max_voices"]), most])
+	check(played >= 1, "the pecking flock is heard (%d clucks played)" % played)
+	check(played < clucks or clucks <= int(real_s / float(cue["min_gap"])), "the cue drops some of a pecking flock's clucks (%d of %d)" % [played, clucks])
+	check(played <= int(real_s / float(cue["min_gap"])) + 1, "the gap caps the rate (%d played in %.1f s)" % [played, real_s])
+	# A puppet clucks when its peck count moves (as it plays the peck), not on its first sample.
+	var shown := Chicken.make_shown(Vector3(6, 0, -6))
+	shown.set_physics_process(false)
+	await frames(1)
+	var c0 := shown.clucks
+	shown.net_show(Vector3.FORWARD, false, shown.hp, Chicken.State.WANDER, 0.0, 5)
+	eq(shown.clucks, c0, "a puppet's first sample is not a peck: no cluck")
+	shown.net_show(Vector3.FORWARD, false, shown.hp, Chicken.State.PECK, 0.0, 6)
+	eq(shown.clucks, c0 + 1, "a puppet's peck clucks")
+	# Poofing: no clucks.
+	shown.net_show(Vector3.FORWARD, false, shown.hp, Chicken.State.POOF, 0.0, 6)
+	var c1 := shown.clucks
+	shown.cluck()
+	for f in int((Chicken.CLUCK_IDLE_MAX + 0.5) * 60.0):
+		shown.net_tick(1.0 / 60.0)
+	eq(shown.clucks, c1, "a poofing chicken never clucks")
+	shown.die()
+	for b in birds:
+		if is_instance_valid(b):
+			b.die()
+	await frames(2)
+	Sfx.disable_for_tests()
 
 
 # --- The word ------------------------------------------------------------------------------------------------

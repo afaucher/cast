@@ -208,8 +208,10 @@ model), `scripts/fx/chicken_fx.gd` (the feathers), `ChickenSpell.cast` (`scripts
   shrugs), so nothing about them travels. A late joiner gets the chickens as runtime spawns plus the keyframe.
 - **Voice:** "chicken" (and "chickens") is in the vocabulary; see the CHICKEN note in `scripts/voice/incantation.gd` for
   what the recognizer writes.
-- **Sound (not built: the Sfx system is coming separately):** a cluck in `ChickenFx.cast_cloud`, a peck tick in
-  `ChickenFx.peck`, a squawk in `ChickenFx.feather_explosion` and a soft pop in `ChickenFx.poof`.
+- **Sound (2026-10-25):** the user's five recorded clucks, the `chicken_cluck` pool (`Chicken.cluck`, cosmetic, every
+  screen from the chicken it shows): one per chicken as the flock lands (staggered 0.05-0.45 s), one on each peck, and
+  one now and then (every 2-5 s); the cue's two voices and 0.18 s gap cap a pecking flock (audio-plan.md "War cries").
+  Not built: a squawk in `ChickenFx.feather_explosion` and a soft pop in `ChickenFx.poof`.
 
 ### Speed modifiers (`Actor.set_modifier`)
 One verb, four stats, built for coffee and ready for goo slows:

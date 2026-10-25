@@ -1,7 +1,8 @@
 extends Node
 ## Mic-leak probe for the audio plan (docs/design/audio-plan.md, "Mic safety"): plays each prototype cue into the real
 ## recognizer as if it leaked from speakers into the mic, and checks that
-##   A. a cue on its own produces no words and no casts (gate on and off), and
+##   A. a cue on its own produces no words and no casts (gate on and off): the casts, the triggers it armed (the game's
+##      "cast heard") and the voice orders it gave ("Rebar go") are listed, and
 ##   B. the "cast heard" chime, overlapping the spell word, does not break a real "cast <spell>".
 ##   C. a "cast <spell>" said over a teammate's loud cue starting with the voice still casts (voice a0; with recipes
 ##      named on the command line, voice b0 too).
@@ -20,7 +21,8 @@ const RATE := 16000
 const STEP := 320
 ## D: recipe -> seconds between its starts under the utterance (how the game repeats it).
 const REPEATS := {"wade_step_v1": 0.45, "lava_bubble_v1": 1.7, "wire_buzz_v4": 6.0,
-		"step_hard_v1": 0.23, "step_soft_v1": 0.23, "step_wood_v1": 0.23, "step_metal_v1": 0.23}   # (footsteps: Wick's cadence at a walk)
+		"step_hard_v1": 0.23, "step_soft_v1": 0.23, "step_wood_v1": 0.23, "step_metal_v1": 0.23,   # (footsteps: Wick's cadence at a walk)
+		"chicken_cluck_1": 0.3, "chicken_cluck_2": 0.3, "chicken_cluck_3": 0.3, "chicken_cluck_4": 0.3, "chicken_cluck_5": 0.3}   # (a pecking flock, near the cue's cap)
 ## D: the beds the game ducks while the local player speaks (Sfx duck_db), and by how much.
 const DUCKED := {"lava_bubble_v1": true, "wire_buzz_v4": true}
 const DUCK_DB := -10.0
@@ -28,6 +30,8 @@ const DUCK_DB := -10.0
 var caster: VoiceCaster
 var _heard: Array[String] = []
 var _casts: Array[String] = []
+var _armed: Array[String] = []
+var _orders: Array[String] = []
 var _rng := RandomNumberGenerator.new()
 
 
@@ -54,6 +58,8 @@ func _run() -> void:
 		if final and text.strip_edges() != "":
 			_heard.append(text))
 	caster.spell_spoken.connect(func(id: String, _p: float, _h: String) -> void: _casts.append(id))
+	caster.trigger_heard.connect(func(word: String) -> void: _armed.append(word))
+	caster.order_spoken.connect(func(who: String, order: String, _h: String) -> void: _orders.append("%s %s" % [who, order]))
 	_rng.seed = 11
 	var synth := Synth.new()
 
@@ -77,8 +83,11 @@ func _run() -> void:
 			caster.reset()
 			_heard.clear()
 			_casts.clear()
+			_armed.clear()
+			_orders.clear()
 			_feed(stream)
-			res.append("gate %s: heard %s casts %s" % ["on " if gate_on else "off", str(_heard), str(_casts)])
+			res.append("gate %s: heard %s casts %s armed %s orders %s" % ["on " if gate_on else "off", str(_heard), str(_casts),
+					str(_armed), str(_orders)])
 		print("  %-18s %s | %s" % [cue, res[0], res[1]])
 
 	print("B. 'cast <spell>' with the armed chime overlapping the spell word (gate on)")

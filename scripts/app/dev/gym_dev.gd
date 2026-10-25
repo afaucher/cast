@@ -20,10 +20,10 @@ extends Node
 ##   - the EXPERIMENTS (GymPanel's pickers; the user, 2026-10-23: "lets put experiments in the gym menu instead of adding
 ##     keybindings"): the movement profile (MoveFeel: today / grounded / grounded_anim, the default) and the judder
 ##     smoothing (MoveFeel.interp, off by default), live; the monsters' walk (MonsterModel.active_walk: old / new, the
-##     default) and their war cries (Monster.war_cry: off / A / B / C, the sound candidate; A by default), and the heroes'
-##     arms (LowPolyModel.elbow_ik: old / ik, ik by default; Wick, Gasket and Rebar bend their elbows with TwoBoneIK; it
-##     goes once the user has compared them). A new A/B goes here, not on a key; its switch goes once it is settled.
+##     default), and the heroes' arms (LowPolyModel.elbow_ik: old / ik, ik by default; Wick, Gasket and Rebar bend their
+##     elbows with TwoBoneIK; it goes once the user has compared them). A new A/B goes here, not on a key; its switch goes once it is settled.
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
+##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
 ##     (the gym's longest straight run) and the crew at its arena end, and sends them at the player; "Hallway mix" is the same
 ##     with a brute and imps among them
@@ -345,13 +345,13 @@ func act(nm: String) -> void:
 			_status("a hallway pack of %d" % hall_pack(nm == "hall_mix").size())
 		"cry":
 			var kinds := cry_each()
-			_status("war cry (%s): %s" % [Monster.war_cry, ", ".join(kinds)] if not kinds.is_empty() else "war cry: no monster to yell")
+			_status("war cry: %s" % ", ".join(kinds) if not kinds.is_empty() else "war cry: no monster to yell")
 		"reset_log":
 			stats.reset()
 
 
-## The WAR CRY button: the living monster of each kind nearest the player yells once (Monster.yell; the "War cries"
-## picker's candidate, silent when it is off). Returns the kinds that yelled, sorted.
+## The WAR CRY button: the living monster of each kind nearest the player yells once (Monster.yell). Returns the kinds
+## that yelled, sorted.
 func cry_each() -> Array[String]:
 	var p := player()
 	var at := p.global_position if p != null else ring_point()
@@ -412,33 +412,27 @@ static func experiments() -> Array:
 	return [["feel", "Movement", MoveFeel.ORDER, MoveFeel.active()],
 		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"],
 		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"],
-		["war_cries", "War cries", Monster.CRY_PICKS, Monster.war_cry],
 		["elbows", "Elbows", ["old", "ik"], "ik" if LowPolyModel.elbow_ik else "old"]]
 
 
 ## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
-## log starts a new stretch. "walk" plays the monsters' old or new walk (MonsterModel.active_walk) and "war_cries" the cry
-## candidate (Monster.war_cry: off, A, B or C), live; the status line says which. "elbows" gives Wick, Gasket and Rebar
+## log starts a new stretch. "walk" plays the monsters' old or new walk (MonsterModel.active_walk), live; the status line
+## says which. "elbows" gives Wick, Gasket and Rebar
 ## today's arms or the IK arms (LowPolyModel.elbow_ik), live: each model rebuilds its arms on its next pose.
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
-	if nm == "walk" or nm == "war_cries" or nm == "elbows":
+	if nm == "walk" or nm == "elbows":
 		if nm == "elbows":
 			if value != "old" and value != "ik":
 				return
 			LowPolyModel.elbow_ik = value == "ik"
 			text = "elbows: %s" % value
-		elif nm == "walk":
+		else:
 			if value != "old" and value != "new":
 				return
 			MonsterModel.active_walk = value == "new"
 			text = "monster walk: %s" % value
-		else:
-			if not Monster.CRY_PICKS.has(value):
-				return
-			Monster.war_cry = value
-			text = "war cries: %s" % value
 		panel.set_experiment(nm, value)
 		_status(text)
 		return
