@@ -28,14 +28,16 @@ var hold_offset := Vector3.ZERO            ## prop position relative to the host
 
 var cycle_k := 1.0                         ## the idle / walk clock's rate (a monster's walk unsync)
 
-## THE ELBOW STUDY (docs/design/animation-research.md, "Elbow IK study (2026-10-24)"): models with split arms (Gasket, the
-## grunt) can pose them with TwoBoneIK, an upper arm and a forearm meeting at a bending elbow, instead of today's one-piece
-## arms. A look: every machine poses its own copy. false (the default) keeps today's arms; the gym's "Elbows" picker
-## (GymDev's Experiments) switches it, live (a model rebuilds its arms on its next pose).
-static var elbow_ik := false
+## ELBOW IK (docs/design/animation-research.md, "Elbow IK study (2026-10-24)"; adopted for the three heroes, the user
+## 2026-10-24: "Let's adopt it for the three main characters"): Wick, Gasket and Rebar pose their arms with TwoBoneIK, an
+## upper arm ("arm_*") and a forearm ("fore_*", under it) meeting at a bending elbow. The monsters keep their one-piece arms.
+## A look: every machine poses its own copy. On by default; the gym's "Elbows" picker (GymDev's Experiments: old / ik)
+## switches it live for comparing (a model rebuilds its arms on its next pose) until the user has seen them.
+static var elbow_ik := true
 ## -1 follows elbow_ik; 0 today's arms, 1 the IK arms whatever the switch says (the elbow lab shows both side by side).
 var elbow_pick := -1
 var _elbows_on := false                    ## the arms are built split (upper arm + forearm) right now
+var _fore_len := {}                        ## "l" / "r" -> that forearm's length to the hand while split (_build_arms)
 
 var _mat: ShaderMaterial
 var _t := 0.0
@@ -192,16 +194,27 @@ func _drop_part(part_name: String) -> void:
 	p.queue_free()
 
 
+## Where the split arm on `side` ("l" / "r") ends (world): its forearm's hand. Vector3.INF while the arms are one piece.
+func ik_hand(side: String) -> Vector3:
+	var fore := parts.get("fore_" + side) as Node3D
+	if fore == null or not _fore_len.has(side):
+		return Vector3.INF
+	return fore.global_transform * Vector3(0.0, -float(_fore_len[side]), 0.0)
+
+
 ## Lay an IK arm: `upper` hangs from its pivot (the shoulder, in its parent's space) and `fore` hangs under it from the
 ## elbow, both soups down their local -Y, upper l1 and fore l2 long. The hand reaches `hand` (the upper's parent space),
 ## the elbow bent toward `pole` (TwoBoneIK.solve). A hand out of reach stretches both bones evenly up to `max_stretch`
-## (1.0: none, the hand stops short). Returns where the hand ends up.
-func pose_ik_arm(upper: Node3D, fore: Node3D, hand: Vector3, l1: float, l2: float, pole: Vector3, max_stretch: float = 1.0) -> Vector3:
+## (1.0: none, the hand stops short). Both parts turn their local +Z toward `twist` (default: the pole, the elbow's
+## outside); a model whose hand part must keep today's turn passes today's arm's +Z. Returns where the hand ends up.
+func pose_ik_arm(upper: Node3D, fore: Node3D, hand: Vector3, l1: float, l2: float, pole: Vector3, max_stretch: float = 1.0,
+		twist: Vector3 = Vector3.ZERO) -> Vector3:
 	var sh := upper.position
 	var k := clampf(sh.distance_to(hand) / ((l1 + l2) * TwoBoneIK.REACH), 1.0, maxf(max_stretch, 1.0))
 	var j := TwoBoneIK.solve(sh, hand, l1 * k, l2 * k, pole)
-	var ub := TwoBoneIK.bone_basis(sh, j[0], pole)
-	var fb := TwoBoneIK.bone_basis(j[0], j[1], pole)
+	var tw := pole if twist == Vector3.ZERO else twist
+	var ub := TwoBoneIK.bone_basis(sh, j[0], tw)
+	var fb := TwoBoneIK.bone_basis(j[0], j[1], tw)
 	fore.position = Vector3(0.0, -l1, 0.0)
 	if k > 1.0:
 		upper.basis = Basis(ub.x, ub.y * k, ub.z)   # (stretched down its own length; the forearm undoes it, then stretches)

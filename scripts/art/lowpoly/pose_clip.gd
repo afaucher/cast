@@ -4,7 +4,8 @@ extends RefCounted
 ## penetrates the body and disappears when the hammer comes down"). A measure for the strike lab (--clipcheck) and
 ## test_move_feel_anim: each arm's centre line, from a little past the shoulder to the fist, is sampled and every sample is
 ## tested against the body parts' boxes (each part mesh's own AABB, in that part's space, shrunk by MARGIN so a sleeve
-## brushing a coat's edge is fine). Returns the deepest a sample sits inside a box (0 = clear).
+## brushing a coat's edge is fine). An arm split at the elbow (elbow IK) is sampled along its upper arm and forearm. Returns
+## the deepest a sample sits inside a box (0 = clear).
 
 const MARGIN := 0.05
 const SAMPLES := 12
@@ -32,8 +33,20 @@ static func depth(m: LowPolyModel, kit: String) -> Array:
 		var a := m.parts[arm[0]] as Node3D
 		var s := a.global_position
 		var f: Vector3 = (m.parts[arm[1]] as Node3D).global_position if arm[1] is String else a.global_transform * (arm[1] as Vector3)
+		# an IK arm (elbow IK) bends: sample shoulder -> elbow -> hand instead of the straight line
+		var side := String(arm[0]).substr(4)
+		var el := s
+		if m.parts.has("fore_" + side):
+			el = (m.parts["fore_" + side] as Node3D).global_position
+			if not (arm[1] is String):
+				f = m.ik_hand(side)
 		for k in SAMPLES:
-			var q := s.lerp(f, lerpf(FROM, 1.0, float(k) / (SAMPLES - 1)))
+			var u := lerpf(FROM, 1.0, float(k) / (SAMPLES - 1))
+			var q := s.lerp(f, u)
+			if el != s:
+				var l1 := s.distance_to(el)
+				var at := u * (l1 + el.distance_to(f))
+				q = s.lerp(el, at / maxf(l1, 0.0001)) if at <= l1 else el.lerp(f, (at - l1) / maxf(el.distance_to(f), 0.0001))
 			for b: Array in boxes:
 				var l: Vector3 = (b[1] as Transform3D).affine_inverse() * q
 				var bb: AABB = b[2]

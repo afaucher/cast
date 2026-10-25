@@ -16,7 +16,8 @@ extends LowPolyModel
 ## leg_l, leg_r, weapon (the bow), wand. Extras that belong to the bow: string (rebuilt when drawn)
 ## and arrow (only shown while a shot is drawn). head / jacket / belt / quiver / arms / bow / wand hang
 ## under body; hat hangs under head; string and arrow under the bow; legs under the root. Both
-## sleeves are re-aimed every frame at their hand (the bow grip, the string, the wand).
+## sleeves are re-aimed every frame at their hand (the bow grip, the string, the wand); with elbow IK (on by default) each
+## is an upper arm "arm_*" and a forearm "fore_*" under it, bending at the elbow (ELBOW IK below).
 ##
 ## Hero hooks: shoot_pose() (raise the bow, draw, release), attack_swing() (bow bash), cast_pose()
 ## (raise the copper wand), set_downed(), ui_height, has_own_weapon. For the future hold-to-draw
@@ -71,6 +72,16 @@ const BODY_Y := 0.92                               ## pelvis / hip height
 const HEAD_Y := 0.78                               ## body-local head centre
 const SHOULDER := Vector3(0.28, 0.54, 0.0)         ## body-local shoulder pivot (mirrored for the left)
 const ARM_LEN := 0.64                              ## shoulder to fist
+## ELBOW IK (LowPolyModel.elbow_ik, on by default; animation-research.md "Elbow IK study"): each sleeve is split at the
+## elbow into "arm_*" (the upper arm, the elbow patch on its point) and "fore_*" (cuff, bare forearm, hand), laid by
+## TwoBoneIK at the same hand targets the one-piece sleeves aimed at (the bow grip, the string, the wand). The drawing arm
+## folds at the elbow instead of shrinking to half its length; the bow arm stays straight and may stretch to
+## ARM_STRETCH, today's clamp, where the bow is held out further than the arm reaches (the aim, the bash).
+const UPPER_LEN := 0.32
+const FORE_LEN := 0.32
+const ARM_STRETCH := 1.3
+## The drawing elbow's bend hint (body space): out to his right, back and a little up, level with the string.
+const DRAW_POLE := Vector3(0.9, 0.35, 0.7)
 const LEG_X := 0.14
 
 const BOW_HALF := 0.80                             ## half length of the bow
@@ -131,8 +142,8 @@ func _build() -> void:
 	_add_part("quiver", _quiver_soup(), body, Vector3.ZERO)
 	for s: int in [-1, 1]:
 		var side := "l" if s < 0 else "r"
-		_add_part("arm_" + side, _arm_soup(s), body, Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z))
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(LEG_X * s, BODY_Y, 0.0))
+	_build_arms(false)
 	var bow := _add_part("weapon", _bow_soup(), body, BOW_REST_POS)
 	var string_mi := _add_part("string", _string_soup(0.0), bow, Vector3.ZERO)
 	string_mi.material_override = _thin_mat
@@ -290,6 +301,43 @@ func _arm_soup(side: int) -> LowPoly.Soup:
 	return s
 
 
+## The arms: today's one-piece sleeves, or (`split`, the IK arms) an upper arm and a forearm each.
+func _build_arms(split: bool) -> void:
+	var body := parts["body"] as Node3D
+	for side: String in ["l", "r"]:
+		_drop_part("fore_" + side)
+		_drop_part("arm_" + side)
+	for s: int in [-1, 1]:
+		var side := "l" if s < 0 else "r"
+		var at := Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z)
+		if split:
+			var upper := _add_part("arm_" + side, _upper_arm_soup(s), body, at)
+			_add_part("fore_" + side, _forearm_soup(s), upper, Vector3(0.0, -UPPER_LEN, 0.0))
+			_fore_len[side] = FORE_LEN
+		else:
+			_add_part("arm_" + side, _arm_soup(s), body, at)
+
+
+## The IK arms' upper arm: the shoulder pad, the sleeve to the elbow and the elbow patch on its point (+Z: TwoBoneIK turns
+## that toward the elbow's outside).
+func _upper_arm_soup(side: int) -> LowPoly.Soup:
+	var s := LowPoly.boulder(Vector3(0.11, 0.09, 0.11), 0, 0.15, JACKET_LIGHT, 301 + side, 0.07)
+	s.merge(LowPoly.frustum(Vector2(0.14, 0.14), Vector2(0.12, 0.12), 0.30, JACKET, 303 + side, 0.025, 1, Vector2.ZERO, 0.07), LowPoly.at(Vector3(0, -0.17, 0)))
+	s.merge(LowPoly.boulder(Vector3(0.075, 0.07, 0.075), 0, 0.12, JACKET, 313 + side, 0.07), LowPoly.at(Vector3(0, -UPPER_LEN, 0)))   # elbow
+	s.merge(LowPoly.box(Vector3(0.11, 0.10, 0.03), PATCH_OCHRE if side < 0 else PATCH_RED, 305 + side, 0.005, 1, 0.06), LowPoly.at(Vector3(0, -UPPER_LEN + 0.01, 0.07)))   # elbow patch
+	return s
+
+
+## The IK arms' forearm, from the elbow: the end of the sleeve, the cuff, the bare forearm and the hand.
+func _forearm_soup(side: int) -> LowPoly.Soup:
+	var s := LowPoly.frustum(Vector2(0.15, 0.15), Vector2(0.14, 0.14), 0.11, JACKET, 315 + side, 0.02, 1, Vector2.ZERO, 0.07)
+	s = _moved(s, Vector3(0, -0.045, 0))
+	s.merge(LowPoly.cylinder(0.075, 0.075, 0.07, 6, JACKET_DARK, 307 + side, 0.01), LowPoly.at(Vector3(0, -0.11, 0)))   # cuff
+	s.merge(LowPoly.cylinder(0.052, 0.046, 0.14, 6, SKIN_DARK, 309 + side, 0.008), LowPoly.at(Vector3(0, -0.20, 0)))
+	s.merge(LowPoly.boulder(Vector3(0.07, 0.075, 0.07), 0, 0.15, SKIN, 311 + side, 0.06), LowPoly.at(Vector3(0, -0.30, 0)))   # hand
+	return s
+
+
 ## Long thin trouser leg with a knee patch and a brown boot. Pivot at the hip.
 func _leg_soup(side: int) -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(321, 0.07)
@@ -438,6 +486,7 @@ static func _moved(s: LowPoly.Soup, off: Vector3) -> LowPoly.Soup:
 ## Idle: a nervous fidget (hunch, head darting about, trembling knees, the hat tip bobbing). Walk:
 ## long strides, swinging free arm, hat tip lagging. Poses: raise / draw (shoot), bash, cast.
 func apply_idle(t: float, speed: float = 0.0) -> void:
+	var ik := _sync_elbows()
 	var walk := clampf(speed / 4.0, 0.0, 1.0)
 	var calm := 1.0 - walk
 	var breath := sin(t * 2.1)
@@ -482,14 +531,22 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var arrow := parts["arrow"] as MeshInstance3D
 	arrow.visible = _arrow_on
 	arrow.position.z = BOW_BULGE + BOW_PULL * clampf(draw, 0.0, 1.0)
-	_aim_arm(parts["arm_l"] as MeshInstance3D, bow_pos)
+	if ik:
+		var sh_l := (parts["arm_l"] as Node3D).position
+		_reach("l", bow_pos, TwoBoneIK.arm_pole(-1, (bow_pos - sh_l).normalized()))
+	else:
+		_aim_arm(parts["arm_l"] as MeshInstance3D, bow_pos)
 
 	# the right hand: hangs and swings, draws the string, or raises the wand
 	var hand := HAND_R_REST + Vector3(0.0, sin(t * 3.3) * 0.01 * calm, -stride * 0.20 * walk)
 	hand = hand.lerp(HAND_R_CAST, cast)
 	var nock := bow_pos + bow.basis * Vector3(0.0, 0.0, BOW_BULGE + BOW_PULL * clampf(draw, 0.0, 1.0))
 	hand = hand.lerp(nock, raise) + Vector3(0.10, 0.0, -0.12) * sin(raise * PI)   # (on the way up or down it swings out round his chest)
-	_aim_arm(parts["arm_r"] as MeshInstance3D, hand)
+	if ik:
+		var sh_r := (parts["arm_r"] as Node3D).position
+		hand = _reach("r", hand, TwoBoneIK.arm_pole(1, (hand - sh_r).normalized()).lerp(DRAW_POLE, raise))   # (the wand and the held item follow)
+	else:
+		_aim_arm(parts["arm_r"] as MeshInstance3D, hand)
 
 	# the wand: tucked in the belt, drawn to the hand for a cast
 	var wand := parts["wand"] as MeshInstance3D
@@ -501,6 +558,11 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	# a held component sits in the free right hand, wherever it is (hanging, drawing, raised)
 	if hold_anchor != null:
 		hold_anchor.position = hand + HOLD_GRIP
+
+
+## Lay the IK arm on `side` so its hand reaches `hand` (body space), the elbow bent toward `pole`; returns where it ends.
+func _reach(side: String, hand: Vector3, pole: Vector3) -> Vector3:
+	return pose_ik_arm(parts["arm_" + side] as Node3D, parts["fore_" + side] as Node3D, hand, UPPER_LEN, FORE_LEN, pole, ARM_STRETCH)
 
 
 ## Re-aim a sleeve from the shoulder at `hand`, stretching it a little so it always reaches.

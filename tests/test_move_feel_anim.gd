@@ -503,6 +503,8 @@ func _held_prop(kit: String, prof: String) -> void:
 
 ## Where the hand that holds the component is (world).
 func _fist(m: LowPolyModel, kit: String) -> Vector3:
+	if kit != "rebar" and m.has_part("fore_l"):   # (elbow IK: the forearm's hand; Rebar's fist is his glove either way)
+		return m.ik_hand("l" if kit == "gasket" else "r")
 	match kit:
 		"gasket":
 			return (m.parts["arm_l"] as Node3D).global_transform * Vector3(0, -0.76, 0)

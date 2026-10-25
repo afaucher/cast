@@ -9,7 +9,7 @@ extends TestCase
 ##   3. in the real game (GameDev with --gym, under the grounded_anim profile): the panel is up, one of each entry spawns and the world runs on (god mode on),
 ##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the experiments' pickers
 ##      switch the movement profile, the smoothing, the monsters' walk (old / new), their war cries (off / A / B / C) and
-##      the elbow study's arms (old / ik),
+##      the heroes' arms (elbow IK: old / ik),
 ##      the hallway packs come down the arena-lobby hall at the player, the War cry button makes the nearest monster of each
 ##      kind yell once, the slot picker and
 ##      infinite components keep a spell castable, and the player switches through every hero with the allies filling the rest
@@ -361,35 +361,33 @@ func _check_game() -> void:
 		gym.set_experiment("war_cries", "A")
 		eq(Monster.war_cry, "A", "back to A")
 		eq(cry_pick.get_item_text(cry_pick.selected), "A", "the picker follows")
-	# the elbow study (docs/design/animation-research.md, "Elbow IK study"): old / ik, live; the skeletons and Gasket rebuild
-	# their arms on their next pose
+	# elbow IK (docs/design/animation-research.md, "Elbow IK study"; adopted for the three heroes): old / ik, ik by default,
+	# live; every hero rebuilds its arms on its next pose, the monsters keep their one-piece arms
 	var elbow_pick := gym.panel.experiment("elbows")
 	if check(elbow_pick != null, "the panel has the Elbows picker"):
-		eq(elbow_pick.get_item_text(elbow_pick.selected), "old", "the Elbows picker shows old (the default)")
-		check(not LowPolyModel.elbow_ik, "today's arms by default")
-		var grunt: GruntModel = null
-		for m: Monster in mix:
-			if m.model is GruntModel:
-				grunt = m.model as GruntModel
-		var gasket: GasketModel = null
+		eq(elbow_pick.get_item_text(elbow_pick.selected), "ik", "the Elbows picker shows ik (the default)")
+		check(LowPolyModel.elbow_ik, "the IK arms by default")
+		var models: Array[LowPolyModel] = []
 		for h: Hero in gym.heroes():
-			if h.visual_override is GasketModel:
-				gasket = h.visual_override as GasketModel
-		elbow_pick.item_selected.emit(1)
-		check(LowPolyModel.elbow_ik, "picking ik gives the IK arms")
+			if h.visual_override is LowPolyModel:
+				models.append(h.visual_override as LowPolyModel)
+		check(models.size() >= 3, "the crew has the three hero models (%d)" % models.size())
+		for m in models:
+			check(m.has_part("fore_l") and m.has_part("fore_r"), "%s: the arms bend at the elbow" % m.name)
+		for m: Monster in mix:
+			if m.model != null:
+				check(not m.model.has_part("fore_r"), "%s keeps its one-piece arms" % m.kind)
+		elbow_pick.item_selected.emit(0)
+		check(not LowPolyModel.elbow_ik, "picking old gives today's arms")
 		await frames(3)
-		if check(grunt != null, "a skeleton in the mix"):
-			check(grunt.has_part("fore_r") and grunt.get_part("weapon").get_parent() == grunt.get_part("fore_r"),
-					"a skeleton's arms split at the elbow, the sword in the forearm's fist")
-		if gasket != null:
-			check(gasket.has_part("fore_l") and gasket.has_part("fore_r"), "Gasket's arms split at the elbow")
-		gym.set_experiment("elbows", "old")
-		check(not LowPolyModel.elbow_ik, "and old again")
-		eq(elbow_pick.get_item_text(elbow_pick.selected), "old", "the picker follows")
+		for m in models:
+			check(not m.has_part("fore_l") and not m.has_part("fore_r"), "%s: today's one-piece arms" % m.name)
+		gym.set_experiment("elbows", "ik")
+		check(LowPolyModel.elbow_ik, "and ik again")
+		eq(elbow_pick.get_item_text(elbow_pick.selected), "ik", "the picker follows")
 		await frames(3)
-		if grunt != null:
-			check(not grunt.has_part("fore_r") and grunt.get_part("weapon").get_parent() == grunt.get_part("arm_r"),
-					"the skeleton's one-piece arms are back")
+		for m in models:
+			check(m.has_part("fore_r"), "%s: the IK arms are back" % m.name)
 	var before := {}
 	for m: Monster in mix:
 		before[m] = m.cries
@@ -430,5 +428,5 @@ func _check_game() -> void:
 	MoveFeel.reset()
 	MonsterModel.active_walk = true
 	Monster.war_cry = "A"
-	LowPolyModel.elbow_ik = false
+	LowPolyModel.elbow_ik = true
 

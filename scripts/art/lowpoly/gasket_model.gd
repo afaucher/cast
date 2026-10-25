@@ -73,7 +73,7 @@ const SMASH_ARM_L := Vector3(-0.45, 0.0, deg_to_rad(-26.0))   ## the left arm's 
 ## undoes any stretch of the sleeve.
 const HOLD_GRIP := Vector3(0.0, -0.86, -0.09)
 const HOLD_SCALE := 0.9
-## THE IK ARMS (the elbow study, LowPolyModel.elbow_ik; off by default): each arm split at the elbow into "arm_*" (the
+## THE IK ARMS (elbow IK, LowPolyModel.elbow_ik; on by default): each arm split at the elbow into "arm_*" (the
 ## upper arm, from the shoulder) and "fore_*" (the forearm, under it), laid by TwoBoneIK. The right fist is the wrench's
 ## grip, where the old sleeve was aimed, so the right arm reaches it with a bent elbow instead of a stretched sleeve (up to
 ## R_STRETCH when the smash puts the fist out of reach; past that the wrench comes in to the fist). The left arm keeps its old rotations as a hand target, drawn in a
@@ -229,6 +229,7 @@ func _build_arms(split: bool) -> void:
 		if split:
 			var upper := _add_part("arm_" + side, _upper_arm_soup(s), body, at)
 			_add_part("fore_" + side, _forearm_soup(s), upper, Vector3(0.0, -(L_L1 if s < 0 else R_L1), 0.0))
+			_fore_len[side] = L_L2 if s < 0 else R_L2
 		else:
 			var arm := _add_part("arm_" + side, _arm_soup(s), body, at)
 			arm.rotation = Vector3(0.10, 0.0, deg_to_rad(10.0 * s))   # hangs at her sides, splayed clear of the belly

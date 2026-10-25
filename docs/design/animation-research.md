@@ -516,7 +516,13 @@ the areas against today's wedge target by target, today and grounded untouched, 
 
 ### 7.2 Elbow IK study (2026-10-24)
 The user: **"Looking to see if an IK solver for elbows would make animations look better."** This section reports a
-prototype you can try in the gym, what it costs, and a recommendation. It is not adopted: today's arms stay the default.
+prototype you can try in the gym, what it costs, and a recommendation.
+
+**Decided (user, 2026-10-24): "Let's adopt it for the three main characters."** Wick, Gasket and Rebar have IK elbows,
+on by default. Rebar was the user's choice, despite the recommendation below. The grunt's prototype is taken out:
+every monster keeps today's one-piece arms. The gym's "Elbows" picker (old / ik, ik by default) stays until the user has
+compared Wick and Rebar, then it goes. See "As adopted" at the end of this section. The study below is as it was
+written.
 
 #### What I found
 No arm in the game bends at the elbow. Every arm is one rigid mesh. It is placed in one of two ways:
@@ -654,17 +660,75 @@ So there are two different problems:
 - **If adopted**, do it per model, behind this switch, and settle each in the gym before the switch goes. Before adopting
   it widely, cut the cost: solve only on-screen models, or solve once per frame for a pose that has not changed.
 
-#### Tests
-- `test_elbow_ik`:
-  - The solver reaches 200 seeded reachable targets exactly, with both bones at their lengths.
-  - It clamps a far target onto the line and a near one out to the folded chain, never a NaN.
-  - The elbow follows the pole and flips with it.
-  - The bone basis is a rotation along the bone.
-  - Gasket and the grunt build and pose with the IK arms: the fist meets the grip, the blade keeps today's angle, the
-    elbow bends where it should, and both stay inside their budgets.
-  - Switching back gives today's arms with the wrench where it was.
-- `test_gym` covers the Elbows picker live, both ways, on a skeleton of the mix and on Gasket.
-- The models' own tests pass unchanged with the default (old) arms.
+#### As adopted (2026-10-24)
+The user: "Let's adopt it for the three main characters." `LowPolyModel.elbow_ik` is now **true**. Each hero's arms are
+an upper arm `arm_*` and a forearm `fore_*` under it, in the same faceted style and the same material.
+`LowPolyModel.ik_hand(side)` gives where a split arm's hand is. The silhouettes, kit poses, held item, cast and strike
+timing, and the HeroFeel and SpinSweep layers are unchanged: only the arm parts are laid differently.
+
+- **Wick**, the bow draw first:
+  - Both sleeves reach the same targets the one-piece sleeves aimed at: the bow grip, the string's nock and the wand.
+  - The drawing arm now folds at the elbow, out to his right, back and a little up (`DRAW_POLE` while the bow is
+    raised). Before, the sleeve shrank to 0.56 of its length.
+  - The bow arm stays straight. It may stretch to `ARM_STRETCH` 1.3, today's clamp, where the bow is held further out
+    than the arm reaches (the aim, the bash).
+  - The elbow patch now sits on the point of the elbow.
+  - The wand and the held item follow the hand the arm actually reaches.
+- **Gasket**: as in the study.
+  - Her right fist meets the wrench's grip. It stretches to 1.15 at most; past that, the wrench comes in to the fist.
+  - Her left arm takes its old rotations as a target, slightly bent, more at the walk's forward swing.
+  - The held item rides in her left forearm's fist.
+- **Rebar**: his poses stay rotations. The hand target is where the old rigid arm put the glove, drawn in by a flex per
+  pose:
+
+  | Pose | Flex |
+  |---|---|
+  | Resting | 0.012 (nearly straight; he still reads upright) |
+  | Walk's forward swing | a little more |
+  | Punch, wind-up | 0.40 (the fist cocked, the elbow back) |
+  | Punch, strike | straight |
+  | Cast | 0.12 (the fists raised with bent elbows) |
+  | Slam, top | 0.22 (the fists bent over his head) |
+  | Slam, bottom | straight |
+  | Bowl | straight |
+
+  - The upper arm and the forearm keep today's arm's turn (`pose_ik_arm`'s new `twist`), so the glove's knuckles and
+    thumb face where they did. The glove rides on the forearm.
+  - An elbow boulder fills the joint.
+- **The grunt**: taken out. `grunt_model.gd` is main's, with the war cry's arms in front.
+- **Kept**:
+  - `TwoBoneIK`, the shared solver.
+  - `PoseClip`, which now samples a bent arm along both bones.
+  - The elbow lab (`scenes/elbow_lab.tscn`), now each hero today vs IK, with `--bench`.
+- **Cost**: `elbow_lab --bench 200`, headless, two runs.
+
+  | Hero | Today | With IK | IK adds |
+  |---|---|---|---|
+  | Wick | 6.2 µs | 10.6 µs | 4.3 µs |
+  | Gasket | 3.7 µs | 8.0 µs | 4.4 µs |
+  | Rebar | 3.8 µs | 10 µs | 6.3 µs |
+
+  That is 0.02 ms a frame for a crew of four. Each hero draws two more parts.
+- **Stills**, today vs IK for each hero in each pose, at the game camera and zoomed: `test_logs/elbow_ik/heroes_*.png`
+  (untracked; no GIFs).
+  - **Wick's draw** shows the change most: the folded drawing elbow next to today's half-length sleeve.
+  - **Rebar's** cocked punch and raised slam show bent elbows. His boulder arms make the rest look much as before.
+- **Networking**: none. It is a look; every machine poses its own copy. The models are cosmetic and declare no
+  `net_fields`.
+- **Tests**:
+  - `test_elbow_ik`:
+    - the solver;
+    - IK is the default and a grunt keeps its one-piece arms;
+    - Gasket: the fist meets the grip in every pose, the elbow bends out, and it switches back;
+    - Wick: the drawing hand is on the nock, the drawing elbow folds out to his right and back, the bow hand holds the
+      grip (or reaches as far as the 1.3 clamp), the held item and the wand ride in the hand;
+    - Rebar: the glove is on the forearm with today's turn and at today's place at rest, the punch's wind-up and the
+      slam's top bend more than the strike and the slam's bottom, and the elbow goes back with the fist cocked;
+    - no NaN in any pose;
+    - all three inside their budgets.
+  - `test_gym`: the Elbows picker shows ik, the crew's three hero models are split, the monsters are not, and picking
+    old and then ik switches all three live.
+  - `test_move_feel_anim`: its held-item fist and PoseClip follow the bent arms.
 
 ---
 

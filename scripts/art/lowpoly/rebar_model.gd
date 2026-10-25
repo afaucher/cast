@@ -37,6 +37,21 @@ const BOWL_IN := 0.45
 const BOWL_CROUCH := 0.34
 
 const PART_NAMES: Array[String] = ["body", "head", "vest", "belt", "arm_l", "arm_r", "glove_l", "glove_r", "leg_l", "leg_r"]
+## ELBOW IK (LowPolyModel.elbow_ik, on by default; animation-research.md "Elbow IK study"): each stone arm is split at the
+## elbow into "arm_*" (the shoulder and the upper-arm boulder) and "fore_*" (the forearm boulder, with the glove under it),
+## laid by TwoBoneIK. His poses stay rotations: the hand target is where the old rigid arm put the glove, drawn in toward
+## the shoulder by a flex per pose (ARM_FLEX resting, more on the walk's forward swing, the punch's fist cocked back at
+## PUNCH_FLEX, the cast's fists raised, the slam's fists bent over his head at SLAM_TOP_FLEX and flung straight at the
+## bottom, the bowl straight). The parts keep today's arm's turn (pose_ik_arm's twist), so the glove's knuckles and thumb
+## face where they did.
+const UPPER_LEN := 0.65
+const FORE_LEN := 0.57
+const GLOVE_AT := Vector3(0.10, -FORE_LEN, -0.02)    ## the glove in the forearm's space (x mirrored for the left)
+const FIST := Vector3(0.0, -UPPER_LEN - FORE_LEN, 0.0)   ## the old rigid arm's hand point on its axis
+const ARM_FLEX := 0.012
+const PUNCH_FLEX := 0.40
+const CAST_FLEX := 0.12
+const SLAM_TOP_FLEX := 0.22
 
 # Palette (sRGB, painted): warm sandstone, hi-vis orange with silver tape, leather, faded denim.
 const STONE := Color(0.76, 0.66, 0.49)
@@ -87,10 +102,40 @@ func _build() -> void:
 	_add_part("belt", _belt_soup(), body, Vector3(0, -0.27, 0))
 	for s in [-1, 1]:
 		var side := "l" if s < 0 else "r"
-		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(0.60 * s, 0.64, 0.0))
-		arm.rotation = Vector3(ARM_FWD, 0.0, deg_to_rad(10.0 * s))   # hangs down at his sides, splayed clear of the belly
-		_add_part("glove_" + side, _glove_soup(s), arm, Vector3(0.10 * s, -1.22, -0.02))
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(0.23 * s, 1.2, 0.0))
+	_build_arms(false)
+
+
+## The arms: today's one-piece stone arms, or (`split`, the IK arms) an upper arm and a forearm each; the gloves (and the
+## held item in the left one) move over.
+func _build_arms(split: bool) -> void:
+	var body := parts["body"] as Node3D
+	var gloves := {}
+	for side: String in ["l", "r"]:
+		var g := parts.get("glove_" + side) as Node3D
+		if g != null:
+			g.get_parent().remove_child(g)
+			gloves[side] = g
+		_drop_part("fore_" + side)
+		_drop_part("arm_" + side)
+	for s: int in [-1, 1]:
+		var side := "l" if s < 0 else "r"
+		var host: Node3D
+		var glove_at: Vector3
+		if split:
+			var upper := _add_part("arm_" + side, _upper_arm_soup(s), body, Vector3(0.60 * s, 0.64, 0.0))
+			host = _add_part("fore_" + side, _forearm_soup(s), upper, Vector3(0.0, -UPPER_LEN, 0.0))
+			_fore_len[side] = FORE_LEN
+			glove_at = Vector3(GLOVE_AT.x * s, GLOVE_AT.y, GLOVE_AT.z)
+		else:
+			host = _add_part("arm_" + side, _arm_soup(s), body, Vector3(0.60 * s, 0.64, 0.0))
+			host.rotation = Vector3(ARM_FWD, 0.0, deg_to_rad(10.0 * s))   # hangs down at his sides, splayed clear of the belly
+			glove_at = Vector3(0.10 * s, -1.22, -0.02)
+		if gloves.has(side):
+			host.add_child(gloves[side])
+			(gloves[side] as Node3D).position = glove_at
+		else:
+			_add_part("glove_" + side, _glove_soup(s), host, glove_at)
 
 
 ## Stone torso (hidden mostly by the vest, but the belly, the traps behind the head and the chest
@@ -193,6 +238,21 @@ func _arm_soup(side: int) -> LowPoly.Soup:
 	return s
 
 
+## The IK arms' upper arm: the shoulder boulder and the upper-arm boulder (as in _arm_soup), down to the elbow.
+func _upper_arm_soup(side: int) -> LowPoly.Soup:
+	var s := LowPoly.boulder(Vector3(0.33, 0.31, 0.33), 0, 0.22, STONE_LIGHT, 51 + side, 0.12)   # the shoulder
+	s.merge(LowPoly.boulder(Vector3(0.27, 0.40, 0.27), 0, 0.2, STONE, 53 + side, 0.12), LowPoly.at(Vector3(0.03 * side, -0.42, 0.0)))
+	s.merge(LowPoly.boulder(Vector3(0.24, 0.20, 0.24), 0, 0.2, STONE, 57 + side, 0.12), LowPoly.at(Vector3(0.0, -UPPER_LEN, 0.0)))   # elbow
+	return s
+
+
+## The IK arms' forearm, from the elbow: the dark forearm boulder down to the glove's cuff.
+func _forearm_soup(side: int) -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(59 + side, 0.07)
+	s.merge(LowPoly.boulder(Vector3(0.29, 0.38, 0.29), 0, 0.2, STONE_DARK, 55 + side, 0.12), LowPoly.at(Vector3(0.04 * side, -0.22, 0.0)))
+	return s
+
+
 ## Giant work glove: a huge tan leather mitt with a heavy cuff, a thumb and knuckle bumps.
 ## Local origin is the middle of the fist.
 func _glove_soup(side: int) -> LowPoly.Soup:
@@ -224,6 +284,7 @@ func _hold_host() -> Node3D:
 
 ## Pose the idle / walk cycle at time t (breathing, a slow head nod, stomping legs when moving).
 func apply_idle(t: float, speed: float = 0.0) -> void:
+	var ik := _sync_elbows()
 	var walk := clampf(speed / 4.5, 0.0, 1.0)
 	var breath := sin(t * 1.9)
 	var stride := sin(t * 7.0)
@@ -250,7 +311,20 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 		var r := Vector3(lerpf(swing, a, w), clasp * s, deg_to_rad(10.0 * s) * (1.0 - 0.6 * w))
 		if s > 0 and bw > 0.0:
 			r = r.lerp(Vector3(arm_kick("bowl_a"), BOWL_IN, deg_to_rad(4.0)), bw)
-		(parts[side] as MeshInstance3D).rotation = r
+		if not ik:
+			(parts[side] as MeshInstance3D).rotation = r
+			continue
+		# the IK arms: today's glove, drawn in by the pose's flex (see ELBOW IK), the parts keeping today's turn
+		var k := arm_kick(side)
+		var flex := ARM_FLEX + 0.25 * clampf(swing - ARM_FWD - arm_kick(side), 0.0, 0.3) 				+ PUNCH_FLEX * clampf(-k / 0.6, 0.0, 1.0) + CAST_FLEX * clampf(k, 0.0, 1.0) * (1.0 - clampf((k - 0.9) / 0.6, 0.0, 1.0))
+		flex = lerpf(flex, lerpf(SLAM_TOP_FLEX, 0.02, down / maxf(w, 0.001)), w)
+		if s > 0:
+			flex = lerpf(flex, 0.04, bw)
+		var upper := parts[side] as Node3D
+		var rb := Basis.from_euler(r)
+		var hand := TwoBoneIK.flexed(upper.position, rb, FIST, flex)
+		pose_ik_arm(upper, parts["fore_" + side.substr(4)] as Node3D, hand, UPPER_LEN, FORE_LEN,
+				TwoBoneIK.arm_pole(s, (hand - upper.position).normalized()), 1.0, rb.z)
 
 
 ## A quick heavy punch with alternating arms: wind back, slam forward, recover.

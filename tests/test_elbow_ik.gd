@@ -1,5 +1,6 @@
 extends TestCase
-## The elbow study (docs/design/animation-research.md, "Elbow IK study (2026-10-24)"; TwoBoneIK, LowPolyModel.elbow_ik):
+## Elbow IK for the three heroes (docs/design/animation-research.md, "Elbow IK study (2026-10-24)"; TwoBoneIK,
+## LowPolyModel.elbow_ik, on by default):
 ##   1. THE SOLVER reaches a reachable target exactly with both bones at their lengths; an unreachable one (too far, or
 ##      closer than the folded chain) is clamped onto the line toward it, bones still at their lengths; the elbow bends
 ##      toward the pole (and flips with it) in the plane of root, target and pole; a bone's basis is orthonormal, lies
@@ -8,10 +9,14 @@ extends TestCase
 ##      both ways), the right forearm's fist meets the wrench's grip in every pose (rest, walk, wind-up, slam, the overhead
 ##      smash top and bottom, the spin, the cast; a grip out of the stretched reach comes in to the fist), the elbow bends out to her right when the fist comes up by her shoulder,
 ##      and switching back gives today's arms with the wrench where it was
-##   3. THE GRUNT with the IK arms builds and poses: the sword rides in the forearm's fist with exactly today's blade angle
-##      in every pose (rest, walk, wind-up, strike, war cry), the elbow is bent more cocking the sword than striking, and
-##      the downed slump hangs the arms straight
-##   4. both stay inside their node and triangle budgets with the extra parts
+##   3. WICK with the IK arms, the bow draw first: the drawing hand reaches the string's nock, the drawing elbow folds out
+##      to his right and back (not squashed to half an arm), the bow hand holds the grip (within today's 1.3 stretch); rest,
+##      bash and cast reach their targets too; the held item rides in the drawing hand, the wand in the raised one
+##   4. REBAR with the IK arms: the gloves ride on the forearms with today's turn; at rest the glove is where today's is; the
+##      punch's wind-up cocks the elbow far more than the punch; the slam's fists bend over his head and come down
+##      straight; the elbow goes back with the fist cocked
+##   5. all three stay inside their node and triangle budgets with the extra parts; no arm part is ever NaN; the default is
+##      the IK arms (elbow_ik) and the monsters (a grunt) keep their one-piece arms
 
 const L1 := 0.4
 const L2 := 0.3
@@ -19,10 +24,17 @@ const EPS := 0.0005
 
 
 func setup() -> void:
-	LowPolyModel.elbow_ik = false
+	check(LowPolyModel.elbow_ik, "the IK arms are the default")
+	var grunt := GruntModel.new()
+	add_child(grunt)
+	grunt.apply_idle(0.3)
+	check(not grunt.has_part("fore_r"), "a monster keeps its one-piece arms")
+	grunt.queue_free()
 	_check_solver()
 	await _check_gasket()
-	await _check_grunt()
+	await _check_wick()
+	await _check_rebar()
+	LowPolyModel.elbow_ik = true
 	finish()
 
 
@@ -197,64 +209,138 @@ func _check_gasket() -> void:
 	LowPolyModel.elbow_ik = false
 	m.apply_idle(0.0)
 	check(not m.has_part("fore_r"), "... both ways")
+	LowPolyModel.elbow_ik = true
 	m.queue_free()
 	await frames(1)
 
 
-# ------------------------------------------------------------------ 3. the grunt
+# ------------------------------------------------------------------ 3. Wick
 
-func _pose_grunt(m: GruntModel, pose: String) -> void:
-	m._wind = 0.0
-	m._swing = 0.0
-	m._cry = 0.0
+## True when no part of `m`'s arms holds a NaN.
+func _numbers(m: LowPolyModel) -> bool:
+	for part: String in ["arm_l", "fore_l", "arm_r", "fore_r"]:
+		var t := m.get_part(part).global_transform
+		var v := t.origin + t.basis.x + t.basis.y + t.basis.z
+		if is_nan(v.x + v.y + v.z):
+			return false
+	return true
+
+
+## The elbow on `side`: its offset (world) from the shoulder-to-hand line.
+func _elbow_side(m: LowPolyModel, side: String) -> Vector3:
+	var sh := m.get_part("arm_" + side).global_position
+	var el := m.get_part("fore_" + side).global_position
+	var hand := m.ik_hand(side)
+	var line := (hand - sh).normalized()
+	return el - (sh + line * line.dot(el - sh))
+
+
+func _check_wick() -> void:
+	var m := WickModel.new()
+	add_child(m)
+	m.idle_enabled = false
+	m.apply_idle(0.0)
+	await frames(1)
+	check(m.has_part("fore_l") and m.has_part("fore_r"), "Wick: the arms are split by default")
+	check(m.get_part("fore_r").material_override != null, "Wick: the forearm has the low-poly material")
+	check(_count_nodes(m) <= 20, "Wick: node count %d inside his budget" % _count_nodes(m))
+	check(m.triangle_count() <= 3500, "Wick: triangle budget %d" % m.triangle_count())
+	m.hold_item(Node3D.new())
+	var body := m.get_part("body")
+	# the bow draw first
+	m.pose_preview("shoot")
+	var bow := m.get_part("weapon")
+	var nock := bow.global_transform * Vector3(0.0, 0.0, WickModel.BOW_BULGE + WickModel.BOW_PULL * 0.9)
+	var gap := m.ik_hand("r").distance_to(nock)
+	check(gap < 0.01, "Wick draw: the drawing hand is on the string (gap %.3f)" % gap)
+	var bend := _elbow_angle(m.get_part("arm_r"), m.get_part("fore_r"), WickModel.FORE_LEN)
+	check(bend < 125.0, "Wick draw: the drawing elbow folds (%.0f deg) instead of a half-length sleeve" % bend)
+	var out := body.global_basis.inverse() * _elbow_side(m, "r")
+	check(out.x > 0.04 and out.z > 0.0, "Wick draw: the drawing elbow sticks out to his right and back (%s)" % str(out))
+	var reach := (WickModel.UPPER_LEN + WickModel.FORE_LEN) * WickModel.ARM_STRETCH * m.scale.x
+	var hand_r_body := body.global_transform.affine_inverse() * m.ik_hand("r")
+	var hold_gap := m.hold_anchor.global_position.distance_to(body.global_transform * (hand_r_body + WickModel.HOLD_GRIP))
+	check(hold_gap < 0.01, "Wick draw: the held item rides in the drawing hand (%.3f)" % hold_gap)
+	for pose: String in ["shoot", "rest", "bash", "cast"]:
+		m.pose_preview(pose)
+		check(_numbers(m), "Wick %s: every arm part is a number" % pose)
+		var g := m.get_part("weapon").global_position
+		var far := m.get_part("arm_l").global_position.distance_to(g) > reach - 0.01
+		check(far or m.ik_hand("l").distance_to(g) < 0.01, "Wick %s: the bow hand is on the grip (or as far as today's clamp)" % pose)
+	m.pose_preview("cast")
+	var wand := m.get_part("wand").global_position
+	check(m.ik_hand("r").distance_to(wand) < 0.15, "Wick cast: the wand is in the raised hand")
+	m.queue_free()
+	await frames(1)
+
+
+# ------------------------------------------------------------------ 4. Rebar
+
+func _pose_rebar(m: RebarModel, pose: String) -> void:
+	for k: String in ["arm_l", "arm_r", "slam_w", "slam_a", "bowl_w", "bowl_a"]:
+		m._arm_kick[k] = 0.0
 	var speed := 0.0
+	var t := 0.6
 	match pose:
 		"walk":
-			speed = 4.0
-		"windup":
-			m._wind = 1.0
-		"swing":
-			m._swing = 1.0
-		"cry":
-			m._cry = 1.0
-	m.apply_idle(0.6 if pose != "walk" else PI / 17.0, speed)
+			speed = 4.5
+			t = 3.0 * PI / 14.0
+		"punch_wind":
+			m._arm_kick["arm_r"] = -0.6
+		"punch":
+			m._arm_kick["arm_r"] = 1.55
+		"cast":
+			m._arm_kick["arm_l"] = 0.9
+			m._arm_kick["arm_r"] = 0.9
+		"slam_top":
+			m._arm_kick["slam_w"] = 1.0
+			m._arm_kick["slam_a"] = RebarModel.SLAM_UP
+		"slam_bottom":
+			m._arm_kick["slam_w"] = 1.0
+			m._arm_kick["slam_a"] = RebarModel.SLAM_DOWN
+		"bowl":
+			m._arm_kick["bowl_w"] = 1.0
+			m._arm_kick["bowl_a"] = RebarModel.BOWL_RELEASE
+	m.apply_idle(t, speed)
 
 
-func _check_grunt() -> void:
-	var old := GruntModel.new()
-	var ik := GruntModel.new()
-	add_child(old)
-	add_child(ik)
-	for m: GruntModel in [old, ik]:
-		m.idle_enabled = false
+func _check_rebar() -> void:
+	var old := RebarModel.new()
+	var m := RebarModel.new()
+	for r: RebarModel in [old, m]:
+		add_child(r)
+		r.idle_enabled = false
 	old.elbow_pick = 0
-	ik.elbow_pick = 1
-	ik.apply_idle(0.0)
+	_pose_rebar(old, "rest")
+	_pose_rebar(m, "rest")
 	await frames(1)
-	check(ik.has_part("fore_l") and ik.has_part("fore_r"), "grunt IK: the arms are split")
-	check(ik.get_part("weapon").get_parent() == ik.get_part("fore_r"), "grunt IK: the sword is in the right forearm's fist")
-	check(ik.get_part("fore_r").material_override != null, "grunt IK: the forearm has the enemy material")
-	var budget := int(MonsterDefs.row("grunt")["tris"])
-	check(ik.triangle_count() <= budget, "grunt IK: triangle budget %d <= %d (today's %d)" % [ik.triangle_count(), budget, old.triangle_count()])
+	check(m.has_part("fore_l") and m.has_part("fore_r"), "Rebar: the arms are split by default")
+	check(m.get_part("glove_r").get_parent() == m.get_part("fore_r"), "Rebar: the glove rides on the forearm")
+	check(_count_nodes(m) <= 20, "Rebar: node count %d inside his budget" % _count_nodes(m))
+	check(m.triangle_count() <= 2500, "Rebar: triangle budget %d" % m.triangle_count())
+	var off := (m.get_part("glove_r").global_position - m.global_position) - (old.get_part("glove_r").global_position - old.global_position)
+	check(off.length() < 0.12, "Rebar rest: the glove hangs where today's does (%.3f off)" % off.length())
+	var turn := m.get_part("glove_r").global_basis.z.normalized().dot(old.get_part("glove_r").global_basis.z.normalized())
+	check(turn > 0.97, "Rebar rest: the glove faces where today's does (%.3f)" % turn)
+	m.hold_item(Node3D.new())
+	check(m.hold_anchor.get_parent() == m.get_part("glove_l"), "Rebar: the held item stays in the left glove")
 	var bends := {}
-	for pose: String in ["rest", "walk", "windup", "swing", "cry"]:
-		_pose_grunt(old, pose)
-		_pose_grunt(ik, pose)
-		var bo := old.get_part("weapon").global_basis
-		var bi := ik.get_part("weapon").global_basis
-		var same := bo.x.distance_to(bi.x) + bo.y.distance_to(bi.y) + bo.z.distance_to(bi.z)
-		check(same < 0.002, "grunt IK %s: the blade keeps today's angle (diff %.4f)" % [pose, same])
-		var up := ik.get_part("arm_r")
-		var fist := up.transform * (ik.get_part("fore_r").transform * GruntModel.IK_HAND)
-		check(fist.distance_to(up.position) <= GruntModel.L1 + GruntModel.L2 + 0.001, "grunt IK %s: the fist is in reach" % pose)
-		bends[pose] = _elbow_angle(up, ik.get_part("fore_r"), GruntModel.L2)
-	check(float(bends["windup"]) < float(bends["swing"]) - 30.0,
-			"grunt IK: the elbow is cocked in the wind-up (%.0f deg) and flung out in the strike (%.0f deg)" % [bends["windup"], bends["swing"]])
-	check(float(bends["rest"]) < 150.0, "grunt IK: the sword is carried with a bent elbow (%.0f deg)" % bends["rest"])
-	ik.set_downed(true)
-	check(ik.get_part("fore_r").basis.is_equal_approx(Basis.IDENTITY), "grunt IK downed: the arms hang straight")
+	for pose: String in ["rest", "walk", "punch_wind", "punch", "cast", "slam_top", "slam_bottom", "bowl"]:
+		_pose_rebar(m, pose)
+		check(_numbers(m), "Rebar %s: every arm part is a number" % pose)
+		bends[pose] = _elbow_angle(m.get_part("arm_r"), m.get_part("fore_r"), RebarModel.FORE_LEN)
+		var gl := m.get_part("glove_r").global_position.distance_to(m.ik_hand("r"))
+		check(gl < 0.2, "Rebar %s: the glove is at the forearm's end (%.3f)" % [pose, gl])
+	check(float(bends["punch_wind"]) < float(bends["punch"]) - 40.0,
+			"Rebar: the punch's wind-up cocks the elbow (%.0f deg), the punch flings it straight (%.0f deg)" % [bends["punch_wind"], bends["punch"]])
+	check(float(bends["slam_top"]) < float(bends["slam_bottom"]) - 25.0,
+			"Rebar: the slam's fists bend over his head (%.0f deg) and come down straight (%.0f deg)" % [bends["slam_top"], bends["slam_bottom"]])
+	check(float(bends["rest"]) > 160.0, "Rebar rest: the arms hang nearly straight (%.0f deg)" % bends["rest"])
+	_pose_rebar(m, "punch_wind")
+	var side := m.get_part("body").global_basis.inverse() * _elbow_side(m, "r")
+	check(side.z > 0.05, "Rebar punch wind-up: the elbow goes back (%s)" % str(side))
 	old.queue_free()
-	ik.queue_free()
+	m.queue_free()
 	await frames(1)
 
 
