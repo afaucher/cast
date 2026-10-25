@@ -19,9 +19,9 @@ extends Node
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
 ##   - the EXPERIMENTS (GymPanel's pickers; the user, 2026-10-23: "lets put experiments in the gym menu instead of adding
 ##     keybindings"): the movement profile (MoveFeel: today / grounded / grounded_anim, the default) and the judder
-##     smoothing (MoveFeel.interp, off by default), live; the monsters' walk (MonsterModel.active_walk: old / new, the
-##     default), and the heroes' arms (LowPolyModel.elbow_ik: old / ik, ik by default; Wick, Gasket and Rebar bend their
-##     elbows with TwoBoneIK; it goes once the user has compared them). A new A/B goes here, not on a key; its switch goes once it is settled.
+##     smoothing (MoveFeel.interp, off by default), live; and the monsters' walk (MonsterModel.active_walk: old / new, the
+##     default). A new A/B goes here, not on a key; its switch goes once it is settled (the heroes' elbow IK went on
+##     2026-10-25: "Looks great, we can remove the switch").
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -411,28 +411,20 @@ static func hall_link() -> Dictionary:
 static func experiments() -> Array:
 	return [["feel", "Movement", MoveFeel.ORDER, MoveFeel.active()],
 		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"],
-		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"],
-		["elbows", "Elbows", ["old", "ik"], "ik" if LowPolyModel.elbow_ik else "old"]]
+		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"]]
 
 
 ## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
 ## log starts a new stretch. "walk" plays the monsters' old or new walk (MonsterModel.active_walk), live; the status line
-## says which. "elbows" gives Wick, Gasket and Rebar
-## today's arms or the IK arms (LowPolyModel.elbow_ik), live: each model rebuilds its arms on its next pose.
+## says which.
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
-	if nm == "walk" or nm == "elbows":
-		if nm == "elbows":
-			if value != "old" and value != "ik":
-				return
-			LowPolyModel.elbow_ik = value == "ik"
-			text = "elbows: %s" % value
-		else:
-			if value != "old" and value != "new":
-				return
-			MonsterModel.active_walk = value == "new"
-			text = "monster walk: %s" % value
+	if nm == "walk":
+		if value != "old" and value != "new":
+			return
+		MonsterModel.active_walk = value == "new"
+		text = "monster walk: %s" % value
 		panel.set_experiment(nm, value)
 		_status(text)
 		return

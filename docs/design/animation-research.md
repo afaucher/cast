@@ -520,9 +520,9 @@ prototype you can try in the gym, what it costs, and a recommendation.
 
 **Decided (user, 2026-10-24): "Let's adopt it for the three main characters."** Wick, Gasket and Rebar have IK elbows,
 on by default. Rebar was the user's choice, despite the recommendation below. The grunt's prototype is taken out:
-every monster keeps today's one-piece arms. The gym's "Elbows" picker (old / ik, ik by default) stays until the user has
-compared Wick and Rebar, then it goes. See "As adopted" at the end of this section. The study below is as it was
-written.
+every monster keeps today's one-piece arms. The gym's "Elbows" picker came out on 2026-10-25, after the user compared the
+heroes in the gym: "Looks great, we can remove the switch" (`LowPolyModel.elbow_ik` stays, for the tests and the elbow
+lab's side by side). See "As adopted" at the end of this section. The study below is as it was written.
 
 #### What I found
 No arm in the game bends at the elbow. Every arm is one rigid mesh. It is placed in one of two ways:

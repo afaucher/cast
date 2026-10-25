@@ -8,7 +8,7 @@ extends TestCase
 ##   2. the spawn list covers every registry entry (a new monster kind, prop, style, spell or decor gets its button)
 ##   3. in the real game (GameDev with --gym, under the grounded_anim profile): the panel is up, one of each entry spawns and the world runs on (god mode on),
 ##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the experiments' pickers
-##      switch the movement profile, the smoothing, the monsters' walk (old / new) and the heroes' arms (elbow IK: old / ik;
+##      switch the movement profile, the smoothing, the monsters' walk (old / new) (the heroes' elbow IK picker is gone, settled;
 ##      the war cries' picker came out, settled),
 ##      the hallway packs come down the arena-lobby hall at the player, the War cry button makes the nearest monster of each
 ##      kind yell once, the slot picker and
@@ -355,33 +355,20 @@ func _check_game() -> void:
 		gym.set_experiment("walk", "new")
 		check(MonsterModel.active_walk, "and new again")
 		eq(walk_pick.get_item_text(walk_pick.selected), "new", "the picker follows")
-	# elbow IK (docs/design/animation-research.md, "Elbow IK study"; adopted for the three heroes): old / ik, ik by default,
-	# live; every hero rebuilds its arms on its next pose, the monsters keep their one-piece arms
-	var elbow_pick := gym.panel.experiment("elbows")
-	if check(elbow_pick != null, "the panel has the Elbows picker"):
-		eq(elbow_pick.get_item_text(elbow_pick.selected), "ik", "the Elbows picker shows ik (the default)")
-		check(LowPolyModel.elbow_ik, "the IK arms by default")
-		var models: Array[LowPolyModel] = []
-		for h: Hero in gym.heroes():
-			if h.visual_override is LowPolyModel:
-				models.append(h.visual_override as LowPolyModel)
-		check(models.size() >= 3, "the crew has the three hero models (%d)" % models.size())
-		for m in models:
-			check(m.has_part("fore_l") and m.has_part("fore_r"), "%s: the arms bend at the elbow" % m.name)
-		for m: Monster in mix:
-			if m.model != null:
-				check(not m.model.has_part("fore_r"), "%s keeps its one-piece arms" % m.kind)
-		elbow_pick.item_selected.emit(0)
-		check(not LowPolyModel.elbow_ik, "picking old gives today's arms")
-		await frames(3)
-		for m in models:
-			check(not m.has_part("fore_l") and not m.has_part("fore_r"), "%s: today's one-piece arms" % m.name)
-		gym.set_experiment("elbows", "ik")
-		check(LowPolyModel.elbow_ik, "and ik again")
-		eq(elbow_pick.get_item_text(elbow_pick.selected), "ik", "the picker follows")
-		await frames(3)
-		for m in models:
-			check(m.has_part("fore_r"), "%s: the IK arms are back" % m.name)
+	# elbow IK (docs/design/animation-research.md, "Elbow IK study"): settled 2026-10-25, so no picker; the three heroes bend
+	# their elbows, the monsters keep their one-piece arms
+	check(gym.panel.experiment("elbows") == null, "no Elbows picker any more")
+	check(LowPolyModel.elbow_ik, "the IK arms")
+	var models: Array[LowPolyModel] = []
+	for h: Hero in gym.heroes():
+		if h.visual_override is LowPolyModel:
+			models.append(h.visual_override as LowPolyModel)
+	check(models.size() >= 3, "the crew has the three hero models (%d)" % models.size())
+	for m in models:
+		check(m.has_part("fore_l") and m.has_part("fore_r"), "%s: the arms bend at the elbow" % m.name)
+	for m: Monster in mix:
+		if m.model != null:
+			check(not m.model.has_part("fore_r"), "%s keeps its one-piece arms" % m.kind)
 	var before := {}
 	for m: Monster in mix:
 		before[m] = m.cries
