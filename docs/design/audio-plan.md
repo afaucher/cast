@@ -584,6 +584,13 @@ in test C, so in the game it must not play over a new utterance (it is cut when 
 Status: **parked by the user** (2026-10-19: "Let's park that for now. And keep track of it and subsequent analysis").
 Nothing is changed in the game for it yet. Add every later probe run or decision to this section.
 
+**Engine trial, 2026-10-25: Kokoro stays.** OmniVoice (k2-fsa, 0.6B, code Apache-2.0, weights CC-BY-NC: fine for a free
+game) was tried for the radio chatter: three voices designed from its fixed attributes (A female young adult American,
+B female middle-aged British low, C male middle-aged American low), each designed on one line and cloned for the rest,
+plus a `[sigh]` tag, five lines each through the walkie chain (`render_dispatch.radio`), next to today's Kokoro clips. The
+user: "Keep Kokoro (K) for the dispatch voice." The trial's scripts and renders are outside the repo
+(`scratch\tts_trial`); nothing in the game changed.
+
 The dispatch headset lines are spoken (Kokoro af_bella, walkie radio; `DispatchVoice`, `tools/render_dispatch.ps1`), so
 unlike the cues they are real words. `tools/dispatch_leak_probe.tscn` fed all 228 clips into `VoiceCaster` with the real
 model, at full level with no room between speaker and mic (the worst case), in loose (default) and chaos strictness,
