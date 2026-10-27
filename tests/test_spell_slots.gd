@@ -84,11 +84,12 @@ func _test_data_and_input() -> void:
 	eq(SpellBook.component_name("damp"), "Soggy sponge")
 	eq(SpellBook.component_name("coffee"), "Coffee beans")
 	eq(SpellBook.component_name("chicken"), "Chicken feather")
+	eq(SpellBook.component_name("revive"), "Aloe leaf")
 	check(SpellBook.has_spell("teeth") and SpellBook.is_available("teeth"), "teeth exists and is available")
 	check(SpellBook.ids().has("teeth"), "teeth is offered by the picker")
-	for id in ["vines", "damp", "coffee", "chicken"]:
+	for id in ["vines", "damp", "coffee", "chicken", "revive"]:
 		check(SpellBook.has_spell(id) and SpellBook.is_available(id) and SpellBook.ids().has(id), "%s is offered by the picker" % id)
-	check(SpellBook.ids().size() == 10, "ten castable spells")
+	check(SpellBook.ids().size() == 11, "eleven castable spells")
 	eq(SpellBook.all_ids().size(), SpellBook.ids().size(), "no unavailable spells are left")
 
 
@@ -387,7 +388,7 @@ func _test_drop_table() -> void:
 		mail_seen[MailPackage.roll_component(rng)] = true
 	for id in SpellBook.ids():
 		check(mail_seen.has(id), "a mail package can contain the %s component" % id)
-	eq(mail_seen.size(), 10, "all ten spells show up in 900 rolls")
+	eq(mail_seen.size(), 11, "all eleven spells show up in 900 rolls")
 
 	# Teeth is available, so grunts really drop it by default (an unavailable spell would be skipped).
 	rng.seed = 99

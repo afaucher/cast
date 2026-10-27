@@ -14,8 +14,9 @@ and the aim snaps onto a teammate near the cursor. **[decided]** marks the user'
 | Teeth | cast teeth | "Too many teeth" sprout out of everyone in the area, grow for 1–2 s, then explode | **everyone** | in game |
 | Vines | cast vines | Thorny vines root everyone in the area for ~2 s: no walking, no shoving, attacks still work | **everyone** | in game |
 | Damp | cast damp | A wide soggy area: fires go out, nobody can ignite for 15 s, puddles make shoves slide further | **everyone** | in game |
-| Coffee | cast coffee | +60% move and attack speed for 6 s, twitchy, then a 2 s crash (−30%) | **everyone** in a small radius | in game |
+| Coffee | cast coffee | +60% move and attack speed for 6 s, twitchy, then a 2 s crash (−30%); a downed ally gets up as a gray, leaking zombie | **everyone** in a small radius | in game |
 | Chicken | cast chicken | Four chickens scatter from the aim point for 12 s and peck everything for zero; a pecked monster chases its chicken | **everyone** (pecks for 0); monsters turn on them | in game |
+| Revive | cast revive | Stands every downed ally in a small radius back up at half health; lifts a coffee zombie's curse | heroes (the downed, and zombies) | in game |
 
 ## Teeth [decided: core idea]
 **"Cast teeth":** too many teeth sprout out of **anyone** in the area at the aim point, monsters and
@@ -154,6 +155,31 @@ caster if inside, monsters, employees) for about two seconds. Code: `scripts/spe
   **goo slow** (the speeds multiply, 1.6 × 0.5 = 0.8).
 - **Look:** steam wisps curl off the head while it lasts, "COFFEE!" and "crash..." float up, and a ring and a burst
   of beans mark the cast.
+- **The coffee zombie [decided, user, 2026-10-27]:** "I think I want two different ways to revive. One coffee should bring
+  you back but leave you grayscale. With minimum health. And a slow health leak. Basically you're a walking zombie. You
+  could be healed. But if your health drops to zero again, you fall down again." and "So the combination would be coffee
+  plus heal to get you back in the game." Then the numbers: a 75% cure, 10 HP, 1.5 HP/s.
+  - A **downed** hero inside the radius stands up at **10 HP** (`CoffeeSpell.ZOMBIE_HP`) as a **zombie** (`Hero.zombie`):
+    the model stays **grayscale** (the downed look, `LowPolyModel.set_gray`) but stands, walks, attacks and casts as
+    normal, and it **leaks 1.5 HP a second** (`ZOMBIE_LEAK`; straight off the HP: a curse, not a hit, so armor does not
+    slow it and nothing flashes).
+  - **Heals work** as on anyone. Healed to **75% of max HP or more** (`ZOMBIE_CURE`) the curse lifts at once: the colour
+    comes back and the leak stops. One full heal (35) takes a fresh zombie to about 45, so it is coffee **plus two heals**
+    (or a Revive, below) to be whole again.
+  - At **0 HP** a zombie goes down again as usual, and another coffee makes a new zombie.
+  - The one it stood up gets **no haste and no crash** from that cup (the living drink first); live allies and monsters in
+    the splash are caffeinated as ever. A zombie standing in a later coffee is a live ally and gets hasted.
+  - Coffee's aim snaps onto a downed teammate's body too (`SNAPS_DOWNED`), and the aim ring hugs the body while coffee or
+    Revive is the held spell. A body left on the floor above (hidden on arrival) is not there to stand up.
+  - The approved description: "Everyone in a small radius gets +60% move and attack speed for six seconds, twitchy, then a
+    crash. Monsters too. A downed ally gets up gray, leaking health, until healed past three quarters."
+  - A zombie who takes the elevator arrives a zombie (the floor carry keeps the curse). The end-of-floor revival fee bills
+    only whoever is down when the contract ends (contracts.md 9).
+  - Networking: getting up is the verb `Actor.revive(hp, cursed)`, applied by the hero's OWNER (`Combat.revive_radius` asks
+    `Net.resolves`, like a heal); the zombie flag is an `OWNER` var on the hero snapshot (the hp field's top bit,
+    `NetCodec.HERO_FIELDS`), so every screen shows the gray from it and only the owner runs the leak. A puppet stands up when
+    its owner's snapshot says it is no longer down (`Hero.net_stand_up`). A late joiner gets it in the heroes of the join
+    snapshot, then from the stream. Tests: `tests/test_spell_revive.gd`, `tests/test_net_revive.gd`.
 - **Component:** **coffee beans** (three roasted beans with their grooves). Drops from brutes (10%). The break room and
   a reward for protecting employees are the planned environment sources.
 - **Voice:** one speaker's "cast coffee" is often written "COUGHING": that and "cough" are aliased, below the bare
@@ -212,6 +238,43 @@ model), `scripts/fx/chicken_fx.gd` (the feathers), `ChickenSpell.cast` (`scripts
   screen from the chicken it shows): one per chicken as the flock lands (staggered 0.05-0.45 s), one on each peck, and
   one now and then (every 2-5 s); the cue's two voices and 0.18 s gap cap a pecking flock (audio-plan.md "War cries").
   Not built: a squawk in `ChickenFx.feather_explosion` and a soft pop in `ChickenFx.poof`.
+
+## Revive [in game, 2026-10-27]
+**"Cast revive"** (decided by the user, 2026-10-27): "We should also have a dedicated revive spell which brings you back
+about half health and it doesn't have this zombie curse effect. The revive spells should be a plant leaf or something."
+Then: the spell is **Revive**, the word **"revive"**, the component an **Aloe leaf**. It is the clean way back; coffee's
+zombie (above) is the cheap one. Code: `ReviveSpell` (`scripts/spells/defs/revive.gd`), the verb `Actor.revive`,
+`Combat.revive_radius`, `GameWorld.downed_in_radius`, the look `ReviveFx` (`scripts/fx/revive_fx.gd`). Tests:
+`tests/test_spell_revive.gd`, `tests/test_net_revive.gd` (two machines).
+
+- **Effect:** every **downed** ally within **1.5 + 0.5 × power** (1.5 to 2.0, coffee's small radius: you point at the body)
+  stands up at **50% of max HP** (`REVIVE_HP`), with **no zombie curse**. On a **coffee zombie** it lifts the curse (colour
+  back, no leak) and brings the HP up to at least 50% (a zombie already above half keeps what it has). A standing hero who is
+  not a zombie is untouched (it is not a heal). Monsters and staff never get up: only heroes lie downed.
+- **Aim:** a support spell like heal (`FOLLOWS`): the aim snaps onto a teammate, a **downed** one included (`SNAPS_DOWNED`;
+  the aim ring hugs the body while Revive is held).
+- **Cooldown 12 s** [proposal]: heal's rate of HP back (heal 35 per 8 s, Revive 50 per 12 s, about 4 HP a second each), the
+  corn and teeth tier, a little under coffee's 14 s, so the clean revive is not slower than the zombie one. The real budget
+  is the Aloe leaves (charges).
+- **The approved description:** "Stands a downed ally back up at half health. Point at them."
+- **Look:** aloe-green leaf blades burst up and tumble down, pale motes rise and two hex rings lift off the floor at the
+  radius (every cast, hit or miss). A hero who gets up (Revive or coffee) throws a puff of leaves (gray and coffee-brown for
+  a zombie) and plays the hop's cue (`jump`: Revive has no sound of its own, no new audio); a zombie cured throws a green
+  sparkle. No floating text.
+- **Component:** the **Aloe leaf** (a fat, fleshy leaf curling to a point, pale teeth along both edges, pale flecks, the
+  gel at the cut). Drops from the **Water Boy** (the enemy medic, floors 2-3) at 12% [proposal]; a mail package can hold
+  one too.
+- **Networking:** the shape is a status applied by the target's owner (like heal and coffee). The cast is an event that lands
+  on every machine at the same moment; each machine stands up only the heroes it owns (`Net.resolves`: a player's own hero,
+  the host's AI seats), so a client's Revive at the host's AI is applied on the host and a host's coffee at a client's
+  hero on that client. The other screens see the hero stand from its owner's snapshot (`dead` false, the HP, the zombie
+  flag). No new event, no request. Randomness: none.
+- **AI allies** do not cast spells (`AllyBrain`: "Allies do not cast spells in the POC"), so they neither Revive nor coffee
+  the downed; solo is unchanged (you down = crew down).
+- **Voice:** "revive" (and "revives") is in the vocabulary. Measured with TTS (David + Zira, 2026-10-27): 12 of 12
+  deliberate clips fire revive and nothing else (0.95 to 1.00), no other clip fires it, and "arrive", "relive", "reviews",
+  "survive", "rival" and "revival" never cast; "revive me" / "I need a revive" cast in chaos only. Details: the REVIVE note
+  in `scripts/voice/incantation.gd`; clips in `tools/make_voice_clips.ps1`.
 
 ### Speed modifiers (`Actor.set_modifier`)
 One verb, four stats, built for coffee and ready for goo slows:

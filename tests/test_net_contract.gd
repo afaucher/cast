@@ -16,7 +16,8 @@ extends TestCase
 ## 5. The packet budget (M3): the host's packet (heroes plus the world section NetWorld fills) fits NetWorldCodec.PACKET_BUDGET
 ##    (about 1.2 KB, one datagram); test_net_world_codec fills it with the worst floor it can find.
 ## 6. Area verbs (M4, layer 4): a loop over the actors in an area (GameWorld.actors_in_radius / hittable_in_radius /
-##    team_actors / actors, the "actors" group) that calls a verb on them (apply_damage, shove, set_modifier, heal, daze, lose_ground) must ask
+##    downed_in_radius / team_actors / actors, the "actors" group) that calls a verb on them (apply_damage, shove, set_modifier, heal, daze,
+##    lose_ground, revive) must ask
 ##    who resolves each one (Combat.resolves / Net.resolves / Net.resolves_hit / Net.owns) in that loop: effects run on
 ##    every machine, and a verb applied by every machine lands once per machine. Run against loops that must fail too.
 ## 7. Late-join coverage (M6): every replicated class (REPLICATED, and every class NetEvents.WORLD_CARRIES names) declares in
@@ -290,7 +291,7 @@ func _all_scripts(dir: String) -> Array[String]:
 
 ## Files whose area loops may call verbs without asking who resolves: {path: reason}. Adding one is a design decision.
 const AREA_LOOP_ALLOW := {}   # (empty: every area loop in scripts/ asks)
-const AREA_LOOP_RE := "^(\\s*)for (\\w+)(?:\\s*:\\s*\\w+)? in .*(GameWorld\\.(actors_in_radius|hittable_in_radius|team_actors|actors)\\(|get_nodes_in_group\\(\"actors\"\\)|\\bheroes\\(\\))"
+const AREA_LOOP_RE := "^(\\s*)for (\\w+)(?:\\s*:\\s*\\w+)? in .*(GameWorld\\.(actors_in_radius|hittable_in_radius|downed_in_radius|team_actors|actors)\\(|get_nodes_in_group\\(\"actors\"\\)|\\bheroes\\(\\))"
 const AREA_ASK_RE := "Combat\\.resolves\\(|Net\\.resolves(_hit)?\\(|Net\\.owns\\("
 
 
@@ -305,7 +306,7 @@ static func _area_loop_gaps(lines: PackedStringArray) -> Array:
 			continue
 		var indent := m.get_string(1).length()
 		var v := m.get_string(2)
-		var verb_re := RegEx.create_from_string("\\b%s\\.(apply_damage|shove|set_modifier|heal|daze|lose_ground)\\(" % v)
+		var verb_re := RegEx.create_from_string("\\b%s\\.(apply_damage|shove|set_modifier|heal|daze|lose_ground|revive)\\(" % v)
 		var verb := false
 		var asks := false
 		var j := i + 1
@@ -342,6 +343,8 @@ func _check_area_samples() -> void:
 	eq(_area_loop_gaps(bad3).size(), 1, "... a daze (the brute slam's verb)")
 	var bad4 := PackedStringArray(["\tfor a in GameWorld.actors():", "\t\ta.lose_ground(self)"])
 	eq(_area_loop_gaps(bad4).size(), 1, "... the ground taken from under it (a lava crust melting: lose_ground)")
+	var bad5 := PackedStringArray(["\tfor h in GameWorld.downed_in_radius(p, 2.0):", "\t\th.revive(50.0)"])
+	eq(_area_loop_gaps(bad5).size(), 1, "... standing the downed back up (Revive, coffee: revive)")
 	var good := PackedStringArray(["\tfor a in GameWorld.actors_in_radius(p, 2.0):", "\t\tif not Combat.resolves(a, self):", "\t\t\tcontinue", "\t\ta.apply_damage(5.0, self)"])
 	eq(_area_loop_gaps(good).size(), 0, "a loop that asks Combat.resolves passes")
 	var other := PackedStringArray(["\tfor a in GameWorld.actors_in_radius(p, 2.0):", "\t\tFx.attach_hit_feedback(a)", "\tb.apply_damage(1.0)"])

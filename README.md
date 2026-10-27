@@ -194,13 +194,15 @@ them (a dented prop is free; a break bills its full price to whoever landed it).
 | Esc | Pause (Resume, Abandon contract, Main menu) |
 
 ### Spells
-Ten spells: **heal**, **fireball**, **armor**, **corn** (a corn bomb from the sky that hits
+Eleven spells: **heal**, **fireball**, **armor**, **corn** (a corn bomb from the sky that hits
 everyone), **tentacles** (neon tentacles burst from the floor and shove everything outward),
 **teeth** (too many teeth sprout out of everyone in the area, then pop; a heal pulls them),
 **vines** (thorny vines root everyone in the area for about two seconds: no walking, no being shoved, attacks still
 work), **damp** (a wide soggy area: fires go out, nobody can ignite for a while, and puddles make shoves slide
-further), **coffee** (+60% move and attack speed for six seconds, twitchy, then a crash; monsters get it too) and
-**chicken** (four chickens run about pecking everything for zero; a pecked monster forgets you and chases its chicken).
+further), **coffee** (+60% move and attack speed for six seconds, twitchy, then a crash; monsters get it too; a downed
+ally gets up as a gray zombie leaking health until healed past three quarters), **chicken** (four chickens run about
+pecking everything for zero; a pecked monster forgets you and chases its chicken) and **revive** (a downed ally stands
+back up at half health).
 
 - **Aiming:** everything lands where you aim, so to heal a friend you point at them.
 - **Fire:** a fireball can set anyone near the blast on fire (monsters, teammates, employees) for 5 to 10 seconds of mild damage. It never spreads, and healing doesn't put it out.

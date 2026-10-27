@@ -28,7 +28,7 @@ signal cancelled
 const PICK_COUNT := 2
 const LINE_H := 48.0
 const MIN_LINES := 5                ## the list is at least this tall (so a short list does not collapse the sheet)
-const MAX_LINES := 10               ## ... and at most this tall (the ten spells of 2026-10-18 all show); more scroll
+const MAX_LINES := 11               ## ... and at most this tall (the eleven spells of 2026-10-27 all show); more scroll
 const SHEET_W := 1040.0
 const SPEC_W := 430.0
 const PAGE_GAP := 26.0

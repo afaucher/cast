@@ -363,6 +363,12 @@ and the cooldown, then spends 1 charge), `cooldown_left(id) -> float`, `cooldown
 numbers and the drop table; `Monster._on_death` rolls the drops; `ComponentPickup` is the world prop).
 The player-controlled hero has `is_player = true`.
 `PlayerController` reads input. `AllyBrain` drives AI allies.
+A downed hero (`dead`, lying gray where it fell: `Hero._on_death`) can get back up mid-floor through the verb
+`Actor.revive(to_hp, cursed)` (2026-10-27; `docs/design/spells.md` "Revive" and "Coffee"): applied by the hero's owner
+(`Combat.revive_radius` asks `Net.resolves`; the downed are found with `GameWorld.downed_in_radius`, since every other query
+drops the dead), it stands the body up (`_on_revived` undoes the fall on every screen; a puppet stands when its owner's
+snapshot says so, `Hero.net_stand_up`). `cursed` makes a coffee ZOMBIE (`Hero.zombie`, an `OWNER` var on the snapshot's hp
+field): gray, leaking `CoffeeSpell.ZOMBIE_LEAK` HP a second on the owner, cured by heals past `ZOMBIE_CURE`.
 How a hero walks follows the active movement profile (`MoveFeel`, `docs/design/movement-research.md` "As built"; the
 default is `grounded_anim` since 2026-10-23, `MoveFeel.DEFAULT`): with `today` `Hero.move` is the plain walk; with `grounded` the owner's walk is `HeroMotion` (envelope, hop, mantle,
 fall) and every screen draws the stride, footsteps and dust from the shown motion (`HeroGait`, on `Gait`, which the animation

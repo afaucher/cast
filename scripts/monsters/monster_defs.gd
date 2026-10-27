@@ -81,7 +81,8 @@ const DEFS := {
 	"water_boy": {   ## the Water Boy healer (enemy-healer-options.md §7, "As built"): from floor 2, one a pack, after 3 others
 		"script": "res://scripts/monsters/water_boy.gd", "model": "res://scripts/art/lowpoly/monsters/water_boy_model.gd", "tris": 1600,
 		"pack": {"cost": 3, "weight": 2.0, "min_floor": 2, "max": 1, "after": 3},
-		"drops": [{"spells": ["heal"], "chance": 0.30}, {"spells": ["damp"], "chance": 0.15}],
+		## the enemy medic carries the Revive's aloe leaf (2026-10-27)
+		"drops": [{"spells": ["heal"], "chance": 0.30}, {"spells": ["damp"], "chance": 0.15}, {"spells": ["revive"], "chance": 0.12}],
 	},
 	"goo_imp": {   ## the goo imp (goo-imp.md, "As built"): the sewer's ranged pest; sewer packs of 3-4, never a floor pack or a gate
 		"script": "res://scripts/monsters/goo_imp.gd", "model": "res://scripts/art/lowpoly/monsters/goo_imp_model.gd", "tris": 2200,

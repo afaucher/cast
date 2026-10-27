@@ -90,6 +90,24 @@ func actors_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Acto
 	return out
 
 
+## DOWNED heroes (dead, still lying on this floor) of `team` (-1 any) within radius: every other query drops the dead, but
+## coffee and Revive stand them back up (Actor.revive). A hero whose body stayed on the floor above (hidden on arrival,
+## game.gd's carry) is not here, nor is one that is not in the tree.
+func downed_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Actor]:
+	var out: Array[Actor] = []
+	if root == null or not root.is_inside_tree():
+		return out
+	for n in root.get_tree().get_nodes_in_group("actors"):
+		var h := n as Hero
+		if h == null or not h.dead or not h.is_visible_in_tree() or h.is_queued_for_deletion():
+			continue
+		if team != -1 and h.team != team:
+			continue
+		if flat_distance(h.global_position, pos) <= radius + h.radius:
+			out.append(h)
+	return out
+
+
 ## Living actors in the group "breakables" (mail packages) within radius. They are neutral, so melee, arrows
 ## and bolts (which only look for the foe team) use hittable_in_radius to catch them as well.
 func breakables_in_radius(pos: Vector3, radius: float) -> Array[Actor]:

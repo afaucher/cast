@@ -227,5 +227,10 @@ func pose_ik_arm(upper: Node3D, fore: Node3D, hand: Vector3, l1: float, l2: floa
 
 ## Downed: greyed out; the hero lies the whole model down.
 func set_downed(downed: bool) -> void:
-	_mat.set_shader_parameter("desat", 0.85 if downed else 0.0)
+	set_gray(downed)
 	idle_enabled = not downed
+
+
+## Greyed out (the downed look) while still standing and moving: a coffee zombie (Hero.zombie).
+func set_gray(gray: bool) -> void:
+	_mat.set_shader_parameter("desat", 0.85 if gray else 0.0)

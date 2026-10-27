@@ -146,6 +146,19 @@ extends RefCounted
 ## Adding the hotword: one chaos pass heard David's "fines" as "VI VINES" (it was "FI NES" in the other passes and before),
 ## so "fines" now counts as heard-as-vines in chaos, like "binds".
 ##
+## REVIVE (11th spell; measured 2026-10-27 with TTS, David + Zira, rates -3/0/+3, through the real model with the eleven-word
+## vocabulary: tests/test_voice_audio.gd, test_voice_triggers.gd, test_voice_noise.gd, test_voice_orders.gd). Every deliberate
+## clip (12 of 12: clean in both voices, both rates in both voices, "okay / please cast revive", "cast revive now", "cast revive
+## him", a 300 / 500 ms pause) fired revive and nothing else, 0.95 to 1.00, about 250-400 ms after the voice stops; no other
+## clip fired revive (0 confusions). The model writes "REVIVE" every time, so only "revive" / "revives" are listed: no measured
+## mishearing to alias. The look-alikes are heard as themselves and do not cast in any mode: "arrive", "relive", "reviews",
+## "survive", "rival", "revival" (bare); "cast arrive / relive / survive" fizzle ("unknown_spell"), "cast reviews" is
+## spell-ish ("garbled"). Chatter that really says it ("revive me", "I need a revive", what a crew shouts over a body) casts
+## in chaos only (0.91 to 0.98, flagged accidental); loose needs the trigger. Not a mention word. Triggers: "presto revive" was
+## heard "PRESSED A REVIVE" and "abracadabra revive" "ABRECADEVER REVIVE" (the triggers' own known weak spots; both within
+## their miss budget). The new hotword made no phantoms (idle noise and digital silence as before, none through the gate),
+## and no order clip cast it.
+##
 ## VOICE ORDERS (2026-10-19; docs/design/combat-proposals.md 1.0 / 1.8): "<name> <go | attack | follow>" gives an event
 ## {"kind": "order", "who": name key, "order", "heard", "gap", "at_start", "accidental", "t"}. The name is the trigger (no
 ## "cast"); the order word must be the very next token, within `order_window` of recognition time (timed from when each

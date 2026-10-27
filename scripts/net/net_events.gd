@@ -184,7 +184,7 @@ const KIND_SEAT_TAKE := "seat.take"
 ## NetObjects); a runtime actor's are the world.spawn replay and the keyframe (NetWorld, RUNTIME_ACTORS).
 ## A new replicated class without an entry here fails the build: it would be wrong on a late joiner's screen.
 const LATE_JOIN := {
-	"res://scripts/heroes/hero.gd": "handover: kit, player name, owner and epoch per seat; position, HP, slots, charges, held slot (heroes); the joiner's own seat: SeatHandover.hero_state; statuses: replay; the AI seats' order states: `orders` (NetOrders.late_join_state)",
+	"res://scripts/heroes/hero.gd": "handover: kit, player name, owner and epoch per seat; position, HP, downed, the coffee zombie, slots, charges, held slot (heroes; then every hero snapshot carries HP, downed and the zombie, NetCodec); the joiner's own seat: SeatHandover.hero_state; statuses: replay; the AI seats' order states: `orders` (NetOrders.late_join_state)",
 	"res://scripts/monsters/monster.gd": "keyframe (seed-built and runtime); gone ids; runtime spawns: replay of world.spawn; statuses: replay; wind-ups: skipped (under a second)",
 	"res://scripts/monsters/grunt.gd": "as monster.gd",
 	"res://scripts/monsters/archer.gd": "as monster.gd",

@@ -320,7 +320,7 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		var owner := _session.seats.owner_of(s)
 		kits[s] = [h.kit_id, str((_session.roster.get(owner, {}) as Dictionary).get("name", "")) if owner != 0 else ""]
 		if s != seat:
-			heroes[s] = [h.global_position, h.facing, h.hp, h.dead, Array(h.spell_slots), h._charges.duplicate(), h.held_slot]
+			heroes[s] = [h.global_position, h.facing, h.hp, h.dead, Array(h.spell_slots), h._charges.duplicate(), h.held_slot, h.zombie]
 	var gone := gone_ids()
 	var jt: Dictionary = joiners[peer]
 	# (M7: the join's timings, passively in the host's log: the license, the wait for a running floor, the joiner's build,
@@ -473,6 +473,7 @@ func _apply(d: Dictionary) -> void:
 		st.hp = float(row[2])
 		st.dead = bool(row[3])
 		st.held_slot = int(row[6])
+		st.zombie = row.size() > 7 and bool(row[7])   # (a coffee zombie shows gray at once; the stream carries it from here)
 		NetCodec.write_hero(h, st)
 		h.reset_physics_interpolation()
 		var slots: Array[String] = []

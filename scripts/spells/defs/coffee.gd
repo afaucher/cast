@@ -1,7 +1,8 @@
 class_name CoffeeSpell
 extends SpellDef
-## Coffee: everyone in a small radius gets haste, then a crash (Coffee, scripts/spells/coffee.gd). A support spell: it
-## follows the teammate the aim snapped onto. Design record: docs/design/spells.md.
+## Coffee: everyone in a small radius gets haste, then a crash (Coffee, scripts/spells/coffee.gd), and a downed hero in it
+## gets up as a zombie (ZOMBIE_*, Hero.zombie). A support spell: it follows the teammate the aim snapped onto (a downed one
+## too). Design record: docs/design/spells.md.
 
 const ID := "coffee"
 const FOLLOWS := true
@@ -9,9 +10,12 @@ const FOLLOWS := true
 ## Its row in SpellBook.SPELLS (name, cooldown, colour, description, spoken word, component, available).
 const ROW := {
 	"name": "Coffee", "cooldown": 14.0, "color": Color(0.66, 0.43, 0.24),
-	"desc": "Everyone in a small radius gets +60% move and attack speed for six seconds, twitchy, then a crash. Monsters too.", "word": "coffee",
+	"desc": "Everyone in a small radius gets +60% move and attack speed for six seconds, twitchy, then a crash. Monsters too. A downed ally gets up gray, leaking health, until healed past three quarters.", "word": "coffee",
 	"component": "Coffee beans", "available": true,
 }
+
+## Coffee's aim snaps onto a DOWNED teammate too (SpellBook.snap_hero): a cup stands them up as a zombie.
+const SNAPS_DOWNED := true
 
 ## What the recognizer hears as this spell's word: heard phrase -> match quality (Incantation's spell table).
 ## The exact word plus the measured mishearings, all below the 0.85 bare floor
@@ -29,6 +33,12 @@ const COFFEE_TIME_BASE := 4.5      ## seconds of haste at power ~0
 const COFFEE_TIME_POWER := 1.5     ## ... plus this at power 1 (6 s)
 const COFFEE_CRASH_MULT := 0.7     ## -30% move and attack speed
 const COFFEE_CRASH_TIME := 2.0
+## THE COFFEE ZOMBIE (the user, 2026-10-27: "One coffee should bring you back but leave you grayscale. With minimum health.
+## And a slow health leak."): a downed hero in the radius stands up at ZOMBIE_HP, gray, losing ZOMBIE_LEAK HP a second (no
+## haste for them), until healed to ZOMBIE_CURE of max HP or more (Hero.zombie). At 0 HP they go down again.
+const ZOMBIE_HP := 10.0
+const ZOMBIE_LEAK := 1.5           ## HP a second
+const ZOMBIE_CURE := 0.75          ## the curse lifts at this fraction of max HP or more
 
 
 static func coffee_radius(power: float) -> float:

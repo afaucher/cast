@@ -32,7 +32,7 @@ const YAW := 45.0
 const PITCH := -56.0
 const STYLES: Array[String] = ["rune", "hand", "rune_hand", "glyph", "sigil"]
 const NAMES: Array[String] = ["A rune", "B hand", "C rune+hand", "D glyph", "E sigil"]
-const LINEUP: Array[String] = ["fireball", "heal", "corn", "armor", "tentacles", "teeth", "vines", "damp", "coffee", "chicken"]
+const LINEUP: Array[String] = ["fireball", "heal", "corn", "armor", "tentacles", "teeth", "vines", "damp", "coffee", "chicken", "revive"]
 const SPELL := "fireball"
 const AIM_DIST := 3.5
 

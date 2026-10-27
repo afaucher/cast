@@ -10,7 +10,7 @@ extends Node3D
 ## Then the crash: -30% to both for 2 s. Drinking again refreshes the haste and cancels the crash (no stacking).
 ## Design record: docs/design/spells.md ("Coffee").
 ##
-##   Coffee.cast(caster, power, point)        # the spell: drink() for everyone in range
+##   Coffee.cast(caster, power, point)        # the spell: drink() for everyone in range; a downed hero gets up a zombie
 ##   Coffee.drink(actor, seconds)             # caffeinate one actor (or refresh); null if it can't be
 ##   Coffee.is_hasted(actor) / is_crashing(actor) / is_caffeinated(actor)
 ##   Coffee.jitter_aim(actor, aim) -> Vector3 # the aim point as a twitchy, hasted hand would place it
@@ -65,11 +65,14 @@ func net_fields() -> Dictionary:
 
 # --- Public API ---------------------------------------------------------------------------------
 
-## The spell: everyone (any team) within CoffeeSpell.coffee_radius(power) of `pos` is caffeinated.
+## The spell: everyone (any team) within CoffeeSpell.coffee_radius(power) of `pos` is caffeinated, and a DOWNED hero in it
+## gets up as a zombie (CoffeeSpell.ZOMBIE_HP, gray and leaking: Hero.zombie) without the haste (the living drink first, so
+## the one it stood up is not caffeinated by the same cup). Each target's owner applies it (Combat). Returns who drank.
 static func cast(caster: Actor, power: float, pos: Vector3) -> Array[Actor]:
 	var radius := CoffeeSpell.coffee_radius(power)
 	var secs := CoffeeSpell.coffee_duration(power)
 	var out := Combat.each_in_radius(pos, radius, func(a: Actor) -> void: Coffee.drink(a, secs))
+	Combat.revive_radius(pos, radius, -1, CoffeeSpell.ZOMBIE_HP, 0.0, true)
 	CoffeeFx.splash(pos, radius)   # on EVERY cast, even one that hits nobody: the spill, steam, droplets and the radius ring
 	return out
 

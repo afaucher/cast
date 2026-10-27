@@ -374,7 +374,7 @@ func _test_triggers() -> void:
 
 func _test_explain() -> void:
 	var ex := _inc().explain("CAST HEEL")
-	eq(ex.size(), 11, "trigger + ten spells")
+	eq(ex.size(), 12, "trigger + eleven spells")
 	eq(ex[0]["word"], "cast", "first is the trigger")
 	eq(ex[0]["kind"], "exact", "cast exact")
 	eq(ex[1]["kind"], "homophone", "heel is a homophone of heal")
@@ -702,7 +702,7 @@ func _test_orders() -> void:
 	check(_inc({"order_hotwords": ["rebar", "go"]}).vocabulary().has("rebar"), "order hotwords when set")
 
 
-## Eleven cards (trigger + ten spells) in a 3-column grid: four rows, and a long
+## Twelve cards (trigger + eleven spells) in a 3-column grid: four rows, and a long
 ## "sound-alike 'headacles'" caption must not push the grid past the 400 px panel.
 func _test_panel_cards() -> void:
 	var caster := VoiceCaster.new()
@@ -716,7 +716,7 @@ func _test_panel_cards() -> void:
 	panel.toggle_with_f1 = false
 	add_child(panel)
 	panel.attach(caster)
-	eq(panel._cards.size(), 11, "panel has trigger + ten spell cards")
+	eq(panel._cards.size(), 12, "panel has trigger + eleven spell cards")
 	eq(panel._card_grid.columns, 3, "three columns")
 	eq(int(ceil(float(panel._cards.size()) / float(panel._card_grid.columns))), 4, "four rows")
 	var names: Array = []

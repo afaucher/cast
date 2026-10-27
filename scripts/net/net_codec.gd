@@ -17,7 +17,8 @@ extends RefCounted
 ##   i8  vx, vz    velocity in 1/8 unit per second (+-15.9)
 ##   u8  angle     facing, 256 steps of a turn
 ##   i8  aimx, aimz  the aim point relative to the hero in 1/4 unit (+-31.75)
-##   u16 hp        tenths of a point
+##   u16 hp        tenths of a point (bits 0-14, so at most HP_MAX) | ZOMBIE 0x8000 (Hero.zombie: coffee stood the hero up
+##                 gray and leaking; the owner leaks it, every screen shows the gray)
 ##   u8  draw      only when flags has drawing: how long the bow has been drawn, centiseconds
 ##
 ## A snapshot to the host is 7 + 1 + 16 = 24 bytes; the host's to a client carries two heroes, 40 bytes; at 30 Hz
@@ -39,6 +40,9 @@ const HEADER_SIZE := NetWire.HEADER + 1     ## the wire header plus the count by
 const AIM_MAX := 31.75
 const VEL_MAX := 15.875
 const POS_MAX := 327.67
+## The hp field keeps 15 bits for the tenths; its top bit is the zombie flag.
+const HP_MAX := 3276.7
+const HP_ZOMBIE := 0x8000
 ## How long a received "passing through" flag keeps the puppet a ghost (it is refreshed by every snapshot).
 const GHOST_HOLD := 0.3
 
@@ -51,6 +55,7 @@ const HERO_FIELDS := {
 	"pass_through_until": "flags",
 	"held_slot": "head",
 	"_draw_start": "draw",
+	"zombie": "hp",
 }
 
 
@@ -87,7 +92,7 @@ static func _put_entry(b: StreamPeerBuffer, s: NetHeroState, sent_at: float) -> 
 	b.put_u8(roundi(wrapf(s.angle, 0.0, TAU) / TAU * 256.0) & 255)
 	b.put_8(clampi(roundi(s.aim.x * 4.0), -127, 127))
 	b.put_8(clampi(roundi(s.aim.y * 4.0), -127, 127))
-	b.put_u16(clampi(roundi(s.hp * 10.0), 0, 65535))
+	b.put_u16(clampi(roundi(s.hp * 10.0), 0, 32767) | (HP_ZOMBIE if s.zombie else 0))
 	if s.drawing:
 		b.put_u8(clampi(roundi(s.draw_age * 100.0), 0, 255))
 
@@ -127,7 +132,9 @@ static func decode_from(b: StreamPeerBuffer, stamp: float) -> Array[NetHeroState
 		s.vel = Vector2(float(b.get_8()) / 8.0, float(b.get_8()) / 8.0)
 		s.angle = float(b.get_u8()) / 256.0 * TAU
 		s.aim = Vector2(float(b.get_8()) / 4.0, float(b.get_8()) / 4.0)
-		s.hp = float(b.get_u16()) / 10.0
+		var hp_raw := b.get_u16()
+		s.hp = float(hp_raw & 0x7FFF) / 10.0
+		s.zombie = (hp_raw & HP_ZOMBIE) != 0
 		if s.drawing:
 			if b.get_available_bytes() < 1:
 				break
@@ -177,6 +184,7 @@ static func quantum(what: String) -> float:
 static func read_hero(hero: Hero, st: NetHeroState) -> void:
 	st.hp = hero.hp
 	st.dead = hero.dead
+	st.zombie = hero.zombie
 	st.angle = atan2(hero.facing.z, hero.facing.x)
 	st.climbing = hero.climbing
 	st.ghost = hero.pass_through_until > GameWorld.time
@@ -185,8 +193,9 @@ static func read_hero(hero: Hero, st: NetHeroState) -> void:
 	st.draw_age = maxf(GameWorld.time - hero._draw_start, 0.0) if st.drawing else 0.0
 
 
-## Put a (decoded, interpolated) state onto a puppet. HP, death, the bow and the held spell show on its screen the
-## way they do on its owner's; nothing here is damage or a cast (those are events: M4).
+## Put a (decoded, interpolated) state onto a puppet. HP, death, standing back up (a Revive, a coffee: dead going false),
+## the zombie's gray, the bow and the held spell show on its screen the way they do on its owner's; nothing here is damage
+## or a cast (those are events: M4).
 static func write_hero(hero: Hero, st: NetHeroState) -> void:
 	hero.global_position = st.pos
 	hero.facing = st.facing_vector()
@@ -199,6 +208,10 @@ static func write_hero(hero: Hero, st: NetHeroState) -> void:
 		hero.held_slot = st.held_slot
 		hero._refresh_hold()
 		hero.held_changed.emit()
+	if not st.dead and hero.dead:
+		hero.net_stand_up(st.hp, st.zombie)   # (its owner stood it up: a Revive or a coffee, Actor.revive)
+	elif not hero.dead and hero.zombie != st.zombie:
+		hero.set_zombie(st.zombie)            # (the owner's cure, or a Revive on a zombie)
 	if absf(hero.hp - st.hp) > 0.05 and not hero.dead:
 		hero.hp = st.hp
 		hero._refresh_bar()

@@ -1818,7 +1818,8 @@ func _hide_wait() -> void:
 
 ## Heroes arrive as the previous floor left them (HP, downed). A downed hero's body stayed on the floor above, so it is
 ## hidden here (on every machine: the hiding is local, `carried_down` is each machine's own carry), and a downed player
-## hands the camera to a living ally. There is still no mid-contract revival; corporate bills the revival at the end.
+## hands the camera to a living ally. A body left on the floor above cannot be stood up here (Revive and coffee find only the
+## downed lying on this floor: GameWorld.downed_in_radius); corporate bills the revival of whoever is down at the end.
 func _apply_carry() -> void:
 	for h in _heroes():
 		_session.apply_carry(h)
@@ -2527,6 +2528,12 @@ func _check_crew() -> void:
 		controller.enabled = false
 		_follow_living_ally()
 		_show_banner(NoteCopy.YOU_DOWN, 4.0)
+	elif not player.dead and _player_down_noted:
+		# Back up mid-floor (a teammate's Revive or coffee: Actor.revive): the camera and the controls come back.
+		_player_down_noted = false
+		rig.target = player
+		if not _ended and _menu == null and _van_menu == null and not _joining and not _arrival_running():
+			controller.enabled = true
 
 
 func _physics_process(delta: float) -> void:

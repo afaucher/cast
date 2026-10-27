@@ -93,11 +93,11 @@ func save_carry(heroes: Array[Hero]) -> void:
 	carry.clear()
 	for h in heroes:
 		if is_instance_valid(h):
-			carry[carry_key(h)] = {"hp": h.hp, "dead": h.dead}
+			carry[carry_key(h)] = {"hp": h.hp, "dead": h.dead, "zombie": h.zombie}
 
 
-## Put a hero back as the previous floor left them: same HP, and downed if they were downed.
-## Returns true if the hero is downed.
+## Put a hero back as the previous floor left them: same HP, downed if they were downed, and still a coffee zombie (gray,
+## leaking: Hero.zombie) if they were one. Returns true if the hero is downed.
 func apply_carry(hero: Hero) -> bool:
 	var key: Variant = carry_key(hero)
 	if not carry.has(key):
@@ -108,6 +108,7 @@ func apply_carry(hero: Hero) -> bool:
 		hero.die()
 		return true
 	hero.hp = clampf(float(c["hp"]), 1.0, hero.max_hp)
+	hero.set_zombie(bool(c.get("zombie", false)))
 	hero._refresh_bar()
 	return false
 

@@ -8,7 +8,7 @@ extends TestCase
 ##   to the codec without a test here fails), including dying once and the bow.
 
 ## The Hero / Actor vars this test round-trips. Must equal NetCodec.HERO_FIELDS' keys.
-const TESTED := ["hp", "dead", "facing", "climbing", "pass_through_until", "held_slot", "_draw_start"]
+const TESTED := ["hp", "dead", "facing", "climbing", "pass_through_until", "held_slot", "_draw_start", "zombie"]
 
 var root: Node3D
 
@@ -113,7 +113,17 @@ func _check_clamps_and_ages() -> void:
 	near(d.vel.x, NetCodec.VEL_MAX, 0.01, "a velocity past the range clamps")
 	near(d.vel.y, -NetCodec.VEL_MAX, 0.01, "... both ways")
 	near(d.aim.x, NetCodec.AIM_MAX, 0.01, "an aim point far away clamps to the aim range")
-	near(d.hp, 6553.5, 0.1, "hp clamps at the field's top")
+	near(d.hp, NetCodec.HP_MAX, 0.1, "hp clamps at the field's top (15 bits: the top one is the zombie flag)")
+	check(not d.zombie, "... and a huge hp never reads as a zombie")
+	# The coffee zombie (Hero.zombie) rides the hp field's top bit: both ways, with the hp intact.
+	s.hp = 10.0
+	s.zombie = true
+	var z := NetCodec.decode(NetCodec.encode(one, 100.0), 100.0)[0]
+	check(z.zombie, "a zombie reads back as a zombie")
+	near(z.hp, 10.0, NetCodec.quantum("hp"), "... with its hp")
+	s.zombie = false
+	check(not NetCodec.decode(NetCodec.encode(one, 100.0), 100.0)[0].zombie, "and a hero who is not one, not")
+	eq(NetCodec.HERO_FIELDS.get("zombie", ""), "hp", "the zombie flag is a hero snapshot field (the hp field)")
 	# A forwarded state keeps its own moment: sample time = packet stamp - age.
 	s.pos = Vector3.ZERO
 	s.vel = Vector2.ZERO
@@ -216,6 +226,26 @@ func _check_hero_fields() -> void:
 	check(b.dead and b.hp == 0.0, "death arrives")
 	eq(deaths, [1, 1], "and fires died / actor_died once, however often the state repeats")
 	GameWorld.actor_died.disconnect(on_died)
+	# Back up (a coffee: Actor.revive on the owner): standing, gray, at its HP; once, however often the state repeats.
+	var ups := []
+	b.revived.connect(func(cursed: bool) -> void: ups.append(cursed))
+	a.dead = false
+	a.hp = 10.0
+	a.zombie = true
+	NetCodec.read_hero(a, st)
+	var up_state := _through_wire(st)
+	NetCodec.write_hero(b, up_state)
+	NetCodec.write_hero(b, up_state)
+	check(not b.dead and b.zombie, "standing back up arrives, as a zombie")
+	near(b.hp, 10.0, 0.05, "... at its HP")
+	eq(ups, [true], "revived fires once (cursed)")
+	# The curse lifts on the owner (healed past three quarters): the receiver's gray goes too.
+	a.hp = 80.0
+	a.zombie = false
+	NetCodec.read_hero(a, st)
+	NetCodec.write_hero(b, _through_wire(st))
+	check(not b.zombie and not b.dead, "the cure arrives")
+	near(b.hp, 80.0, 0.05, "... with the HP")
 
 
 ## A state packed into a packet and unpacked again.

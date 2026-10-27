@@ -32,9 +32,10 @@ seeds, 2026-10-18):
 - **Every monster asks the same question:** "walk up and hit me". Grunt, imp and brute all chase the nearest hero and
   swing; the archer kites. There is nothing to prioritise (no healer, summoner, shield or bomb), nothing that forces the
   crew to split or regroup, and no attack that needs a teammate to answer.
-- **The player has no defensive verb.** No dodge, block, parry or revive in a fight (a downed hero lies there until
-  corporate revives the crew at the end of the floor, `game.gd:2276`). Defence is walking away or a voice spell, and a
-  voice spell can't answer a 0.3-0.9 s wind-up (section 3.1).
+- **The player has no defensive verb.** No dodge, block or parry in a fight. (When this was written there was no revive
+  either: a downed hero lay there until corporate revived the crew at the end of the floor. Since 2026-10-27 there is one,
+  by voice: coffee stands a downed ally up as a gray, leaking zombie and the Revive spell at half health; spells.md.)
+  Defence is walking away or a voice spell, and a voice spell can't answer a 0.3-0.9 s wind-up (section 3.1).
 - **Voice is a damage button.** Teeth and heal were the most cast. Teeth is "big damage on a clump", heal is the
   only recovery. Spells that change the shape of a fight (vines, damp, tentacles, chicken) have few targets that
   care: a fight of one-hit imps doesn't need control.
@@ -405,6 +406,12 @@ skeleton hit from out of reach charges in a straight line it can't steer (into w
 
 **10. Revive in the fight.** Hold E by a downed teammate for ~3 s to stand them up at a share of HP; the reviver is
 exposed (Children of Morta). Heal on a downed friend could speed it up.
+- **Built differently (user, 2026-10-27): by voice, not on E.** "I think I want two different ways to revive. One coffee
+  should bring you back but leave you grayscale. With minimum health. And a slow health leak." and "We should also have a
+  dedicated revive spell which brings you back about half health and it doesn't have this zombie curse effect." Coffee on
+  a body makes a zombie (10 HP, leaking 1.5 HP/s, cured by heals past 75%), the Revive spell (an Aloe leaf) stands them
+  up at half health; spells.md has both. The hold-E revive below is not built; the fallback stays: corporate bills
+  whoever is down at the end (contracts.md 9).
 - Builds on: `use` (E), the downed state, `Ledger` (revive stats for the end screen).
 - Size: **S-M**.
 - Shape: a request to the downed hero's owner, which stands it up; an AI ally revives on the host.

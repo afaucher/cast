@@ -19,6 +19,8 @@ var aim := Vector2.ZERO
 var hp := 0.0
 var held_slot := 0
 var dead := false
+## A coffee zombie (Hero.zombie): standing, gray, leaking on its owner's machine.
+var zombie := false
 var climbing := false
 ## Passing through other heroes (Actor.pass_through_until is in the future).
 var ghost := false
@@ -57,6 +59,7 @@ func copy() -> NetHeroState:
 	s.hp = hp
 	s.held_slot = held_slot
 	s.dead = dead
+	s.zombie = zombie
 	s.climbing = climbing
 	s.ghost = ghost
 	s.drawing = drawing

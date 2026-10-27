@@ -646,6 +646,6 @@ func pose_preview(kind: String, time: float = 0.6) -> void:
 	apply_idle(time)
 
 
-func set_downed(downed: bool) -> void:
-	super.set_downed(downed)
-	_thin_mat.set_shader_parameter("desat", 0.85 if downed else 0.0)
+func set_gray(gray: bool) -> void:
+	super.set_gray(gray)
+	_thin_mat.set_shader_parameter("desat", 0.85 if gray else 0.0)

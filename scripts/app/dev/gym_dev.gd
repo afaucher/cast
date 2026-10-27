@@ -13,7 +13,8 @@ extends Node
 ##     world (it stays put while the mouse is on the panel); G or a middle-click puts the last picked kind at the cursor
 ##   - the TOOLS: infinite components (on by default: the slots never run out, a picker per slot puts any spell in it),
 ##     spell cooldowns off, monster AI off (F4: monsters stand as dummies, still hit and shoved), god mode (F8: the crew
-##     takes no damage), hit areas (F3: GymOverlay), heal the crew (the downed get up), refill the spells once, clear the
+##     takes no damage), hit areas (F3: GymOverlay), heal the crew (the downed get up), down the AI ally nearest the ring
+##     (to try Revive and coffee's zombie on), refill the spells once, clear the
 ##     monsters, clear what the panel put down, a mixed pack, teleports, and the HIT LOG (GymStats: hits, and damage dealt
 ##     and taken per minute)
 ##   - three training dummies (GymSpawns.DUMMY_HP) on the arena's north side
@@ -115,7 +116,7 @@ func setup(g: Node) -> void:
 	panel.build(entries, HeroKit.ids(), spells,
 		[["infinite", "Infinite", infinite], ["no_cooldowns", "No cooldown", no_cooldowns], ["ai", "AI", ai_on],
 			["god", "God", god], ["areas", "Areas", false]],
-		[["heal", "Heal crew"], ["refill", "Refill spells"], ["clear", "Clear monsters"], ["clear_spawned", "Clear spawned"], ["pack", "Spawn pack"],
+		[["heal", "Heal crew"], ["down", "Down ally"], ["refill", "Refill spells"], ["clear", "Clear monsters"], ["clear_spawned", "Clear spawned"], ["pack", "Spawn pack"],
 			["hall", "Hallway x12"], ["hall_mix", "Hallway mix"], ["cry", "War cry"], ["reset_log", "Reset log"]],
 		spots(), experiments())
 	panel.spawn_pressed.connect(func(id: String) -> void: spawn(id, ring_point()))
@@ -333,6 +334,9 @@ func act(nm: String) -> void:
 	match nm:
 		"heal":
 			heal_crew()
+		"down":
+			var h := down_ally(ring_point())
+			_status("%s is down" % h.display_name if h != null else "no ally standing to down")
 		"refill":
 			var p := player()
 			if p != null:
@@ -525,6 +529,24 @@ func heal_crew() -> void:
 	if hud != null:
 		hud.bind(player(), game.get("allies"))
 	_status("crew healed")
+
+
+## Down the standing AI ally nearest `near` (the panel's ring), to try Revive and coffee's zombie on (docs/design/spells.md):
+## it dies as from a blow (Actor.die), god mode or not. The player's own hero is never picked (solo, you down = crew down).
+## Returns the hero downed, or null.
+func down_ally(near: Vector3) -> Hero:
+	var best: Hero = null
+	var best_d := INF
+	for h in heroes():
+		if h == player() or h.dead or not Net.owns(h):
+			continue
+		var d := GameWorld.flat_distance(h.global_position, near)
+		if d < best_d:
+			best = h
+			best_d = d
+	if best != null:
+		best.die()
+	return best
 
 
 ## Remove every monster but the gym's own fauna (its sharks, their gunners, the gator). Returns how many went.

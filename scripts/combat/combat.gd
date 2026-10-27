@@ -199,6 +199,25 @@ static func heal_radius(pos: Vector3, radius: float, amount: float, team: int) -
 	return out
 
 
+## Stand up every downed hero of `team` within `radius` of `pos` (Actor.revive) at `hp_flat` HP or `hp_frac` of its max HP,
+## whichever is more (`cursed`: as a coffee zombie), each by the machine that resolves it (Net.resolves: its owner). With
+## `lift`, a standing zombie in the radius gets it too (Revive: its curse lifts, its HP up to that). Returns the actors it
+## stood up or lifted.
+static func revive_radius(pos: Vector3, radius: float, team: int, hp_flat: float, hp_frac: float, cursed: bool, lift: bool = false) -> Array[Actor]:
+	var out: Array[Actor] = []
+	var targets := GameWorld.downed_in_radius(pos, radius, team)
+	if lift:
+		for a in GameWorld.actors_in_radius(pos, radius, team):
+			if a is Hero and (a as Hero).zombie:
+				targets.append(a)
+	for a in targets:
+		if not Net.resolves(a):
+			continue
+		if a.revive(maxf(hp_flat, a.max_hp * hp_frac), cursed):
+			out.append(a)
+	return out
+
+
 ## The staff (henchmen included) within radius of pos: [[employee, hp healed], ...], each healed where it resolves (the
 ## host). A heal is for the crew AND the people they came to rescue (user, 2026-10-21: "Healing should work on henchmen
 ## too"); not the rest of the neutral team (props, gators).

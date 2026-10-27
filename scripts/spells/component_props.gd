@@ -14,6 +14,7 @@ extends RefCounted
 ##   damp       Soggy sponge  yellow porous sponge with a dripping blue bead
 ##   coffee     Coffee beans  three roasted beans with their grooves
 ##   chicken    Chicken feather  a long white tail feather with a rust-red tip, curling at the end
+##   revive     Aloe leaf     a fat, fleshy, curling leaf with pale teeth along its edges and gel at the cut
 ## Used by ComponentPickup (the world prop) and held in a hero's hand (LowPolyModel.hold_item).
 
 ## Colours more than one prop uses (the hide plate's rim, the ichor flask's cork).

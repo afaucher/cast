@@ -64,7 +64,8 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
   allies always play the other characters.
 - **Spell slots**: a picker per slot (any available spell). **Infinite** (on by default): the slots never run out of
   charges. **No cooldown**: spells are ready at once (the attacks keep theirs). **Refill spells**: once, when Infinite is off.
-- **Tools**: AI, God, Areas (F4 / F8 / F3), Heal crew (the downed get up), Clear monsters (all but the map's own sharks and
+- **Tools**: AI, God, Areas (F4 / F8 / F3), Heal crew (the downed get up), Down ally (2026-10-27: the AI ally nearest the
+  ring goes down, to try Revive and coffee's zombie on; `GymDev.down_ally`), Clear monsters (all but the map's own sharks and
   gator), Clear spawned (everything the panel put down), Spawn pack (a mixed floor-3 pack), Reset log.
 - **Experiments**: a picker per live A/B (`GymDev.experiments()`; a new one is a row there, never a key):
   - **Movement**: today / grounded / **grounded_anim** (the default since 2026-10-23; `MoveFeel.pick`), live. The corner tag

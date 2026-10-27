@@ -154,7 +154,7 @@ function Same([string]$group, [string]$text, [string]$expect, [double]$minPower,
     Add-Clip $group $text $expect $expect $expect $minPower $voice $rate
 }
 
-$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth"; vines = "vines"; damp = "damp"; coffee = "coffee"; chicken = "chicken" }
+$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth"; vines = "vines"; damp = "damp"; coffee = "coffee"; chicken = "chicken"; revive = "revive" }
 
 # Clean casts, both voices, normal pace: must fire at >= 0.9 in every mode.
 foreach ($v in @($v1, $v2)) {
@@ -183,6 +183,8 @@ Same "rate" "cast tooth" "teeth" 0.7 $v1 3
 foreach ($r in @(-3, 3)) { foreach ($id in @("vines", "damp", "coffee")) { Same "rate" "cast $id" $id 0.7 $v2 $r } }
 # chicken: the pace extremes in the other voice too.
 foreach ($r in @(-3, 3)) { Same "rate" "cast chicken" "chicken" 0.7 $v2 $r }
+# revive: the pace extremes in the other voice too.
+foreach ($r in @(-3, 3)) { Same "rate" "cast revive" "revive" 0.7 $v2 $r }
 # Sloppy but intended: preamble, suffix, mispronunciations, spelling variants.
 Same "sloppy" "okay cast heal"            "heal"     0.8 $v1 0
 Same "sloppy" "cast fireball now"         "fireball" 0.8 $v2 0
@@ -227,6 +229,11 @@ Same "sloppy" "please cast chicken"         "chicken" 0.8 $v2 0
 Same "sloppy" "cast chicken now"            "chicken" 0.8 $v1 0
 Same "sloppy" "cast chickens"               "chicken" 0.8 $v1 0
 Same "sloppy" "cast chickens"               "chicken" 0.8 $v2 0
+# revive: preamble, suffix, the other voice, and "revive him" (the natural call over a body).
+Same "sloppy" "okay cast revive"            "revive" 0.8 $v1 0
+Same "sloppy" "please cast revive"          "revive" 0.8 $v2 0
+Same "sloppy" "cast revive now"             "revive" 0.8 $v1 0
+Same "sloppy" "cast revive him"             "revive" 0.8 $v2 0
 # Hesitation between the keyword and the spell word.
 Same "hesitate" "cast <b300> heal"                    "heal"     0.8 $v1 0
 Same "hesitate" "cast <b300> tentacles"               "tentacles" 0.6 $v1 0
@@ -240,6 +247,8 @@ Same "hesitate" "cast <b500> teeth"                   "teeth" 0.6 $v2 0
 Same "hesitate" "cast <b800> teeth"                   "teeth" 0.5 $v1 0
 Same "hesitate" "cast <b300> chicken"                 "chicken" 0.6 $v1 0
 Same "hesitate" "cast <b500> chicken"                 "chicken" 0.6 $v2 0
+Same "hesitate" "cast <b300> revive"                  "revive" 0.6 $v1 0
+Same "hesitate" "cast <b500> revive"                  "revive" 0.6 $v2 0
 Same "hesitate" "cast <b700> fireball"                "any"      0.3 $v1 0
 Same "hesitate" "cast <b400> uh <b400> heal"          "heal"     0.5 $v2 0
 Same "hesitate" "cast <b1200> armor"                  "any"      0.4 $v2 0
@@ -310,6 +319,17 @@ foreach ($v in @($v1, $v2)) {
     Add-Clip "negative" "cast check in" "any" "any" "any" 0.0 $v 0
     foreach ($t in @("don't chicken out", "watch out for the chicken")) {
         Add-Clip "negative" $t "none" "none" "chicken" 0.4 $v 0
+    }
+}
+# Revive: the words it can be mistaken for ("arrive", "relive", "reviews", "survive", "rival", "revival"), and chatter that
+# really says it ("revive me", "I need a revive", called over a downed teammate). Nothing may cast in any mode, except that
+# chaos (any spell word anywhere) fires on the real word.
+foreach ($v in @($v1, $v2)) {
+    foreach ($t in @("arrive", "relive", "reviews", "survive", "rival", "revival", "cast arrive", "cast relive", "cast reviews", "cast survive")) {
+        Add-Clip "negative" $t "none" "none" "none" 0.0 $v 0
+    }
+    foreach ($t in @("revive me", "I need a revive")) {
+        Add-Clip "negative" $t "none" "none" "revive" 0.4 $v 0
     }
 }
 # Hero names (Rebar, Gasket, Wick) may become voice callsigns, so they must never cast by themselves.

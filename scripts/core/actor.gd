@@ -17,6 +17,9 @@ signal shoved(dir: Vector3, distance: float)
 signal shove_impact(kind: String, pos: Vector3, amount: float)
 ## A peck landed (the Chicken spell's zero hit, `peck`): `source` is the chicken.
 signal pecked(source: Node)
+## A downed actor stood back up (`revive`; on a copy, when its owner's state shows it standing). `cursed`: it got up as a
+## coffee zombie (gray, leaking: Hero.zombie).
+signal revived(cursed: bool)
 
 @export var team: int = 0
 @export var max_hp: float = 100.0
@@ -348,6 +351,41 @@ func die() -> void:
 ## Override for death visuals. Default: vanish.
 func _on_death() -> void:
 	queue_free()
+
+
+## STAND BACK UP: the verb that brings a downed actor back mid-floor (docs/design/spells.md, "Revive" and "Coffee"). On a
+## downed actor: it stands at `to_hp` (at least 1, at most max_hp); `cursed` makes it a coffee zombie (Hero.zombie: gray,
+## leaking, until healed past CoffeeSpell.ZOMBIE_CURE). On a standing actor it is the actor's own business
+## (_revive_standing: Revive lifts a zombie's curse). Applied by the TARGET'S OWNER (Net.resolves: a hero's player, the host
+## for the AI seats), like a heal; a copy ignores it (the cast runs on every machine, so its owner applies it there, and the
+## other screens see it stand from the owner's state: NetCodec). Only an actor that stays down when it dies can get up
+## (_can_revive: a hero); anything else is gone. Returns true when something changed.
+func revive(to_hp: float, cursed: bool = false) -> bool:
+	if Net.is_copy(self) or to_hp <= 0.0 or not is_inside_tree() or not _can_revive():
+		return false
+	if not dead:
+		return _revive_standing(to_hp, cursed)
+	dead = false
+	hp = clampf(to_hp, 1.0, max_hp)
+	_on_revived(cursed)
+	revived.emit(cursed)
+	return true
+
+
+## Override: can this actor get back up after dying? (Hero: it lies downed; everything else is freed on death.)
+func _can_revive() -> bool:
+	return false
+
+
+## Override: `revive` on an actor that is standing (Hero: Revive lifts a zombie's curse). Default: nothing.
+func _revive_standing(_to_hp: float, _cursed: bool) -> bool:
+	return false
+
+
+## Override: undo the death visuals (the actor is standing again). Called on the owner by `revive` and on a copy by the net
+## layer when the owner's state shows it standing.
+func _on_revived(_cursed: bool) -> void:
+	pass
 
 
 # --- Movement -----------------------------------------------------------------

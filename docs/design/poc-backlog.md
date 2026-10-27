@@ -296,6 +296,11 @@ hero, the host owns monsters, and cross-owner hits and shoves travel as messages
 - **Decided (user, 2026-10-20): "Option A is fine for now."** The contract ends ("crew incapacitated") when every
   human-played hero is down; AI seats do not keep it alive (solo: you down = crew down). Before, a solo player who went
   down watched the last AI ally until it died, and the AI cannot take the elevator.
+- **Built (user, 2026-10-27): two revives, by voice.** Coffee on a downed hero stands them up as a gray, leaking zombie
+  (10 HP, 1.5 HP/s, cured by heals past 75%), and the Revive spell (component: an Aloe leaf) stands them up at half health
+  with no curse; spells.md. The budget is the components (charges) and the cooldowns; the end-of-job fee still bills
+  whoever is down at the end. Solo is unchanged (you down = crew down: an AI ally casts no spells). The channelled
+  hold-E revive below is not built.
 - **P2** A real revive mechanic ("We can consider C when we define a revive mechanic"): the nearest ally walks to a
   downed hero and channels a revive (~3 s, exposed), the hero gets up with some HP, the revive is billed like today's
   end-of-job revival. Needs a networked revive (the reviver's machine requests, the host decides) and an AI rule for what

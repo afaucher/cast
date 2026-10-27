@@ -20,6 +20,7 @@ const DEFS := [
 	preload("res://scripts/spells/defs/damp.gd"),
 	preload("res://scripts/spells/defs/coffee.gd"),
 	preload("res://scripts/spells/defs/chicken.gd"),
+	preload("res://scripts/spells/defs/revive.gd"),
 ]
 
 ## spell id -> its def's ROW ({"name", "cooldown", "color", "desc", "word", "component", "available"}), in DEFS order.
@@ -147,9 +148,10 @@ static func cast(id: String, caster: Actor, power: float, aim: Vector3) -> bool:
 	power = clampf(power, MIN_POWER, 1.0)
 	if GameWorld.flat_distance(aim, caster.global_position) > 0.05:
 		caster.face_point(aim)
-	var target := resolve_target(caster, aim)
+	var downed := snaps_downed(id)
+	var target := resolve_target(caster, aim, downed)
 	var d := def_of(id)
-	var spec := {"spell": id, "power": power, "target": target, "follow": snap_hero(aim) if d.FOLLOWS else null,
+	var spec := {"spell": id, "power": power, "target": target, "follow": snap_hero(aim, downed) if d.FOLLOWS else null,
 		"extra": d.cast_extra(caster, target)}
 	if Net.shares_cast(caster):
 		Net.send_cast(caster, spec)
@@ -180,10 +182,11 @@ static func apply(caster: Actor, spec: Dictionary, start: float) -> Node:
 
 ## Where a spell aimed at `aim` lands: clamped to SPELL_RANGE, snapped onto a hero
 ## standing near the aim point (so pointing at a teammate targets them), and pulled
-## back toward the caster until it is over real ground. Y is the ground height.
-static func resolve_target(caster: Actor, aim: Vector3) -> Vector3:
+## back toward the caster until it is over real ground. Y is the ground height. `downed`: a downed hero's body is snapped
+## onto too (a spell that stands them up: snaps_downed).
+static func resolve_target(caster: Actor, aim: Vector3, downed: bool = false) -> Vector3:
 	var from := caster.global_position
-	var hero := snap_hero(aim)
+	var hero := snap_hero(aim, downed)
 	if hero != null:
 		aim = hero.global_position
 	var d := aim - from
@@ -200,16 +203,25 @@ static func resolve_target(caster: Actor, aim: Vector3) -> Vector3:
 	return target
 
 
-## The living hero nearest to `aim` within ALLY_SNAP, or null.
-static func snap_hero(aim: Vector3) -> Actor:
+## The living hero nearest to `aim` within ALLY_SNAP, or null. `downed`: downed heroes (still lying on this floor) count too.
+static func snap_hero(aim: Vector3, downed: bool = false) -> Actor:
 	var best: Actor = null
 	var best_d := ALLY_SNAP
-	for a in GameWorld.team_actors(GameWorld.TEAM_HEROES):
+	var heroes := GameWorld.team_actors(GameWorld.TEAM_HEROES)
+	if downed:
+		heroes.append_array(GameWorld.downed_in_radius(aim, ALLY_SNAP, GameWorld.TEAM_HEROES))
+	for a in heroes:
 		var d := GameWorld.flat_distance(a.global_position, aim)
 		if d <= best_d:
 			best = a
 			best_d = d
 	return best
+
+
+## True for a spell that stands downed teammates up (its def's SNAPS_DOWNED: coffee, Revive): its aim snaps onto a body too.
+static func snaps_downed(id: String) -> bool:
+	var d := def_of(id)
+	return d != null and bool(d.get_script_constant_map().get("SNAPS_DOWNED", false))
 
 
 ## A sad little puff for a spell that went wrong (mumbled, wrong, etc.).

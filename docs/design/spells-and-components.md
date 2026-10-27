@@ -22,8 +22,8 @@ expected to move with playtesting. Nothing here is a proposal any more except th
 player joining a job in progress (one component, two variants). The player requisitions 2 licenses for this job (later,
 per-mission spending lives here; no prices or stock yet). Every spell from `SpellBook.ids()` is a **line item**
 (`RequisitionLine`: a printed box, the license with its colour tag, its component and cooldown), with nothing hard-coded
-per spell, so a new spell appears without a picker change. The list is at least 5 and at most 10 lines tall (10 since
-Chicken, the tenth spell, so all ten show) and
+per spell, so a new spell appears without a picker change. The list is at least 5 and at most 11 lines tall (10 since
+Chicken, the tenth spell, 11 since Revive, the eleventh, so all show; `SpellPicker.MAX_LINES`) and
 **scrolls** past that (focus keeps the line in view). Beside it lies FORM 15-A, a separate **spec sheet** (`SpecSheet`)
 for the focused line: what to say ("cast heal", with the player's trigger word), component, cooldown and what it does.
 Both pages fit 1600 x 900 canvas units (1280 x 720) and the Steam Deck's 1600 x 1000, from ten spells to a hundred.
@@ -81,6 +81,10 @@ covers 10, 24 and 100 spells and both variants.
 | Damp | Soggy sponge | yellow porous sponge with a dripping blue bead |
 | Coffee | Coffee beans | three roasted beans with their grooves |
 | Chicken | Chicken feather | a long white tail feather with a rust-red tip |
+| Revive | Aloe leaf | a fat, fleshy green leaf curling to a point, pale teeth along both edges, pale flecks, the clear gel at the cut |
+
+The **Aloe leaf** (2026-10-27) is the user's call: "The revive spells should be a plant leaf or something", then "Aloe
+leaf". Out of charges, the HUD's toast reads "You have no Aloe leaf" like every other component.
 
 ### Drops (data table `SpellComponents.DROPS` / `ANY_KIND`, *tunable*)
 Every monster rolls each entry of its kind's list, then each entry of `ANY_KIND`, independently when
@@ -96,6 +100,7 @@ it dies.
 | archer | Seed pod | vines | 8% |
 | brute | Coffee beans | coffee | 10% |
 | swarmer (imp) | Chicken feather | chicken | 4% **per imp** |
+| water boy (the enemy medic, floor 2+) | Aloe leaf | revive | 12% [proposal, 2026-10-27] |
 | any monster | Corn kernel | corn | 2%, in addition (was 5%) |
 
 Drops are rare on purpose: not every creature drops every spell, and the floor should not fill up with
@@ -120,7 +125,10 @@ pickups. Two more tunables in `SpellComponents` keep it that way:
 Vines, damp and coffee (2026-10-17) take their drops from the monsters for now. Their designed environment sources do
 not exist yet: seed pods from spa planters, a sponge or leaky pipe as an environment pickup, and coffee beans from the
 break room or as a reward for protecting employees. A broken mail package can also hold any castable spell's component
-(`MailPackage.roll_component` uses `SpellBook.ids()`, so all ten are possible). Chicken feathers (2026-10-18) come from imps.
+(`MailPackage.roll_component` uses `SpellBook.ids()`, so all eleven are possible). Chicken feathers (2026-10-18) come from imps.
+Aloe leaves (2026-10-27) come from the Water Boy, the enemy medic (floors 2-3, so on floor 1 the Revive is the license or
+mail); the source and its 12% are a proposal for the user. (The Water Boy's existing heal and damp drops are rolled first,
+so the new entry leaves their dice where they were.)
 
 ## Pickups, and the swap rule [decided, implemented]
 `ComponentPickup` is a world prop: it bobs and turns, has a soft glow and a faint floor ring, and shows a
@@ -162,8 +170,8 @@ small floating label ("Ember horn x3") when a player is within 4 units.
    a deliberate stop-and-press, and the old spell's charges are never lost, so a lock added only friction.
 
 ## Still open
-- How many distinct spells for the vertical slice? There are ten now (vines, damp and coffee are the seventh to ninth,
-  chicken the tenth);
+- How many distinct spells for the vertical slice? There are eleven now (vines, damp and coffee are the seventh to ninth,
+  chicken the tenth, revive the eleventh);
   the license requisition (FORM 15) is a scrolling catalog that is meant to grow past 20.
 - Exploration secrets and vantage points holding rarer components (`exploration.md`).
 - Handing a component to a teammate; allies casting and collecting.

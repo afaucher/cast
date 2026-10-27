@@ -59,7 +59,8 @@ var of `Hero` or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELD
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.
 2. **Change other entities only through verbs:** `apply_damage`, `heal`, `shove`, `set_modifier`, `daze`,
-   `lose_ground` and `die`. Never write another actor's `hp`, `dead` or position.
+   `lose_ground`, `revive` (a downed hero stands back up: Revive, a coffee zombie; the target's owner applies it, like a
+   heal) and `die`. Never write another actor's `hp`, `dead` or position.
 3. **Resolve hits through `Combat`** (`melee_arc`, `explode`, `slam`, `shove_radius`, `hits_in_radius`, `each_in_radius`,
    `Projectile`) rather than your own loop over actors. A loop of your own that calls a verb must ask
    `Combat.resolves` / `Net.resolves` for each actor (the test checks it): effects run on every machine.

@@ -122,6 +122,12 @@ var _charge_mat: StandardMaterial3D = null
 var _ui_top := 1.95                  ## height of the figure's top (the bar, name, shield and daze stars float above it)
 var _daze_stars: Node3D = null       ## the stars over the head while dazed (DazeFx)
 var _daze_shown := false             ## this screen is showing the daze (stars, sway): follows is_dazed()
+## A COFFEE ZOMBIE (docs/design/spells.md, "Coffee"): coffee stood this hero up from downed. It stays gray (the downed look,
+## standing and acting normally) and leaks CoffeeSpell.ZOMBIE_LEAK HP a second (the owner's tick) until healed to
+## CoffeeSpell.ZOMBIE_CURE of max HP or more, or a Revive lifts it; at 0 HP it goes down again as usual. The owner writes it
+## (revive, the cure, going down); it rides the hero snapshot (NetCodec), so every screen shows the gray.
+var zombie := false
+var _down_tween: Tween = null        ## the fall when downed (killed when the hero stands back up)
 
 ## Opt-in replacement for the capsule/hat/weapon body (e.g. a RebarModel). Set it before the
 ## hero enters the tree (HeroFactory.spawn_hero(..., model)). The model faces local -Z; if it has
@@ -189,6 +195,8 @@ func net_fields() -> Dictionary:
 		"spell_slots": Net.OWNER, "held_slot": Net.OWNER, "_charges": Net.OWNER,
 		"_draw_start": Net.OWNER,         # other screens show the bow drawn
 		"order_state": Net.OWNER,         # an AI seat's order chip (the host owns the AI seats): ord.st
+		"zombie": Net.OWNER,              # coffee's zombie: every screen shows the gray; only the owner leaks it (NetCodec)
+		"_down_tween": Net.LOCAL,
 		# The owner's own bookkeeping; the pickup it stands next to is only used by that machine.
 		"_ready_at": Net.PRIVATE, "swap_candidate": Net.PRIVATE,
 		# True only on the machine that drives this hero (remote copies stay false); it gates the
@@ -668,6 +676,7 @@ func snap_to_ground(delta: float = -1.0) -> void:
 
 ## The movement feel's per-tick part, on the machine that moves this hero (after its controller or AI: priority 10).
 func _physics_process(delta: float) -> void:
+	_zombie_tick(delta)
 	if not MoveFeel.on("envelope"):
 		if _motion.mantle != 0 or _motion.vel != Vector3.ZERO or _motion.air or _motion.hop_t >= 0.0:
 			_motion.reset()   # (switched back to today mid-step: the plain walk takes over from here)
@@ -804,13 +813,113 @@ func _on_death() -> void:
 	if _name_label:
 		_name_label.visible = false
 	_set_armor_visuals(false)
+	zombie = false   # (down again: the curse ends with it; another coffee makes a new zombie)
 	if visual_override != null and visual_override.has_method("set_downed"):
 		visual_override.call("set_downed", true)
 	if _visual:
+		if _down_tween != null and _down_tween.is_valid():
+			_down_tween.kill()
+		_down_tween = create_tween()
+		_down_tween.set_parallel(true)
+		_down_tween.tween_property(_visual, "rotation:x", PI * 0.5, 0.35).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		_down_tween.tween_property(_visual, "position:y", 0.3, 0.35)
+
+
+# --- Back up: Revive and the coffee zombie (Actor.revive; docs/design/spells.md) ----------------------------------------
+
+func _can_revive() -> bool:
+	return true
+
+
+## Revive on a hero who is standing: a zombie's curse lifts and its HP goes up to `to_hp` if it is below. A coffee
+## (`cursed`) does nothing to a standing hero here (it hastes the living: Coffee.cast).
+func _revive_standing(to_hp: float, cursed: bool) -> bool:
+	if cursed or not zombie:
+		return false
+	set_zombie(false)
+	if hp < to_hp:
+		var before := hp
+		hp = minf(to_hp, max_hp)
+		healed.emit(hp - before)
+	_refresh_bar()
+	return true
+
+
+## Standing again (the owner's revive, or a copy shown standing by its owner's state): undo _on_death (the fall, the gray,
+## the hidden bar and name), and turn gray again if it got up as a coffee zombie. On every screen: a puff of green and the
+## hop's cue.
+func _on_revived(cursed: bool) -> void:
+	zombie = cursed
+	if _down_tween != null and _down_tween.is_valid():
+		_down_tween.kill()
+	_down_tween = null
+	if visual_override != null and visual_override.has_method("set_downed"):
+		visual_override.call("set_downed", false)
+	if _visual:
 		var tw := create_tween()
 		tw.set_parallel(true)
-		tw.tween_property(_visual, "rotation:x", PI * 0.5, 0.35).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-		tw.tween_property(_visual, "position:y", 0.3, 0.35)
+		tw.tween_property(_visual, "rotation:x", 0.0, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_visual, "position:y", 0.0, 0.3)
+	if _bar:
+		_bar.visible = true
+	if _name_label:
+		_name_label.visible = not is_player
+	_refresh_zombie_look()
+	_refresh_bar()
+	ReviveFx.stand_up(self, _ui_top, cursed)
+
+
+## On a copy: its owner's state shows it standing again (NetCodec.write_hero, while the net layer applies the owner's
+## state). The same stand-up as the owner's revive; nothing is decided here.
+func net_stand_up(to_hp: float, cursed: bool) -> void:
+	if not dead:
+		return
+	dead = false
+	hp = to_hp
+	_on_revived(cursed)
+	revived.emit(cursed)
+
+
+## Turn the zombie curse on or off (the owner: the cure past ZOMBIE_CURE, a Revive; a copy: its owner's state changed).
+func set_zombie(on: bool) -> void:
+	if zombie == on:
+		return
+	zombie = on
+	_refresh_zombie_look()
+	if not on and not dead:
+		ReviveFx.cured(self, _ui_top)
+
+
+## The owner's leak: CoffeeSpell.ZOMBIE_LEAK HP a second while a zombie, straight off the HP (a curse, not a hit: no armor,
+## no hit flash, no Ledger line); healed to ZOMBIE_CURE of max HP or more and it lifts; at 0 the hero goes down as usual.
+func _zombie_tick(delta: float) -> void:
+	if not zombie or dead or delta <= 0.0 or Net.is_copy(self):
+		return
+	if hp >= max_hp * CoffeeSpell.ZOMBIE_CURE:
+		set_zombie(false)
+		return
+	hp = maxf(0.0, hp - CoffeeSpell.ZOMBIE_LEAK * delta)
+	_refresh_bar()
+	if hp <= 0.0:
+		die()
+
+
+## A heal on a zombie past CoffeeSpell.ZOMBIE_CURE of max HP lifts the curse at once (color back, no leak).
+func heal(amount: float) -> float:
+	var got := super.heal(amount)
+	if zombie and not dead and not Net.is_copy(self) and hp >= max_hp * CoffeeSpell.ZOMBIE_CURE:
+		set_zombie(false)
+	return got
+
+
+## The gray of a zombie (the downed look, standing), or the hero's own colours.
+func _refresh_zombie_look() -> void:
+	if dead:
+		return
+	if visual_override != null and visual_override.has_method("set_gray"):
+		visual_override.call("set_gray", zombie)
+	if _body_mat:
+		_body_mat.albedo_color = Color(0.45, 0.45, 0.48) if zombie else hero_color
 
 
 # --- Seat handover (docs/design/networking-build-plan.md M2b / M6) -----------------------------
@@ -849,12 +958,16 @@ func become(kit: String, new_name: String, color: Color, model: Node3D, full: bo
 	if has_meta(Net.NAME_META):
 		remove_meta(Net.NAME_META)   # a seat the AI plays shows its character's name
 	_build_visuals()
+	if full:
+		zombie = false   # (a joiner arrives at 100%, so a coffee zombie's curse is gone with the rest)
+	_down_tween = null
 	dead = false
 	hp = max_hp * fraction
 	if was_dead:
 		hp = 0.0
 		dead = true
 		_on_death()
+	_refresh_zombie_look()
 	_refresh_bar()
 	_refresh_hold()
 

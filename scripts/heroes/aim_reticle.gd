@@ -31,8 +31,9 @@ func _process(delta: float) -> void:
 		return
 	visible = true
 	var aim := controller.aim_point()
-	var target := SpellBook.resolve_target(hero, aim)
-	var buddy := SpellBook.snap_hero(aim)
+	var downed := SpellBook.snaps_downed(hero.slot_spell(hero.held_slot))   # (holding Revive or coffee: a body is a friend too)
+	var target := SpellBook.resolve_target(hero, aim, downed)
+	var buddy := SpellBook.snap_hero(aim, downed)
 	if buddy != null and buddy != hero:
 		_snap.visible = true
 		_ring.visible = false
