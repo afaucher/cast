@@ -92,6 +92,13 @@ var cave: Dictionary = {}
 ## that changes on a schedule every machine computes from the shared cast).
 var lava: Dictionary = {}
 const CRUST_TAG := "lava_crust"
+## The floor's hallway LANDINGS (DungeonGen's landings pass; docs/design/hallways.md "As built"): one record per landing,
+## {center: Vector2i (a route cell of its hall), hub (the middle of its hexagon: the centre or a neighbour of it), level,
+## cells (the cells it added, all tagged "corridor"), hall: [room tag, room tag], step (the centre's index on the route),
+## turn (the hall changes direction there), dir_in, dir_out, backs (the hexagon's sides a set piece may stand against, best
+## first: hub + Hex.DIRS[k] + Hex.DIRS[k + 1] is side k's middle cell)}. [] on a floor without. Spawn data from the floor
+## seed, in NetFloor's checksum.
+var landings: Array[Dictionary] = []
 ## DYNAMIC BLOCKERS (shut doors, docs/design/exploration.md "Decisions: map information, fog and doors"): key -> [a: Vector2,
 ## b: Vector2, top: float]. A segment in world X/Z that is SOLID while it is set (user, 2026-10-19: a shut door is solid):
 ## line_of_sight treats it as a wall face up to world height `top`; bodies stop against it like a wall face (_gather adds it
@@ -109,7 +116,7 @@ var _solid_box := Rect2()        ## the bounding box of every solid
 func net_fields() -> Dictionary:
 	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "solids": Net.SPAWN, "no_stand": Net.SPAWN,
 		"elevator": Net.SPAWN, "pools": Net.SPAWN, "sewer": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL,
-		"blockers": Net.LOCAL, "cave": Net.SPAWN, "lava": Net.SPAWN}
+		"blockers": Net.LOCAL, "cave": Net.SPAWN, "lava": Net.SPAWN, "landings": Net.SPAWN}
 
 
 func set_cell(c: Vector2i, level: int, type: int = Tile.FLOOR) -> Cell:

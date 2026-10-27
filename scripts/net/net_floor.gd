@@ -7,7 +7,7 @@ extends RefCounted
 ##   order SiteBuilder.spawn created them). Heroes get theirs from their seat (1-3). Ids start at ID_BASE for
 ##   everything else, so M3's runtime spawns can take 10000 and up. The ids are kept in NetRegistry (id -> node).
 ## - the CHECKSUM: a hash of the map (every cell, the midpoint-wall masks, the materials, the pool and water-body records,
-##   the sewer cluster's record), the site plan (every SitePlan field: rooms, themes, materials, notes, props, decor, the
+##   the sewer cluster's record, the hallway landings), the site plan (every SitePlan field: rooms, themes, materials, notes, props, decor, the
 ##   van), the contract, and the SPAWN TABLE (id, kind, name, team, cell and position of every actor, and an actor's own
 ##   spawn data when it has more: net_spawn_text). Each machine computes it after building and the
 ##   host compares them; one different cell is a different hash. The parts are kept apart so a mismatch can
@@ -173,6 +173,10 @@ static func map_text_of(map: HexMap) -> String:
 	# crust lasts. Only a floor with a cave has the line.
 	if not map.cave.is_empty():
 		lines.append("cave=%s" % canon(map.cave))
+	# the hallway landings (DungeonGen's landings pass; their cells are in the cell lines below too): only a floor with one
+	# has the line
+	if not map.landings.is_empty():
+		lines.append("landings=%s" % canon(map.landings))
 	for c: Vector2i in keys:
 		if map.lava.has(c):
 			continue

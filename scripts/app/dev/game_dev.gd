@@ -6,7 +6,7 @@ extends "res://scripts/app/game.gd"
 ##
 ## Flags this file serves (each flag's arguments: the Command line list at the top of game.gd, which parses them):
 ##   --spawn-near --idle-monsters --stage-ledge --slay-near --kit-demo --hazard-near --hazard-demo --to-hazard
-##   --to-gate --to-theme --to-corridor --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
+##   --to-gate --to-theme --to-corridor --to-landing --to-exit --to-pool --to-package --to-door --to-employee --to-note --to-shark
 ##   --shark-demo --monster-demo --give --give-allies --hold --drop-near --focus dev|elevator --tour --autocast --aim-offset
 ##   --pause-demo --invite-demo --invoice-demo --press-e --break-crates --demo-damage --hud-stage
 ## and, parsed here (SewerDev.parse): --sewer N --sewer-demo overview|gator|nip|wire|sluice[:n]|outfall[:n] (the sewer slice:
@@ -58,8 +58,14 @@ func _sewer() -> int:
 
 
 ## --gym: the test gym (GymMap) instead of the floor. Solo only: a shared run ignores the flag (every machine of a crew
-## would need the gym's tools, and its spawns are this machine's own).
+## would need the gym's tools, and its spawns are this machine's own). The gym panel's "Map" experiment can leave the map
+## for the contract's generated floor with the gym's tools kept (GymDev.generated): then this is false and _gym_tools true.
 func _gym() -> bool:
+	return _gym_tools() and not GymDev.generated
+
+
+## The gym's driver (its panel and tools) runs: on the gym's map, or on a generated floor reached from its panel.
+func _gym_tools() -> bool:
 	return bool(opts.get("gym", false)) and not _dev_released and not _shared
 
 
@@ -100,6 +106,49 @@ func _sewer_floor_ready() -> void:
 			_teleport_crew(st["door"] if to == "foot" else up)
 
 
+## A generated floor's hallway landings (docs/design/hallways.md): say where they are and what stands on each.
+func _landings_floor_ready() -> void:
+	if map == null or _plan == null:
+		return
+	var rows: Array[String] = []
+	for li in map.landings.size():
+		var lr: Dictionary = map.landings[li]
+		var kind := "-"
+		for sp in _plan.set_pieces:
+			if int(sp["landing"]) == li:
+				kind = str(sp["kind"])
+		rows.append("%d %s %s%s" % [li, lr["center"], kind, " (turn)" if bool(lr["turn"]) else ""])
+	_log("landings: %d%s%s" % [map.landings.size(), " (switch off)" if not DungeonGen.landings and not _shared else "",
+		": " + ", ".join(rows) if not rows.is_empty() else ""], Color(0.8, 0.8, 1.0))
+
+
+## --to-landing N: the crew in landing N's hall, three steps back along it from the landing's centre (the hall's route
+## cell), so the landing and its set piece are in the picture ahead of them, not behind the crew. False when the floor has
+## no landing.
+func _to_landing(n: int) -> bool:
+	if map == null or map.landings.is_empty():
+		_log("to-landing: this floor has no landings", Color(1.0, 0.6, 0.3))
+		return false
+	var lr: Dictionary = map.landings[clampi(n, 0, map.landings.size() - 1)]
+	var c: Vector2i = lr["center"]
+	var stand := c
+	for k in [3, 2, 1]:
+		var back: Vector2i = c - Hex.DIRS[int(lr["dir_in"])] * k
+		if map.is_walkable_cell(back) and map.get_cell(back).tag == "corridor":
+			stand = back
+			break
+	_teleport_crew(stand)
+	if opts.get("focus", "") == "landing":
+		# (--focus landing: the camera looks at the landing's hexagon, not the player)
+		var hub: Vector2i = lr["hub"]
+		var mk := Node3D.new()
+		GameWorld.root.add_child(mk)
+		mk.global_position = Hex.to_world(hub, float(lr["level"]))
+		rig.target = mk
+		rig.snap()
+	return true
+
+
 ## A generated floor's lava cave (LavaDev): --to-lava puts the crew there (solo), --lava-perf measures its lights.
 func _lava_floor_ready() -> void:
 	if map == null or map.cave.is_empty() or _lava_cave() > 0:
@@ -137,7 +186,8 @@ func _sewer_populate() -> void:
 
 
 func _dev_on_floor_ready() -> void:
-	if _gym() and gym == null:
+	_landings_floor_ready()
+	if _gym_tools() and gym == null:
 		gym = GymDev.new()
 		gym.setup(self)
 		if opts.has("gym_tour"):
@@ -378,6 +428,8 @@ func _dev_teleports() -> void:
 							focus = fc
 			_teleport_crew(focus)
 			return
+	if opts.has("to_landing") and _to_landing(int(opts["to_landing"])):
+		return
 	if opts.has("to_corridor"):
 		var corr: Array[Vector2i] = []
 		for cc: Vector2i in map.cells:

@@ -40,6 +40,11 @@ var props: Array[Dictionary] = []
 ## Explosive props (ExplosiveProp, docs/design/hazards.md), placed by the room themes after the priced props, the same
 ## fields as a priced prop: {cell, kind, room, pos, yaw, place, orient, foot}. Not counted in `props` (MAX_PROPS).
 var hazards: Array[Dictionary] = []
+## The hallway SET PIECES (docs/design/hallways.md; PropPlanner.plan_set_pieces): one priced prop against the back wall of
+## each landing (HexMap.landings), out of the hall's lane, the same fields as a priced prop plus `landing` (its index in
+## HexMap.landings); `room` is "" (a landing is hall, not a room). Spawned right after the priced props (PropPlanner.spawn),
+## into Site.props. Not counted in `props` (MAX_PROPS: the rooms' share).
+var set_pieces: Array[Dictionary] = []
 ## Room tag -> theme id (see the header). Includes the start room ("service_entrance").
 var room_themes: Dictionary = {}
 ## Decor (not priced, purely decorative): {kind, pos: Vector2, yaw, cell, room, place, orient, group (-1 = alone),
@@ -102,6 +107,7 @@ func net_fields() -> Dictionary:
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "hazards": Net.SPAWN,
+		"set_pieces": Net.SPAWN,
 		"packages": Net.SPAWN,
 		"room_themes": Net.SPAWN, "decor": Net.SPAWN, "lights": Net.SPAWN, "entrances": Net.SPAWN,
 		"decor_report": Net.SPAWN, "notes": Net.SPAWN, "dispatch": Net.SPAWN, "ranked_rooms": Net.SPAWN,

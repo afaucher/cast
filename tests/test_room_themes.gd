@@ -779,10 +779,12 @@ func _check_spawn() -> void:
 	for l in plan.lights:
 		check(not (l["color"] as Color).is_equal_approx(Color.BLACK) and float(l["energy"]) > 0.0 and float(l["range"]) > 0.0, "a light has colour, energy and range")
 	# priced props stand where the plan says and face as planned
-	eq(site.props.size(), plan.props.size(), "every priced prop is spawned")
-	for i in site.props.size():
+	# (the hallway landings' set pieces follow the rooms' props, in plan order: docs/design/hallways.md)
+	var planned: Array[Dictionary] = plan.props + plan.set_pieces
+	eq(site.props.size(), planned.size(), "every priced prop and set piece is spawned")
+	for i in mini(site.props.size(), planned.size()):
 		var prop := site.props[i] as PricedProp
-		var pr: Dictionary = plan.props[i]
+		var pr: Dictionary = planned[i]
 		var pos: Vector2 = pr["pos"]
 		check(Vector2(prop.global_position.x, prop.global_position.z).distance_to(pos) < 0.05, "%s stands at its planned spot" % prop.kind)
 		var pf := prop.facing_vector()

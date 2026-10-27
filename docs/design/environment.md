@@ -141,7 +141,9 @@ into `SiteBuilder.plan()`; the result is on the `SitePlan` (`room_themes`, `deco
   chair, bunk rows, bench + rack, candles in a ring around the chalk circle (drawn around the hellgate when
   there is one), barrel clusters. Jitter is at most 8 degrees; a clear lane is kept in front of facing props; nothing
   within 2 cells of a corridor, 3 of the start / exit / a hellgate; flat floor only; blocking pieces never cut a room
-  in two; decor is capped per room by size (`ThemeCtx`) and blocking pieces stay out of the middle.
+  in two; decor is capped per room by size (`ThemeCtx`) and blocking pieces stay out of the middle. (Since 2026-10-26 a
+  long hall's LANDINGS each hold one priced prop, its set piece, in a bay off the hall's lane: the one thing in a hall;
+  `hallways.md`.)
 - **Camera:** placement prefers walls whose pieces face the iso camera (signs only on those), so the front of a
   wall piece is what the player sees.
 - **Lighting:** one accent OmniLight per room (`ThemeLight`), colour per theme (cinema blue flicker, spa candle
@@ -200,7 +202,8 @@ wooden crates, stairs stay warm planks, cliff sides keep their slate bands (heig
   risers included; the material shader maps walls in world units from the face normal). Cap outlines of 4 or 5
   kites (a room's 120-degree corner seen from the wall side, an inside corner seen from the floor) are concave, so
   caps and seams fan from the hex center; all 63 wall masks are checked.
-- **Dev flags:** `--to-theme <id> --zoom 11` (any theme), `--to-corridor` (the middle of the floor's corridors).
+- **Dev flags:** `--to-theme <id> --zoom 11` (any theme), `--to-corridor` (the middle of the floor's corridors),
+  `--to-landing [N] --focus landing` (a hallway landing and its set piece, `hallways.md`).
 
 ## Pools [built, 2026-10-18]
 The indoor pool, the science room and the shark moat have real **in-ground water**, terrain rather than a decal: option B of

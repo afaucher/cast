@@ -63,8 +63,10 @@ var segmented: PackedByteArray = PackedByteArray()   ## space index -> 1: a segm
 ## three times the camera's half width. build() cuts a hall of SEGMENT_STEPS * 2 or more steps into SEGMENTS of about
 ## SEGMENT_STEPS steps, each its own space ("hall:4", "hall:4.1", ...), joined by CUTS: doorways without doors
 ## ("split": true), appended after Doorways.find's so every door keeps its doorway id. A cut keeps CUT_CLEAR steps from
-## every real doorway (and its door) and off the foot of a drop, and a segment is one connected piece (a branching hall's
-## band can be two). FogView draws a cut as a soft feather across the hall, not a line.
+## every real doorway (and its door), off the foot of a drop and, when a move of LANDING_CUT_MOVE steps does it, off a
+## hallway landing (HexMap.landings: a landing and its set piece show together), and a
+## segment is one connected piece (a branching hall's band can be two). FogView draws a cut as a soft feather across the
+## hall, not a line.
 ##   - Sight crosses a cut like a doorway (DOOR_SIGHT and line of sight from the hero) but it costs no hop: the segments
 ##     are still one corridor. So a hero on either side of a cut sees the same (no flicker), and the hall shows about one
 ##     segment ahead of the crew.
@@ -77,6 +79,7 @@ const CUT_CLEAR := 3                   ## no cut within this many steps of a rea
 const MIN_SEGMENT := 4                 ## no segment shorter than this many steps
 const DROP_LEVELS := 3                 ## no cut this many levels (1.5) or more below the floor ...
 const DROP_CLEAR := 2                  ## ... within this many steps of it (the foot of a drop)
+const LANDING_CUT_MOVE := 2            ## a cut moves up to this many steps to stay off a hallway landing (else it crosses it)
 
 
 ## Who may write each var (see Net). Fog is presentation, computed on every machine from the map (SPAWN data) and what it
@@ -298,18 +301,34 @@ func _split_halls(m: HexMap) -> void:
 				var lv: int = m.cells[c].level
 				floor_lo[d] = mini(int(floor_lo.get(d, lv)), lv)
 				floor_hi[d] = maxi(int(floor_hi.get(d, lv)), lv)
+		# ... and, when a small move does it, not across a landing (DungeonGen's, docs/design/hallways.md): a landing and its set
+		# piece show together
+		var landing_d := {}
+		for lr: Dictionary in m.landings:
+			for c in Hex.range_cells(lr["hub"], DungeonGen.LANDING_R + 1):
+				if dist.has(c):
+					landing_d[int(dist[c])] = true
 		var segs := maxi(2, int(round(float(length + 1) / float(SEGMENT_STEPS))))
 		var cuts: Array[int] = []      # a cut at t: the cells at distance t or more are past it
 		var last := 0
 		for k in range(1, segs):
 			var ideal := int(round(float(k) * float(length + 1) / float(segs)))
+			var first := -1
+			var chosen := -1
 			for off: int in [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5]:
 				var t := ideal + off
 				if t - last < MIN_SEGMENT or length + 1 - t < MIN_SEGMENT or not _cut_clear(t, blocked) or _below_drop(t, floor_lo, floor_hi):
 					continue
-				cuts.append(t)
-				last = t
-				break
+				if first < 0:
+					first = t
+				if absi(off) <= LANDING_CUT_MOVE and not (landing_d.has(t) and landing_d.has(t - 1)):
+					chosen = t
+					break
+			if chosen < 0:
+				chosen = first   # (no spot off a landing near the even share: the cut crosses it rather than leave a long segment)
+			if chosen >= 0:
+				cuts.append(chosen)
+				last = chosen
 		if cuts.is_empty():
 			continue
 		# bands of distance, then the connected pieces of each band

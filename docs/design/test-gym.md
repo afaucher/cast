@@ -72,6 +72,12 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
   - **Smoothing**: **off** / on: the judder smoothing of your own heroes (`MoveFeel.interp`, as `--physics-interp`; what
     it does is unchanged, `movement-research.md` §5.3 "The judder check").
   - **Monster walk**: old / **new** (playtest feedback item 4, batch 2): the monsters' active walk (`MonsterModel.active_walk`).
+  - **Landings**: off / **on**: the generator's hallway landings and their set pieces (`DungeonGen.landings`,
+    `hallways.md`). The gym's own map has none, so pair it with **Map**.
+  - **Map**: **gym** / generated: "generated" reloads onto the gym contract's generated floor (solo, the same floor of the
+    same contract) with this panel kept (`GymDev.generated`). There a Landings pick rebuilds the floor at once (the same
+    floor with and without its landings), Go to lists the floor's landings, the dummies and the hallway packs are the gym
+    map's only, and the elevator goes down to the next generated floor. "gym" comes back; the main menu forgets it.
   - (War cries: the off / A / B / C picker came out on 2026-10-25, settled: the cries are the user's own takes, always on;
     audio-plan.md "War cries".) The **War cry** tool button makes the nearest monster of each kind yell once, to audition
     them; "Hallway x12" and "Hallway mix" show a pack's cry and the charging ones.
@@ -84,7 +90,7 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
 - **Props** (every non-explosive `PricedProp.TABLE` kind; an electrical panel by water brings its live wire), **Hazards**
   (every explosive), **Staff** (every `EmployeeModel` style), **Components** (every spell's pickup, `SpellBook`; one that is
   not available yet is disabled), **Gates** (a hellgate, an origin gate), **Decor** (every `RoomThemeDefs.DECOR` kind).
-- **Go to**: teleports to each environment.
+- **Go to**: teleports to each environment (on a generated floor: to each hallway landing).
 - **Hit log** (`GymStats`): hits and damage the player dealt, the crew dealt and the player took, totals and per minute over
   the last 60 s, and the newest hits (amount, attacker, victim, weapon).
 
@@ -124,4 +130,5 @@ experiments),
 drawn with `HitAreaShape`, which the strike lab's overlay shares), `GymTour`. GameDev's hooks: `_parse_args` (`GymDev.parse`),
 `_dev_floor` (the map and plan), `_dev_on_floor_ready` (the driver). `tests/test_gym.gd` builds the map and checks every
 environment is there and reachable, that the spawn list covers every registry entry, spawns one of each and steps the world,
-switches the experiments and switches through every hero. The golden floors do not move: nothing in the generator calls the gym.
+switches the experiments (the Map picker's reload through the game's scene-changer seam, and the panel on the generated floor)
+and switches through every hero. The golden floors do not move: nothing in the generator calls the gym.

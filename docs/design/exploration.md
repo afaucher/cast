@@ -21,7 +21,8 @@ ARCHITECTURE.md). What it means on the ground:
   against the flat face; arrows hit the face, not a tooth of it. Props stand flush against the walls.
 - **Corridors.** Tree links are 4.5 wide (two full lanes); extra loops, the climb shortcut and the one chokepoint
   are 3.0 wide. Every corridor has a full centre lane, which is what pathing walks (a cut cell's center is on the
-  wall line, so it is never a path step). Doorways are always a full cell in a flared, clean opening.
+  wall line, so it is never a path step). Doorways are always a full cell in a flared, clean opening. A long hall
+  widens partway into a flat LANDING with one set piece in a bay off its lane (2026-10-26, `hallways.md`).
 - **The old one-wide chokepoint is gone:** at 3.0 it is still the narrowest passage on a floor and still a place
   to hold a pack, but two heroes can pass in it. A tighter squeeze would need a corridor with no full lane, which
   pathing could not use.
@@ -165,7 +166,8 @@ Spells stay mainly about combat. These are small extras that cost little:
   decides every door (a client's walk-in or E is a request), and a late joiner gets every door's state.
 - **Long halls (2026-10-20, after the fog spaces audit, `fog-spaces-audit.md`):** a hall was one fog space however
   long, so a hero seeing into a corridor saw all of it, up to 78 units round corners. Long halls are now **cut into
-  segments** of about 8 steps, never cut within 3 steps of a doorway or its door. The user: "Turn it on."
+  segments** of about 8 steps, never cut within 3 steps of a doorway or its door (and moved up to 2 steps to stay off a
+  hallway landing, `hallways.md`). The user: "Turn it on."
   Walking down a long hall shows it about one segment ahead; the segment after that is next (silhouette), and a room at
   the far end of a cut hall stays dark until the crew gets near. Where a segment in view meets one that is not, the fog
   fades over about a hex (a soft edge across the hall, not a line), so the hall reads as going on into the dark, not as

@@ -8,7 +8,9 @@ extends TestCase
 ##   2. the spawn list covers every registry entry (a new monster kind, prop, style, spell or decor gets its button)
 ##   3. in the real game (GameDev with --gym, under the grounded_anim profile): the panel is up, one of each entry spawns and the world runs on (god mode on),
 ##      the tools work (AI off / on, clear, heal, the pack), the hit log counts a swing at a dummy, the experiments' pickers
-##      switch the movement profile, the smoothing, the monsters' walk (old / new) (the heroes' elbow IK picker is gone, settled;
+##      switch the movement profile, the smoothing, the monsters' walk (old / new), the hallway landings (off / on) and the
+##      map (gym / generated: a reload onto the contract's generated floor, where the panel runs on with its landings as the
+##      Go to buttons; docs/design/hallways.md) (the heroes' elbow IK picker is gone, settled;
 ##      the war cries' picker came out, settled),
 ##      the hallway packs come down the arena-lobby hall at the player, the War cry button makes the nearest monster of each
 ##      kind yell once, the slot picker and
@@ -355,6 +357,31 @@ func _check_game() -> void:
 		gym.set_experiment("walk", "new")
 		check(MonsterModel.active_walk, "and new again")
 		eq(walk_pick.get_item_text(walk_pick.selected), "new", "the picker follows")
+	# the hallway landings' A/B (docs/design/hallways.md): the Landings picker is the generator's switch; the Map picker
+	# leaves the gym's map for the contract's generated floor (a scene reload: the game's scene changer, a seam here)
+	var changes: Array[String] = []
+	g.set("scene_changer", func(path: String) -> void: changes.append(path))
+	var land_pick := gym.panel.experiment("landings")
+	var map_pick := gym.panel.experiment("map")
+	if check(land_pick != null and map_pick != null, "the panel has the Landings and Map pickers"):
+		eq(land_pick.get_item_text(land_pick.selected), "on", "landings on by default")
+		eq(map_pick.get_item_text(map_pick.selected), "gym", "on the gym's map")
+		land_pick.item_selected.emit(0)
+		check(not DungeonGen.landings, "picking off turns the generator's landings off")
+		check(changes.is_empty(), "on the gym's map that rebuilds nothing")
+		gym.set_experiment("landings", "on")
+		check(DungeonGen.landings, "and on again")
+		map_pick.item_selected.emit(1)
+		check(GymDev.generated, "Map: generated asks for the generated floor")
+		check(changes.size() == 1 and changes[0] == "", "the floor reloads (once: %s)" % str(changes))
+		gym.set_experiment("landings", "off")
+		eq(changes.size(), 2, "on the generated floor a Landings pick rebuilds it")
+		gym.set_experiment("landings", "on")
+		gym.set_experiment("map", "gym")
+		check(not GymDev.generated, "Map: gym comes back")
+	GymDev.generated = false
+	DungeonGen.landings = true
+	g.set("scene_changer", Callable())
 	# elbow IK (docs/design/animation-research.md, "Elbow IK study"): settled 2026-10-25, so no picker; the three heroes bend
 	# their elbows, the monsters keep their one-piece arms
 	check(gym.panel.experiment("elbows") == null, "no Elbows picker any more")
@@ -409,4 +436,39 @@ func _check_game() -> void:
 	MoveFeel.reset()
 	MonsterModel.active_walk = true
 	LowPolyModel.elbow_ik = true
+	await _check_generated()
+
+
+## The gym's panel on the contract's generated floor (the Map experiment, GymDev.generated): the generated floor with its
+## landings, no gym staging, the Go to buttons its landings; reset_flow forgets it.
+func _check_generated() -> void:
+	GAME.reset_flow()
+	GymDev.generated = true
+	var g: Node3D = load("res://scripts/app/dev/game_dev.gd").new()
+	g.set("opts", {"no_mic": true, "gym": true, "spells": GymDev.DEFAULT_SPELLS, "seed": GymMap.SEED})
+	add_child(g)
+	var gym: GymDev = null
+	for _i in 120:
+		await frames(1)
+		gym = g.get("gym")
+		if gym != null:
+			break
+	if check(gym != null, "the gym's driver runs on the generated floor too"):
+		await frames(3)
+		var map: HexMap = g.get("map")
+		var want := DungeonGen.for_run(ContractBoard.run_for_seed(GymMap.SEED), 1)   # (the gym's contract: --seed GymMap.SEED)
+		check(map.cells.size() == want.cells.size() and str(map.landings) == str(want.landings) and str(map.elevator) == str(want.elevator),
+				"the contract's generated floor 1 (%d cells, %d landings), not the gym's map" % [map.cells.size(), map.landings.size()])
+		check(gym.staged.is_empty(), "no training dummies staged there")
+		eq(gym.spots().size(), map.landings.size(), "the Go to buttons are its landings")
+		if not map.landings.is_empty():
+			gym.go_to("landing_0")
+			await frames(2)
+			var p: Hero = g.get("player")
+			check(Hex.distance(p.current_cell(), map.landings[0]["center"]) <= 2, "Go to landing 0 puts the crew there")
+		eq(gym.panel.experiment("map").get_item_text(gym.panel.experiment("map").selected), "generated", "the Map picker says so")
+	g.queue_free()
+	await frames(2)
+	GAME.reset_flow()
+	check(not GymDev.generated, "reset_flow forgets the generated floor")
 

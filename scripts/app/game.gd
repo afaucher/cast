@@ -48,6 +48,9 @@ extends Node3D
 ##                       log lists every room's theme. Combine with --zoom 12 for a close look at the set dressing; --focus sign puts the
 ##                       crew a few steps in front of the room's neon sign
 ##   --to-corridor       dev: put the crew in the middle of the floor's corridors (to see the site's corridor material)
+##   --to-landing [N]    dev: put the crew in the hall three steps short of hallway landing N (default 0) of the floor, its
+##                       set piece ahead (screenshots; the log lists the floor's landings; docs/design/hallways.md); --focus
+##                       landing points the camera at the landing instead of the player
 ##   --to-pool [pool|specimen|moat]  dev: put the crew at the floor's first in-ground pool (of that look): the player wading
 ##                       in it, the next seat on the deck at the rim, the third wading by the rim; at a moat all three wade in
 ##                       the channel (screenshots; the log lists the floor's pools; the AI allies hold their spots).
@@ -323,6 +326,7 @@ static func reset_flow() -> void:
 	_fade_in = false
 	_board_note = ""
 	menu_args = PackedStringArray()
+	GymDev.generated = false   # (the gym opens on its own map again)
 
 
 ## The command line's user args plus the flags the main menu asked for (menu_args).
@@ -413,6 +417,7 @@ func _parse_args() -> void:
 			"--to-theme": opts["to_theme"] = nxt
 			"--to-exit": opts["to_exit"] = true
 			"--to-corridor": opts["to_corridor"] = true
+			"--to-landing": opts["to_landing"] = int(nxt) if nxt.is_valid_int() else 0
 			"--to-door": opts["to_door"] = int(nxt)
 			"--to-shark":
 				opts["to_shark"] = args[i + 1] if i + 1 < args.size() and not args[i + 1].begins_with("--") else "any"
@@ -1259,7 +1264,7 @@ func _arrive_by_van() -> void:
 	for seat: int in [1, 3, 2]:
 		if heroes_by_seat.has(seat):
 			crew.append(heroes_by_seat[seat])
-	var moved_away := opts.has("to_shark") or opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
+	var moved_away := opts.has("to_shark") or opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_landing") or opts.has("to_door")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_arrival = VanArrival.spawn(_site.plan.van, crew, play)
 	if _arrival == null:
@@ -1287,7 +1292,7 @@ func _arrive_by_elevator() -> void:
 				arriving.append(heroes_by_seat[seat])   # (a downed hero stayed behind on the floor above)
 		if _session.carried_down(player):
 			_follow_living_ally()   # a downed player watches the crew step out
-	var moved_away := opts.has("to_shark") or opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_door")
+	var moved_away := opts.has("to_shark") or opts.has("to_theme") or opts.has("to_pool") or opts.has("to_package") or opts.has("to_gate") or opts.has("to_exit") or opts.has("to_employee") or opts.has("to_corridor") or opts.has("to_landing") or opts.has("to_door")
 	var play := _van_intro_enabled() and not moved_away and not player.dead
 	_lift = ElevatorArrival.spawn(_site.plan.elevator, _floor_n(), arriving, _heroes(), play)
 	if _lift == null:

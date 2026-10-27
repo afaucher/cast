@@ -26,6 +26,12 @@ extends RefCounted
 ##    into the room (or in a corner facing the centre) with a clear lane in front: SitePlan.props carry pos / yaw. The
 ##    anchor cells next to a wall are cut by the midpoint wall (HexMap.cut_walls): the prop stands flush against the
 ##    flat face and no footprint reaches the wall side (ThemeCtx);
+##  - hallway SET PIECES (docs/design/hallways.md; the user, 2026-10-26: "Build landings and set pieces only, no hall
+##    explosives."): the one exception to "nothing in a corridor". A long hall's LANDINGS (DungeonGen, HexMap.landings) each
+##    get exactly one priced prop of the site's catalog (a tall landmark: PropPlanner.LANDING_KINDS) against the landing's
+##    back wall, wholly on the cells the landing added, so the hall's own width stays clear: SitePlan.set_pieces
+##    (PropPlanner.plan_set_pieces, own dice), spawned with the priced props. Nothing else (no explosive, decor, note,
+##    package, gate, employee or pack) goes in a hall;
 ##  - explosive props (ExplosiveProp, docs/design/hazards.md): planned right after the priced props with their own dice, in
 ##    the rooms whose theme has some (RoomThemeDefs "hazards"), on the same wall cells and poses, at most
 ##    HazardPlanner.MAX_HAZARDS a floor, sometimes a chained pair: SitePlan.hazards (HazardPlanner);
@@ -62,7 +68,7 @@ extends RefCounted
 ##    (ElevatorGeo.keep_cells) are avoided and blocked like the exit zone, and it is a body in its room's ThemeCtx.
 ##
 ## Clear zones (hex distance): START_CLEAR / EXIT_CLEAR around the start and exit (the exit is the elevator's landing),
-## CORRIDOR_CLEAR around any corridor cell.
+## CORRIDOR_CLEAR around any corridor cell (what the rooms' planners keep off; a landing's set piece is planned on its own).
 
 const START_CLEAR := 3
 const EXIT_CLEAR := 3
@@ -134,6 +140,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	_plan_van(map, p, ctx, floor_n)                                     # no dice; before everything placed in the start room
 	t0 = Time.get_ticks_usec()
 	PropPlanner.plan(map, run, p, rng, avoid, near_corr, catalog, ctx)  # dice: the shared rng, then ctx.rng (the poses)
+	PropPlanner.plan_set_pieces(map, run, floor_n, p, catalog, ctx)    # own dice; the landings' set pieces (none without)
 	var t_hz := Time.get_ticks_usec()
 	HazardPlanner.plan(map, run, floor_n, p, avoid, near_corr, ctx)     # own dice (lent to ctx for its poses)
 	HazardPlanner.plan_sewer(map, run, floor_n, p, avoid, near_corr, ctx)   # the cluster's own dice: its panel and pumps
@@ -387,7 +394,7 @@ static func _block_cells(p: SitePlan) -> void:
 			p.blocked[n] = true
 	for e in p.employees:
 		p.blocked[e["cell"]] = true
-	for pr in p.props + p.hazards:
+	for pr in p.props + p.hazards + p.set_pieces:
 		for n in Hex.range_cells(pr["cell"], 1):
 			p.blocked[n] = true
 	for nt in p.notes:
@@ -466,7 +473,8 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	SharkPlanner.spawn(run, p, site)            # the sharks and their imp gunners
 	GatorPlanner.spawn(map, p, site)            # a sewer cluster's gators
 	SewerPlanner.spawn(map, run, p, site)       # its goo imp pack, its water's look, the live wires
-	LavaPlanner.spawn(map, run, p, site)        # a lava cave's archers (the last actors), its look and its rules
+	LavaPlanner.spawn(map, run, p, site)        # a lava cave's archers, its look and its rules
+	PropPlanner.spawn_set_pieces(run, p, site)  # the landings' set pieces (the last actors: priced props, into site.props)
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
 	DoorPlanner.spawn(p, site)

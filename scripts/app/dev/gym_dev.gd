@@ -22,6 +22,11 @@ extends Node
 ##     smoothing (MoveFeel.interp, off by default), live; and the monsters' walk (MonsterModel.active_walk: old / new, the
 ##     default). A new A/B goes here, not on a key; its switch goes once it is settled (the heroes' elbow IK went on
 ##     2026-10-25: "Looks great, we can remove the switch").
+##   - the HALLWAY LANDINGS' A/B (docs/design/hallways.md): the "Landings" picker (off / on, the default) is the generator's
+##     switch (DungeonGen.landings), and the "Map" picker leaves the gym's fixed map for the contract's GENERATED floor
+##     (`generated`: the scene reloads on that floor, solo, with this panel kept; "gym" comes back). On a generated floor a
+##     Landings pick rebuilds it at once, and the Go to buttons are its landings. The elevator goes down to the next
+##     generated floor as ever
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -44,6 +49,11 @@ const HALL_MIX: Array[String] = ["brute", "grunt", "grunt", "swarmer", "swarmer"
 const HALL_LEASH := 40.0           ## (a hall pack chases down the hall and into the arena: no leash home on the way)
 const GOTO: Array[String] = ["arena", "lobby", "course_pad", "course_top", "course_end", "cinema", "throne", "pool", "moat",
 		"barracks", "sewer_a", "sewer_c", "cave_a", "isle_shore", "cave_b"]
+const LANDING_SPOT := "landing_"   ## a generated floor's Go to buttons: landing_0, landing_1, ...
+
+## The "Map" experiment: true while the gym's panel runs on the contract's generated floor instead of the gym's map (GameDev
+## reads it in _dev_floor; it survives the scene reloads, and game.gd's reset_flow forgets it).
+static var generated := false
 
 var game: Node = null              ## the GameDev node (its crew, HUD, site, controller)
 var panel: GymPanel
@@ -107,7 +117,7 @@ func setup(g: Node) -> void:
 			["god", "God", god], ["areas", "Areas", false]],
 		[["heal", "Heal crew"], ["refill", "Refill spells"], ["clear", "Clear monsters"], ["clear_spawned", "Clear spawned"], ["pack", "Spawn pack"],
 			["hall", "Hallway x12"], ["hall_mix", "Hallway mix"], ["cry", "War cry"], ["reset_log", "Reset log"]],
-		GOTO, experiments())
+		spots(), experiments())
 	panel.spawn_pressed.connect(func(id: String) -> void: spawn(id, ring_point()))
 	panel.hero_pressed.connect(switch_to)
 	panel.slot_picked.connect(set_slot)
@@ -118,7 +128,11 @@ func setup(g: Node) -> void:
 	panel.experiment_picked.connect(set_experiment)
 	GameWorld.actor_spawned.connect(_on_spawned)
 	_bind()
-	stage()
+	if generated:
+		var lands := GameWorld.map.landings.size() if GameWorld.map != null else 0
+		_status("generated floor: %d landing%s, landings %s" % [lands, "" if lands == 1 else "s", "on" if DungeonGen.landings else "off"])
+	else:
+		stage()
 	_log("test gym: %d spawnable kinds (%d listed), F9 hides the panel" % [entries.filter(func(e: Dictionary) -> bool: return str(e["skip"]) == "").size(), entries.size()])
 
 
@@ -342,6 +356,9 @@ func act(nm: String) -> void:
 			spawned.append_array(made)
 			_status("a pack of %d" % made.size())
 		"hall", "hall_mix":
+			if generated:
+				_status("the hallway packs need the gym's map (Map: gym)")
+				return
 			_status("a hallway pack of %d" % hall_pack(nm == "hall_mix").size())
 		"cry":
 			var kinds := cry_each()
@@ -411,7 +428,20 @@ static func hall_link() -> Dictionary:
 static func experiments() -> Array:
 	return [["feel", "Movement", MoveFeel.ORDER, MoveFeel.active()],
 		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"],
-		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"]]
+		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"],
+		["landings", "Landings", ["off", "on"], "on" if DungeonGen.landings else "off"],
+		["map", "Map", ["gym", "generated"], "generated" if generated else "gym"]]
+
+
+## The Go to buttons: the gym's places, or on a generated floor its landings.
+func spots() -> Array:
+	if not generated:
+		return GOTO
+	var out: Array[String] = []
+	var map := GameWorld.map
+	for i in (map.landings.size() if map != null else 0):
+		out.append(LANDING_SPOT + str(i))
+	return out
 
 
 ## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
@@ -420,6 +450,9 @@ static func experiments() -> Array:
 ## says which.
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
+	if nm == "landings" or nm == "map":
+		_set_floor_experiment(nm, value)
+		return
 	if nm == "walk":
 		if value != "old" and value != "new":
 			return
@@ -445,6 +478,38 @@ func set_experiment(nm: String, value: String) -> void:
 		tag.show_tag(text)
 		if tag.move_log != null:
 			tag.move_log.switched()
+
+
+## The hallway landings' A/B (docs/design/hallways.md): "landings" sets the generator's switch (DungeonGen.landings), and on
+## a generated floor rebuilds it at once; "map" goes to the contract's generated floor (or back to the gym's map) by
+## reloading the scene on the same floor of the same contract, this panel kept.
+func _set_floor_experiment(nm: String, value: String) -> void:
+	match nm:
+		"landings":
+			if value != "off" and value != "on":
+				return
+			DungeonGen.landings = value == "on"
+			panel.set_experiment(nm, value)
+			if generated:
+				_status("landings %s: rebuilding the floor" % value)
+				_reload()
+			else:
+				_status("landings %s (Map: generated walks a floor)" % value)
+		"map":
+			if value != "gym" and value != "generated":
+				return
+			panel.set_experiment(nm, value)
+			if (value == "generated") == generated:
+				return
+			generated = value == "generated"
+			_status("to the generated floor" if generated else "back to the gym")
+			_reload()
+
+
+## Rebuild this floor of the contract (the scene reloads; game.gd's scene changer, a test seam).
+func _reload() -> void:
+	if game != null and game.has_method("_change_scene"):
+		game.call("_change_scene", "")
 
 
 ## Every hero at full health; a downed one gets up (Hero.become, full: as a joiner arrives).
@@ -482,9 +547,16 @@ func clear_monsters() -> int:
 
 
 func go_to(spot: String) -> void:
-	var spots := GymMap.spots(GameWorld.map)
-	if spots.has(spot):
-		game.call("_teleport_crew", spots[spot])
+	if spot.begins_with(LANDING_SPOT):
+		var map := GameWorld.map
+		var i := int(spot.trim_prefix(LANDING_SPOT))
+		if map != null and i >= 0 and i < map.landings.size():
+			game.call("_teleport_crew", map.landings[i]["center"] as Vector2i)
+			_status("at landing %d" % i)
+		return
+	var gym_spots := GymMap.spots(GameWorld.map)
+	if gym_spots.has(spot):
+		game.call("_teleport_crew", gym_spots[spot])
 		_status("at %s" % spot.replace("_", " "))
 
 

@@ -47,10 +47,28 @@ extends RefCounted
 ## validation (HexMap.cave, HexMap.lava). Its rooms get no features and never the exit. A cave and a sewer cluster are never
 ## on one floor: generate() tries the floor's cluster first (when it rolled one), then the cave, then plain, attempt by attempt.
 ##
+## LANDINGS (docs/design/hallways.md; the user, 2026-10-26: "Build landings and set pieces only, no hall explosives."): once
+## every link is cut, a hall whose route is longer than LANDING_MIN_LEN gets a LANDING partway along it, and one more for
+## every LANDING_EVERY beyond that (the stretches between landings are at most about that long): the hall widens to a
+## hexagon of LANDING_R + 1 rings (full floor out to LANDING_R, its outer ring cut by the walls) round its HUB, a route cell
+## or the neighbour of it away from the camera (the bay opens on the far side, its set piece faces the camera). The centre is
+## the route cell nearest the even share of the route, preferring one where the route turns (then the hall changes
+## direction there); it is chosen before the hall's height profile is placed, whose terraces and stairs keep off it (and off
+## both doors, and apart: _landing_profile; when they cannot, the hall gets none), so a landing is FLAT (the hexagon one
+## level, no stairs a ring beyond); its new cells keep LANDING_ROOM_CLEAR from every room and
+## a wall's width from every other hall; never on the service stair, the chokepoint, a sewer cluster's or a lava cave's
+## halls. It draws NO random numbers (the profile's dice are drawn as ever) and adds cells nothing earlier reads, so the
+## rooms, the features, the elevator and every other cell are as without it (only the halls' heights round a landing move):
+## the cells are tagged "corridor" (a landing is part of its hall: fog, doors, materials, senses read it as hall) and the
+## record goes to HexMap.landings, which PropPlanner.plan_set_pieces reads to stand one priced prop against each landing's
+## back wall. `landings` is the dev switch (the gym's "Landings" experiment); a crew's floors (for_run's `shared`) always
+## have them, so every machine builds the same floor.
+##
 ## params (all optional): rooms, size, room_radius_min, room_radius_max, gap, loops, wall_height, elevator ("wall" |
 ## "free"; a contract's floors use for_run(), which passes the job's choice), sewer (a cluster's seed, 0: none),
 ## sewer_force (dev: try the cluster on every attempt before building without it), cave (a cave's seed, 0: none), cave_gate
-## (its far chamber holds a hellgate: the record says so for GatePlanner), cave_force (dev: try the cave on every attempt first).
+## (its far chamber holds a hellgate: the record says so for GatePlanner), cave_force (dev: try the cave on every attempt first),
+## landings (bool: overrides the `landings` switch for this floor; for_run passes true for a crew's floors).
 
 const MAX_ATTEMPTS := 24
 const MAX_BASE_LEVEL := 8
@@ -67,6 +85,26 @@ const FEATURE_CENTER_CLEAR := 2 ## no raised feature / pit within this many cell
 const FEATURE_DOOR_CLEAR := 3   ## ... nor within this many cells of a corridor cell (the doors)
 const EXIT_ROOM_TRIES := 3      ## the elevator tries the farthest rooms from the start, this many
 const WALL_DOOR_CAP := 10.0     ## a notch's distance from the doors counts up to this many cells
+# LANDINGS (see the header; docs/design/hallways.md "As built")
+const LANDING_MIN_LEN := 22.0   ## a hall whose route (door to door) is longer than this many world units gets a landing ...
+const LANDING_EVERY := 24.0     ## ... and one more for every this many beyond (no stretch of hall between landings longer)
+const LANDING_R := 2            ## full floor this many rings round the landing's centre (its next ring is cut by the walls)
+const LANDING_ROOM_CLEAR := 4   ## a landing's new cells keep this many cells from every room cell (nothing in a room moves)
+const LANDING_SPACING := 8      ## two landings' centres are at least this many cells apart
+const LANDING_TURN_PULL := 2.5  ## a centre where the route turns counts this many steps nearer the ideal spot
+const LANDING_WINDOW := 0.3     ## the centre is looked for within this share of the spacing either side of the ideal spot
+const LANDING_DOOR_CLEAR := 3   ## a hall with landings keeps its terraces and stairs this many steps off both doors
+const LANDING_SHIFT := 0.5      ## ... its landings move together up to this share of their spacing to let them fit
+const LANDING_EVENT_GAP := 2    ## ... and its terraces and stairs stay this many steps apart
+
+## The dev switch for landings (the gym's "Landings" experiment, docs/design/test-gym.md); solo floors read it, a crew's
+## floors always have landings (for_run). On by default.
+static var landings := true
+## Diagnostics of the last floor built (tools and tests: tests/probe_halls.gd): one row per hall, {a, b, steps, path (world
+## units along the route, door to door), straight (door to door), narrow, loop, shortcut, stair, landings}.
+static var last_halls: Array[Dictionary] = []
+## Microseconds the landings pass has taken, summed over every attempt since it was last zeroed (a perf probe).
+static var landing_usec := 0
 
 enum Ev { TERRACE, CLIMB, STAIRS }
 enum Feature { PLATFORM, ZIGGURAT, LEDGE, PILLAR, PIT }
@@ -135,6 +173,14 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 const CAVE_KEYS: Array[String] = ["cave", "cave_gate", "cave_force"]
 
 
+## How many landings a hall `length` world units long (door to door along its route) gets: none up to LANDING_MIN_LEN,
+## then one, and one more for every LANDING_EVERY beyond.
+static func landing_count(length: float) -> int:
+	if length <= LANDING_MIN_LEN:
+		return 0
+	return 1 + int(floorf((length - LANDING_MIN_LEN) / LANDING_EVERY))
+
+
 static func _attempt_seed(seed: int, attempt: int) -> int:
 	return seed if attempt == 0 else ((seed * 1103515245 + attempt * 12345 + 1) & 0x7fffffff)
 
@@ -158,6 +204,8 @@ static func _attempt(s: int, params: Dictionary) -> HexMap:
 ## solo run since the sewer is networked (SewerCluster.NETWORKED, sewer phase 2).
 static func for_run(run: ContractRun, floor_n: int, shared: bool = false) -> HexMap:
 	var params := {"elevator": run.elevator_place}
+	if shared:
+		params["landings"] = true   # (a crew's floors always have landings: the dev switch is one machine's, solo only)
 	var sewer := SewerCluster.seed_for(run, floor_n, shared)
 	if sewer != 0:
 		params["sewer"] = sewer
@@ -212,6 +260,7 @@ class Link:
 	var route: Array[Vector2i] = []     ## [door_a, the route cells .., door_b]
 	var lanes: Array[Vector2i] = []     ## a tree link's lane cells (beside the route)
 	var cells: Array[Vector2i] = []     ## every corridor cell it added
+	var centres: Array[int] = []        ## where its landings were meant to go (route indices; its profile kept them flat)
 
 
 class Step:
@@ -266,9 +315,14 @@ class Builder:
 	var crng := RandomNumberGenerator.new()
 	var cave: Dictionary = {}           ## room index -> true
 	var cave_info: Dictionary = {}
+	# the landings (see the header): on or off for this floor, and what the pass made
+	var p_landings := true
+	var landing_recs: Array[Dictionary] = []
+	var landings_of: Dictionary = {}    ## link index -> how many landings it got
 
 	func _init(s: int, params: Dictionary) -> void:
 		rng.seed = s
+		p_landings = bool(params.get("landings", DungeonGen.landings))
 		p_sewer = int(params.get("sewer", 0))
 		srng.seed = (p_sewer * 31 + s) & 0x7fffffff
 		p_cave = int(params.get("cave", 0))
@@ -291,6 +345,10 @@ class Builder:
 			return null
 		if not _plan_and_carve():
 			return null
+		if p_landings:
+			var t0 := Time.get_ticks_usec()
+			_add_landings()   # (no dice; nothing before it moves, and nothing after it reads its cells: see the header)
+			DungeonGen.landing_usec += Time.get_ticks_usec() - t0
 		_choose_start_exit()
 		if not _place_elevator():
 			return null
@@ -306,6 +364,8 @@ class Builder:
 			_sewer_record()
 		if not cave.is_empty():
 			CaveGen.finish(self)
+		map.landings = landing_recs
+		DungeonGen.last_halls = _hall_stats()
 		return map
 
 	# ------------------------------------------------------------------ rooms
@@ -760,10 +820,19 @@ class Builder:
 		var steps: Array = []
 		var inside := (cluster.has(ai) and cluster.has(bi)) or (cave.has(ai) and cave.has(bi))
 		var stair := stair_pair == Vector2i(ai, bi) or stair_pair == Vector2i(bi, ai)
+		# the landings' spots on a long hall (see the header): its terraces and stairs keep off them, so each sits on a flat
+		# stretch (the profile's dice are the same either way; only where its events go moves)
+		var centres: Array[int] = []
+		if p_landings and not inside and not stair and not cluster.has(ai) and not cluster.has(bi) and not cave.has(ai) and not cave.has(bi):
+			centres = _landing_centres(S)
 		if inside or stair:
 			# (the dice this link's profile draws without the cluster, drawn and thrown away: the floor around stays the same)
 			_profile(S, orig_level[ai], orig_level[bi], shortcut)
 			steps = _flat_steps(S.size() - 2, ra.level) if inside else _stair_profile(S, ra.level, rb.level)
+		elif not centres.is_empty():
+			var lp := _landing_profile(S, ra.level, rb.level, _profile_events(ra.level, rb.level, shortcut), centres)
+			steps = lp[0]
+			centres = lp[1]
 		else:
 			steps = _profile(S, ra.level, rb.level, shortcut)
 		if steps.is_empty():
@@ -825,6 +894,7 @@ class Builder:
 		link.route = S
 		link.lanes = lanes
 		link.cells = added
+		link.centres = centres
 		links.append(link)
 		if shortcut:
 			climb_features += 1
@@ -869,6 +939,10 @@ class Builder:
 
 	## Height profile for cells S[1..n]; [] when the events cannot be placed.
 	func _profile(S: Array[Vector2i], la: int, lb: int, shortcut: bool) -> Array:
+		return _place_events(S, la, lb, _profile_events(la, lb, shortcut))
+
+	## The events of a link's height profile from la to lb ([kind, delta], in order): its dice.
+	func _profile_events(la: int, lb: int, shortcut: bool) -> Array:
 		var diff := lb - la
 		var events: Array = []   # [kind, delta]
 		var rest := diff
@@ -907,7 +981,37 @@ class Builder:
 			events[j] = tmp
 		if not climb_ev.is_empty():
 			events.insert(0 if bump else rng.randi_range(0, events.size()), climb_ev)
-		return _place_events(S, la, lb, events)
+		return events
+
+	## A long hall's profile with its landings (see the header): the events keep off the landings' flat stretches and
+	## LANDING_DOOR_CLEAR steps off both doors (a step at a door's mouth moves where its office door can stand). The spots are
+	## shifted together, 0, 1, -1, 2, -2 ... steps, until the events fit; [steps, the spots used]. When they never fit, the
+	## events go where they always went and the hall gets no landing ([steps, []]). No dice.
+	func _landing_profile(S: Array[Vector2i], la: int, lb: int, events: Array, centres: Array[int]) -> Array:
+		var n := S.size() - 2
+		var win := maxi(2, roundi(float(n + 1) / float(centres.size() + 1) * LANDING_SHIFT))
+		for d in range(0, 2 * win + 1):
+			var shift := (d + 1) / 2 * (1 if d % 2 == 1 else -1)
+			var spots: Array[int] = []
+			for c in centres:
+				spots.append(c + shift)
+			if spots[0] < LANDING_R + 2 or spots[spots.size() - 1] > n - LANDING_R - 1:
+				continue
+			var keep := {}
+			for c in spots:
+				for k in range(c - LANDING_R - 2, c + LANDING_R + 3):
+					keep[k] = true
+			# (an event at k changes cell k and every cell after it, so the CLEAR - 1 cells at each door stay at its level: no
+			# event at 1 .. CLEAR - 1 by door a, nor at n + 2 - CLEAR .. n + 1 by door b)
+			for k in range(1, LANDING_DOOR_CLEAR + 1):
+				keep[n + 2 - k] = true
+				if k < LANDING_DOOR_CLEAR:
+					keep[k] = true
+			var steps := _place_events(S, la, lb, events, keep)
+			if not steps.is_empty():
+				return [steps, spots]
+		var none: Array[int] = []
+		return [_place_events(S, la, lb, events), none]
 
 	## A flat link (the sewer cluster's own halls): every cell at `level`.
 	func _flat_steps(n: int, level: int) -> Array:
@@ -931,23 +1035,27 @@ class Builder:
 		return _place_events(S, la, lb, events)
 
 	## Put the profile's events on cells S[1..n] (stairs only on straight stretches), spread evenly; [] when they do not fit.
-	func _place_events(S: Array[Vector2i], la: int, lb: int, events: Array) -> Array:
+	## No event goes on an index in `keep`.
+	func _place_events(S: Array[Vector2i], la: int, lb: int, events: Array, keep: Dictionary = {}) -> Array:
 		var n := S.size() - 2
 		var e := events.size()
 		if e > n + 1:
 			return []
 		var ev_at := {}
 		var prev := 0
+		# (crowded off a landing, two events keep LANDING_EVENT_GAP apart: back to back, a stair's twins and the next step
+		# leave a climb in the hall)
+		var gap := 1 if keep.is_empty() else LANDING_EVENT_GAP
 		for j in e:
 			var kind: int = events[j][0]
 			var target := int(round((j + 1.0) * (n + 1.0) / (e + 1.0)))
-			var lo_i := prev + 1
-			var hi_i := n + 1 - (e - 1 - j)
+			var lo_i := prev + (gap if j > 0 else 1)
+			var hi_i := n + 1 - (e - 1 - j) * gap
 			var found := -1
 			for off in range(0, n + 2):
 				for sgn in [1, -1]:
 					var i: int = target + off * sgn
-					if i < lo_i or i > hi_i:
+					if i < lo_i or i > hi_i or keep.has(i):
 						continue
 					if kind == Ev.STAIRS and (i > n or not _straight(S, i)):
 						continue
@@ -990,6 +1098,239 @@ class Builder:
 		if cur != lb:
 			return []
 		return steps
+
+	# ------------------------------------------------------------------ landings
+
+	## The LANDINGS (see the header): how many each long hall gets, where, and the cells they add. No dice.
+	func _add_landings() -> void:
+		for li in links.size():
+			var l := links[li]
+			if not _landing_link(l) or l.centres.is_empty():
+				continue
+			var own := {}                   # the hall's own cells (its doors are room cells: they stay out)
+			for c in l.cells:
+				own[c] = true
+			var n := l.route.size() - 2
+			var win := maxi(2, roundi(float(n + 1) / float(l.centres.size() + 1) * LANDING_WINDOW))
+			var lanes: Array[Vector2i] = []   # the hall's lanes (its route and lane cells): a back keeps two cells from them
+			for k in range(1, l.route.size() - 1):
+				lanes.append(l.route[k])
+			lanes.append_array(l.lanes)
+			var placed: Array[int] = []
+			for c0 in l.centres:
+				# the spot its profile kept flat; else the best that fits nearby
+				var best := -1
+				var shape := {}
+				if _spaced(l.route, placed, c0):
+					shape = _landing_shape(l, c0, own, lanes)
+					if not shape.is_empty():
+						best = c0
+				var best_s := INF
+				if best < 0:
+					for i in range(c0 - win, c0 + win + 1):
+						if i < LANDING_R + 2 or i > n - LANDING_R - 1:
+							continue
+						var s := absf(float(i - c0)) - (LANDING_TURN_PULL if _turns(l.route, i) else 0.0)
+						if s >= best_s - 0.0001 or not _spaced(l.route, placed, i):
+							continue
+						var sh := _landing_shape(l, i, own, lanes)
+						if sh.is_empty():
+							continue
+						best = i
+						best_s = s
+						shape = sh
+				if best < 0:
+					continue
+				placed.append(best)
+				_make_landing(l, best, shape, own)
+			landings_of[li] = placed.size()
+
+	## Where a hall of route S means its landings (route indices): DungeonGen.landing_count of its length, each nearest the
+	## even share of the route, a spot where the route turns counted LANDING_TURN_PULL steps nearer, LANDING_SPACING apart
+	## and the hexagon off the doors. Empty for a short hall. No dice.
+	func _landing_centres(S: Array[Vector2i]) -> Array[int]:
+		var out: Array[int] = []
+		var n := S.size() - 2
+		var want := DungeonGen.landing_count(float(n + 1) * Hex.SQRT3)
+		if want == 0:
+			return out
+		var spacing := float(n + 1) / float(want + 1)
+		var win := maxi(2, roundi(spacing * LANDING_WINDOW))
+		for j in want:
+			var ideal := roundi(float(j + 1) * spacing)
+			var best := -1
+			var best_s := INF
+			for i in range(ideal - win, ideal + win + 1):
+				if i < LANDING_R + 2 or i > n - LANDING_R - 1 or not _spaced(S, out, i):
+					continue
+				var s := absf(float(i - ideal)) - (LANDING_TURN_PULL if _turns(S, i) else 0.0)
+				if s < best_s - 0.0001:
+					best = i
+					best_s = s
+			if best >= 0:
+				out.append(best)
+		return out
+
+	## Is route index i LANDING_SPACING from every index in `placed` (along the route and on the map)?
+	func _spaced(S: Array[Vector2i], placed: Array[int], i: int) -> bool:
+		for pi in placed:
+			if absi(pi - i) < LANDING_SPACING or Hex.distance(S[pi], S[i]) < LANDING_SPACING:
+				return false
+		return true
+
+	## May this hall have landings? Not the service stair, not the one short chokepoint (a narrow tree link), not a sewer
+	## cluster's or a lava cave's halls.
+	func _landing_link(l: Link) -> bool:
+		if stair_pair == Vector2i(l.a, l.b) or stair_pair == Vector2i(l.b, l.a):
+			return false
+		if l.narrow and not l.loop and not l.shortcut:
+			return false
+		if cluster.has(l.a) or cluster.has(l.b) or cave.has(l.a) or cave.has(l.b):
+			return false
+		return true
+
+	## Does the route turn at S[i]?
+	func _turns(S: Array[Vector2i], i: int) -> bool:
+		return i >= 1 and i + 1 < S.size() and not _straight(S, i)
+
+	## The landing's shape at route cell S[i]: its HUB (the hexagon's middle: S[i], or a neighbour of it on the side the
+	## camera looks at, so the bay opens away from the camera and its set piece faces it instead of hiding behind the near
+	## wall) and its BACKS. {hub, backs} or {} when no hub fits. The hub is S[i] when that gives a back away from the camera,
+	## else the first neighbour (most away from the camera first) that does, else S[i] or the first neighbour that fits.
+	func _landing_shape(l: Link, i: int, own: Dictionary, lanes: Array[Vector2i]) -> Dictionary:
+		var c: Vector2i = l.route[i]
+		var cc: HexMap.Cell = map.get_cell(c)
+		if cc == null or cc.type != HexMap.Tile.FLOOR:
+			return {}
+		var hubs: Array[Vector2i] = [c]
+		var ks: Array[int] = [0, 1, 2, 3, 4, 5]
+		ks.sort_custom(func(a: int, b: int) -> bool:
+			var da := Hex.dir_vector(a).dot(Vector3(ThemeGeo.CAMERA_DIR.x, 0.0, ThemeGeo.CAMERA_DIR.y))
+			var db := Hex.dir_vector(b).dot(Vector3(ThemeGeo.CAMERA_DIR.x, 0.0, ThemeGeo.CAMERA_DIR.y))
+			return da < db - 0.001 or (absf(da - db) <= 0.001 and a < b))
+		for k in ks:
+			hubs.append(c + Hex.DIRS[k])
+		var fallback := {}
+		for h in hubs:
+			if not _landing_fits(h, cc.level, own):
+				continue
+			var backs := _backs(h, lanes)
+			if backs.is_empty():
+				continue
+			if _back_far(h, backs[0]):
+				return {"hub": h, "backs": backs}
+			if fallback.is_empty():
+				fallback = {"hub": h, "backs": backs}
+		return fallback
+
+	## Can a landing's hexagon stand round `hub` at level `lv`? The hall's cells in it (LANDING_R + 1 round the hub) are floor
+	## at that level and none within one ring more is a stair; every new cell of it is free, a wall's width from anything
+	## that is not the hall and LANDING_ROOM_CLEAR from every room (so nothing that reads distances to the halls, the rooms'
+	## features, the elevator's notch, the van, the mail, sees it).
+	func _landing_fits(hub: Vector2i, lv: int, own: Dictionary) -> bool:
+		for x in Hex.range_cells(hub, LANDING_R + 2):
+			if own.has(x):
+				var xc: HexMap.Cell = map.get_cell(x)
+				if xc.type != HexMap.Tile.FLOOR or (xc.level != lv and Hex.distance(x, hub) <= LANDING_R + 1):
+					return false
+		for x in Hex.range_cells(hub, LANDING_R + 1):
+			if map.has_cell(x):
+				if not own.has(x):
+					return false
+				continue
+			if room_of.has(x) or pits.has(x) or Hex.distance(x, Vector2i.ZERO) > p_size + 16:
+				return false
+			if _room_zone().has(x):
+				return false
+			for d in Hex.DIRS:
+				var y: Vector2i = x + d
+				if map.has_cell(y) and not own.has(y):
+					return false
+		return true
+
+	var _room_zone_cache: Dictionary = {}
+
+	## The cells closer than LANDING_ROOM_CLEAR to a room cell (from the room cells on an edge: the nearest room cell to
+	## anything outside the rooms is one of those). Built once, when the landings pass first asks.
+	func _room_zone() -> Dictionary:
+		if _room_zone_cache.is_empty():
+			for c: Vector2i in room_of:
+				var edge := false
+				for d in Hex.DIRS:
+					if not room_of.has(c + d):
+						edge = true
+						break
+				if not edge:
+					_room_zone_cache[c] = true
+					continue
+				for y in Hex.range_cells(c, LANDING_ROOM_CLEAR - 1):
+					_room_zone_cache[y] = true
+		return _room_zone_cache
+
+	## The sides of the hexagon round `hub` a set piece may stand against (side k: its middle cell hub + DIRS[k] + DIRS[k + 1]
+	## two cells or more from every lane cell), best first: its back wall farthest from the camera (so the piece faces it),
+	## then farthest from the lanes.
+	func _backs(hub: Vector2i, lanes: Array[Vector2i]) -> Array[int]:
+		var sides: Array = []   # [k, distance to the lanes, camera dot]
+		for k in 6:
+			var bc: Vector2i = hub + Hex.DIRS[k] + Hex.DIRS[(k + 1) % 6]
+			var dmin := 1 << 20
+			for q in lanes:
+				dmin = mini(dmin, Hex.distance(bc, q))
+			if dmin < 2:
+				continue
+			sides.append([k, dmin, _side_normal(hub, k).dot(ThemeGeo.CAMERA_DIR)])
+		sides.sort_custom(func(a: Array, b: Array) -> bool:
+			if absf(float(a[2]) - float(b[2])) > 0.001:
+				return float(a[2]) < float(b[2])
+			return int(a[1]) > int(b[1]) or (int(a[1]) == int(b[1]) and int(a[0]) < int(b[0])))
+		var out: Array[int] = []
+		for s: Array in sides:
+			out.append(int(s[0]))
+		return out
+
+	## Side k's outward normal (world X/Z) of the hexagon round `hub`.
+	func _side_normal(hub: Vector2i, k: int) -> Vector2:
+		var w := Hex.to_world(hub + Hex.DIRS[k] + Hex.DIRS[(k + 1) % 6]) - Hex.to_world(hub)
+		return Vector2(w.x, w.z).normalized()
+
+	## Is side k's back wall on the far side from the camera (the piece in front of it faces the camera)?
+	func _back_far(hub: Vector2i, k: int) -> bool:
+		return _side_normal(hub, k).dot(ThemeGeo.CAMERA_DIR) <= -0.25
+
+	## Cut the landing at route cell S[i] (its hexagon round shape's hub) and record it (HexMap.landings): its centre (S[i]),
+	## hub, level, new cells, the hall it is on, and its backs.
+	func _make_landing(l: Link, i: int, shape: Dictionary, own: Dictionary) -> void:
+		var c: Vector2i = l.route[i]
+		var hub: Vector2i = shape["hub"]
+		var lv: int = map.get_cell(c).level
+		var added: Array[Vector2i] = []
+		for x in Hex.range_cells(hub, LANDING_R + 1):
+			if map.has_cell(x):
+				continue
+			map.set_cell(x, lv).tag = "corridor"
+			corr_cells[x] = true
+			added.append(x)
+		added.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
+		for x in added:
+			own[x] = true
+		landing_recs.append({"center": c, "hub": hub, "level": lv, "cells": added, "hall": ["room:%d" % l.a, "room:%d" % l.b],
+				"step": i, "turn": _turns(l.route, i), "dir_in": Hex.dir_to(l.route[i - 1], c), "dir_out": Hex.dir_to(c, l.route[i + 1]),
+				"backs": shape["backs"]})
+
+	## One row per hall for DungeonGen.last_halls (diagnostics).
+	func _hall_stats() -> Array[Dictionary]:
+		var out: Array[Dictionary] = []
+		for li in links.size():
+			var l := links[li]
+			var wa := Hex.to_world(l.door_a)
+			var wb := Hex.to_world(l.door_b)
+			out.append({"a": l.a, "b": l.b, "steps": l.length, "path": float(l.length) * Hex.SQRT3,
+					"straight": Vector2(wa.x - wb.x, wa.z - wb.z).length(), "narrow": l.narrow, "loop": l.loop, "shortcut": l.shortcut,
+					"stair": stair_pair == Vector2i(l.a, l.b) or stair_pair == Vector2i(l.b, l.a),
+					"special": cluster.has(l.a) or cluster.has(l.b) or cave.has(l.a) or cave.has(l.b),
+					"landings": int(landings_of.get(li, 0))})
+		return out
 
 	# ------------------------------------------------------------------ start / exit
 

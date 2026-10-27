@@ -386,6 +386,14 @@ Monsters idle until a hero is within aggro range with line of sight, then act.
 `DungeonGen.generate(seed: int, params := {}) -> HexMap`. Cells are tagged: `"start"` (one cell),
 `"exit"` (one cell), `"room:<n>"` for room floors (so monsters can be packed per room; a room's cut border cells
 carry its tag too), `"corridor"`. `HexMapView` (`scripts/world/hex_map_view.gd`, extends Node3D): `build(map)`.
+**Hallway landings** (`docs/design/hallways.md`): a hall longer than `DungeonGen.LANDING_MIN_LEN` (22 units, door to door
+along its route) widens into a flat hexagon partway along it, one more every `LANDING_EVERY` (24); never on the service
+stair, the chokepoint or a cluster's / cave's halls. The pass draws no dice and adds cells nothing before it reads (4+
+cells from every room), so rooms and their contents are as without it; the hall's terraces and stairs keep off the spot.
+Its cells are tagged `"corridor"` (part of the hall for fog, doors, materials, senses) and recorded in `HexMap.landings`
+(in the checksum). `PropPlanner.plan_set_pieces` stands exactly one priced prop of the site's catalog against each
+landing's back wall, wholly on the cells the landing added (`SitePlan.set_pieces`, spawned last into `Site.props`).
+`DungeonGen.landings` is the dev switch (the gym's "Landings" experiment, on by default); a crew's floors always have them.
 A contract's floor is `DungeonGen.for_run(run, floor, shared)` (the job's elevator placement, and a sewer cluster when the floor
 rolls one: below). The `"exit"` cell is the
 elevator's landing: `ElevatorGeo` (`scripts/world/elevator_geo.gd`) places the car (a notch cut into a wall, or
@@ -438,7 +446,8 @@ floors". The hand-authored prototype caves (`--lava-cave N`, `LavaCave`) run on 
 environment from the generator's pieces (hex rooms and halls cut like DungeonGen's, a sewer record SewerPlanner floods, a cave
 record in CaveGen's shape, PoolGeo's pools) and plans it with the real planners (fixed themes, no packs); `GymDev`
 (`scripts/app/dev/gym_dev.gd`, with `scripts/app/dev/gym/`) is its driver: the character switch (`Hero.become`), the spawn
-panel built from the registries (`GymSpawns`), the tools and the hit log. GameDev swaps it in at `_dev_floor`; nothing in the
+panel built from the registries (`GymSpawns`), the tools and the hit log; its "Map" experiment can take the panel onto the
+gym contract's generated floor instead (`GymDev.generated`, for the landings' A/B). GameDev swaps it in at `_dev_floor`; nothing in the
 generator calls it (the golden floors do not move). `tests/test_gym.gd`. The main menu opens it too, with no command line
 (any build): a click on the dead H of the garage's "WE FIX HEXES" neon (`MenuBackdrop.door_at`, `MainMenu.open_gym`) puts
 `--gym` in `game.gd`'s `menu_args`, which `launch_args()` adds to the command line for `_parse_args` until `reset_flow`;
@@ -464,7 +473,8 @@ midpoint walls), extra loops, the climb shortcut and the one short chokepoint th
 within `FEATURE_CENTER_CLEAR` (2) of a room's center or `FEATURE_DOOR_CLEAR` (3) of a door. Generation takes
 about 130 ms (limit 300 ms, asserted in `test_dungeon_gen`). `SiteBuilder`'s planners (`scripts/contracts/planners/`) then put at most 6 priced props on a floor (`PropPlanner`:
 next to walls, 4+ apart, flush and square against the flat face: `ThemeCtx.wall_pose_at` marches to the face and
-refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`) and at most 3
+refuses a pose that would not stand flush; footprints must stay off the wall side, `ThemeCtx.rect_clear`), one more on each
+hallway landing (its set piece, the one priced prop in a hall: `hallways.md`) and at most 3
 explosive props (`HazardPlanner.plan`, own dice, the same wall poses), scale the monster pack budgets by 0.7 (`PackPlanner`) and cap a room at one monster per
 `MonsterFactory.CELLS_PER_MONSTER` (6) walkable cells. Allies (`AllyBrain`) trail the player 2.5-3.5 hexes away at
 distinct angles and step out of the player's lane.

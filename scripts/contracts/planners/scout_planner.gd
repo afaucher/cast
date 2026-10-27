@@ -17,6 +17,11 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> vo
 	var rng := RandomNumberGenerator.new()
 	rng.seed = run.floor_seed(floor_n) * 7919 + floor_n * 101 + 11
 	var arrival := SiteBuilder.arrival_room(p)
+	# a landing's set piece (PropPlanner.plan_set_pieces) and the cells round it: no route runs through them
+	var pieces := {}
+	for sp in p.set_pieces:
+		for n in Hex.range_cells(sp["cell"], 1):
+			pieces[n] = true
 	var seen := {}
 	var cands: Array = []
 	var cells: Array = map.cells.keys()
@@ -58,7 +63,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> vo
 		var b: String = tags[1]
 		if a == p.start_room or b == p.start_room or a == arrival or b == arrival:
 			continue
-		var path := _link_path(map, comp, (doors[a] as Array)[0], (doors[b] as Array)[0])
+		var path := _link_path(map, comp, (doors[a] as Array)[0], (doors[b] as Array)[0], pieces)
 		if path.size() < SCOUT_MIN_CELLS:
 			continue
 		var score := (1 if p.pack_budgets.has(a) else 0) + (1 if p.pack_budgets.has(b) else 0)
@@ -89,11 +94,12 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> vo
 		p.scouts.append({"route": route, "looks": looks, "rooms": rooms, "start": rng.randi_range(0, route.size() - 1)})
 
 
-## The shortest walkable path from `a` to `b` inside one corridor link (breadth first; goblins climb).
-static func _link_path(map: HexMap, comp: Array[Vector2i], a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+## The shortest walkable path from `a` to `b` inside one corridor link (breadth first; goblins climb), round the cells in
+## `avoid` (a landing's set piece).
+static func _link_path(map: HexMap, comp: Array[Vector2i], a: Vector2i, b: Vector2i, avoid: Dictionary = {}) -> Array[Vector2i]:
 	var inside := {}
 	for c in comp:
-		if map.is_walkable_cell(c):
+		if map.is_walkable_cell(c) and (not avoid.has(c) or c == a or c == b):
 			inside[c] = true
 	var prev := {a: a}
 	var q: Array[Vector2i] = [a]
