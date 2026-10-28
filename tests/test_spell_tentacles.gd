@@ -2,8 +2,8 @@ extends TestCase
 ## Tentacles: after a short telegraph everything inside a SIDEWAYS oval (heroes, caster, monsters) is shoved directly away
 ## from the aim point; then the tentacles stay up (4 s at minimum power, 6 s at full) and every 0.6 s on the cast's clock
 ## they swat everyone inside the oval out of its NEAREST edge. Monsters take a little damage at the burst and at every
-## swat, heroes none. The oval lies across the caster's line of aim (depth along it, width 1.4 to 2.0 times that across
-## it), an immovable actor stays put, an actor on the centre goes along its facing, and power scales the oval, the
+## swat, heroes none. The oval lies across the caster's line of aim (depth along it, width 1.2 to 1.5 times that across
+## it), only floor the centre reaches counts (no tentacles in walls, nobody hit through one), an immovable actor stays put, an actor on the centre goes along its facing, and power scales the oval, the
 ## distances, the damage and the duration. The FX node builds and frees itself headless.
 
 var root: Node3D
@@ -69,9 +69,9 @@ func setup() -> void:
 	check(SpellBook.color_of("tentacles").b > 0.9 and SpellBook.color_of("tentacles").g < 0.3, "neon purple")
 	near(TentaclesSpell.tentacles_radius(1.0), 3.0, 0.001, "depth (the old radius) 2.2 + 0.8 * power")
 	near(TentaclesSpell.tentacles_depth(1.0), 3.0, 0.001, "depth at full power 3.0")
-	near(TentaclesSpell.tentacles_width(1.0), 6.0, 0.001, "width at full power = depth x 2.0")
-	near(TentaclesSpell.tentacles_width(SpellBook.MIN_POWER) / TentaclesSpell.tentacles_depth(SpellBook.MIN_POWER), 1.4 + 0.6 * SpellBook.MIN_POWER, 0.001, "width = depth x 1.4 at minimum power")
-	check(TentaclesSpell.tentacles_width(SpellBook.MIN_POWER) > 3.0 and TentaclesSpell.tentacles_width(SpellBook.MIN_POWER) < 3.3, "width about 3.1 at minimum (%.2f)" % TentaclesSpell.tentacles_width(SpellBook.MIN_POWER))
+	near(TentaclesSpell.tentacles_width(1.0), 4.5, 0.001, "width at full power = depth x 1.5")
+	near(TentaclesSpell.tentacles_width(SpellBook.MIN_POWER) / TentaclesSpell.tentacles_depth(SpellBook.MIN_POWER), 1.2 + 0.3 * SpellBook.MIN_POWER, 0.001, "width = depth x 1.2 at minimum power")
+	check(TentaclesSpell.tentacles_width(SpellBook.MIN_POWER) > 2.6 and TentaclesSpell.tentacles_width(SpellBook.MIN_POWER) < 2.85, "width about 2.7 at minimum (%.2f)" % TentaclesSpell.tentacles_width(SpellBook.MIN_POWER))
 	near(TentaclesSpell.tentacles_distance(1.0), 4.0, 0.001, "burst distance 2.5 + 1.5 * power")
 	near(TentaclesSpell.tentacles_damage(1.0), 6.0, 0.001, "damage 6 * power")
 	near(TentaclesSpell.tentacles_duration(1.0), 6.0, 0.001, "up 6 s at full power")
@@ -81,7 +81,7 @@ func setup() -> void:
 	eq(TentaclesSpell.tentacles_swats(1.0), 9, "nine swats at full power (0.6 .. 5.4 s after the burst)")
 	eq(TentaclesSpell.tentacles_swats(SpellBook.MIN_POWER), 6, "six at minimum power")
 	for p in [SpellBook.MIN_POWER, 0.3, 0.6, 1.0]:
-		check(TentaclesSpell.tentacles_width(p) > TentaclesSpell.tentacles_depth(p) * 1.39, "wider than deep at power %.2f" % p)
+		check(TentaclesSpell.tentacles_width(p) > TentaclesSpell.tentacles_depth(p) * 1.19, "wider than deep at power %.2f" % p)
 	var scaled := {
 		"depth": func(p: float) -> float: return TentaclesSpell.tentacles_depth(p),
 		"width": func(p: float) -> float: return TentaclesSpell.tentacles_width(p),
@@ -133,7 +133,7 @@ func setup() -> void:
 	var hero_b := _hero(Vector3(0, 0, -1.9))
 	var mon_a := _dummy(Vector3(-1.0, 0, 1.0))
 	var mon_b := _dummy(Vector3(0.3, 0, 2.2))
-	var side_mon := _dummy(Vector3(0.0, 0, 5.0))               # far across the aim: only the wide oval reaches it
+	var side_mon := _dummy(Vector3(0.0, 0, 4.0))               # far across the aim: only the wide oval reaches it
 	var far_hero := _hero(Vector3(-5, 0, -4))                 # outside the oval, off everyone's path
 	var far_mon := _dummy(Vector3(6, 0, -5))
 	var past_mon := _dummy(Vector3(4.2, 0, -1.6))             # along the aim past the depth: outside (off hero_a's path)
@@ -171,13 +171,13 @@ func setup() -> void:
 	# --- The oval turns with the aim: cast along +Z and the wide axis is X.
 	_fresh()
 	caster = _hero(Vector3(0, 0, -8))
-	var x_mon := _dummy(Vector3(5.0, 0, 0))                    # across this aim: inside
+	var x_mon := _dummy(Vector3(4.0, 0, 0))                    # across this aim: inside
 	var z_mon := _dummy(Vector3(0.0, 0, 4.2))                  # along it, past the depth: outside
 	SpellBook.cast("tentacles", caster, 1.0, center)
 	node = _node()
 	check(node != null and node.aim.dot(Vector3(0, 0, 1)) > 0.999, "aimed along +Z")
 	await frames(BEFORE_SWAT)
-	check(x_mon.global_position.x > 8.0, "across the +Z aim, 5 out is inside the oval and shoved (x=%.2f)" % x_mon.global_position.x)
+	check(x_mon.global_position.x > 7.0, "across the +Z aim, 4 out is inside the oval and shoved (x=%.2f)" % x_mon.global_position.x)
 	near(z_mon.global_position.distance_to(Vector3(0, 0, 4.2)), 0.0, 0.05, "along the +Z aim, 4.2 out is outside")
 
 	# --- Immovable actors (Rebar) stay put but monsters still take the damage.
@@ -230,13 +230,13 @@ func setup() -> void:
 		var c := _hero(Vector3(-8, 0, 0))
 		var m := _dummy(Vector3(0, 0, 1.5))
 		var edge := _dummy(Vector3(3.3, 0, 0))      # along the aim: inside the depth only at full power
-		var wide := _dummy(Vector3(0, 0, -4.6))     # across it: inside the width at full power, not at 0.3
+		var wide := _dummy(Vector3(0, 0, -4.0))     # across it: inside the width at full power, not at 0.3
 		SpellBook.cast("tentacles", c, p, center)
 		await frames(BEFORE_SWAT)
 		moved_by.append(m.global_position.z - 1.5)
 		hurt_by.append(m.max_hp - m.hp)
 		reach_by.append(edge.global_position.x > 3.4)
-		wide_by.append(wide.global_position.z < -4.7)
+		wide_by.append(wide.global_position.z < -4.1)
 	check(moved_by[0] < moved_by[1] and moved_by[1] < moved_by[2], "distance grows with power %s" % str(moved_by))
 	check(hurt_by[0] < hurt_by[1] and hurt_by[1] < hurt_by[2], "damage grows with power %s" % str(hurt_by))
 	check(not reach_by[0] and reach_by[2], "depth grows with power %s" % str(reach_by))
@@ -244,13 +244,13 @@ func setup() -> void:
 
 	# --- Swats: on the tick schedule, everyone inside (monsters AND heroes) out of the nearest edge.
 	_fresh()
-	caster = _hero(Vector3(-9, 0, 0))                          # aim +X: depth 3 along X, width 6 along Z
+	caster = _hero(Vector3(-9, 0, 0))                          # aim +X: depth 3 along X, width 4.5 along Z
 	SpellBook.cast("tentacles", caster, 1.0, center)
 	node = _node()
 	await frames(30)                                           # the burst is over; now stand people in the oval
 	var near_side := _dummy(Vector3(-1.0, 0, 2.5))             # the caster's side of the middle: back toward the caster
 	var far_side := _hero(Vector3(1.0, 0, -2.0))               # a HERO beyond the middle: on away from the caster
-	var end_mon := _dummy(Vector3(0.3, 0, 5.0))                # near an end of the width: out of that end
+	var end_mon := _dummy(Vector3(0.3, 0, 4.0))                # near an end of the width: out of that end
 	var swatted: Array[Actor] = [near_side, far_side, end_mon]
 	var at0 := {}
 	var want := {}
@@ -270,7 +270,7 @@ func setup() -> void:
 		near(moved.length(), TentaclesSpell.tentacles_swat_distance(1.0), 0.35, "by about the swat distance (%s)" % a.display_name)
 	check(near_side.global_position.x < -2.0, "the caster's side goes back toward the caster (x=%.2f)" % near_side.global_position.x)
 	check(far_side.global_position.x > 2.0, "the far side goes on away from it (x=%.2f)" % far_side.global_position.x)
-	check(end_mon.global_position.z > 6.0, "the end goes out its end (z=%.2f)" % end_mon.global_position.z)
+	check(end_mon.global_position.z > 5.5, "the end goes out its end (z=%.2f)" % end_mon.global_position.z)
 	near(far_side.hp, far_side.max_hp, 0.001, "a swatted hero takes no damage")
 	near(near_side.hp, near_side.max_hp - TentaclesSpell.tentacles_damage(1.0), 0.001, "a swatted monster takes 6 * power")
 
@@ -306,6 +306,49 @@ func setup() -> void:
 		check(alive_at_end, "power %.2f: still up just before %.1f s + the retract" % [p, up])
 		check(not is_instance_valid(tn), "power %.2f: gone after it" % p)
 
+	# --- Only floor counts (the user, 2026-10-28: "Maybe we can limit it to just the floor space?"): a wall row across the
+	# oval (hex row 1, z 0.5 to 2.5; cells 10 levels high). A dummy beyond it, inside the oval, is not shoved; one on the near side is, and
+	# no tentacle grows in the wall or beyond it.
+	var walled := _flat_map()
+	var wall_cells := {}
+	for c in walled.cells.keys():
+		if c.y == 1:
+			wall_cells[c] = true
+			walled.set_cell(c, 10, HexMap.Tile.WALL)
+	check(not wall_cells.is_empty(), "a wall row")
+	check(Tentacles.reaches(walled, center, Vector3(0.5, 0, -1.0)), "floor this side of the wall is reached")
+	check(not Tentacles.reaches(walled, center, Hex.to_world(wall_cells.keys()[0])), "a wall cell is not")
+	check(not Tentacles.reaches(walled, center, Vector3(0.0, 0, 3.0)), "floor beyond the wall is not")
+	check(Tentacles.reaches(null, center, Vector3(0.0, 0, 3.0)), "no map: everywhere")
+	if root != null:
+		root.free()
+	root = Node3D.new()
+	add_child(root)
+	GameWorld.begin(walled, root, 5)
+	var c3 := _hero(Vector3(-8, 0, 0))                          # aim +X: the width runs along Z, through the wall
+	var this_side := _dummy(Vector3(0, 0, -1.2))
+	var beyond := _dummy(Vector3(0, 0, 3.2))                   # inside the oval (width 4.5), behind the wall
+	SpellBook.cast("tentacles", c3, 1.0, center)
+	await frames(BEFORE_SWAT)
+	check(this_side.global_position.z < -1.6, "this side of the wall is shoved (z=%.2f)" % this_side.global_position.z)
+	near(beyond.global_position.z, 3.2, 0.001, "beyond the wall is not shoved")
+	near(beyond.hp, beyond.max_hp, 0.001, "... nor hurt")
+	var wnode := _node()
+	var wfx: TentaclesFx = null
+	for n in wnode.get_children():
+		if n is TentaclesFx:
+			wfx = n
+	var grown := 0
+	var bad := 0
+	for tc: Dictionary in wfx._tentacles:
+		if not bool(tc["ok"]):
+			continue
+		grown += 1
+		if wfx.to_global(tc["pos"]).z > 1.0:   # (row 0 ends at z 1.0; the wall and beyond lie past it)
+			bad += 1
+	check(grown > 0, "tentacles grow on this side (%d)" % grown)
+	eq(bad, 0, "none in the wall or beyond it")
+
 	# --- The FX builds headless: tentacles spread over the oval, the rim, and the spell node frees itself.
 	_fresh()
 	var c2 := _hero(Vector3(-8, 0, 0))
@@ -328,8 +371,8 @@ func setup() -> void:
 			max_side = maxf(max_side, absf(lp.x))
 			max_along = maxf(max_along, absf(lp.y))
 	eq(count, fx.count(), "every tentacle built (%d)" % count)
-	check(count >= 12 and count <= TentaclesFx.COUNT_MAX, "more tentacles over the wide oval (%d)" % count)
-	check(max_side > max_along * 1.5, "spread over the width (%.2f across, %.2f along)" % [max_side, max_along])
+	check(count >= 10 and count <= TentaclesFx.COUNT_MAX, "tentacles over the oval (%d)" % count)
+	check(max_side > max_along * 1.2, "spread over the width (%.2f across, %.2f along)" % [max_side, max_along])
 	check(fx.get_node_or_null("Rim") != null, "the oval's rim")
 	await frames(int((Tentacles.TELEGRAPH + TentaclesSpell.tentacles_duration(1.0) + TentaclesFx.RETRACT) * 60.0) + 30)
 	check(not is_instance_valid(tnode), "the spell node frees itself after the tentacles retract")

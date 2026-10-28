@@ -30,7 +30,7 @@ consider increasing the width of the area but not the depth. Again with strength
 
 - **Shape [decided]:** an oval lying **sideways across the caster's line of aim** (caster -> target, flat; the caster's
   facing when it stands on the target). Its depth half-axis, along the aim, is the old radius: 2.2 + 0.8 × power (2.2 to
-  3.0). Its width half-axis, across the aim, is the depth × (1.4 + 0.6 × power): about 3.1 at minimum power, 6.0 at full.
+  3.0). Its width half-axis, across the aim, is the depth × (1.2 + 0.3 × power): about 2.7 at minimum power, 4.5 at full (2026-10-28, below).
   Aimed down a hall, the oval spans the hall wall to wall. A body counts when any of it is inside.
 - **Burst (as before):** after the 0.25 s telegraph everyone inside is shoved directly away from the centre, 2.5 + 1.5 ×
   power (4.0 at full); monsters and breakables (mail) take 6 × power. A pavise's planks facing the centre block it; floor
@@ -58,6 +58,12 @@ consider increasing the width of the area but not the depth. Again with strength
   shove never downs a hero). In the crew test a hero standing near a wall was swatted on all nine ticks.
   Decision (2026-10-27): offered "swats skip wall slams" and a new desc ("... then keep swatting anyone inside for a few
   seconds"), the user said "Leave both as is": swats keep slamming, and the desc stays as it was.
+- **Floor only, narrower [decided] (2026-10-28):** after the gym, the user: "I think we scaled it up too much. It is MUCH
+  bigger then hallways now and spawns tenticles in the walls. Maybe we can limit it to just the floor space?" and picked
+  the width 1.2 to 1.5 × depth (about 2.7 to 4.5 half-width; it was 1.4 to 2.0, 12 across at full) and "Yes, visuals and
+  hits". A spot counts only when it is floor (not wall, not void) and a line 0.9 above the floor reaches it from the centre
+  without passing through a wall (`Tentacles.reaches`): tentacles grow only there, and only bodies standing there are
+  shoved, swatted or hurt, so nothing reaches into the next room. The telegraph oval and rim are still drawn whole.
 
 ## Teeth [decided: core idea]
 **"Cast teeth":** too many teeth sprout out of **anyone** in the area at the aim point, monsters and

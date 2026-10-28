@@ -24,11 +24,13 @@ const VOICE := {
 
 ## The area is an OVAL lying sideways across the caster's line of aim (the user, 2026-10-27: "Let's consider increasing the
 ## width of the area but not the depth. Again with strength."): its DEPTH half-axis, along the aim, is the old radius; its
-## WIDTH half-axis, across the aim, is the depth times 1.4 (minimum power) to 2.0 (full).
+## WIDTH half-axis, across the aim, is the depth times 1.2 (minimum power) to 1.5 (full). (It was 1.4 to 2.0, 12 across at
+## full power; the user, 2026-10-28: "I think we scaled it up too much. It is MUCH bigger then hallways now".) Only floor
+## the centre reaches without crossing a wall counts (Tentacles.reaches).
 const TENTACLES_RADIUS_BASE := 2.2       ## the depth half-axis (along the aim): 2.2 to 3.0
 const TENTACLES_RADIUS_POWER := 0.8
-const TENTACLES_WIDTH_BASE := 1.4        ## the width half-axis = depth x (1.4 + 0.6 x power): about 3.1 to 6.0
-const TENTACLES_WIDTH_POWER := 0.6
+const TENTACLES_WIDTH_BASE := 1.2        ## the width half-axis = depth x (1.2 + 0.3 x power): about 2.6 to 4.5
+const TENTACLES_WIDTH_POWER := 0.3
 const TENTACLES_SHOVE_BASE := 2.5        ## the burst's shove, straight out from the centre: 2.5 to 4.0
 const TENTACLES_SHOVE_POWER := 1.5
 const TENTACLES_DAMAGE := 6.0            ## monsters and breakables only, times power: at the burst and at every swat

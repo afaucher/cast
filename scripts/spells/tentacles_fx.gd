@@ -180,8 +180,8 @@ func _build_tentacles() -> void:
 		var ok := true
 		if map != null:
 			var g := map.ground_height(to_global(pos))
-			if is_nan(g):
-				ok = false
+			if is_nan(g) or not Tentacles.reaches(map, global_position, to_global(pos)):
+				ok = false   # (walls, void and the far side of a wall grow none)
 			else:
 				gy = g
 		pos.y = gy - _ground_y

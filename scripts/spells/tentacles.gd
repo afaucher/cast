@@ -10,7 +10,11 @@ extends Node3D
 ## The oval lies SIDEWAYS across the caster's line of aim (the user, 2026-10-27: "Let's consider increasing the width of
 ## the area but not the depth. Again with strength."): `aim` (caster -> target, flat; SPAWN, fixed on the caster's
 ## machine and carried by the cast event, TentaclesSpell.cast_extra) is the DEPTH axis, the old radius
-## (TentaclesSpell.tentacles_depth); across it is the WIDTH axis, 1.4 to 2.0 times as long (tentacles_width).
+## (TentaclesSpell.tentacles_depth); across it is the WIDTH axis, 1.2 to 1.5 times as long (tentacles_width).
+##
+## Only FLOOR counts (the user, 2026-10-28: "Maybe we can limit it to just the floor space?"): a spot in the oval is in
+## the area when it is floor (not wall, not void) and the centre sees it without crossing a wall (reaches). Tentacles
+## grow only there, and only bodies standing there are shoved and swatted, so nothing reaches into the next room.
 ##
 ## Every machine runs the same schedule from the cast's moment (start_time, SPAWN): the burst at TELEGRAPH, swat k at
 ## TELEGRAPH + k x SWAT_EVERY. Each machine applies only the hits it resolves (Combat.hits_in_radius: a hero's by its owner,
@@ -19,6 +23,8 @@ extends Node3D
 ## node, TentaclesFx, running on the same clock.
 
 const TELEGRAPH := 0.25
+## How high above the floor the reach test's sight line runs (reaches): over a terrace step, under a wall.
+const REACH_LIFT := 0.9
 
 var power := 1.0
 var source_team := GameWorld.TEAM_HEROES
@@ -89,9 +95,9 @@ func _physics_process(_delta: float) -> void:
 		queue_free()
 
 
-## True when `a` (its body included) is inside the oval.
+## True when `a` (its body included) is inside the oval, on floor the centre reaches.
 func covers(a: Actor) -> bool:
-	return in_oval(a.global_position, global_position, aim, depth(), width(), a.radius)
+	return in_oval(a.global_position, global_position, aim, depth(), width(), a.radius) 			and reaches(GameWorld.map, global_position, a.global_position)
 
 
 func _source() -> Node:
@@ -154,6 +160,21 @@ func _crack_floor() -> void:
 
 
 # --- The oval's geometry (static: the reticle and the tests use it too) ------------------------------------------------
+
+## True when the tentacles can come up at `p` (world X/Z): it is floor, not wall or void, and a line REACH_LIFT above the
+## floor runs to it from the centre without passing through a wall. No map (a bare test world): everywhere.
+static func reaches(map: HexMap, center: Vector3, p: Vector3) -> bool:
+	if map == null:
+		return true
+	if map.wall_at(p):
+		return false
+	var g := map.ground_height(p)
+	if is_nan(g):
+		return false
+	var gc := map.ground_height(center)
+	var from := Vector3(center.x, (center.y if is_nan(gc) else gc) + REACH_LIFT, center.z)
+	return map.line_of_sight(from, Vector3(p.x, g + REACH_LIFT, p.z), 0.1, false)
+
 # Local coordinates: x across the aim (the width axis, `side` = aim turned a quarter left), y along the aim (depth).
 
 ## `p` in the oval's local coordinates: x along `side`, y along `aim`.

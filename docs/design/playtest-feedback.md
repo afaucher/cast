@@ -28,6 +28,9 @@ The user: "Playtest feedback - just record then we can decide how to react".
      while Tentacles is held. The aim travels in the cast, so every machine lays the same oval. Cooldown, word, component
      and the card's text are unchanged. To watch in play: a swat slams a body pinned against a wall (8 damage per swat).
      `test_spell_tentacles`, `test_net_m4_status`.
+   - Narrowed (2026-10-28, after the gym: "MUCH bigger then hallways now and spawns tenticles in the walls"): the width
+     is 1.2 to 1.5 × depth (about 2.7 to 4.5 half-width), and only floor the centre reaches without crossing a wall counts,
+     for the tentacles and the hits (`spells.md`, "Floor only, narrower").
 3. **Offensive spell drops when the players are out.** "Increase offensive spell drop rates when the players are out."
    - Decision: pending.
 4. **Swarms flocking down hallways.** "We need to figure out how to break up swarms of enemies a bit flocking down
