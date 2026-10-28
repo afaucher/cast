@@ -16,7 +16,18 @@ The user: "Playtest feedback - just record then we can decide how to react".
      something next to it: a ledge, a platform or a terrace step, or the mantle).
 2. **Tentacles for crowd control.** "Tentacles - most useful in hallways to break up a rush. Maybe like a wall or a push
    from the player outward for better crowd control."
-   - Decision: pending.
+   - Decision (2026-10-27): asked "How do we expect the player to use it? Defensively?" and offered a sideways tentacle wall
+     pushing away from the caster, the user said: "Let's just increase the duration and that swatting behavior. Let's
+     consider increasing the width of the area but not the depth. Again with strength." and then "Build" on the spec.
+   - Built (2026-10-27; `docs/design/spells.md`, "Tentacles"): the area is an oval lying sideways across the caster's line
+     of aim, as deep as the old radius (2.2 to 3.0) and 1.4 to 2.0 times as wide (about 3.1 to 6.0 half-width), so aimed
+     down a hall it spans the hall. The burst is unchanged (everyone shoved straight out, 6 × power to monsters); then the
+     tentacles stay up 4 s (minimum power) to 6 s (full) and every 0.6 s on the shared clock swat everyone inside, heroes
+     too, out of the oval's nearest edge (1.5 to 2.0), monsters taking 6 × power each time. More tentacles spread over the
+     oval wave, lash on each swat and retract at the end, with a faint neon rim on the edge; the aim ring shows the oval
+     while Tentacles is held. The aim travels in the cast, so every machine lays the same oval. Cooldown, word, component
+     and the card's text are unchanged. To watch in play: a swat slams a body pinned against a wall (8 damage per swat).
+     `test_spell_tentacles`, `test_net_m4_status`.
 3. **Offensive spell drops when the players are out.** "Increase offensive spell drop rates when the players are out."
    - Decision: pending.
 4. **Swarms flocking down hallways.** "We need to figure out how to break up swarms of enemies a bit flocking down

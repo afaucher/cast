@@ -351,7 +351,8 @@ training dummy check before steering or attacking (voice casts still work). Terr
 - a shove caused by a hero (`source` team) never takes a hero below 1 HP (slam, fall or pit).
 Monsters cancel a wind-up when shoved and re-home where they land (no leash-heal). Signals: `shoved`, `shove_impact`.
 Built on it: every melee hit nudges (hero 0.7, monster 0.35, brute slam 1.0: `Combat.melee_arc(..., shove)`),
-the Tentacles spell, and the heroes' `secondary_kind`: `"bolt"` (Wick), `"bowl"` (Rebar: `BowlBoulder` rolls
+the Tentacles spell (a burst straight out of its sideways oval, then a swat out of the oval's nearest edge every 0.6 s while
+it is up), and the heroes' `secondary_kind`: `"bolt"` (Wick), `"bowl"` (Rebar: `BowlBoulder` rolls
 through everything, shoving each actor 3.5 sideways/forward, 6 damage to monsters only) and `"spin"` (Gasket: 360 degrees,
 reach 1.9, 16 damage to monsters, everything in reach shoved 2.2, teammates included).
 

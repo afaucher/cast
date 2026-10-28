@@ -20,8 +20,8 @@ extends Node3D
 ##   --spells a,b        skip the picker (e.g. heal,corn); with no --contract it also skips the board
 ##   --no-mic            don't open the mic / load the model (typed casts only)
 ##   --shot <png>        save a screenshot after --shot-after game seconds (default 3) and quit
-##   --autocast <id>     cast a spell once, 1 s in (for screenshots); in a shared run once the floor has started and the
-##                       crew is out of the van, plus --autocast-after S (default 0.5)
+##   --autocast <id>     cast a spell once, 1 s in (for screenshots; solo, --autocast-after S makes it S s in); in a shared
+##                       run once the floor has started and the crew is out of the van, plus --autocast-after S (default 0.5)
 ##   --aim-offset x,z    dev: --autocast aims at the player's position plus this offset (world units) instead of at the monsters
 ##   --proto-heroes      use the old capsule prototype bodies instead of the faceted crew
 ##   --hero wick|gasket|rebar  play this hero (Session.character_id) instead of the one picked on the main menu
@@ -110,10 +110,12 @@ extends Node3D
 ##   --move-feel today|grounded|grounded_anim, --physics-interp on|off   dev: the movement-feel profile (default grounded_anim)
 ##                       and the judder smoothing (default off) (MoveFeel; the gym's panel switches both live). In a crew
 ##                       the host's profile is everyone's.
-##   --gym [--gym-tour <dir>]  dev, solo: the test gym (GymMap's one map of every environment, GymDev's panel: switch hero,
-##                       spawn anything, infinite components, AI / god / hit-area toggles, a hit log, the experiments;
-##                       docs/design/test-gym.md). Ignored in a crew. --gym-tour saves its screenshot sheet to <dir> and
-##                       quits. The main menu hands --gym in too (the garage's dead H: MainMenu.open_gym, `menu_args`)
+##   --gym [--gym-tour <dir>] [--gym-act <action>]  dev, solo: the test gym (GymMap's one map of every environment, GymDev's
+##                       panel: switch hero, spawn anything, infinite components, AI / god / hit-area toggles, a hit log, the
+##                       experiments; docs/design/test-gym.md). Ignored in a crew. --gym-tour saves its screenshot sheet to <dir>
+##                       and quits. --gym-act presses one panel action as the gym opens (hall, hall_mix, pack, ...; a hallway
+##                       pack is then --autocast's target), for screenshots. The main menu hands --gym in too (the garage's
+##                       dead H: MainMenu.open_gym, `menu_args`)
 ##   --cast-tell off|colour|neutral  the "cast armed" tell on your own hero (CastTell, docs/design/cast-armed-fx.md): a rune
 ##                       under your feet and a glow at your hand from "cast" until the spell goes off; colour (the default)
 ##                       floods it with the spell's colour on recognition, neutral keeps it white until the release, off

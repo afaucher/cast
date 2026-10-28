@@ -123,6 +123,12 @@ Every room is a fog space; the lobby and the halls between the zones are wide (o
 The pictures: `.\run.ps1 --gym --no-mic --no-fog --gym-tour <abs dir>` (GymTour: each view, the
 sheet and the panel, then it quits).
 
+For a one-off screenshot, `--gym-act <action>` presses one panel action as the gym opens (`hall`, `hall_mix`, `pack`, ...),
+and a hallway pack then becomes `--autocast`'s target (solo, `--autocast-after S` sets when it goes off). For example the
+Tentacles check of 2026-10-27, a full-power cast across the arena-lobby hall into a skeleton pack:
+`.\run.ps1 --gym --no-mic --no-fog --gym-act hall --focus dev --zoom 22 --hold 4 --autocast tentacles --autocast-after 1.4
+--shot <png> --shot-after 2.45`.
+
 ## Code
 
 `GymMap` (the map and the plan), `GymDev` (`scripts/app/dev/gym_dev.gd`: the driver: keys, the switch, the tools, the

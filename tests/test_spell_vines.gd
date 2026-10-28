@@ -213,7 +213,7 @@ func _no_shove_source_moves_a_rooted_actor() -> void:
 	rooted_mon.set_modifier("vines", 1.0, 30.0, Actor.STAT_ROOT)
 	rooted_hero.set_modifier("vines", 1.0, 30.0, Actor.STAT_ROOT)
 	SpellBook.cast("tentacles", caster, 1.0, Vector3.ZERO)
-	await frames(70)
+	await frames(45)   # (the burst has landed; the first swat is at 0.85 s)
 	check(free_mon.global_position.x > 3.0, "tentacles still shove a free actor")
 	near(rooted_mon.global_position.x, -1.5, 0.0001, "tentacles do not move a rooted monster")
 	near(rooted_hero.global_position.z, 1.6, 0.0001, "or a rooted hero")

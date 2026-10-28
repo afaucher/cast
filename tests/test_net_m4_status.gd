@@ -5,7 +5,9 @@ extends NetGameTest
 ##
 ## - VINES: the host's vines root B on B's machine; the host and A show B rooted (the leg wraps); the host's tentacles
 ##   then cannot move B (Actor.shove refuses while rooted, on B's machine);
-## - TENTACLES: once the root is gone, the host's tentacles shove B ONCE, on B's machine, out of the burst;
+## - TENTACLES: once the root is gone, the host's tentacles lay the same sideways oval on all three machines (the aim
+##   travels in the cast); the burst shoves B once and the swats shove it again on their ticks of the shared schedule,
+##   each once, on B's machine;
 ## - BURNING: B catches fire (B's own roll: an owner's ignite); the host and A show the flames, and only B's machine
 ##   ticks the damage (B's HP, as every screen shows it, drops by whole ticks);
 ## - DAMP: A's damp at B puts the fire out on B's machine and soaks B; every screen shows the fire gone and B damp;
@@ -18,6 +20,11 @@ const PEERS := 3
 const SEED := 13
 
 var shoves := 0
+var shove_times: Array[float] = []   ## Session.host_time() of each of this machine's hero's shoves
+
+
+func _init() -> void:
+	net_timeout = 95.0   # (two casts of tentacles stay up 6 s each, waited out)
 
 
 func run_host() -> void:
@@ -51,29 +58,72 @@ func run_host() -> void:
 	command(b, "watch_shove")
 	await sleep(0.2)
 	_cast("tentacles", b_hero.global_position + Vector3(0.6, 0.0, 0.0))
-	await sleep(NetCasts.LEAD + Tentacles.TELEGRAPH + 0.6)
+	await sleep(NetCasts.LEAD + Tentacles.TELEGRAPH + 0.5)
 	command(b, "shoves")
 	check(await wait_reports("shoves", 1, 10.0), "B reports the shoves")
 	var r: Dictionary = reported(b, "shoves")
 	eq(int(r["n"]), 0, "rooted, B was not shoved by the tentacles (B's machine dropped it)")
 	check(float(r["moved"]) < 0.3, "... and did not move (%.2f)" % float(r["moved"]))
 
-	# 2. The root wears off; tentacles shove B once.
-	await until(func() -> bool: return not b_hero.has_modifier("vines"), 4.0)
+	# 2. The root wears off and those tentacles retract; B stands back at its spot. The host's tentacles land beside B,
+	# across the host's line of aim: every machine lays the same oval (the aim travels in the cast event), the burst
+	# shoves B once and then the swats shove it on their ticks, each on B's machine.
+	check(await until(func() -> bool: return not b_hero.has_modifier("vines") and not _tentacles_up(), 12.0), "the root and the first tentacles are gone")
+	await sleep(0.4)
+	reports[a].erase("stood")
+	reports[b].erase("stood")
+	command(b, "stand", {"at": p})
+	check(await wait_reports("stood", 1, 20.0), "B stands back at its spot")
 	await sleep(0.4)
 	reports[b].erase("shoves")
 	command(b, "watch_shove")
 	await sleep(0.2)
-	_cast("tentacles", b_hero.global_position + Vector3(0.6, 0.0, 0.0))
-	await sleep(NetCasts.LEAD + Tentacles.TELEGRAPH + 0.9)
+	var to_b := b_hero.global_position - my_hero().global_position
+	to_b.y = 0.0
+	var side := Vector3(-to_b.z, 0.0, to_b.x).normalized()
+	var aim_at := b_hero.global_position + side * (SpellBook.ALLY_SNAP + 0.3)   # (B off the middle along the oval's WIDTH; no snap onto B)
+	var want_aim := SpellBook.resolve_target(my_hero(), aim_at) - my_hero().global_position
+	want_aim.y = 0.0
+	_cast("tentacles", aim_at)
+	check(await until(_tentacles_up, 2.0), "the host runs the tentacles")
+	var mine := _tentacles()
+	if check(mine != null, "the host's tentacles node"):
+		check(mine.aim.dot(want_aim.normalized()) > 0.995, "the oval lies across the host's aim (%s vs %s)" % [str(mine.aim), str(want_aim.normalized())])
+		command(a, "look", {"what": "tentacles"})
+		command(b, "look", {"what": "tentacles"})
+		check(await wait_reports("tentacles", 2, 10.0), "A and B report their tentacles")
+		for peer in [a, b]:
+			var o: Dictionary = reported(peer, "tentacles")
+			var who := "A" if peer == a else "B"
+			if not check(bool(o.get("up", false)), "%s runs the tentacles" % who):
+				continue
+			near(GameWorld.flat_distance(o["c"], mine.global_position), 0.0, 0.02, "%s's oval is centred where the host's is" % who)
+			check((o["aim"] as Vector3).dot(mine.aim) > 0.9999, "%s's oval lies the same way (%s vs %s)" % [who, str(o["aim"]), str(mine.aim)])
+			near(float(o["w"]), mine.width(), 0.001, "%s's oval is as wide" % who)
+			near(float(o["d"]), mine.depth(), 0.001, "%s's oval is as deep" % who)
+	check(await until(func() -> bool: return not _tentacles_up(), 12.0), "the tentacles retract")
+	await sleep(0.4)
 	command(b, "shoves")
-	check(await wait_reports("shoves", 1, 10.0), "B reports the second burst")
+	check(await wait_reports("shoves", 1, 10.0), "B reports the second cast's shoves")
 	r = reported(b, "shoves")
-	eq(int(r["n"]), 1, "the tentacles shoved B once, on B's machine")
-	check(float(r["moved"]) > 1.5, "... out of the burst (%.2f)" % float(r["moved"]))
+	var times: Array = r["times"]
+	print("[M4] tentacles: B was shoved at %s s after the cast's moment (burst at %.2f, swats every %.1f)" % [str(times), Tentacles.TELEGRAPH, TentaclesSpell.TENTACLES_SWAT_EVERY])
+	check(times.size() >= 2, "the burst and at least one swat shoved B, on B's machine (%d)" % times.size())
+	if not times.is_empty():
+		near(float(times[0]), Tentacles.TELEGRAPH, 0.07, "the first is the burst")
+	var ticks := {}
+	var on_tick := true
+	for t: float in times:
+		var k := roundi((t - Tentacles.TELEGRAPH) / TentaclesSpell.TENTACLES_SWAT_EVERY)
+		if absf(t - (Tentacles.TELEGRAPH + float(k) * TentaclesSpell.TENTACLES_SWAT_EVERY)) > 0.07 or k > TentaclesSpell.tentacles_swats(1.0):
+			on_tick = false
+		ticks[k] = int(ticks.get(k, 0)) + 1
+	check(on_tick, "every shove on a tick of the shared schedule %s" % str(times))
+	eq(ticks.size(), times.size(), "each tick shoved B once (one machine resolved it) %s" % str(ticks))
+	check(float(r["moved"]) > 1.5, "... out of the oval (%.2f)" % float(r["moved"]))
 	await sleep(0.3)
 	near(GameWorld.flat_distance(b_hero.global_position, r["pos"]), 0.0, 0.35, "the host shows B where B landed")
-	command(b, "stand", {"at": p})
+	command(b, "stand", {"at": p, "mend": true})   # (and B heals itself: swats against a wall slam, and the fire below must not hit the 1 HP floor)
 	await sleep(0.6)
 
 	# 3. B burns (its own roll), every screen shows it; only B ticks it.
@@ -150,7 +200,9 @@ func run_client() -> void:
 		return
 	if index == 1:
 		my_hero().spell_slots = ["damp", "coffee", "heal", "corn"] as Array[String]
-	my_hero().shoved.connect(func(_d: Vector3, _n: float) -> void: shoves += 1)
+	my_hero().shoved.connect(func(_d: Vector3, _n: float) -> void:
+		shoves += 1
+		shove_times.append(Session.host_time()))
 	var b_hero := hero_at(3)
 	var hp_at_fire := 0.0
 	var watch_from := Vector3.ZERO
@@ -163,6 +215,8 @@ func run_client() -> void:
 			"stand":
 				my_hero().global_position = cmd["at"]
 				my_hero().snap_to_ground()
+				if bool(cmd.get("mend", false)):
+					my_hero().heal(my_hero().max_hp)
 				await sleep(0.3)
 				report("stood", true)
 			"look":
@@ -180,11 +234,23 @@ func run_client() -> void:
 						report(what, {"speed": me.move_speed_mult()})
 					"armor":
 						report(what, {"own": me.has_modifier("armor"), "seen": b_hero.has_modifier("armor")})
+					"tentacles":
+						var tn := _tentacles()
+						if tn == null:
+							report(what, {"up": false})
+						else:
+							report(what, {"up": true, "c": tn.global_position, "aim": tn.aim, "w": tn.width(), "d": tn.depth()})
 			"watch_shove":
 				n0 = shoves
 				watch_from = my_hero().global_position
 			"shoves":
-				report("shoves", {"n": shoves - n0, "moved": GameWorld.flat_distance(my_hero().global_position, watch_from), "pos": my_hero().global_position})
+				# (when, after the last tentacles cast's moment on the shared clock, each shove since watch_shove landed)
+				var at := float((Session.casts.last_applied.get("tentacles", {}) as Dictionary).get("at", 0.0))
+				var times: Array[float] = []
+				for i in range(n0, shove_times.size()):
+					times.append(snappedf(shove_times[i] - at, 0.001))
+				report("shoves", {"n": shoves - n0, "moved": GameWorld.flat_distance(my_hero().global_position, watch_from), "pos": my_hero().global_position,
+					"times": times})
 			"ignite":
 				hp_at_fire = my_hero().hp
 				Burning.ignite(my_hero(), my_hero(), 8.0)   # (B's own roll came up: the owner sets its hero on fire)
@@ -222,6 +288,20 @@ func _cast(spell: String, aim: Vector3) -> void:
 	c.aim_override = aim
 	check(c.cast_spell(spell, 1.0), "the host cast %s" % spell)
 	c.aim_override = Vector3.INF
+
+
+## This machine's live Tentacles node, or null.
+func _tentacles() -> Tentacles:
+	if GameWorld.root == null:
+		return null
+	for n in GameWorld.root.get_children():
+		if n is Tentacles and not n.is_queued_for_deletion():
+			return n
+	return null
+
+
+func _tentacles_up() -> bool:
+	return _tentacles() != null
 
 
 func _freeze_world() -> void:

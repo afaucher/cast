@@ -10,13 +10,52 @@ and the aim snaps onto a teammate near the cursor. **[decided]** marks the user'
 | Fireball | cast fireball | A projectile that explodes at the aim point; anyone near the blast may catch fire (see Burning) | monsters (damage), **everyone** (fire) | in game |
 | Armor | cast armor | A zone at the aim point where heroes take less damage | heroes | in game |
 | Corn | cast corn | A corn bomb drops from the sky | **everyone** | in game |
-| Tentacles | cast tentacles | Neon-purple tentacles burst from the floor and shove everything outward | **everyone** (shove), monsters (a little damage) | in game |
+| Tentacles | cast tentacles | Neon-purple tentacles burst from the floor in an oval lying across your aim, shove everything outward, then stay up 4–6 s swatting anyone inside back out | **everyone** (shoves), monsters (a little damage, every swat) | in game |
 | Teeth | cast teeth | "Too many teeth" sprout out of everyone in the area, grow for 1–2 s, then explode | **everyone** | in game |
 | Vines | cast vines | Thorny vines root everyone in the area for ~2 s: no walking, no shoving, attacks still work | **everyone** | in game |
 | Damp | cast damp | A wide soggy area: fires go out, nobody can ignite for 15 s, puddles make shoves slide further | **everyone** | in game |
 | Coffee | cast coffee | +60% move and attack speed for 6 s, twitchy, then a 2 s crash (−30%); a downed ally gets up as a gray, leaking zombie | **everyone** in a small radius | in game |
 | Chicken | cast chicken | Four chickens scatter from the aim point for 12 s and peck everything for zero; a pecked monster chases its chicken | **everyone** (pecks for 0); monsters turn on them | in game |
 | Revive | cast revive | Stands every downed ally in a small radius back up at half health; lifts a coffee zombie's curse | heroes (the downed, and zombies) | in game |
+
+## Tentacles [in game; reshaped 2026-10-27]
+**"Cast tentacles":** neon-purple tentacles burst from the floor at the aim point and shove **everyone** out, then stay up
+swatting. Code: `scripts/spells/tentacles.gd` (the spell, a scheduled effect), `tentacles_fx.gd` (the look),
+`defs/tentacles.gd` (the numbers). Tests: `tests/test_spell_tentacles.gd`, and in a crew `tests/test_net_m4_status.gd`.
+
+Playtest feedback item 2 ("most useful in hallways to break up a rush. Maybe like a wall or a push from the player
+outward"). Asked "How do we expect the player to use it? Defensively?" and offered a sideways tentacle wall pushing away
+from the caster, the user said (2026-10-27): **"Let's just increase the duration and that swatting behavior. Let's
+consider increasing the width of the area but not the depth. Again with strength."** and then "Build" on the spec below.
+
+- **Shape [decided]:** an oval lying **sideways across the caster's line of aim** (caster -> target, flat; the caster's
+  facing when it stands on the target). Its depth half-axis, along the aim, is the old radius: 2.2 + 0.8 × power (2.2 to
+  3.0). Its width half-axis, across the aim, is the depth × (1.4 + 0.6 × power): about 3.1 at minimum power, 6.0 at full.
+  Aimed down a hall, the oval spans the hall wall to wall. A body counts when any of it is inside.
+- **Burst (as before):** after the 0.25 s telegraph everyone inside is shoved directly away from the centre, 2.5 + 1.5 ×
+  power (4.0 at full); monsters and breakables (mail) take 6 × power. A pavise's planks facing the centre block it; floor
+  cracks over the oval (three Grime marks along its width); one burst of noise for the monsters.
+- **Duration [decided]:** the tentacles stay up **4 s at minimum power to 6 s at full** (4 + 2 × power) after the burst,
+  then retract over 0.8 s.
+- **Swats [decided]:** every **0.6 s** while up (at the cast's moment + 0.25 + k × 0.6, on the shared clock: 6 swats at
+  minimum power, 9 at full) everyone inside the oval, monsters **and** heroes and the caster, is swatted out of the oval's
+  **nearest edge**: a shove of 1.5 + 0.5 × power (2.0 at full). Across this wide oval that is mostly along the aim: a body
+  on the caster's side of the middle goes back toward the caster, one beyond it on away; near an end of the width it goes
+  out of that end. Monsters and breakables take 6 × power at every swat. No noise per swat.
+- **Unchanged:** cooldown 10 s, the word, Neon ichor, and the description on the spell's card.
+- **Look:** a purple telegraph oval, then about 8 tentacles per radius-3 circle's worth of area (16 at full power, 6 to
+  18) spread over the oval, each leaning toward its nearest edge; they whip out with the burst, wave while up, lash out on
+  every swat (drawn back just before it) and sink away at the end. A faint neon rim marks the oval's edge the whole time and
+  flares on each swat. Cosmetic only, on the same clock (`GameWorld.fx_rng` for the jitter).
+- **Aim reticle:** while Tentacles is the held spell, the aim ring shows its full-power oval round the landing point, turned
+  across the line of aim as the cast will lay it (`AimReticle`; the power is not known until it is spoken).
+- **Co-op:** the aim travels in the cast event (`TentaclesSpell.cast_extra` -> NetCasts' `x`, the `aim` SPAWN var), so every
+  machine lays the same oval from the same moment; each machine applies only the shoves and damage it resolves
+  (`Combat.hits_in_radius` filtered to the oval: a hero's by its owner, the rest by the caster's machine).
+- **Watch for (playtest):** a swat is long enough (over `Actor.WALL_SLAM_MIN_SHOVE`, 1.0) to **slam** a body pinned
+  against a wall inside the oval: 8 damage and a stagger per swat, on top of the swat's 6 × power for a monster. A
+  monster pinned for all nine swats of a full cast takes up to about 140 with the burst; a teammate pinned there can drop to 1 HP (a hero's
+  shove never downs a hero). In the crew test a hero standing near a wall was swatted on all nine ticks.
 
 ## Teeth [decided: core idea]
 **"Cast teeth":** too many teeth sprout out of **anyone** in the area at the aim point, monsters and

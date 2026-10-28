@@ -1,6 +1,7 @@
 class_name TentaclesSpell
 extends SpellDef
-## Tentacles: neon tentacles burst from the floor where you aim (Tentacles, a scheduled effect) and shove everyone outward.
+## Tentacles: neon tentacles burst from the floor where you aim (Tentacles, a scheduled effect) and shove everyone outward,
+## then stay up a few seconds, swatting anyone inside their sideways oval back out of it.
 
 const ID := "tentacles"
 const FOLLOWS := false
@@ -21,32 +22,93 @@ const VOICE := {
 	"tenacles": 0.8, "temicals": 0.7,   # the voice log to 2026-10-24: "TENACLES" 6 misses, "TEMICALS" 1
 }
 
-const TENTACLES_RADIUS_BASE := 2.2
+## The area is an OVAL lying sideways across the caster's line of aim (the user, 2026-10-27: "Let's consider increasing the
+## width of the area but not the depth. Again with strength."): its DEPTH half-axis, along the aim, is the old radius; its
+## WIDTH half-axis, across the aim, is the depth times 1.4 (minimum power) to 2.0 (full).
+const TENTACLES_RADIUS_BASE := 2.2       ## the depth half-axis (along the aim): 2.2 to 3.0
 const TENTACLES_RADIUS_POWER := 0.8
-const TENTACLES_SHOVE_BASE := 2.5
+const TENTACLES_WIDTH_BASE := 1.4        ## the width half-axis = depth x (1.4 + 0.6 x power): about 3.1 to 6.0
+const TENTACLES_WIDTH_POWER := 0.6
+const TENTACLES_SHOVE_BASE := 2.5        ## the burst's shove, straight out from the centre: 2.5 to 4.0
 const TENTACLES_SHOVE_POWER := 1.5
-const TENTACLES_DAMAGE := 6.0     ## monsters only, times power
+const TENTACLES_DAMAGE := 6.0            ## monsters and breakables only, times power: at the burst and at every swat
+## After the burst the tentacles stay up 4 s (minimum power) to 6 s (full) (the user: "Let's just increase the duration and
+## that swatting behavior"), and every SWAT_EVERY seconds on the shared clock they swat everyone inside the oval out of its
+## nearest edge, a smaller shove than the burst's.
+const TENTACLES_UP_BASE := 4.0
+const TENTACLES_UP_POWER := 2.0
+const TENTACLES_SWAT_EVERY := 0.6
+const TENTACLES_SWAT_BASE := 1.5         ## a swat's shove: 1.5 to 2.0
+const TENTACLES_SWAT_POWER := 0.5
 
 
+static func _p(power: float) -> float:
+	return clampf(power, SpellBook.MIN_POWER, 1.0)
+
+
+## The oval's DEPTH half-axis (along the caster's aim): the old radius.
 static func tentacles_radius(power: float) -> float:
-	return TENTACLES_RADIUS_BASE + TENTACLES_RADIUS_POWER * clampf(power, SpellBook.MIN_POWER, 1.0)
+	return TENTACLES_RADIUS_BASE + TENTACLES_RADIUS_POWER * _p(power)
 
 
-## World units everyone in the radius is shoved (before each actor's shove_mult).
+## The same as tentacles_radius: the oval's half-axis along the aim.
+static func tentacles_depth(power: float) -> float:
+	return tentacles_radius(power)
+
+
+## The oval's WIDTH half-axis (across the aim).
+static func tentacles_width(power: float) -> float:
+	return tentacles_depth(power) * (TENTACLES_WIDTH_BASE + TENTACLES_WIDTH_POWER * _p(power))
+
+
+## World units everyone in the oval is shoved by the burst (before each actor's shove_mult).
 static func tentacles_distance(power: float) -> float:
-	return TENTACLES_SHOVE_BASE + TENTACLES_SHOVE_POWER * clampf(power, SpellBook.MIN_POWER, 1.0)
+	return TENTACLES_SHOVE_BASE + TENTACLES_SHOVE_POWER * _p(power)
 
 
 static func tentacles_damage(power: float) -> float:
-	return TENTACLES_DAMAGE * clampf(power, SpellBook.MIN_POWER, 1.0)
+	return TENTACLES_DAMAGE * _p(power)
 
 
-static func cast(caster: Actor, power: float, target: Vector3, start: float, _extra: Dictionary) -> Node:
+## Seconds the tentacles stay up after the burst (then they retract).
+static func tentacles_duration(power: float) -> float:
+	return TENTACLES_UP_BASE + TENTACLES_UP_POWER * _p(power)
+
+
+## World units a swat shoves (before each actor's shove_mult).
+static func tentacles_swat_distance(power: float) -> float:
+	return TENTACLES_SWAT_BASE + TENTACLES_SWAT_POWER * _p(power)
+
+
+## How many swats a cast makes: one every TENTACLES_SWAT_EVERY after the burst while the tentacles are up (6 to 9).
+static func tentacles_swats(power: float) -> int:
+	return floori((tentacles_duration(power) - 0.001) / TENTACLES_SWAT_EVERY)
+
+
+## The line of aim the oval lies across: caster -> target, flat; the caster's facing when it stands on the target.
+static func aim_dir(caster: Actor, target: Vector3) -> Vector3:
+	var d := target - caster.global_position
+	d.y = 0.0
+	if d.length() < 0.05:
+		d = caster.facing
+		d.y = 0.0
+	return d.normalized() if d.length() > 0.001 else Vector3.FORWARD
+
+
+## Fixed on the caster's machine and sent with the cast (NetCasts' `x`), so every machine lays the oval the same way.
+static func cast_extra(caster: Actor, target: Vector3) -> Dictionary:
+	return {"d": aim_dir(caster, target)}
+
+
+static func cast(caster: Actor, power: float, target: Vector3, start: float, extra: Dictionary) -> Node:
 	var t := Tentacles.new()
 	t.power = clampf(power, SpellBook.MIN_POWER, 1.0)
 	t.source_team = caster.team
 	t.caster = caster
 	t.start_time = start
+	var d: Vector3 = extra.get("d", aim_dir(caster, target))
+	d.y = 0.0
+	t.aim = d.normalized() if d.length() > 0.001 else Vector3.FORWARD
 	GameWorld.spawn(t, target)
 	return t
 

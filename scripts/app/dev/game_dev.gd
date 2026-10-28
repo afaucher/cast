@@ -15,7 +15,7 @@ extends "res://scripts/app/game.gd"
 ## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md);
 ## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z --walk-path x0,z0,x1,z1 (frame sequences for flicker hunts:
 ## _take_shot_later); and (GymDev.parse) --gym: the test gym (GymMap's floor and GymDev's panel, solo only:
-## docs/design/test-gym.md).
+## docs/design/test-gym.md), with --gym-tour <dir> and --gym-act <action> (one panel action as it opens, for screenshots).
 
 var _dev_monsters: Array[Monster] = []   ## --spawn-near
 var _dev_sharks: Array[Shark] = []        ## --to-shark (the shark the --shark-demo acts on)
@@ -192,6 +192,14 @@ func _dev_on_floor_ready() -> void:
 		gym.setup(self)
 		if opts.has("gym_tour"):
 			GymTour.new().run(self, gym, str(opts["gym_tour"]))   # (--gym-tour <dir>: the docs' screenshots, then quit)
+		if opts.has("gym_act"):
+			# --gym-act <action>: press that panel button once (screenshots). A hallway pack becomes --autocast's target.
+			var act := str(opts["gym_act"])
+			if act == "hall" or act == "hall_mix":
+				for m in gym.hall_pack(act == "hall_mix"):
+					_dev_monsters.append(m as Monster)
+			else:
+				gym.act(act)
 	_sewer_floor_ready()
 	_lava_floor_ready()
 	if _sewer() > 0 and opts.has("sewer_demo"):
@@ -224,7 +232,7 @@ func _dev_after_barrier() -> bool:
 	if opts.has("kit_demo"):
 		_kit_demo(str(opts["kit_demo"]))
 	if opts.has("autocast"):
-		await get_tree().create_timer(1.0).timeout
+		await get_tree().create_timer(1.0 if _shared else float(opts.get("autocast_after", 1.0))).timeout
 		if _shared:
 			# A shared run (M4): the world is frozen behind the barrier, so cast once the floor runs and the crew is out of
 			# the van (the cast is an event that lands on every screen).

@@ -90,6 +90,9 @@ static func parse(args: PackedStringArray, opts: Dictionary) -> void:
 	var t := args.find("--gym-tour")
 	if t >= 0 and t + 1 < args.size():
 		opts["gym_tour"] = args[t + 1]
+	var a := args.find("--gym-act")
+	if a >= 0 and a + 1 < args.size():
+		opts["gym_act"] = args[a + 1]   # (a panel action pressed once the gym is up, for screenshots: e.g. hall)
 
 
 func _init() -> void:
