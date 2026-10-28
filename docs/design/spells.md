@@ -56,6 +56,8 @@ consider increasing the width of the area but not the depth. Again with strength
   against a wall inside the oval: 8 damage and a stagger per swat, on top of the swat's 6 × power for a monster. A
   monster pinned for all nine swats of a full cast takes up to about 140 with the burst; a teammate pinned there can drop to 1 HP (a hero's
   shove never downs a hero). In the crew test a hero standing near a wall was swatted on all nine ticks.
+  Decision (2026-10-27): offered "swats skip wall slams" and a new desc ("... then keep swatting anyone inside for a few
+  seconds"), the user said "Leave both as is": swats keep slamming, and the desc stays as it was.
 
 ## Teeth [decided: core idea]
 **"Cast teeth":** too many teeth sprout out of **anyone** in the area at the aim point, monsters and
