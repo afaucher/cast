@@ -27,7 +27,7 @@ const MAX_FOLLOWERS := 4            ## employee rows shown; more becomes "+N mor
 const NAME_MIN_SCALE := 0.8         ## a long name shrinks to this share of its size before it is cut
 const ROW_GAP := 8.0
 const LIST_GAP := 10.0
-const PAD := 12.0                   ## the plate's inner padding (right, top and bottom; the left is the portrait)
+const PAD := 12.0                   ## the follower list box's padding past its bars (a row plate's right end is its curve: plate_rect)
 const CHIP_GAP := 10.0              ## between the name and the chip
 ## Row geometry (canvas units, 1600x900): portrait diameter, row height, text x, name size, chip size, bar width / height,
 ## the name's baseline and the bar's top (both from the row top), the ring width and the badge size.
@@ -126,10 +126,12 @@ static func spec(is_you: bool) -> Dictionary:
 	return YOU if is_you else ALLY
 
 
-## A row's plate: from the portrait's centre to PAD past the bar, inset 4 from the row's top and bottom.
+## A row's plate: a pill from the portrait's centre, inset 4 from the row's top and bottom. Its round right end starts where
+## the bar ends, so the square bar never runs into the curve (the user, 2026-10-28: "Stop the bar before the curve").
 static func plate_rect(s: Dictionary, top: float) -> Rect2:
-	var right := float(s["tx"]) + float(s["bar_w"]) + PAD
-	return Rect2(Vector2(PORTRAIT_X, top + 4.0), Vector2(right - PORTRAIT_X, float(s["h"]) - 8.0))
+	var h := float(s["h"]) - 8.0
+	var right := float(s["tx"]) + float(s["bar_w"]) + h * 0.5
+	return Rect2(Vector2(PORTRAIT_X, top + 4.0), Vector2(right - PORTRAIT_X, h))
 
 
 func row_top(i: int) -> float:

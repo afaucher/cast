@@ -130,10 +130,11 @@ func _party_frame(hero: Hero, ally: Hero) -> void:
 		check(int(fit["size"]) >= int(floorf(25 * PartyFrame.NAME_MIN_SCALE)), "it never shrinks below the floor")
 		check(not bool(fit["cut"]) or str(fit["text"]).ends_with("…"), "a cut name ends in an ellipsis")
 	check(bool(PartyFrame.fit_name("WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", font, 25, w)["cut"]), "32 wide letters are cut")
-	# The plates keep PAD inside them past the bar, and their rows do not overlap.
+	# The plates' round right ends start where the bar ends (the bar never runs into the curve), and their rows do not overlap.
 	for sp: Dictionary in [PartyFrame.YOU, PartyFrame.ALLY]:
 		var plate := PartyFrame.plate_rect(sp, 0.0)
-		near(plate.end.x - (float(sp["tx"]) + float(sp["bar_w"])), PartyFrame.PAD, 0.01, "the plate pads the bar's right end")
+		near(plate.end.x - plate.size.y * 0.5, float(sp["tx"]) + float(sp["bar_w"]), 0.01, "the plate's curve starts at the bar's right end")
+		check(plate.size.y * 0.5 >= PartyFrame.PAD, "... at least PAD past it")
 		check(plate.end.y - (float(sp["bar_y"]) + float(sp["bar_h"])) >= 8.0, "... and its bottom")
 		check(float(sp["name_y"]) - float(sp["name"]) * 0.75 - plate.position.y >= 8.0, "... and the name's top")
 	var frame := PartyFrame.new()
