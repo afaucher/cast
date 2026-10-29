@@ -43,7 +43,7 @@ func _check_experiments() -> void:
 		rows[str(row[0])] = row
 	check(rows.has("necro_rim") and rows.has("grimoire"), "the panel has the Necro rim and Grimoire pickers")
 	eq(str(rows["necro_rim"][1]), "Necro rim", "its label")
-	eq(str(rows["grimoire"][2]), str(["open", "damaged", "shut", "burnt"]), "the grimoire's states")
+	eq(str(rows["grimoire"][2]), str(["open", "weakened", "failing", "shut"]), "the grimoire's states")
 	check(not NecroLook.pick("grimoire", "nope"), "an unknown state is refused")
 	check(not NecroLook.pick("necro_nope", "on"), "an unknown switch is refused")
 	eq(NecroLook.grimoire, "open", "a refused pick changes nothing")
@@ -111,15 +111,18 @@ func _check_grimoires() -> void:
 	for st: String in GrimoireModel.STANDS:
 		for state: String in GrimoireModel.STATES:
 			var g := GrimoireModel.make(st, state)
-			var lit := state == "open" or state == "damaged"
+			var lit := state != "shut"
 			eq(g.is_lit(), lit, "%s %s: lit or not" % [st, state])
 			check(g.find_child("Sigil", true, false) != null and (g.find_child("Sigil", true, false) as Node3D).visible == lit,
 					"%s %s: the circle %s" % [st, state, "lit" if lit else "out"])
 			check((g.find_child("Column", true, false) != null) == lit, "%s %s: the column of light %s" % [st, state, "up" if lit else "gone"])
 			check((g.find_child("BookLight", true, false) != null) == lit, "%s %s: the pale light %s" % [st, state, "on" if lit else "off"])
-			check((g.find_child("Smoke", true, false) != null) == (state == "burnt"), "%s %s: smoke only when burnt" % [st, state])
+			check(g.find_child("Smoke", true, false) == null, "%s %s: no smoke (no burnt book)" % [st, state])
 			check(g.triangle_count() < 6000, "%s %s: cheap (%d tris)" % [st, state, g.triangle_count()])
-			check(g.scale.x > 1.2 and g.ui_height > 3.5, "%s %s: an outsized set piece (ui height %.1f)" % [st, state, g.ui_height])
+			if st == "altar":
+				check(g.scale.x > 1.2 and g.ui_height > 3.5, "%s %s: an outsized set piece (ui height %.1f)" % [st, state, g.ui_height])
+			else:
+				check(g.scale.x < 1.0, "%s %s: the lectern much smaller" % [st, state])
 			check(_no_text(g), "%s %s: no text anywhere" % [st, state])
 			g.free()
 	check(not NecroLook.FLOOR_SHADER.contains("texture"), "the circle is drawn from rings and spokes, no glyph texture")

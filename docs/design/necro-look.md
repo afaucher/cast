@@ -22,6 +22,12 @@ on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raise
   thin waist (0.26, was 0.46) and is shallower; the shoulders, arms and legs moved in to match, and a hunched upper back
   was added. The user: "Better!"
 - **No ring under a rising zombie**: "Drop the ring." The motes rising off it stay as the "it will get up" tell.
+- **The grimoire: a much smaller lectern, and the phases in the effects round the book.** The user: "The lectern should be
+  much smaller." and "The damaged and burnt don't read correctly. Maybe let's do it with the effects surrounding the book
+  instead. The book itself could go from open to closed." The lectern set piece is now 0.85 (was 1.4; the altar stays
+  1.4). The states are **open**, **weakened**, **failing** and **shut**: the book stays whole and open until it is shut,
+  and the column of light thins and stutters, the circle breaks up, the circling pages and the candles go out and the
+  light drops as it weakens. The torn and burnt books are gone. (The sections below still describe the first version.)
 
 ## What the user is choosing
 

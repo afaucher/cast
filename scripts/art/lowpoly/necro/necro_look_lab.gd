@@ -10,7 +10,7 @@ extends LabBase
 ## PNGs, next to --shot (docs/design/necro_look/):
 ##   zombie.png, zombie_2x.png       a row per zombie: stand, shamble, about to rise, burnt (bright), stand, rising (dark)
 ##   acolyte.png, acolyte_2x.png     a row per acolyte: idle, raising, fleeing (bright), idle, raising (dark)
-##   grimoire.png, grimoire_2x.png   a row per stand: open, damaged, shut, burnt
+##   grimoire.png, grimoire_2x.png   a row per stand: open, weakened, failing, shut
 ##   grimoire_scale.png              the whole game frame: the origin gate, a hellgate and both grimoires, Wick and Rebar
 ##   lineup.png, lineup_2x.png       Wick, Rebar, the grunt, the brute, the staff, the henchman, both zombies, both acolytes
 ##   strip_rim.png                   the zombies and the acolytes with the rim off and on, bright and dark
@@ -268,7 +268,7 @@ func _grimoire_sheet(dir: String) -> void:
 		for st: String in NecroLook.STATES:
 			row.append(await _cell("grimoire", v, st, "bright", CROP_G))
 		rows.append(row)
-	var blocks := [[LIGHT_NAMES["bright"], ["open (pulsing)", "damaged", "slammed shut", "burnt"]]]
+	var blocks := [[LIGHT_NAMES["bright"], ["open (pulsing)", "weakened", "failing", "slammed shut"]]]
 	await _sheet("%s/grimoire.png" % dir, "The grimoire at the game camera (size 24, 1:1), pale blue  -  docs/design/necro-look.md",
 			NecroBody.VARIANTS["grimoire"], blocks, rows, CROP_G, 440)
 	await _sheet("%s/grimoire_2x.png" % dir, "The same at 2x (the middle of each cell)", NecroBody.VARIANTS["grimoire"], blocks, rows, CROP_G, 440, 2)
@@ -364,7 +364,7 @@ func _closeups(dir: String) -> void:
 	var sets := {
 		"zombie": [["zombie", "mourner", "stand"], ["zombie", "mourner", "rising"], ["zombie", "digger", "stand"], ["zombie", "digger", "shamble"], ["zombie", "mourner", "burnt"]],
 		"acolyte": [["acolyte", "cowl", "idle"], ["acolyte", "cowl", "raise"], ["acolyte", "mask", "idle"], ["acolyte", "mask", "raise"], ["acolyte", "cowl", "flee"]],
-		"grimoire": [["grimoire", "lectern", "open"], ["grimoire", "altar", "open"], ["grimoire", "lectern", "damaged"], ["grimoire", "altar", "shut"], ["grimoire", "lectern", "burnt"]],
+		"grimoire": [["grimoire", "lectern", "open"], ["grimoire", "lectern", "weakened"], ["grimoire", "lectern", "failing"], ["grimoire", "lectern", "shut"], ["grimoire", "altar", "open"]],
 	}
 	for k: String in sets:
 		var row: Array[Image] = []

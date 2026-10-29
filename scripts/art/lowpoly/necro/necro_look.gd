@@ -12,13 +12,13 @@ extends RefCounted
 ##
 ## Two live switches (the gym panel's Experiments rows, GymDev.set_experiment -> pick):
 ##   necro_rim   off | on: the rim on the zombies and the acolytes (the eyes, hands and flames glow either way)
-##   grimoire    open | damaged | shut | burnt: the state of every grimoire the panel put down
+##   grimoire    open | weakened | failing | shut: the state of every grimoire the panel put down
 ## Every NecroBody is in GhostLook.GROUP, so a "Ghost colour" pick redresses them too (their glow paint is baked into the
 ## faces, so a refresh rebuilds them).
 
 const RIM := 0.40                   ## the dead's rim gain (under the ghosts' soft 0.55: they are bodies, not ghosts)
 const RIM_ACOLYTE := 0.22           ## a living cultist: a faint edge of what it channels
-const STATES: Array[String] = ["open", "damaged", "shut", "burnt"]
+const STATES: Array[String] = ["open", "weakened", "failing", "shut"]   ## GrimoireModel.STATES
 
 static var rim := true
 static var grimoire := "open"
