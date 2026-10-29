@@ -31,7 +31,7 @@ extends Node
 ##   - the GHOST LOOK test (docs/design/ghost-look.md, look-dev only): the Ghosts spawns (a skeleton, a suit of armour, a
 ##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost
 ##   - the HAUNT LOOK test (docs/design/haunt-look.md, look-dev only): the Haunts spawns (the suit of armour and the crypt
-##     skeleton, dormant and possessed: HauntPiece) and the "Ghost form" picker (off / glass / spirit: the player's own
+##     skeleton, dormant and possessed: HauntPiece) and the "Ghost form" picker (off / ghost: the player's own
 ##     hero in ghost form, GhostForm; it follows the player through a character switch)
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)

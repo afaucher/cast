@@ -9,11 +9,11 @@ extends "res://scripts/art/lowpoly/ghost/ghost_look_lab.gd"
 ## PNGs, next to --shot (docs/design/haunt_look/):
 ##   armour.png          the armour dormant / guard / lurch: bright room and dark corner at 1:1, then the same at 2x
 ##   skeleton.png        the skeleton slumped / risen: the same columns
-##   ghost_hero.png      Wick and Rebar off / glass / spirit, a possessed skeleton on their left and a wisp on their right,
+##   ghost_hero.png      Wick and Rebar off / ghost, a possessed skeleton on their left and a wisp on their right,
 ##                       bright room then dark corner, 1:1
 ##   ghost_hero_2x.png   the same at 2x
 ##   lineup.png          everything in a row at 1:1 for scale: Wick, Rebar, a grunt, the armour's three stances, the
-##                       skeleton's three, Wick in glass and in spirit
+##                       skeleton's three, Wick and Rebar in ghost form
 ##   close_armour.png, close_skeleton.png, close_hero.png   close-ups at the game's angle (size 7)
 
 const CLOSE_SIZE := 7.0
@@ -62,7 +62,7 @@ func _run() -> void:
 		hero_rows.append(row)
 		hero_rows_2x.append(row2)
 	var blocks := [[LIGHT_NAMES["bright"], GhostForm.TREATMENTS], [LIGHT_NAMES["dark"], GhostForm.TREATMENTS]]
-	await _sheet("%s/ghost_hero.png" % dir, "Ghost form: off / glass / spirit, a possessed skeleton (left) and a wisp (right) for contrast, 1:1",
+	await _sheet("%s/ghost_hero.png" % dir, "Ghost form: off / ghost, a possessed skeleton (left) and a wisp (right) for contrast, 1:1",
 			["Wick", "Rebar"], blocks, hero_rows, 294)
 	await _sheet("%s/ghost_hero_2x.png" % dir, "Ghost form at 2x (the middle of each cell)", ["Wick", "Rebar"], blocks, hero_rows_2x, 294)
 	await _lineup("%s/lineup.png" % dir)
@@ -82,7 +82,7 @@ func _run() -> void:
 		for i in items.size():
 			_put(items[i], at + RIGHT * 1.9 * (float(i) - 1.0))
 		save_shot(await _crop_at(at + Vector3(0, 0.9, 0)), "%s/vs_wisp_%s.png" % [dir, light])
-	await _close("%s/close_hero.png" % dir, [], ["wick:off", "wick:glass", "wick:spirit", "rebar:off", "rebar:glass", "rebar:spirit"], 1.8)
+	await _close("%s/close_hero.png" % dir, [], ["wick:off", "wick:ghost", "rebar:off", "rebar:ghost"], 1.8)
 	GhostLook.reset()
 	GhostForm.clock = -1.0
 	finish()
@@ -176,7 +176,7 @@ func _lineup(path: String) -> void:
 	_clear()
 	var at: Vector3 = spots["bright"]
 	var items: Array[String] = ["wick", "rebar", "grunt", "armour_dormant", "armour_guard", "armour_lurch",
-		"skeleton_slumped", "skeleton_risen", "wick:glass", "wick:spirit"]
+		"skeleton_slumped", "skeleton_risen", "wick:ghost", "rebar:ghost"]
 	var step := 1.75
 	var xs: Array[float] = []
 	var x := 0.0
@@ -196,7 +196,7 @@ func _lineup(path: String) -> void:
 	save_shot(img.get_region(Rect2i(0, img.get_height() / 2 - h / 2 - 20, img.get_width(), h)), path)
 
 
-## Put one lineup or close-up item down: a hero ("wick", "rebar", "wick:glass"), "grunt" or a HauntPiece kind.
+## Put one lineup or close-up item down: a hero ("wick", "rebar", "wick:ghost"), "grunt" or a HauntPiece kind.
 func _put(it: String, p: Vector3) -> void:
 	if it == "grunt":
 		var g := GruntModel.new()

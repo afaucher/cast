@@ -181,12 +181,17 @@ func refresh() -> void:
 
 ## The ghost's body round a possessed host: a copy of each part (not the plinth), grown round its own middle, as a child of
 ## the part so it follows the pose.
-func _add_vapour() -> void:
+## The vapour shader (the wisp's, one even tint: no dark eye parts, no vertex colours), shared with GhostForm.
+static func vapour_shader() -> Shader:
 	if _vapour_shader == null:
 		_vapour_shader = Shader.new()
 		_vapour_shader.code = GhostLook.WISP_SHADER.replace("float eye = 1.0 - step(0.25, lum);", "float eye = 0.0;") 				.replace("ghost_color.rgb * COLOR.rgb", "ghost_color.rgb")
+	return _vapour_shader
+
+
+func _add_vapour() -> void:
 	vapour = ShaderMaterial.new()
-	vapour.shader = _vapour_shader
+	vapour.shader = vapour_shader()
 	for p: MeshInstance3D in model.parts.values():
 		if p.name == "stand":
 			continue

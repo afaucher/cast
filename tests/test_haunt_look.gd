@@ -108,8 +108,8 @@ func _has_ink(passes: Array[Material]) -> bool:
 	return false
 
 
-## Ghost form on Wick and Rebar: every part redrawn in the chain (depth, body, ink or halo), the colours kept (vertex
-## colours, nothing tinted cold), off puts everything back; a held item and a rebuilt arm get dressed too.
+## Ghost form on Wick and Rebar: just the ghost shape (every part in the warm vapour, no body, no shadow), off puts
+## everything back; a held item is made see-through.
 func _check_ghost_form() -> void:
 	for which: String in ["wick", "rebar"]:
 		var m: LowPolyModel = RebarModel.new() if which == "rebar" else WickModel.new()
@@ -117,32 +117,21 @@ func _check_ghost_form() -> void:
 		var own := {}
 		for part: MeshInstance3D in m.parts.values():
 			own[part] = part.material_override
-		for t: String in ["glass", "spirit"]:
-			var f := GhostForm.apply(m, t)
-			if not check(f != null and GhostForm.of(m) == f, "%s: %s applied" % [which, t]):
-				continue
-			for part: MeshInstance3D in m.parts.values():
-				check(part.material_override == f.head, "%s %s: %s redrawn" % [which, t, part.name])
-			check(f.head.render_priority < f.body.render_priority, "%s: the depth pass draws first" % t)
-			check(f.head.next_pass == f.body, "%s: the body after the depth pass" % t)
-			var warm: Color = f.body.get_shader_parameter("rim_color")
-			check(warm.r > warm.b, "%s: a warm edge (never the enemy ghosts' cold one)" % t)
-			check(float(f.body.get_shader_parameter("alpha")) < 0.6, "%s: see-through" % t)
-			var tail := f.body.next_pass as ShaderMaterial
-			if t == "glass":
-				check(tail != null and tail.shader.code == GhostForm.INK_SHADER, "glass: keeps a translucent ink outline")
-			else:
-				check(tail != null and tail.shader.code == GhostLook.SHELL_SHADER, "spirit: a soft halo instead of the ink")
-				check(float(f.body.get_shader_parameter("fade_h")) > 0.0, "spirit: the legs fade toward the floor")
-				check((m.get_part("body") as MeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "spirit: no shadow")
-		# a held item: not the hero's material, so only made see-through
+		var f := GhostForm.apply(m, "ghost")
+		if not check(f != null and GhostForm.of(m) == f, "%s: ghost applied" % which):
+			continue
+		for part: MeshInstance3D in m.parts.values():
+			check(part.material_override == f.vapour, "%s: %s is ghost vapour" % [which, part.name])
+			check(part.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "%s: %s casts no shadow" % [which, part.name])
+		eq(f.vapour.shader, HauntPiece.vapour_shader(), "%s: the possessed hosts' vapour" % which)
+		var warm: Color = f.vapour.get_shader_parameter("ghost_color")
+		check(warm.r > warm.b, "%s: warm (never the enemy ghosts' cold colour)" % which)
 		var item := MeshInstance3D.new()
 		item.mesh = BoxMesh.new()
 		m.hold_item(item)
-		var f2 := GhostForm.of(m)
-		f2.scan()
+		f.scan()
 		check(item.transparency > 0.3, "%s: a held item is made see-through" % which)
-		check(f2.counts().x >= m.parts.size() and f2.counts().y >= 1, "%s: the parts redrawn, the item only see-through (%s)" % [which, f2.counts()])
+		check(f.counts().x >= m.parts.size() and f.counts().y >= 1, "%s: the parts redrawn, the item only see-through (%s)" % [which, f.counts()])
 		GhostForm.apply(m, "off")
 		check(GhostForm.of(m) == null, "%s: off removes it" % which)
 		for part: MeshInstance3D in own:
@@ -150,7 +139,7 @@ func _check_ghost_form() -> void:
 		near(item.transparency, 0.0, 0.0001, "%s: the held item solid again" % which)
 		m.free()
 	check(not GhostForm.pick(null, "nope"), "an unknown treatment is refused")
-	check(GhostForm.pick(null, "glass") and GhostForm.treatment == "glass", "a pick with no model still sets the treatment")
+	check(GhostForm.pick(null, "ghost") and GhostForm.treatment == "ghost", "a pick with no model still sets the treatment")
 	GhostForm.treatment = "off"
 
 
@@ -165,7 +154,7 @@ func _check_entries() -> void:
 		rows[str(row[0])] = row
 	if check(rows.has("hero_ghost"), "the panel has the Ghost form picker"):
 		eq(str(rows["hero_ghost"][1]), "Ghost form", "its label")
-		eq(str(rows["hero_ghost"][2]), str(["off", "glass", "spirit"]), "off and the two treatments")
+		eq(str(rows["hero_ghost"][2]), str(["off", "ghost"]), "off and the ghost shape")
 		eq(str(rows["hero_ghost"][3]), "off", "off by default")
 
 

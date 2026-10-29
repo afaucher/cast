@@ -31,6 +31,10 @@ armour, a skeleton), and ghost form is a whole-body transform you cast on yourse
   the wisp). Seen in motion in the gym, the user: "Tone the particles down more but otherwise looks good". Toned down: fewer
   puffs (5 off the head, 6 off the shoulders), smaller, and fainter (0.9 of the wisp's alpha, was 1.6). Kept: **shell +
   seep**, the default the user saw.
+- **The player's ghost form is just the ghost shape** (the user: "lets actually remove the main body and make it just
+  the ghost shape"): every part of the hero in the same vapour as the possessed hosts' ghost body, warm (not the enemies'
+  cold colour), no body, no ink, no shadow (`GhostForm`, one treatment, "ghost"; glass and spirit are gone). The gym's
+  Ghost form row is off / ghost.
 - **The niche is dropped for now.** The single niche "doesn't read" (it looked like a free-standing box). A wall of stacked
   burial slots was tried next and also failed ("No, that isn't working"): at the game camera it still read as a chest in
   the middle of the room. The user: "Drop the niche for now." The dormant skeleton is slumped only, and the risen one stands
