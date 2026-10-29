@@ -30,6 +30,8 @@ extends Node
 ##     generated floor as ever
 ##   - the GHOST LOOK test (docs/design/ghost-look.md, look-dev only): the Ghosts spawns (a skeleton, a suit of armour, a
 ##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost
+##   - the HAUNTED ROOMS test (docs/design/mansion-rooms.md, church-rooms.md, look-dev only): the Haunted rooms spawns (key
+##     mansion and church props: HauntProps) and the "Haunt light" picker (HauntLook: game / moonlight / candle), live
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -456,7 +458,8 @@ static func experiments() -> Array:
 		["map", "Map", ["gym", "generated"], "generated" if generated else "gym"],
 		["ghost_look", "Ghost look", GhostLook.LOOKS, GhostLook.look],
 		["ghost_strength", "Ghost strength", GhostLook.STRENGTHS, GhostLook.strength],
-		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour]]
+		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour],
+		["haunt_light", "Haunt light", HauntLook.MODES, HauntLook.light]]
 
 
 ## The Go to buttons: the gym's places, or on a generated floor its landings.
@@ -485,6 +488,12 @@ func set_experiment(nm: String, value: String) -> void:
 			return
 		panel.set_experiment(nm, value)
 		_status("ghosts: %s, %s, %s" % [GhostLook.look, GhostLook.strength, GhostLook.colour])
+		return
+	if nm == "haunt_light":
+		if not HauntLook.pick(value, get_tree().root):
+			return
+		panel.set_experiment(nm, value)
+		_status("haunt light: %s" % value)
 		return
 	if nm == "walk":
 		if value != "old" and value != "new":

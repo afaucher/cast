@@ -15,13 +15,15 @@ extends RefCounted
 ##   decor    every RoomThemeDefs.DECOR kind (set dressing, not an actor)
 ##   ghost    the ghost look test (docs/design/ghost-look.md, LOOK-DEV ONLY): GhostBody's skeleton, armour and wisp, plain
 ##            cosmetic nodes (no AI, no combat, nothing networked) that the panel's Ghost look / strength / colour redress
+##   haunt    the haunted rooms' key props (docs/design/mansion-rooms.md, church-rooms.md, LOOK-DEV ONLY): HauntProps.GYM_KINDS,
+##            plain cosmetic nodes (a wall piece backs onto the nearest wall); the panel's Haunt light relights the gym
 ## Entries: {id, group, key (the registry key), label, skip ("" or why it has no button)}. spawn() puts `n` of one round a
 ## world point on valid cells and returns what it made. Dev only: solo, so every spawn is this machine's own (GameWorld).
 
 const DUMMY_HP := 5000.0
 const PROP_YAW := 45.0             ## a free-standing prop faces the camera
 const GHOST_YAW := -120.0          ## a ghost's host (its front is -Z) turned three-quarters to the camera
-const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost"]
+const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost", "haunt"]
 
 
 ## Every entry, in GROUPS order and each registry's own order.
@@ -55,6 +57,8 @@ static func entries() -> Array[Dictionary]:
 		out.append(_e("decor", kind, kind.capitalize()))
 	for kind: String in GhostBody.KINDS:
 		out.append(_e("ghost", kind, "ghost: " + kind))
+	for kind: String in HauntProps.GYM_KINDS:
+		out.append(_e("haunt", kind, "%s: %s" % [HauntProps.row(kind)["set"], HauntProps.row(kind)["label"]]))
 	return out
 
 
@@ -149,6 +153,11 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				g.global_position = Hex.to_world(c, _level(map, c))
 				g.rotation_degrees.y = GHOST_YAW
 				out.append(g)
+		"haunt":
+			for c in cells_near(map, at, n, 2):
+				var hp := HauntProps.gym_spawn(key, Hex.to_world(c, _level(map, c)))
+				if hp != null:
+					out.append(hp)
 	return out
 
 
