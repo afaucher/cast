@@ -30,6 +30,8 @@ extends Node
 ##     generated floor as ever
 ##   - the GHOST LOOK test (docs/design/ghost-look.md, look-dev only): the Ghosts spawns (a skeleton, a suit of armour, a
 ##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost
+##   - the NECRO LOOK test (docs/design/necro-look.md, look-dev only): the Necro spawns (the zombies, the acolytes and the
+##     grimoire: NecroBody) and the "Necro rim" / "Grimoire" pickers (NecroLook), live; `--gym-act necro` lays out a row
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -371,6 +373,8 @@ func act(nm: String) -> void:
 			_status("a hallway pack of %d" % hall_pack(nm == "hall_mix").size())
 		"ghosts":
 			_status("ghosts: %d put down" % ghost_row(ring_point()).size())
+		"necro":
+			_status("necro: %d put down" % necro_row(ring_point()).size())
 		"cry":
 			var kinds := cry_each()
 			_status("war cry: %s" % ", ".join(kinds) if not kinds.is_empty() else "war cry: no monster to yell")
@@ -386,6 +390,19 @@ func ghost_row(at: Vector3) -> Array[Node]:
 	for i in GhostBody.KINDS.size():
 		var e := GymSpawns.find("ghost:" + GhostBody.KINDS[i])
 		made.append_array(GymSpawns.spawn(e, at + across * 2.2 * float(i - 1), 1, null, null))
+	spawned.append_array(made)
+	return made
+
+
+## The necro look test's row (`--gym-act necro`, for screenshots): a shambling and a rising zombie, an acolyte raising one,
+## and the grimoire on its lectern behind them, round `at`. Returns what it put down.
+func necro_row(at: Vector3) -> Array[Node]:
+	var made: Array[Node] = []
+	var across := Vector3(0.7071, 0.0, -0.7071)
+	var back := Vector3(-0.7071, 0.0, -0.7071)
+	for r: Array in [["zombie:mourner:shamble", -3.0, 0.0], ["zombie:digger:rising", -1.0, 0.0], ["acolyte:cowl:raise", 1.5, 0.0],
+			["grimoire:lectern:state", 0.0, 6.0]]:
+		made.append_array(GymSpawns.spawn(GymSpawns.find("necro:" + str(r[0])), at + across * float(r[1]) + back * float(r[2]), 1, null, null))
 	spawned.append_array(made)
 	return made
 
@@ -456,7 +473,9 @@ static func experiments() -> Array:
 		["map", "Map", ["gym", "generated"], "generated" if generated else "gym"],
 		["ghost_look", "Ghost look", GhostLook.LOOKS, GhostLook.look],
 		["ghost_strength", "Ghost strength", GhostLook.STRENGTHS, GhostLook.strength],
-		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour]]
+		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour],
+		["necro_rim", "Necro rim", ["off", "on"], "on" if NecroLook.rim else "off"],
+		["grimoire", "Grimoire", NecroLook.STATES, NecroLook.grimoire]]
 
 
 ## The Go to buttons: the gym's places, or on a generated floor its landings.
@@ -474,7 +493,7 @@ func spots() -> Array:
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
 ## log starts a new stretch. "walk" plays the monsters' old or new walk (MonsterModel.active_walk), live; the status line
 ## says which. "ghost_look" / "ghost_strength" / "ghost_colour" redress every ghost the panel put down (GhostLook.pick: the
-## ghost look test, docs/design/ghost-look.md).
+## ghost look test, docs/design/ghost-look.md); "necro_rim" / "grimoire" redress every necro body (NecroLook.pick, necro-look.md).
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
 	if nm == "landings" or nm == "map":
@@ -485,6 +504,12 @@ func set_experiment(nm: String, value: String) -> void:
 			return
 		panel.set_experiment(nm, value)
 		_status("ghosts: %s, %s, %s" % [GhostLook.look, GhostLook.strength, GhostLook.colour])
+		return
+	if nm == "necro_rim" or nm == "grimoire":
+		if not NecroLook.pick(nm, value):
+			return
+		panel.set_experiment(nm, value)
+		_status("necro: rim %s, grimoire %s" % ["on" if NecroLook.rim else "off", NecroLook.grimoire])
 		return
 	if nm == "walk":
 		if value != "old" and value != "new":

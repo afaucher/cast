@@ -1,0 +1,510 @@
+class_name GrimoireModel
+extends Node3D
+## LOOK-DEV ONLY (docs/design/necro-look.md): the grimoire, the haunted contracts' origin source (new-themes.md "Ghost
+## house": "pulsing out the dead until it is slammed shut or burned", a host-arbitrated world object like a hellgate). This
+## is only its look: no HP, no phases, nothing networked, and nothing in the game spawns it (only NecroBody, for the gym and
+## the look lab). It is a physical object and NEVER text: blank glowing pages, an eye on the cover, rings and spokes on the
+## floor, no letter or glyph anywhere (Cast is not a reading game).
+##
+## To read as the floor's big objective from across a room (the origin gate is about 7 across with horns about 6 up), the
+## book is oversized (BOOK) and it is the middle of a set piece: a necromancer's circle on the floor round it (rings,
+## spokes and dots in the ghost colour), candles with ghost-light flames, a column of pale light rising off the pages,
+## loose pages circling in it, motes rising and a pale light on everything near it.
+##   stand   lectern   a heavy dark-wood lectern on a stone step, the book open on its slanted desk
+##           altar     a stone altar on a dais, a black runner over it, skulls at its feet, the book open on a rest
+##   state   open      the pages blazing and pulsing, the column up, pages circling, the circle and the candles lit
+##           damaged   knocked askew, a page block torn away, torn pages on the floor, the circle broken in places, the
+##                     column thin and stuttering, two candles knocked over
+##           shut      slammed shut: a closed, chained book with the eye on its cover, every light out, pages fallen
+##           burnt     charred black, curled, ember edges and smoke, every ghost light out
+## Faces local -Z (the reader's side), origin on the floor at its middle. freeze_at() holds a moment for the lab.
+
+const STANDS: Array[String] = ["lectern", "altar"]
+const STATES: Array[String] = ["open", "damaged", "shut", "burnt"]
+const BOOK := Vector2(1.7, 1.15)      ## the open book: across both pages, and the page height (front to back)
+const PAGES := 7                      ## loose pages circling in the column
+const SIGIL := {"lectern": 5.2, "altar": 6.0}   ## the circle across (before SCALE)
+const SCALE := 1.4                    ## the whole set piece: an outsized tome, to hold its own beside an origin gate
+
+const WOOD := Color(0.27, 0.17, 0.11)
+const WOOD_LIGHT := Color(0.36, 0.24, 0.15)
+const WOOD_DARK := Color(0.16, 0.10, 0.07)
+const STONE := Color(0.40, 0.39, 0.40)
+const STONE_LIGHT := Color(0.50, 0.49, 0.50)
+const STONE_DARK := Color(0.27, 0.26, 0.28)
+const IRON := Color(0.24, 0.25, 0.28)
+const IRON_LIGHT := Color(0.40, 0.41, 0.45)
+const LEATHER := Color(0.13, 0.16, 0.15)          ## the cover: a black-green hide, not the hell family's red
+const LEATHER_LIGHT := Color(0.20, 0.24, 0.22)
+const BONE := Color(0.86, 0.82, 0.70)
+const BONE_DARK := Color(0.66, 0.61, 0.50)
+const PARCHMENT := Color(0.84, 0.78, 0.62)
+const PARCHMENT_DARK := Color(0.66, 0.59, 0.45)
+const CLOTH := Color(0.11, 0.13, 0.13)
+const WAX := Color(0.86, 0.83, 0.72)
+const VOID := Color(0.05, 0.04, 0.05)
+const CHAR := Color(0.09, 0.075, 0.07)
+const CHAR_LIGHT := Color(0.18, 0.16, 0.15)
+const ASH := Color(0.38, 0.36, 0.35)
+const EMBER := Color(1.0, 0.42, 0.10)
+
+## The column of light off the pages: additive bands rising and fading (the hellgate's vortex, in the ghost colour).
+const BEAM_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
+
+uniform float t = 0.0;
+uniform float amount = 1.0;
+uniform vec4 tint : source_color = vec4(0.70, 0.86, 1.0, 1.0);
+
+void fragment() {
+	float v = UV.y;
+	float fade = pow(1.0 - v, 1.2) * smoothstep(0.0, 0.08, 1.0 - v);
+	float s = 0.5 + 0.5 * sin(UV.x * 6.2831 * 4.0 - v * 7.0 + t * 1.6);
+	s = floor(s * 3.0) / 3.0;
+	float rise = 0.5 + 0.5 * sin(v * 18.0 - t * 3.0);
+	float a = clamp(fade * (0.35 + 0.45 * s + 0.25 * rise) * amount, 0.0, 0.75);
+	ALBEDO = tint.rgb * a;
+	ALPHA = 1.0;
+}
+"""
+
+static var _beam_shader: Shader
+
+var stand := "lectern"
+var state := "open"
+var ui_height := 3.0
+var book_top := Vector3.ZERO          ## the open pages' middle (local), where the column and the light start
+
+var _mat: ShaderMaterial
+var _t := 0.0
+var _frozen := false
+var _phase := 0.0
+var _book: MeshInstance3D
+var _sigil: MeshInstance3D
+var _beam: MeshInstance3D
+var _beam_mat: ShaderMaterial
+var _light: OmniLight3D
+var _orbit: Array[Dictionary] = []   ## {node, ang, speed, rad, y, spin}
+var _parts: Array[MeshInstance3D] = []
+
+
+static func make(stand_name: String = "lectern", state_name: String = "open", phase: float = 0.0) -> GrimoireModel:
+	var g := GrimoireModel.new()
+	g.stand = stand_name if STANDS.has(stand_name) else "lectern"
+	g.state = state_name if STATES.has(state_name) else "open"
+	g._phase = phase
+	g._build()
+	return g
+
+
+func is_lit() -> bool:
+	return state == "open" or state == "damaged"
+
+
+## Lab / screenshots: hold the animation at `seconds`.
+func freeze_at(seconds: float) -> void:
+	_frozen = true
+	_t = seconds
+	_animate()
+
+
+func triangle_count() -> int:
+	var n := 0
+	for mi in _parts:
+		n += (mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+	return n
+
+
+# ------------------------------------------------------------------ build
+
+func _build() -> void:
+	name = "Grimoire_%s_%s" % [stand, state]
+	scale = Vector3.ONE * SCALE
+	_mat = NecroLook.body_material(2.6, 0.0)
+	_mat.set_shader_parameter("glow_gain", 1.8)
+	var burnt := state == "burnt"
+	var damaged := state == "damaged"
+	var book_xf: Transform3D
+	if stand == "altar":
+		_mesh("Altar", _altar_soup(burnt, damaged), self)
+		book_xf = Transform3D(Basis(Vector3(1, 0, 0), -0.22), Vector3(0, 1.26, 0.02))
+	else:
+		_mesh("Lectern", _lectern_soup(damaged), self)
+		var desk := Node3D.new()
+		desk.name = "Desk"
+		desk.position = Vector3(0, 1.16, 0.0)
+		desk.rotation.x = -0.30
+		add_child(desk)
+		_mesh("DeskTop", _desk_soup(burnt), desk)
+		book_xf = desk.transform * Transform3D(Basis.IDENTITY, Vector3(0, 0.05, 0.0))
+	if damaged:
+		book_xf = book_xf * Transform3D(Basis(Vector3.UP, 0.22) * Basis(Vector3(0, 0, 1), 0.07), Vector3(0.12, 0.02, 0.06))
+	var book := Node3D.new()
+	book.name = "Book"
+	book.transform = book_xf
+	add_child(book)
+	_book = _mesh("Pages", _shut_soup() if state == "shut" else _open_soup(), book)
+	book_top = book_xf * Vector3(0, 0.2, 0)
+	_mesh("Candles", _candles_soup(), self)
+	if state != "open":
+		_mesh("Floor", _floor_soup(), self)
+	var size: float = SIGIL[stand]
+	_sigil = NecroLook.floor_glow(size, true, 1.0, _phase)
+	_sigil.position.y = 0.03
+	(_sigil.material_override as ShaderMaterial).set_shader_parameter("spin", 0.04)
+	(_sigil.material_override as ShaderMaterial).set_shader_parameter("broken", 0.45 if damaged else 0.0)
+	_sigil.visible = is_lit()
+	add_child(_sigil)
+	if is_lit():
+		_build_beam(damaged)
+		_build_orbit()
+		var m := NecroLook.motes(26 if not damaged else 14, 0.55, 0.9, 0.045)
+		m.position = book_top
+		add_child(m)
+		_light = OmniLight3D.new()
+		_light.name = "BookLight"
+		_light.light_color = NecroLook.glow_colour()
+		_light.omni_range = 10.0
+		_light.omni_attenuation = 1.4
+		_light.light_specular = 0.1
+		_light.shadow_enabled = false
+		_light.position = book_top + Vector3(0, 0.9, 0)
+		add_child(_light)
+	elif burnt:
+		var sm := NecroLook.smoke(18, 0.45)
+		sm.position = book_top
+		add_child(sm)
+		var em := NecroLook.smoke(12, 0.4, true)
+		em.position = book_top
+		add_child(em)
+		_light = OmniLight3D.new()
+		_light.name = "EmberLight"
+		_light.light_color = Color(1.0, 0.45, 0.15)
+		_light.light_energy = 0.7
+		_light.omni_range = 2.6
+		_light.shadow_enabled = false
+		_light.position = book_top + Vector3(0, 0.4, 0)
+		add_child(_light)
+	ui_height = (3.2 if stand == "lectern" else 3.0) * SCALE
+	_animate()
+
+
+func _mesh(node_name: String, soup: LowPoly.Soup, parent: Node3D) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.name = node_name
+	mi.mesh = soup.to_mesh(0.26)
+	mi.material_override = _mat
+	parent.add_child(mi)
+	_parts.append(mi)
+	return mi
+
+
+## A quad facing `out` whatever order its corners come in.
+static func _face(s: LowPoly.Soup, a: Vector3, b: Vector3, c: Vector3, d: Vector3, col: Color, out: Vector3) -> void:
+	if (b - a).cross(c - b).dot(out) > 0.0:
+		s.add_quad(d, c, b, a, col)
+	else:
+		s.add_quad(a, b, c, d, col)
+
+
+## The lectern: a stone step, a thick turned post of dark wood with iron bands and a carved knot, brackets up to the desk.
+func _lectern_soup(damaged: bool) -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1101, 0.07)
+	s.merge(LowPoly.cylinder(0.70, 0.66, 0.16, 8, STONE_DARK, 1102, 0.01), LowPoly.at(Vector3(0, 0.08, 0)))
+	s.merge(LowPoly.cylinder(0.50, 0.47, 0.13, 8, STONE, 1103, 0.01), LowPoly.at(Vector3(0, 0.225, 0)))
+	MonsterModel.limb(s, Vector3(0, 0.28, 0), Vector3(0, 1.06, 0), 0.19, 0.14, 8, WOOD_DARK, 1104)
+	for y: float in [0.36, 0.98]:
+		s.merge(LowPoly.cylinder(0.20, 0.20, 0.06, 8, IRON, 1105, 0.0), LowPoly.at(Vector3(0, y, 0)))
+	MonsterModel.blob(s, Vector3(0, 0.66, 0), Vector3(0.23, 0.13, 0.23), WOOD, 1106, 0.12)          # the carved knot
+	for x: float in [-1.0, 1.0]:
+		MonsterModel.wedge(s, Vector3(0.30 * x, 1.04, 0), Vector2(0.10, 0.20), Vector2(0.10, 0.50), 0.14, WOOD_DARK, 1107 + int(x), Vector3(0, 0, -36.0 * x))   # brackets
+	for i in 4:
+		var a := TAU * float(i) / 4.0 + PI * 0.25
+		MonsterModel.wedge(s, Vector3(cos(a) * 0.36, 0.33, sin(a) * 0.36), Vector2(0.16, 0.14), Vector2(0.08, 0.08), 0.10, IRON_LIGHT, 1110 + i, Vector3(0, rad_to_deg(-a), 0))   # claws
+	if damaged:
+		MonsterModel.slab(s, Vector3(0.06, 0.62, -0.18), Vector3(0.03, 0.42, 0.03), VOID, 1115, Vector3(0, 0, 12))   # split
+	return s
+
+
+## The lectern's slanted desk (local: flat, tilted by its node), a lip at the front to hold the book, iron corners.
+func _desk_soup(burnt: bool) -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1121, 0.06)
+	var wood := CHAR_LIGHT if burnt else WOOD
+	MonsterModel.slab(s, Vector3(0, 0, 0.0), Vector3(1.95, 0.08, 1.32), wood, 1122, Vector3.ZERO, 0.01)
+	MonsterModel.slab(s, Vector3(0, 0.07, -0.66), Vector3(1.95, 0.10, 0.07), CHAR if burnt else WOOD_DARK, 1123)
+	for x: float in [-1.0, 1.0]:
+		for z: float in [-1.0, 1.0]:
+			MonsterModel.slab(s, Vector3(0.92 * x, 0.045, 0.61 * z), Vector3(0.14, 0.02, 0.14), IRON_LIGHT, 1124, Vector3(0, 45, 0))
+	return s
+
+
+## The altar: a stone dais, the altar block with a carved front panel and a heavy top, a black runner over it and down the
+## front with a bone trim, a low book rest, piles of skulls at its feet.
+func _altar_soup(burnt: bool, damaged: bool) -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1131, 0.07)
+	MonsterModel.slab(s, Vector3(0, 0.11, 0), Vector3(3.7, 0.22, 2.6), STONE_DARK, 1132, Vector3.ZERO, 0.01)
+	MonsterModel.slab(s, Vector3(0, 0.30, 0.05), Vector3(3.0, 0.16, 1.9), STONE, 1133, Vector3.ZERO, 0.01)
+	MonsterModel.slab(s, Vector3(0, 0.75, 0.08), Vector3(2.4, 0.74, 1.2), STONE_DARK, 1134, Vector3.ZERO, 0.01)
+	MonsterModel.slab(s, Vector3(0, 1.17, 0.08), Vector3(2.75, 0.12, 1.45), STONE_LIGHT, 1135, Vector3.ZERO, 0.01)
+	MonsterModel.slab(s, Vector3(0, 0.74, -0.53), Vector3(1.9, 0.48, 0.04), STONE, 1136)
+	for x: float in [-1.0, 1.0]:
+		MonsterModel.slab(s, Vector3(0.62 * x, 0.74, -0.555), Vector3(0.10, 0.40, 0.03), STONE_DARK, 1137 + int(x))   # carved panels
+	var cloth := CHAR if burnt else CLOTH
+	MonsterModel.slab(s, Vector3(0, 1.24, 0.08), Vector3(0.80, 0.025, 1.47), cloth, 1140)
+	MonsterModel.slab(s, Vector3(0, 0.92, -0.655), Vector3(0.80, 0.62, 0.025), cloth, 1141)
+	if not burnt:
+		MonsterModel.slab(s, Vector3(0, 0.62, -0.665), Vector3(0.82, 0.04, 0.02), BONE, 1142)
+	else:
+		MonsterModel.slab(s, Vector3(0.1, 0.70, -0.665), Vector3(0.40, 0.25, 0.02), ASH, 1142)
+	MonsterModel.wedge(s, Vector3(0, 1.30, 0.06), Vector2(0.9, 0.7), Vector2(0.9, 0.5), 0.10, WOOD_DARK if not burnt else CHAR, 1143)   # the rest
+	if damaged:
+		MonsterModel.slab(s, Vector3(0.55, 1.18, -0.3), Vector3(0.6, 0.13, 0.03), VOID, 1144, Vector3(0, 30, 0))   # a crack in the top
+	# skulls at the front corners of the dais
+	var k := 0
+	for x: float in [-1.0, 1.0]:
+		for p: Vector3 in [Vector3(1.45, 0.30, -1.0), Vector3(1.22, 0.30, -1.08), Vector3(1.34, 0.46, -1.02)]:
+			_skull(s, Vector3(p.x * x, p.y, p.z), 1150 + k, 25.0 * x)
+			k += 4
+	return s
+
+
+func _skull(s: LowPoly.Soup, p: Vector3, seed_value: int, yaw: float) -> void:
+	var f := Basis(Vector3.UP, deg_to_rad(yaw))
+	MonsterModel.blob(s, p, Vector3(0.12, 0.10, 0.12), BONE, seed_value, 0.1)
+	for x: float in [-1.0, 1.0]:
+		MonsterModel.slab(s, p + f * Vector3(0.045 * x, 0.0, -0.10), Vector3(0.045, 0.04, 0.03), VOID, seed_value + 1)
+	MonsterModel.slab(s, p + f * Vector3(0, -0.07, -0.08), Vector3(0.09, 0.03, 0.04), BONE_DARK, seed_value + 2)
+
+
+## The open book, its spine along Z, origin under the spine: two covers in a shallow V, two page blocks rising to the
+## gutter, iron corners and clasps hanging open. Open / damaged: the page tops glow in the ghost colour (no marks on them,
+## ever). Damaged: the right block is torn half away and a crack glows in the left cover. Burnt: charred, curled up at
+## the edges, ember along them.
+func _open_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1201, 0.05)
+	var burnt := state == "burnt"
+	var damaged := state == "damaged"
+	var hw := BOOK.x * 0.5
+	var hd := BOOK.y * 0.5
+	var c := NecroLook.glow_colour()
+	var page_glow := MonsterModel.glow(c.lerp(Color(1.0, 0.98, 0.92), 0.3) * 0.62)
+	var page_soft := MonsterModel.glow(PARCHMENT.lerp(c, 0.35) * 0.48)
+	var page_rim := MonsterModel.glow(c * 0.8)
+	for side: int in [-1, 1]:
+		var x := float(side)
+		var cov := CHAR if burnt else LEATHER
+		MonsterModel.slab(s, Vector3(x * (hw * 0.5 + 0.02), 0.02, 0), Vector3(hw + 0.06, 0.05, BOOK.y + 0.08), cov, 1202 + side, Vector3(0, 0, 4.0 * x))
+		for z: float in [-1.0, 1.0]:
+			MonsterModel.wedge(s, Vector3(x * (hw - 0.02), 0.05, z * (hd + 0.0)), Vector2(0.16, 0.16), Vector2(0.10, 0.10), 0.03, IRON_LIGHT if not burnt else CHAR_LIGHT, 1204, Vector3(0, 45, 0))
+		# the page block: strips from the gutter out, rising to a crown and falling to the edge
+		var xs: Array[float] = [0.02, 0.14, 0.42, 0.66, 0.80]
+		var ys: Array[float] = [0.10, 0.20, 0.215, 0.18, 0.12]
+		if burnt:
+			ys = [0.08, 0.15, 0.17, 0.22, 0.28]
+		var reach := xs.size()
+		if damaged and side > 0:
+			reach = 3
+		for i in reach - 1:
+			var x0 := xs[i] * hw / 0.8 * x
+			var x1 := xs[i + 1] * hw / 0.8 * x
+			var y0 := ys[i]
+			var y1 := ys[i + 1]
+			# the light wells up from the gutter: glowing there, parchment lit by it at the edges
+			var top := page_glow if i < 2 else (page_soft if i == 2 else PARCHMENT)
+			if burnt:
+				top = [CHAR, CHAR_LIGHT, CHAR, MonsterModel.glow(EMBER)][i]
+			_face(s, Vector3(x0, y0, -hd), Vector3(x1, y1, -hd), Vector3(x1, y1, hd), Vector3(x0, y0, hd), top, Vector3.UP)
+			var edge := ASH if burnt else PARCHMENT
+			_face(s, Vector3(x0, y0, -hd), Vector3(x1, y1, -hd), Vector3(x1, 0.05, -hd), Vector3(x0, 0.05, -hd), edge, Vector3(0, 0, -1))
+			_face(s, Vector3(x0, y0, hd), Vector3(x1, y1, hd), Vector3(x1, 0.05, hd), Vector3(x0, 0.05, hd), PARCHMENT_DARK if not burnt else CHAR_LIGHT, Vector3(0, 0, 1))
+		var xe := xs[reach - 1] * hw / 0.8 * x
+		var ye := ys[reach - 1]
+		_face(s, Vector3(xe, ye, -hd), Vector3(xe, ye, hd), Vector3(xe, 0.05, hd), Vector3(xe, 0.05, -hd), PARCHMENT_DARK if not burnt else MonsterModel.glow(EMBER), Vector3(x, 0, 0))
+		if damaged and side > 0:
+			# the torn edge: a few half-torn leaves sticking up out of the stub, at odd angles
+			for j in 3:
+				var z := -hd * 0.55 + hd * 0.5 * j
+				MonsterModel.slab(s, Vector3(xe + 0.10 * x, ye + 0.06, z), Vector3(0.24, 0.012, 0.30 - 0.05 * j), PARCHMENT, 1212 + j, Vector3(8.0 * j, 10.0 * j - 8.0, 28.0 + 12.0 * j))
+		# the clasp straps hanging open off the outer edge
+		if not burnt:
+			MonsterModel.slab(s, Vector3(x * (hw + 0.12), -0.02, -0.20), Vector3(0.22, 0.03, 0.10), LEATHER_LIGHT, 1206 + side, Vector3(0, 0, -50.0 * x))
+			MonsterModel.slab(s, Vector3(x * (hw + 0.20), -0.10, -0.20), Vector3(0.06, 0.05, 0.12), IRON_LIGHT, 1208 + side)
+	if burnt:
+		# smouldering cracks across the charred pages
+		for j in 6:
+			var px := (-0.62 + 0.25 * j) * hw
+			var py := 0.17 + 0.02 * (j % 2)
+			MonsterModel.slab(s, Vector3(px, py, -hd * 0.3 + 0.18 * (j % 3)), Vector3(0.16, 0.02, 0.035), MonsterModel.glow(EMBER), 1215 + j, Vector3(0, 30.0 + 40.0 * (j % 3), 0))
+	if damaged:
+		MonsterModel.slab(s, Vector3(-hw * 0.5, 0.0, -hd - 0.035), Vector3(0.5, 0.025, 0.02), page_rim, 1210, Vector3(0, 0, 14))   # cracked cover
+	# a ribbon hanging from the gutter over the front edge
+	if not burnt:
+		MonsterModel.slab(s, Vector3(0.05, 0.02, -hd - 0.05), Vector3(0.05, 0.22, 0.015), BONE_DARK, 1211, Vector3(20, 0, 0))
+	return s
+
+
+## The shut book: a thick closed block lying flat, the page edges showing on three sides, the eye on the cover (an almond
+## of bone round a dark iris: a picture, not a letter), iron corners, a clasp shut across it and a chain round it.
+func _shut_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1221, 0.05)
+	var w := BOOK.x * 0.5 + 0.08
+	var d := BOOK.y + 0.08
+	MonsterModel.slab(s, Vector3(0.0, 0.03, 0), Vector3(w, 0.06, d), LEATHER, 1222)
+	MonsterModel.slab(s, Vector3(0.02, 0.15, 0), Vector3(w - 0.06, 0.20, d - 0.06), PARCHMENT_DARK, 1223)
+	MonsterModel.slab(s, Vector3(0.0, 0.28, 0), Vector3(w, 0.06, d), LEATHER_LIGHT, 1224)
+	MonsterModel.slab(s, Vector3(-w * 0.5, 0.155, 0), Vector3(0.10, 0.31, d + 0.02), LEATHER, 1225)          # the spine
+	for x: float in [-1.0, 1.0]:
+		for z: float in [-1.0, 1.0]:
+			MonsterModel.wedge(s, Vector3(x * (w * 0.5 - 0.05), 0.315, z * (d * 0.5 - 0.05)), Vector2(0.16, 0.16), Vector2(0.10, 0.10), 0.03, IRON_LIGHT, 1226, Vector3(0, 45, 0))
+	# the eye
+	MonsterModel.blob(s, Vector3(0.03, 0.32, 0), Vector3(0.26, 0.03, 0.15), BONE, 1227, 0.02)
+	MonsterModel.blob(s, Vector3(0.03, 0.345, 0), Vector3(0.10, 0.025, 0.10), VOID, 1228, 0.02)
+	MonsterModel.blob(s, Vector3(0.03, 0.355, 0), Vector3(0.035, 0.02, 0.035), BONE_DARK, 1229, 0.02)
+	# the clasp across the fore edge, and the chain round the middle
+	MonsterModel.slab(s, Vector3(w * 0.5 + 0.01, 0.155, -0.18), Vector3(0.04, 0.34, 0.12), LEATHER_LIGHT, 1230)
+	MonsterModel.slab(s, Vector3(w * 0.5 + 0.03, 0.20, -0.18), Vector3(0.05, 0.10, 0.10), IRON_LIGHT, 1231)
+	for i in 9:
+		var x := -w * 0.5 - 0.04 + (w + 0.08) * float(i) / 8.0
+		var size := Vector3(0.10, 0.03, 0.05) if i % 2 == 0 else Vector3(0.10, 0.05, 0.03)
+		MonsterModel.slab(s, Vector3(x, 0.33, 0.25), size, IRON, 1232 + i)
+		MonsterModel.slab(s, Vector3(x, -0.005, 0.25), size, IRON, 1242 + i)
+	return s
+
+
+## Candles: tall wax stubs with ghost-light flames, round the circle (the lectern) or on the altar's corners and the dais.
+## Damaged: two knocked over and out. Shut: all out. Burnt: melted low and out.
+func _candles_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1301, 0.06)
+	var spots: Array[Vector3] = []
+	if stand == "altar":
+		spots = [Vector3(-1.2, 1.23, -0.55), Vector3(1.2, 1.23, -0.55), Vector3(-1.2, 1.23, 0.7), Vector3(1.2, 1.23, 0.7),
+				Vector3(-1.75, 0.0, -1.55), Vector3(1.75, 0.0, -1.55), Vector3(0.0, 0.0, -1.75)]
+	else:
+		var r: float = SIGIL["lectern"] * 0.5 * 0.80
+		for i in 6:
+			var a := TAU * float(i) / 6.0 + PI / 6.0
+			spots.append(Vector3(cos(a) * r, 0.0, sin(a) * r))
+	var lit := is_lit()
+	for i in spots.size():
+		var p := spots[i]
+		var h := 0.42 + 0.14 * float(i % 3)
+		if state == "burnt":
+			h = 0.10 + 0.04 * float(i % 2)
+		var down := state == "damaged" and (i == 1 or i == 4)
+		if down:
+			MonsterModel.limb(s, p + Vector3(0, 0.05, 0), p + Vector3(h * 0.7, 0.05, h * 0.7), 0.05, 0.05, 6, WAX, 1302 + i)
+			continue
+		s.merge(LowPoly.cylinder(0.12, 0.10, 0.04, 6, IRON, 1310 + i, 0.0), LowPoly.at(p + Vector3(0, 0.02, 0)))
+		s.merge(LowPoly.cylinder(0.055, 0.05, h, 6, WAX, 1320 + i, 0.004), LowPoly.at(p + Vector3(0, 0.04 + h * 0.5, 0)))
+		MonsterModel.blob(s, p + Vector3(0.05, 0.04 + h * 0.75, 0.0), Vector3(0.025, 0.06, 0.025), WAX.darkened(0.08), 1330 + i, 0.2)   # a drip
+		if lit:
+			MonsterModel.blob(s, p + Vector3(0, 0.04 + h + 0.07, 0), Vector3(0.045, 0.09, 0.045), NecroLook.glow(1.15), 1340 + i, 0.1)
+		elif state == "burnt":
+			MonsterModel.blob(s, p + Vector3(0, 0.03, 0), Vector3(0.09, 0.03, 0.09), WAX.darkened(0.15), 1350 + i, 0.2)
+	return s
+
+
+## On the floor round it: nothing when open; torn pages (damaged); fallen pages (shut); charred pages and an ash heap
+## (burnt). Pages are blank.
+func _floor_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1401, 0.06)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1403
+	var n := 5 if state == "damaged" else 8
+	var r0 := 1.3 if stand == "lectern" else 2.1
+	for i in n:
+		var a := TAU * float(i) / float(n) + rng.randf_range(-0.3, 0.3)
+		var r := r0 + rng.randf_range(0.0, 0.9)
+		var col := PARCHMENT if state != "burnt" else (CHAR_LIGHT if i % 2 == 0 else ASH)
+		MonsterModel.slab(s, Vector3(cos(a) * r, 0.012 + 0.004 * i, sin(a) * r), Vector3(0.30, 0.012, 0.40), col, 1404 + i, Vector3(rng.randf_range(-6, 6), rng.randf_range(0, 180), rng.randf_range(-6, 6)))
+	if state == "burnt":
+		MonsterModel.blob(s, Vector3(0.1, 0.02, -0.75 if stand == "lectern" else -1.1), Vector3(0.45, 0.06, 0.32), ASH, 1420, 0.25)
+	return s
+
+
+func _build_beam(damaged: bool) -> void:
+	if _beam_shader == null:
+		_beam_shader = Shader.new()
+		_beam_shader.code = BEAM_SHADER
+	_beam_mat = ShaderMaterial.new()
+	_beam_mat.shader = _beam_shader
+	_beam_mat.set_shader_parameter("tint", NecroLook.glow_colour())
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.30 if not damaged else 0.18
+	cone.bottom_radius = 0.80 if not damaged else 0.55
+	cone.height = 5.5
+	cone.radial_segments = 10
+	cone.rings = 1
+	cone.cap_top = false
+	cone.cap_bottom = false
+	_beam = MeshInstance3D.new()
+	_beam.name = "Column"
+	_beam.mesh = cone
+	_beam.material_override = _beam_mat
+	_beam.position = book_top + Vector3(0, cone.height * 0.5 - 0.1, 0)
+	_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_beam.set_meta("no_flash", true)
+	add_child(_beam)
+
+
+## Loose pages circling in the column: blank, glowing a little at their edges.
+func _build_orbit() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1501
+	var n := PAGES if state == "open" else 3
+	var page := LowPoly.Soup.new(1502, 0.04)
+	MonsterModel.slab(page, Vector3.ZERO, Vector3(0.30, 0.015, 0.40), PARCHMENT, 1503)
+	MonsterModel.slab(page, Vector3(0, 0.009, 0), Vector3(0.24, 0.004, 0.34), NecroLook.glow(0.9), 1504)
+	var mesh := page.to_mesh(0.26)
+	for i in n:
+		var holder := Node3D.new()
+		holder.name = "Page%d" % i
+		add_child(holder)
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.material_override = _mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		holder.add_child(mi)
+		_orbit.append({"node": holder, "ang": TAU * float(i) / float(n) + rng.randf_range(-0.3, 0.3), "speed": rng.randf_range(0.35, 0.6),
+				"rad": rng.randf_range(0.85, 1.35), "y": rng.randf_range(0.7, 2.1), "spin": rng.randf_range(0.8, 1.6)})
+
+
+# ------------------------------------------------------------------ animation
+
+func _process(delta: float) -> void:
+	if _frozen:
+		return
+	_t += delta
+	_animate()
+
+
+func _animate() -> void:
+	var t := _t + _phase
+	var lit := is_lit()
+	var damaged := state == "damaged"
+	# the pages' heartbeat (the origin gate's slow pulse); a damaged book stutters
+	var beat := 0.5 + 0.5 * sin(t * 1.7)
+	var stutter := 1.0
+	if damaged:
+		stutter = 0.55 + 0.45 * step_f(0.35, sin(t * 7.3) * sin(t * 2.9 + 1.0))
+	_mat.set_shader_parameter("glow_gain", (1.4 + 0.8 * beat) * stutter if lit else 1.8)
+	if _sigil != null:
+		var sm := _sigil.material_override as ShaderMaterial
+		sm.set_shader_parameter("clock", t)
+		sm.set_shader_parameter("strength", (0.85 + 0.25 * beat) * (0.75 if damaged else 1.0) * stutter)
+	if _beam_mat != null:
+		_beam_mat.set_shader_parameter("t", t)
+		_beam_mat.set_shader_parameter("amount", (0.85 + 0.35 * beat) * (0.55 if damaged else 1.0) * stutter)
+	if _light != null and lit:
+		_light.light_energy = (3.2 + 1.6 * beat) * (0.6 if damaged else 1.0) * stutter
+	for o in _orbit:
+		var node: Node3D = o["node"]
+		var a := float(o["ang"]) + float(o["speed"]) * t
+		var y := book_top.y + float(o["y"]) + 0.15 * sin(t * 1.3 + float(o["ang"]) * 3.0)
+		node.position = Vector3(book_top.x + cos(a) * float(o["rad"]), y, book_top.z + sin(a) * float(o["rad"]))
+		node.rotation = Vector3(0.6 * sin(t * float(o["spin"]) + float(o["ang"])), -a, 0.4 * cos(t * float(o["spin"]) * 0.7))
+
+
+static func step_f(edge: float, x: float) -> float:
+	return 0.0 if x < edge else 1.0
