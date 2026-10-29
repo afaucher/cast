@@ -39,11 +39,12 @@ on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raise
   yellow iris with a slit pupil, a heavy upper lid over the back of it (`GrimoireModel._live_eye`). The iris is its own
   node and looks around: it holds a gaze, then darts to the next (`eye_dir`, `_look`). See it move in the gym
   (`--gym-act necro`, Experiments > Grimoire > shut).
+- **The acolyte is the cowl** (the user, 2026-10-29: "Cowl"): the black robe, the bone-white stole, the staff and lantern.
 
 ## What the user is choosing
 
 - **Which zombie**, or both: the **mourner** or the **digger**.
-- **Which acolyte**, or both: the **cowl** or the **mask**.
+- **Which acolyte**: the **cowl** (decided, see "The user's read").
 - **Which grimoire stand**: the **altar** (decided, see "The user's read").
 - **Two switches**, which can be set separately:
 
