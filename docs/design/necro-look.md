@@ -13,6 +13,15 @@ The decisions this serves (new-themes.md, "Ghost house: haunted contracts"):
 The glow is the ghost look the user picked (ghost-look.md, 2026-10-29: "The rim look is really good"): the ghost colour
 on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raised dead.
 
+## The user's read (2026-10-29)
+
+- **The zombie is the mourner** (asked whether "the zombie" meant the mourner: "Yes, but let's look at the shape of the
+  torso first").
+- **No coat tails**: "The coattails definitely don't read. Remove them."
+- **A thin torso**: "And let's make it a thin torso." The coat now tapers from a narrow chest (0.42 wide, was 0.56) to a
+  thin waist (0.26, was 0.46) and is shallower; the shoulders, arms and legs moved in to match, and a hunched upper back
+  was added. The user: "Better!"
+
 ## What the user is choosing
 
 - **Which zombie**, or both: the **mourner** or the **digger**.

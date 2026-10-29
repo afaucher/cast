@@ -60,8 +60,8 @@ var variant := "mourner"
 var charred := false
 var body_y := 0.86
 var hip_y := 0.80
-var leg_x := 0.13
-var shoulder := Vector3(0.31, 0.56, 0.0)
+var leg_x := 0.11
+var shoulder := Vector3(0.24, 0.56, 0.0)   ## (the mourner's thin torso: the user, 2026-10-29, "let's make it a thin torso")
 var arm_len := 0.72
 var lie_h := 0.20                   ## the pelvis's height lying down
 var rise_mark: MeshInstance3D       ## the soft glow under a downed body (none when charred)
@@ -120,25 +120,25 @@ func _build() -> void:
 		_add_embers(body)
 
 
-## The mourner's torso: a narrow chest in the black burial coat, its front hanging open on a torn shirt with a gash of
-## flesh and two ribs showing, coat tails behind, sagging shoulders.
+## The mourner's torso: thin (the user, 2026-10-29: "let's make it a thin torso"): a narrow, shallow chest tapering to a
+## thin waist in the black burial coat, a hunched upper back, its front hanging open on a torn shirt with a gash of flesh
+## and two ribs showing, bony sagging shoulders.
 func _body_mourner() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(701, 0.07)
-	blob(s, Vector3(0, -0.02, 0), Vector3(0.22, 0.12, 0.15), k(TROUSERS), 702, 0.12)                              # hips
-	wedge(s, Vector3(0, 0.30, 0.0), Vector2(0.46, 0.28), Vector2(0.56, 0.32), 0.58, k(COAT), 703, Vector3(-4, 0, 0), 0.015)   # coat
-	slab(s, Vector3(0, 0.30, -0.150), Vector3(0.22, 0.52, 0.04), k(SHIRT), 704, Vector3(-4, 0, 0), 0.01)            # shirt
-	slab(s, Vector3(0.03, 0.26, -0.175), Vector3(0.13, 0.20, 0.03), k(SKIN_DARK), 705, Vector3(-4, 0, 12), 0.012)   # the gash
+	blob(s, Vector3(0, -0.02, 0), Vector3(0.16, 0.10, 0.11), k(TROUSERS), 702, 0.12)                              # hips
+	wedge(s, Vector3(0, 0.30, 0.0), Vector2(0.26, 0.18), Vector2(0.42, 0.22), 0.58, k(COAT), 703, Vector3(-4, 0, 0), 0.015)   # coat
+	slab(s, Vector3(0, 0.30, -0.105), Vector3(0.15, 0.52, 0.04), k(SHIRT), 704, Vector3(-4, 0, 0), 0.01)            # shirt
+	slab(s, Vector3(0.02, 0.26, -0.13), Vector3(0.10, 0.20, 0.03), k(SKIN_DARK), 705, Vector3(-4, 0, 12), 0.012)   # the gash
 	for i in 2:
-		slab(s, Vector3(0.03, 0.22 + 0.075 * i, -0.19), Vector3(0.12, 0.025, 0.02), k(BONE), 706 + i, Vector3(-4, 0, 12))   # ribs
-	slab(s, Vector3(-0.07, 0.10, -0.17), Vector3(0.10, 0.12, 0.025), k(SHIRT_DARK), 708, Vector3(-4, 0, -20), 0.02)   # a torn flap
+		slab(s, Vector3(0.02, 0.22 + 0.075 * i, -0.145), Vector3(0.09, 0.025, 0.02), k(BONE), 706 + i, Vector3(-4, 0, 12))   # ribs
+	slab(s, Vector3(-0.05, 0.10, -0.12), Vector3(0.08, 0.12, 0.025), k(SHIRT_DARK), 708, Vector3(-4, 0, -20), 0.02)   # a torn flap
 	for x: float in [-1.0, 1.0]:
-		wedge(s, Vector3(0.15 * x, 0.36, -0.165), Vector2(0.09, 0.03), Vector2(0.05, 0.03), 0.46, k(COAT_LIGHT), 709 + int(x), Vector3(-4, 0, -10.0 * x))   # lapels
-		blob(s, Vector3(0.27 * x, 0.55, 0.0), Vector3(0.12, 0.08, 0.14), k(COAT), 711 + int(x), 0.12)            # sagging shoulders
-	for i in 3:
-		var x := -0.14 + 0.14 * i
-		wedge(s, Vector3(x, -0.20 - 0.04 * (i % 2), 0.13), Vector2(0.15, 0.04), Vector2(0.15, 0.05), 0.34 + 0.08 * (i % 2), k(COAT_DARK), 714 + i, Vector3(8, 0, (i - 1) * 6), 0.02)   # tails
+		wedge(s, Vector3(0.11 * x, 0.36, -0.12), Vector2(0.06, 0.03), Vector2(0.04, 0.03), 0.46, k(COAT_LIGHT), 709 + int(x), Vector3(-4, 0, -10.0 * x))   # lapels
+		blob(s, Vector3(0.21 * x, 0.55, 0.01), Vector3(0.09, 0.07, 0.10), k(COAT), 711 + int(x), 0.12)            # sagging shoulders
+	blob(s, Vector3(0, 0.47, 0.08), Vector3(0.17, 0.12, 0.09), k(COAT), 713, 0.1)                                  # the hunched upper back
+	# (no coat tails: the user, 2026-10-29: "The coattails definitely don't read. Remove them.")
 	limb(s, Vector3(0, 0.56, -0.02), Vector3(0, 0.74, -0.06), 0.075, 0.065, 6, k(SKIN_DARK), 718)              # neck
-	slab(s, Vector3(0, 0.58, -0.02), Vector3(0.24, 0.07, 0.24), k(SHIRT_DARK), 719, Vector3.ZERO, 0.02)            # a limp collar
+	slab(s, Vector3(0, 0.58, -0.01), Vector3(0.18, 0.07, 0.18), k(SHIRT_DARK), 719, Vector3.ZERO, 0.02)            # a limp collar
 	return s
 
 
