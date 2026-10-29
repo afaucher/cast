@@ -33,6 +33,7 @@ const BEVEL_SCALE := 0.955       ## outer edge of the bevel; the rest of the hex
 const BEVEL_DROP := 0.035        ## how far the bevel falls below the top
 const SEAM_DROP := 0.07          ## depth of the glowing seam surface below the top
 const WALL_TOP_SCALE := 0.93     ## a wall cap's flat top with wall_depth on (its bevel then runs out to the full hex)
+const NO_WALL := -999             ## (_top_tile / _run_tile: not a wall's cap)
 
 const SEAM_COLOR := Color(1.0, 0.40, 0.07)
 const EXIT_COLOR := Color(1.0, 0.28, 1.0)
@@ -54,7 +55,7 @@ var seam_gain := 1.0
 var seam_near_gain := 1.0
 var seam_near_range := 0.0
 ## WALL DEPTH (look-dev, docs/design/wall-depth.md; off in the game until the user decides): the material shader's walls
-## get stone courses locked to the hex grid, per-stone bevels, depth in albedo and AO, a coping band and slab-cut caps,
+## get rough ashlar courses locked to the hex grid, per-stone bevels, depth in albedo and AO, a coping band and slab-cut caps,
 ## and the wall caps close the seam round them (flat to WALL_TOP_SCALE, a bevel out to the full hex and down to the face's
 ## top). A shader uniform, so it flips live (`set_wall_depth`): the mesh carries both shapes (CUSTOM0, Batch.custom).
 ## `wall_depth_default` is what a new view starts with (the gym's Experiments row sets it).
@@ -450,9 +451,12 @@ vec3 wall_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float rgh,
 // face seen edge-on (no moire). The terrain has no screen-space ink outline (models ink their own hulls), so the bent
 // normals ink nothing.
 const float WD_DROP = 0.07;               // HexMapView.SEAM_DROP: every face's top is a level line this far down
-const float WD_COURSE = 0.25;             // a course: half a level, so the courses end on the level lines
 const float WD_COPING = 0.125;            // the coping band under the cap: the top half course
 const vec3 VKEY = vec3(-0.30, 0.86, 0.41);
+// The wall's outline in the dark: the cap's bevel ring and the coping's lip give off this faint cool light, so a wall top
+// still reads where no light reaches (the vault: the dim seam round each cap did that before the seam closed). A floor, not
+// a glow: under any real light it is lost in the lit stone.
+const vec3 WD_EDGE = vec3(0.016, 0.019, 0.025);
 
 // The hex (pointy-top, SIZE 1) centre of a point in XZ.
 vec2 hex_center(vec2 p) {
@@ -478,14 +482,15 @@ vec2 bevel(float e, float m, float w) {
 	float t = clamp((e - m) / w, 0.0, 1.0);
 	return vec2(t * t * (3.0 - 2.0 * t), 6.0 * t * (1.0 - t) / w);
 }
-// A wall face. Courses LH/2 tall, counted down from the coping (whose band is the top half course: the course under it is to the hex grid in a half bond: 0.5 long on the hex-edge
-// faces (their corners sit at u = +/-0.5 mod 1.5) and 0.433 on the wall-line faces (hex centres at u = 0 mod 0.866), so
-// every other course has a joint on each corner and the courses between turn it with one stone (a quoin; hashed by its
-// world-space centre, the corner itself, so it is one colour on both faces). Rough stone blocks (pattern 21) get the
-// stones; the other wall patterns keep their own look, aligned to the level lines. Every pattern gets the coping band
+// A wall face. Rough stone blocks (pattern 21): rough ashlar locked to the hex grid. Courses a level tall (some bands two
+// half-level courses), counted down from the coping (whose band is the top quarter level), so every wall top ends on a whole
+// course. Joints keep to the ends and middles of the spans: a hex edge (corners at u = +/-0.5 mod 1.5) or half a wall line
+// (hex centres and midpoints at u = 0 mod 0.866). Every other course has a joint on each corner and the courses between
+// turn it with one stone (a quoin, hashed by its corner, so it is one colour on both faces); some spans split, some halves
+// merge. The other wall patterns keep their own look, aligned to the level lines. Every pattern gets the coping band
 // (the cap's stone, joints only at hex corners, a lit lip, a dark line under it) and the darker foot.
 vec3 depth_face(int pat, vec3 base, vec3 alt, float sc, vec3 p3, vec3 n3, vec4 fc, vec2 fuv, inout float rgh, out vec3 nrm,
-		out float ao) {
+		out float ao, out float edge) {
 	vec2 along = vec2(-n3.z, n3.x);
 	vec3 T = vec3(along.x, 0.0, along.y);
 	float u = dot(p3.xz, along);
@@ -504,6 +509,7 @@ vec3 depth_face(int pat, vec3 base, vec3 alt, float sc, vec3 p3, vec3 n3, vec4 f
 	float su = 0.0;                       // the height field's slope along u
 	float sv = 0.0;                       // and up
 	ao = 1.0;
+	edge = 0.0;
 	if (below < WD_COPING) {
 		// the coping: one stone per hex edge, or per half wall line
 		float span = on_line ? 0.8660254 : 1.5;
@@ -528,41 +534,97 @@ vec3 depth_face(int pat, vec3 base, vec3 alt, float sc, vec3 p3, vec3 n3, vec4 f
 		c *= 1.0 + 0.35 * (1.0 - bt.x);       // the lit lip
 		c = mix(c, alt, max(jx, jb));
 		ao = mix(0.7, 1.0, h) * (1.0 - 0.5 * max(jx, jb));
+		edge = (1.0 - bt.x) * (1.0 - jx);    // the lip: part of the wall's outline (WD_EDGE)
 	} else if (pat == 21) {
-		float L = on_line ? 0.4330127 : 0.5;
-		// (the courses count down from the coping's lower joint, so the course under it is whole; the one at the foot is a half)
+		// rough ashlar. A course is a level tall (0.5), or a band split into two half-level courses; the bands count down
+		// from the coping's lower joint, so the course under it is whole (the one at the foot is cut). A span is a hex edge
+		// (corner to corner, 1.0) or half a wall line (centre to midpoint, 0.866): the joints keep to its ends and middle.
+		float S = on_line ? 0.8660254 : 1.0;
+		float H = 0.5 * S;
 		float vc = v + WD_COPING;
-		float row = floor(vc / WD_COURSE);
-		float off = mod(row, 2.0) * 0.5 * L;
-		float bi = floor((u - off) / L);
-		float lx = u - off - bi * L;
-		float ly = vc - row * WD_COURSE;
-		vec2 key = floor((along * (off + (bi + 0.5) * L) + n3.xz * d) * 4.0 + 0.5) + vec2(row * 7.0, row * 13.0);
+		float band = floor(vc / 0.5);
+		bool thin = h21(vec2(band, 41.0)) < 0.3;
+		float sub = thin ? floor((vc - band * 0.5) / 0.25) : 0.0;
+		float ch = thin ? 0.25 : 0.5;
+		float row = band * 2.0 + sub;
+		float ly = vc - band * 0.5 - sub * 0.25;
+		float c0 = on_line ? S * (floor(u / S) + 0.5) : 1.5 * round(u / 1.5);   // this span's middle
+		float s = u - c0;                                                     // -H .. H
+		float pick = h21(floor((along * c0 + n3.xz * d) * 4.0 + 0.5) + vec2(row * 3.0, 5.0));
+		// the stone under s: [lo, hi] along the span; an end that is not a joint is a corner it turns (a quoin)
+		float lo = -H;
+		float hi = H;
+		bool lo_j = true;
+		bool hi_j = true;
+		bool halves = false;
+		if (!thin) {
+			if (mod(band, 2.0) < 0.5) {
+				halves = pick < 0.3;              // a whole span, sometimes split
+			} else {
+				halves = true;                    // a joint in the middle, a stone turning each corner
+				lo_j = s >= 0.0;
+				hi_j = s < 0.0;
+			}
+		} else if (sub < 0.5) {
+			halves = pick >= 0.25;               // half spans, sometimes merged
+		} else if (s < -0.5 * H) {
+			hi = -0.5 * H;                       // a short course: a middle stone, a half span turning each corner
+			lo_j = false;
+		} else if (s > 0.5 * H) {
+			lo = 0.5 * H;
+			hi_j = false;
+		} else {
+			lo = -0.5 * H;
+			hi = 0.5 * H;
+		}
+		if (halves) {
+			lo = s < 0.0 ? -H : 0.0;
+			hi = s < 0.0 ? 0.0 : H;
+		}
+		// one colour per stone, hashed by a world-space point of it (a quoin by its corner: the same on both faces)
+		float kpos = !lo_j ? lo : (!hi_j ? hi : 0.5 * (lo + hi));
+		vec2 key = floor((along * (c0 + kpos) + n3.xz * d) * 4.0 + 0.5) + vec2(row * 7.0, row * 13.0);
 		float hb = h21(key);
 		vec2 ht = h22(key + 3.7);
-		// hand-cut: each joint wobbles a little (from the world position, so both faces of a corner agree)
-		float wob = vn(vec2(dot(p3.xz, vec2(7.1, 5.3)) + p3.y * 3.0, p3.y * 9.0)) - 0.5;
-		float ex = min(lx, L - lx) + 0.012 * wob;
-		float ey = min(ly, WD_COURSE - ly) + 0.01 * wob;
+		float hh = h21(key + 9.1);
+		// rough: the joints wander (from the world position, so both faces of a corner agree) and the corners are chipped
+		float wob = vn(vec2(dot(p3.xz, vec2(4.1, 3.3)) + p3.y * 2.0, p3.y * 5.0)) - 0.5;
+		float wob2 = vn(vec2(p3.y * 4.0 + 7.0, dot(p3.xz, vec2(3.7, 5.9)))) - 0.5;
+		float dl = s - lo;
+		float dr = hi - s;
+		float ex = min(lo_j ? dl : 9.0, hi_j ? dr : 9.0) + 0.022 * wob;
+		float sx = (lo_j && (!hi_j || dl < dr)) ? 1.0 : -1.0;
+		float ey = min(ly, ch - ly) + 0.014 * wob2;
+		float sy = ly < ch - ly ? 1.0 : -1.0;
+		float chip = min(0.012 + 0.03 * ht.x, 0.3 * ch) * step(0.5, h21(key + 2.3));
+		float ec = (ex + ey) * 0.7071 - chip;
 		// a face seen edge-on packs its stones into a few pixels: their joints and colours fade to their average there (no moire)
-		float fx = smoothstep(L / 5.0, L / 2.5, fu);
-		float fy = smoothstep(WD_COURSE / 4.0, WD_COURSE / 2.0, fv);
-		hb = mix(hb, 0.5, max(fx, fy));
-		float jx = (1.0 - smoothstep(mx - fu, mx + fu, ex)) * (1.0 - fx);
-		float jy = (1.0 - smoothstep(my - fv, my + fv, ey)) * (1.0 - fy);
-		float mortar = max(jx, jy);
-		// the bevel: ~1 px at the game's zoom, never more than 0.4 of the stone's half, slope ~0.75 at any width
-		float wx = min(max(0.025, 1.2 * fu), 0.4 * (0.5 * L - mx));
-		float wy = min(max(0.022, 1.2 * fv), 0.4 * (0.5 * WD_COURSE - my));
-		vec2 bx = mix(bevel(ex, mx, wx), vec2(1.0, 0.0), fx);
-		vec2 by = mix(bevel(ey, my, wy), vec2(1.0, 0.0), fy);
-		float h = bx.x * by.x;
-		su = 0.5 * wx * bx.y * (lx < L - lx ? 1.0 : -1.0) * by.x + (ht.x - 0.5) * 0.14 * h * (1.0 - max(fx, fy));
-		sv = 0.5 * wy * by.y * (ly < WD_COURSE - ly ? 1.0 : -1.0) * bx.x + (ht.y - 0.5) * 0.14 * h * (1.0 - max(fx, fy));
-		c = base * (0.74 + 0.52 * hb) * (0.8 + 0.4 * fbm(vec2(u, v) * 3.0 + vec2(hb * 31.0, hb * 17.0)));
+		float fx = smoothstep(S / 10.0, S / 5.0, fu);
+		float fy = smoothstep(ch / 4.0, ch / 2.0, fv);
+		float ff = max(fx, fy);
+		hb = mix(hb, 0.5, ff);
+		hh = mix(hh, 0.5, ff);
+		float mx2 = max(0.018, 0.6 * fu);     // (joints a little wider than the bricks': readable at 1:1)
+		float my2 = max(0.018, 0.6 * fv);
+		float jx = (1.0 - smoothstep(mx2 - fu, mx2 + fu, ex)) * (1.0 - fx);
+		float jy = (1.0 - smoothstep(my2 - fv, my2 + fv, ey)) * (1.0 - fy);
+		float jc = (1.0 - smoothstep(mx2 - fu, mx2 + fu, ec)) * (1.0 - ff);
+		float mortar = max(max(jx, jy), jc);
+		// the bevel: ~1 px at the game's zoom, never more than 0.4 of a short stone's half, slope ~0.75 at any width
+		float wx = min(max(0.03, 1.2 * fu), 0.4 * (0.25 * S - mx2));
+		float wy = min(max(0.026, 1.2 * fv), 0.4 * (0.5 * ch - my2));
+		vec2 bx = mix(bevel(ex, mx2, wx), vec2(1.0, 0.0), fx);
+		vec2 by = mix(bevel(ey, my2, wy), vec2(1.0, 0.0), fy);
+		float hc = mix(bevel(ec, mx2, wx).x, 1.0, ff);
+		float h = bx.x * by.x * hc;
+		su = 0.5 * wx * bx.y * sx * by.x + (ht.x - 0.5) * 0.14 * h * (1.0 - ff);
+		sv = 0.5 * wy * by.y * sy * bx.x + (ht.y - 0.5) * 0.14 * h * (1.0 - ff);
+		// more value and hue between stones than the bricks had: warm and cool ones, light and dark
+		vec3 tint = mix(vec3(1.08, 0.98, 0.88), vec3(0.9, 0.98, 1.08), hh);
+		c = base * (0.58 + 0.84 * hb) * tint * (0.76 + 0.48 * fbm(vec2(u, v) * 2.3 + vec2(hb * 31.0, hb * 17.0)));
 		c *= mix(0.8, 1.0, h);
 		c = mix(c, alt, mortar);
-		c *= mix(1.0, 0.85, max(fx, fy));   // (the joints' average)
+		c *= mix(1.0, 0.85, ff);   // (the joints' average)
 		ao = mix(0.7, 1.0, h) * (1.0 - 0.5 * mortar);
 		// the course under the coping sits in its shadow
 		c *= mix(0.6, 1.0, smoothstep(0.0, 0.05, below - WD_COPING));
@@ -579,7 +641,7 @@ vec3 depth_face(int pat, vec3 base, vec3 alt, float sc, vec3 p3, vec3 n3, vec4 f
 }
 // A wall cap: the cap's stone in three large slabs per hex, cut on alternate kite lines (centre to the edge midpoints at 0,
 // 120 and 240 degrees: never square lines); its bevel ring (out to the full hex) catches the virtual light.
-vec3 depth_cap(vec3 base, vec3 alt, vec3 p3, vec3 n3, float fw, out float ao) {
+vec3 depth_cap(vec3 base, vec3 alt, vec3 p3, vec3 n3, float fw, float rim, out float ao, out float edge) {
 	vec2 hc = hex_center(p3.xz);
 	vec2 o = p3.xz - hc;
 	float dist = 9.0;
@@ -597,6 +659,7 @@ vec3 depth_cap(vec3 base, vec3 alt, vec3 p3, vec3 n3, float fw, out float ao) {
 	float joint = 1.0 - smoothstep(jw - fw, jw + fw, dist);
 	c = mix(c, alt, joint * 0.5);   // (quiet joints: a cap should read as one top, not as floor tiles)
 	ao = 1.0 - 0.3 * joint;
+	edge = (1.0 - step(0.99, n3.y)) * step(2.5, rim);   // the bevel over a face (_cap_move w = 3): the cap's outline (WD_EDGE)
 	return c * clamp(1.0 + 0.55 * (dot(n3, VKEY) - VKEY.y), 0.6, 1.4);
 }
 
@@ -625,6 +688,7 @@ void fragment() {
 	float rgh = rough;
 	float spc = spec;
 	float ao = 1.0;
+	float edge = 0.0;
 	bool depth = is_wall && wall_depth > 0.5;
 	// (screen derivatives taken here, outside the branches: a face's u and height, a cap's XZ)
 	vec2 fuv = vec2(fwidth(dot(wp.xz, vec2(-wn.z, wn.x))), fwidth(wp.y));
@@ -647,13 +711,13 @@ void fragment() {
 			vec2 along = vec2(-wn.z, wn.x);
 			if (depth) {
 				vec3 nrm;
-				alb = depth_face(pat, b.rgb, a.rgb, a.a, wp, wn, wface, fuv, rgh, nrm, ao);
+				alb = depth_face(pat, b.rgb, a.rgb, a.a, wp, wn, wface, fuv, rgh, nrm, ao, edge);
 				NORMAL = (VIEW_MATRIX * vec4(nrm, 0.0)).xyz;
 			} else {
 				alb = wall_color(pat, vec2(dot(wp.xz, along), wp.y), b.rgb, a.rgb, a.a, rgh, false);
 			}
 		} else if (depth) {
-			alb = depth_cap(b.rgb, a.rgb, wp, wn, fwc, ao);
+			alb = depth_cap(b.rgb, a.rgb, wp, wn, fwc, wface.w, ao, edge);
 		} else if (is_wall) {
 			alb = b.rgb * 0.5 * (0.8 + 0.4 * fbm(wp.xz * 3.0));  // the cap of a wall: darker than the floor, like the slate cap
 		} else {
@@ -665,7 +729,7 @@ void fragment() {
 	ROUGHNESS = rgh;
 	SPECULAR = spc;
 	float k = near_range > 0.0 ? mix(near_gain, 1.0, smoothstep(near_range * 0.5, near_range, length(VERTEX))) : 1.0;
-	EMISSION = glow_color * glow_energy * k * glow;
+	EMISSION = glow_color * glow_energy * k * glow + WD_EDGE * edge;
 }
 """
 
@@ -976,7 +1040,10 @@ func _uv_for(center: Vector3, p: Vector3, world_uv: bool) -> Vector2:
 
 ## A tile top: flat hex plus a sloped bevel ring. `rim` / `rim_glow` colour and light the outer
 ## edge of the bevel (warm light spilling from the seam below).
-func _top_tile(top_b: Batch, center: Vector3, y: float, col: Color, rim: Color, rim_glow: float, world_uv: bool) -> void:
+## `wall_c` / `wall_lv` (a wall's cap): its cell and level, so each bevel quad over a face (an outer edge) is marked for the
+## wall depth look's outline (`_cap_move`).
+func _top_tile(top_b: Batch, center: Vector3, y: float, col: Color, rim: Color, rim_glow: float, world_uv: bool,
+		wall_c: Vector2i = Vector2i.ZERO, wall_lv: int = NO_WALL) -> void:
 	var pts: Array = []
 	var uv: Array = []
 	for i in 6:
@@ -998,20 +1065,34 @@ func _top_tile(top_b: Batch, center: Vector3, y: float, col: Color, rim: Color, 
 		var quad: Array = [ia, oa, ob, ib]
 		var quv: Array = [_uv_for(center, ia, world_uv), _uv_for(center, oa, world_uv), _uv_for(center, ob, world_uv), _uv_for(center, ib, world_uv)]
 		top_b.polyv(quad, n, quv, [col, rim, rim, col], [0.0, rim_glow, rim_glow, 0.0])
-		top_b.set_custom_last([_cap_move(center, ia, false), _cap_move(center, oa, true), _cap_move(center, ob, true), _cap_move(center, ib, false)])
+		var rim_out := wall_lv != NO_WALL and _cap_edge_outer(wall_c, ia - center, ib - center, wall_lv)
+		top_b.set_custom_last([_cap_move(center, ia, false, rim_out), _cap_move(center, oa, true, rim_out), _cap_move(center, ob, true, rim_out),
+				_cap_move(center, ib, false, rim_out)])
 
 
 ## A wall cap vertex's move with wall_depth on (Batch.custom, w = 2): the flat top's outline (at TOP_SCALE) out to
 ## WALL_TOP_SCALE, the bevel's outer edge (at BEVEL_SCALE, BEVEL_DROP down) out to the full hex and down to SEAM_DROP,
 ## where the wall face's top edge is: no gap round the cap, and no seam shows. A point on a wall line (a cut cell's radial
 ## edge) stays on it, since the move is along its offset from the center.
-static func _cap_move(center: Vector3, p: Vector3, outer: bool) -> Vector4:
+static func _cap_move(center: Vector3, p: Vector3, outer: bool, rim_out: bool = false) -> Vector4:
 	var off := Vector3(p.x - center.x, 0.0, p.z - center.z)
+	var w := 3.0 if rim_out else 2.0
 	if outer:
 		var d := off * (1.0 / BEVEL_SCALE - 1.0)
-		return Vector4(d.x, -(SEAM_DROP - BEVEL_DROP), d.z, 2.0)
+		return Vector4(d.x, -(SEAM_DROP - BEVEL_DROP), d.z, w)
 	var d2 := off * (WALL_TOP_SCALE / TOP_SCALE - 1.0)
-	return Vector4(d2.x, 0.0, d2.z, 2.0)
+	return Vector4(d2.x, 0.0, d2.z, w)
+
+
+## Whether a wall cap's hex-edge segment (offsets a -> b from cell c's center) has a face under it: something lower across
+## either half of it (the wall depth outline marks those bevel quads, w = 3; a groove between two wall tops stays unmarked).
+func _cap_edge_outer(c: Vector2i, a: Vector3, b: Vector3, level: int) -> bool:
+	var d := _dir_of_offset((a + b) * 0.5)
+	for t: float in [0.25, 0.75]:
+		var k := Hex.kite_of(a.lerp(b, t))
+		if _across(c, k, k == d) < level:
+			return true
+	return false
 
 
 ## Full-size emissive hex sunk just below the tile top: what shows through the gap.
@@ -1102,7 +1183,7 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 			col = col.lerp(Color(1.0, 0.5, 1.0), 0.14)
 			rim = col.lerp(EXIT_COLOR, 0.55)
 			seam = EXIT_COLOR
-	_top_tile(top_b, center, y, col, rim, rim_glow, not is_crate)
+	_top_tile(top_b, center, y, col, rim, rim_glow, not is_crate, c, cell.level if is_wall else NO_WALL)
 	_seam_hex(center, y, seam)
 
 	var side_col := _shade(cell.level) if not is_crate else _scaled(Color.WHITE, 0.95)
@@ -1344,7 +1425,8 @@ static func _cap_outline(k0: int, count: int) -> Array[Vector3]:
 
 ## A tile top over a run of kites: inset top, bevel along the hex-edge parts only (the radial parts lie on the
 ## wall line and stay flush), the full-size seam below.
-func _run_tile(top_b: Batch, center: Vector3, k0: int, count: int, y: float, col: Color, rim: Color, rim_glow: float, seam: Color, world_uv: bool) -> void:
+func _run_tile(top_b: Batch, center: Vector3, k0: int, count: int, y: float, col: Color, rim: Color, rim_glow: float, seam: Color, world_uv: bool,
+		wall_c: Vector2i = Vector2i.ZERO, wall_lv: int = NO_WALL) -> void:
 	var outline := _run_outline(k0, count)
 	var cap := _cap_outline(k0, count)
 	var pts: Array = []
@@ -1376,7 +1458,9 @@ func _run_tile(top_b: Batch, center: Vector3, k0: int, count: int, y: float, col
 		var qcol: Array = [col, rim, rim, col]
 		var qglow: Array = [0.0, rim_glow, rim_glow, 0.0]
 		top_b.polyv(_ccw_fix(quad), n, _ccw_fix(quv), _ccw_fix(qcol), _ccw_fix(qglow))
-		var qmove: Array = [_cap_move(center, ia, false), _cap_move(center, oa, true), _cap_move(center, ob, true), _cap_move(center, ib, false)]
+		var rim_out := wall_lv != NO_WALL and _cap_edge_outer(wall_c, a, b, wall_lv)
+		var qmove: Array = [_cap_move(center, ia, false, rim_out), _cap_move(center, oa, true, rim_out), _cap_move(center, ob, true, rim_out),
+				_cap_move(center, ib, false, rim_out)]
 		top_b.set_custom_last(_ccw_fix(qmove))
 	var sp: Array = []
 	var suv: Array = []
@@ -1478,7 +1562,7 @@ func _add_wall_part(c: Vector2i, cell: HexMap.Cell, mask: int) -> void:
 	top_b.mat = wm
 	side_b.mat = wm
 	for run: Array in _runs(mask):
-		_run_tile(top_b, center, int(run[0]), int(run[1]), y, col, rim, 0.12, seam, true)
+		_run_tile(top_b, center, int(run[0]), int(run[1]), y, col, rim, 0.12, seam, true, c, top_lv)
 	var side_col := Color(0.9, 0.9, 0.9)
 	_kite_sides(c, center, mask, top_lv, side_b, side_col)
 	if mask == HexMap.ALL_KITES:

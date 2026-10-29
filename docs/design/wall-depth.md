@@ -16,12 +16,19 @@ built behind one switch. **Off in the game** (today's look) until the user decid
   cell's) stopped 0.07 under a cap that runs right to the line: a slot.
 
 ## What changed (`HexMapView`, `MATERIAL_SHADER`; the switch is `wall_depth`)
-1. **Grid-locked courses and bond.** Courses are half a level (0.25), so they end on the level lines. Stones are 0.5 long
-   on hex-edge faces (corners at u = +/-0.5 mod 1.5) and 0.433 on wall-line faces (hex centres at u = 0 mod 0.866), in a
-   half bond: every other course has a joint on each corner, and the courses between turn it with one stone (a quoin). Each
-   stone is hashed by its world-space centre, so a quoin is one colour on both faces. The face kind comes from the normal's
-   angle mod 60. The formwork (20) and panelling (22) patterns keep their look but their panel lines and rails are now a
-   whole number of levels (1.0 and 1.5) from the level lines.
+1. **Grid-locked courses: rough ashlar** (second pass; the first was a brick bond, see below). A course is a level tall
+   (0.5); about 3 bands in 10 are two half-level courses instead. The bands count down from the coping's lower joint, so the
+   course under the coping is whole (the one at a wall's foot is cut). The joints keep to a span's ends and middle: a
+   hex-edge face's span is corner to corner (1.0; corners at u = +/-0.5 mod 1.5), a wall-line face's is centre to midpoint
+   (0.866; at u = 0 mod 0.866). Level courses alternate a joint on each corner (a whole span, split in two 3 times in 10)
+   with a joint in the middle and a stone turning each corner (a quoin, half a span each way); in a pair of half-level
+   courses the lower one is half spans (merged into one a quarter of the time) and the upper one a middle stone with a half
+   span turning each corner. On a straight wall line the "corners" are hex centres and midpoints, so a quoin there is just a
+   stone a whole span long across them. Each stone is hashed by a world-space point of it (a quoin by its corner, so it is
+   one colour on both faces), for its value (0.58-1.42 of the base) and a warm or cool hue shift. Rough: the joints wander
+   by up to 0.01 (world noise, so both faces of a corner agree) and half the stones have a chipped corner. Joints are a
+   little wider than the bricks' (readable at 1:1). The face kind comes from the normal's angle mod 60. The formwork (20)
+   and panelling (22) patterns keep their look, with their panel lines and rails on whole levels (1.0 and 1.5).
 2. **The wall seam closed.** A wall cap's flat top runs to 0.93 (`WALL_TOP_SCALE`), then its bevel runs out to the full
    hex and down to `SEAM_DROP`, exactly where the faces' tops are: no gap, no ring. A wall-line face's top rises 0.07 to
    the cap's edge: no slot. Same vertices and triangles: the mesh carries the second shape in CUSTOM0 (`Batch.custom`,
@@ -40,7 +47,14 @@ built behind one switch. **Off in the game** (today's look) until the user decid
    under it; the courses count down from it, so the course under it is whole. The cap is the same stone in three large
    slabs per hex, cut on alternate kite lines (centre to the edge midpoints at 0, 120 and 240 degrees: never square lines),
    joints kept quiet so a cap reads as one top. Caps stay darker than floors (the cap stone is the wall's base x 0.44; in
-   the chapel set, the palest, sampled patches of the game view measure about 57 on a cap against 92 on a floor). No new triangles: no lip.
+   the chapel set, the palest, sampled patches of the game view measure about 57 on a cap against 92 on a floor). No new
+   triangles: no lip.
+5. **The outline in the dark** (second pass). The cap's bevel over a face and the coping's lip give off a faint cool light
+   (`WD_EDGE`, about 0.02 linear), so a wall's top edges still read where no light reaches. Only the edges over a face:
+   `_cap_edge_outer` marks those bevel quads at build (CUSTOM0 w = 3), and a groove between two wall tops stays dark, so it
+   draws the walls' silhouettes, not the hex grid the old seam drew, and it is grey-blue, not amber. Under any real light
+   it is lost in the lit stone (the chapel, the lair). Caps stay darker than floors. `tests/test_wall_mesh.gd` checks the
+   marking (every bevel over a face, none on the groove between two wall columns).
 
 No textures, no new draw calls or triangles (`tests/test_floor_materials.gd` passes unchanged). With the switch off the
 shader takes today's path and the mesh is today's (plus the unused CUSTOM0 on the two wall surfaces).
@@ -60,14 +74,24 @@ shader takes today's path and the mesh is today's (plus the unused CUSTOM0 on th
   materials). The full frames are `<set>_off.png` / `<set>_on.png`.
 - `close.png` / `close_2x.png`: an outside wall corner and its cap at size 8, off | on, a row per set.
 
+## Second pass (2026-10-29)
+Asked "How do the walls look with it on?", the user picked "Bigger blocks": "Good direction, but use larger blocks so it
+reads as rough stone, not brick; and fix the vault's outlines". Fix 1 became rough ashlar (above); fix 5, the outline, is new.
+- The first pass's stones were 0.5 x 0.25 (0.433 on wall lines) in a plain half bond: brickwork at the game's zoom.
+- Tried for the vault's outlines: the brief's three options come to one thing in the vault, since nothing there is lit. A lit
+  lip from the virtual light alone does nothing (it scales the albedo, and there is no light to scale), so the lip and the
+  cap's bevel get a minimum value instead, as a faint cool emission (option 2 and 3 together). On every bevel ring it
+  brought back a grey hex grid over the wall tops, the old seam's pattern in another colour; on the bevels over a face
+  only, it draws the walls' outlines, which is what is kept. A first strength (0.012 linear) was too faint at 1:1; it is
+  about 0.02 now.
+
 ## Open questions
-- **The vault loses its wall outlines.** In the vault set the only thing that drew the wall caps in the dark was the dim
-  seam showing through the gap round each cap. With the seam closed the caps go black there (the faces facing a candle
-  read better than before). A faint glow on the cap's outer bevel would bring the outline back, at the price of a seam-like
-  line; not done.
-- **Bricks or blocks.** The grid maths makes small stones (0.5 x 0.25; 0.433 on wall lines): at the game's zoom a wall
-  reads as brickwork. Larger blocks (a level tall, 1.0 long, still on the grid) would read more like rough ashlar but turn
-  fewer corners.
+- **The vault's outline strength.** About 0.02 linear, cool grey: the walls' silhouettes read at 1:1 in the vault, faint.
+  Brighter would start to read as a glow; a warmer tint would read as the old seam. One constant (`WD_EDGE`).
+- **Course mix.** 3 bands in 10 are two half-level courses, 3 spans in 10 split; the rest are level-tall stones a span
+  long. Every wall shares the same band pattern by height (a course is the same all round a room, so corners agree).
+- **The chips** read as rounded corners on the short stones of a half-level course at size 8; at the game's zoom they are
+  a pixel or two.
 - **Caps as slabs.** Three slabs per hex with quiet joints read as a stone top; with the seam gone a long wall's cap reads
   as one mass with grooves between hexes. Straight slabs along a wall line are the alternative the brief allowed.
 - **The game.** In the lair's light the bent normals are moderate (not toned down further). The seam ring round wall caps

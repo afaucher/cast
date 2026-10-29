@@ -43,7 +43,7 @@ func setup() -> void:
 		_check_wall_depth(view.mesh_instance.mesh, mask, "mask %d" % mask)
 		view.free()
 	var col_view := _build(_wall_column_map())
-	_check_wall_depth(col_view.mesh_instance.mesh, HexMap.ALL_KITES, "wall column")
+	_check_wall_depth(col_view.mesh_instance.mesh, HexMap.ALL_KITES, "two wall columns", 2, 2)
 	col_view.free()
 	for mask in range(1, HexMap.ALL_KITES + 1):
 		var pview := _build(_pool_cell_map(mask))
@@ -126,12 +126,13 @@ func _check_caps(mesh: ArrayMesh, mask: int) -> void:
 	_cap(groups, FLOOR_LV * LH - HexMapView.SEAM_DROP, open * KITE_AREA, HexMap.ALL_KITES & ~mask, ref_sign, "mask %d floor seam" % mask)
 
 
-## One WALL column (WALL_LV) in a patch of level-0 floor.
+## Two WALL columns side by side (WALL_LV) in a patch of level-0 floor.
 func _wall_column_map() -> HexMap:
 	var m := HexMap.new()
 	for c in Hex.range_cells(Vector2i.ZERO, 2):
 		m.set_cell(c, 0).tag = "room:0"
 	m.set_cell(Vector2i.ZERO, WALL_LV, HexMap.Tile.WALL)
+	m.set_cell(Hex.DIRS[0], WALL_LV, HexMap.Tile.WALL)   # (side by side: a groove between their caps)
 	return m
 
 
@@ -140,14 +141,17 @@ func _wall_column_map() -> HexMap:
 ## its seam: its flat top is exactly its kites at WALL_TOP_SCALE (same winding, inside them, no overlap), flat top and bevel
 ## together cover the kites to their edges (no ring of seam round the cap), each hex-edge face's top vertices are the
 ## bevel's outer ones (the face meets the cap: no gap), and each face on a wall line stands up to the cap's height (no
-## slot under the cap's edge). The same triangles as with it off (a uniform, not a rebuild).
-func _check_wall_depth(mesh: ArrayMesh, mask: int, tag: String) -> void:
+## slot under the cap's edge). The same triangles as with it off (a uniform, not a rebuild). The bevel quads over a face are
+## marked (w = 3) for the outline that keeps a wall top readable in the dark; a groove between two wall tops is not.
+func _check_wall_depth(mesh: ArrayMesh, mask: int, tag: String, cells: int = 1, grooves: int = 0) -> void:
 	var y := WALL_LV * LH
 	var cap_pts: Array[Vector3] = []
 	var cap_flat := {}       ## y -> triangles, as _flat_groups
 	var cap_area := 0.0
 	var side_tops: Array = []   ## [moved top vertex, its rise]
 	var with_custom := 0
+	var rim_marked := 0         ## bevel quads marked as over a face (w = 3: the outline)
+	var rim_plain := 0
 	for s in mesh.get_surface_count():
 		var arr := mesh.surface_get_arrays(s)
 		var cu: Variant = arr[Mesh.ARRAY_CUSTOM0]
@@ -163,6 +167,11 @@ func _check_wall_depth(mesh: ArrayMesh, mask: int, tag: String) -> void:
 		for i in v.size():
 			var w := c[i * 4 + 3]
 			if w > 1.5:
+				if n[i].y < 0.99:
+					if w > 2.5:
+						rim_marked += 1
+					else:
+						rim_plain += 1
 				moved.append(v[i] + Vector3(c[i * 4], c[i * 4 + 1], c[i * 4 + 2]))
 				cap_pts.append(moved[i])
 			else:
@@ -188,9 +197,9 @@ func _check_wall_depth(mesh: ArrayMesh, mask: int, tag: String) -> void:
 	eq(with_custom, 2, "%s: the wall cap and the wall face surfaces carry CUSTOM0" % tag)
 	var walls := _bits(mask)
 	var ref_sign := _sign_of(_flat_groups(mesh).get(0.0, []))
-	_cap(cap_flat, y, walls * KITE_AREA * HexMapView.WALL_TOP_SCALE * HexMapView.WALL_TOP_SCALE, mask, ref_sign,
+	_cap(cap_flat, y, cells * walls * KITE_AREA * HexMapView.WALL_TOP_SCALE * HexMapView.WALL_TOP_SCALE, mask, ref_sign,
 			"%s wall depth cap" % tag)
-	near(cap_area, walls * KITE_AREA, 1e-4, "%s: with wall depth the cap and its bevel cover the wall's kites to the edge" % tag)
+	near(cap_area, cells * walls * KITE_AREA, 1e-4, "%s: with wall depth the cap and its bevel cover the wall's kites to the edge" % tag)
 	var gaps := 0
 	var slots := 0
 	for st: Array in side_tops:
@@ -215,6 +224,9 @@ func _check_wall_depth(mesh: ArrayMesh, mask: int, tag: String) -> void:
 		if not met:
 			gaps += 1
 	check(not side_tops.is_empty(), "%s: wall faces to measure" % tag)
+	# the outline in the dark: every bevel quad over a face is marked, a groove between two wall tops is not (4 vertices a quad)
+	eq(rim_plain, grooves * 4, "%s: the bevel quads between wall tops are the only unmarked ones" % tag)
+	check(rim_marked > 0, "%s: bevel quads over faces are marked for the outline" % tag)
 	check(gaps == 0, "%s: %d wall face top vertices miss the cap's bevel with wall depth on (a gap)" % [tag, gaps])
 	check(slots == 0, "%s: %d wall-line face tops stop short of the cap with wall depth on (a slot)" % [tag, slots])
 
