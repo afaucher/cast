@@ -28,7 +28,9 @@ armour, a skeleton), and ghost form is a whole-body transform you cast on yourse
   fading), **seep** (the puffs alone) and **cloak** (puffs rising off every part, no vapour body). Puffs stay in the world
   (not local), so they trail; in the gym the possessed pieces glide slowly to and fro to show it. Stills:
   `close_wisps_0.png` to `close_wisps_3.png` in that order (`close_vs_wisp.png`, `vs_wisp_*.png`: the default against
-  the wisp). Undecided until the user has seen them move.
+  the wisp). Seen in motion in the gym, the user: "Tone the particles down more but otherwise looks good". Toned down: fewer
+  puffs (5 off the head, 6 off the shoulders), smaller, and fainter (0.9 of the wisp's alpha, was 1.6). Kept: **shell +
+  seep**, the default the user saw.
 - **The niche is dropped for now.** The single niche "doesn't read" (it looked like a free-standing box). A wall of stacked
   burial slots was tried next and also failed ("No, that isn't working"): at the game camera it still read as a chest in
   the middle of the room. The user: "Drop the niche for now." The dormant skeleton is slumped only, and the risen one stands

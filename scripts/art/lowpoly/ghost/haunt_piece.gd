@@ -61,6 +61,7 @@ static var _puff_mesh: Mesh
 ##   cloak          no vapour body: puffs rising off every part, a moving cloud the shape of the host
 const WISPS: Array[String] = ["shell", "shell + seep", "seep", "cloak"]
 static var wisps := "shell + seep"
+const PUFF_ALPHA := 0.9            ## a puff's alpha against the wisp's (toned down: the user, "Tone the particles down more")
 
 const PUFF_SHADER := """
 shader_type spatial;
@@ -166,7 +167,7 @@ func refresh() -> void:
 	if puff != null:
 		var st2 := GhostLook.strength_now()
 		puff.set_shader_parameter("ghost_color", GhostLook.color_now())
-		puff.set_shader_parameter("alpha", float(st2["wisp"]) * 1.6)
+		puff.set_shader_parameter("alpha", float(st2["wisp"]) * PUFF_ALPHA)
 		puff.set_shader_parameter("glow", float(st2["glow"]))
 		for v in _shells:
 			v.visible = wisps.begins_with("shell")
@@ -213,17 +214,17 @@ func _add_wisps() -> void:
 	var body := model.parts.get("body") as MeshInstance3D
 	if head != null:
 		var hb := head.mesh.get_aabb()
-		_seep.append(_emitter(head, hb.get_center() + Vector3(0, hb.size.y * 0.25, 0), hb.size * 0.35, 8, 1.8, 0.35, 1.0))
+		_seep.append(_emitter(head, hb.get_center() + Vector3(0, hb.size.y * 0.25, 0), hb.size * 0.35, 5, 1.8, 0.35, 0.8))
 	if body != null:
 		var bb := body.mesh.get_aabb()
 		var top := Vector3(bb.get_center().x, bb.end.y - 0.05, bb.get_center().z)
-		_seep.append(_emitter(body, top, Vector3(bb.size.x * 0.45, 0.04, bb.size.z * 0.35), 10, 1.8, 0.3, 1.0))
+		_seep.append(_emitter(body, top, Vector3(bb.size.x * 0.45, 0.04, bb.size.z * 0.35), 6, 1.8, 0.3, 0.8))
 	for p: MeshInstance3D in model.parts.values():
 		if p.name == "stand":
 			continue
 		var ab := p.mesh.get_aabb()
-		var n := clampi(int(ab.size.length() * 5.0), 2, 7)
-		_cloak.append(_emitter(p, ab.get_center(), ab.size * 0.5, n, 1.2, 0.15, 0.8))
+		var n := clampi(int(ab.size.length() * 3.0), 1, 4)
+		_cloak.append(_emitter(p, ab.get_center(), ab.size * 0.5, n, 1.2, 0.15, 0.7))
 
 
 func _emitter(parent: Node3D, at: Vector3, box: Vector3, amount: int, life: float, speed: float, size: float) -> CPUParticles3D:
