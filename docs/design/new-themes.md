@@ -92,6 +92,13 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
   [acolytes] should actually be traveling around the map as a procession with monsters. So they would come across bodies
   and raise them." Open: what the procession is made of and how it moves (a route, a leader), and whether it is a
   networking shape of its own (a host-owned group of host monsters, like a pack).
+- **Coffee raises a downed zombie too.** The user: "the other situations would be when the player uses a heal or coffee.
+  Where they get caught in the blast and brought back." Today Coffee touches any team (the haste on everyone in the
+  splash, and a downed hero stands up as a coffee zombie), while Heal and Revive touch only the caster's team. Decided:
+  "Let's do coffee only for now but revisit heal in a bit before we finish." So a downed zombie in a Coffee splash gets
+  back up (spilling coffee near the bodies is a mistake you can make); Heal stays allies-only. **To revisit before the
+  milestone ends:** whether Heal raises zombies too. This needs a downed zombie to be a body on the floor (it is not
+  gone: an acolyte or a cup can stand it up), unlike today's monsters, which die.
 - The look test (look-dev only): `necro-look.md`. The zombie is the thin mourner; a zombie's "about to rise" pose is now
   what an acolyte's raising shows.
 
