@@ -150,3 +150,13 @@ $env:CAST_GODOT = "<abs path>\Hero-Reader\third_party\godot\Godot_v4.7-stable_wi
 - **Room shapes** are elongated hexagons (the shapes midpoint walls make), so the back wall and the upper-left wall face the
   camera; wall pieces stand on those.
 - **The conservatory** has three raised planter beds where the parked garden's pollen beds could go; there is no pollen.
+
+## The user's read (2026-10-29)
+
+One room at a time.
+- **Library:** candle light (the user picked it over moonlight: "Candle light").
+- **Portrait gallery:** reads; candle light ("Reads, candle").
+- **Ballroom:** reads; candle light ("Reads, candle").
+- **Dining hall:** reads; candle light ("Reads, candle").
+- **Conservatory:** reads; moonlight ("Reads, moonlight"): the one room lit through its glass. So the light is per room: candle light in the house rooms, moonlight in the glasshouse.
+- **Material set:** walnut & damask ("Walnut & damask").
