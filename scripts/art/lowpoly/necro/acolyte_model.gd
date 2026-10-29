@@ -171,10 +171,14 @@ func _hood_soup() -> LowPoly.Soup:
 	slab(s, Vector3(0, 0.19, -0.08 if deep else -0.04), Vector3(0.32, 0.06, 0.16), col, 966, Vector3(-14, 0, 0), 0.012)   # the brow of it
 	s.merge(LowPoly.cylinder(0.13, 0.0, 0.32 if deep else 0.20, 5, col, 967, 0.01), LowPoly.at(Vector3(0, 0.12, 0.24), Vector3(-62, 0, 0)))  # the peak
 	if deep:
-		# the trim round the opening, and the dark inside above the face
-		slab(s, Vector3(0, 0.215, -0.16), Vector3(0.32, 0.03, 0.03), BONE, 968, Vector3(-14, 0, 0))
+		# the trim round the opening, its three runs meeting at the top corners (the user, 2026-10-29: "Lets see if we can
+		# get the corners of the cowl's white trim to touch"), and the dark inside above the face
+		var top := Vector3(0.165, 0.215, -0.165)
+		var foot := Vector3(0.15, -0.17, -0.17)
+		limb(s, Vector3(-top.x, top.y, top.z), top, 0.018, 0.018, 4, BONE, 968)
 		for x: float in [-1.0, 1.0]:
-			slab(s, Vector3(0.165 * x, -0.02, -0.17), Vector3(0.03, 0.30, 0.03), BONE, 969 + int(x), Vector3(0, 0, -6.0 * x))
+			limb(s, Vector3(top.x * x, top.y, top.z), Vector3(foot.x * x, foot.y, foot.z), 0.017, 0.017, 4, BONE, 969 + int(x))
+			blob(s, Vector3(top.x * x, top.y, top.z), Vector3(0.024, 0.024, 0.022), BONE, 973 + int(x), 0.05)
 		slab(s, Vector3(0, 0.13, -0.10), Vector3(0.26, 0.06, 0.06), VOID, 972)
 	return s
 
