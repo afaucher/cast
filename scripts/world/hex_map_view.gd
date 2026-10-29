@@ -32,6 +32,7 @@ const TOP_SCALE := 0.90          ## flat top, as a fraction of the full hex
 const BEVEL_SCALE := 0.955       ## outer edge of the bevel; the rest of the hex is the glowing gap
 const BEVEL_DROP := 0.035        ## how far the bevel falls below the top
 const SEAM_DROP := 0.07          ## depth of the glowing seam surface below the top
+const WALL_TOP_SCALE := 0.93     ## a wall cap's flat top with wall_depth on (its bevel then runs out to the full hex)
 
 const SEAM_COLOR := Color(1.0, 0.40, 0.07)
 const EXIT_COLOR := Color(1.0, 0.28, 1.0)
@@ -52,6 +53,13 @@ var pool_view: PoolView = null   ## water, coping, foam, ladders, gantries of th
 var seam_gain := 1.0
 var seam_near_gain := 1.0
 var seam_near_range := 0.0
+## WALL DEPTH (look-dev, docs/design/wall-depth.md; off in the game until the user decides): the material shader's walls
+## get stone courses locked to the hex grid, per-stone bevels, depth in albedo and AO, a coping band and slab-cut caps,
+## and the wall caps close the seam round them (flat to WALL_TOP_SCALE, a bevel out to the full hex and down to the face's
+## top). A shader uniform, so it flips live (`set_wall_depth`): the mesh carries both shapes (CUSTOM0, Batch.custom).
+## `wall_depth_default` is what a new view starts with (the gym's Experiments row sets it).
+static var wall_depth_default := false
+var wall_depth := wall_depth_default
 
 static var _tex_cache: Dictionary = {}
 static var _terrain_shader: Shader
@@ -80,6 +88,11 @@ class Batch:
 	var mat := 0.0                     ## the material index every vertex added next gets (set per cell by the caller)
 	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
+	## CUSTOM0 per vertex (4 floats; the wall surfaces upload it, the others don't): what the WALL DEPTH look needs
+	## (`wall_depth`, MATERIAL_SHADER). A wall face: x = its top (its level line, SEAM_DROP down), y = its bottom, z = how far
+	## its top rises with wall_depth on, w = 1 at its top vertices. A wall cap: xyz = how far the vertex moves with
+	## wall_depth on, w = 2.
+	var custom := PackedFloat32Array()
 
 	## Polygon fan from pts[0]: the polygon must be convex or star-shaped about pts[0] (every other vertex visible
 	## from it); pts must be clockwise when seen from the normal side.
@@ -91,6 +104,8 @@ class Batch:
 			uvs.append(uv[i])
 			uv2s.append(Vector2(0.0, mat))
 			colors.append(col)
+		for _i in pts.size() * 4:
+			custom.append(0.0)
 		_fan(base, pts.size())
 
 	## Same, with a color and a glow value per vertex.
@@ -102,7 +117,19 @@ class Batch:
 			uvs.append(uv[i])
 			uv2s.append(Vector2(float(glows[i]), mat))
 			colors.append(cols[i])
+		for _i in pts.size() * 4:
+			custom.append(0.0)
 		_fan(base, pts.size())
+
+	## Set the CUSTOM0 of the last `values.size()` vertices added, in the order they were added.
+	func set_custom_last(values: Array) -> void:
+		var first := verts.size() - values.size()
+		for i in values.size():
+			var c: Vector4 = values[i]
+			custom[(first + i) * 4] = c.x
+			custom[(first + i) * 4 + 1] = c.y
+			custom[(first + i) * 4 + 2] = c.z
+			custom[(first + i) * 4 + 3] = c.w
 
 	func _fan(base: int, count: int) -> void:
 		for i in range(1, count - 1):
@@ -172,7 +199,11 @@ func build(map: HexMap) -> void:
 		arrays[Mesh.ARRAY_TEX_UV2] = b.uv2s
 		arrays[Mesh.ARRAY_COLOR] = b.colors
 		arrays[Mesh.ARRAY_INDEX] = b.indices
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var flags := 0
+		if s == Surf.WALL_TOP or s == Surf.WALL_SIDE:
+			arrays[Mesh.ARRAY_CUSTOM0] = b.custom   # (the wall depth look's data; same vertices, same triangles)
+			flags = Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, _material(s))
 		tris += b.indices.size() / 3
 		verts += b.verts.size()
@@ -254,11 +285,13 @@ uniform float spec = 0.2;
 uniform float near_gain = 1.0;
 uniform float near_range = 0.0;
 uniform bool is_wall = false;
+uniform float wall_depth = 0.0;
 uniform vec4 m_base[32];
 uniform vec4 m_alt[32];
 uniform vec4 m_par[32];
 varying vec3 wp;
 varying vec3 wn;
+varying vec4 wface;
 
 float h21(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -357,12 +390,14 @@ vec3 material_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float 
 	}
 	return c;
 }
-vec3 wall_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float rgh) {
+// `grid` (wall depth on): p.y counts from the level lines, and the formwork panels and the panelling's rails are a whole
+// number of levels tall, so a wall's top ends on a line.
+vec3 wall_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float rgh, bool grid) {
 	vec3 c = base;
 	float u = p.x;
 	float v = p.y;
 	if (pat == 20) {                      // poured concrete: formwork panels, tie holes, rain streaks
-		vec2 psz = vec2(2.4, 1.2);
+		vec2 psz = grid ? vec2(2.4, 1.0) : vec2(2.4, 1.2);
 		float line = 1.0 - smoothstep(0.0, 0.035, grid_d(p, psz));
 		float streak = fbm(vec2(u * 0.8, v * 0.12));
 		c = base * (0.78 + 0.45 * streak) * (0.92 + 0.16 * fbm(p * 5.0));
@@ -391,7 +426,8 @@ vec3 wall_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float rgh)
 		float lx = fract(u / bw) * bw;
 		float groove = 1.0 - smoothstep(0.0, 0.025, min(lx, bw - lx));
 		c = mix(c, alt, groove * 0.8);
-		float ry = fract(v / 1.6) * 1.6;
+		float rp = grid ? 1.5 : 1.6;
+		float ry = fract(v / rp) * rp;
 		float rail = step(ry, 0.16);
 		c = mix(c, base * 1.35, rail * 0.8);
 		float redge = 1.0 - smoothstep(0.0, 0.02, min(abs(ry - 0.16), ry));
@@ -406,7 +442,179 @@ vec3 wall_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float rgh)
 	}
 	return c;
 }
+
+// ---- WALL DEPTH (wall_depth = 1; docs/design/wall-depth.md) ----
+// The crypt is lit almost only by ambient light, where a bent normal shows little, so the depth goes into the albedo and AO
+// too: a fixed "virtual light" (VKEY, from above) shades each stone's bevels, the joints and bevel recesses darken the AO,
+// and the foot of a wall darkens. Joints and bevels widen with fwidth so they never go under ~1 px each, and fade out on a
+// face seen edge-on (no moire). The terrain has no screen-space ink outline (models ink their own hulls), so the bent
+// normals ink nothing.
+const float WD_DROP = 0.07;               // HexMapView.SEAM_DROP: every face's top is a level line this far down
+const float WD_COURSE = 0.25;             // a course: half a level, so the courses end on the level lines
+const float WD_COPING = 0.125;            // the coping band under the cap: the top half course
+const vec3 VKEY = vec3(-0.30, 0.86, 0.41);
+
+// The hex (pointy-top, SIZE 1) centre of a point in XZ.
+vec2 hex_center(vec2 p) {
+	float q = 0.57735027 * p.x - p.y / 3.0;
+	float r = 0.66666667 * p.y;
+	vec3 c = vec3(q, r, -q - r);
+	vec3 rc = round(c);
+	vec3 d = abs(rc - c);
+	if (d.x > d.y && d.x > d.z) {
+		rc.x = -rc.y - rc.z;
+	} else if (d.y > d.z) {
+		rc.y = -rc.x - rc.z;
+	}
+	return vec2(1.7320508 * (rc.x + rc.y * 0.5), 1.5 * rc.y);
+}
+// The cap's stone (the cap and the coping band): dark, so caps stay darker than floors, like the slate caps.
+vec3 cap_stone(vec3 base, vec2 p, float h) {
+	return base * 0.44 * (0.8 + 0.4 * fbm(p * 3.0)) * (0.88 + 0.24 * h);
+}
+// A smoothstep bevel over `w` from the joint edge `m` at distance `e`: x = height (0 in the joint, 1 on the face),
+// y = its slope d(height)/d(e).
+vec2 bevel(float e, float m, float w) {
+	float t = clamp((e - m) / w, 0.0, 1.0);
+	return vec2(t * t * (3.0 - 2.0 * t), 6.0 * t * (1.0 - t) / w);
+}
+// A wall face. Courses LH/2 tall, counted down from the coping (whose band is the top half course: the course under it is to the hex grid in a half bond: 0.5 long on the hex-edge
+// faces (their corners sit at u = +/-0.5 mod 1.5) and 0.433 on the wall-line faces (hex centres at u = 0 mod 0.866), so
+// every other course has a joint on each corner and the courses between turn it with one stone (a quoin; hashed by its
+// world-space centre, the corner itself, so it is one colour on both faces). Rough stone blocks (pattern 21) get the
+// stones; the other wall patterns keep their own look, aligned to the level lines. Every pattern gets the coping band
+// (the cap's stone, joints only at hex corners, a lit lip, a dark line under it) and the darker foot.
+vec3 depth_face(int pat, vec3 base, vec3 alt, float sc, vec3 p3, vec3 n3, vec4 fc, vec2 fuv, inout float rgh, out vec3 nrm,
+		out float ao) {
+	vec2 along = vec2(-n3.z, n3.x);
+	vec3 T = vec3(along.x, 0.0, along.y);
+	float u = dot(p3.xz, along);
+	float v = p3.y + WD_DROP;
+	float d = dot(p3.xz, n3.xz);
+	float fu = max(fuv.x, 1e-4);   // (fwidth of u and v, from fragment())
+	float fv = max(fuv.y, 1e-4);
+	float ang = mod(degrees(atan(n3.z, n3.x)) + 360.0, 60.0);
+	bool on_line = abs(ang - 30.0) < 15.0;   // on a wall line (centre to centre), not a hex edge
+	float below = fc.x - p3.y;         // under the face's level line (a raised wall-line face goes 0.07 above it)
+	float above = p3.y - fc.y;         // over the face's foot
+	float mx = max(0.012, 0.5 * fu);      // half a joint, at least ~1 px wide in all
+	float my = max(0.012, 0.5 * fv);
+	float k = 1.0 - smoothstep(0.06, 0.15, max(fu, fv));   // bent normals fade out far away
+	vec3 c;
+	float su = 0.0;                       // the height field's slope along u
+	float sv = 0.0;                       // and up
+	ao = 1.0;
+	if (below < WD_COPING) {
+		// the coping: one stone per hex edge, or per half wall line
+		float span = on_line ? 0.8660254 : 1.5;
+		float uc = on_line ? span * (floor(u / span) + 0.5) : span * round(u / span);
+		float half_w = on_line ? 0.4330127 : 0.5;
+		float jd = half_w - abs(u - uc);
+		float cy = WD_COPING - below;         // up from its lower joint
+		float dtop = below + fc.z;            // down from its top (the cap's edge)
+		vec2 key = floor((along * uc + n3.xz * d) * 4.0 + 0.5);
+		c = cap_stone(base, vec2(u, v), h21(key + 5.0));
+		float jx = 1.0 - smoothstep(mx - fu, mx + fu, jd);
+		float jb = 1.0 - smoothstep(my - fv, my + fv, cy);
+		float wx = max(0.025, 1.2 * fu);
+		float wy = min(max(0.022, 1.2 * fv), 0.04);
+		vec2 bx = bevel(jd, mx, wx);
+		vec2 bb = bevel(cy, my, wy);
+		vec2 bt = bevel(dtop, 0.0, wy);
+		float h = bx.x * bb.x * bt.x;
+		su = 0.5 * wx * bx.y * -sign(u - uc) * bb.x * bt.x;
+		sv = 0.5 * wy * (bb.y * bx.x * bt.x - bt.y * bx.x * bb.x);
+		c *= mix(0.8, 1.0, bx.x * bb.x);
+		c *= 1.0 + 0.35 * (1.0 - bt.x);       // the lit lip
+		c = mix(c, alt, max(jx, jb));
+		ao = mix(0.7, 1.0, h) * (1.0 - 0.5 * max(jx, jb));
+	} else if (pat == 21) {
+		float L = on_line ? 0.4330127 : 0.5;
+		// (the courses count down from the coping's lower joint, so the course under it is whole; the one at the foot is a half)
+		float vc = v + WD_COPING;
+		float row = floor(vc / WD_COURSE);
+		float off = mod(row, 2.0) * 0.5 * L;
+		float bi = floor((u - off) / L);
+		float lx = u - off - bi * L;
+		float ly = vc - row * WD_COURSE;
+		vec2 key = floor((along * (off + (bi + 0.5) * L) + n3.xz * d) * 4.0 + 0.5) + vec2(row * 7.0, row * 13.0);
+		float hb = h21(key);
+		vec2 ht = h22(key + 3.7);
+		// hand-cut: each joint wobbles a little (from the world position, so both faces of a corner agree)
+		float wob = vn(vec2(dot(p3.xz, vec2(7.1, 5.3)) + p3.y * 3.0, p3.y * 9.0)) - 0.5;
+		float ex = min(lx, L - lx) + 0.012 * wob;
+		float ey = min(ly, WD_COURSE - ly) + 0.01 * wob;
+		// a face seen edge-on packs its stones into a few pixels: their joints and colours fade to their average there (no moire)
+		float fx = smoothstep(L / 5.0, L / 2.5, fu);
+		float fy = smoothstep(WD_COURSE / 4.0, WD_COURSE / 2.0, fv);
+		hb = mix(hb, 0.5, max(fx, fy));
+		float jx = (1.0 - smoothstep(mx - fu, mx + fu, ex)) * (1.0 - fx);
+		float jy = (1.0 - smoothstep(my - fv, my + fv, ey)) * (1.0 - fy);
+		float mortar = max(jx, jy);
+		// the bevel: ~1 px at the game's zoom, never more than 0.4 of the stone's half, slope ~0.75 at any width
+		float wx = min(max(0.025, 1.2 * fu), 0.4 * (0.5 * L - mx));
+		float wy = min(max(0.022, 1.2 * fv), 0.4 * (0.5 * WD_COURSE - my));
+		vec2 bx = mix(bevel(ex, mx, wx), vec2(1.0, 0.0), fx);
+		vec2 by = mix(bevel(ey, my, wy), vec2(1.0, 0.0), fy);
+		float h = bx.x * by.x;
+		su = 0.5 * wx * bx.y * (lx < L - lx ? 1.0 : -1.0) * by.x + (ht.x - 0.5) * 0.14 * h * (1.0 - max(fx, fy));
+		sv = 0.5 * wy * by.y * (ly < WD_COURSE - ly ? 1.0 : -1.0) * bx.x + (ht.y - 0.5) * 0.14 * h * (1.0 - max(fx, fy));
+		c = base * (0.74 + 0.52 * hb) * (0.8 + 0.4 * fbm(vec2(u, v) * 3.0 + vec2(hb * 31.0, hb * 17.0)));
+		c *= mix(0.8, 1.0, h);
+		c = mix(c, alt, mortar);
+		c *= mix(1.0, 0.85, max(fx, fy));   // (the joints' average)
+		ao = mix(0.7, 1.0, h) * (1.0 - 0.5 * mortar);
+		// the course under the coping sits in its shadow
+		c *= mix(0.6, 1.0, smoothstep(0.0, 0.05, below - WD_COPING));
+	} else {
+		c = wall_color(pat, vec2(u, v), base, alt, sc, rgh, true);
+		c *= mix(0.6, 1.0, smoothstep(0.0, 0.05, below - WD_COPING));
+	}
+	// the foot of a wall darker, its top a touch lighter
+	c *= mix(0.7, 1.0, smoothstep(0.0, 0.45, above)) * (1.0 + 0.1 * (1.0 - smoothstep(0.2, 0.9, below)));
+	ao *= mix(0.65, 1.0, smoothstep(0.0, 0.35, above));
+	nrm = normalize(n3 - T * su * k - vec3(0.0, 1.0, 0.0) * sv * k);
+	c *= clamp(1.0 + 0.55 * (dot(nrm, VKEY) - dot(n3, VKEY)), 0.5, 1.5);
+	return c;
+}
+// A wall cap: the cap's stone in three large slabs per hex, cut on alternate kite lines (centre to the edge midpoints at 0,
+// 120 and 240 degrees: never square lines); its bevel ring (out to the full hex) catches the virtual light.
+vec3 depth_cap(vec3 base, vec3 alt, vec3 p3, vec3 n3, float fw, out float ao) {
+	vec2 hc = hex_center(p3.xz);
+	vec2 o = p3.xz - hc;
+	float dist = 9.0;
+	for (int i = 0; i < 3; i++) {
+		float a = radians(120.0 * float(i));
+		vec2 dv = vec2(cos(a), sin(a));
+		float dd = dot(o, dv) > 0.0 ? abs(o.x * dv.y - o.y * dv.x) : length(o);
+		dist = min(dist, dd);
+	}
+	float sector = floor(mod(degrees(atan(o.y, o.x)) + 360.0, 360.0) / 120.0);
+	float h = h21(floor(hc * 4.0 + 0.5) + vec2(sector * 11.0, 3.0));
+	vec3 c = cap_stone(base, p3.xz, h);
+	fw = max(fw, 1e-4);
+	float jw = max(0.012, 0.6 * fw);
+	float joint = 1.0 - smoothstep(jw - fw, jw + fw, dist);
+	c = mix(c, alt, joint * 0.5);   // (quiet joints: a cap should read as one top, not as floor tiles)
+	ao = 1.0 - 0.3 * joint;
+	return c * clamp(1.0 + 0.55 * (dot(n3, VKEY) - VKEY.y), 0.6, 1.4);
+}
+
 void vertex() {
+	wface = CUSTOM0;
+	if (is_wall && wall_depth > 0.5) {
+		if (CUSTOM0.w > 1.5) {
+			// a cap vertex (HexMapView._cap_move): the flat top out to WALL_TOP_SCALE, the bevel out to the full hex
+			// and down to the face's top; the bevel's normal takes its new slope (0.07 down over 0.07 * INNER out)
+			VERTEX += CUSTOM0.xyz;
+			if (NORMAL.y < 0.99) {
+				vec2 o = normalize(NORMAL.xz);
+				NORMAL = normalize(vec3(o.x * 0.07, 0.0606, o.y * 0.07));
+			}
+		} else {
+			VERTEX.y += CUSTOM0.z * CUSTOM0.w;   // a wall-line face's top up to the cap's edge
+		}
+	}
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
@@ -416,6 +624,14 @@ void fragment() {
 	float glow = UV2.x;
 	float rgh = rough;
 	float spc = spec;
+	float ao = 1.0;
+	bool depth = is_wall && wall_depth > 0.5;
+	// (screen derivatives taken here, outside the branches: a face's u and height, a cap's XZ)
+	vec2 fuv = vec2(fwidth(dot(wp.xz, vec2(-wn.z, wn.x))), fwidth(wp.y));
+	float fwc = 0.5 * (fwidth(wp.x) + fwidth(wp.z));
+	if (depth) {
+		glow = 0.0;   // (the seam round a wall cap is closed: no rim glow)
+	}
 	if (id == 0) {
 		vec4 t = texture(tex, UV);
 		alb = t.rgb;
@@ -429,13 +645,22 @@ void fragment() {
 		int pat = int(b.a + 0.5);
 		if (is_wall && abs(wn.y) < 0.5) {
 			vec2 along = vec2(-wn.z, wn.x);
-			alb = wall_color(pat, vec2(dot(wp.xz, along), wp.y), b.rgb, a.rgb, a.a, rgh);
+			if (depth) {
+				vec3 nrm;
+				alb = depth_face(pat, b.rgb, a.rgb, a.a, wp, wn, wface, fuv, rgh, nrm, ao);
+				NORMAL = (VIEW_MATRIX * vec4(nrm, 0.0)).xyz;
+			} else {
+				alb = wall_color(pat, vec2(dot(wp.xz, along), wp.y), b.rgb, a.rgb, a.a, rgh, false);
+			}
+		} else if (depth) {
+			alb = depth_cap(b.rgb, a.rgb, wp, wn, fwc, ao);
 		} else if (is_wall) {
 			alb = b.rgb * 0.5 * (0.8 + 0.4 * fbm(wp.xz * 3.0));  // the cap of a wall: darker than the floor, like the slate cap
 		} else {
 			alb = material_color(pat, wp.xz, b.rgb, a.rgb, a.a, rgh);
 		}
 	}
+	AO = ao;
 	ALBEDO = alb * COLOR.rgb;
 	ROUGHNESS = rgh;
 	SPECULAR = spc;
@@ -549,6 +774,7 @@ func _material(surf: int) -> Material:
 		m.set_shader_parameter("m_alt", tables["alt"])
 		m.set_shader_parameter("m_par", tables["par"])
 		m.set_shader_parameter("is_wall", surf != Surf.FLOOR_TOP)
+		m.set_shader_parameter("wall_depth", 1.0 if wall_depth else 0.0)
 	else:
 		m.shader = _terrain_shader
 	var tex := ""
@@ -583,6 +809,20 @@ func _material(surf: int) -> Material:
 	m.set_shader_parameter("rough", rough)
 	m.set_shader_parameter("spec", spec)
 	return m
+
+
+## Turn the wall depth look on or off, live: the uniform on every material of the built mesh that has it (the material
+## shader's; a restyle's duplicates included, as they are the mesh's materials now). A map without materials (the classic
+## slate shader) has nothing to switch.
+func set_wall_depth(on: bool) -> void:
+	wall_depth = on
+	if mesh_instance == null or mesh_instance.mesh == null:
+		return
+	var mesh := mesh_instance.mesh
+	for i in mesh.get_surface_count():
+		var m := mesh.surface_get_material(i) as ShaderMaterial
+		if m != null and m.get_shader_parameter("m_base") != null:
+			m.set_shader_parameter("wall_depth", 1.0 if on else 0.0)
 
 
 ## Brightness of a slate floor top for a given height level (cool grey-blue). Higher levels
@@ -684,9 +924,12 @@ static func _edge_dir(j: int) -> int:
 
 ## Vertical quad between two XZ points. `n` is the outward normal; winding is fixed up so it faces n.
 ## `drop` is the SEAM_DROP the caller already subtracted (keeps the level banding aligned);
-## g_top / g_bot are per-vertex glow values.
+## g_top / g_bot are per-vertex glow values. For the wall depth look (Batch.custom) the face runs from `face_top` to
+## `face_bot` (INF: this quad's own top / bottom; a face drawn in two quads passes the whole face's), and its top rises
+## by `raise` with wall_depth on.
 func _side_quad(b: Batch, p0: Vector3, p1: Vector3, y_top: float, y_bot: float, n: Vector3, u0: float, u1: float, col: Color,
-		drop: float = 0.0, g_top: float = 0.0, g_bot: float = 0.0) -> void:
+		drop: float = 0.0, g_top: float = 0.0, g_bot: float = 0.0, face_top: float = INF, face_bot: float = INF,
+		raise: float = 0.0) -> void:
 	var right := (-n).cross(Vector3.UP)
 	var a := p0
 	var c := p1
@@ -708,6 +951,11 @@ func _side_quad(b: Batch, p0: Vector3, p1: Vector3, y_top: float, y_bot: float, 
 		b.poly(pts, n, uv, col)
 	else:
 		b.polyv(pts, n, uv, [col, col, col, col], [g_top, g_top, g_bot, g_bot])
+	var ft := y_top if face_top == INF else face_top
+	var fb := y_bot if face_bot == INF else face_bot
+	var top := Vector4(ft, fb, raise, 1.0)
+	var bot := Vector4(ft, fb, raise, 0.0)
+	b.set_custom_last([top, top, bot, bot])
 
 
 func _corner(center: Vector3, i: int) -> Vector3:
@@ -736,6 +984,10 @@ func _top_tile(top_b: Batch, center: Vector3, y: float, col: Color, rim: Color, 
 		pts.append(p)
 		uv.append(_uv_for(center, p, world_uv))
 	top_b.poly(pts, Vector3.UP, uv, col)
+	var moved: Array = []
+	for p: Vector3 in pts:
+		moved.append(_cap_move(center, p, false))
+	top_b.set_custom_last(moved)
 	for j in 6:
 		var ia := _ring_pt(center, j, TOP_SCALE, y)
 		var ib := _ring_pt(center, j + 1, TOP_SCALE, y)
@@ -746,6 +998,20 @@ func _top_tile(top_b: Batch, center: Vector3, y: float, col: Color, rim: Color, 
 		var quad: Array = [ia, oa, ob, ib]
 		var quv: Array = [_uv_for(center, ia, world_uv), _uv_for(center, oa, world_uv), _uv_for(center, ob, world_uv), _uv_for(center, ib, world_uv)]
 		top_b.polyv(quad, n, quv, [col, rim, rim, col], [0.0, rim_glow, rim_glow, 0.0])
+		top_b.set_custom_last([_cap_move(center, ia, false), _cap_move(center, oa, true), _cap_move(center, ob, true), _cap_move(center, ib, false)])
+
+
+## A wall cap vertex's move with wall_depth on (Batch.custom, w = 2): the flat top's outline (at TOP_SCALE) out to
+## WALL_TOP_SCALE, the bevel's outer edge (at BEVEL_SCALE, BEVEL_DROP down) out to the full hex and down to SEAM_DROP,
+## where the wall face's top edge is: no gap round the cap, and no seam shows. A point on a wall line (a cut cell's radial
+## edge) stays on it, since the move is along its offset from the center.
+static func _cap_move(center: Vector3, p: Vector3, outer: bool) -> Vector4:
+	var off := Vector3(p.x - center.x, 0.0, p.z - center.z)
+	if outer:
+		var d := off * (1.0 / BEVEL_SCALE - 1.0)
+		return Vector4(d.x, -(SEAM_DROP - BEVEL_DROP), d.z, 2.0)
+	var d2 := off * (WALL_TOP_SCALE / TOP_SCALE - 1.0)
+	return Vector4(d2.x, 0.0, d2.z, 2.0)
 
 
 ## Full-size emissive hex sunk just below the tile top: what shows through the gap.
@@ -871,8 +1137,8 @@ func _add_column(c: Vector2i, cell: HexMap.Cell) -> void:
 		if _pits.has(nb):
 			# warm glow climbing the last stretch of the pit wall
 			var gh := minf(0.9, y_top - y_bot)
-			_side_quad(side_b, p0, p1, y_top, y_bot + gh, n, 0.0, 1.0, side_col, SEAM_DROP)
-			_side_quad(side_b, p0, p1, y_bot + gh, y_bot, n, 0.0, 1.0, side_col, SEAM_DROP, 0.0, 0.6)
+			_side_quad(side_b, p0, p1, y_top, y_bot + gh, n, 0.0, 1.0, side_col, SEAM_DROP, 0.0, 0.0, y_top, y_bot)
+			_side_quad(side_b, p0, p1, y_bot + gh, y_bot, n, 0.0, 1.0, side_col, SEAM_DROP, 0.0, 0.6, y_top, y_bot)
 		else:
 			_side_quad(side_b, p0, p1, y_top, y_bot, n, 0.0, 1.0, side_col, SEAM_DROP)
 	if not is_wall and cell.tag == "exit" and _map.elevator.is_empty():
@@ -1088,6 +1354,10 @@ func _run_tile(top_b: Batch, center: Vector3, k0: int, count: int, y: float, col
 		pts.append(p)
 		uv.append(_uv_for(center, p, world_uv))
 	top_b.poly(pts, Vector3.UP, uv, col)
+	var moved: Array = []
+	for p: Vector3 in pts:
+		moved.append(_cap_move(center, p, false))
+	top_b.set_custom_last(moved)
 	var m := outline.size()
 	var whole := count >= 6
 	for i in m:
@@ -1106,6 +1376,8 @@ func _run_tile(top_b: Batch, center: Vector3, k0: int, count: int, y: float, col
 		var qcol: Array = [col, rim, rim, col]
 		var qglow: Array = [0.0, rim_glow, rim_glow, 0.0]
 		top_b.polyv(_ccw_fix(quad), n, _ccw_fix(quv), _ccw_fix(qcol), _ccw_fix(qglow))
+		var qmove: Array = [_cap_move(center, ia, false), _cap_move(center, oa, true), _cap_move(center, ob, true), _cap_move(center, ib, false)]
+		top_b.set_custom_last(_ccw_fix(qmove))
 	var sp: Array = []
 	var suv: Array = []
 	for o in cap:
@@ -1231,7 +1503,10 @@ func _add_wall_part(c: Vector2i, cell: HexMap.Cell, mask: int) -> void:
 		# half of the face continues it seamlessly, and the texture's corner glow lands on the hex centers, where
 		# wall corners are. (It was scaled by 0.5 here, which drew these faces at half the horizontal density of
 		# every other side: stretched 2x, with the corner glow in the middle of a face.)
-		_side_quad(side_b, center, mid, y - SEAM_DROP, bottom_y, n, 0.0, Hex.INNER / Hex.SIZE, side_col, SEAM_DROP)
+		# (with wall_depth on its top rises SEAM_DROP to the cap's edge: the cap's flat top runs right to the wall line, so
+		# a face SEAM_DROP lower left a slot along every wall line)
+		_side_quad(side_b, center, mid, y - SEAM_DROP, bottom_y, n, 0.0, Hex.INNER / Hex.SIZE, side_col, SEAM_DROP, 0.0, 0.0,
+				INF, INF, SEAM_DROP)
 
 
 ## Treads of a cut staircase over its open kites only (each kite clipped to each tread strip), with the outer faces

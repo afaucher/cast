@@ -51,6 +51,8 @@ var crew := {}                      ## "wick", "rebar", "grunt", "grunt2" -> the
 var lights: Array[Light3D] = []     ## the candle lights and downlights (tests count them)
 var labels: Array[Node3D] = []      ## the plan's names (hidden in the game views)
 var display: Array[Node3D] = []     ## the display room's pieces, in props.png's column order
+## The walls' depth look (HexMapView.wall_depth, docs/design/wall-depth.md): on here, off in the game until the user decides.
+var wall_depth := true
 
 
 func _ready() -> void:
@@ -207,6 +209,7 @@ func build(which: String) -> void:
 	_make_map()
 	GameWorld.begin(map, holder, 11)
 	terrain = HexMapView.new()
+	terrain.wall_depth = wall_depth
 	terrain.seam_gain = float(CryptLook.look(set_name)["seam"])
 	holder.add_child(terrain)
 	terrain.build(map)

@@ -40,7 +40,11 @@ func setup() -> void:
 		var view := _build(_cut_cell_map(mask))
 		_check_caps(view.mesh_instance.mesh, mask)
 		_check_sides(view.mesh_instance.mesh, "mask %d" % mask)
+		_check_wall_depth(view.mesh_instance.mesh, mask, "mask %d" % mask)
 		view.free()
+	var col_view := _build(_wall_column_map())
+	_check_wall_depth(col_view.mesh_instance.mesh, HexMap.ALL_KITES, "wall column")
+	col_view.free()
 	for mask in range(1, HexMap.ALL_KITES + 1):
 		var pview := _build(_pool_cell_map(mask))
 		_check_pool_caps(pview.mesh_instance.mesh, mask)
@@ -120,6 +124,99 @@ func _check_caps(mesh: ArrayMesh, mask: int) -> void:
 	_cap(groups, WALL_LV * LH - HexMapView.SEAM_DROP, walls * KITE_AREA, mask, ref_sign, "mask %d wall seam" % mask)
 	_cap(groups, FLOOR_LV * LH, open * KITE_AREA * top2, HexMap.ALL_KITES & ~mask, ref_sign, "mask %d floor top" % mask)
 	_cap(groups, FLOOR_LV * LH - HexMapView.SEAM_DROP, open * KITE_AREA, HexMap.ALL_KITES & ~mask, ref_sign, "mask %d floor seam" % mask)
+
+
+## One WALL column (WALL_LV) in a patch of level-0 floor.
+func _wall_column_map() -> HexMap:
+	var m := HexMap.new()
+	for c in Hex.range_cells(Vector2i.ZERO, 2):
+		m.set_cell(c, 0).tag = "room:0"
+	m.set_cell(Vector2i.ZERO, WALL_LV, HexMap.Tile.WALL)
+	return m
+
+
+## WALL DEPTH (HexMapView.wall_depth, docs/design/wall-depth.md): the mesh carries the second shape in CUSTOM0 and the
+## vertex shader moves it, so here the moves are applied on the CPU and the result read back. With it on, a wall cap closes
+## its seam: its flat top is exactly its kites at WALL_TOP_SCALE (same winding, inside them, no overlap), flat top and bevel
+## together cover the kites to their edges (no ring of seam round the cap), each hex-edge face's top vertices are the
+## bevel's outer ones (the face meets the cap: no gap), and each face on a wall line stands up to the cap's height (no
+## slot under the cap's edge). The same triangles as with it off (a uniform, not a rebuild).
+func _check_wall_depth(mesh: ArrayMesh, mask: int, tag: String) -> void:
+	var y := WALL_LV * LH
+	var cap_pts: Array[Vector3] = []
+	var cap_flat := {}       ## y -> triangles, as _flat_groups
+	var cap_area := 0.0
+	var side_tops: Array = []   ## [moved top vertex, its rise]
+	var with_custom := 0
+	for s in mesh.get_surface_count():
+		var arr := mesh.surface_get_arrays(s)
+		var cu: Variant = arr[Mesh.ARRAY_CUSTOM0]
+		if cu == null or (cu as PackedFloat32Array).is_empty():
+			continue
+		with_custom += 1
+		var c: PackedFloat32Array = cu
+		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var n: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+		eq(c.size(), v.size() * 4, "%s: CUSTOM0 has four floats per vertex" % tag)
+		var moved := PackedVector3Array()
+		for i in v.size():
+			var w := c[i * 4 + 3]
+			if w > 1.5:
+				moved.append(v[i] + Vector3(c[i * 4], c[i * 4 + 1], c[i * 4 + 2]))
+				cap_pts.append(moved[i])
+			else:
+				moved.append(v[i] + Vector3(0.0, c[i * 4 + 2] * w, 0.0))
+				if w > 0.5:
+					side_tops.append([moved[i], c[i * 4 + 2]])
+		var t := 0
+		while t < idx.size():
+			var p0 := moved[idx[t]]
+			var p1 := moved[idx[t + 1]]
+			var p2 := moved[idx[t + 2]]
+			var is_cap := c[idx[t] * 4 + 3] > 1.5
+			var n0 := n[idx[t]]
+			t += 3
+			if not is_cap:
+				continue
+			cap_area += absf(_signed_area([Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), Vector2(p2.x, p2.z)]))
+			if n0.y > 0.999 and absf(p0.y - y) < 1e-5 and absf(p1.y - y) < 1e-5 and absf(p2.y - y) < 1e-5:
+				var key := snappedf(y, 0.001)
+				if not cap_flat.has(key):
+					cap_flat[key] = []
+				cap_flat[key].append([Vector2(p0.x, p0.z), Vector2(p1.x, p1.z), Vector2(p2.x, p2.z)])
+	eq(with_custom, 2, "%s: the wall cap and the wall face surfaces carry CUSTOM0" % tag)
+	var walls := _bits(mask)
+	var ref_sign := _sign_of(_flat_groups(mesh).get(0.0, []))
+	_cap(cap_flat, y, walls * KITE_AREA * HexMapView.WALL_TOP_SCALE * HexMapView.WALL_TOP_SCALE, mask, ref_sign,
+			"%s wall depth cap" % tag)
+	near(cap_area, walls * KITE_AREA, 1e-4, "%s: with wall depth the cap and its bevel cover the wall's kites to the edge" % tag)
+	var gaps := 0
+	var slots := 0
+	for st: Array in side_tops:
+		var p: Vector3 = st[0]
+		if float(st[1]) > 0.0:
+			if absf(p.y - y) > 1e-4:
+				slots += 1
+			continue
+		if absf(p.y - (y - HexMapView.SEAM_DROP)) > 1e-4:
+			continue   # (a face of another height: none in these maps)
+		# on the bevel's outer edge: a bevel vertex, or a point of the cell's hex outline (a half edge's midpoint under a whole
+		# hex cap's straight edge; the cell is at the origin)
+		var met := false
+		for q in cap_pts:
+			if q.distance_to(p) < 1e-4:
+				met = true
+				break
+		var out := 0.0
+		for d in 6:
+			out = maxf(out, p.x * Hex.dir_vector(d).x + p.z * Hex.dir_vector(d).z)
+		met = met or absf(out - Hex.INNER) < 1e-4
+		if not met:
+			gaps += 1
+	check(not side_tops.is_empty(), "%s: wall faces to measure" % tag)
+	check(gaps == 0, "%s: %d wall face top vertices miss the cap's bevel with wall depth on (a gap)" % [tag, gaps])
+	check(slots == 0, "%s: %d wall-line face tops stop short of the cap with wall depth on (a slot)" % [tag, slots])
 
 
 ## The triangles at height y: same winding as ref_sign, inside the kites of `kites`, pairwise disjoint, total `area`.
