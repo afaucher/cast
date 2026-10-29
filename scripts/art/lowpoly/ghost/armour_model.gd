@@ -2,7 +2,8 @@ class_name ArmourModel
 extends LowPolyModel
 ## LOOK-DEV ONLY (docs/design/ghost-look.md): a suit of armour on its stand, the haunted mansion's antique that a ghost
 ## possesses (new-themes.md "Ghost house"). A blockout for the ghost look test: it stands still, it is not a monster and
-## nothing in the game spawns it (only GhostBody, for the gym and the look lab).
+## nothing in the game spawns it (only GhostBody and HauntPiece, for the gym and the look labs). It holds one of STANCES
+## (pose(): dormant, and the two possessed stances of the haunt look test, docs/design/haunt-look.md).
 ##
 ## The house look: a few big faceted masses (frustum plates, jittered blobs), tarnished steel in three values, one faded
 ## crimson accent (the plume and the tabard). A knight's silhouette (the user, 2026-10-29: "Knight silhouette", "Sword, not
@@ -31,6 +32,15 @@ const SHOULDER := Vector3(0.40, 0.42, 0.0)  ## body space
 const ARM_LEN := 0.66
 const SWORD := Vector3(0.0, STAND_H, -0.34)     ## where the sword's point rests on the plinth
 const SWORD_GRIP := 1.08                        ## the grip's height above the stand's foot, where both hands meet
+const GRIP_FROM_POINT := 0.995                  ## the sword's point to the middle of its grip
+
+## The stances (docs/design/haunt-look.md, look-dev only): "dormant" the antique as it stands, the sword point-down on the
+## plinth and both gauntlets on the pommel; two possessed ones, "guard" (still on the plinth, the sword raised point-up
+## across the body in both hands, a wider stance, leaning in, the helm lowered) and "lurch" (stepped down off the plinth
+## onto the floor in front of it, hunched forward, one gauntlet reaching out, the sword low in the other, point leading).
+const STANCES: Array[String] = ["dormant", "guard", "lurch"]
+
+var stance := "dormant"
 
 
 func _init() -> void:
@@ -48,12 +58,88 @@ func _build() -> void:
 	for s: int in [-1, 1]:
 		var side := "l" if s < 0 else "r"
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(HIP.x * s, HIP.y, HIP.z))
-		# both hands on the sword's pommel: each arm aimed at its side of the grip (one piece, no elbow)
-		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z))
-		var shoulder_w := Vector3(SHOULDER.x * s, WAIST_Y + SHOULDER.y, 0.0)
-		var hand := Vector3(SWORD.x + 0.06 * s, SWORD_GRIP, SWORD.z)
-		arm.basis = Basis(Quaternion(Vector3.DOWN, (hand - shoulder_w).normalized()))
+		_add_part("arm_" + side, _arm_soup(s), body, Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z))
 	_add_part("weapon", _sword_soup(), self, SWORD)
+	pose(stance)
+
+
+## Pose one of STANCES (an unknown one is "dormant"). Rigid parts only: the body and legs move and turn, each arm (one
+## piece, no elbow) is aimed at its hand's spot and stretched a little to reach it, the sword is laid along its line.
+func pose(st: String) -> void:
+	stance = st if STANCES.has(st) else "dormant"
+	var body := parts["body"] as Node3D
+	var head := parts["head"] as Node3D
+	var leg_l := parts["leg_l"] as Node3D
+	var leg_r := parts["leg_r"] as Node3D
+	match stance:
+		"guard":
+			body.position = Vector3(0.0, WAIST_Y - 0.05, 0.03)
+			body.rotation = Vector3(deg_to_rad(-9.0), deg_to_rad(14.0), 0.0)
+			head.rotation = Vector3(deg_to_rad(-14.0), deg_to_rad(-10.0), 0.0)
+			leg_l.position = Vector3(-HIP.x - 0.03, HIP.y - 0.05, -0.06)
+			leg_l.rotation = Vector3(deg_to_rad(12.0), 0.0, deg_to_rad(-9.0))
+			leg_r.position = Vector3(HIP.x + 0.03, HIP.y - 0.05, 0.10)
+			leg_r.rotation = Vector3(deg_to_rad(-10.0), 0.0, deg_to_rad(9.0))
+			# the sword point-up across the body, leaning to its left; the grip at the belly, both hands on it
+			var grip := Vector3(0.02, 1.16, -0.56)
+			var up := Vector3(-0.42, 0.86, -0.30).normalized()   # from the grip toward the point
+			_lay_sword(grip, up)
+			_reach("r", grip - up * 0.07)
+			_reach("l", grip + up * 0.05)
+		"lurch":
+			var off := Vector3(0.04, -STAND_H - 0.07, -0.70)   # down off the plinth, onto the floor in front of it
+			body.position = Vector3(0.0, WAIST_Y, 0.0) + off + Vector3(0.0, 0.0, 0.06)
+			body.rotation = Vector3(deg_to_rad(-18.0), deg_to_rad(16.0), deg_to_rad(8.0))
+			head.rotation = Vector3(deg_to_rad(12.0), deg_to_rad(-18.0), deg_to_rad(-14.0))
+			leg_l.position = HIP * Vector3(-1, 1, 1) + off
+			leg_l.rotation = Vector3(deg_to_rad(24.0), 0.0, deg_to_rad(-4.0))
+			leg_r.position = HIP + off
+			leg_r.rotation = Vector3(deg_to_rad(-20.0), 0.0, deg_to_rad(5.0))
+			# the left gauntlet reaching out ahead at chest height; the right holds the sword low at its side, its point
+			# leading, angled down toward the floor ahead
+			var sl := _shoulder(-1)
+			_reach("l", sl + Vector3(0.12, 0.22, -1.0).normalized() * ARM_LEN * 1.1)
+			var hand := _shoulder(1) + Vector3(0.10, -0.52, -0.22)
+			_lay_sword(hand, Vector3(0.18, -0.42, -1.0))
+			_reach("r", hand)
+		_:
+			body.position = Vector3(0, WAIST_Y, 0)
+			body.rotation = Vector3.ZERO
+			head.rotation = Vector3.ZERO
+			leg_l.position = HIP * Vector3(-1, 1, 1)
+			leg_l.rotation = Vector3.ZERO
+			leg_r.position = HIP
+			leg_r.rotation = Vector3.ZERO
+			# both hands on the sword's pommel: each arm aimed at its side of the grip
+			var weapon := parts["weapon"] as Node3D
+			weapon.position = SWORD
+			weapon.basis = Basis.IDENTITY
+			for s: int in [-1, 1]:
+				_reach("l" if s < 0 else "r", Vector3(SWORD.x + 0.06 * s, SWORD_GRIP, SWORD.z))
+
+
+## A shoulder's pivot in model space (side -1 left, 1 right), where the body is now.
+func _shoulder(side: int) -> Vector3:
+	return (parts["body"] as Node3D).transform * Vector3(SHOULDER.x * side, SHOULDER.y, SHOULDER.z)
+
+
+## Aim arm `side` ("l" / "r") so its gauntlet reaches `hand` (model space), stretched or shortened a little to meet it.
+func _reach(side: String, hand: Vector3) -> void:
+	var arm := parts["arm_" + side] as Node3D
+	var body := parts["body"] as Node3D
+	var d := body.basis.inverse() * (hand - body.transform * arm.position)
+	var l := d.length()
+	if l < 0.001:
+		return
+	arm.basis = Basis(Quaternion(Vector3.DOWN, d / l)) * Basis.from_scale(Vector3(1.0, clampf(l / (ARM_LEN - 0.03), 0.7, 1.3), 1.0))
+
+
+## Lay the sword with the middle of its grip at `grip` (model space) and its blade running from there along `to_point`.
+func _lay_sword(grip: Vector3, to_point: Vector3) -> void:
+	var weapon := parts["weapon"] as Node3D
+	var d := to_point.normalized()
+	weapon.basis = Basis(Quaternion(Vector3.UP, -d))
+	weapon.position = grip + d * GRIP_FROM_POINT
 
 
 ## A round wooden plinth.

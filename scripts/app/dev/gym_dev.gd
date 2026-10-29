@@ -30,6 +30,9 @@ extends Node
 ##     generated floor as ever
 ##   - the GHOST LOOK test (docs/design/ghost-look.md, look-dev only): the Ghosts spawns (a skeleton, a suit of armour, a
 ##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost
+##   - the HAUNT LOOK test (docs/design/haunt-look.md, look-dev only): the Haunts spawns (the suit of armour and the crypt
+##     skeleton, dormant and possessed: HauntPiece) and the "Ghost form" picker (off / glass / spirit: the player's own
+##     hero in ghost form, GhostForm; it follows the player through a character switch)
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -156,6 +159,7 @@ func _bind() -> void:
 	if p != null:
 		panel.set_hero(p.kit_id)
 		panel.set_slots(p.spell_slots)
+		GhostForm.apply(p.visual_override, GhostForm.treatment)   # (the haunt look test: a new model keeps the ghost form)
 
 
 func player() -> Hero:
@@ -371,6 +375,8 @@ func act(nm: String) -> void:
 			_status("a hallway pack of %d" % hall_pack(nm == "hall_mix").size())
 		"ghosts":
 			_status("ghosts: %d put down" % ghost_row(ring_point()).size())
+		"haunts":
+			_status("haunts: %d put down" % haunt_row(ring_point()).size())
 		"cry":
 			var kinds := cry_each()
 			_status("war cry: %s" % ", ".join(kinds) if not kinds.is_empty() else "war cry: no monster to yell")
@@ -386,6 +392,19 @@ func ghost_row(at: Vector3) -> Array[Node]:
 	for i in GhostBody.KINDS.size():
 		var e := GymSpawns.find("ghost:" + GhostBody.KINDS[i])
 		made.append_array(GymSpawns.spawn(e, at + across * 2.2 * float(i - 1), 1, null, null))
+	spawned.append_array(made)
+	return made
+
+
+## The haunt look test's row (`--gym-act haunts`, for screenshots; the Haunts spawns are the panel's): every HauntPiece kind
+## side by side across the screen round `at`. Returns what it put down.
+func haunt_row(at: Vector3) -> Array[Node]:
+	var made: Array[Node] = []
+	var across := Vector3(0.7071, 0.0, -0.7071)
+	var n := HauntPiece.KINDS.size()
+	for i in n:
+		var e := GymSpawns.find("haunt:" + HauntPiece.KINDS[i])
+		made.append_array(GymSpawns.spawn(e, at + across * 3.0 * (float(i) - (n - 1) * 0.5), 1, null, null))
 	spawned.append_array(made)
 	return made
 
@@ -456,7 +475,8 @@ static func experiments() -> Array:
 		["map", "Map", ["gym", "generated"], "generated" if generated else "gym"],
 		["ghost_look", "Ghost look", GhostLook.LOOKS, GhostLook.look],
 		["ghost_strength", "Ghost strength", GhostLook.STRENGTHS, GhostLook.strength],
-		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour]]
+		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour],
+		["hero_ghost", "Ghost form", GhostForm.TREATMENTS, GhostForm.treatment]]
 
 
 ## The Go to buttons: the gym's places, or on a generated floor its landings.
@@ -474,11 +494,19 @@ func spots() -> Array:
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
 ## log starts a new stretch. "walk" plays the monsters' old or new walk (MonsterModel.active_walk), live; the status line
 ## says which. "ghost_look" / "ghost_strength" / "ghost_colour" redress every ghost the panel put down (GhostLook.pick: the
-## ghost look test, docs/design/ghost-look.md).
+## ghost look test, docs/design/ghost-look.md). "hero_ghost" puts the player's own model in ghost form (GhostForm.pick: the
+## haunt look test, docs/design/haunt-look.md).
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
 	if nm == "landings" or nm == "map":
 		_set_floor_experiment(nm, value)
+		return
+	if nm == "hero_ghost":
+		var p := player()
+		if p == null or not GhostForm.pick(p.visual_override, value):
+			return
+		panel.set_experiment(nm, value)
+		_status("ghost form: %s" % value)
 		return
 	if nm.begins_with("ghost_"):
 		if not GhostLook.pick(nm, value):
