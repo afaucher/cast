@@ -181,11 +181,11 @@ static func _sarcophagus(s: LowPoly.Soup, p: Dictionary, lid: String) -> void:
 
 # --- ossuary ------------------------------------------------------------------------------------------------------
 
-## A bone wall: a stone frame of niches in two tiers, each packed the way a charnel house stacks them: bands of long bones
-## laid lengthwise (knobbed ends) between rows of skulls facing out. No board on top: the upper tier is open with a row of
-## skulls on its stack like the rows below (the user, 2026-10-29: "remove the top shelf and randomize the placement a bit
-## more", "leave the top open. It can have a pile of skulls on it. Just no top board", "The little dots also don't sell as
-## skulls", then "just a slightly jittered row of skulls"). Back at z = 0 (against the wall face), front at +DEPTH.
+## A bone wall: a stone frame of niches in two tiers, each stacked with rows of skulls facing out. No board on top: the
+## upper tier is open with a row of skulls on its stack like the rows below (the user, 2026-10-29: "remove the top shelf
+## and randomize the placement a bit more", "leave the top open. It can have a pile of skulls on it. Just no top board",
+## "The little dots also don't sell as skulls", then "just a slightly jittered row of skulls"). Back at z = 0 (against
+## the wall face), front at +DEPTH.
 static func _ossuary(s: LowPoly.Soup, p: Dictionary, width: float, height: float) -> void:
 	var st: Color = p["stone"]
 	var dk: Color = p["stone_dk"]
@@ -209,38 +209,15 @@ static func _ossuary(s: LowPoly.Soup, p: Dictionary, width: float, height: float
 		_skull_row(s, cx, w - 0.12, y, d - 0.11, rng)              # the open top: one more row of skulls
 
 
-## Fill a niche `w` wide from y0 up to y1: a band of long bones, a row of skulls, again, as far as fits. Returns the top
-## of the stack.
+## Fill a niche `w` wide from y0 up to y1 with rows of skulls, one on another, as many as fit. Returns the top of the
+## stack. (Only skulls: the bands of long bones between the rows read as white filler; the user, 2026-10-29: "Just skulls
+## for now.")
 static func _niche(s: LowPoly.Soup, cx: float, w: float, y0: float, y1: float, d: float, rng: RandomNumberGenerator) -> float:
 	var y := y0
-	var skulls := rng.randf() < 0.5        # which band comes first
-	while true:
-		if skulls and y + 0.2 <= y1:
-			_skull_row(s, cx, w, y, d - 0.11, rng)
-			y += 0.2
-		elif not skulls and y + 0.07 <= y1:
-			var layers := 2 if y + 0.13 <= y1 else 1
-			for l in layers:
-				_bone_layer(s, cx, w, y + 0.035 + 0.06 * float(l), d - 0.07, rng)
-			y += 0.065 * float(layers)
-		else:
-			break
-		skulls = not skulls
+	while y + 0.19 <= y1:
+		_skull_row(s, cx, w, y, d - 0.11, rng)
+		y += 0.19
 	return y
-
-
-## Long bones lying along X, end to end across `w` at height `y`, their knobbed ends showing.
-static func _bone_layer(s: LowPoly.Soup, cx: float, w: float, y: float, z: float, rng: RandomNumberGenerator) -> void:
-	var x := cx - w * 0.5 + rng.randf_range(-0.08, 0.0)
-	while x < cx + w * 0.5 - 0.08:
-		var l := rng.randf_range(0.24, 0.36)
-		var a := Vector3(maxf(x, cx - w * 0.5 + 0.04), y, z + rng.randf_range(-0.03, 0.02))
-		var b := Vector3(minf(x + l, cx + w * 0.5 - 0.04), y + rng.randf_range(-0.01, 0.01), z + rng.randf_range(-0.03, 0.02))
-		var col := BONE if rng.randf() > 0.3 else BONE_DK
-		PropModels.rod(s, a, b, 0.026, 0.024, 4, col)
-		PropModels.ball(s, Vector3(0.042, 0.036, 0.042), a, col, 0, 0.1)
-		PropModels.ball(s, Vector3(0.042, 0.036, 0.042), b, col, 0, 0.1)
-		x += l + rng.randf_range(0.0, 0.04)
 
 
 ## A row of skulls facing out across `w`, sitting on `y`.

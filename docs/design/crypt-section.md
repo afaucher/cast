@@ -19,7 +19,7 @@ walls of skulls and bones, iron gates and candles, and how the crypt meets the f
 | **Light** | as shown | The crypt has no daylight. Its bright parts are candle light only. The dark parts get only a dim, cool ambient |
 
 The kit is the same in both sets: sarcophagi (effigy, cross or pushed-open lid), an ossuary wall (niches packed with
-bands of long bones between rows of skulls, its top open with a row of skulls on it), an iron bar gate in a stone arch
+rows of skulls, its top open with one more row on it), an iron bar gate in a stone arch
 (shut, half open or open), a plain stone arch, floor candles, a standing candelabra and a fallen skeleton. The church above also has
 pews and an altar.
 
@@ -161,7 +161,8 @@ anything. The bones are a little weak."
   also don't sell as skulls." So the niches are stacked the way a charnel house stacks them: bands of long bones laid
   lengthwise between rows of skulls facing out. A heap on the open top (skulls lying in the dips of the row below) gave
   way to the user's "Lets just try making the top row like the bottom two, just a slightly jittered row of skulls": the
-  open top carries one more row of skulls.
+  open top carries one more row of skulls. Asked what the white between the skull rows was (the long bones), the user:
+  "Just skulls for now." The niches are rows of skulls only.
 
 The two sets: "I want both a vault and chapel, but they are too similar to eachother." Open: how to set them apart.
 
