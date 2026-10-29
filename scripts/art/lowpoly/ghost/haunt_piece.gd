@@ -30,8 +30,8 @@ const CAP := Color(0.21, 0.19, 0.18)       ## the top, dark like the game's wall
 const MORTAR := Color(0.25, 0.23, 0.21)
 
 
-## The ghost wearing a possessed suit (the user, 2026-10-29: "The ghost shows around it. A faint, larger wisp-like body
-## overlaps the armour, as if the ghost is wearing it"): every armour part again, GHOST_GROW times larger round its own
+## The ghost wearing a possessed host (the user, 2026-10-29: "The ghost shows around it. A faint, larger wisp-like body
+## overlaps the armour, as if the ghost is wearing it"; the risen skeleton too: "Yes"): every part again, GHOST_GROW times larger round its own
 ## middle, in the wisp's vapour (GhostLook's wisp shader, one even tint: no dark eye parts, no vertex colours).
 const GHOST_GROW := 1.2
 
@@ -40,7 +40,7 @@ var model: LowPolyModel           ## the ArmourModel or the GruntModel
 var base: ShaderMaterial          ## a possessed piece's ghost body (shared by its possessed parts)
 var phase := 0.0
 var blockout: MeshInstance3D      ## the slumped skeleton's stone block (null otherwise)
-var vapour: ShaderMaterial        ## a possessed suit's ghost body round the armour (null otherwise)
+var vapour: ShaderMaterial        ## a possessed piece's ghost body round the host (null when dormant)
 
 static var _vapour_shader: Shader
 
@@ -99,8 +99,7 @@ func _build() -> void:
 				p.material_override = base
 		if model is GruntModel:
 			model._mat = base
-		if kind.begins_with("armour"):
-			_add_vapour()
+		_add_vapour()
 
 
 ## Redress a possessed piece for GhostLook's strength and colour as they are now, always in the rim look.
@@ -122,7 +121,7 @@ func refresh() -> void:
 		vapour.set_shader_parameter("clock", GhostLook.clock)
 
 
-## The ghost's body round a possessed suit: a copy of each part (not the plinth), grown round its own middle, as a child of
+## The ghost's body round a possessed host: a copy of each part (not the plinth), grown round its own middle, as a child of
 ## the part so it follows the pose.
 func _add_vapour() -> void:
 	if _vapour_shader == null:

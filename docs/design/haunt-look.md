@@ -19,6 +19,7 @@ armour, a skeleton), and ghost form is a whole-body transform you cast on yourse
   Built: every armour part again, 1.2 times larger round its own middle, in the wisp's vapour (`HauntPiece.vapour`), so it
   follows the pose. The user: "Fine for now. I'll want to see it animated." To do: the possessed knight moving (today it
   holds a still stance; only the pulse moves).
+- **The risen skeleton wears the ghost too**, the same vapour body as the knight (asked, the user: "Yes").
 - **The niche is dropped for now.** The single niche "doesn't read" (it looked like a free-standing box). A wall of stacked
   burial slots was tried next and also failed ("No, that isn't working"): at the game camera it still read as a chest in
   the middle of the room. The user: "Drop the niche for now." The dormant skeleton is slumped only, and the risen one stands
