@@ -38,11 +38,19 @@ const SHELF_Y := 0.5
 const OPENING_TOP := 1.42
 const RECESS := 0.6
 
+## The ghost wearing a possessed suit (the user, 2026-10-29: "The ghost shows around it. A faint, larger wisp-like body
+## overlaps the armour, as if the ghost is wearing it"): every armour part again, GHOST_GROW times larger round its own
+## middle, in the wisp's vapour (GhostLook's wisp shader, one even tint: no dark eye parts, no vertex colours).
+const GHOST_GROW := 1.2
+
 var kind := "armour_dormant"
 var model: LowPolyModel           ## the ArmourModel or the GruntModel
 var base: ShaderMaterial          ## a possessed piece's ghost body (shared by its possessed parts)
 var phase := 0.0
 var blockout: MeshInstance3D      ## the niche or the stone block (null for the armour)
+var vapour: ShaderMaterial        ## a possessed suit's ghost body round the armour (null otherwise)
+
+static var _vapour_shader: Shader
 
 
 static func make(k: String) -> HauntPiece:
@@ -111,6 +119,8 @@ func _build() -> void:
 				p.material_override = base
 		if model is GruntModel:
 			model._mat = base
+		if kind.begins_with("armour"):
+			_add_vapour()
 
 
 ## Redress a possessed piece for GhostLook's strength and colour as they are now, always in the rim look.
@@ -121,6 +131,36 @@ func refresh() -> void:
 	GhostLook.look = "rim"
 	GhostLook.dress(base, false, phase)
 	GhostLook.look = was
+	if vapour != null:
+		var st := GhostLook.strength_now()
+		vapour.set_shader_parameter("ghost_color", GhostLook.color_now())
+		vapour.set_shader_parameter("alpha", float(st["wisp"]))
+		vapour.set_shader_parameter("edge_k", 1.7)
+		vapour.set_shader_parameter("glow", float(st["glow"]))
+		vapour.set_shader_parameter("pulse", GhostLook.PULSE)
+		vapour.set_shader_parameter("phase", phase)
+		vapour.set_shader_parameter("clock", GhostLook.clock)
+
+
+## The ghost's body round a possessed suit: a copy of each part (not the plinth), grown round its own middle, as a child of
+## the part so it follows the pose.
+func _add_vapour() -> void:
+	if _vapour_shader == null:
+		_vapour_shader = Shader.new()
+		_vapour_shader.code = GhostLook.WISP_SHADER.replace("float eye = 1.0 - step(0.25, lum);", "float eye = 0.0;") 				.replace("ghost_color.rgb * COLOR.rgb", "ghost_color.rgb")
+	vapour = ShaderMaterial.new()
+	vapour.shader = _vapour_shader
+	for p: MeshInstance3D in model.parts.values():
+		if p.name == "stand":
+			continue
+		var c := p.mesh.get_aabb().get_center()
+		var v := MeshInstance3D.new()
+		v.name = "Vapour"
+		v.mesh = p.mesh
+		v.material_override = vapour
+		v.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		v.transform = Transform3D(Basis.from_scale(Vector3.ONE * GHOST_GROW), c - c * GHOST_GROW)
+		p.add_child(v)
 
 
 func _add_blockout(soup: LowPoly.Soup, at: Vector3) -> MeshInstance3D:

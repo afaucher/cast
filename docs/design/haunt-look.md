@@ -9,6 +9,17 @@ Especially as a wisp."). Every ghostly thing here wears the **rim** look, at the
 decisions they serve are in new-themes.md, "Ghost house: haunted contracts", Ghosts: a ghost possesses a host (a suit of
 armour, a skeleton), and ghost form is a whole-body transform you cast on yourself ("For now").
 
+## The user's read (2026-10-29)
+
+- **The possessed knight did not read as possessed** with the rim alone: "This does not read as being possessed by a ghost."
+  The rim only tints the steel; what the user liked on the wisp was its steamy body ("The wisp itself looked kind of
+  steamy").
+- **The ghost wears the suit**, picked from three ideas (steam leaking out, the ghost showing round it, the armour turning to
+  steam): "The ghost shows around it. A faint, larger wisp-like body overlaps the armour, as if the ghost is wearing it."
+  Built: every armour part again, 1.2 times larger round its own middle, in the wisp's vapour (`HauntPiece.vapour`), so it
+  follows the pose. The user: "Fine for now. I'll want to see it animated." To do: the possessed knight moving (today it
+  holds a still stance; only the pulse moves).
+
 ## What the user is choosing
 
 | Test | Options | What to judge |

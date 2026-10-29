@@ -77,7 +77,12 @@ func _check_pieces() -> void:
 					check(part.material_override == p.base, "%s: %s wears the ghost body" % [kind, part.name])
 			near(float(p.base.get_shader_parameter("ghost_rim")), float(GhostLook.STRENGTH["soft"]["rim"]), 0.0001, "%s: in the rim look" % kind)
 			check(not _has_ink(GhostLook.passes_of(p.base)), "%s: no ink outline" % kind)
+			if kind.begins_with("armour"):
+				var vap := p.find_children("Vapour", "MeshInstance3D", true, false)
+				eq(vap.size(), p.model.parts.size() - 1, "%s: the ghost's body round every part but the plinth" % kind)
+				near(float(p.vapour.get_shader_parameter("alpha")), float(GhostLook.STRENGTH["soft"]["wisp"]), 0.0001, "%s: the ghost's body at the wisp's alpha" % kind)
 		else:
+			check(p.find_children("Vapour", "MeshInstance3D", true, false).is_empty(), "%s: no ghost body" % kind)
 			check(not p.is_in_group(GhostLook.GROUP), "%s: not a ghost" % kind)
 			var m := (p.model.get_part("body") as MeshInstance3D).material_override as ShaderMaterial
 			check(m.shader.code == prop_code, "%s: drawn like a prop" % kind)
