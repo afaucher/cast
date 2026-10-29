@@ -18,9 +18,9 @@ walls of skulls and bones, iron gates and candles, and how the crypt meets the f
 | **The way down** | as shown | A stone arch in a wall of the room above, a narrow stair hall going down 6 levels (3.0) in two flights with a candle-lit landing, and an iron gate at its foot into the first crypt room |
 | **Light** | as shown | The crypt has no daylight. Its bright parts are candle light only. The dark parts get only a dim, cool ambient |
 
-The kit is the same in both sets: sarcophagi (effigy, cross or pushed-open lid), an ossuary wall (niches packed with long
-bones, a skull on each stack and a skull frieze along the top), an iron bar gate in a stone arch (shut, half open or open),
-a plain stone arch, floor candles, a standing candelabra, a squat pillar and a scatter of bones. The church above also has
+The kit is the same in both sets: sarcophagi (effigy, cross or pushed-open lid), an ossuary wall (niches packed with
+bands of long bones between rows of skulls, its top open with skulls heaped on it), an iron bar gate in a stone arch
+(shut, half open or open), a plain stone arch, floor candles, a standing candelabra and a fallen skeleton. The church above also has
 pews and an altar.
 
 ## The sheets
@@ -34,7 +34,7 @@ The layout is the same in both sets:
 - the stair hall, coming down toward the camera;
 - the **entry vault** at the foot of the stairs;
 - to the left, through a half-open gate, the **burial chamber**: candle-lit, with three sarcophagi, two candelabras, floor
-  candles, two pillars and an ossuary wall;
+  candles and an ossuary wall;
 - to the right, through an arch, the **ossuary gallery**: unlit, with ossuary walls down its far side;
 - at the far end of the gallery, the **end vault**: unlit, with an opened sarcophagus.
 
@@ -101,7 +101,7 @@ seeds, and the gym's spawns draw theirs from `GameWorld.fx_rng`.
 
 | Piece | Where | What |
 |---|---|---|
-| `CryptProps` | `scripts/art/lowpoly/crypt/crypt_props.gd` | The kit, in the house look (LowPoly soups, `MonsterMaterial`: ink outline, emissive flames). `build(kind, {set, ...})`: sarcophagus (`lid`: effigy / cross / ajar), ossuary (`width`, `height`; its back on a wall face), gate (`width`, `open`), arch, candles (`count`, `radius`, `seed`, `lit`, `light`), candelabra, pillar, bones, pew, altar. A lit piece carries an `OmniLight3D` named "CandleLight" (warm, short range, no shadow). Everything is in the group `crypt_look`. |
+| `CryptProps` | `scripts/art/lowpoly/crypt/crypt_props.gd` | The kit, in the house look (LowPoly soups, `MonsterMaterial`: ink outline, emissive flames). `build(kind, {set, ...})`: sarcophagus (`lid`: effigy / cross / ajar), ossuary (`width`, `height`; its back on a wall face), gate (`width`, `open`), arch, candles (`count`, `radius`, `seed`, `lit`, `light`), candelabra, bones, pew, altar. A lit piece carries an `OmniLight3D` named "CandleLight" (warm, short range, no shadow). Everything is in the group `crypt_look`. |
 | `CryptLook` | `scripts/art/lowpoly/crypt/crypt_look.gd` | The two sets. `restyle(terrain, set)` gives one terrain its own copy of the material tables with the crypt's rows recoloured: `F_FLAGSTONE` (rooms), `F_CORR_STONE` (halls), `W_STONE` (walls), and for the chapel `W_CONCRETE` (the church's walls) and `F_MARBLE` (the church's floor). The shared `FloorMaterials` table is untouched. `relight(parent, set)` cuts `DungeonLook`'s key and fill to almost nothing and sets a dim, cool ambient. `downlight` is a warm pool for the room above. |
 | The lab | `scripts/art/lowpoly/crypt/crypt_section_lab.gd`, `scenes/crypt_section_lab.tscn` | Builds the section (rooms and halls cut the way `DungeonGen` cuts them, the room above 6 levels up, two `STAIRS` cells, walls 3 levels over the highest floor beside them) in each set, dresses it and renders the sheets above. A display room off to the side holds the close-up pieces. |
 | The gym | `GymSpawns` group `haunt` (**Haunting (look test)**) | "crypt: sarcophagus", "crypt: ossuary", "crypt: gate" and "crypt: candles" (lit) put a vault-set piece down. An ossuary within 3 of a wall backs onto it. There is no live crypt room in the gym: a whole section on the gym's map would be a big build, and the lab shows it. |
@@ -132,7 +132,7 @@ This writes every PNG above next to `--shot`. `--set` renders only that set's tw
   wherever the generator likes.
 - **Candle light is the only light** in the crypt. The key light is almost off, because its wall shadows made the floors
   darker than the wall tops. That makes the dark parts flat and cool rather than shadowed.
-- **The walls are the game's height** (3 levels, 1.5), so the ossuary walls (1.45 plus a skull frieze) fill a wall face and
+- **The walls are the game's height** (3 levels, 1.5), so the ossuary walls (1.45 plus the skull heap) fill a wall face and
   the arches (1.78) stand a little above it.
 - **Gates**: the stair's gate is open, the chamber's half open. A shut gate would be the natural "locked crypt" beat, but it
   needs a design (a key, a lever, a shove).
@@ -140,3 +140,27 @@ This writes every PNG above next to `--shot`. `--set` renders only that set's tw
   something having got out.
 - **The church above** is pale marble with pews and an altar. The mansion above is the game's wood boards and panelling,
   with today's statue and crystal lamp. A suit of armour stands in the room's far corner, just out of the frame.
+
+## The user's read (2026-10-29)
+
+The kit, first pass. The user: "The sarcophogus should be a little smaller. It just takes too much of the room. The
+ossuary - remove the top shelf and randomize the placement a bit more. The gates, they read _very_ dark when lit in the
+scene. Anything we can do? The floor candles, the wax spill doesn't read, just leave the candles. The pillar doesn't add
+anything. The bones are a little weak."
+- **Sarcophagus** at 0.8 of its size (`CryptProps.SARC_SCALE`); the chamber's three moved closer together.
+- **Gates** in worn iron (`gate`, `gate_hi` in the palette): mid-grey bars, lighter rails and finials (brass finials in
+  the chapel), the bars a little thicker.
+- **Candles** without the wax spill.
+- **Pillar** gone from the kit and the section.
+- **Bones**: a fallen skeleton (a bigger skull, a ribcage on a spine, a pelvis, thick long bones with fat knobs) instead of
+  a thin scatter.
+- **Ossuary**: the user also showed one placed across a wall's corner, half in the wall. A wall piece now goes on the
+  nearest straight run of wall, centred on it and no wider than it (`_wall_run` in the lab).
+  Then on the top: "I meant leave the top open. It can have a pile of skulls on it. Just no top board." And on the
+  heap: "that is randomly in the air, not on the shelf. They should be laying on top of one another. The little dots
+  also don't sell as skulls." So the niches are stacked the way a charnel house stacks them: bands of long bones laid
+  lengthwise between rows of skulls facing out. The open top has a row of skulls on the stack, more lying in the dips
+  between them, and now and then one more on those.
+
+The two sets: "I want both a vault and chapel, but they are too similar to eachother." Open: how to set them apart.
+

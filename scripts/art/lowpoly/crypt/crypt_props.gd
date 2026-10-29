@@ -19,32 +19,34 @@ extends RefCounted
 ##   gate         an iron bar gate in a stone arch, spanning x (width: between the wall lines, height, open 0..1: the two
 ##                leaves swing toward +Z)
 ##   arch         the same stone arch, no gate (a doorway)
-##   candles      a cluster of floor candles in their own wax (count, radius, seed, lit, light: the light's energy scale)
+##   candles      a cluster of floor candles (count, radius, seed, lit, light: the light's energy scale)
 ##   candelabra   a standing five-branch candlestick (lit, light)
-##   pillar       a squat vault column
-##   bones        a scatter of bones and a skull on the floor (seed)
+##   bones        a fallen skeleton on the floor: a skull, a ribcage, long bones (seed)
 ##   pew          a church pew, long along X (the church above)
 ##   altar        a stone altar with a cloth and two candlesticks (the church above; lit, light)
 ## Lit pieces carry an OmniLight3D named "CandleLight" (warm, short range, no shadow): the candle light the crypt's bright
 ## parts are made of.
 
 const GROUP := &"crypt_look"
-const KINDS: Array[String] = ["sarcophagus", "ossuary", "gate", "arch", "candles", "candelabra", "pillar", "bones", "pew", "altar"]
+const KINDS: Array[String] = ["sarcophagus", "ossuary", "gate", "arch", "candles", "candelabra", "bones", "pew", "altar"]
 ## The gym's spawns (GymSpawns "haunt"): the pieces that read on their own.
 const GYM_KINDS: Array[String] = ["sarcophagus", "ossuary", "gate", "candles"]
 const SETS: Array[String] = ["vault", "chapel"]
 
 ## Per set: stone (body), stone_dk (insets, plinths), stone_lt (lids, carving), iron (bars), metal (candlesticks, trim),
-## cloth (the altar's), wax.
+## cloth (the altar's), wax, gate and gate_hi (the gate's bars, and its rails and finials: worn iron, lighter than `iron`,
+## so a gate reads in the dark; the user, 2026-10-29: "they read _very_ dark when lit in the scene").
 const PALETTE := {
 	"vault": {
 		"stone": Color(0.37, 0.34, 0.31), "stone_dk": Color(0.20, 0.18, 0.17), "stone_lt": Color(0.50, 0.47, 0.42),
-		"iron": Color(0.12, 0.11, 0.12), "metal": Color(0.26, 0.24, 0.24), "cloth": Color(0.36, 0.10, 0.09),
+		"iron": Color(0.12, 0.11, 0.12), "metal": Color(0.26, 0.24, 0.24),
+		"gate": Color(0.40, 0.36, 0.33), "gate_hi": Color(0.62, 0.55, 0.46), "cloth": Color(0.36, 0.10, 0.09),
 		"wax": Color(0.90, 0.84, 0.66), "niche": Color(0.08, 0.07, 0.07),
 	},
 	"chapel": {
 		"stone": Color(0.70, 0.66, 0.57), "stone_dk": Color(0.47, 0.44, 0.38), "stone_lt": Color(0.86, 0.83, 0.75),
-		"iron": Color(0.16, 0.15, 0.15), "metal": Color(0.74, 0.57, 0.27), "cloth": Color(0.32, 0.12, 0.38),
+		"iron": Color(0.16, 0.15, 0.15), "metal": Color(0.74, 0.57, 0.27),
+		"gate": Color(0.36, 0.33, 0.31), "gate_hi": Color(0.80, 0.62, 0.30), "cloth": Color(0.32, 0.12, 0.38),
 		"wax": Color(0.98, 0.93, 0.80), "niche": Color(0.17, 0.14, 0.12),
 	},
 }
@@ -63,6 +65,7 @@ const SPRING := 1.18         ## where the arch springs from the jambs
 const RISE := 0.32           ## the arch's rise over its span (a segmental arch)
 const JAMB := 0.32           ## jamb width
 const DEPTH := 0.42          ## the arch's depth (through the doorway)
+const SARC_SCALE := 0.8      ## the sarcophagus smaller (the user, 2026-10-29: "It just takes too much of the room")
 
 
 static func pal(set_name: String) -> Dictionary:
@@ -80,7 +83,10 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 	PropModels._seed = absi(kind.hash()) % 9973 + 7
 	var light_at := Vector3.INF
 	match kind:
-		"sarcophagus": _sarcophagus(s, p, str(params.get("lid", "cross" if set_name == "chapel" else "effigy")))
+		"sarcophagus":
+			var sc := LowPoly.Soup.new(31, 0.06)
+			_sarcophagus(sc, p, str(params.get("lid", "cross" if set_name == "chapel" else "effigy")))
+			s.merge(sc, Transform3D(Basis.from_scale(Vector3.ONE * SARC_SCALE), Vector3.ZERO))
 		"ossuary": _ossuary(s, p, float(params.get("width", 3.0)), float(params.get("height", 1.45)))
 		"gate": _arch(s, p, float(params.get("width", GATE_W)), true, float(params.get("open", 0.0)))
 		"arch": _arch(s, p, float(params.get("width", GATE_W)), false, 0.0)
@@ -90,7 +96,6 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 		"candelabra":
 			_candelabra(s, p)
 			light_at = Vector3(0, 1.75, 0)
-		"pillar": _pillar(s, p)
 		"bones": _bones(s, p, int(params.get("seed", 5)))
 		"pew": _pew(s, float(params.get("length", 2.4)))
 		"altar":
@@ -176,52 +181,94 @@ static func _sarcophagus(s: LowPoly.Soup, p: Dictionary, lid: String) -> void:
 
 # --- ossuary ------------------------------------------------------------------------------------------------------
 
-## A bone wall: a stone frame of niches in two tiers, each packed with long bones (their knobbed ends out) and a row of
-## skulls on the stack; a skull frieze along the cornice. Back at z = 0 (against the wall face), front at +DEPTH.
+## A bone wall: a stone frame of niches in two tiers, each packed the way a charnel house stacks them: bands of long bones
+## laid lengthwise (knobbed ends) between rows of skulls facing out. No board on top: the upper tier is open and skulls
+## are heaped on its stack, each lying on the ones below (the user, 2026-10-29: "remove the top shelf and randomize the
+## placement a bit more", "leave the top open. It can have a pile of skulls on it. Just no top board", then "They should
+## be laying on top of one another. The little dots also don't sell as skulls"). Back at z = 0 (against the wall face),
+## front at +DEPTH.
 static func _ossuary(s: LowPoly.Soup, p: Dictionary, width: float, height: float) -> void:
 	var st: Color = p["stone"]
 	var dk: Color = p["stone_dk"]
 	var n := maxi(2, roundi(width / 0.78))
 	var w := width / float(n)
 	var d := 0.44
-	_box(s, Vector3(width, height, 0.08), Vector3(0, height * 0.5, 0.04), p["niche"])     # the niches' dark backs
+	var top := height - 0.12                                                                # the piers' tops
+	_box(s, Vector3(width, top, 0.08), Vector3(0, top * 0.5, 0.04), p["niche"])            # the niches' dark backs
 	_box(s, Vector3(width + 0.1, 0.16, d + 0.04), Vector3(0, 0.08, d * 0.5), dk)           # the plinth
 	var mid := 0.16 + (height - 0.3) * 0.5
 	_box(s, Vector3(width, 0.08, d), Vector3(0, mid, d * 0.5), st)                          # the middle shelf
-	_box(s, Vector3(width + 0.14, 0.13, d + 0.06), Vector3(0, height - 0.065, d * 0.5 + 0.01), st)   # the cornice
 	for i in n + 1:
 		var x := -width * 0.5 + w * float(i)
-		_box(s, Vector3(0.12, height - 0.2, d), Vector3(x, height * 0.5 - 0.02, d * 0.5), st)    # the piers
+		_box(s, Vector3(0.12, top - 0.08, d), Vector3(x, (top + 0.08) * 0.5, d * 0.5), st)    # the piers
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 41 + n
 	for i in n:
 		var cx := -width * 0.5 + w * (float(i) + 0.5)
-		for tier: Array in [[0.16, mid - 0.04], [mid + 0.04, height - 0.13]]:
-			_niche(s, cx, w - 0.14, float(tier[0]), float(tier[1]), d, rng)
-	# the frieze: skulls along the cornice
-	var m := maxi(3, int(width / 0.3))
+		_niche(s, cx, w - 0.12, 0.16, mid - 0.04, d, rng)
+		var y := _niche(s, cx, w - 0.12, mid + 0.04, top, d, rng)
+		_skull_heap(s, cx, w, y, d, rng)
+
+
+## Fill a niche `w` wide from y0 up to y1: a band of long bones, a row of skulls, again, as far as fits. Returns the top
+## of the stack.
+static func _niche(s: LowPoly.Soup, cx: float, w: float, y0: float, y1: float, d: float, rng: RandomNumberGenerator) -> float:
+	var y := y0
+	var skulls := rng.randf() < 0.5        # which band comes first
+	while true:
+		if skulls and y + 0.2 <= y1:
+			_skull_row(s, cx, w, y, d - 0.11, rng)
+			y += 0.2
+		elif not skulls and y + 0.07 <= y1:
+			var layers := 2 if y + 0.13 <= y1 else 1
+			for l in layers:
+				_bone_layer(s, cx, w, y + 0.035 + 0.06 * float(l), d - 0.07, rng)
+			y += 0.065 * float(layers)
+		else:
+			break
+		skulls = not skulls
+	return y
+
+
+## Long bones lying along X, end to end across `w` at height `y`, their knobbed ends showing.
+static func _bone_layer(s: LowPoly.Soup, cx: float, w: float, y: float, z: float, rng: RandomNumberGenerator) -> void:
+	var x := cx - w * 0.5 + rng.randf_range(-0.08, 0.0)
+	while x < cx + w * 0.5 - 0.08:
+		var l := rng.randf_range(0.24, 0.36)
+		var a := Vector3(maxf(x, cx - w * 0.5 + 0.04), y, z + rng.randf_range(-0.03, 0.02))
+		var b := Vector3(minf(x + l, cx + w * 0.5 - 0.04), y + rng.randf_range(-0.01, 0.01), z + rng.randf_range(-0.03, 0.02))
+		var col := BONE if rng.randf() > 0.3 else BONE_DK
+		PropModels.rod(s, a, b, 0.026, 0.024, 4, col)
+		PropModels.ball(s, Vector3(0.042, 0.036, 0.042), a, col, 0, 0.1)
+		PropModels.ball(s, Vector3(0.042, 0.036, 0.042), b, col, 0, 0.1)
+		x += l + rng.randf_range(0.0, 0.04)
+
+
+## A row of skulls facing out across `w`, sitting on `y`.
+static func _skull_row(s: LowPoly.Soup, cx: float, w: float, y: float, z: float, rng: RandomNumberGenerator) -> void:
+	var m := maxi(1, int(w / 0.2))
 	for i in m:
-		var x := -width * 0.5 + width * (float(i) + 0.5) / float(m)
-		_skull(s, Vector3(x, height + 0.08, d * 0.5 + 0.05), 0.85, 0.0)
+		var x := cx - w * 0.5 + w * (float(i) + 0.5) / float(m) + rng.randf_range(-0.02, 0.02)
+		_skull(s, Vector3(x, y + 0.1, z), rng.randf_range(0.92, 1.05), rng.randf_range(-20.0, 20.0))
 
 
-## One niche between y0 and y1, `w` wide: long-bone ends stacked in rows, two skulls on top.
-static func _niche(s: LowPoly.Soup, cx: float, w: float, y0: float, y1: float, d: float, rng: RandomNumberGenerator) -> void:
-	var cols := maxi(3, int(w / 0.11))
-	var top := y1 - 0.2
-	var rows := maxi(1, int((top - y0) / 0.1))
-	for r in rows:
-		var y := y0 + 0.06 + 0.1 * float(r)
-		for c in cols:
-			var x := cx - w * 0.5 + w * (float(c) + 0.5 + (0.25 if r % 2 == 1 else 0.0)) / float(cols)
-			if absf(x - cx) > w * 0.5 - 0.03:
-				continue
-			var col := BONE if rng.randf() > 0.3 else BONE_DK
-			PropModels.ball(s, Vector3(0.05, 0.045, 0.05), Vector3(x, y, d - 0.08 + rng.randf_range(-0.03, 0.02)), col, 0, 0.12)
-	var k := 2 if w < 0.7 else 3
-	for i in k:
-		var x := cx - w * 0.5 + w * (float(i) + 0.5) / float(k)
-		_skull(s, Vector3(x, top + 0.08, d - 0.09), 1.0, rng.randf_range(-12.0, 12.0))
+## The heap on an open bay: a row of skulls on the stack's top `y`, some lying in the dips between two of them, now and
+## then one more on those.
+static func _skull_heap(s: LowPoly.Soup, cx: float, w: float, y: float, d: float, rng: RandomNumberGenerator) -> void:
+	var m := maxi(2, int(w / 0.21))
+	var row: Array[float] = []
+	for i in m:
+		row.append(cx - w * 0.5 + 0.1 + (w - 0.2) * float(i) / float(m - 1) + rng.randf_range(-0.02, 0.02))
+		_skull(s, Vector3(row[i], y + 0.1, d - 0.13 + rng.randf_range(-0.03, 0.02)), rng.randf_range(0.92, 1.05), rng.randf_range(-30.0, 30.0))
+	var second: Array[float] = []
+	for i in m - 1:
+		if rng.randf() < 0.6:
+			var x := (row[i] + row[i + 1]) * 0.5
+			second.append(x)
+			_skull(s, Vector3(x, y + 0.27, d - 0.16), rng.randf_range(0.9, 1.0), rng.randf_range(-35.0, 35.0))
+	for i in second.size() - 1:
+		if second[i + 1] - second[i] < 0.3 and rng.randf() < 0.5:
+			_skull(s, Vector3((second[i] + second[i + 1]) * 0.5, y + 0.44, d - 0.19), rng.randf_range(0.88, 0.98), rng.randf_range(-40.0, 40.0))
 
 
 ## A skull facing +Z at `at` (its middle), `k` its scale, turned `yaw` degrees: the cranium, a jaw, dark sockets and nose.
@@ -282,14 +329,14 @@ static func _arch(s: LowPoly.Soup, p: Dictionary, width: float, gate: bool, open
 			var h: float = under.call(side * (a - lx))     # the arch over where that bar stands when shut
 			var bar_top := h - 0.1
 			var x := -side * lx
-			leaf.merge(LowPoly.cylinder(0.026, 0.026, bar_top - 0.04, 5, p["iron"], 130 + i), LowPoly.at(Vector3(x, (bar_top + 0.04) * 0.5, 0)))
-			leaf.merge(LowPoly.cylinder(0.045, 0.0, 0.12, 4, p["iron"], 140 + i), LowPoly.at(Vector3(x, bar_top + 0.06, 0)))
+			leaf.merge(LowPoly.cylinder(0.03, 0.03, bar_top - 0.04, 5, p["gate"], 130 + i), LowPoly.at(Vector3(x, (bar_top + 0.04) * 0.5, 0)))
+			leaf.merge(LowPoly.cylinder(0.05, 0.0, 0.13, 4, p["gate_hi"], 140 + i), LowPoly.at(Vector3(x, bar_top + 0.06, 0)))
 		for y: float in [0.16, 0.92]:
-			leaf.merge(LowPoly.box(Vector3(a, 0.05, 0.04), p["iron"], 150), LowPoly.at(Vector3(-side * a * 0.5, y, 0)))
+			leaf.merge(LowPoly.box(Vector3(a, 0.06, 0.05), p["gate_hi"], 150), LowPoly.at(Vector3(-side * a * 0.5, y, 0)))
 		# a band of scrolls between the rails: a zigzag of short bars
 		for i in nb:
 			var mid := Vector3(-side * a * (float(i) + 0.5) / float(nb), 0.54, 0)
-			leaf.merge(LowPoly.box(Vector3(0.035, 0.5, 0.03), p["iron"], 160 + i), LowPoly.at(mid, Vector3(0, 0, 32.0 if i % 2 == 0 else -32.0)))
+			leaf.merge(LowPoly.box(Vector3(0.035, 0.5, 0.03), p["gate"], 160 + i), LowPoly.at(mid, Vector3(0, 0, 32.0 if i % 2 == 0 else -32.0)))
 		if side > 0.0:
 			leaf.merge(LowPoly.box(Vector3(0.16, 0.2, 0.08), p["metal"], 170), LowPoly.at(Vector3(-(a - 0.04), 0.95, 0.04)))
 		# swung on the hinge toward +Z
@@ -298,12 +345,12 @@ static func _arch(s: LowPoly.Soup, p: Dictionary, width: float, gate: bool, open
 
 # --- candles ------------------------------------------------------------------------------------------------------
 
-## `count` floor candles of mixed heights in a spill of wax, each with a drip, a wick and a two-tone flame.
+## `count` floor candles of mixed heights, each with a drip, a wick and a two-tone flame. No wax spill (the user,
+## 2026-10-29: "the wax spill doesn't read, just leave the candles").
 static func _candles(s: LowPoly.Soup, p: Dictionary, count: int, radius: float, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var wax: Color = p["wax"]
-	PropModels.cyl(s, radius * 0.75, radius * 0.7, 0.02, 9, Vector3(0, 0.01, 0), wax.darkened(0.45))
 	for i in count:
 		var ang := TAU * float(i) / float(count) + rng.randf_range(-0.4, 0.4)
 		var d := radius * (0.25 + 0.75 * sqrt(rng.randf())) if i > 0 else 0.0
@@ -319,8 +366,6 @@ static func _candle(s: LowPoly.Soup, at: Vector3, h: float, rr: float, wax: Colo
 	PropModels.rod(s, at + Vector3(0, h, 0), at + Vector3(0, h + 0.03, 0), 0.008, 0.008, 3, SOCKET)
 	PropModels.rod(s, at + Vector3(0, h + 0.02, 0), at + Vector3(0, h + 0.15, 0), 0.045, 0.0, 5, _g(FLAME))
 	PropModels.rod(s, at + Vector3(0, h + 0.025, 0), at + Vector3(0, h + 0.09, 0), 0.025, 0.0, 4, _g(FLAME_HOT))
-	if rng.randf() < 0.5:
-		PropModels.ball(s, Vector3(rr * 0.9, 0.02, rr * 0.9), at + Vector3(-rr * 1.2, 0.02, rr), wax.darkened(0.15), 0, 0.1)
 
 
 ## A standing candlestick, about 1.6 tall: three feet, a turned shaft, a crossbar with five cups and candles.
@@ -342,32 +387,29 @@ static func _candelabra(s: LowPoly.Soup, p: Dictionary) -> void:
 		_candle(s, Vector3(x, cup_y + 0.025, 0), rng.randf_range(0.16, 0.26), 0.035, p["wax"], rng)
 
 
-# --- pillar, bones ------------------------------------------------------------------------------------------------
+# --- bones -------------------------------------------------------------------------------------------------------
 
-## A squat vault column (about 1.6, the walls' height and a little more): a base, a shaft, a flared capital, an abacus.
-static func _pillar(s: LowPoly.Soup, p: Dictionary) -> void:
-	_box(s, Vector3(0.72, 0.16, 0.72), Vector3(0, 0.08, 0), p["stone_dk"])
-	PropModels.cyl(s, 0.3, 0.27, 0.12, 8, Vector3(0, 0.22, 0), p["stone"])
-	PropModels.cyl(s, 0.25, 0.23, 1.06, 8, Vector3(0, 0.81, 0), p["stone"])
-	PropModels.frus(s, Vector2(0.44, 0.44), Vector2(0.64, 0.64), 0.18, Vector3(0, 1.43, 0), p["stone_lt"])
-	_box(s, Vector3(0.76, 0.1, 0.76), Vector3(0, 1.57, 0), p["stone"])
-
-
-## A floor scatter: a skull, long bones with knobbed ends, a few ribs.
+## A fallen skeleton, bigger and bolder than a scatter (the user, 2026-10-29: "The bones are a little weak"): a skull, a
+## ribcage of arched ribs on a spine, a pelvis, and long bones thrown about with fat knobbed ends.
 static func _bones(s: LowPoly.Soup, _p: Dictionary, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	_skull(s, Vector3(0.05, 0.09, -0.05), 1.0, rng.randf_range(-40.0, 40.0))
-	for i in 5:
+	_skull(s, Vector3(0.0, 0.13, -0.5), 1.45, rng.randf_range(-40.0, 40.0))
+	PropModels.rod(s, Vector3(0, 0.04, -0.36), Vector3(0, 0.04, 0.2), 0.03, 0.03, 4, BONE_DK)     # the spine
+	for i in 4:
+		var z := -0.3 + 0.1 * float(i)
+		var w := 0.22 - 0.02 * float(i)
+		for x: float in [-1.0, 1.0]:
+			PropModels.rod(s, Vector3(0, 0.05, z), Vector3(x * w * 0.75, 0.14, z + 0.02), 0.024, 0.022, 4, BONE)
+			PropModels.rod(s, Vector3(x * w * 0.75, 0.14, z + 0.02), Vector3(x * w, 0.03, z + 0.05), 0.022, 0.02, 4, BONE)
+	PropModels.ball(s, Vector3(0.17, 0.06, 0.1), Vector3(0, 0.06, 0.27), BONE, 1, 0.1)                # the pelvis
+	for i in 4:
 		var a := rng.randf_range(0.0, TAU)
-		var c := Vector3(rng.randf_range(-0.45, 0.45), 0.035, rng.randf_range(-0.4, 0.4))
-		var half := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.18, 0.28)
-		PropModels.rod(s, c - half, c + half, 0.025, 0.022, 4, BONE)
-		PropModels.ball(s, Vector3(0.045, 0.035, 0.045), c - half, BONE, 0, 0.1)
-		PropModels.ball(s, Vector3(0.045, 0.035, 0.045), c + half, BONE, 0, 0.1)
-	for i in 3:
-		var c := Vector3(rng.randf_range(-0.3, 0.3), 0.02, rng.randf_range(-0.3, 0.3))
-		_box(s, Vector3(0.22, 0.025, 0.035), c, BONE_DK, Vector3(0, rng.randf_range(0, 180), 0))
+		var c := Vector3(rng.randf_range(-0.45, 0.45), 0.045, rng.randf_range(0.05, 0.65))
+		var half := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.2, 0.3)
+		PropModels.rod(s, c - half, c + half, 0.04, 0.035, 5, BONE)
+		PropModels.ball(s, Vector3(0.07, 0.055, 0.07), c - half, BONE, 0, 0.1)
+		PropModels.ball(s, Vector3(0.07, 0.055, 0.07), c + half, BONE, 0, 0.1)
 
 
 # --- the church above: pew, altar ---------------------------------------------------------------------------------

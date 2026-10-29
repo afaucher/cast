@@ -2,14 +2,14 @@ extends LabBase
 ## Crypt section lab (docs/design/crypt-section.md): a crypt as a SECTION of a floor, the way the sewer clusters and the
 ## lava caves are, drawn on the game's own terrain (a HexMap with levels, stairs and midpoint walls, HexMapView,
 ## DungeonLook) in its two material sets (CryptLook: "vault" under a mansion, "chapel" under a church), dressed with the
-## crypt kit (CryptProps: sarcophagi, ossuary walls, iron gates, candles, pillars, bones). LOOK-DEV ONLY: nothing here is
+## crypt kit (CryptProps: sarcophagi, ossuary walls, iron gates, candles, bones). LOOK-DEV ONLY: nothing here is
 ## used by the game, the floor generator never makes a crypt, and the monsters are posed models (the crypt's skeletons as
 ## possessed hosts are another test's).
 ##
 ## The layout (the same in both sets): the room above (the mansion's wood-panelled room, or a church nave with pews and an
 ## altar) 6 levels up at the top of the screen; a stone arch at the head of a narrow stair hall that goes down toward the
 ## camera in two flights with a candle-lit landing; an open iron gate at its foot into the ENTRY VAULT; to the left, through
-## a half-open gate, the BURIAL CHAMBER (candle-lit: sarcophagi, candelabras, floor candles, pillars, a bone wall); to the
+## a half-open gate, the BURIAL CHAMBER (candle-lit: sarcophagi, candelabras, floor candles, a bone wall); to the
 ## right, through an arch, the OSSUARY GALLERY (unlit: bone walls down its far side) and the END VAULT (an opened
 ## sarcophagus, bones).
 ##
@@ -249,12 +249,62 @@ func _crypt(kind: String, pos: Vector3, yaw_deg: float, params: Dictionary = {})
 
 ## A piece backed onto the wall face nearest `near` (within 3): its back on the face, its front along the face's normal.
 func _on_wall(kind: String, near: Vector3, params: Dictionary = {}) -> Node3D:
-	var wall := map.nearest_wall(near, 3.5)
-	if wall.is_empty():
+	var run := _wall_run(Vector2(near.x, near.z), 3.5)
+	if run.is_empty():
 		return null
-	var pt: Vector2 = wall["point"]
-	var n: Vector2 = wall["normal"]
-	return _crypt(kind, Vector3(pt.x, near.y, pt.y) + Vector3(n.x, 0, n.y) * 0.02, rad_to_deg(atan2(n.x, n.y)), params)
+	var a: Vector2 = run[0]
+	var b: Vector2 = run[1]
+	var n: Vector2 = run[2]
+	var along := (b - a).normalized()
+	var length := a.distance_to(b)
+	var width := minf(float(params.get("width", 3.0)), length - 0.2)
+	var t := clampf((Vector2(near.x, near.z) - a).dot(along), width * 0.5 + 0.1, length - width * 0.5 - 0.1)
+	var pt := a + along * t
+	var pp := params.duplicate()
+	pp["width"] = width
+	return _crypt(kind, Vector3(pt.x, near.y, pt.y) + Vector3(n.x, 0, n.y) * 0.02, rad_to_deg(atan2(n.x, n.y)), pp)
+
+
+## The straight run of wall nearest `q` (within `max_dist`): the nearest wall face's segment grown along every face that
+## continues it in line, facing the same way. [a, b, normal], or [] with no wall near. (An ossuary on the nearest point
+## alone sat across a corner, half in the wall.)
+func _wall_run(q: Vector2, max_dist: float) -> Array:
+	var segs: Array = []
+	for c: Vector2i in map.cells:
+		var w := Hex.to_world(c)
+		if Vector2(w.x, w.z).distance_to(q) > max_dist + 8.0:
+			continue
+		var s := map.wall_segments(c)
+		for i in range(0, s.size(), 3):
+			segs.append([s[i], s[i + 1], s[i + 2]])
+	var best: Array = []
+	var bd := max_dist
+	for sg: Array in segs:
+		var d := q.distance_to(Geometry2D.get_closest_point_to_segment(q, sg[0], sg[1]))
+		if d < bd and (q - (sg[0] as Vector2)).dot(sg[2]) > 0.0:
+			bd = d
+			best = sg
+	if best.is_empty():
+		return []
+	var a: Vector2 = best[0]
+	var b: Vector2 = best[1]
+	var n: Vector2 = best[2]
+	var grew := true
+	while grew:
+		grew = false
+		for sg: Array in segs:
+			if (sg[2] as Vector2).dot(n) < 0.999:
+				continue
+			for k in 2:
+				var p: Vector2 = sg[k]
+				var o: Vector2 = sg[1 - k]
+				if p.distance_to(b) < 0.01 and o.distance_to(a) > a.distance_to(b) + 0.01 and (o - a).dot(b - a) > 0.0:
+					b = o
+					grew = true
+				elif p.distance_to(a) < 0.01 and o.distance_to(b) > a.distance_to(b) + 0.01 and (o - b).dot(a - b) > 0.0:
+					a = o
+					grew = true
+	return [a, b, n]
 
 
 ## The doorway between a hall's first route cell (a room's edge cell) and the hall, on the hall's centre line: [position,
@@ -315,27 +365,23 @@ func _dress_crypt() -> void:
 	var k0: Vector2i = keys["end"]
 	var side := Vector3(0.866, 0, -0.5)          # across the chamber, square to the camera's line
 	var back := -Hex.dir_vector(5)               # away from the camera
-	# the entry vault: candles by the stair gate, a bone scatter, two pillars
+	# the entry vault: candles by the stair gate, a skeleton
 	_crypt("candles", _w(e0 + D[2] * 2) + side * 1.3, 0.0, {"count": 6, "seed": 4, "light": 0.9})
 	_crypt("bones", _w(e0 + D[0]) + Vector3(0.2, 0, 0.3), 30.0, {"seed": 6})
-	_crypt("pillar", _w(e0 + D[3] * 2), 0.0)
-	_crypt("pillar", _w(e0 + D[0] * 2 + D[1]), 0.0)
 	# the gate into the burial chamber (half open), the arch into the gallery
 	var gd: Array = _door("chamber", 4, 1)
 	_crypt("gate", gd[0], yaw_to(gd[1]), {"width": 4.5, "open": 0.45})
 	var ad: Array = _door("gallery", 1, 1)
 	_crypt("arch", ad[0], yaw_to(-(ad[1] as Vector3)), {"width": 4.5})
-	# the burial chamber: three sarcophagi, candelabras at their heads, candles at their feet, pillars, a bone wall
+	# the burial chamber: three sarcophagi, candelabras at their heads, candles at their feet, a bone wall
 	var bc := _w(b0) + back * 0.6
 	_crypt("sarcophagus", bc, yaw_to(-back))
-	_crypt("sarcophagus", bc + side * 2.3 + back * 0.2, yaw_to(-back), {"lid": "cross" if set_name == "vault" else "effigy"})
-	_crypt("sarcophagus", bc - side * 2.3 + back * 0.2, yaw_to(-back), {"lid": "ajar"})
-	_crypt("candelabra", bc + side * 1.15 + back * 1.5, 0.0)
-	_crypt("candelabra", bc - side * 1.15 + back * 1.5, 0.0)
+	_crypt("sarcophagus", bc + side * 2.0 + back * 0.2, yaw_to(-back), {"lid": "cross" if set_name == "vault" else "effigy"})
+	_crypt("sarcophagus", bc - side * 2.0 + back * 0.2, yaw_to(-back), {"lid": "ajar"})
+	_crypt("candelabra", bc + side * 1.0 + back * 1.25, 0.0)
+	_crypt("candelabra", bc - side * 1.0 + back * 1.25, 0.0)
 	_crypt("candles", bc - back * 1.75, 0.0, {"count": 7, "seed": 11})
-	_crypt("candles", bc + side * 2.3 - back * 1.8, 0.0, {"count": 4, "radius": 0.3, "seed": 12, "light": 0.7})
-	_crypt("pillar", bc + side * 3.6 - back * 1.2, 0.0)
-	_crypt("pillar", bc - side * 3.6 - back * 1.2, 0.0)
+	_crypt("candles", bc + side * 2.0 - back * 1.5, 0.0, {"count": 4, "radius": 0.3, "seed": 12, "light": 0.7})
 	_on_wall("ossuary", _w(b0) + back * 5.2, {"width": 3.4})
 	# the gallery: bone walls down the far side, bones on the floor; no light
 	var gr: Array[Vector2i] = routes["gallery"]
@@ -367,12 +413,11 @@ func _dress_display() -> void:
 		holder.add_child(l)
 	var face := yaw_to(TOWARD)
 	var specs := [["sarcophagus", {}], ["ossuary", {"width": 2.2}], ["gate", {"open": 0.25}], ["candles", {"count": 7, "seed": 2}],
-			["candelabra", {}], ["pillar", {}]]
+			["candelabra", {}], ["bones", {"seed": 3}]]
 	for i in specs.size():
 		var at := c + RIGHT * (-7.0 + 2.8 * float(i)) - TOWARD * 0.6
 		var n := _crypt(str(specs[i][0]), at, yaw_to(RIGHT) if i == 0 else face, specs[i][1])
 		display.append(n)
-	_crypt("bones", c + RIGHT * (-7.0 + 2.8 * 5.0 + 0.85) + TOWARD * 0.1, 20.0, {"seed": 3})
 
 
 ## The crew and two grunts (today's skeleton model), posed: Wick on the stairs' landing, Rebar at the chamber's candles, a
@@ -510,7 +555,7 @@ func _run(only: String) -> void:
 		await _sheet("%s/light_dark_2x.png" % dir, "The same, the middle of each crop at 2x (nearest)",
 				names, [["", ["burial chamber (candle-lit)", "ossuary gallery (no light)"]]], lit_crops, CROP, 0, 2)
 		await _sheet("%s/props.png" % dir, "The crypt kit, closer (size 9.5) at the game angles, in a lit display room",
-				names, [["", ["sarcophagus", "ossuary wall", "iron gate", "floor candles", "candelabra", "pillar, bones"]]], close_rows,
+				names, [["", ["sarcophagus", "ossuary wall", "iron gate", "floor candles", "candelabra", "bones"]]], close_rows,
 				CLOSE_CROP, 0)
 	finish()
 
