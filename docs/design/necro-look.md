@@ -32,9 +32,13 @@ on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raise
   light lean toward red (`GrimoireModel.FAIL_RED`), most in the stutter's dips.
 - **The grimoire stands on the altar** (the user, 2026-10-29: "I like the bigger size"): the altar at 1.4 over the
   lectern at 0.85.
-- **The eye on the shut cover, redrawn** (the user: "the eye on the cover of the book isn't coming across well. Can we
-  adjust it?"): a big pointed almond across the cover in an iron rim, bone white, a round iris still faintly glowing in
-  the ghost colour, a slit pupil (`GrimoireModel._almond`). It was a small bone oval round a dark dot.
+- **The eye on the shut cover, alive** (the user: "the eye on the cover of the book isn't coming across well. Can we
+  adjust it?"). A flat almond with a glowing iris was "worse"; the user picked "A live eye: keep it fleshy, but make it
+  bulge out of the cover, with veins and a lid half closed. It reads as creepy and alive." Then: "Raise the top lid more,
+  and can the pupil move around?" So: a yellowed eyeball bulging from a rim of flesh, red veins crawling to the iris, a
+  yellow iris with a slit pupil, a heavy upper lid over the back of it (`GrimoireModel._live_eye`). The iris is its own
+  node and looks around: it holds a gaze, then darts to the next (`eye_dir`, `_look`). See it move in the gym
+  (`--gym-act necro`, Experiments > Grimoire > shut).
 
 ## What the user is choosing
 

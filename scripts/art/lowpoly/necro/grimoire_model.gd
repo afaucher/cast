@@ -54,6 +54,14 @@ const PARCHMENT_DARK := Color(0.66, 0.59, 0.45)
 const CLOTH := Color(0.11, 0.13, 0.13)
 const WAX := Color(0.86, 0.83, 0.72)
 const VOID := Color(0.05, 0.04, 0.05)
+const EYE_R := Vector3(0.28, 0.19, 0.23)          ## the live eye's eyeball (radii)
+const EYE_AT := Vector3(0.03, 0.34, 0.0)          ## its centre on the shut book
+const EYE_REST := Vector3(0, 0.62, -0.78) * (1.0 / 0.99640)   ## where it looks at rest: up and out over the front edge
+const EYE_WHITE := Color(0.86, 0.80, 0.62)        ## yellowed, not paper white
+const VEIN := Color(0.70, 0.10, 0.10)
+const IRIS := Color(0.95, 0.75, 0.15)
+const FLESH := Color(0.46, 0.24, 0.24)
+const FLESH_DARK := Color(0.30, 0.14, 0.15)
 
 ## The column of light off the pages: additive bands rising and fading (the hellgate's vortex, in the ghost colour).
 const BEAM_SHADER := """
@@ -88,6 +96,7 @@ var _t := 0.0
 var _frozen := false
 var _phase := 0.0
 var _book: MeshInstance3D
+var _iris: MeshInstance3D            ## the shut book's live eye's iris (it looks around)
 var _sigil: MeshInstance3D
 var _beam: MeshInstance3D
 var _beam_mat: ShaderMaterial
@@ -154,6 +163,8 @@ func _build() -> void:
 	book.transform = book_xf
 	add_child(book)
 	_book = _mesh("Pages", _shut_soup() if state == "shut" else _open_soup(), book)
+	if state == "shut":
+		_iris = _mesh("Iris", _iris_soup(), book)
 	book_top = book_xf * Vector3(0, 0.2, 0)
 	_mesh("Candles", _candles_soup(), self)
 	if state == "shut":
@@ -301,8 +312,8 @@ func _open_soup() -> LowPoly.Soup:
 	return s
 
 
-## The shut book: a thick closed block lying flat, the page edges showing on three sides, the eye on the cover (an almond
-## of bone round a dark iris: a picture, not a letter), iron corners, a clasp shut across it and a chain round it.
+## The shut book: a thick closed block lying flat, the page edges showing on three sides, a live eye bulging from the
+## cover (a picture, not a letter; its iris is a separate node), iron corners, a clasp shut across it and a chain round it.
 func _shut_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(1221, 0.05)
 	var w := BOOK.x * 0.5 + 0.08
@@ -314,13 +325,11 @@ func _shut_soup() -> LowPoly.Soup:
 	for x: float in [-1.0, 1.0]:
 		for z: float in [-1.0, 1.0]:
 			MonsterModel.wedge(s, Vector3(x * (w * 0.5 - 0.05), 0.315, z * (d * 0.5 - 0.05)), Vector2(0.16, 0.16), Vector2(0.10, 0.10), 0.03, IRON_LIGHT, 1226, Vector3(0, 45, 0))
-	# the eye, big across the cover (the user, 2026-10-29: "the eye on the cover of the book isn't coming across well"): a
-	# pointed almond in an iron rim, bone white, a round iris still faintly glowing in the ghost colour, a slit pupil
-	var e := Vector3(0.03, 0.31, 0.0)
-	_almond(s, e + Vector3(0, 0.012, 0), 0.40, 0.23, IRON_LIGHT)
-	_almond(s, e + Vector3(0, 0.022, 0), 0.34, 0.17, BONE)
-	_almond(s, e + Vector3(0, 0.032, 0), 0.135, 0.135, MonsterModel.glow(NecroLook.glow_colour() * 0.6), 10, true)
-	_almond(s, e + Vector3(0, 0.042, 0), 0.03, 0.115, VOID, 6)
+	# the eye: alive, bulging out of the cover (the user, 2026-10-29: "A live eye: keep it fleshy, but make it bulge out of
+	# the cover, with veins and a lid half closed. It reads as creepy and alive."): puffy lips of flesh round its socket, a
+	# yellowed eyeball with red veins crawling to the iris, a yellow iris with a slit pupil looking out over the front edge
+	# (-Z), and a heavy upper lid drooping half over it
+	_live_eye(s, EYE_AT - Vector3(0, 0.03, 0))
 	# the clasp across the fore edge, and the chain round the middle
 	MonsterModel.slab(s, Vector3(w * 0.5 + 0.01, 0.155, -0.18), Vector3(0.04, 0.34, 0.12), LEATHER_LIGHT, 1230)
 	MonsterModel.slab(s, Vector3(w * 0.5 + 0.03, 0.20, -0.18), Vector3(0.05, 0.10, 0.10), IRON_LIGHT, 1231)
@@ -332,16 +341,62 @@ func _shut_soup() -> LowPoly.Soup:
 	return s
 
 
-## A flat almond facing up at `c`: `a` its half length along X, `h` its half width along Z, pointed at both ends (`round`:
-## an ellipse instead, for the iris). Strips of quads between its two edges.
-static func _almond(s: LowPoly.Soup, c: Vector3, a: float, h: float, col: Color, n: int = 10, round: bool = false) -> void:
-	for i in n:
-		var u0 := -1.0 + 2.0 * float(i) / float(n)
-		var u1 := -1.0 + 2.0 * float(i + 1) / float(n)
-		var w0 := sqrt(maxf(1.0 - u0 * u0, 0.0)) if round else (1.0 - u0 * u0)
-		var w1 := sqrt(maxf(1.0 - u1 * u1, 0.0)) if round else (1.0 - u1 * u1)
-		_face(s, c + Vector3(u0 * a, 0, -w0 * h), c + Vector3(u1 * a, 0, -w1 * h), c + Vector3(u1 * a, 0, w1 * h),
-				c + Vector3(u0 * a, 0, w0 * h), col, Vector3.UP)
+## The live eye on the shut cover, its base at `c` (on the cover's top): flesh lips, the eyeball, veins, the iris and
+## pupil, the drooping lid. The eyeball is an ellipsoid of radii EYE_R centred a little above the cover.
+static func _live_eye(s: LowPoly.Soup, c: Vector3) -> void:
+	var o := c + Vector3(0, 0.03, 0)
+	# the lips: a smooth puffy rim of flesh round the socket (separate lumps read as petals)
+	for i in 18:
+		var a := TAU * float(i) / 18.0
+		var at := c + Vector3(cos(a) * (EYE_R.x + 0.015), 0.025, sin(a) * (EYE_R.z + 0.012))
+		MonsterModel.blob(s, at, Vector3(0.06, 0.045, 0.06), FLESH, 1260 + i, 0.04)
+	MonsterModel.blob(s, o, EYE_R, EYE_WHITE, 1275, 0.02, 1)
+	# the veins: from round the base up toward the iris, along the eyeball's surface, each forking once
+	var iris_dir := EYE_REST
+	for i in 7:
+		var a := TAU * (float(i) + 0.3) / 7.0
+		var from := Vector3(cos(a), 0.15, sin(a)).normalized()
+		var pts: Array[Vector3] = []
+		for k in 4:
+			var d := from.slerp(iris_dir, 0.22 * float(k) + 0.05).normalized()
+			pts.append(o + d * EYE_R * 1.03)
+		for k in 3:
+			PropModels.rod(s, pts[k], pts[k + 1], 0.016 - 0.003 * float(k), 0.013 - 0.003 * float(k), 3, VEIN)
+		var fork := from.rotated(Vector3.UP, 0.5).slerp(iris_dir, 0.4).normalized()
+		PropModels.rod(s, pts[1], o + fork * EYE_R * 1.03, 0.011, 0.007, 3, VEIN)
+	# the upper lid: a heavy fold of the cover's hide over the back of the eyeball, its edge above the iris (raised: the
+	# user, "Raise the top lid more"). The iris is its own node (`_iris_soup`), so it can look around.
+	MonsterModel.blob(s, o + Vector3(0, 0.12, 0.15), Vector3(EYE_R.x * 1.1, 0.09, 0.12), FLESH_DARK, 1292, 0.08, 1)
+	MonsterModel.blob(s, o + Vector3(0, 0.15, 0.10), Vector3(EYE_R.x * 0.98, 0.05, 0.05), FLESH, 1293, 0.06)
+
+
+## The live eye's iris and slit pupil, facing +Z from the origin (`_look` puts it on the eyeball and turns it).
+static func _iris_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1289, 0.05)
+	MonsterModel.blob(s, Vector3.ZERO, Vector3(0.125, 0.125, 0.04), MonsterModel.glow(IRIS * 0.55), 1290, 0.02)
+	MonsterModel.blob(s, Vector3(0, 0, 0.032), Vector3(0.028, 0.10, 0.02), VOID, 1291, 0.02)
+	return s
+
+
+## Where the live eye looks at time `t`: it holds a gaze, then darts to the next (a few per few seconds), round its rest
+## direction out over the front edge. Returns the direction from the eyeball's centre (book space).
+static func eye_dir(t: float) -> Vector3:
+	var slot := floorf(t / 1.1)
+	var into := clampf((t - slot * 1.1) / 0.12, 0.0, 1.0)          # a quick dart at the start of each hold
+	var a := _gaze(slot - 1.0).lerp(_gaze(slot), into * into * (3.0 - 2.0 * into))
+	return EYE_REST.rotated(Vector3.UP, a.x).rotated(Vector3.RIGHT, a.y).normalized()
+
+
+static func _gaze(slot: float) -> Vector2:
+	var h := fposmod(sin(slot * 12.9898) * 43758.5453, 1.0)
+	var k := fposmod(sin(slot * 78.233) * 12543.123, 1.0)
+	return Vector2((h - 0.5) * 1.3, (k - 0.5) * 0.45)
+
+
+## Put the iris on the eyeball's surface, facing `d`.
+func _look(d: Vector3) -> void:
+	var r := 1.0 / sqrt(pow(d.x / EYE_R.x, 2) + pow(d.y / EYE_R.y, 2) + pow(d.z / EYE_R.z, 2))
+	_iris.transform = Transform3D(Basis.looking_at(-d, Vector3.UP), EYE_AT + d * (r - 0.012))
 
 
 ## Candles: tall wax stubs with ghost-light flames, round the circle (the lectern) or on the altar's corners and the dais.
@@ -459,6 +514,8 @@ func _animate() -> void:
 		var flash := (1.0 - stutter) / maxf(1.0 - pw, 0.01)   # 1 in a stutter's dip, 0 between
 		tint = tint.lerp(FAIL_RED, clampf(red * 1.1 + flash * 0.5, 0.0, 1.0))
 	_mat.set_shader_parameter("glow_gain", (1.4 + 0.8 * beat) * stutter if lit else 1.8)
+	if _iris != null:
+		_look(eye_dir(t))
 	if _sigil != null:
 		var sm := _sigil.material_override as ShaderMaterial
 		sm.set_shader_parameter("clock", t)
