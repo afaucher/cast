@@ -38,6 +38,62 @@ Mechanics discussed (the user's reactions):
 Open: who the blooms' gas hits (enemies only or everyone, as the roots do); daze (exists) or confuse (new status); which
 client owns the grow room.
 
-## Ghost house
+## Ghost house: haunted contracts
 
-In discussion (2026-10-23).
+Status: **[discussion]**, 2026-10-28. Nothing is built. Decisions are marked with the date and the user's words; the rest is
+proposal.
+
+The user (2026-10-28): "I'm thinking about our ghost theme again. I think it actually makes more sense than plants. But
+let's think about it from a mission point of view. Because it's not really compatible with the hellgate necessarily. What
+if it's a different mission objective - like closing a book or hunting the necromancers? Haunted mansion, crypt, etc. we
+can have zombies, ghosts, ectoplasm type things. The ghosts could haunt things like suits of armour or skeletons. We could
+mix and match existing themes based on the specific locations. Like a haunted Mansion could have a sewer section. Or a
+church or historical mansion could have a crypt."
+
+### The mission [proposal]
+A second **pest family** with its own **source**, in the same contract frame (floors, employees, property damage, invoice):
+- Floors 1-2: **necromancer acolytes** raising the dead (mobile host monsters that flee and raise bodies; paid per kill).
+- The origin floor: **the grimoire**, pulsing out the dead until it is slammed shut or burned (a host-arbitrated world
+  object like a hellgate: HP, phases, a pay line). A physical object, never text to read (Cast is not a reading game).
+
+### Sites: a room pool plus sections [proposal]
+Sewer clusters and lava caves already mix sections into a floor; a site type becomes a room pool plus a section pool.
+- Haunted mansion: library, portrait gallery, ballroom, dining hall, the existing wine cellar; sections: crypt, sewer.
+  A conservatory room could carry the parked garden's pollen beds.
+- Church / historic estate: nave, vestry, bell tower; section: crypt.
+- A villain lair could roll a crypt too.
+
+### Ghosts [decided, 2026-10-28]
+- **No spell is required to beat them.** The user: "Generally we want the player to be able to take on any monster without
+  a specific spell." Anyone can hit a ghost directly.
+- **They keep away unless they hold a body.** The user: "Maybe players can hit ghosts directly but generally they won't get
+  near you unless they are holding a body. So killing the body makes them run, but they get hurt in the process." A ghost
+  possesses a host (a suit of armour, a skeleton); breaking the host hurts the ghost and sends it fleeing to the next one.
+- **Hard to see:** "a soft outline on whatever they possess." **A visual test comes first** ("Lets make sure to do a visual
+  test on this"): the outline on a possessed host, and a free ghost, judged on screen before the look is built in.
+- **Tentacles pass through ghosts:** physical only, they smash or shove the hosts (the user picked "They pass through
+  ghosts"). Swatting a wisp away from its hosts was dropped ("Skip this mechanic at least").
+- **The Ghost spell's old "make an enemy lose its target" use is skipped for now** ("Skip this one for now as well").
+- **Ghost form (cast Ghost on yourself) makes ghosts easier, not possible:** the user, asked whether it is the only way to
+  kill a wisp: "Easier." It is a **whole-body transform** for now (translucent, moving as today's hero; "For now").
+  Proposal: in ghost form you see free ghosts clearly and they do not flee from you.
+- **Later (a big build):** "I like the idea of ghost mode after you normally die though. That is a huge extra build so
+  later." A downed hero would roam as a ghost.
+
+### Other enemies [proposal]
+- **Zombies:** slow and tough, and they get back up unless burned (Fireball's job).
+- **Ectoplasm:** the infestation layer, like goo: it slicks or slows the floor, and Damp washes it away.
+
+### Networking shapes [proposal]
+- The grimoire: a host-arbitrated world object (the hellgate's shape). Acolytes, ghosts, hosts and zombies: host monsters.
+- A possessed antique is a host monster from spawn, dormant and priced like a prop, with a possessed state (a prop
+  turning into a monster fits no shape yet).
+- Ghost visibility (soft outline, ghost form seeing them) is cosmetic per machine; who a ghost avoids is host-side.
+- The crypt section goes in the floor checksum, like the sewers.
+
+### Open
+1. Source: acolytes on floors 1-2 plus the grimoire at the origin, or one of them?
+2. Is a haunting tied to the site (mansions, churches) or the client (a haunted lair)?
+3. Possessed antiques: does breaking one bill the crew, and is there a way to evict a ghost without breaking it?
+4. One pest family per contract (no demons and ghosts together) for now?
+5. What ghost form does exactly beyond "easier" (see the proposal above), and its duration and cooldown.
