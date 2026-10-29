@@ -82,8 +82,20 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 - **Later (a big build):** "I like the idea of ghost mode after you normally die though. That is a huge extra build so
   later." A downed hero would roam as a ghost.
 
+### Zombies and acolytes [decided, 2026-10-29]
+- **Zombies stay down unless an acolyte raises them.** The user: "I was assuming that they would be wandering around and if
+  they get knocked down the acolyte can bring them back." A downed zombie never gets up by itself; only an acolyte raises
+  it, which makes acolytes the ones to hunt first. Asked whether a zombie ever rises on its own, and whether a burnt body
+  can be raised: "Let's go with that for now" (no, and no: burning a body makes sure it stays down, useful but never
+  required). This replaces the earlier proposal that zombies get back up unless burned.
+- **Acolytes travel the map in a procession with monsters**, raising the bodies they come across. The user: "I think
+  [acolytes] should actually be traveling around the map as a procession with monsters. So they would come across bodies
+  and raise them." Open: what the procession is made of and how it moves (a route, a leader), and whether it is a
+  networking shape of its own (a host-owned group of host monsters, like a pack).
+- The look test (look-dev only): `necro-look.md`. The zombie is the thin mourner; a zombie's "about to rise" pose is now
+  what an acolyte's raising shows.
+
 ### Other enemies [proposal]
-- **Zombies:** slow and tough, and they get back up unless burned (Fireball's job).
 - **Ectoplasm:** the infestation layer, like goo: it slicks or slows the floor, and Damp washes it away.
 
 ### Networking shapes [proposal]
