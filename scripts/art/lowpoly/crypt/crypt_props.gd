@@ -182,11 +182,10 @@ static func _sarcophagus(s: LowPoly.Soup, p: Dictionary, lid: String) -> void:
 # --- ossuary ------------------------------------------------------------------------------------------------------
 
 ## A bone wall: a stone frame of niches in two tiers, each packed the way a charnel house stacks them: bands of long bones
-## laid lengthwise (knobbed ends) between rows of skulls facing out. No board on top: the upper tier is open and skulls
-## are heaped on its stack, each lying on the ones below (the user, 2026-10-29: "remove the top shelf and randomize the
-## placement a bit more", "leave the top open. It can have a pile of skulls on it. Just no top board", then "They should
-## be laying on top of one another. The little dots also don't sell as skulls"). Back at z = 0 (against the wall face),
-## front at +DEPTH.
+## laid lengthwise (knobbed ends) between rows of skulls facing out. No board on top: the upper tier is open with a row of
+## skulls on its stack like the rows below (the user, 2026-10-29: "remove the top shelf and randomize the placement a bit
+## more", "leave the top open. It can have a pile of skulls on it. Just no top board", "The little dots also don't sell as
+## skulls", then "just a slightly jittered row of skulls"). Back at z = 0 (against the wall face), front at +DEPTH.
 static func _ossuary(s: LowPoly.Soup, p: Dictionary, width: float, height: float) -> void:
 	var st: Color = p["stone"]
 	var dk: Color = p["stone_dk"]
@@ -207,7 +206,7 @@ static func _ossuary(s: LowPoly.Soup, p: Dictionary, width: float, height: float
 		var cx := -width * 0.5 + w * (float(i) + 0.5)
 		_niche(s, cx, w - 0.12, 0.16, mid - 0.04, d, rng)
 		var y := _niche(s, cx, w - 0.12, mid + 0.04, top, d, rng)
-		_skull_heap(s, cx, w, y, d, rng)
+		_skull_row(s, cx, w - 0.12, y, d - 0.11, rng)              # the open top: one more row of skulls
 
 
 ## Fill a niche `w` wide from y0 up to y1: a band of long bones, a row of skulls, again, as far as fits. Returns the top
@@ -250,25 +249,6 @@ static func _skull_row(s: LowPoly.Soup, cx: float, w: float, y: float, z: float,
 	for i in m:
 		var x := cx - w * 0.5 + w * (float(i) + 0.5) / float(m) + rng.randf_range(-0.02, 0.02)
 		_skull(s, Vector3(x, y + 0.1, z), rng.randf_range(0.92, 1.05), rng.randf_range(-20.0, 20.0))
-
-
-## The heap on an open bay: a row of skulls on the stack's top `y`, some lying in the dips between two of them, now and
-## then one more on those.
-static func _skull_heap(s: LowPoly.Soup, cx: float, w: float, y: float, d: float, rng: RandomNumberGenerator) -> void:
-	var m := maxi(2, int(w / 0.21))
-	var row: Array[float] = []
-	for i in m:
-		row.append(cx - w * 0.5 + 0.1 + (w - 0.2) * float(i) / float(m - 1) + rng.randf_range(-0.02, 0.02))
-		_skull(s, Vector3(row[i], y + 0.1, d - 0.13 + rng.randf_range(-0.03, 0.02)), rng.randf_range(0.92, 1.05), rng.randf_range(-30.0, 30.0))
-	var second: Array[float] = []
-	for i in m - 1:
-		if rng.randf() < 0.6:
-			var x := (row[i] + row[i + 1]) * 0.5
-			second.append(x)
-			_skull(s, Vector3(x, y + 0.27, d - 0.16), rng.randf_range(0.9, 1.0), rng.randf_range(-35.0, 35.0))
-	for i in second.size() - 1:
-		if second[i + 1] - second[i] < 0.3 and rng.randf() < 0.5:
-			_skull(s, Vector3((second[i] + second[i + 1]) * 0.5, y + 0.44, d - 0.19), rng.randf_range(0.88, 0.98), rng.randf_range(-40.0, 40.0))
 
 
 ## A skull facing +Z at `at` (its middle), `k` its scale, turned `yaw` degrees: the cranium, a jaw, dark sockets and nose.

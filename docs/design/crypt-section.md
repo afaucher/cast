@@ -19,7 +19,7 @@ walls of skulls and bones, iron gates and candles, and how the crypt meets the f
 | **Light** | as shown | The crypt has no daylight. Its bright parts are candle light only. The dark parts get only a dim, cool ambient |
 
 The kit is the same in both sets: sarcophagi (effigy, cross or pushed-open lid), an ossuary wall (niches packed with
-bands of long bones between rows of skulls, its top open with skulls heaped on it), an iron bar gate in a stone arch
+bands of long bones between rows of skulls, its top open with a row of skulls on it), an iron bar gate in a stone arch
 (shut, half open or open), a plain stone arch, floor candles, a standing candelabra and a fallen skeleton. The church above also has
 pews and an altar.
 
@@ -132,7 +132,7 @@ This writes every PNG above next to `--shot`. `--set` renders only that set's tw
   wherever the generator likes.
 - **Candle light is the only light** in the crypt. The key light is almost off, because its wall shadows made the floors
   darker than the wall tops. That makes the dark parts flat and cool rather than shadowed.
-- **The walls are the game's height** (3 levels, 1.5), so the ossuary walls (1.45 plus the skull heap) fill a wall face and
+- **The walls are the game's height** (3 levels, 1.5), so the ossuary walls (1.45 plus the top row of skulls) fill a wall face and
   the arches (1.78) stand a little above it.
 - **Gates**: the stair's gate is open, the chamber's half open. A shut gate would be the natural "locked crypt" beat, but it
   needs a design (a key, a lever, a shove).
@@ -159,8 +159,9 @@ anything. The bones are a little weak."
   Then on the top: "I meant leave the top open. It can have a pile of skulls on it. Just no top board." And on the
   heap: "that is randomly in the air, not on the shelf. They should be laying on top of one another. The little dots
   also don't sell as skulls." So the niches are stacked the way a charnel house stacks them: bands of long bones laid
-  lengthwise between rows of skulls facing out. The open top has a row of skulls on the stack, more lying in the dips
-  between them, and now and then one more on those.
+  lengthwise between rows of skulls facing out. A heap on the open top (skulls lying in the dips of the row below) gave
+  way to the user's "Lets just try making the top row like the bottom two, just a slightly jittered row of skulls": the
+  open top carries one more row of skulls.
 
 The two sets: "I want both a vault and chapel, but they are too similar to eachother." Open: how to set them apart.
 
