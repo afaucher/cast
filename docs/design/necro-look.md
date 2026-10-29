@@ -21,6 +21,7 @@ on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raise
 - **A thin torso**: "And let's make it a thin torso." The coat now tapers from a narrow chest (0.42 wide, was 0.56) to a
   thin waist (0.26, was 0.46) and is shallower; the shoulders, arms and legs moved in to match, and a hunched upper back
   was added. The user: "Better!"
+- **No ring under a rising zombie**: "Drop the ring." The motes rising off it stay as the "it will get up" tell.
 
 ## What the user is choosing
 

@@ -72,7 +72,7 @@ func _check_zombies() -> void:
 			z.pose_rise(1.0)
 			check(_world_y(z, "head") > flat + 0.1, "%s pushes up on its arms to rise" % v)
 			check(z.rise_fx != null and z.rise_fx.visible, "%s: motes (smoke when burnt) while down" % v)
-			check((z.rise_mark != null and z.rise_mark.visible) != charred, "%s: the glow under it only if it can rise" % v)
+			check(z.find_children("*", "MeshInstance3D", false, false).filter(func(n: Node) -> bool: return not z.parts.values().has(n)).is_empty(), "%s: no glow ring on the floor" % v)
 			z.stand_up()
 			check(not z.is_lying() and z.rise_fx != null and not z.rise_fx.visible, "%s stands back up" % v)
 			check((z.get_part("head") as Node3D).position.is_equal_approx(head_up), "the head stays on its neck")

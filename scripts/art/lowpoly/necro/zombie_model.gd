@@ -13,7 +13,7 @@ extends MonsterModel
 ##
 ## Poses: apply_idle(t, speed) stands (a slow sway) or shambles (a lurch onto a dragged left leg, the body rolling side to
 ## side, the head lolling) from the walk speed; pose_rise(k) lies it face down and pushes it up on its arms (k 0 flat, 1
-## about to stand), with a soft glow on the floor under it and motes rising (the "it will get up" tell); stand_up() goes
+## about to stand), with motes rising (the "it will get up" tell; no floor ring: "Drop the ring"); stand_up() goes
 ## back. `charred` builds the burnt one (it stays down): char black, ember cracks, no eye glow, smoke instead of motes.
 ## Faces local -Z, +X is its right, origin at the feet. Named rigid parts: body, head, jaw, arm_l, arm_r, leg_l, leg_r.
 
@@ -64,7 +64,6 @@ var leg_x := 0.11
 var shoulder := Vector3(0.24, 0.56, 0.0)   ## (the mourner's thin torso: the user, 2026-10-29, "let's make it a thin torso")
 var arm_len := 0.72
 var lie_h := 0.20                   ## the pelvis's height lying down
-var rise_mark: MeshInstance3D       ## the soft glow under a downed body (none when charred)
 var rise_fx: CPUParticles3D         ## motes rising (smoke when charred)
 var _lying := false
 var _rise := 0.0
@@ -331,7 +330,7 @@ func rise_k() -> float:
 
 
 ## Downed, about to rise: lying face down (k 0, sprawled, cheek on the floor) up to pushed up on both arms with its head
-## up and its eyes on you (k 1). The glow under it and the motes rising (or, charred, the smoke) come with it.
+## up and its eyes on you (k 1). The motes rising (or, charred, the smoke) come with it.
 func pose_rise(k_rise: float) -> void:
 	_lying = true
 	_rise = clampf(k_rise, 0.0, 1.0)
@@ -370,21 +369,14 @@ func stand_up() -> void:
 
 
 func _show_rise(on: bool) -> void:
-	if on and rise_mark == null:
-		var size := 2.6 if variant == "digger" else 2.3
+	# (no glow ring on the floor under it: the user, 2026-10-29, "Drop the ring"; the motes are the tell)
+	if on and rise_fx == null:
 		if not charred:
-			rise_mark = NecroLook.floor_glow(size, false, 0.75)
-			rise_mark.position = Vector3(0.0, 0.03, -0.35)
-			add_child(rise_mark)
 			rise_fx = NecroLook.motes(10, 0.4, 0.5, 0.035)
 		else:
 			rise_fx = NecroLook.smoke(10, 0.35)
 		rise_fx.position = Vector3(0.0, 0.25, -0.35)
 		add_child(rise_fx)
-	if rise_mark != null:
-		rise_mark.visible = on
-		var m := rise_mark.material_override as ShaderMaterial
-		m.set_shader_parameter("strength", 0.45 + 0.45 * _rise)
 	if rise_fx != null:
 		rise_fx.visible = on
 		rise_fx.emitting = on
