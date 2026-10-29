@@ -19,7 +19,7 @@ extends Node3D
 ##           weakened  the book still open: the column thinner and stuttering, fewer pages circling, the circle broken in
 ##                     places, two candles out
 ##           failing   the book still open: the column a flickering thread, one page left, most of the circle and four
-##                     candles out, the light low
+##                     candles out, the light low, its flicker tending red (FAIL_RED)
 ##           shut      slammed shut: a closed, chained book with the eye on its cover, every light out, pages fallen
 ## Faces local -Z (the reader's side), origin on the floor at its middle. freeze_at() holds a moment for the lab.
 
@@ -27,6 +27,9 @@ const STANDS: Array[String] = ["lectern", "altar"]
 const STATES: Array[String] = ["open", "weakened", "failing", "shut"]
 ## How much of the effects each state keeps (1 open, 0 shut).
 const POWER := {"open": 1.0, "weakened": 0.6, "failing": 0.3, "shut": 0.0}
+## A failing book's flicker turns red (the user, 2026-10-29: "Failing - maybe we have the flicker tend red?"): its lights
+## lean toward FAIL_RED, more the weaker it is and most in a stutter's dips.
+const FAIL_RED := Color(1.0, 0.16, 0.12)
 const BOOK := Vector2(1.7, 1.15)      ## the open book: across both pages, and the page height (front to back)
 const PAGES := 7                      ## loose pages circling in the column
 const SIGIL := {"lectern": 5.2, "altar": 6.0}   ## the circle across (before SCALE)
@@ -434,16 +437,25 @@ func _animate() -> void:
 	if lit and pw < 1.0:
 		var dip := 1.0 - pw
 		stutter = 1.0 - dip * (1.0 - step_f(0.35 - 0.5 * dip, sin(t * 7.3) * sin(t * 2.9 + 1.0)))
+	# the lights' colour: the ghost colour, leaning red as the book fails (in a dip most)
+	var tint := NecroLook.glow_colour()
+	if lit and pw < 0.5:
+		var red := (0.5 - pw) * 2.0
+		var flash := (1.0 - stutter) / maxf(1.0 - pw, 0.01)   # 1 in a stutter's dip, 0 between
+		tint = tint.lerp(FAIL_RED, clampf(red * 1.1 + flash * 0.5, 0.0, 1.0))
 	_mat.set_shader_parameter("glow_gain", (1.4 + 0.8 * beat) * stutter if lit else 1.8)
 	if _sigil != null:
 		var sm := _sigil.material_override as ShaderMaterial
 		sm.set_shader_parameter("clock", t)
+		sm.set_shader_parameter("tint", tint)
 		sm.set_shader_parameter("strength", (0.85 + 0.25 * beat) * lerpf(0.5, 1.0, pw) * stutter)
 	if _beam_mat != null:
 		_beam_mat.set_shader_parameter("t", t)
+		_beam_mat.set_shader_parameter("tint", tint)
 		_beam_mat.set_shader_parameter("amount", (0.85 + 0.35 * beat) * lerpf(0.35, 1.0, pw) * stutter)
 	if _light != null and lit:
 		_light.light_energy = (3.2 + 1.6 * beat) * lerpf(0.3, 1.0, pw) * stutter
+		_light.light_color = tint
 	for o in _orbit:
 		var node: Node3D = o["node"]
 		var a := float(o["ang"]) + float(o["speed"]) * t

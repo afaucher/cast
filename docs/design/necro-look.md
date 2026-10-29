@@ -28,6 +28,8 @@ on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raise
   1.4). The states are **open**, **weakened**, **failing** and **shut**: the book stays whole and open until it is shut,
   and the column of light thins and stutters, the circle breaks up, the circling pages and the candles go out and the
   light drops as it weakens. The torn and burnt books are gone. (The sections below still describe the first version.)
+- **A failing book's flicker tends red**: "Failing - maybe we have the flicker tend red?" Failing, its column, circle and
+  light lean toward red (`GrimoireModel.FAIL_RED`), most in the stutter's dips.
 
 ## What the user is choosing
 
