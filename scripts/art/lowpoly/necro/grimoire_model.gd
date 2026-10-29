@@ -314,10 +314,13 @@ func _shut_soup() -> LowPoly.Soup:
 	for x: float in [-1.0, 1.0]:
 		for z: float in [-1.0, 1.0]:
 			MonsterModel.wedge(s, Vector3(x * (w * 0.5 - 0.05), 0.315, z * (d * 0.5 - 0.05)), Vector2(0.16, 0.16), Vector2(0.10, 0.10), 0.03, IRON_LIGHT, 1226, Vector3(0, 45, 0))
-	# the eye
-	MonsterModel.blob(s, Vector3(0.03, 0.32, 0), Vector3(0.26, 0.03, 0.15), BONE, 1227, 0.02)
-	MonsterModel.blob(s, Vector3(0.03, 0.345, 0), Vector3(0.10, 0.025, 0.10), VOID, 1228, 0.02)
-	MonsterModel.blob(s, Vector3(0.03, 0.355, 0), Vector3(0.035, 0.02, 0.035), BONE_DARK, 1229, 0.02)
+	# the eye, big across the cover (the user, 2026-10-29: "the eye on the cover of the book isn't coming across well"): a
+	# pointed almond in an iron rim, bone white, a round iris still faintly glowing in the ghost colour, a slit pupil
+	var e := Vector3(0.03, 0.31, 0.0)
+	_almond(s, e + Vector3(0, 0.012, 0), 0.40, 0.23, IRON_LIGHT)
+	_almond(s, e + Vector3(0, 0.022, 0), 0.34, 0.17, BONE)
+	_almond(s, e + Vector3(0, 0.032, 0), 0.135, 0.135, MonsterModel.glow(NecroLook.glow_colour() * 0.6), 10, true)
+	_almond(s, e + Vector3(0, 0.042, 0), 0.03, 0.115, VOID, 6)
 	# the clasp across the fore edge, and the chain round the middle
 	MonsterModel.slab(s, Vector3(w * 0.5 + 0.01, 0.155, -0.18), Vector3(0.04, 0.34, 0.12), LEATHER_LIGHT, 1230)
 	MonsterModel.slab(s, Vector3(w * 0.5 + 0.03, 0.20, -0.18), Vector3(0.05, 0.10, 0.10), IRON_LIGHT, 1231)
@@ -327,6 +330,18 @@ func _shut_soup() -> LowPoly.Soup:
 		MonsterModel.slab(s, Vector3(x, 0.33, 0.25), size, IRON, 1232 + i)
 		MonsterModel.slab(s, Vector3(x, -0.005, 0.25), size, IRON, 1242 + i)
 	return s
+
+
+## A flat almond facing up at `c`: `a` its half length along X, `h` its half width along Z, pointed at both ends (`round`:
+## an ellipse instead, for the iris). Strips of quads between its two edges.
+static func _almond(s: LowPoly.Soup, c: Vector3, a: float, h: float, col: Color, n: int = 10, round: bool = false) -> void:
+	for i in n:
+		var u0 := -1.0 + 2.0 * float(i) / float(n)
+		var u1 := -1.0 + 2.0 * float(i + 1) / float(n)
+		var w0 := sqrt(maxf(1.0 - u0 * u0, 0.0)) if round else (1.0 - u0 * u0)
+		var w1 := sqrt(maxf(1.0 - u1 * u1, 0.0)) if round else (1.0 - u1 * u1)
+		_face(s, c + Vector3(u0 * a, 0, -w0 * h), c + Vector3(u1 * a, 0, -w1 * h), c + Vector3(u1 * a, 0, w1 * h),
+				c + Vector3(u0 * a, 0, w0 * h), col, Vector3.UP)
 
 
 ## Candles: tall wax stubs with ghost-light flames, round the circle (the lectern) or on the altar's corners and the dais.

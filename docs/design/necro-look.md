@@ -30,12 +30,17 @@ on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raise
   light drops as it weakens. The torn and burnt books are gone. (The sections below still describe the first version.)
 - **A failing book's flicker tends red**: "Failing - maybe we have the flicker tend red?" Failing, its column, circle and
   light lean toward red (`GrimoireModel.FAIL_RED`), most in the stutter's dips.
+- **The grimoire stands on the altar** (the user, 2026-10-29: "I like the bigger size"): the altar at 1.4 over the
+  lectern at 0.85.
+- **The eye on the shut cover, redrawn** (the user: "the eye on the cover of the book isn't coming across well. Can we
+  adjust it?"): a big pointed almond across the cover in an iron rim, bone white, a round iris still faintly glowing in
+  the ghost colour, a slit pupil (`GrimoireModel._almond`). It was a small bone oval round a dark dot.
 
 ## What the user is choosing
 
 - **Which zombie**, or both: the **mourner** or the **digger**.
 - **Which acolyte**, or both: the **cowl** or the **mask**.
-- **Which grimoire stand**, or both by site: the **lectern** or the **altar**.
+- **Which grimoire stand**: the **altar** (decided, see "The user's read").
 - **Two switches**, which can be set separately:
 
 | Switch | Options | What it does |
