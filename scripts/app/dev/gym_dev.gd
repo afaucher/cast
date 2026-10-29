@@ -28,6 +28,8 @@ extends Node
 ##     (`generated`: the scene reloads on that floor, solo, with this panel kept; "gym" comes back). On a generated floor a
 ##     Landings pick rebuilds it at once, and the Go to buttons are its landings. The elevator goes down to the next
 ##     generated floor as ever
+##   - the GHOST LOOK test (docs/design/ghost-look.md, look-dev only): the Ghosts spawns (a skeleton, a suit of armour, a
+##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -367,11 +369,25 @@ func act(nm: String) -> void:
 				_status("the hallway packs need the gym's map (Map: gym)")
 				return
 			_status("a hallway pack of %d" % hall_pack(nm == "hall_mix").size())
+		"ghosts":
+			_status("ghosts: %d put down" % ghost_row(ring_point()).size())
 		"cry":
 			var kinds := cry_each()
 			_status("war cry: %s" % ", ".join(kinds) if not kinds.is_empty() else "war cry: no monster to yell")
 		"reset_log":
 			stats.reset()
+
+
+## The ghost look test's row (`--gym-act ghosts`, for screenshots; no panel button: the Ghosts spawns are there): a skeleton,
+## a suit of armour and a wisp side by side across the screen round `at`. Returns what it put down.
+func ghost_row(at: Vector3) -> Array[Node]:
+	var made: Array[Node] = []
+	var across := Vector3(0.7071, 0.0, -0.7071)   # (the game camera's screen right)
+	for i in GhostBody.KINDS.size():
+		var e := GymSpawns.find("ghost:" + GhostBody.KINDS[i])
+		made.append_array(GymSpawns.spawn(e, at + across * 2.2 * float(i - 1), 1, null, null))
+	spawned.append_array(made)
+	return made
 
 
 ## The WAR CRY button: the living monster of each kind nearest the player yells once (Monster.yell). Returns the kinds
@@ -437,7 +453,10 @@ static func experiments() -> Array:
 		["smoothing", "Smoothing", ["off", "on"], "on" if MoveFeel.interp else "off"],
 		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"],
 		["landings", "Landings", ["off", "on"], "on" if DungeonGen.landings else "off"],
-		["map", "Map", ["gym", "generated"], "generated" if generated else "gym"]]
+		["map", "Map", ["gym", "generated"], "generated" if generated else "gym"],
+		["ghost_look", "Ghost look", GhostLook.LOOKS, GhostLook.look],
+		["ghost_strength", "Ghost strength", GhostLook.STRENGTHS, GhostLook.strength],
+		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour]]
 
 
 ## The Go to buttons: the gym's places, or on a generated floor its landings.
@@ -454,11 +473,18 @@ func spots() -> Array:
 ## An experiment picked in the panel: "feel" plays that movement profile (MoveFeel.pick), "smoothing" turns the judder
 ## smoothing on or off (MoveFeel.interp). The status line and the corner dev tag (MoveFeelTag's) say which; the passive move
 ## log starts a new stretch. "walk" plays the monsters' old or new walk (MonsterModel.active_walk), live; the status line
-## says which.
+## says which. "ghost_look" / "ghost_strength" / "ghost_colour" redress every ghost the panel put down (GhostLook.pick: the
+## ghost look test, docs/design/ghost-look.md).
 func set_experiment(nm: String, value: String) -> void:
 	var text := ""
 	if nm == "landings" or nm == "map":
 		_set_floor_experiment(nm, value)
+		return
+	if nm.begins_with("ghost_"):
+		if not GhostLook.pick(nm, value):
+			return
+		panel.set_experiment(nm, value)
+		_status("ghosts: %s, %s, %s" % [GhostLook.look, GhostLook.strength, GhostLook.colour])
 		return
 	if nm == "walk":
 		if value != "old" and value != "new":

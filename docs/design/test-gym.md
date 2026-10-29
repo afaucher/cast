@@ -75,6 +75,9 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
   - **Monster walk**: old / **new** (playtest feedback item 4, batch 2): the monsters' active walk (`MonsterModel.active_walk`).
   - **Landings**: off / **on**: the generator's hallway landings and their set pieces (`DungeonGen.landings`,
     `hallways.md`). The gym's own map has none, so pair it with **Map**.
+  - **Ghost look**: **outline** / rim / shimmer, **Ghost strength**: faint / **soft** / strong, **Ghost colour**: **pale
+    blue** / ecto green. These are the ghost look test (look-dev only, `ghost-look.md`, `GhostLook`) and apply live to
+    every ghost the panel put down.
   - **Map**: **gym** / generated: "generated" reloads onto the gym contract's generated floor (solo, the same floor of the
     same contract) with this panel kept (`GymDev.generated`). There a Landings pick rebuilds the floor at once (the same
     floor with and without its landings), Go to lists the floor's landings, the dummies and the hallway packs are the gym
@@ -90,7 +93,9 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
 - **Dummies**: a static training dummy and a walker, 5000 HP each (three static ones stand on the arena's north side).
 - **Props** (every non-explosive `PricedProp.TABLE` kind; an electrical panel by water brings its live wire), **Hazards**
   (every explosive), **Staff** (every `EmployeeModel` style), **Components** (every spell's pickup, `SpellBook`; one that is
-  not available yet is disabled), **Gates** (a hellgate, an origin gate), **Decor** (every `RoomThemeDefs.DECOR` kind).
+  not available yet is disabled), **Gates** (a hellgate, an origin gate), **Decor** (every `RoomThemeDefs.DECOR` kind),
+  **Ghosts (look test)** (`ghost-look.md`: "ghost: skeleton", "ghost: armour", "ghost: wisp", which are cosmetic `GhostBody`
+  nodes; `--gym-act ghosts` puts one of each in front of you).
 - **Go to**: teleports to each environment (on a generated floor: to each hallway landing).
 - **Hit log** (`GymStats`): hits and damage the player dealt, the crew dealt and the player took, totals and per minute over
   the last 60 s, and the newest hits (amount, attacker, victim, weapon).

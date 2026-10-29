@@ -13,12 +13,15 @@ extends RefCounted
 ##   pickup   every spell in SpellBook.SPELLS: its component on the floor (a spell that is not available yet: `skip`)
 ##   gate     a hellgate and an origin gate
 ##   decor    every RoomThemeDefs.DECOR kind (set dressing, not an actor)
+##   ghost    the ghost look test (docs/design/ghost-look.md, LOOK-DEV ONLY): GhostBody's skeleton, armour and wisp, plain
+##            cosmetic nodes (no AI, no combat, nothing networked) that the panel's Ghost look / strength / colour redress
 ## Entries: {id, group, key (the registry key), label, skip ("" or why it has no button)}. spawn() puts `n` of one round a
 ## world point on valid cells and returns what it made. Dev only: solo, so every spawn is this machine's own (GameWorld).
 
 const DUMMY_HP := 5000.0
 const PROP_YAW := 45.0             ## a free-standing prop faces the camera
-const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor"]
+const GHOST_YAW := -120.0          ## a ghost's host (its front is -Z) turned three-quarters to the camera
+const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost"]
 
 
 ## Every entry, in GROUPS order and each registry's own order.
@@ -50,6 +53,8 @@ static func entries() -> Array[Dictionary]:
 	out.append(_e("gate", "origin", "Origin gate"))
 	for kind: String in RoomThemeDefs.DECOR:
 		out.append(_e("decor", kind, kind.capitalize()))
+	for kind: String in GhostBody.KINDS:
+		out.append(_e("ghost", kind, "ghost: " + kind))
 	return out
 
 
@@ -137,6 +142,13 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				var dp := DecorProp.spawn(entry)
 				if dp != null:
 					out.append(dp)
+		"ghost":
+			for c in cells_near(map, at, n, 1):
+				var g := GhostBody.make(key)
+				GameWorld.root.add_child(g)
+				g.global_position = Hex.to_world(c, _level(map, c))
+				g.rotation_degrees.y = GHOST_YAW
+				out.append(g)
 	return out
 
 

@@ -70,7 +70,9 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
   near you unless they are holding a body. So killing the body makes them run, but they get hurt in the process." A ghost
   possesses a host (a suit of armour, a skeleton); breaking the host hurts the ghost and sends it fleeing to the next one.
 - **Hard to see:** "a soft outline on whatever they possess." **A visual test comes first** ("Lets make sure to do a visual
-  test on this"): the outline on a possessed host, and a free ghost, judged on screen before the look is built in.
+  test on this"): the outline on a possessed host, and a free ghost, judged on screen before the look is built in. The
+  test is built (look-dev only, 2026-10-28): `ghost-look.md`. It has a skeleton, a suit of armour and a wisp in the gym
+  and in a look lab, with three choices: outline / rim / shimmer, faint / soft / strong, and pale blue / ecto green.
 - **Tentacles pass through ghosts:** physical only, they smash or shove the hosts (the user picked "They pass through
   ghosts"). Swatting a wisp away from its hosts was dropped ("Skip this mechanic at least").
 - **The Ghost spell's old "make an enemy lose its target" use is skipped for now** ("Skip this one for now as well").
