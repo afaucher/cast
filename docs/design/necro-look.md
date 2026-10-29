@@ -41,6 +41,23 @@ on eyes, hands, flames and pages, and the rim (the faceted fresnel) on the raise
   (`--gym-act necro`, Experiments > Grimoire > shut).
 - **The acolyte is the cowl** (the user, 2026-10-29: "Cowl"): the black robe, the bone-white stole, the staff and lantern.
 
+## The procession [look test, 2026-10-29]
+
+The user asked to revisit the acolyte (new-themes.md, "Zombies and acolytes": "acolytes should actually be traveling around
+the map as a procession with monsters. So they would come across bodies and raise them"), then: "Lets build the
+procession". Cosmetic like the rest of this test: `NecroProcession` (`scripts/art/lowpoly/necro/necro_procession.gd`).
+
+- The acolyte (the cowl) leads, two zombies walk behind it in single file round a loop (an oval 10 by 6.4).
+- When it comes level with a downed body beside the path, it stops (the file stops), turns to it and raises it: arms up,
+  the body pushes up on its arms, stands, and shambles to the back of the file, which grows.
+- At each new lap the zombies past the first two fall where they walk: the gym's stand-in for the crew knocking them
+  down, so the next lap has bodies to raise again.
+- Not built: the fight (the acolyte hanging back to raise what falls, fleeing when hurt), being interrupted by a hit, a
+  route through real rooms, other monsters in the file.
+
+`procession.png` (`--set procession`): six moments of the first raise at the game camera. In the gym: Spawn > Necro (look
+test) > "procession (acolyte and zombies)", or `--gym-act procession`.
+
 ## What the user is choosing
 
 - **Which zombie**, or both: the **mourner** or the **digger**.

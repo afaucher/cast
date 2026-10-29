@@ -15,7 +15,8 @@ extends LabBase
 ##   lineup.png, lineup_2x.png       Wick, Rebar, the grunt, the brute, the staff, the henchman, both zombies, both acolytes
 ##   strip_rim.png                   the zombies and the acolytes with the rim off and on, bright and dark
 ##   close_zombie.png, close_acolyte.png, close_grimoire.png   closer, lower three-quarter views
-## --set   all (default) | zombie | acolyte | grimoire | scale | lineup | rim | close
+##   procession.png                  NecroProcession in six moments: walking, stopping, raising, the body up, rejoining, on
+## --set   all (default) | zombie | acolyte | grimoire | scale | lineup | rim | close | procession
 ## The glows, the pulse and the grimoire are frozen at one moment (NecroLook.clock, GrimoireModel.freeze_at).
 
 const GAME_YAW := 45.0
@@ -224,6 +225,8 @@ func _run() -> void:
 		await _rim_strip(dir)
 	if all or set_name == "close":
 		await _closeups(dir)
+	if all or set_name == "procession":
+		await _procession(dir)
 	NecroLook.reset()
 	finish()
 
@@ -378,6 +381,46 @@ func _closeups(dir: String) -> void:
 ## A labelled contact sheet (the ghost look lab's): `row_names` down the left, column blocks [[title, [names]], ...] across
 ## the top, `rows` the images (row-major, each `crop`, cut to `cw` wide round its middle; `zoom` 2: the middle half,
 ## doubled), laid out in window pixels and grabbed.
+## The procession (NecroProcession) round the room's middle in six moments of its first raise, at the game camera, the
+## whole loop in frame.
+func _procession(dir: String) -> void:
+	const CROP_P := Vector2i(600, 440)
+	_clear()
+	var pr := NecroProcession.new()
+	holder.add_child(pr)
+	pr.position = spots["middle"]
+	pr.set_process(false)
+	aim(GAME_YAW, GAME_PITCH, GAME_SIZE, (spots["middle"] as Vector3) + Vector3(0, 0.3, 0))
+	await wait_frames(2)
+	var shots: Array[Image] = []
+	var step := 1.0 / 60.0
+	# the moments: walking; stopped, arms going up; the body pushing up; on its feet; shambling back; the file walking on
+	var wants: Array[Callable] = [
+		func() -> bool: return pr.s > 4.0,
+		func() -> bool: return not pr.raising.is_empty() and float(pr.raising["t"]) > 0.7,
+		func() -> bool: return not pr.raising.is_empty() and float(pr.raising["t"]) > 2.2,
+		func() -> bool: return not pr.raising.is_empty() and float(pr.raising["t"]) > 3.0,
+		func() -> bool: return pr.raising.is_empty() and not pr.joining.is_empty(),
+		func() -> bool: return pr.joining.is_empty() and pr.walkers.size() > NecroProcession.BASE,
+	]
+	for want: Callable in wants:
+		var guard := 0
+		while not want.call() and guard < 6000:
+			pr.advance(step)
+			guard += 1
+		# a few rendered frames so the walkers' strides follow their speed
+		for i in 8:
+			pr.advance(step)
+			await wait_frames(1)
+		var img := await grab()
+		img.convert(Image.FORMAT_RGBA8)
+		shots.append(img.get_region(Rect2i(img.get_width() / 2 - CROP_P.x / 2, img.get_height() / 2 - CROP_P.y / 2, CROP_P.x, CROP_P.y)))
+	var rows: Array = [shots.slice(0, 3), shots.slice(3, 6)]
+	var blocks := [["", ["1 walking  /  4 on its feet", "2 stops, arms up  /  5 to the back", "3 the body rises  /  6 walking on"]]]
+	await _sheet("%s/procession.png" % dir, "The procession at the game camera (size 24, 1:1; gym: necro:procession)  -  docs/design/necro-look.md",
+			["", ""], blocks, rows, CROP_P, CROP_P.x)
+
+
 func _sheet(path: String, title: String, row_names: Array, blocks: Array, rows: Array, crop: Vector2i, cw: int, zoom: int = 1) -> void:
 	_clear()
 	var layer := _canvas()

@@ -32,6 +32,7 @@ extends Node
 ##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost
 ##   - the NECRO LOOK test (docs/design/necro-look.md, look-dev only): the Necro spawns (the zombies, the acolytes and the
 ##     grimoire: NecroBody) and the "Necro rim" / "Grimoire" pickers (NecroLook), live; `--gym-act necro` lays out a row
+##     (`--gym-act procession` puts NecroProcession down: an acolyte leading zombies, raising the downed)
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -375,6 +376,10 @@ func act(nm: String) -> void:
 			_status("ghosts: %d put down" % ghost_row(ring_point()).size())
 		"necro":
 			_status("necro: %d put down" % necro_row(ring_point()).size())
+		"procession":
+			var pr := GymSpawns.spawn(GymSpawns.find("necro:procession"), ring_point(), 1, null, null)
+			spawned.append_array(pr)
+			_status("procession: %d put down" % pr.size())
 		"cry":
 			var kinds := cry_each()
 			_status("war cry: %s" % ", ".join(kinds) if not kinds.is_empty() else "war cry: no monster to yell")

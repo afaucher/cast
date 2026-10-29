@@ -18,6 +18,7 @@ func setup() -> void:
 	_check_acolytes()
 	_check_grimoires()
 	await _check_gym_spawns()
+	await _check_procession()
 	await _check_lab()
 	NecroLook.reset()
 	GhostLook.reset()
@@ -186,6 +187,53 @@ func _check_gym_spawns() -> void:
 	check(((grunt.get_part("body") as MeshInstance3D).material_override as ShaderMaterial).shader.code == MonsterMaterial._code(),
 			"a real grunt still wears MonsterMaterial")
 	grunt.free()
+	root.queue_free()
+	await frames(2)
+
+
+## The procession (GymSpawns "necro:procession"): the acolyte leads its zombies round the loop, stops at a downed body,
+## raises it, and the body stands and joins the back of the file; at a new lap the extras fall again.
+func _check_procession() -> void:
+	root = Node3D.new()
+	add_child(root)
+	var map := HexMap.new()
+	for c in Hex.range_cells(Vector2i.ZERO, 9):
+		map.set_cell(c, 0).tag = "room:0"
+	GameWorld.begin(map, root, 3)
+	var e := GymSpawns.find("necro:procession")
+	if not check(not e.is_empty(), "necro:procession is a gym entry"):
+		return
+	var out := GymSpawns.spawn(e, Vector3.ZERO, 1, null, null)
+	if not check(out.size() == 1 and out[0] is NecroProcession, "it spawns a NecroProcession"):
+		return
+	var pr := out[0] as NecroProcession
+	pr.set_process(false)
+	await frames(1)
+	eq(pr.walkers.size(), NecroProcession.BASE, "the file starts with its base zombies")
+	eq(pr.downed.size(), NecroProcession.BODIES_AT.size(), "bodies lie by the path")
+	check(not ((pr as Node) is Actor) and not ((pr.acolyte as Node) is Actor), "cosmetic, not actors")
+	var start := pr.acolyte.position
+	pr.advance(0.5)
+	check(pr.acolyte.position.distance_to(start) > 0.2, "the acolyte walks")
+	var stopped := false
+	var raised_arms := false
+	for i in 400:
+		pr.advance(0.05)
+		if not pr.raising.is_empty():
+			stopped = true
+			raised_arms = raised_arms or pr.acolyte.raise_k() > 0.9
+	check(stopped and raised_arms, "it stops and raises a body (arms up)")
+	check(pr.downed.size() < NecroProcession.BODIES_AT.size(), "a body was raised")
+	check(pr.walkers.size() > NecroProcession.BASE, "the raised zombie joined the file")
+	var lap := pr.lap
+	for i in 2000:
+		pr.advance(0.05)
+		if pr.lap > lap:
+			break
+	check(pr.lap > lap, "a lap goes by")
+	eq(pr.walkers.size(), NecroProcession.BASE, "at the new lap the extras fall")
+	for z: ZombieModel in pr.walkers:
+		check(not z.is_lying(), "the file walks on its feet")
 	root.queue_free()
 	await frames(2)
 

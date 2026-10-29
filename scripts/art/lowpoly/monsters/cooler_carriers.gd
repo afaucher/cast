@@ -36,7 +36,7 @@ static func build(kind: String) -> HealerBlockouts.HealerModel:
 		"temp":
 			return TempModel.new()
 		"acolyte":
-			return AcolyteModel.new()
+			return CarrierAcolyteModel.new()
 		"waterboy":
 			return WaterboyModel.new()
 		"janitor":
@@ -179,7 +179,7 @@ class TempModel extends CarrierModel:
 
 # =============================================================================== acolyte
 
-class AcolyteModel extends CarrierModel:
+class CarrierAcolyteModel extends CarrierModel:
 	const ROBE := Color(0.66, 0.60, 0.50)
 	const ROBE_LIGHT := Color(0.74, 0.68, 0.57)
 	const ROBE_DARK := Color(0.50, 0.45, 0.37)

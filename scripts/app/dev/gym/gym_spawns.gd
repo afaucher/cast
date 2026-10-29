@@ -17,6 +17,7 @@ extends RefCounted
 ##            cosmetic nodes (no AI, no combat, nothing networked) that the panel's Ghost look / strength / colour redress
 ##   necro    the necro look test (docs/design/necro-look.md, LOOK-DEV ONLY): NecroBody's zombies, acolytes and grimoires in
 ##            each pose, cosmetic like the ghosts (the panel's Necro rim / Grimoire / Ghost colour redress them)
+##            and "procession": NecroProcession, an acolyte leading zombies round a loop and raising the downed
 ## Entries: {id, group, key (the registry key), label, skip ("" or why it has no button)}. spawn() puts `n` of one round a
 ## world point on valid cells and returns what it made. Dev only: solo, so every spawn is this machine's own (GameWorld).
 
@@ -59,6 +60,7 @@ static func entries() -> Array[Dictionary]:
 		out.append(_e("ghost", kind, "ghost: " + kind))
 	for r: Array in NecroBody.entries():
 		out.append(_e("necro", NecroBody.key_of(r[0], r[1], r[2]), NecroBody.label_of(r[0], r[1], r[2])))
+	out.append(_e("necro", "procession", "procession (acolyte and zombies)"))
 	return out
 
 
@@ -154,6 +156,12 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				g.rotation_degrees.y = GHOST_YAW
 				out.append(g)
 		"necro":
+			if key == "procession":
+				var pr := NecroProcession.new()
+				GameWorld.root.add_child(pr)
+				pr.global_position = at
+				out.append(pr)
+				return out
 			var f := key.split(":")
 			for c in cells_near(map, at, n, 3 if f[0] == "grimoire" else 1):
 				var b := NecroBody.make(f[0], f[1], f[2])
