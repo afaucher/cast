@@ -34,7 +34,8 @@ armour, a skeleton), and ghost form is a whole-body transform you cast on yourse
 - **The player's ghost form is just the ghost shape** (the user: "lets actually remove the main body and make it just
   the ghost shape"): every part of the hero in the same vapour as the possessed hosts' ghost body, warm (not the enemies'
   cold colour), no body, no ink, no shadow (`GhostForm`, one treatment, "ghost"; glass and spirit are gone). The gym's
-  Ghost form row is off / ghost.
+  Ghost form row is off / ghost. Then: "Maybe have the pale corpse inside instead?": the hero's own body drained of colour
+  and paled (its ink kept) inside the warm ghost, 1.2 times larger round each part, like the possessed hosts.
 - **The niche is dropped for now.** The single niche "doesn't read" (it looked like a free-standing box). A wall of stacked
   burial slots was tried next and also failed ("No, that isn't working"): at the game camera it still read as a chest in
   the middle of the room. The user: "Drop the niche for now." The dormant skeleton is slumped only, and the risen one stands

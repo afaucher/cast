@@ -108,8 +108,8 @@ func _has_ink(passes: Array[Material]) -> bool:
 	return false
 
 
-## Ghost form on Wick and Rebar: just the ghost shape (every part in the warm vapour, no body, no shadow), off puts
-## everything back; a held item is made see-through.
+## Ghost form on Wick and Rebar: the pale corpse (each part's own material, no colour, brighter, ink kept) inside a warm
+## vapour ghost round every part, no shadow; off puts everything back; a held item is made see-through.
 func _check_ghost_form() -> void:
 	for which: String in ["wick", "rebar"]:
 		var m: LowPolyModel = RebarModel.new() if which == "rebar" else WickModel.new()
@@ -121,7 +121,12 @@ func _check_ghost_form() -> void:
 		if not check(f != null and GhostForm.of(m) == f, "%s: ghost applied" % which):
 			continue
 		for part: MeshInstance3D in m.parts.values():
-			check(part.material_override == f.vapour, "%s: %s is ghost vapour" % [which, part.name])
+			var pm := part.material_override as ShaderMaterial
+			check(pm != null and pm != own[part] and pm.shader == (own[part] as ShaderMaterial).shader, "%s: %s keeps its own shader" % [which, part.name])
+			near(float(pm.get_shader_parameter("desat")), 1.0, 0.001, "%s: %s drained of colour" % [which, part.name])
+			check(pm.next_pass == (own[part] as ShaderMaterial).next_pass, "%s: %s keeps its ink" % [which, part.name])
+			var g := part.get_node_or_null("GhostVapour") as MeshInstance3D
+			check(g != null and g.material_override == f.vapour, "%s: %s wrapped in the ghost" % [which, part.name])
 			check(part.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "%s: %s casts no shadow" % [which, part.name])
 		eq(f.vapour.shader, HauntPiece.vapour_shader(), "%s: the possessed hosts' vapour" % which)
 		var warm: Color = f.vapour.get_shader_parameter("ghost_color")
@@ -134,6 +139,7 @@ func _check_ghost_form() -> void:
 		check(f.counts().x >= m.parts.size() and f.counts().y >= 1, "%s: the parts redrawn, the item only see-through (%s)" % [which, f.counts()])
 		GhostForm.apply(m, "off")
 		check(GhostForm.of(m) == null, "%s: off removes it" % which)
+		check(m.find_children("GhostVapour", "", true, false).is_empty(), "%s: off removes the ghost round the parts" % which)
 		for part: MeshInstance3D in own:
 			check(part.material_override == own[part], "%s: %s back to its own material" % [which, part.name])
 		near(item.transparency, 0.0, 0.0001, "%s: the held item solid again" % which)
