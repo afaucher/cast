@@ -7,6 +7,16 @@ The decision this serves (new-themes.md, "Ghost house: haunted contracts", Ghost
 soft outline on whatever they possess", and **a visual test comes first** ("Lets make sure to do a visual test on this").
 The test covers the outline on a possessed host and a free ghost.
 
+## The user's read (2026-10-29)
+
+- **Rim is the look.** "The rim look is really good. Especially as a wisp."
+- **The suit of armour needs work.** "I'm not sure about the suit of armour yet. I think that needs work to make it sell."
+  Picked from four proposals: **"Knight silhouette"** (big domed pauldrons, a broad chest narrowing to the waist, a tall
+  flat-topped great helm with a clear eye slit) and **"Sword, not halberd"** (a big sword point-down in front, both
+  gauntlets on the pommel). Not picked: a glowing visor and joint gaps, darker steel. Reworked the same day:
+
+![the reworked armour, no ghost look, close up](ghost_look/armour_close.png)
+
 ## What the user is choosing
 
 Three switches, and each can be set separately:
@@ -75,7 +85,7 @@ pulse phase and the wisp's starting point on its loop) comes from `GameWorld.fx_
 |---|---|---|
 | `GhostLook` | `scripts/art/lowpoly/ghost/ghost_look.gd` | The three switches as static state (`pick`, `reset`), and the shaders. The host's body is the monsters' toon shader (`MonsterMaterial`) with a ghost rim added to it. The soft outline is three stacked translucent inverted hulls, built the same way as the ink outline (`LowPolyMaterial.OUTLINE_SHADER`); the widest is the faintest. The afterimage is a translucent copy pushed behind the body and offset in screen pixels. The wisp's body is a translucent, unshaded fresnel. `dress` hangs the chain for the current look off a body's shared material. `refresh_all` redresses every ghost in the tree. |
 | `GhostBody` | `scripts/art/lowpoly/ghost/ghost_body.gd` | One ghost: `make("skeleton" / "armour" / "wisp")`. The skeleton is a `GruntModel` with every part in the ghost body; it idles on its own clock and stands still. The armour is an `ArmourModel`. The wisp drifts in a slow figure eight round where it was put down (1.6 wide, about 19 s a lap), bobbing. Its tail trails behind its heading with a sideways wave, and it carries a small light. Every ghost is in the `ghost_look` group. |
-| `ArmourModel` | `scripts/art/lowpoly/ghost/armour_model.gd` | A suit of armour on a wooden plinth, built with LowPoly soups in the house look: tarnished steel in three values, brass trim, one faded crimson accent (the plume and the tabard), and one silhouette tell, a halberd planted on the plinth that stands taller than the suit. Its parts are named like a monster's, so a possessed suit could be posed later. |
+| `ArmourModel` | `scripts/art/lowpoly/ghost/armour_model.gd` | A suit of armour on a wooden plinth, built with LowPoly soups in the house look: tarnished steel in three values, brass trim, one faded crimson accent (the plume and the tabard), and a knight's silhouette: big domed pauldrons, a broad chest narrowing to the waist, a tall flat-topped great helm with a dark eye slit, and a big sword held point-down in front with both gauntlets on its pommel. Its parts are named like a monster's, so a possessed suit could be posed later. |
 | The gym | `GymSpawns` group `ghost`, `GymDev.experiments()` | Three spawn buttons under **Ghosts (look test)**: "ghost: skeleton", "ghost: armour" and "ghost: wisp". Three rows in **Experiments**: **Ghost look**, **Ghost strength** and **Ghost colour**, which apply live to every ghost in the gym. `--gym-act ghosts` puts one of each in a row in front of the player, for screenshots. |
 | The lab | `scripts/art/lowpoly/ghost/ghost_look_lab.gd`, `scenes/ghost_look_lab.tscn` | Renders the sheets above. |
 | Test | `tests/test_ghost_look.gd` | Checks that the three gym entries spawn cosmetic ghosts, that each switch changes the material parameters on every ghost (the rim, the shell alphas, the colours, the afterimage pass, the wisp's alpha and light), that the wisp drifts, that a real grunt still wears `MonsterMaterial` and its ink, and that the lab's builders run headless. |
@@ -107,7 +117,8 @@ every cell's crop to the folder you give it; those are not committed.
 - **The wisp has a face**: two dark eyes and a small round mouth. Without them it read as a puff of smoke.
 - **The wisp lights the floor** at soft and strong, with no light at faint. The light makes it much easier to find in the
   dark.
-- **The armour**: a great helm with a crimson plume, a faded crimson tabard and a halberd. A different silhouette tell
+- **The armour**: a great helm with a crimson plume, a faded crimson tabard and a sword held point-down (it was a halberd
+  until the user's read above). A different silhouette tell
   would change how it reads from across a room.
 - **The pulse** runs about one cycle every 5 s, ±30 % alpha and a little width.
 - **The dark corner** uses the game's own lighting: a wall shadow outside the downlight pool, not a specially darkened

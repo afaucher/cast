@@ -5,10 +5,11 @@ extends LowPolyModel
 ## nothing in the game spawns it (only GhostBody, for the gym and the look lab).
 ##
 ## The house look: a few big faceted masses (frustum plates, jittered blobs), tarnished steel in three values, one faded
-## crimson accent (the plume and the tabard) and one silhouette tell (the halberd planted on the stand, taller than the
-## suit). Faces local -Z, +X is its right, origin at the foot of the stand. About 2.0 tall to the plume, 2.35 to the
-## halberd's spike (before MODEL_SCALE). Named rigid parts like the monsters' (body, head, arm_l, arm_r, leg_l, leg_r,
-## weapon, stand), so a possessed suit could be posed later.
+## crimson accent (the plume and the tabard). A knight's silhouette (the user, 2026-10-29: "Knight silhouette", "Sword, not
+## halberd"): big domed pauldrons, a broad chest narrowing to the waist, a tall flat-topped great helm with a clear eye
+## slit, and a big sword held point-down in front, both gauntlets on its pommel. Faces local -Z, +X is its right, origin at
+## the foot of the stand. About 2.1 tall to the plume (before MODEL_SCALE). Named rigid parts like the monsters' (body,
+## head, arm_l, arm_r, leg_l, leg_r, weapon, stand), so a possessed suit could be posed later.
 
 const STEEL := Color(0.46, 0.49, 0.54)
 const STEEL_LIGHT := Color(0.64, 0.68, 0.72)
@@ -26,9 +27,10 @@ const MODEL_SCALE := 1.12       ## a little over a skeleton's height: an imposin
 const STAND_H := 0.12           ## the plinth's top
 const WAIST_Y := 1.08
 const HIP := Vector3(0.13, 1.06, 0.0)
-const SHOULDER := Vector3(0.33, 0.42, 0.0)  ## body space
+const SHOULDER := Vector3(0.40, 0.42, 0.0)  ## body space
 const ARM_LEN := 0.66
-const HALBERD := Vector3(0.42, STAND_H, -0.30)   ## where the halberd's butt stands on the plinth
+const SWORD := Vector3(0.0, STAND_H, -0.34)     ## where the sword's point rests on the plinth
+const SWORD_GRIP := 1.08                        ## the grip's height above the stand's foot, where both hands meet
 
 
 func _init() -> void:
@@ -46,16 +48,12 @@ func _build() -> void:
 	for s: int in [-1, 1]:
 		var side := "l" if s < 0 else "r"
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(HIP.x * s, HIP.y, HIP.z))
+		# both hands on the sword's pommel: each arm aimed at its side of the grip (one piece, no elbow)
 		var arm := _add_part("arm_" + side, _arm_soup(s), body, Vector3(SHOULDER.x * s, SHOULDER.y, SHOULDER.z))
-		if s < 0:
-			arm.rotation = Vector3(0.08, 0.0, -0.12)
-	# the right hand on the halberd's haft: the arm aimed at the grip (one piece, no elbow)
-	var arm_r := parts["arm_r"] as MeshInstance3D
-	var shoulder_w := Vector3(SHOULDER.x, WAIST_Y + SHOULDER.y, 0.0)
-	var grip := Vector3(HALBERD.x, 0.92, HALBERD.z)
-	var d := (grip - shoulder_w).normalized()
-	arm_r.basis = Basis(Quaternion(Vector3.DOWN, d))
-	_add_part("weapon", _halberd_soup(), self, HALBERD)
+		var shoulder_w := Vector3(SHOULDER.x * s, WAIST_Y + SHOULDER.y, 0.0)
+		var hand := Vector3(SWORD.x + 0.06 * s, SWORD_GRIP, SWORD.z)
+		arm.basis = Basis(Quaternion(Vector3.DOWN, (hand - shoulder_w).normalized()))
+	_add_part("weapon", _sword_soup(), self, SWORD)
 
 
 ## A round wooden plinth.
@@ -66,42 +64,46 @@ func _stand_soup() -> LowPoly.Soup:
 	return s
 
 
-## The torso: faulds (a flared skirt of three lames), a belt, the breastplate with its ridge, a gorget, pauldrons and the
-## faded tabard down the front.
+## The torso: faulds (a flared skirt of three lames), a belt at a narrow waist, a broad breastplate with its ridge, a
+## gorget, big domed pauldrons with two lames each and the faded tabard down the front.
 func _body_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(411, 0.06)
 	for i in 3:
 		var y := -0.05 - 0.085 * i
-		MonsterModel.wedge(s, Vector3(0, y, 0.0), Vector2(0.48 + 0.05 * i, 0.32 + 0.03 * i), Vector2(0.44 + 0.05 * i, 0.29 + 0.03 * i),
+		MonsterModel.wedge(s, Vector3(0, y, 0.0), Vector2(0.44 + 0.06 * i, 0.30 + 0.03 * i), Vector2(0.38 + 0.06 * i, 0.27 + 0.03 * i),
 				0.09, STEEL if i % 2 == 0 else TARNISH, 412 + i)
-	MonsterModel.slab(s, Vector3(0, 0.02, 0.0), Vector3(0.46, 0.06, 0.30), LEATHER, 416)                 # belt
-	MonsterModel.slab(s, Vector3(0, 0.02, -0.155), Vector3(0.08, 0.07, 0.03), BRASS, 417)                # buckle
-	MonsterModel.wedge(s, Vector3(0, 0.27, 0.0), Vector2(0.42, 0.27), Vector2(0.58, 0.36), 0.44, STEEL, 418, Vector3.ZERO, 0.01)  # cuirass
+	MonsterModel.slab(s, Vector3(0, 0.02, 0.0), Vector3(0.38, 0.06, 0.27), LEATHER, 416)                 # belt
+	MonsterModel.slab(s, Vector3(0, 0.02, -0.14), Vector3(0.08, 0.07, 0.03), BRASS, 417)                 # buckle
+	MonsterModel.wedge(s, Vector3(0, 0.27, 0.0), Vector2(0.36, 0.25), Vector2(0.70, 0.38), 0.44, STEEL, 418, Vector3.ZERO, 0.01)  # cuirass
 	MonsterModel.wedge(s, Vector3(0, 0.30, -0.16), Vector2(0.05, 0.06), Vector2(0.03, 0.08), 0.40, STEEL_LIGHT, 419)              # the ridge
-	MonsterModel.slab(s, Vector3(0, 0.47, -0.02), Vector3(0.60, 0.05, 0.38), BRASS, 420)                  # the cuirass's brass rim
-	s.merge(LowPoly.cylinder(0.15, 0.13, 0.12, 8, STEEL_DARK, 421), LowPoly.at(Vector3(0, 0.54, 0.0)))   # gorget
+	MonsterModel.slab(s, Vector3(0, 0.47, -0.02), Vector3(0.50, 0.03, 0.36), BRASS, 420)                  # the cuirass's brass rim
+	s.merge(LowPoly.cylinder(0.15, 0.13, 0.14, 8, STEEL_DARK, 421), LowPoly.at(Vector3(0, 0.55, 0.0)))   # gorget
 	for x: float in [-1.0, 1.0]:
-		MonsterModel.blob(s, Vector3(0.33 * x, 0.44, 0.0), Vector3(0.18, 0.12, 0.19), STEEL, 422 + int(x), 0.1)        # pauldron
-		MonsterModel.blob(s, Vector3(0.36 * x, 0.34, 0.0), Vector3(0.15, 0.08, 0.16), TARNISH, 425 + int(x), 0.1)      # its lame
+		MonsterModel.blob(s, Vector3(0.37 * x, 0.46, 0.0), Vector3(0.18, 0.11, 0.19), STEEL, 422 + int(x), 0.08)        # pauldron
+		MonsterModel.blob(s, Vector3(0.41 * x, 0.37, 0.0), Vector3(0.16, 0.06, 0.17), TARNISH, 425 + int(x), 0.08)      # its lames
+		MonsterModel.blob(s, Vector3(0.43 * x, 0.30, 0.0), Vector3(0.14, 0.05, 0.15), STEEL_DARK, 430 + int(x), 0.08)
 	# the tabard: a faded crimson panel from the belt to the knees, a brass-edged hem
-	MonsterModel.slab(s, Vector3(0, -0.24, -0.185), Vector3(0.26, 0.42, 0.03), CRIMSON, 428, Vector3(-4.0, 0, 0))
-	MonsterModel.slab(s, Vector3(0, -0.45, -0.20), Vector3(0.27, 0.04, 0.035), BRASS, 429, Vector3(-4.0, 0, 0))
+	MonsterModel.slab(s, Vector3(0, -0.24, -0.175), Vector3(0.26, 0.42, 0.03), CRIMSON, 428, Vector3(-4.0, 0, 0))
+	MonsterModel.slab(s, Vector3(0, -0.45, -0.19), Vector3(0.27, 0.04, 0.035), BRASS, 429, Vector3(-4.0, 0, 0))
 	return s
 
 
-## A great helm: a faceted barrel, a domed top, a dark visor slit and breaths, and a crimson plume arcing back.
+## A great helm: a tall flat-topped barrel, a dark eye slit across the front split by a brass ridge, a brass brow band,
+## breaths, and a crimson plume arcing back off the flat top.
 func _head_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(431, 0.06)
-	s.merge(LowPoly.cylinder(0.165, 0.155, 0.30, 8, STEEL, 432, 0.006), LowPoly.at(Vector3(0, 0.15, 0)))
-	s.merge(LowPoly.cylinder(0.155, 0.08, 0.08, 8, STEEL_LIGHT, 433), LowPoly.at(Vector3(0, 0.34, 0)))
-	MonsterModel.slab(s, Vector3(0, 0.19, -0.155), Vector3(0.24, 0.035, 0.04), VOID, 434)                 # visor slit
-	MonsterModel.slab(s, Vector3(0, 0.14, -0.16), Vector3(0.03, 0.12, 0.03), STEEL_LIGHT, 435)            # the nose ridge
+	s.merge(LowPoly.cylinder(0.18, 0.17, 0.40, 8, STEEL, 432, 0.006), LowPoly.at(Vector3(0, 0.20, 0)))
+	s.merge(LowPoly.cylinder(0.17, 0.14, 0.04, 8, STEEL_LIGHT, 433), LowPoly.at(Vector3(0, 0.42, 0)))   # the flat top
+	MonsterModel.slab(s, Vector3(0, 0.27, -0.17), Vector3(0.32, 0.05, 0.04), VOID, 434)                  # the eye slit
+	MonsterModel.slab(s, Vector3(0, 0.31, -0.175), Vector3(0.34, 0.03, 0.04), BRASS, 435)                # the brow band
+	MonsterModel.slab(s, Vector3(0, 0.17, -0.18), Vector3(0.04, 0.24, 0.03), BRASS, 436)                 # the ridge
 	for i in 3:
-		MonsterModel.slab(s, Vector3(0.07, 0.08 - 0.03 * i, -0.155), Vector3(0.05, 0.015, 0.03), VOID, 436 + i)   # breaths
-	MonsterModel.slab(s, Vector3(0, 0.005, 0), Vector3(0.34, 0.03, 0.34), BRASS, 439)                      # the helm's brass band
+		for x: float in [-1.0, 1.0]:
+			MonsterModel.slab(s, Vector3(0.07 * x, 0.18 - 0.04 * i, -0.17), Vector3(0.05, 0.016, 0.03), VOID, 437 + i)   # breaths
+	MonsterModel.slab(s, Vector3(0, 0.005, 0), Vector3(0.36, 0.03, 0.36), BRASS, 439)                      # the helm's brass band
 	for i in 4:
 		var t := float(i) / 3.0
-		var p := Vector3(0, 0.40 + 0.06 * sin(t * PI) - 0.05 * t, 0.02 + 0.22 * t)
+		var p := Vector3(0, 0.48 + 0.06 * sin(t * PI) - 0.05 * t, 0.02 + 0.22 * t)
 		MonsterModel.blob(s, p, Vector3(0.06, 0.08 - 0.012 * i, 0.09), CRIMSON if i % 2 == 0 else CRIMSON_DARK, 440 + i, 0.18)
 	return s
 
@@ -128,12 +130,15 @@ func _arm_soup(side: int) -> LowPoly.Soup:
 	return s
 
 
-## The halberd: a dark haft from the plinth up past the helm, an axe blade to the right, a back hook and a top spike.
-func _halberd_soup() -> LowPoly.Soup:
+## The sword, point-down from the plinth: a broad pale blade with a dark fuller, a wide brass crossguard, a leather grip
+## for both hands and a brass pommel.
+func _sword_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(491, 0.05)
-	MonsterModel.limb(s, Vector3(0, 0.0, 0), Vector3(0, 2.0, 0), 0.035, 0.03, 5, WOOD_DARK, 492)
-	MonsterModel.slab(s, Vector3(0, 1.62, 0), Vector3(0.09, 0.05, 0.09), BRASS, 493)                  # the socket's collar
-	MonsterModel.wedge(s, Vector3(0.15, 1.80, 0), Vector2(0.20, 0.03), Vector2(0.12, 0.03), 0.30, STEEL_LIGHT, 494, Vector3(0, 0, -90.0))  # the axe blade
-	MonsterModel.wedge(s, Vector3(-0.09, 1.82, 0), Vector2(0.07, 0.03), Vector2(0.01, 0.02), 0.14, STEEL, 495, Vector3(0, 0, 90.0))      # the back hook
-	MonsterModel.limb(s, Vector3(0, 1.96, 0), Vector3(0, 2.26, 0), 0.04, 0.0, 4, STEEL_LIGHT, 496)   # the spike
+	var guard := SWORD_GRIP - STAND_H - 0.12
+	MonsterModel.wedge(s, Vector3(0, 0.0, 0), Vector2(0.02, 0.02), Vector2(0.12, 0.03), 0.12, STEEL_LIGHT, 492)              # the point
+	MonsterModel.slab(s, Vector3(0, (0.12 + guard) * 0.5, 0), Vector3(0.12, guard - 0.12, 0.03), STEEL_LIGHT, 493)       # the blade
+	MonsterModel.slab(s, Vector3(0, (0.16 + guard) * 0.5, -0.017), Vector3(0.03, guard - 0.2, 0.01), STEEL_DARK, 494)     # the fuller
+	MonsterModel.slab(s, Vector3(0, guard + 0.025, 0), Vector3(0.44, 0.05, 0.06), BRASS, 495)                           # the crossguard
+	MonsterModel.limb(s, Vector3(0, guard + 0.05, 0), Vector3(0, guard + 0.26, 0), 0.03, 0.03, 5, LEATHER, 496)         # the grip
+	MonsterModel.blob(s, Vector3(0, guard + 0.30, 0), Vector3(0.05, 0.05, 0.05), BRASS, 497, 0.1)                       # the pommel
 	return s
