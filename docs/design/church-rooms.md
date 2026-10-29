@@ -89,3 +89,12 @@ $env:CAST_GODOT = "<abs path>\Hero-Reader\third_party\godot\Godot_v4.7-stable_wi
 - **The bell frame is raised** onto a deck on four posts, so the bell hangs over the ringing chamber instead of standing on
   the floor.
 - **Room sizes**: a long nave (the size of the mansion's gallery, but deeper), a small vestry, a squat tower room.
+
+## The user's read (2026-10-29)
+
+One room at a time.
+- **Nave:** reads; moonlight ("Reads, moonlight").
+- **Vestry:** dropped ("Drop it"): it read as a storeroom with robes. (Its props and lab layout stay in the test for now.)
+- **Bell tower:** does not read, removed ("Does not read, remove it."). (Its props and lab layout stay in the test for now.)
+
+So a church is the nave alone, in moonlight, plus its crypt section (crypt-section.md, the chapel set).
