@@ -393,6 +393,11 @@ func _dress_crypt() -> void:
 	_crypt("sarcophagus", _w(k0) + back * 0.3, yaw_to(Hex.dir_vector(4)), {"lid": "ajar"})
 	_crypt("bones", _w(k0 + D[4] * 2), 140.0, {"seed": 14})
 	_on_wall("ossuary", _w(k0) + back * 3.6, {"width": 3.0})
+	# the chapel's pale shafts from gratings in the church floor: over the entry vault, the chamber's sarcophagi and the end
+	# vault (the gallery stays dark)
+	if bool(CryptLook.look(set_name)["shafts"]):
+		for at: Vector3 in [_w(e0 + D[0]), bc - back * 0.9, _w(k0 + D[4])]:
+			_put(CryptLook.shaft(Vector3.ZERO), at)
 	spots["bright"] = bc - back * 0.4
 	spots["dark"] = _w(gr[4]) + (Hex.to_world(D[2]) - Hex.to_world(Vector2i.ZERO)) * 0.5
 	spots["section"] = (_w(keys["above"]) + _w(e0)) * 0.5 - Hex.dir_vector(5) * 1.5
@@ -506,7 +511,9 @@ func _show_labels(on: bool) -> void:
 func _run(only: String) -> void:
 	await wait_frames(10)
 	var dir := shot_path.get_base_dir()
-	var sets: Array[String] = [only] if only != "" else CryptLook.SETS
+	var sets: Array[String] = CryptLook.SETS.duplicate()
+	if only != "":
+		sets = [only]
 	var lit_crops: Array = []
 	var close_rows: Array = []
 	for i in sets.size():

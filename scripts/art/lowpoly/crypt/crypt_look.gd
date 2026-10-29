@@ -18,32 +18,41 @@ extends RefCounted
 
 const SETS: Array[String] = ["vault", "chapel"]
 
+## The two sets differ on colour, floor, light and seams, not just a shade of stone (the user, 2026-10-29: "I want both a
+## vault and chapel, but they are too similar to eachother"): the vault is warm black-brown wet stone, small rough stones
+## underfoot, candle pools in the near dark; the chapel is whitewashed, large pale slabs, a cool brighter ambient and pale
+## shafts of light falling from the church above (`shaft`). Both all but drop the hex seams, so a crypt does not read as
+## the game's usual grid.
 const LOOK := {
 	"vault": {
 		"title": "vault: under the mansion",
 		"above": "mansion",
-		"floor": Color(0.43, 0.39, 0.34), "floor_alt": Color(0.09, 0.08, 0.08), "floor_scale": 1.2,
-		"hall": Color(0.36, 0.33, 0.30),
-		"wall": Color(0.42, 0.37, 0.32), "wall_alt": Color(0.06, 0.05, 0.045),
-		"rough": 0.82, "spec": 0.22,
-		"seam": 0.55,
-		"ambient": Color(0.50, 0.50, 0.58), "ambient_k": 0.62, "key": 0.08, "key_col": Color(0.70, 0.76, 1.0), "fill": 0.06,
-		"background": Color(0.03, 0.025, 0.025),
+		"floor": Color(0.30, 0.23, 0.17), "floor_alt": Color(0.06, 0.045, 0.035), "floor_scale": 0.55,
+		"hall": Color(0.26, 0.20, 0.15),
+		"wall": Color(0.30, 0.23, 0.17), "wall_alt": Color(0.04, 0.03, 0.025),
+		"rough": 0.35, "spec": 0.55,
+		"seam": 0.08,
+		"ambient": Color(0.55, 0.45, 0.38), "ambient_k": 0.32, "key": 0.04, "key_col": Color(0.70, 0.76, 1.0), "fill": 0.03,
+		"background": Color(0.02, 0.015, 0.01),
+		"shafts": false,
 	},
 	"chapel": {
 		"title": "chapel: under the church",
 		"above": "church",
-		"floor": Color(0.55, 0.52, 0.46), "floor_alt": Color(0.2, 0.18, 0.16), "floor_scale": 1.6,
-		"hall": Color(0.47, 0.45, 0.41),
-		"wall": Color(0.62, 0.58, 0.50), "wall_alt": Color(0.16, 0.14, 0.12),
-		"rough": 0.85, "spec": 0.16,
-		"seam": 0.5,
-		"ambient": Color(0.50, 0.50, 0.58), "ambient_k": 0.52, "key": 0.08, "key_col": Color(0.74, 0.78, 1.0), "fill": 0.06,
-		"background": Color(0.035, 0.03, 0.03),
+		"floor": Color(0.80, 0.78, 0.72), "floor_alt": Color(0.50, 0.48, 0.44), "floor_scale": 2.8,
+		"hall": Color(0.74, 0.72, 0.67),
+		"wall": Color(0.88, 0.86, 0.80), "wall_alt": Color(0.58, 0.56, 0.52),
+		"rough": 0.9, "spec": 0.1,
+		"seam": 0.1,
+		"ambient": Color(0.62, 0.68, 0.86), "ambient_k": 0.4, "key": 0.08, "key_col": Color(0.74, 0.78, 1.0), "fill": 0.06,
+		"background": Color(0.05, 0.05, 0.06),
+		"shafts": true,
 		"church_wall": Color(0.70, 0.66, 0.58), "church_wall_alt": Color(0.24, 0.21, 0.18),
 		"church_floor": Color(0.80, 0.77, 0.70), "church_floor_alt": Color(0.42, 0.40, 0.40),
 	},
 }
+
+const SHAFT_COLOR := Color(0.80, 0.88, 1.0)
 
 
 static func look(set_name: String) -> Dictionary:
@@ -140,3 +149,46 @@ static func downlight(at_floor: Vector3, energy: float = 11.0) -> OmniLight3D:
 	l.light_specular = 0.2
 	l.shadow_enabled = false
 	return l
+
+
+## A pale shaft of light falling onto `at_floor` from a grating in the church floor above (the chapel set): a cool spot
+## straight down and a faint beam to see it by. Not an OmniLight3D, so it is not a candle pool.
+static func shaft(at_floor: Vector3, energy: float = 16.0) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Shaft"
+	root.position = at_floor
+	var l := SpotLight3D.new()
+	l.name = "ShaftLight"
+	l.position = Vector3(0, 7.0, 0)
+	l.rotation_degrees = Vector3(-90, 0, 0)
+	l.light_color = SHAFT_COLOR
+	l.light_energy = energy
+	l.spot_range = 9.0
+	l.spot_angle = 11.0
+	l.spot_attenuation = 0.6
+	l.spot_angle_attenuation = 1.6
+	l.light_specular = 0.1
+	l.shadow_enabled = false
+	root.add_child(l)
+	var beam := MeshInstance3D.new()
+	beam.name = "Beam"
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.45
+	cm.bottom_radius = 1.1
+	cm.height = 6.0
+	cm.radial_segments = 12
+	cm.cap_top = false
+	cm.cap_bottom = false
+	beam.mesh = cm
+	beam.position = Vector3(0, 3.0, 0)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.albedo_color = Color(SHAFT_COLOR.r, SHAFT_COLOR.g, SHAFT_COLOR.b, 0.08)
+	beam.material_override = m
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(beam)
+	return root
+

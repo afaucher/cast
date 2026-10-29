@@ -38,16 +38,16 @@ const SETS: Array[String] = ["vault", "chapel"]
 ## so a gate reads in the dark; the user, 2026-10-29: "they read _very_ dark when lit in the scene").
 const PALETTE := {
 	"vault": {
-		"stone": Color(0.37, 0.34, 0.31), "stone_dk": Color(0.20, 0.18, 0.17), "stone_lt": Color(0.50, 0.47, 0.42),
+		"stone": Color(0.32, 0.26, 0.20), "stone_dk": Color(0.16, 0.12, 0.09), "stone_lt": Color(0.44, 0.37, 0.29),
 		"iron": Color(0.12, 0.11, 0.12), "metal": Color(0.26, 0.24, 0.24),
 		"gate": Color(0.40, 0.36, 0.33), "gate_hi": Color(0.62, 0.55, 0.46), "cloth": Color(0.36, 0.10, 0.09),
 		"wax": Color(0.90, 0.84, 0.66), "niche": Color(0.08, 0.07, 0.07),
 	},
 	"chapel": {
-		"stone": Color(0.70, 0.66, 0.57), "stone_dk": Color(0.47, 0.44, 0.38), "stone_lt": Color(0.86, 0.83, 0.75),
+		"stone": Color(0.86, 0.84, 0.78), "stone_dk": Color(0.64, 0.62, 0.57), "stone_lt": Color(0.95, 0.94, 0.90),
 		"iron": Color(0.16, 0.15, 0.15), "metal": Color(0.74, 0.57, 0.27),
 		"gate": Color(0.36, 0.33, 0.31), "gate_hi": Color(0.80, 0.62, 0.30), "cloth": Color(0.32, 0.12, 0.38),
-		"wax": Color(0.98, 0.93, 0.80), "niche": Color(0.17, 0.14, 0.12),
+		"wax": Color(0.98, 0.93, 0.80), "niche": Color(0.30, 0.28, 0.27),
 	},
 }
 const BONE := Color(0.87, 0.82, 0.67)

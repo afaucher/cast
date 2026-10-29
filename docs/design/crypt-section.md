@@ -164,5 +164,14 @@ anything. The bones are a little weak."
   open top carries one more row of skulls. Asked what the white between the skull rows was (the long bones), the user:
   "Just skulls for now." The niches are rows of skulls only.
 
-The two sets: "I want both a vault and chapel, but they are too similar to eachother." Open: how to set them apart.
+The two sets: "I want both a vault and chapel, but they are too similar to eachother." They differed only in a shade of
+stone (the same floor, light, seams, layout and props), and both looked like the lair's flagstone rooms. Now
+(`CryptLook.LOOK`):
+- **Vault:** warm black-brown wet stone (low roughness, more specular), small rough stones underfoot, a very dark warm
+  ambient: the light is the candle pools. The user: "The vault is great. It really sells the dim lighting."
+- **Chapel:** whitewashed stone and pale large slabs, a cool ambient and pale shafts of light falling from gratings in the
+  church floor (`CryptLook.shaft`: a cool spot straight down and a faint beam) over the entry vault, the sarcophagi and
+  the end vault; the gallery stays dark. The first try was "too bright. But it is definitely more distinct", so the
+  ambient is about half (0.85 to 0.4) and the shafts stronger.
+- **Both:** the hex seam glow almost off (0.08, 0.1), so a crypt does not read as the game's usual grid.
 
