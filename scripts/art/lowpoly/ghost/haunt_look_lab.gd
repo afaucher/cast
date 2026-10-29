@@ -8,7 +8,7 @@ extends "res://scripts/art/lowpoly/ghost/ghost_look_lab.gd"
 ##
 ## PNGs, next to --shot (docs/design/haunt_look/):
 ##   armour.png          the armour dormant / guard / lurch: bright room and dark corner at 1:1, then the same at 2x
-##   skeleton.png        the skeleton in its niche / slumped / risen: the same columns
+##   skeleton.png        the skeleton slumped / risen: the same columns
 ##   ghost_hero.png      Wick and Rebar off / glass / spirit, a possessed skeleton on their left and a wisp on their right,
 ##                       bright room then dark corner, 1:1
 ##   ghost_hero_2x.png   the same at 2x
@@ -19,7 +19,7 @@ extends "res://scripts/art/lowpoly/ghost/ghost_look_lab.gd"
 const CLOSE_SIZE := 7.0
 const CLOSE_CROP := Vector2i(1680, 640)   ## the middle of a close-up's frame
 const ARMOUR_ROWS: Array[String] = ["armour_dormant", "armour_guard", "armour_lurch"]
-const SKELETON_ROWS: Array[String] = ["skeleton_niche", "skeleton_slumped", "skeleton_risen"]
+const SKELETON_ROWS: Array[String] = ["skeleton_slumped", "skeleton_risen"]
 const NICHE_YAW := HauntPiece.FACING
 const HEROES: Array[String] = ["wick", "rebar"]
 
@@ -38,7 +38,7 @@ func _run() -> void:
 	var both := [["1:1 game pixels", [LIGHT_NAMES["bright"], LIGHT_NAMES["dark"]]], ["2x", [LIGHT_NAMES["bright"], LIGHT_NAMES["dark"]]]]
 	# the armour and the skeleton: a row per pose; bright, dark at 1:1 then the same doubled
 	for test: Array in [["armour", ARMOUR_ROWS, "Suit of armour: dormant (a priced prop) and two possessed stances (rim, soft, pale blue)"],
-			["skeleton", SKELETON_ROWS, "Crypt skeleton: dormant in a niche, dormant slumped, risen (rim, soft, pale blue)"]]:
+			["skeleton", SKELETON_ROWS, "Crypt skeleton: dormant slumped, risen (rim, soft, pale blue)"]]:
 		var rows: Array = []
 		for kind: String in test[1]:
 			var row: Array[Image] = []
@@ -161,7 +161,7 @@ func _crop_at(tgt: Vector3) -> Image:
 func _lineup(path: String) -> void:
 	_clear()
 	var at: Vector3 = spots["bright"]
-	var items: Array[String] = ["wick", "rebar", "grunt", "armour_dormant", "armour_guard", "armour_lurch", "skeleton_niche",
+	var items: Array[String] = ["wick", "rebar", "grunt", "armour_dormant", "armour_guard", "armour_lurch",
 		"skeleton_slumped", "skeleton_risen", "wick:glass", "wick:spirit"]
 	var step := 1.75
 	var xs: Array[float] = []
@@ -213,10 +213,10 @@ func _put(it: String, p: Vector3) -> void:
 ## side and the back, at eye level, in a row each.
 func _turn(path: String) -> void:
 	var at := Vector3(70.0, 0.0, 70.0)   # (out past the room: nothing in the way)
-	var rows: Array = [["armour_dormant", "armour_guard", "armour_lurch"], ["skeleton_niche", "skeleton_slumped", "skeleton_risen"]]
+	var rows: Array = [["armour_dormant", "armour_guard", "armour_lurch"], ["skeleton_slumped", "skeleton_risen"]]
 	for r in rows.size():
 		_clear()
-		for i in 3:
+		for i in (rows[r] as Array).size():
 			for k in 3:
 				var hp := HauntPiece.make(str(rows[r][i]))
 				holder.add_child(hp)

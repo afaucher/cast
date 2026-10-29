@@ -66,8 +66,8 @@ func _check_pieces() -> void:
 		check(not ((p as Node) is Actor) and p.find_children("*", "CollisionObject3D").is_empty(), "%s: a cosmetic node" % kind)
 		check(p.model != null and p.model.triangle_count() > 0, "%s: built" % kind)
 		check((p.model is ArmourModel) if kind.begins_with("armour") else (p.model is GruntModel), "%s: the right model" % kind)
-		if kind.begins_with("skeleton"):
-			check(p.blockout != null, "%s: its blockout" % kind)
+		if kind == "skeleton_slumped":
+			check(p.blockout != null, "%s: its stone block" % kind)
 		if p.is_possessed():
 			check(p.is_in_group(GhostLook.GROUP), "%s: redressed by the ghost pickers" % kind)
 			for part: MeshInstance3D in p.model.parts.values():
