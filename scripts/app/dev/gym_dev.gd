@@ -476,7 +476,8 @@ static func experiments() -> Array:
 		["ghost_look", "Ghost look", GhostLook.LOOKS, GhostLook.look],
 		["ghost_strength", "Ghost strength", GhostLook.STRENGTHS, GhostLook.strength],
 		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour],
-		["hero_ghost", "Ghost form", GhostForm.TREATMENTS, GhostForm.treatment]]
+		["hero_ghost", "Ghost form", GhostForm.TREATMENTS, GhostForm.treatment],
+		["haunt_wisps", "Haunt wisps", HauntPiece.WISPS, HauntPiece.wisps]]
 
 
 ## The Go to buttons: the gym's places, or on a generated floor its landings.
@@ -507,6 +508,14 @@ func set_experiment(nm: String, value: String) -> void:
 			return
 		panel.set_experiment(nm, value)
 		_status("ghost form: %s" % value)
+		return
+	if nm == "haunt_wisps":   # (the haunt look test: the possessed hosts' wisps, HauntPiece.WISPS)
+		if not HauntPiece.WISPS.has(value):
+			return
+		HauntPiece.wisps = value
+		GhostLook.refresh_all()
+		panel.set_experiment(nm, value)
+		_status("haunt wisps: %s" % value)
 		return
 	if nm.begins_with("ghost_"):
 		if not GhostLook.pick(nm, value):

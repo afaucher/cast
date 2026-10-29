@@ -20,6 +20,15 @@ armour, a skeleton), and ghost form is a whole-body transform you cast on yourse
   follows the pose. The user: "Fine for now. I'll want to see it animated." To do: the possessed knight moving (today it
   holds a still stance; only the pulse moves).
 - **The risen skeleton wears the ghost too**, the same vapour body as the knight (asked, the user: "Yes").
+- **Against the wisp, something still didn't read** ("show me against the wisp again. Something still isn't reading
+  right"): the vapour body copies the host's hard plates, so it reads as glass, where the wisp is soft with trailing puffs.
+  The user: "I think we might want particles to give that wispy effect", "Show me some options", "I want to see it in
+  motion to make a final decision". Built as the gym's Experiments > **Haunt wisps** (`HauntPiece.WISPS`): **shell** (the
+  vapour body alone), **shell + seep** (the default: plus puffs seeping off the head and shoulders, drifting up and
+  fading), **seep** (the puffs alone) and **cloak** (puffs rising off every part, no vapour body). Puffs stay in the world
+  (not local), so they trail; in the gym the possessed pieces glide slowly to and fro to show it. Stills:
+  `close_wisps_0.png` to `close_wisps_3.png` in that order (`close_vs_wisp.png`, `vs_wisp_*.png`: the default against
+  the wisp). Undecided until the user has seen them move.
 - **The niche is dropped for now.** The single niche "doesn't read" (it looked like a free-standing box). A wall of stacked
   burial slots was tried next and also failed ("No, that isn't working"): at the game camera it still read as a chest in
   the middle of the room. The user: "Drop the niche for now." The dormant skeleton is slumped only, and the risen one stands

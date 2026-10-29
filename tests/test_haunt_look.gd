@@ -15,6 +15,7 @@ func setup() -> void:
 	_check_pieces()
 	_check_ghost_form()
 	_check_entries()
+	_check_wisps()
 	await _check_gym_spawns()
 	await _check_lab()
 	GhostLook.reset()
@@ -204,3 +205,18 @@ func _check_lab() -> void:
 		eq(holder.get_child_count(), 3, "%s: with a possessed skeleton and a wisp" % t)
 	lab.queue_free()
 	await frames(2)
+
+
+## The wisps options (HauntPiece.WISPS) show the vapour body and the seep or cloak emitters as named. (Whether puffs come
+## out is not checked here: headless, CPUParticles3D draw nothing; the lab's close_wisps_*.png show them.)
+func _check_wisps() -> void:
+	var was := HauntPiece.wisps
+	for w: String in HauntPiece.WISPS:
+		HauntPiece.wisps = w
+		var p := HauntPiece.make("armour_guard")
+		add_child(p)
+		check(p._shells.size() > 0 and p._shells[0].visible == w.begins_with("shell"), "%s: the vapour body shown or not" % w)
+		check(p._seep.size() > 0 and p._seep[0].emitting == w.ends_with("seep"), "%s: seep on or off" % w)
+		check(p._cloak.size() > 0 and p._cloak[0].emitting == (w == "cloak"), "%s: cloak on or off" % w)
+		p.free()
+	HauntPiece.wisps = was

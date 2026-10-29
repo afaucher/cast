@@ -68,6 +68,20 @@ func _run() -> void:
 	await _lineup("%s/lineup.png" % dir)
 	await _close("%s/close_armour.png" % dir, ARMOUR_ROWS, [], 2.7)
 	await _close("%s/close_skeleton.png" % dir, SKELETON_ROWS, [], 3.4)
+	# the possessed hosts against the free ghost they should match (the user, 2026-10-29: "show me against the wisp again")
+	var was := HauntPiece.wisps
+	for w in HauntPiece.WISPS.size():
+		HauntPiece.wisps = HauntPiece.WISPS[w]
+		await _close("%s/close_wisps_%d.png" % [dir, w], ["wisp", "armour_guard", "skeleton_risen", "wisp"], [], 2.6, 120)   # (2 s: the puffs fill in)
+	HauntPiece.wisps = was
+	await _close("%s/close_vs_wisp.png" % dir, ["wisp", "armour_guard", "skeleton_risen", "wisp"], [], 2.6)
+	for light: String in ["bright", "dark"]:
+		_clear()
+		var at: Vector3 = spots[light]
+		var items: Array[String] = ["wisp", "armour_guard", "skeleton_risen"]
+		for i in items.size():
+			_put(items[i], at + RIGHT * 1.9 * (float(i) - 1.0))
+		save_shot(await _crop_at(at + Vector3(0, 0.9, 0)), "%s/vs_wisp_%s.png" % [dir, light])
 	await _close("%s/close_hero.png" % dir, [], ["wick:off", "wick:glass", "wick:spirit", "rebar:off", "rebar:glass", "rebar:spirit"], 1.8)
 	GhostLook.reset()
 	GhostForm.clock = -1.0
@@ -201,6 +215,13 @@ func _put(it: String, p: Vector3) -> void:
 		m.rotation_degrees = Vector3(0, rad_to_deg(atan2(-face.x, -face.z)), 0)
 		if it.contains(":"):
 			GhostForm.apply(m, it.get_slice(":", 1))
+	elif it == "wisp":
+		var wi := GhostBody.make("wisp")
+		wi.drift = false
+		holder.add_child(wi)
+		var dp := wi.drift_point(WISP_T)
+		wi.position = p - Vector3(dp.x, 0.0, dp.z)
+		wi.pose_wisp(WISP_T)
 	else:
 		var hp := HauntPiece.make(it)
 		holder.add_child(hp)
@@ -229,13 +250,13 @@ func _turn(path: String) -> void:
 
 
 ## A close-up at the game's angle (size CLOSE_SIZE): `pieces` or `heroes` in a row `step` apart, in the bright room.
-func _close(path: String, pieces: Array, heroes: Array, step: float) -> void:
+func _close(path: String, pieces: Array, heroes: Array, step: float, settle: int = 6) -> void:
 	_clear()
 	var at: Vector3 = spots["bright"]
 	var items: Array = pieces + heroes
 	for i in items.size():
 		_put(str(items[i]), at + RIGHT * step * (float(i) - (items.size() - 1) * 0.5))
 	aim(GAME_YAW, GAME_PITCH, CLOSE_SIZE, at + Vector3(0, 0.9, 0))
-	var img := await grab()
+	var img := await grab(settle)
 	img.convert(Image.FORMAT_RGBA8)
 	save_shot(img.get_region(Rect2i(img.get_width() / 2 - CLOSE_CROP.x / 2, img.get_height() / 2 - CLOSE_CROP.y / 2 + 30, CLOSE_CROP.x, CLOSE_CROP.y)), path)

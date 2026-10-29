@@ -159,6 +159,7 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				GameWorld.root.add_child(hp)
 				hp.global_position = Hex.to_world(c, _level(map, c))
 				hp.rotation_degrees.y = HauntPiece.FACING if key.begins_with("skeleton") else GHOST_YAW
+				hp.pace = true
 				out.append(hp)
 	return out
 

@@ -41,8 +41,42 @@ var base: ShaderMaterial          ## a possessed piece's ghost body (shared by i
 var phase := 0.0
 var blockout: MeshInstance3D      ## the slumped skeleton's stone block (null otherwise)
 var vapour: ShaderMaterial        ## a possessed piece's ghost body round the host (null when dormant)
+var puff: ShaderMaterial          ## its wisps' puffs
+var pace := false                 ## the gym: a possessed piece glides slowly to and fro, so its wisps trail in motion
+var _shells: Array[MeshInstance3D] = []
+var _seep: Array[CPUParticles3D] = []
+var _cloak: Array[CPUParticles3D] = []
+var _home := Vector3.ZERO
+var _t := 0.0
 
 static var _vapour_shader: Shader
+static var _puff_shader: Shader
+static var _puff_mesh: Mesh
+
+## The ghost's wisps on a possessed host, options to compare (the user, 2026-10-29: "I think we might want particles to
+## give that wispy effect", "Show me some options", "I want to see it in motion to make a final decision"):
+##   shell          the vapour body alone (no particles)
+##   shell + seep   the vapour body, and puffs seeping off the head and shoulders, drifting up and fading
+##   seep           the puffs alone (no vapour body)
+##   cloak          no vapour body: puffs rising off every part, a moving cloud the shape of the host
+const WISPS: Array[String] = ["shell", "shell + seep", "seep", "cloak"]
+static var wisps := "shell + seep"
+
+const PUFF_SHADER := """
+shader_type spatial;
+render_mode unshaded, shadows_disabled, depth_draw_never, blend_mix, cull_back;
+
+uniform vec4 ghost_color : source_color = vec4(0.70, 0.86, 1.0, 1.0);
+uniform float alpha = 0.3;
+uniform float glow = 1.0;
+
+void fragment() {
+	float ndv = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
+	float edge = pow(1.0 - ndv, 1.4);
+	ALBEDO = ghost_color.rgb * glow * (0.85 + 0.5 * edge);
+	ALPHA = clamp(alpha * COLOR.a * (0.45 + 0.9 * edge), 0.0, 1.0);
+}
+"""
 
 
 static func make(k: String) -> HauntPiece:
@@ -64,6 +98,15 @@ func _ready() -> void:
 	if GameWorld.fx_rng != null:
 		phase = GameWorld.fx_rng.randf_range(0.0, TAU)
 	refresh()
+
+
+func _process(delta: float) -> void:
+	if not pace or not is_possessed():
+		return
+	if _t == 0.0:
+		_home = position
+	_t += delta
+	position = _home + transform.basis.x.normalized() * sin(_t * 0.6) * 1.4
 
 
 func _build() -> void:
@@ -100,6 +143,7 @@ func _build() -> void:
 		if model is GruntModel:
 			model._mat = base
 		_add_vapour()
+		_add_wisps()
 
 
 ## Redress a possessed piece for GhostLook's strength and colour as they are now, always in the rim look.
@@ -119,6 +163,19 @@ func refresh() -> void:
 		vapour.set_shader_parameter("pulse", GhostLook.PULSE)
 		vapour.set_shader_parameter("phase", phase)
 		vapour.set_shader_parameter("clock", GhostLook.clock)
+	if puff != null:
+		var st2 := GhostLook.strength_now()
+		puff.set_shader_parameter("ghost_color", GhostLook.color_now())
+		puff.set_shader_parameter("alpha", float(st2["wisp"]) * 1.6)
+		puff.set_shader_parameter("glow", float(st2["glow"]))
+		for v in _shells:
+			v.visible = wisps.begins_with("shell")
+		for e in _seep:
+			e.visible = wisps.ends_with("seep")
+			e.emitting = e.visible
+		for e in _cloak:
+			e.visible = wisps == "cloak"
+			e.emitting = e.visible
 
 
 ## The ghost's body round a possessed host: a copy of each part (not the plinth), grown round its own middle, as a child of
@@ -140,6 +197,68 @@ func _add_vapour() -> void:
 		v.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		v.transform = Transform3D(Basis.from_scale(Vector3.ONE * GHOST_GROW), c - c * GHOST_GROW)
 		p.add_child(v)
+		_shells.append(v)
+
+
+## The wisps' emitters (refresh shows the ones WISPS picks): seep off the head and the top of the body; cloak off every
+## part but the plinth. Puffs are left behind in the world as the host moves (not local), so they trail.
+func _add_wisps() -> void:
+	if _puff_shader == null:
+		_puff_shader = Shader.new()
+		_puff_shader.code = PUFF_SHADER
+		_puff_mesh = LowPoly.boulder(Vector3(0.1, 0.09, 0.1), 0, 0.12, Color.WHITE, 611, 0.0).to_mesh(0.0)
+	puff = ShaderMaterial.new()
+	puff.shader = _puff_shader
+	var head := model.parts.get("head") as MeshInstance3D
+	var body := model.parts.get("body") as MeshInstance3D
+	if head != null:
+		var hb := head.mesh.get_aabb()
+		_seep.append(_emitter(head, hb.get_center() + Vector3(0, hb.size.y * 0.25, 0), hb.size * 0.35, 8, 1.8, 0.35, 1.0))
+	if body != null:
+		var bb := body.mesh.get_aabb()
+		var top := Vector3(bb.get_center().x, bb.end.y - 0.05, bb.get_center().z)
+		_seep.append(_emitter(body, top, Vector3(bb.size.x * 0.45, 0.04, bb.size.z * 0.35), 10, 1.8, 0.3, 1.0))
+	for p: MeshInstance3D in model.parts.values():
+		if p.name == "stand":
+			continue
+		var ab := p.mesh.get_aabb()
+		var n := clampi(int(ab.size.length() * 5.0), 2, 7)
+		_cloak.append(_emitter(p, ab.get_center(), ab.size * 0.5, n, 1.2, 0.15, 0.8))
+
+
+func _emitter(parent: Node3D, at: Vector3, box: Vector3, amount: int, life: float, speed: float, size: float) -> CPUParticles3D:
+	var e := CPUParticles3D.new()
+	e.name = "Wisps"
+	var m := _puff_mesh.duplicate() as ArrayMesh
+	m.surface_set_material(0, puff)
+	e.mesh = m
+	e.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	e.amount = amount
+	e.lifetime = life
+	e.preprocess = life
+	e.local_coords = false
+	e.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	e.emission_box_extents = box
+	e.direction = Vector3.UP
+	e.spread = 30.0
+	e.gravity = Vector3(0, 0.25, 0)
+	e.initial_velocity_min = speed * 0.5
+	e.initial_velocity_max = speed
+	e.scale_amount_min = size * 0.6
+	e.scale_amount_max = size
+	var grow := Curve.new()
+	grow.max_value = 2.0
+	grow.add_point(Vector2(0.0, 0.5))
+	grow.add_point(Vector2(1.0, 1.4))
+	e.scale_amount_curve = grow
+	var fade := Gradient.new()
+	fade.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	e.color_ramp = fade
+	e.position = at
+	e.emitting = true
+	parent.add_child(e)
+	return e
 
 
 func _add_blockout(soup: LowPoly.Soup, at: Vector3) -> MeshInstance3D:
