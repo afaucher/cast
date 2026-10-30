@@ -382,15 +382,17 @@ func _closeups(dir: String) -> void:
 ## the top, `rows` the images (row-major, each `crop`, cut to `cw` wide round its middle; `zoom` 2: the middle half,
 ## doubled), laid out in window pixels and grabbed.
 ## The procession (NecroProcession) round the room's middle in six moments of its first raise, at the game camera, the
-## whole loop in frame.
+## whole loop in frame, in a candle-dark room (the downlight off, the key, fill and ambient low: the haunted mansion's
+## light), where the acolytes' lanterns light the floor round them.
 func _procession(dir: String) -> void:
-	const CROP_P := Vector2i(600, 440)
+	const CROP_P := Vector2i(620, 460)
 	_clear()
 	var pr := NecroProcession.new()
 	holder.add_child(pr)
 	pr.position = spots["middle"]
 	pr.set_process(false)
 	aim(GAME_YAW, GAME_PITCH, GAME_SIZE, (spots["middle"] as Vector3) + Vector3(0, 0.3, 0))
+	var was := _dim(true, {})
 	await wait_frames(2)
 	var shots: Array[Image] = []
 	var step := 1.0 / 60.0
@@ -408,6 +410,9 @@ func _procession(dir: String) -> void:
 		while not want.call() and guard < 6000:
 			pr.advance(step)
 			guard += 1
+		# the motes restart where their owners are now (the jump above ran no frames, so old ones hang where they began)
+		for m in pr.find_children("*", "CPUParticles3D", true, false):
+			(m as CPUParticles3D).restart()
 		# a few rendered frames so the walkers' strides follow their speed
 		for i in 8:
 			pr.advance(step)
@@ -417,8 +422,25 @@ func _procession(dir: String) -> void:
 		shots.append(img.get_region(Rect2i(img.get_width() / 2 - CROP_P.x / 2, img.get_height() / 2 - CROP_P.y / 2, CROP_P.x, CROP_P.y)))
 	var rows: Array = [shots.slice(0, 3), shots.slice(3, 6)]
 	var blocks := [["", ["1 walking  /  4 on its feet", "2 stops, arms up  /  5 to the back", "3 the body rises  /  6 walking on"]]]
-	await _sheet("%s/procession.png" % dir, "The procession at the game camera (size 24, 1:1; gym: necro:procession)  -  docs/design/necro-look.md",
+	_dim(false, was)
+	await _sheet("%s/procession.png" % dir, "The procession at the game camera (size 24, 1:1), candle-dark  -  docs/design/necro-look.md",
 			["", ""], blocks, rows, CROP_P, CROP_P.x)
+
+
+## Dim the room to candle-dark (`on`), or put back what `was` returned.
+func _dim(on: bool, was: Dictionary) -> Dictionary:
+	var out := {}
+	for ch in get_children():
+		if ch is WorldEnvironment:
+			var env := (ch as WorldEnvironment).environment
+			out["ambient"] = env.ambient_light_energy
+			env.ambient_light_energy = 0.3 if on else float(was.get("ambient", env.ambient_light_energy))
+		elif ch is Light3D and ch.name in ["KeyLight", "FillLight", "Downlight"]:
+			var l := ch as Light3D
+			out[ch.name] = l.light_energy
+			var dim := {"KeyLight": 0.15, "FillLight": 0.05, "Downlight": 0.0}
+			l.light_energy = float(dim[ch.name]) if on else float(was.get(ch.name, l.light_energy))
+	return out
 
 
 func _sheet(path: String, title: String, row_names: Array, blocks: Array, rows: Array, crop: Vector2i, cw: int, zoom: int = 1) -> void:

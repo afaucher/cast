@@ -52,6 +52,14 @@ procession". Cosmetic like the rest of this test: `NecroProcession` (`scripts/ar
   the body pushes up on its arms, stands, and shambles to the back of the file, which grows.
 - At each new lap the zombies past the first two fall where they walk: the gym's stand-in for the crew knocking them
   down, so the next lap has bodies to raise again.
+- The user's first read (2026-10-29), on the stills (not the motion): "Too cramped: the walkers are 1.15 apart and
+  overlap at the game camera, so the file reads as a clump. I'd space them wider." "Too small: a leader and two zombies
+  doesn't read as a procession. It could start with four, maybe with a second acolyte or a carried lantern." "the acolyte
+  needs something to make it stand out more. It is too bland." So: walkers 1.8 apart on a bigger loop (12 by 7.6), four
+  zombies, a second acolyte bringing up the rear (it waits while a raised zombie joins, and catches up when the file
+  shortens), and the cowl's lantern now lights the floor round it in the ghost colour (`LanternLight`, 5.0 over 5 units)
+  with motes drifting off it: a pool of cold light walking with each acolyte. The sheet is now candle-dark (the haunted
+  mansion's light), where the pools show; in a bright room they are lost.
 - Not built: the fight (the acolyte hanging back to raise what falls, fleeing when hurt), being interrupted by a hit, a
   route through real rooms, other monsters in the file.
 

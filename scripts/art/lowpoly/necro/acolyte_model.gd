@@ -38,6 +38,7 @@ const WOOD := Color(0.26, 0.18, 0.13)
 const WOOD_DARK := Color(0.17, 0.12, 0.09)
 const IRON := Color(0.26, 0.27, 0.30)
 const IRON_LIGHT := Color(0.40, 0.41, 0.45)
+const LANTERN := Vector3(0.22, 0.76, 0)           ## the cowl's lantern on its staff (the prop's space)
 const VOID := Color(0.04, 0.035, 0.04)
 const SHOE := Color(0.12, 0.10, 0.09)
 
@@ -76,7 +77,25 @@ func _build() -> void:
 		var aura := _add_part("aura_" + side, _aura_soup(s), arm, Vector3(0, -ARM_LEN, -0.02))
 		aura.scale = Vector3.ONE * 0.001
 		_add_part("leg_" + side, _leg_soup(s), self, Vector3(LEG_X * s, BODY_Y - 0.05, 0.0))
-	_add_part("prop", _censer_soup() if mask else _staff_soup(), parts["arm_r"] as Node3D, Vector3(0, -ARM_LEN + 0.02, -0.02))
+	var prop := _add_part("prop", _censer_soup() if mask else _staff_soup(), parts["arm_r"] as Node3D, Vector3(0, -ARM_LEN + 0.02, -0.02))
+	if not mask:
+		# the lantern lights the floor round it in the ghost colour, with a few motes drifting off it: a pool of cold light
+		# that walks with the acolyte, so it stands out at the game camera (the user, 2026-10-29: "the acolyte needs
+		# something to make it stand out more. It is too bland.")
+		var l := OmniLight3D.new()
+		l.name = "LanternLight"
+		l.position = LANTERN
+		l.light_color = NecroLook.glow_colour()
+		l.light_energy = 5.0
+		l.omni_range = 5.0
+		l.omni_attenuation = 1.1
+		l.light_specular = 0.1
+		l.shadow_enabled = false
+		prop.add_child(l)
+		var m := NecroLook.motes(8, 0.14, 0.45, 0.03)
+		m.name = "LanternMotes"
+		m.position = LANTERN
+		prop.add_child(m)
 
 
 func _robe() -> Color:
@@ -223,14 +242,14 @@ func _staff_soup() -> LowPoly.Soup:
 	for y: float in [0.3, 0.62]:
 		s.merge(LowPoly.cylinder(0.045, 0.045, 0.04, 6, IRON, 1027, 0.0), LowPoly.at(Vector3(0.0, y, 0)))
 	# the lantern: an iron cap, four bars and a base round a glowing core
-	var c := Vector3(0.22, 0.76, 0)
+	var c := LANTERN
 	limb(s, Vector3(0.22, 0.90, 0), c + Vector3(0, 0.10, 0), 0.008, 0.008, 3, IRON, 1029)
 	s.merge(LowPoly.cylinder(0.09, 0.04, 0.05, 6, IRON_LIGHT, 1030, 0.0), LowPoly.at(c + Vector3(0, 0.09, 0)))
 	s.merge(LowPoly.cylinder(0.08, 0.08, 0.03, 6, IRON, 1031, 0.0), LowPoly.at(c - Vector3(0, 0.09, 0)))
 	for i in 4:
 		var a := TAU * float(i) / 4.0 + 0.4
 		limb(s, c + Vector3(cos(a) * 0.075, -0.08, sin(a) * 0.075), c + Vector3(cos(a) * 0.075, 0.08, sin(a) * 0.075), 0.01, 0.01, 3, IRON, 1032 + i)
-	blob(s, c, Vector3(0.06, 0.075, 0.06), NecroLook.glow(1.2), 1036, 0.15)
+	blob(s, c, Vector3(0.07, 0.085, 0.07), NecroLook.glow(1.4), 1036, 0.15)
 	return s
 
 
