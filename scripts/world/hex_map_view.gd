@@ -54,12 +54,13 @@ var pool_view: PoolView = null   ## water, coping, foam, ladders, gantries of th
 var seam_gain := 1.0
 var seam_near_gain := 1.0
 var seam_near_range := 0.0
-## WALL DEPTH (look-dev, docs/design/wall-depth.md; off in the game until the user decides): the material shader's walls
+## WALL DEPTH (docs/design/wall-depth.md; on in the game, the user's call 2026-10-29): the material shader's walls
 ## get rough ashlar courses locked to the hex grid, per-stone bevels, depth in albedo and AO, a coping band and slab-cut caps,
 ## and the wall caps close the seam round them (flat to WALL_TOP_SCALE, a bevel out to the full hex and down to the face's
 ## top). A shader uniform, so it flips live (`set_wall_depth`): the mesh carries both shapes (CUSTOM0, Batch.custom).
-## `wall_depth_default` is what a new view starts with (the gym's Experiments row sets it).
-static var wall_depth_default := false
+## `wall_depth_default` is what a new view starts with (the gym's Experiments row sets it): on, everywhere in the game (the
+## user, 2026-10-29, on the second pass: "The second pass is great. This is much better.", then "Everywhere").
+static var wall_depth_default := true
 var wall_depth := wall_depth_default
 
 static var _tex_cache: Dictionary = {}

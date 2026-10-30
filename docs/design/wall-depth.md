@@ -4,7 +4,7 @@ The user, on the crypt section lab (`crypt-section.md`): "The bricks read as a f
 better align the texture lines with the hex grid such that the transition to the 'top' layer is smoother."
 
 A research pass read `HexMapView` and found why (below); the user picked four fixes, A to E in its terms, and all four are
-built behind one switch. **Off in the game** (today's look) until the user decides; **on in the crypt lab**.
+built behind one switch. **On everywhere in the game** (the user's call, 2026-10-29); the gym can turn it off.
 
 ## What was wrong
 - The rough stone blocks (wall pattern 21) had 0.8 courses against 0.5 levels, from absolute height, with a random block
@@ -85,7 +85,9 @@ reads as rough stone, not brick; and fix the vault's outlines". Fix 1 became rou
   only, it draws the walls' outlines, which is what is kept. A first strength (0.012 linear) was too faint at 1:1; it is
   about 0.02 now.
 
-The user's read of the second pass (2026-10-29): "The second pass is great. This is much better."
+The user's read of the second pass (2026-10-29): "The second pass is great. This is much better." Asked whether to turn it
+on for every wall in the game or only in crypts: "Everywhere". So `HexMapView.wall_depth_default` is on; the gym's
+"Wall depth" row still turns it off to compare.
 
 ## Open questions
 - **The vault's outline strength.** About 0.02 linear, cool grey: the walls' silhouettes read at 1:1 in the vault, faint.

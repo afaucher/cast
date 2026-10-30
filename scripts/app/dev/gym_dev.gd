@@ -28,7 +28,7 @@ extends Node
 ##     (`generated`: the scene reloads on that floor, solo, with this panel kept; "gym" comes back). On a generated floor a
 ##     Landings pick rebuilds it at once, and the Go to buttons are its landings. The elevator goes down to the next
 ##     generated floor as ever
-##   - the WALL DEPTH look (docs/design/wall-depth.md, look-dev): the "Wall depth" picker (off, the default / on) flips
+##   - the WALL DEPTH look (docs/design/wall-depth.md): the "Wall depth" picker (off / on, the default) flips
 ##     HexMapView's wall depth uniform live on the terrain, and keeps the choice for the floors built after
 ##   - the GHOST LOOK test (docs/design/ghost-look.md, look-dev only): the Ghosts spawns (a skeleton, a suit of armour, a
 ##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost

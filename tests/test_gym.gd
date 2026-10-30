@@ -382,11 +382,12 @@ func _check_game() -> void:
 	GymDev.generated = false
 	DungeonGen.landings = true
 	g.set("scene_changer", Callable())
-	# the walls' depth look (docs/design/wall-depth.md, look-dev): a picker, off by default, live on the terrain's uniform
+	# the walls' depth look (docs/design/wall-depth.md): a picker, on by default (the game's look), live on the terrain's uniform
 	var depth_pick := gym.panel.experiment("wall_depth")
 	var terrain := g.get_node_or_null("Terrain") as HexMapView
 	if check(depth_pick != null and terrain != null, "the panel has the Wall depth picker (and the game its terrain)"):
-		eq(depth_pick.get_item_text(depth_pick.selected), "off", "wall depth off by default")
+		eq(depth_pick.get_item_text(depth_pick.selected), "on", "wall depth on by default")
+		check(terrain.wall_depth, "the game's terrain is built with it on")
 		var walls: Array[ShaderMaterial] = []
 		var mesh := terrain.mesh_instance.mesh
 		for si in mesh.get_surface_count():
@@ -394,15 +395,15 @@ func _check_game() -> void:
 			if sm != null and sm.get_shader_parameter("wall_depth") != null:
 				walls.append(sm)
 		check(not walls.is_empty(), "the gym's floor and wall materials carry the wall depth uniform")
-		depth_pick.item_selected.emit(1)
-		check(HexMapView.wall_depth_default and terrain.wall_depth, "picking on turns it on (and for the floors built after)")
+		depth_pick.item_selected.emit(0)
+		check(not HexMapView.wall_depth_default and not terrain.wall_depth, "picking off turns it off (and for the floors built after)")
 		for sm in walls:
-			eq(float(sm.get_shader_parameter("wall_depth")), 1.0, "the uniform follows, live")
-		gym.set_experiment("wall_depth", "off")
-		check(not HexMapView.wall_depth_default, "and off again")
+			eq(float(sm.get_shader_parameter("wall_depth")), 0.0, "the uniform follows, live")
+		gym.set_experiment("wall_depth", "on")
+		check(HexMapView.wall_depth_default, "and on again")
 		for sm in walls:
-			eq(float(sm.get_shader_parameter("wall_depth")), 0.0, "the uniform follows back")
-	HexMapView.wall_depth_default = false
+			eq(float(sm.get_shader_parameter("wall_depth")), 1.0, "the uniform follows back")
+	HexMapView.wall_depth_default = true
 	# elbow IK (docs/design/animation-research.md, "Elbow IK study"): settled 2026-10-25, so no picker; the three heroes bend
 	# their elbows, the monsters keep their one-piece arms
 	check(gym.panel.experiment("elbows") == null, "no Elbows picker any more")

@@ -51,7 +51,7 @@ var crew := {}                      ## "wick", "rebar", "grunt", "grunt2" -> the
 var lights: Array[Light3D] = []     ## the candle lights and downlights (tests count them)
 var labels: Array[Node3D] = []      ## the plan's names (hidden in the game views)
 var display: Array[Node3D] = []     ## the display room's pieces, in props.png's column order
-## The walls' depth look (HexMapView.wall_depth, docs/design/wall-depth.md): on here, off in the game until the user decides.
+## The walls' depth look (HexMapView.wall_depth, docs/design/wall-depth.md): on, as in the game.
 var wall_depth := true
 
 
