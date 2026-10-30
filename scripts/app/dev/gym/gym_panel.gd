@@ -22,7 +22,8 @@ const FONT_SIZE := 12
 const COLUMNS := 3
 const COUNTS: Array[int] = [1, 5, 10]
 const TITLES := {"monster": "Monsters", "dummy": "Dummies", "prop": "Props", "hazard": "Hazards", "staff": "Staff",
-	"pickup": "Components", "gate": "Gates", "decor": "Decor", "ghost": "Ghosts (look test)", "haunt": "Haunts (look test)"}
+	"pickup": "Components", "gate": "Gates", "decor": "Decor", "ghost": "Ghosts (look test)", "haunt": "Haunts (look test)",
+	"necro": "Necro (look test)"}
 const FOLDED: Array[String] = ["decor", "prop", "goto"]   ## groups that start folded
 
 var stats_label: Label

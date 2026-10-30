@@ -17,13 +17,17 @@ extends RefCounted
 ##            cosmetic nodes (no AI, no combat, nothing networked) that the panel's Ghost look / strength / colour redress
 ##   haunt    the haunt look test (docs/design/haunt-look.md, LOOK-DEV ONLY): HauntPiece's suit of armour and crypt skeleton,
 ##            dormant and possessed (plain cosmetic nodes like the ghosts; a skeleton's niche or block faces the camera)
+##   necro    the necro look test (docs/design/necro-look.md, LOOK-DEV ONLY): NecroBody's zombies, acolytes and grimoires in
+##            each pose, cosmetic like the ghosts (the panel's Necro rim / Grimoire / Ghost colour redress them)
+##            and "procession": NecroProcession, an acolyte leading zombies round a loop and raising the downed
 ## Entries: {id, group, key (the registry key), label, skip ("" or why it has no button)}. spawn() puts `n` of one round a
 ## world point on valid cells and returns what it made. Dev only: solo, so every spawn is this machine's own (GameWorld).
 
 const DUMMY_HP := 5000.0
 const PROP_YAW := 45.0             ## a free-standing prop faces the camera
 const GHOST_YAW := -120.0          ## a ghost's host (its front is -Z) turned three-quarters to the camera
-const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost", "haunt"]
+const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost", "haunt",
+		"necro"]
 
 
 ## Every entry, in GROUPS order and each registry's own order.
@@ -59,6 +63,9 @@ static func entries() -> Array[Dictionary]:
 		out.append(_e("ghost", kind, "ghost: " + kind))
 	for kind: String in HauntPiece.KINDS:
 		out.append(_e("haunt", kind, "haunt: " + kind.replace("_", " ")))
+	for r: Array in NecroBody.entries():
+		out.append(_e("necro", NecroBody.key_of(r[0], r[1], r[2]), NecroBody.label_of(r[0], r[1], r[2])))
+	out.append(_e("necro", "procession", "procession (acolyte and zombies)"))
 	return out
 
 
@@ -161,6 +168,20 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				hp.rotation_degrees.y = HauntPiece.FACING if key.begins_with("skeleton") else GHOST_YAW
 				hp.pace = true
 				out.append(hp)
+		"necro":
+			if key == "procession":
+				var pr := NecroProcession.new()
+				GameWorld.root.add_child(pr)
+				pr.global_position = at
+				out.append(pr)
+				return out
+			var f := key.split(":")
+			for c in cells_near(map, at, n, 3 if f[0] == "grimoire" else 1):
+				var b := NecroBody.make(f[0], f[1], f[2])
+				GameWorld.root.add_child(b)
+				b.global_position = Hex.to_world(c, _level(map, c))
+				b.rotation_degrees.y = -135.0 if f[0] == "grimoire" else GHOST_YAW
+				out.append(b)
 	return out
 
 
