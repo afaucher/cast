@@ -202,6 +202,8 @@ wooden crates, stairs stay warm planks, cliff sides keep their slate bands (heig
   risers included; the material shader maps walls in world units from the face normal). Cap outlines of 4 or 5
   kites (a room's 120-degree corner seen from the wall side, an inside corner seen from the floor) are concave, so
   caps and seams fan from the hex center; all 63 wall masks are checked.
+- **Wall depth** (on everywhere in the game, the user's call 2026-10-29): grid-locked stone courses, per-stone bevels, a coping and slab caps, and
+  the seam round wall caps closed, behind one shader switch (`HexMapView.wall_depth`, the gym's "Wall depth"): `wall-depth.md`.
 - **Dev flags:** `--to-theme <id> --zoom 11` (any theme), `--to-corridor` (the middle of the floor's corridors),
   `--to-landing [N] --focus landing` (a hallway landing and its set piece, `hallways.md`).
 

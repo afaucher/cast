@@ -20,14 +20,18 @@ extends RefCounted
 ##   necro    the necro look test (docs/design/necro-look.md, LOOK-DEV ONLY): NecroBody's zombies, acolytes and grimoires in
 ##            each pose, cosmetic like the ghosts (the panel's Necro rim / Grimoire / Ghost colour redress them)
 ##            and "procession": NecroProcession, an acolyte leading zombies round a loop and raising the downed
+##   crypt    the crypt and ectoplasm look tests (LOOK-DEV ONLY, cosmetic nodes, nothing networked): an ectoplasm puddle per
+##            EctoplasmLook variant (docs/design/ectoplasm-look.md; plus a drip on a wall within HAUNT_WALL) and the crypt's
+##            pieces, CryptProps.GYM_KINDS (docs/design/crypt-section.md; an ossuary goes against a wall within HAUNT_WALL)
 ## Entries: {id, group, key (the registry key), label, skip ("" or why it has no button)}. spawn() puts `n` of one round a
 ## world point on valid cells and returns what it made. Dev only: solo, so every spawn is this machine's own (GameWorld).
 
 const DUMMY_HP := 5000.0
 const PROP_YAW := 45.0             ## a free-standing prop faces the camera
 const GHOST_YAW := -120.0          ## a ghost's host (its front is -Z) turned three-quarters to the camera
+const HAUNT_WALL := 3.0            ## a crypt spawn this near a wall face also dresses the wall (a drip, an ossuary)
 const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost", "haunt",
-		"necro"]
+		"necro", "crypt"]
 
 
 ## Every entry, in GROUPS order and each registry's own order.
@@ -66,6 +70,10 @@ static func entries() -> Array[Dictionary]:
 	for r: Array in NecroBody.entries():
 		out.append(_e("necro", NecroBody.key_of(r[0], r[1], r[2]), NecroBody.label_of(r[0], r[1], r[2])))
 	out.append(_e("necro", "procession", "procession (acolyte and zombies)"))
+	for v: String in EctoplasmLook.VARIANTS:
+		out.append(_e("crypt", "ecto_" + v, "ecto: " + v))
+	for kind: String in CryptProps.GYM_KINDS:
+		out.append(_e("crypt", "crypt_" + kind, "crypt: " + kind))
 	return out
 
 
@@ -182,7 +190,54 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				b.global_position = Hex.to_world(c, _level(map, c))
 				b.rotation_degrees.y = -135.0 if f[0] == "grimoire" else GHOST_YAW
 				out.append(b)
+		"crypt":
+			for c in cells_near(map, at, n, 1):
+				out.append_array(_haunt(map, key, Hex.to_world(c, _level(map, c))))
 	return out
+
+
+## One haunt look-test piece at floor point `p` (cosmetic, under the world): an ectoplasm puddle (and a drip on the nearest
+## wall face within HAUNT_WALL), or a crypt piece (an ossuary backs onto that wall face when there is one; the rest face
+## the camera). Seeds from GameWorld.fx_rng (looks only).
+static func _haunt(map: HexMap, key: String, p: Vector3) -> Array[Node]:
+	var out: Array[Node] = []
+	var seed_value := 1 + GameWorld.fx_rng.randi() % 9973
+	var wall := map.nearest_wall(p, HAUNT_WALL)
+	var node: Node3D
+	if key.begins_with("ecto_"):
+		var v := key.trim_prefix("ecto_")
+		node = EctoplasmLook.puddle(v, 0.9, seed_value)
+		GameWorld.root.add_child(node)
+		node.global_position = p
+		out.append(node)
+		if not wall.is_empty():
+			# the drip runs down from just under the wall's top (the game's walls are 1.5 high; the labs' are 3)
+			var pt: Vector2 = wall["point"]
+			var nrm: Vector2 = wall["normal"]
+			var top := map.ground_height(Vector3(pt.x - nrm.x * 0.3, 0.0, pt.y - nrm.y * 0.3))
+			var h := clampf((top if not is_nan(top) else p.y + 2.4) - p.y - 0.15, 0.6, 2.2)
+			var d := EctoplasmLook.drip(v, h, seed_value)
+			GameWorld.root.add_child(d)
+			_on_wall(d, wall, p.y)
+			out.append(d)
+		return out
+	var kind := key.trim_prefix("crypt_")
+	node = CryptProps.build(kind, {"seed": seed_value})
+	GameWorld.root.add_child(node)
+	node.global_position = p
+	node.rotation_degrees.y = PROP_YAW
+	if kind == "ossuary" and not wall.is_empty():
+		_on_wall(node, wall, p.y)
+	out.append(node)
+	return out
+
+
+## Stand `node` (its back on local z = 0, its front +Z) on a wall face from HexMap.nearest_wall, at floor height `y`.
+static func _on_wall(node: Node3D, wall: Dictionary, y: float) -> void:
+	var pt: Vector2 = wall["point"]
+	var nrm: Vector2 = wall["normal"]
+	node.global_position = Vector3(pt.x, y, pt.y)
+	node.rotation.y = atan2(nrm.x, nrm.y)
 
 
 ## A mixed pack round `at` (MonsterFactory.spawn_pack's composer and spread, a floor-3 budget).

@@ -28,6 +28,8 @@ extends Node
 ##     (`generated`: the scene reloads on that floor, solo, with this panel kept; "gym" comes back). On a generated floor a
 ##     Landings pick rebuilds it at once, and the Go to buttons are its landings. The elevator goes down to the next
 ##     generated floor as ever
+##   - the WALL DEPTH look (docs/design/wall-depth.md): the "Wall depth" picker (off / on, the default) flips
+##     HexMapView's wall depth uniform live on the terrain, and keeps the choice for the floors built after
 ##   - the GHOST LOOK test (docs/design/ghost-look.md, look-dev only): the Ghosts spawns (a skeleton, a suit of armour, a
 ##     wisp: GhostBody) and the "Ghost look" / "Ghost strength" / "Ghost colour" pickers (GhostLook), live on every ghost
 ##   - the HAUNT LOOK test (docs/design/haunt-look.md, look-dev only): the Haunts spawns (the suit of armour and the crypt
@@ -495,6 +497,7 @@ static func experiments() -> Array:
 		["walk", "Monster walk", ["old", "new"], "new" if MonsterModel.active_walk else "old"],
 		["landings", "Landings", ["off", "on"], "on" if DungeonGen.landings else "off"],
 		["map", "Map", ["gym", "generated"], "generated" if generated else "gym"],
+		["wall_depth", "Wall depth", ["off", "on"], "on" if HexMapView.wall_depth_default else "off"],
 		["ghost_look", "Ghost look", GhostLook.LOOKS, GhostLook.look],
 		["ghost_strength", "Ghost strength", GhostLook.STRENGTHS, GhostLook.strength],
 		["ghost_colour", "Ghost colour", GhostLook.COLOURS, GhostLook.colour],
@@ -553,6 +556,12 @@ func set_experiment(nm: String, value: String) -> void:
 			return
 		panel.set_experiment(nm, value)
 		_status("necro: rim %s, grimoire %s" % ["on" if NecroLook.rim else "off", NecroLook.grimoire])
+	if nm == "wall_depth":
+		if value != "off" and value != "on":
+			return
+		_set_wall_depth(value == "on")
+		panel.set_experiment(nm, value)
+		_status("wall depth %s" % value)
 		return
 	if nm == "walk":
 		if value != "old" and value != "new":
@@ -579,6 +588,20 @@ func set_experiment(nm: String, value: String) -> void:
 		tag.show_tag(text)
 		if tag.move_log != null:
 			tag.move_log.switched()
+
+
+## The walls' depth look (HexMapView.wall_depth, docs/design/wall-depth.md), live: every terrain view in the game flips its
+## shader uniform (no rebuild), and the choice stays for the floors built after (a reload, the generated floor).
+func _set_wall_depth(on: bool) -> void:
+	HexMapView.wall_depth_default = on
+	if game == null:
+		return
+	var stack: Array[Node] = [game]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is HexMapView:
+			(n as HexMapView).set_wall_depth(on)
+		stack.append_array(n.get_children())
 
 
 ## The hallway landings' A/B (docs/design/hallways.md): "landings" sets the generator's switch (DungeonGen.landings), and on
