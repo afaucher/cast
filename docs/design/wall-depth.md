@@ -85,6 +85,8 @@ reads as rough stone, not brick; and fix the vault's outlines". Fix 1 became rou
   only, it draws the walls' outlines, which is what is kept. A first strength (0.012 linear) was too faint at 1:1; it is
   about 0.02 now.
 
+The user's read of the second pass (2026-10-29): "The second pass is great. This is much better."
+
 ## Open questions
 - **The vault's outline strength.** About 0.02 linear, cool grey: the walls' silhouettes read at 1:1 in the vault, faint.
   Brighter would start to read as a glow; a warmer tint would read as the old seam. One constant (`WD_EDGE`).
