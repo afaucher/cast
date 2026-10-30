@@ -38,6 +38,8 @@ extends Node
 ##   - the NECRO LOOK test (docs/design/necro-look.md, look-dev only): the Necro spawns (the zombies, the acolytes and the
 ##     grimoire: NecroBody) and the "Necro rim" / "Grimoire" pickers (NecroLook), live; `--gym-act necro` lays out a row
 ##     (`--gym-act procession` puts NecroProcession down: an acolyte leading zombies, raising the downed)
+##   - the HAUNTED ROOMS test (docs/design/mansion-rooms.md, church-rooms.md, look-dev only): the Haunted rooms spawns (key
+##     mansion and church props: HauntProps) and the "Haunt light" picker (HauntLook: game / moonlight / candle), live
 ##   - the WAR CRY button: the nearest monster of each kind yells once (Monster.yell), to audition the cries without a fight
 ##     (the user's takes, settled 2026-10-25: their "War cries" picker came out)
 ##   - the HALLWAY PACKS (to watch a pack come down a hall; Monster's crowd variety): "Hallway x12" puts 12 skeletons at the lobby end of the arena-lobby hall
@@ -504,7 +506,8 @@ static func experiments() -> Array:
 		["hero_ghost", "Ghost form", GhostForm.TREATMENTS, GhostForm.treatment],
 		["haunt_wisps", "Haunt wisps", HauntPiece.WISPS, HauntPiece.wisps],
 		["necro_rim", "Necro rim", ["off", "on"], "on" if NecroLook.rim else "off"],
-		["grimoire", "Grimoire", NecroLook.STATES, NecroLook.grimoire]]
+		["grimoire", "Grimoire", NecroLook.STATES, NecroLook.grimoire],
+		["haunt_light", "Haunt light", HauntLook.MODES, HauntLook.light]]
 
 
 ## The Go to buttons: the gym's places, or on a generated floor its landings.
@@ -562,6 +565,11 @@ func set_experiment(nm: String, value: String) -> void:
 		_set_wall_depth(value == "on")
 		panel.set_experiment(nm, value)
 		_status("wall depth %s" % value)
+	if nm == "haunt_light":
+		if not HauntLook.pick(value, get_tree().root):
+			return
+		panel.set_experiment(nm, value)
+		_status("haunt light: %s" % value)
 		return
 	if nm == "walk":
 		if value != "old" and value != "new":

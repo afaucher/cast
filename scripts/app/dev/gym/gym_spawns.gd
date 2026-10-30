@@ -23,6 +23,8 @@ extends RefCounted
 ##   crypt    the crypt and ectoplasm look tests (LOOK-DEV ONLY, cosmetic nodes, nothing networked): an ectoplasm puddle per
 ##            EctoplasmLook variant (docs/design/ectoplasm-look.md; plus a drip on a wall within HAUNT_WALL) and the crypt's
 ##            pieces, CryptProps.GYM_KINDS (docs/design/crypt-section.md; an ossuary goes against a wall within HAUNT_WALL)
+##   rooms    the haunted rooms' key props (docs/design/mansion-rooms.md, church-rooms.md, LOOK-DEV ONLY): HauntProps.GYM_KINDS,
+##            plain cosmetic nodes (a wall piece backs onto the nearest wall); the panel's Haunt light relights the gym
 ## Entries: {id, group, key (the registry key), label, skip ("" or why it has no button)}. spawn() puts `n` of one round a
 ## world point on valid cells and returns what it made. Dev only: solo, so every spawn is this machine's own (GameWorld).
 
@@ -31,7 +33,7 @@ const PROP_YAW := 45.0             ## a free-standing prop faces the camera
 const GHOST_YAW := -120.0          ## a ghost's host (its front is -Z) turned three-quarters to the camera
 const HAUNT_WALL := 3.0            ## a crypt spawn this near a wall face also dresses the wall (a drip, an ossuary)
 const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost", "haunt",
-		"necro", "crypt"]
+		"necro", "crypt", "rooms"]
 
 
 ## Every entry, in GROUPS order and each registry's own order.
@@ -74,6 +76,8 @@ static func entries() -> Array[Dictionary]:
 		out.append(_e("crypt", "ecto_" + v, "ecto: " + v))
 	for kind: String in CryptProps.GYM_KINDS:
 		out.append(_e("crypt", "crypt_" + kind, "crypt: " + kind))
+	for kind: String in HauntProps.GYM_KINDS:
+		out.append(_e("rooms", kind, "%s: %s" % [HauntProps.row(kind)["set"], HauntProps.row(kind)["label"]]))
 	return out
 
 
@@ -193,6 +197,11 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 		"crypt":
 			for c in cells_near(map, at, n, 1):
 				out.append_array(_haunt(map, key, Hex.to_world(c, _level(map, c))))
+		"rooms":
+			for c in cells_near(map, at, n, 2):
+				var hp := HauntProps.gym_spawn(key, Hex.to_world(c, _level(map, c)))
+				if hp != null:
+					out.append(hp)
 	return out
 
 
