@@ -68,7 +68,7 @@ uniform float wash = 0.0;
 uniform float phase = 0.0;
 uniform float clock = -1.0;
 
-float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+""" + ShaderHash.GLSL + """
 float vn(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
@@ -120,7 +120,7 @@ uniform float wash = 0.0;
 uniform float phase = 0.0;
 uniform float clock = -1.0;
 
-float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+""" + ShaderHash.GLSL + """
 float vn(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);

@@ -97,8 +97,10 @@ float band(float r, float c, float w) {
 	return 1.0 - smoothstep(w * 0.5, w, abs(r - c));
 }
 
+""" + ShaderHash.GLSL + """
+// a segment's number (a whole number) to [0, 1): ShaderHash's lattice hash, never a sine hash
 float hash(float n) {
-	return fract(sin(n * 12.9898 + 4.1) * 43758.5453);
+	return h21(vec2(n, 4.0));
 }
 
 void fragment() {
