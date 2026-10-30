@@ -123,7 +123,7 @@ func _check_gym() -> void:
 	if check(rows.has("haunt_light"), "the panel has a Haunt light picker"):
 		eq(str(rows["haunt_light"][1]), "Haunt light", "its label")
 		eq(str(rows["haunt_light"][2]), str(["game", "moonlight", "candle"]), "its lights")
-	check(GymSpawns.GROUPS.has("haunt"), "the haunt group is listed")
+	check(GymSpawns.GROUPS.has("rooms"), "the rooms group is listed")
 	root = Node3D.new()
 	add_child(root)
 	var map := HexMap.new()
