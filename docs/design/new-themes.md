@@ -120,6 +120,10 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 
 ### Other enemies [proposal]
 - **Ectoplasm:** the infestation layer, like goo: it slicks or slows the floor, and Damp washes it away.
+- **More enemy types are needed, later** (2026-10-31). The user: "We will need to think of additional enemy types to
+  [flesh] out the levels. We only have skeletons and armor so far." Then: "Let's build it as is." The first build uses
+  today's roster (zombies, acolytes, wisps, possessed skeletons and armour, the grimoire); new types come after. Worked
+  out in parallel; the user's starting ideas: "ectoplasm monsters or maybe larger than average rats."
 
 ### Networking shapes [proposal]
 - The grimoire: a host-arbitrated world object (the hellgate's shape). Acolytes, ghosts, hosts and zombies: host monsters.
