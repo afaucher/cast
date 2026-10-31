@@ -90,6 +90,9 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
   ghosts[.]" Still open: whether a ghost-form hero can hit or be hit by regular enemies, and its duration and cooldown.
 - **Evicting a ghost without breaking its host: wanted, deferred** [2026-10-31]. The user: "We will have to add a way to
   evict ghosts without breaking them. I just haven't thought of one yet. Let's defer."
+- **Breaking a possessed antique bills the crew; bones do not** [decided, 2026-10-31]. The user: "Breaking a possessed
+  antique[:] it [bills] the crew. But bones don't count." A suit of armour (or any priced antique) goes on the invoice as
+  property damage when it breaks, possessed or not; a possessed skeleton is free to smash.
 - **Later (a big build):** "I like the idea of ghost mode after you normally die though. That is a huge extra build so
   later." A downed hero would roam as a ghost.
 
@@ -125,6 +128,7 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 
 ### Open
 Answered 2026-10-31: the source (acolytes on floors 1-2, the grimoire on the last), the haunting tied to the site, and one
-pest family per contract (The mission); ghost form passes through regular enemies (Ghosts). Still open:
-1. Possessed antiques: does breaking one bill the crew? (A way to evict a ghost without breaking it is wanted, deferred.)
-2. Ghost form: can a ghost-form hero hit or be hit by regular enemies, and its duration and cooldown.
+pest family per contract (The mission); ghost form passes through regular enemies, and a broken possessed antique bills
+the crew but bones do not (Ghosts). Still open:
+1. Ghost form: can a ghost-form hero hit or be hit by regular enemies, and its duration and cooldown.
+2. Evicting a ghost without breaking its host (wanted, deferred).
