@@ -82,6 +82,11 @@ var pools: Array[Dictionary] = []   ## the in-ground pools (PoolGeo records: roo
 ## ends, source, flows, gators}. {} on a floor without one. Spawn data, solo only for now: phase 2 puts it in NetFloor's
 ## checksum (its water already is, as cells and the body record in pools).
 var sewer: Dictionary = {}
+## The floor's CRYPT (a haunted site's section: DungeonGen's "crypt" option, then CryptPlanner; haunted-build-plan.md "H2 as
+## built"): the sewer record's shape {seed, level, rooms, stair (with its route), halls, all_doors} and, once planned, set
+## (vault | chapel), lit and dark (its rooms by look), tombs (the sarcophagi's rooms). {} on a floor without one. Spawn data,
+## in NetFloor's checksum.
+var crypt: Dictionary = {}
 ## The floor's LAVA CAVE (DungeonGen's "cave" option, CaveGen and LavaPlanner; the `--lava-cave` prototype's LavaCave too;
 ## docs/design/lava-playtest.md "As built"): {seed, pattern, level, rooms, bridges, spans, isles, rock, crust_level, ...}. {}
 ## on a floor without one. Spawn data, in NetFloor's checksum.
@@ -115,7 +120,7 @@ var _solid_box := Rect2()        ## the bounding box of every solid
 ## Who may write each var (see Net). The map is built from the floor seed on every machine.
 func net_fields() -> Dictionary:
 	return {"cells": Net.SPAWN, "midpoint_walls": Net.SPAWN, "solids": Net.SPAWN, "no_stand": Net.SPAWN,
-		"elevator": Net.SPAWN, "pools": Net.SPAWN, "sewer": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL,
+		"elevator": Net.SPAWN, "pools": Net.SPAWN, "sewer": Net.SPAWN, "crypt": Net.SPAWN, "_segs": Net.LOCAL, "_solid_segs": Net.LOCAL, "_solid_box": Net.LOCAL,
 		"blockers": Net.LOCAL, "cave": Net.SPAWN, "lava": Net.SPAWN, "landings": Net.SPAWN}
 
 

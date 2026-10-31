@@ -33,6 +33,9 @@ static var OPS := {
 	"mirror": _on_wall("wall_mirror"), "fireplace": _on_wall("fireplace"), "garden_bench": _on_wall("garden_bench"),
 	"candelabra": _in_corner("candelabra"), "palms": _in_corner("potted_palm"), "citrus": _in_corner("citrus_tub"),
 	"ferns": _in_corner("fern_stand"), "pillars": _in_corner("pillar"),
+	# the crypt's rooms (CryptVignettes; haunted-build-plan.md H2)
+	"vigil": CryptVignettes.vigil, "ossuary": CryptVignettes.ossuary, "crypt_candles": CryptVignettes.candles,
+	"bones": CryptVignettes.bones, "open_tomb": CryptVignettes.open_tomb, "shaft": CryptVignettes.shaft,
 }
 
 

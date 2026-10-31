@@ -17,6 +17,8 @@ extends RefCounted
 const SERVICE := "service_entrance"     ## the start room's theme
 const SEWER := "sewer"                  ## a sewer cluster's rooms (SewerPlanner.theme; never dealt from a site's POOLS)
 const LAVA := "lava"                    ## a lava cave's chambers (LavaPlanner.theme; never dealt from a site's POOLS)
+## A crypt's rooms (CryptPlanner.theme; never dealt from a site's POOLS), by set and look: [lit, dark].
+const CRYPT := {"vault": ["burial_vault", "bone_vault"], "chapel": ["crypt_chapel", "chapel_ossuary"]}
 
 ## The haunted sites (haunted-build-plan.md H1; the rooms the user read in the look tests, mansion-rooms.md and
 ## church-rooms.md): the mansion's five house rooms and the bunker's wine cellar; the church's nave, and (its vestry and bell
@@ -347,6 +349,68 @@ const THEMES := {
 		],
 		"light": {"color": Color(0.78, 0.92, 0.5), "energy": 5.5, "range": 9.5, "flicker": 0.1},
 	},
+	# A crypt's rooms (haunted-build-plan.md H2; the look test, crypt-section.md). Not in POOLS: only CryptPlanner.theme gives
+	# them, to the crypt DungeonGen cut. "crypt_set": the look test's set (vault under a mansion, chapel under a church), whose
+	# CryptProps pieces the recipe places and whose FloorMaterials rows the room wears. "crypt_look": a LIT room (the burial
+	# chamber: the sarcophagi CryptPlanner stands against its wall, priced, with candelabras at their heads and candles at
+	# their feet: the "vigil") or a DARK one (the ossuary gallery: bone walls, a fallen skeleton, an opened tomb, no flame).
+	# Their light is the candles' (and the chapel's pale shafts from gratings in the church floor above): a dim accent light
+	# and no downlight (DungeonLook.add_pools skips a crypt's rooms). Priced: a bust or a candelabra by the wall, never a
+	# piano. Names and note words are PROPOSALS (the build plan lists them).
+	"burial_vault": {
+		"name": "Burial vault", "site": "any", "min_cells": 0, "crypt_set": "vault", "crypt_look": "lit",
+		"note_word": "burial vault", "floor_mat": FloorMaterials.F_VAULT, "wall_mat": FloorMaterials.W_VAULT,
+		"priced": ["marble_bust", "silver_candelabra"],
+		"recipe": [
+			{"op": "vigil"},
+			{"op": "ossuary"},
+			{"op": "crypt_candles"},
+			{"op": "bones"},
+			{"op": "ossuary", "min_cells": 110},
+		],
+		"light": {"color": Color(1.0, 0.62, 0.3), "energy": 2.4, "range": 8.0, "flicker": 0.3},
+	},
+	"bone_vault": {
+		"name": "Bone vault", "site": "any", "min_cells": 0, "crypt_set": "vault", "crypt_look": "dark",
+		"note_word": "bone vault", "floor_mat": FloorMaterials.F_VAULT, "wall_mat": FloorMaterials.W_VAULT,
+		"priced": ["marble_bust"],
+		"recipe": [
+			{"op": "ossuary"},
+			{"op": "ossuary"},
+			{"op": "open_tomb"},
+			{"op": "bones"},
+			{"op": "bones", "min_cells": 90},
+			{"op": "ossuary", "min_cells": 100},
+		],
+		"light": {"color": Color(0.55, 0.6, 0.8), "energy": 1.0, "range": 7.0, "flicker": 0.0},
+	},
+	"crypt_chapel": {
+		"name": "Crypt chapel", "site": "any", "min_cells": 0, "crypt_set": "chapel", "crypt_look": "lit",
+		"note_word": "crypt chapel", "floor_mat": FloorMaterials.F_CHAPEL, "wall_mat": FloorMaterials.W_CHAPEL,
+		"priced": ["marble_bust", "silver_candelabra"],
+		"recipe": [
+			{"op": "vigil"},
+			{"op": "shaft"},
+			{"op": "ossuary"},
+			{"op": "crypt_candles"},
+			{"op": "bones"},
+		],
+		"light": {"color": Color(1.0, 0.66, 0.34), "energy": 2.2, "range": 8.0, "flicker": 0.25},
+	},
+	"chapel_ossuary": {
+		"name": "Ossuary", "site": "any", "min_cells": 0, "crypt_set": "chapel", "crypt_look": "dark",
+		"note_word": "ossuary", "floor_mat": FloorMaterials.F_CHAPEL, "wall_mat": FloorMaterials.W_CHAPEL,
+		"priced": ["marble_bust"],
+		"recipe": [
+			{"op": "ossuary"},
+			{"op": "ossuary"},
+			{"op": "open_tomb"},
+			{"op": "shaft"},
+			{"op": "bones"},
+			{"op": "ossuary", "min_cells": 100},
+		],
+		"light": {"color": Color(0.62, 0.7, 0.92), "energy": 1.2, "range": 7.0, "flicker": 0.0},
+	},
 	# A lava cave's chambers (docs/design/lava-playtest.md, "As built"). Not in POOLS: only LavaPlanner.theme gives it, to the
 	# cave CaveGen cut. Rock only: no priced props (a chamber has no walls to stand them on), no decor recipe. "lava" is the
 	# look, by whether a hellgate leaks into the cave (LavaPlanner): the lava's colours (crust, hot, core), the glow, the
@@ -444,6 +508,19 @@ const DECOR := {
 	"altar_dais": {"place": "group", "orient": "face_target", "w": 4.2, "d": 2.6, "h": 0.25, "blocks": false, "weight": 0.5, "haunt": "altar_dais"},
 	"pew": {"place": "group", "orient": "face_target", "w": 2.8, "d": 0.7, "h": 1.0, "blocks": false, "weight": 0.4, "haunt": "pew"},
 	"pillar": {"place": "corner", "orient": "face_center", "w": 0.8, "d": 0.8, "h": 3.6, "blocks": true, "weight": 0.6, "haunt": "pillar"},
+	# The crypt's kit (haunted-build-plan.md H2): the look test's pieces. "crypt" = its CryptProps kind, built in the room's set
+	# (DecorModels._crypt: params "set"; "crypt_params" are the kind's own, the opened tomb's lid). The ossuary is a wall of
+	# niches on a straight run of wall ("backed"); the gate and the arch stand across a crypt doorway (CryptPlanner.doorway: the
+	# gate open, never a door); the shaft is the chapel's pale light from a grating in the church floor above (CryptLook.shaft).
+	# Bones are free to smash in the design, but they are decor here: nothing on them bills and nothing breaks them yet.
+	"ossuary": {"place": "wall", "orient": "away_from_wall", "w": 3.0, "d": 0.5, "h": 1.5, "blocks": true, "weight": 1.0, "crypt": "ossuary", "backed": true},
+	"crypt_candles": {"place": "corner", "orient": "face_center", "w": 0.9, "d": 0.9, "h": 0.7, "blocks": false, "weight": 0.2, "crypt": "candles"},
+	"crypt_candelabra": {"place": "corner", "orient": "face_center", "w": 0.7, "d": 0.7, "h": 1.75, "blocks": false, "weight": 0.3, "crypt": "candelabra"},
+	"bones": {"place": "floor", "orient": "free", "w": 1.0, "d": 1.4, "h": 0.3, "blocks": false, "weight": 0.2, "crypt": "bones"},
+	"open_tomb": {"place": "wall", "orient": "away_from_wall", "w": 1.0, "d": 1.9, "h": 0.95, "blocks": true, "weight": 1.0, "crypt": "sarcophagus", "crypt_params": {"lid": "ajar"}},
+	"crypt_gate": {"place": "wall", "orient": "away_from_wall", "w": 3.0, "d": 0.42, "h": 1.78, "blocks": false, "weight": 0.5, "crypt": "gate"},
+	"crypt_arch": {"place": "wall", "orient": "away_from_wall", "w": 3.0, "d": 0.42, "h": 1.78, "blocks": false, "weight": 0.5, "crypt": "arch"},
+	"light_shaft": {"place": "floor", "orient": "free", "w": 1.2, "d": 1.2, "h": 6.0, "blocks": false, "weight": 0.3, "crypt": "shaft", "flat": true},
 }
 
 

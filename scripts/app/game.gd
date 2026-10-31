@@ -106,6 +106,8 @@ extends Node3D
 ##                       (1-5, LavaCave) instead of the generated floor: rock islands and two-wide bridges over lava, archers on
 ##                       isolated isles, a melee pack on the path, damp crusts the lava (LavaField). In a crew: every window.
 ##   --lava-floor, --lava-pattern P, --to-lava entry|far|isle, --lava-perf   dev: a generated lava cave (LavaDev, scripts/app/dev)
+##   --crypt-floor, --to-crypt head|foot|lit|dark, --crypt-perf   dev: a haunted floor's crypt, forced on every floor where it fits
+##                       (CryptDev, scripts/app/dev; with --client heir | parish for its set)
 ##   --move-lab          dev: the movement lab (MoveLab, docs/design/movement-research.md "As built") instead of the generated
 ##                       floor: a lap of slalom, steps, a drop, a ledge, a lava bridge, a pool, a cut-wall corridor and a pen.
 ##                       In a crew every window needs it (run.ps1 -Crew passes it to all).

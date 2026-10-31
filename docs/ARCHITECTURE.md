@@ -449,6 +449,20 @@ map as it is). `NetFloor`'s map text has a `cave=` line and skips the lava cells
 after activation and while a crust lasts; a late joiner gets the live crust sources in the game's part of the join snapshot.
 `tests/test_lava_gen.gd`, `test_net_lava.gd`, `test_lava_cave.gd`; `docs/design/lava-playtest.md`, "As built: caves on real
 floors". The hand-authored prototype caves (`--lava-cave N`, `LavaCave`) run on the same `LavaField` and lava rule.
+**Crypts (a haunted site's section; solo and crews):** `CryptCluster.seed_for(run, floor, shared)` (`scripts/world/crypt/`)
+rolls one on a mansion's floors 2-3 and a church's 1-3 (its own dice, the same in a shared run), and `DungeonGen`'s `"crypt"`
+option cuts it with the sewer cluster's machinery (a wing of 2-4 rooms lowered 4-6 levels, flat links, a narrow stair of
+flights down; never with a sewer cluster or a cave on one floor); the record is `HexMap.crypt` (with the stair's route), in
+the floor checksum as a `crypt=` line. Any failure builds the attempt without it, so a floor without a crypt is byte-identical
+to before. In `SiteBuilder`: `GatePlanner` keeps the origin room out of it, `CryptPlanner.theme` gives its rooms the crypt
+themes of the site's set (vault or chapel; lit and dark by turns from the stair's foot), `CryptPlanner.plan_tombs` stands a
+row of priced sarcophagi in each lit room (own dice), the recipes dress it with the look test's kit (`CryptVignettes`,
+DECOR rows with "crypt": `CryptProps`), `CryptPlanner.dress` puts candles on the stair's landing, `CryptPlanner.materials`
+its halls and walls, `DoorPlanner` stands arches and open gates in its doorways (`CryptPlanner.gate`) and `CryptPlanner.spawn`
+moves its pieces onto `HexMapView.UNDER_LAYER`. LIGHT: its FloorMaterials rows are "under" (`FloorMaterials.is_under`), so
+`HexMapView` draws those cells into a second mesh on `UNDER_LAYER`, which `DungeonLook`'s key and fill leave out, with an AO
+ambient share per row, and `DungeonLook.add_pools` hangs no downlight over its rooms: candles, accent lights and the chapel's
+shafts light it. `tests/test_crypt_gen.gd`; `docs/design/haunted-build-plan.md`, "H2 as built".
 **The test gym (`--gym`, dev, solo; `docs/design/test-gym.md`):** `GymMap` (`scripts/world/gym/`) builds one fixed map of every
 environment from the generator's pieces (hex rooms and halls cut like DungeonGen's, a sewer record SewerPlanner floods, a cave
 record in CaveGen's shape, PoolGeo's pools) and plans it with the real planners (fixed themes, no packs); `GymDev`

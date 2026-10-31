@@ -12,7 +12,8 @@ extends RefCounted
 ## func(s: LowPoly.Soup)), "palette", the optional "extra" (a static func() -> Node3D added beside the body) and, for an
 ## explosive, "fuse_point". build(), palette(), height() and fuse_point() read the row; a new prop adds its builder here.
 ## A haunted site's antique names its look instead: "haunt" (a HauntProps kind, the mansion and church look tests' models)
-## or "node" (a static func() -> Node3D that is the whole model: the suit of armour).
+## or "node" (a static func() -> Node3D that is the whole model: the suit of armour); a crypt's sarcophagus names "crypt" (a
+## CryptProps kind) and its "set".
 ##
 ##   var node := PropModels.build("gold_toilet")     # Node3D with a MeshInstance3D "Body"
 ##   PropModels.palette("gold_toilet")                # colours for debris shards
@@ -83,6 +84,9 @@ static func build(kind: String) -> Node3D:
 	if r0.has("haunt"):
 		# a haunted site's antique: the look test's model (HauntProps), its variation fixed by the kind so every copy matches
 		return HauntProps.build(String(r0["haunt"]), {"seed": int(kind.hash() % 9973)})
+	if r0.has("crypt"):
+		# a crypt's piece (H2): the look test's model (CryptProps) in the row's material set
+		return CryptProps.build(String(r0["crypt"]), {"set": String(r0.get("set", "vault"))})
 	var root := Node3D.new()
 	root.name = "Model"
 	if r0.has("node"):

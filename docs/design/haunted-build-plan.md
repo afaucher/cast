@@ -1,6 +1,6 @@
 # Haunted contracts: build plan
 
-Status: **[proposal; H1 built 2026-10-31, see "H1 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
+Status: **[proposal; H1 and H2 built 2026-10-31, see "H1 as built" and "H2 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
 build it in. The user (2026-10-31): "Let's build it as is" (today's roster; more enemy types are worked out in parallel).
 
 Today none of it is game code: the mansion and church rooms, the crypt, the zombies, acolytes, ghosts, hosts and the
@@ -222,3 +222,110 @@ on the spot, the simplest sound choice, and is listed here to revisit.
 - The dispatch voice clips for the new lines (silent banners until `tools/render_dispatch.ps1` is run).
 - No crew (two-PC) play of a haunted contract yet; the checksum test covers the floor build.
 - The church has one room of its own; its crypt is H2.
+
+## H2 as built (2026-10-31)
+
+The user (2026-10-31), as for H1: "Just build it now. We can revisit the decisions after it's built." Every open call below
+was made on the spot, the simplest sound choice, and is listed to revisit.
+
+### Play it
+
+```
+.\run.ps1 --client heir --seed 1 --floor 2 --spells heal,fireball --no-mic --to-crypt lit     # a vault under the mansion
+.\run.ps1 --client parish --seed 2 --floor 1 --spells heal,fireball --no-mic --to-crypt lit   # a chapel under the church
+.\run.ps1 --client parish --seed 1 --floor 3 --crypt-floor --to-crypt dark                     # forced, in its dark room
+```
+
+- **Natural crypts** (`ContractBoard.run_for_client`, seed/floor): heir 1/2, 1/3, 2/2, 5/2; parish 1/2, 1/3, 2/1, 2/2. The log
+  names the crypt, its set, its lit and dark rooms and the stair's head ("crypt: ...").
+- `--crypt-floor` (`CryptDev`, `CryptCluster.force`): every floor gets a crypt where a wing fits, whatever the site, floor or
+  roll (a hellgate site gets a vault); every window of a crew needs it. `--to-crypt head|foot|lit|dark` (solo) starts the crew
+  at the stair's head (in the room above), its foot, or in the first lit or dark room. `--crypt-perf` measures the crypt's
+  lights and quits. No keybinding.
+- Screenshots (the game camera, 1920x1080): `docs/design/crypt_section/game_vault.png` (heir 1, floor 2: the burial vault),
+  `game_chapel.png` (parish 2, floor 1: the crypt chapel), `game_stair.png` (heir 1, floor 2: the arch at the stair's head in
+  the mansion room above, the dark stair down with its landing candles).
+
+### What was built
+
+| Piece | Where | What |
+|---|---|---|
+| Which floors | `scripts/world/crypt/crypt_cluster.gd` (`CryptCluster`) | `seed_for(run, floor, shared)` on dice of its own (the same shared or solo): the mansion's floors 2-3 at `RATE` 0.5, the church's floors 1-3 at 0.75. `set_for(site)`: the vault under a mansion, the chapel under a church |
+| The cut | `DungeonGen` "crypt" option (`for_run` asks for it on a floor that rolled no sewer cluster; no cave beside it) | The sewer cluster's machinery with CryptCluster's numbers: a wing of 2-4 rooms (never the start or the elevator's room) lowered 4-6 levels to one base level, its own links flat, no features, the narrow stair of STAIRS flights (at most 3 levels a cell) the one way in. Any failure builds the attempt without it. The record is `HexMap.crypt` (the sewer record's shape plus the stair's `route`), a SPAWN var |
+| The checksum | `NetFloor.map_text_of` | A `crypt=` line on a floor with one (the record, with the planners' `set`, `lit`, `dark`, `tombs`); every other floor's text is as before |
+| Themes | `CryptPlanner.theme`, `RoomThemeDefs.CRYPT` | The crypt's rooms take the crypt themes of the set, LIT and DARK by turns from the stair's foot (the foot's room lit). Vault: `burial_vault` (lit) and `bone_vault` (dark); chapel: `crypt_chapel` and `chapel_ossuary`. Never dealt from a pool |
+| The origin room | `GatePlanner` | A crypt's rooms are never the origin room (nor a gate's): the story's room stays a house room |
+| Sarcophagi | `CryptPlanner.plan_tombs`, `PricedProp` "vault_sarcophagus" / "chapel_sarcophagus" | In each lit room a ROW of 1-3 (by the room's size) priced sarcophagi head to one wall, side by side 1.7 apart, facing into the room (the vault's effigy lid, the chapel's cross): `SitePlan.props`, on the crypt's own dice (lent to the ThemeCtx), after the floor's priced props and set pieces (extra to `MAX_PROPS`). Site "crypt": no site's catalog |
+| Dressing | `CryptVignettes` (ops in `ThemeVignettes.OPS`), DECOR rows with "crypt" (`DecorModels._crypt` builds `CryptProps` in the room's set) | `vigil`: a lit candelabra at each end of the row, candles at each sarcophagus's foot. `ossuary`: a bone wall on a straight run of wall, centred and no wider than it (`CryptProps.wall_run`, the lab's placement, moved there from the lab). `crypt_candles` (a corner cluster), `bones` (a fallen skeleton off the middle), `open_tomb` (an opened sarcophagus, decor), `shaft` (the chapel's pale light from above, `CryptLook.shaft`). Lit rooms: vigil, ossuary, candles, bones (a second ossuary in a big room); dark rooms: two or three ossuaries, an opened tomb, bones; the chapel's rooms a shaft each |
+| Doorways | `DoorPlanner`, `CryptPlanner.doorways` / `gate` | No office door on a crypt doorway or at the stair's head. A stone arch at the head (in the room above), an open iron gate at the foot (0.85), a half-open gate into a lit room (0.45), an arch into a dark one: decor across the doorway (`crypt_gate`, `crypt_arch`; nothing shuts) |
+| The stair | `CryptPlanner.dress` | Lit candles on the landing between its flights (the flat route cell nearest its middle) |
+| Materials | `FloorMaterials` slots 32-37 (`F_VAULT`, `F_VAULT_HALL`, `F_CHAPEL`, `F_CHAPEL_HALL`, `W_VAULT`, `W_CHAPEL`), `CryptPlanner.materials` | The look test's colours as game rows (the table grew from 32 to 40 slots; `HexMapView.MATERIAL_SHADER`'s arrays with it). Rooms from their theme rows; the crypt's halls and stair in the hall rows; the walls only the crypt touches in its blocks |
+| Light | `HexMapView` (`UNDER_LAYER`, `under_instance`), `FloorMaterials.is_under` / "ambient", `DungeonLook`, `CryptPlanner.spawn` | The crypt rows are "under": HexMapView draws those cells into a second mesh on its own render layer, which the key and fill lights leave out (`light_cull_mask`), and the shader's AO takes the row's share of the ambient (vault 0.5, chapel 0.9: the lab's dim warm vault and cooler chapel). No downlight over a crypt room. `CryptPlanner.spawn` puts the decor and priced props standing on the crypt's floor on that layer too. So the candles, the rooms' dim accent lights and the chapel's shafts light the crypt, as the look test lit it, while the crew, the monsters, the staff and the rest of the floor keep the game's light. A floor without a crypt builds one mesh, as before |
+| Dev | `scripts/app/dev/crypt_dev.gd` (`CryptDev`), `GameDev._crypt_floor_ready` | The flags above |
+| Look-dev | `CryptLook`, `CryptProps`, `crypt_section_lab.gd`, `wall_depth_lab.gd` | Headers say what is the game's now. `CryptLook`'s sets name the game's rows (`restyle` / `tables` are gone; the lab paints with the rows, the room above in H1's walnut & damask or limestone, and the lab's view keeps the seam gain at 1 since the rows carry it). The wall depth lab's "lair" view repaints its map in the lair's rows. The kit's ossuary back and shelf, the arch's keystone, the gate's meeting bars and the cross lid moved apart by a centimetre or two where faces were coplanar (`test_zfight`) |
+
+### The calls made (to revisit)
+1. **The crypt is the sewer cluster's twin in the generator**: a wing of 2-4 rooms at one level, flat links, reached only by
+   its stair; a floor gets a sewer cluster or a crypt, never both (haunted floors roll no sewer yet, so this never bites).
+2. **How often:** the mansion's floors 2-3 at 0.5, the church's floors 1-3 at 0.75, so the church leans on its crypt
+   (measured over 24 contracts each: 14 of 48 mansion floors 2-3 have one, 29 %; 36 of 72 church floors, 50 %).
+3. **How deep:** 4-6 levels (2.0-3.0) under the room above, in flights of up to 3 levels (the look test's was 6, two flights).
+4. **The set by site:** a vault under the mansion, a chapel under the church; a forced crypt on a hellgate site is a vault.
+5. **Lit and dark rooms by turns from the stair's foot** (the look test's burial chamber, then its dark gallery). The lit
+   room is the burial room; the dark room the bone room.
+6. **Sarcophagi bill, in a row against the wall**, not in the room's middle as in the lab (every room keeps its middle clear
+   for the fight; a row head to the wall still reads as the lab's chamber). $7,500 each, HP 140 (stone: a fireball dents it,
+   it takes a fight to break one). The opened one in the dark rooms is decor (already broken open). Extra to `MAX_PROPS`.
+7. **Candelabra in the crypt are decor** (lit, unpriced), the vigil's. A lit crypt room may also get the site's priced silver
+   candelabra or a marble bust by a wall (its theme's "priced"); a dark room only the bust (no flame in the dark), never a
+   piano.
+8. **Gates are open decor**, never shut and never an office door: 0.85 open at the stair's foot, half open into a lit room,
+   an arch into a dark room and at the stair's head. A locked gate needs a design (a key, a lever, a shove).
+9. **Bones are decor**: free in the design, and nothing breaks them yet (H5's possessed skeletons are the bones that matter).
+10. **The origin room is never a crypt room** (nor a hellgate's room on a forced crypt): the story's room stays a house room.
+11. **Light: the crypt is out of the key light** (its own render layer), with a share of the ambient per set and no
+   downlight, its pieces too; the crew, monsters and staff keep the key light so a fight stays readable. Without it the chapel
+   read as a pale sunlit room (the game's key light is 0.9; the lab's was 0.04-0.08). Each crypt room has a dim accent light
+   (lit rooms warm, 2.2-2.4; dark rooms cool, 1.0-1.2).
+12. **Seams as the lab showed them** (its view-wide gain times the recoloured rows' own): 0.064 / 0.08 in the vault, 0.08 /
+   0.1 in the chapel. Out of the key light the amber seams carry the dark rooms' floors, as in the lab's sheets.
+13. **Materials:** the table grew to 40 slots (slots 22, 23 were the only free ones in the game's table); the halls have rows
+   of their own (a shade darker), as in the lab.
+14. **Packs:** the crypt's rooms get the floor's packs like any room (the contract's family: skeletons until H3); staff, notes
+   and mail may land there too, as in a sewer cluster.
+15. **No crypt room in the gym** (the look test's loose pieces stay in its panel); `--crypt-floor` is the dev way in.
+
+### New player-facing strings (proposals for review)
+- Rooms (name / note word): **Burial vault** / burial vault, **Bone vault** / bone vault (under a mansion); **Crypt chapel** /
+  crypt chapel, **Ossuary** / ossuary (under a church).
+- Priced prop: **Stone sarcophagus**, $7,500 (both sets).
+- No new notes, signs or dispatch lines.
+
+### Tests
+- `tests/test_crypt_gen.gd` (new): the tables (both sites roll, the church more; the crypt themes, their recipes and their
+  rows; the sarcophagi priced and in no catalog; every crypt decor kind builds in both sets; candles carry their light); no
+  bunker or lair floor rolls one (seeds 1-40); 24 contracts of each haunted client, floors 1-3: the crew rolls the solo
+  floor's crypt; every crypt has 2-4 rooms at one level 4+ levels under the room above, never the start or the elevator's
+  room, a stair of flights from its head to its foot, every room reachable; its rooms are the set's crypt rooms in the set's
+  floor, lit and dark by turns; sarcophagi in the lit rooms, heads at a wall; bone walls backed by wall along their width;
+  candles; an arch or a gate in every crypt doorway, no office door; the chapel's shafts; `crypt=` in the map text and no
+  sewer or cave beside it. Three crypt floors per client spawned and built twice: the same checksum and net ids, the
+  sarcophagi spawn priced, only skeletons in the crypt, candle lights, the pieces and the stone on the underground layer, the
+  key and fill leaving it out, no downlight over it. A haunted floor that rolled a crypt but got none is the generator's
+  floor without the option (map and plan checksums), with nothing underground. `--crypt-floor` forces one (a vault on a
+  hellgate site) and the floor is as before without it.
+- **H1's haunted floors without a crypt are byte for byte H1's**: every floor 1-3 of heir and parish contracts 1-24 was built
+  as the game builds it on H1 (7c05fe5) and on H2 and its NetFloor checksum parts compared: all 94 floors without a crypt
+  match in map, plan, run and spawn (50 have a crypt). `test_golden_floor` passes against the recorded floors (bunker and
+  lair floors never roll a crypt).
+- Updated: `test_haunted_contract` (a crypt's rooms are crypt rooms, its sarcophagi not the site's catalog), `test_crypt_section`
+  (the sets are the game's rows), `test_priced_prop` (a "crypt" row's model), `test_room_themes` (a "crypt" decor row).
+- Frame rate (`--crypt-perf`, RTX 3080, 1600x900 view): 9 crypt lights on heir 1 floor 3 (25 other lights on the floor) cost
+  0.05 ms of GPU (4.75 against 4.70 ms); 13 on parish 1 floor 3 (23 others) 0.02 ms. 60 fps.
+
+### Not done in H2
+- No crew (two-PC) play of a crypt; `test_crypt_gen` covers the checksum on two builds and the shared roll.
+- No crypt dispatch line, sign or note; bones do not break; no locked gate; no gym crypt room.
+- `test_zfight` still fails on ten of H1's pieces (decor bookshelf, reading chair, wall mirror, fireplace, altar; props suit
+  of armour, grand piano, stained glass, brass lectern, votive stand), exactly as it does on H1's commit; the crypt's pieces
+  pass.

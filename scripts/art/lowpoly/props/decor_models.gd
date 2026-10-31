@@ -65,6 +65,8 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 	var row := RoomThemeDefs.decor(kind)
 	if row.has("haunt"):
 		return _haunt(String(row["haunt"]), params)
+	if row.has("crypt"):
+		return _crypt(kind, row, params)
 	var root := Node3D.new()
 	root.name = "Model"
 	if row.has("node_model"):
@@ -106,6 +108,32 @@ static func _haunt(haunt_kind: String, params: Dictionary) -> Node3D:
 		var candles := m.get_node_or_null("Candles") as Node3D
 		if candles != null:
 			candles.visible = false
+	return m
+
+
+## A crypt's piece (a DECOR row's "crypt": its CryptProps kind, haunted-build-plan.md H2): the look test's model in the
+## room's set (params "set": vault | chapel), the row's "crypt_params" under the placement's own; its jitter (a candle
+## cluster's, a skeleton's) from the placement's `variant`, so every machine dresses the crypt alike. A wall piece built with
+## its back at z = 0 (the ossuary) moves back half its depth, so the decor's position is its footprint's centre like every
+## other piece. "shaft" is the chapel's light from above (CryptLook.shaft), its beam the Body.
+static func _crypt(kind: String, row: Dictionary, params: Dictionary) -> Node3D:
+	var p: Dictionary = (row.get("crypt_params", {}) as Dictionary).duplicate()
+	p.merge(params, true)
+	var crypt_kind := String(row["crypt"])
+	if crypt_kind == "shaft":
+		var sh := CryptLook.shaft(Vector3.ZERO)
+		sh.name = "Model"
+		var beam := sh.get_node_or_null("Beam")
+		if beam != null:
+			beam.name = "Body"
+		return sh
+	if not p.has("seed"):
+		p["seed"] = int(p.get("variant", 0)) % 97 + 1
+	var m := CryptProps.build(crypt_kind, p)
+	if crypt_kind == "ossuary":
+		for ch in m.get_children():
+			(ch as Node3D).position.z -= float(row["d"]) * 0.5
+	m.name = "Model"
 	return m
 
 

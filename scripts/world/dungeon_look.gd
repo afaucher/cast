@@ -45,6 +45,7 @@ static func apply(parent: Node3D, map: HexMap = null) -> void:
 	sun.light_color = Color(1.0, 0.86, 0.68)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 70.0
+	sun.light_cull_mask = ~HexMapView.UNDER_LAYER & 0xFFFFF   # (underground terrain, a crypt's, is not sunlit: HexMapView)
 	parent.add_child(sun)
 
 	# Faint cool fill from the other side so the second set of cliff faces is not a flat black.
@@ -54,6 +55,7 @@ static func apply(parent: Node3D, map: HexMap = null) -> void:
 	fill.light_energy = 0.22
 	fill.light_color = Color(0.55, 0.65, 0.95)
 	fill.shadow_enabled = false
+	fill.light_cull_mask = ~HexMapView.UNDER_LAYER & 0xFFFFF
 	parent.add_child(fill)
 
 	if map != null:
@@ -67,9 +69,11 @@ static func add_pools(parent: Node3D, map: HexMap) -> Node3D:
 	parent.add_child(holder)
 
 	var rooms := {}   ## tag -> Array[Vector2i]
+	# (a crypt's rooms get no pool: underground, its light is the candles', haunted-build-plan.md H2)
+	var crypt: Array = map.crypt.get("rooms", [])
 	for c in map.cells:
 		var cell: HexMap.Cell = map.cells[c]
-		if cell.type == HexMap.Tile.WALL or not cell.tag.begins_with("room:"):
+		if cell.type == HexMap.Tile.WALL or not cell.tag.begins_with("room:") or crypt.has(cell.tag):
 			continue
 		if not rooms.has(cell.tag):
 			rooms[cell.tag] = [] as Array[Vector2i]

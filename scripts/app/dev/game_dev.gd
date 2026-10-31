@@ -13,6 +13,7 @@ extends "res://scripts/app/game.gd"
 ## scripts/app/dev/sewer_dev.gd, docs/design/sewer-concept.md "Phase 1 as built"; --sewer N in a crew too since "Phase 2 as
 ## built"); --sewer-floor --to-sewer head|foot (a generated floor's sewer cluster, forced: "Phase 3 as built"); and (LavaDev.parse)
 ## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md);
+## and (CryptDev.parse) --crypt-floor --to-crypt head|foot|lit|dark --crypt-perf (a haunted floor's crypt: haunted-build-plan.md H2);
 ## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z --walk-path x0,z0,x1,z1 (frame sequences for flicker hunts:
 ## _take_shot_later); and (GymDev.parse) --gym: the test gym (GymMap's floor and GymDev's panel, solo only:
 ## docs/design/test-gym.md), with --gym-tour <dir> and --gym-act <action> (one panel action as it opens, for screenshots).
@@ -32,6 +33,7 @@ func _parse_args() -> void:
 	SewerDev.parse(args, opts)
 	GymDev.parse(args, opts)
 	LavaDev.parse(args, opts)
+	CryptDev.parse(args, opts)
 	var i := args.find("--shot-seq")
 	if i >= 0 and i + 1 < args.size():
 		opts["shot_seq"] = maxi(1, int(args[i + 1]))
@@ -149,6 +151,24 @@ func _to_landing(n: int) -> bool:
 	return true
 
 
+## A haunted floor's crypt (CryptDev): say where it is; --to-crypt puts the crew there (solo), --crypt-perf measures its
+## candle lights.
+func _crypt_floor_ready() -> void:
+	var rec := CryptPlanner.record(map)
+	if rec.is_empty():
+		return
+	var st: Dictionary = rec["stair"]
+	_log("crypt: %s set, %s at level %d (lit %s, dark %s, sarcophagi in %s), down the stair from %s (its head at %s)" % [
+		str(rec.get("set", "?")), ", ".join(rec["rooms"]), int(rec["level"]), ", ".join(rec.get("lit", [])),
+		", ".join(rec.get("dark", [])), ", ".join(rec.get("tombs", [])), st["from"], st["door_up"]], Color(0.8, 0.75, 0.6))
+	if opts.has("to_crypt") and not _shared:
+		var at := CryptDev.spot(map, _plan, str(opts["to_crypt"]))
+		if at != HexMap.NO_CELL:
+			_teleport_crew(at)
+	if opts.has("crypt_perf"):
+		CryptDev.perf.call_deferred(self, map, _plan)
+
+
 ## A generated floor's lava cave (LavaDev): --to-lava puts the crew there (solo), --lava-perf measures its lights.
 func _lava_floor_ready() -> void:
 	if map == null or map.cave.is_empty() or _lava_cave() > 0:
@@ -202,6 +222,7 @@ func _dev_on_floor_ready() -> void:
 				gym.act(act)
 	_sewer_floor_ready()
 	_lava_floor_ready()
+	_crypt_floor_ready()
 	if _sewer() > 0 and opts.has("sewer_demo"):
 		_sewer_demo(str(opts["sewer_demo"]))
 	if opts.has("tour"):

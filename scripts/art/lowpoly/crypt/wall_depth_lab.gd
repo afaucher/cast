@@ -49,6 +49,11 @@ func build_lair() -> void:
 	display = []
 	_layout()
 	_make_map()
+	# (the lair's flagstone and rough stone, not the crypt's rows the lab paints with)
+	var lair_mat := FloorMaterials.pack(FloorMaterials.F_FLAGSTONE, FloorMaterials.W_STONE)
+	for c: Vector2i in map.cells:
+		if map.cells[c].tag != "room:0":
+			map.cells[c].mat_id = lair_mat
 	GameWorld.begin(map, holder, 11)
 	terrain = HexMapView.new()
 	terrain.wall_depth = wall_depth

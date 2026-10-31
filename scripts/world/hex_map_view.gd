@@ -43,9 +43,17 @@ enum Surf { FLOOR_TOP, WALL_TOP, CRATE_TOP, STAIRS_TOP, CLIFF, WALL_SIDE, CRATE_
 ## like the pools but on their own surface, so SewerView restyles a generated floor's sewer without touching its pools.
 const CHANNEL_MATERIAL := "sewer_channel"
 
+## UNDERGROUND (a crypt: haunted-build-plan.md H2): the cells whose material is an underground row (FloorMaterials.is_under:
+## the crypt's) are drawn into a second mesh, `under_instance`, on render layer UNDER_LAYER, which DungeonLook's key and fill
+## lights leave out (their light_cull_mask): the crypt's stone is lit only by the ambient (turned down per material, the
+## row's "ambient": the shader's AO) and the omni lights (its candles, its accent light, the chapel's shafts), as the look
+## test lit it, while the rest of the floor keeps the game's light. A map without such cells builds one mesh, as before.
+const UNDER_LAYER := 1 << 1
+
 ## Filled by build(): triangles, vertices, surfaces, cells, stair_steps, crates.
 var stats: Dictionary = {}
 var mesh_instance: MeshInstance3D
+var under_instance: MeshInstance3D = null   ## the underground cells' mesh (null without any)
 var pool_view: PoolView = null   ## water, coping, foam, ladders, gantries of the map's pools (null without any)
 ## How loud the glowing seams are (read by build()). 1 = the game's look. Menu backdrops turn it down because
 ## bright seams under a UI are noisy: `seam_gain` scales every seam / rim glow, and seams closer to the camera than
@@ -159,15 +167,25 @@ func build(map: HexMap) -> void:
 		_crates.erase(c)
 	_pits = _find_pits(map)
 	_use_mats = false
+	var any_under := false
 	for c in map.cells:
-		if (map.cells[c] as HexMap.Cell).mat_id != 0:
+		var mid := (map.cells[c] as HexMap.Cell).mat_id
+		if mid != 0:
 			_use_mats = true
-			break
+			any_under = any_under or FloorMaterials.is_under(mid)
 	for _i in Surf.size():
 		_batches.append(Batch.new())
+	var main := _batches
+	var under: Array = []
+	if any_under:
+		for _i in Surf.size():
+			under.append(Batch.new())
+	under_instance = null
 
 	for c in map.cells:
 		var cell: HexMap.Cell = map.cells[c]
+		if any_under:
+			_batches = under if FloorMaterials.is_under(cell.mat_id) else main
 		var wm: int = 0 if cell.type == HexMap.Tile.WALL else cell.wall_mask
 		if cell.pool_mask != 0 and cell.type != HexMap.Tile.WALL:
 			_add_pool_cell(c, cell)
@@ -184,13 +202,44 @@ func build(map: HexMap) -> void:
 			_add_stairs(c, cell)
 		else:
 			_add_column(c, cell)
+	_batches = main
 	_add_pit_bottoms()
 
+	var counts := [0, 0]   ## triangles, vertices
+	var mesh := _make_mesh(main, counts)
+	mesh_instance = MeshInstance3D.new()
+	mesh_instance.name = "TerrainMesh"
+	mesh_instance.mesh = mesh
+	add_child(mesh_instance)
+	var surfaces := mesh.get_surface_count()
+	if any_under:
+		var umesh := _make_mesh(under, counts)
+		under_instance = MeshInstance3D.new()
+		under_instance.name = "UnderMesh"
+		under_instance.mesh = umesh
+		under_instance.layers = UNDER_LAYER
+		add_child(under_instance)
+		surfaces += umesh.get_surface_count()
+	var tris: int = counts[0]
+	var verts: int = counts[1]
+	if not map.pools.is_empty():
+		pool_view = PoolView.new()
+		pool_view.name = "Pools"
+		add_child(pool_view)
+		pool_view.build(map)
+	stats = {
+		"triangles": tris, "vertices": verts, "surfaces": surfaces,
+		"cells": map.cells.size(), "stair_steps": _stair_steps, "crates": _crates.size(),
+	}
+	_batches.clear()
+
+
+## One ArrayMesh from a set of surface batches (each non-empty one a surface with its material); adds its triangles and
+## vertices to counts [triangles, vertices].
+func _make_mesh(batches: Array, counts: Array) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
-	var tris := 0
-	var verts := 0
 	for s in Surf.size():
-		var b: Batch = _batches[s]
+		var b: Batch = batches[s]
 		if b.indices.is_empty():
 			continue
 		var arrays: Array = []
@@ -207,22 +256,9 @@ func build(map: HexMap) -> void:
 			flags = Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, _material(s))
-		tris += b.indices.size() / 3
-		verts += b.verts.size()
-	mesh_instance = MeshInstance3D.new()
-	mesh_instance.name = "TerrainMesh"
-	mesh_instance.mesh = mesh
-	add_child(mesh_instance)
-	if not map.pools.is_empty():
-		pool_view = PoolView.new()
-		pool_view.name = "Pools"
-		add_child(pool_view)
-		pool_view.build(map)
-	stats = {
-		"triangles": tris, "vertices": verts, "surfaces": mesh.get_surface_count(),
-		"cells": map.cells.size(), "stair_steps": _stair_steps, "crates": _crates.size(),
-	}
-	_batches.clear()
+		counts[0] += b.indices.size() / 3
+		counts[1] += b.verts.size()
+	return mesh
 
 
 # ---------------------------------------------------------------------- materials / textures
@@ -288,9 +324,9 @@ uniform float near_gain = 1.0;
 uniform float near_range = 0.0;
 uniform bool is_wall = false;
 uniform float wall_depth = 0.0;
-uniform vec4 m_base[32];
-uniform vec4 m_alt[32];
-uniform vec4 m_par[32];
+uniform vec4 m_base[40];
+uniform vec4 m_alt[40];
+uniform vec4 m_par[40];
 varying vec3 wp;
 varying vec3 wn;
 varying vec4 wface;
@@ -772,6 +808,7 @@ void fragment() {
 	float rgh = rough;
 	float spc = spec;
 	float ao = 1.0;
+	float amb = 1.0;
 	float edge = 0.0;
 	bool depth = is_wall && wall_depth > 0.5;
 	// (screen derivatives taken here, outside the branches: a face's u and height, a cap's XZ)
@@ -790,6 +827,7 @@ void fragment() {
 		vec4 pr = m_par[id];
 		rgh = pr.x;
 		spc = pr.y;
+		amb = pr.z > 0.001 ? pr.z : 1.0;   // (an underground row's ambient: FloorMaterials "ambient"; 0 = none set)
 		int pat = int(b.a + 0.5);
 		if (is_wall && abs(wn.y) < 0.5) {
 			vec2 along = vec2(-wn.z, wn.x);
@@ -816,7 +854,7 @@ void fragment() {
 			alb = material_color(pat, wp.xz, b.rgb, a.rgb, a.a, rgh);
 		}
 	}
-	AO = ao;
+	AO = ao * amb;
 	ALBEDO = alb * COLOR.rgb;
 	ROUGHNESS = rgh;
 	SPECULAR = spc;
@@ -972,13 +1010,14 @@ func _material(surf: int) -> Material:
 ## slate shader) has nothing to switch.
 func set_wall_depth(on: bool) -> void:
 	wall_depth = on
-	if mesh_instance == null or mesh_instance.mesh == null:
-		return
-	var mesh := mesh_instance.mesh
-	for i in mesh.get_surface_count():
-		var m := mesh.surface_get_material(i) as ShaderMaterial
-		if m != null and m.get_shader_parameter("m_base") != null:
-			m.set_shader_parameter("wall_depth", 1.0 if on else 0.0)
+	for mi: MeshInstance3D in [mesh_instance, under_instance]:
+		if mi == null or mi.mesh == null:
+			continue
+		var mesh := mi.mesh
+		for i in mesh.get_surface_count():
+			var m := mesh.surface_get_material(i) as ShaderMaterial
+			if m != null and m.get_shader_parameter("m_base") != null:
+				m.set_shader_parameter("wall_depth", 1.0 if on else 0.0)
 
 
 ## Brightness of a slate floor top for a given height level (cool grey-blue). Higher levels

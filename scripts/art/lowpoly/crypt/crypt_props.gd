@@ -1,8 +1,11 @@
 class_name CryptProps
 extends RefCounted
-## LOOK-DEV ONLY (docs/design/crypt-section.md): the crypt's architecture kit, for the crypt section lab
-## (crypt_section_lab.gd) and the gym's "Crypt and ectoplasm (look test)" spawns. Nothing in the game builds a crypt: the floor
-## generator, the contracts and the network never see these. Plain nodes: no collision, no HP, nothing networked.
+## The crypt's architecture kit (docs/design/crypt-section.md): first the look test's (the crypt section lab and the gym's
+## "Crypt and ectoplasm (look test)" spawns), now the game's too (haunted-build-plan.md H2): a haunted floor's crypt is
+## dressed with these pieces through the decor table (RoomThemeDefs.DECOR rows with "crypt": DecorModels._crypt; placed by
+## CryptVignettes and CryptPlanner), and its sarcophagi are priced props (PricedProp "vault_sarcophagus" /
+## "chapel_sarcophagus": PropModels builds them here). The pieces themselves stay plain nodes: no collision, no HP, nothing
+## networked (a priced prop or a decor blocker around them carries those).
 ##
 ## The house kit (LowPoly soups, MonsterMaterial: ink outline, amber rim, vertex alpha 0.5 = an emissive face), origin at
 ## the base centre, FRONT = +Z (the piece faces (sin yaw, cos yaw) when placed at `yaw`). Every piece comes in the two
@@ -115,6 +118,50 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 	return root
 
 
+## The straight run of wall nearest `q` (world X/Z, within `max_dist`) on `map`: the nearest wall face's segment (with `q`
+## on its open side) grown along every face that continues it in line, facing the same way. [a, b, normal], or [] with no
+## wall near. A wall piece (the ossuary) goes on it, centred and no wider than it: on the nearest point alone it sat across
+## a corner, half in the wall (the user, 2026-10-29). The lab's and the game's (CryptVignettes.ossuary) placement.
+static func wall_run(map: HexMap, q: Vector2, max_dist: float) -> Array:
+	var segs: Array = []
+	var near := Hex.from_world(Vector3(q.x, 0.0, q.y))
+	for c: Vector2i in Hex.range_cells(near, ceili(max_dist) + 6):
+		var w := Hex.to_world(c)
+		if not map.cells.has(c) or Vector2(w.x, w.z).distance_to(q) > max_dist + 8.0:
+			continue
+		var s := map.wall_segments(c)
+		for i in range(0, s.size(), 3):
+			segs.append([s[i], s[i + 1], s[i + 2]])
+	var best: Array = []
+	var bd := max_dist
+	for sg: Array in segs:
+		var d := q.distance_to(Geometry2D.get_closest_point_to_segment(q, sg[0], sg[1]))
+		if d < bd and (q - (sg[0] as Vector2)).dot(sg[2]) > 0.0:
+			bd = d
+			best = sg
+	if best.is_empty():
+		return []
+	var a: Vector2 = best[0]
+	var b: Vector2 = best[1]
+	var n: Vector2 = best[2]
+	var grew := true
+	while grew:
+		grew = false
+		for sg: Array in segs:
+			if (sg[2] as Vector2).dot(n) < 0.999:
+				continue
+			for k in 2:
+				var p: Vector2 = sg[k]
+				var o: Vector2 = sg[1 - k]
+				if p.distance_to(b) < 0.01 and o.distance_to(a) > a.distance_to(b) + 0.01 and (o - a).dot(b - a) > 0.0:
+					b = o
+					grew = true
+				elif p.distance_to(a) < 0.01 and o.distance_to(b) > a.distance_to(b) + 0.01 and (o - b).dot(a - b) > 0.0:
+					a = o
+					grew = true
+	return [a, b, n]
+
+
 ## The warm light of a lit piece: short range, soft falloff, no shadow (the crypt's bright parts are these pools).
 static func candle_light(at: Vector3, k: float = 1.0, tall: bool = false) -> OmniLight3D:
 	var l := OmniLight3D.new()
@@ -162,7 +209,7 @@ static func _sarcophagus(s: LowPoly.Soup, p: Dictionary, lid: String) -> void:
 	var y := top + 0.155
 	if lid == "cross":
 		_box(s, Vector3(0.14, 0.05, 1.5), Vector3(0, y + 0.02, 0.05), lt)
-		_box(s, Vector3(0.62, 0.05, 0.14), Vector3(0, y + 0.02, -0.35), lt)
+		_box(s, Vector3(0.62, 0.04, 0.14), Vector3(0, y + 0.015, -0.35), lt)   # (its top under the upright's: test_zfight)
 		return
 	# the effigy, lying on its back: the head on a cushion at the back (-Z), shoulders, a body narrowing to the feet,
 	# hands together on a sword along it, the feet standing up
@@ -193,10 +240,12 @@ static func _ossuary(s: LowPoly.Soup, p: Dictionary, width: float, height: float
 	var w := width / float(n)
 	var d := 0.44
 	var top := height - 0.12                                                                # the piers' tops
-	_box(s, Vector3(width, top, 0.08), Vector3(0, top * 0.5, 0.04), p["niche"])            # the niches' dark backs
+	# (the dark backs and the shelf sit a hair off the piers' back plane and the shelf a hair proud of their fronts: no two
+	# faces share a plane, test_zfight)
+	_box(s, Vector3(width, top - 0.02, 0.06), Vector3(0, (top - 0.02) * 0.5, 0.04), p["niche"])   # the niches' dark backs
 	_box(s, Vector3(width + 0.1, 0.16, d + 0.04), Vector3(0, 0.08, d * 0.5), dk)           # the plinth
 	var mid := 0.16 + (height - 0.3) * 0.5
-	_box(s, Vector3(width, 0.08, d), Vector3(0, mid, d * 0.5), st)                          # the middle shelf
+	_box(s, Vector3(width, 0.08, d - 0.01), Vector3(0, mid, d * 0.5 + 0.015), st)           # the middle shelf
 	for i in n + 1:
 		var x := -width * 0.5 + w * float(i)
 		_box(s, Vector3(0.12, top - 0.08, d), Vector3(x, (top + 0.08) * 0.5, d * 0.5), st)    # the piers
@@ -267,7 +316,8 @@ static func _arch(s: LowPoly.Soup, p: Dictionary, width: float, gate: bool, open
 		var th := 0.3 if i != segs / 2 else 0.38
 		var col := st if i != segs / 2 else lt
 		var pos := inner + Vector3(sin(tm), cos(tm), 0) * th * 0.5
-		_box(s, Vector3(seg_len + 0.02, th, DEPTH + (0.04 if i == segs / 2 else 0.0)), pos, col, Vector3(0, 0, -rad_to_deg(tm)))
+		# (the keystone stands a little proud of the lintel's faces, not flush with them: test_zfight)
+		_box(s, Vector3(seg_len + 0.02, th, DEPTH + (0.08 if i == segs / 2 else 0.0)), pos, col, Vector3(0, 0, -rad_to_deg(tm)))
 	var apex := SPRING + RISE
 	# spandrels and the lintel over the arch
 	for x: float in [-1.0, 1.0]:
@@ -282,7 +332,7 @@ static func _arch(s: LowPoly.Soup, p: Dictionary, width: float, gate: bool, open
 		var leaf := LowPoly.Soup.new(120 + int(side), 0.04)
 		var nb := 6
 		for i in nb + 1:
-			var lx := a * float(i) / float(nb)            # along the leaf from the hinge
+			var lx := minf(a * float(i) / float(nb), a - 0.035)   # along the leaf from the hinge (the two meeting bars side by side)
 			var h: float = under.call(side * (a - lx))     # the arch over where that bar stands when shut
 			var bar_top := h - 0.1
 			var x := -side * lx

@@ -23,6 +23,10 @@ gets paid. Speech recognition runs on-device (the sherpa-onnx `WordListener` ext
 - **Lava caves:** a supervillain's floors 2-3, and floor 2 of other clients with a hellgate in it, can roll a lava cave
   (`.\run.ps1 --seed 31 --floor 2 --spells damp,fireball --no-mic --to-lava entry`); `--lava-floor` forces one (solo or every
   window of a crew). See `docs/design/lava-playtest.md`, "As built: caves on real floors".
+- **Crypts:** a haunted mansion's floors 2-3 and a haunted church's floors 1-3 can roll a crypt (a vault under the mansion, a
+  chapel under the church: `.\run.ps1 --client heir --seed 1 --floor 2 --spells heal,fireball --no-mic --to-crypt lit`, or
+  `--client parish --seed 2 --floor 1`); `--crypt-floor` forces one (solo or every window of a crew). See
+  `docs/design/haunted-build-plan.md`, "H2 as built".
 - **Movement feel (dev):** the game plays `grounded_anim` by default (the user's pick, 2026-10-23: grounded movement plus the
   body lean / squash, strike-first melee and each hero's hit area reshaped to its weapon; `docs/design/animation-research.md`,
   "As built"), exported builds and crews included. `--move-feel today|grounded|grounded_anim` names another for a run (`today`

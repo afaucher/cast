@@ -122,6 +122,9 @@ func _check_tables() -> void:
 		if m.has("haunt"):
 			# a haunted room's piece: the look test's HauntProps kind (haunted-build-plan.md H1)
 			check(not HauntProps.row(String(m["haunt"])).is_empty(), "%s names a HauntProps kind (%s)" % [kind, m["haunt"]])
+		elif m.has("crypt"):
+			# a crypt's piece: the look test's CryptProps kind, or the chapel's shaft (haunted-build-plan.md H2)
+			check(CryptProps.KINDS.has(String(m["crypt"])) or String(m["crypt"]) == "shaft", "%s names a CryptProps kind (%s)" % [kind, m["crypt"]])
 		else:
 			var model := String(m.get("model", m.get("node_model", "")))
 			check(DecorModels.builder(model).is_valid(), "%s names a DecorModels builder (%s)" % [kind, model])

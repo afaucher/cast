@@ -39,6 +39,12 @@ const F_BASALT_HELL := 15     ## ... where a hellgate leaks into it (the hellfir
 const F_PARQUET := 27         ## dark walnut herringbone (the mansion's house rooms: "walnut & damask")
 const F_LIMESTONE := 29       ## worn limestone flags (the church)
 const F_TERRACOTTA := 30      ## terracotta tiles (the conservatory)
+# The crypt's floors (haunted-build-plan.md H2; the look test's two sets, CryptLook.LOOK: crypt-section.md). Past the
+# haunted slots: the table grew to TABLE_SIZE 40 for them.
+const F_VAULT := 32           ## small rough wet stones, warm black-brown (the vault, under a mansion)
+const F_VAULT_HALL := 33      ## ... its halls, a shade darker
+const F_CHAPEL := 34          ## large pale slabs (the chapel, under a church)
+const F_CHAPEL_HALL := 35     ## ... its halls
 
 # Wall ids (bits 8-15 of mat_id).
 const W_CONCRETE := 1
@@ -50,9 +56,12 @@ const W_BASALT := 5           ## a lava cave's rim
 const W_DAMASK := 8           ## slot 24: oxblood damask over a walnut dado (the mansion)
 const W_LIMESTONE := 10       ## slot 26: pale limestone blocks (the church)
 const W_GLAZING := 15         ## slot 31: white iron glazing bars over dark glass (the conservatory)
+# The crypt's walls (H2): rough stone blocks in the two sets.
+const W_VAULT := 20           ## slot 36: wet black-brown stone blocks (the vault)
+const W_CHAPEL := 21          ## slot 37: whitewashed stone blocks (the chapel)
 
 const WALL_OFFSET := 16     ## shader table index of wall id 0; floors use their own id
-const TABLE_SIZE := 32
+const TABLE_SIZE := 40      ## (HexMapView.MATERIAL_SHADER's uniform arrays are this long)
 ## The terrain shader's haunted patterns (HexMapView.MATERIAL_SHADER; from the look test, HauntLook): herringbone parquet
 ## on a floor; wallpaper over a panelled dado (24 damask on walnut, 25 stripe on oak: the look test's other set) and
 ## conservatory glazing on a wall. Their wall caps are wood or a glass roof, not the base colour.
@@ -91,7 +100,8 @@ const WALLS: Array[Dictionary] = [
 	{"name": "basalt", "pat": Pat.ASHLAR, "base": Color(0.13, 0.115, 0.11), "alt": Color(0.04, 0.035, 0.035), "scale": 1.3, "rough": 0.92, "spec": 0.08, "seam": 0.2},
 ]
 
-## The haunted materials in the free slots at the top of the table (24-31; the look test's layout, HauntLook): slot ->
+## The haunted materials in the free slots at the top of the table (24-31; the look test's layout, HauntLook; the crypt's
+## 32-37, H2): slot ->
 ## the same row shape plus "wall" (true: a wall id, slot - WALL_OFFSET; false: a floor id, the slot itself). The look test
 ## keeps its other material set (oak & stripe, slots 25 and 28) on a copy of the table.
 const HIGH := {
@@ -101,6 +111,18 @@ const HIGH := {
 	29: {"wall": false, "name": "limestone flags", "pat": Pat.FLAGSTONE, "base": Color(0.55, 0.52, 0.47), "alt": Color(0.20, 0.19, 0.17), "scale": 1.5, "rough": 0.88, "spec": 0.12, "seam": 0.8},
 	30: {"wall": false, "name": "terracotta tiles", "pat": Pat.TILE, "base": Color(0.62, 0.31, 0.19), "alt": Color(0.30, 0.15, 0.10), "scale": 0.7, "rough": 0.75, "spec": 0.15, "seam": 0.8},
 	31: {"wall": true, "name": "glazing", "pat": PAT_GLAZING, "base": Color(0.10, 0.17, 0.19), "alt": Color(0.86, 0.87, 0.82), "scale": 1.0, "rough": 0.15, "spec": 0.7, "seam": 0.2},
+	# The crypt's two sets (H2), the look test's rows as the user read them (crypt-section.md, 2026-10-29: "The vault is
+	# great. It really sells the dim lighting."; the chapel distinct from it). Both all but drop the hex seams, so a crypt
+	# does not read as the game's usual grid: "seam" is what the lab showed (its view-wide 0.08 / 0.1 times the flagstone
+	# and corridor stone rows' own 0.8 / 1.0 it recoloured). "under": underground, lit as the lab lit them (HexMapView draws
+	# these cells on its UNDER_LAYER, which the key and fill lights leave out: candles, accent lights and shafts only), and
+	# "ambient": how much of the game's ambient reaches them (the shader's AO; the lab's dim warm vault, its cooler chapel).
+	32: {"wall": false, "under": true, "ambient": 0.5, "name": "vault stone", "pat": Pat.FLAGSTONE, "base": Color(0.30, 0.23, 0.17), "alt": Color(0.06, 0.045, 0.035), "scale": 0.55, "rough": 0.35, "spec": 0.55, "seam": 0.064},
+	33: {"wall": false, "under": true, "ambient": 0.5, "name": "vault stone (hall)", "pat": Pat.FLAGSTONE, "base": Color(0.26, 0.20, 0.15), "alt": Color(0.06, 0.045, 0.035), "scale": 0.55, "rough": 0.35, "spec": 0.55, "seam": 0.08},
+	34: {"wall": false, "under": true, "ambient": 0.9, "name": "chapel slabs", "pat": Pat.FLAGSTONE, "base": Color(0.80, 0.78, 0.72), "alt": Color(0.50, 0.48, 0.44), "scale": 2.8, "rough": 0.9, "spec": 0.1, "seam": 0.08},
+	35: {"wall": false, "under": true, "ambient": 0.9, "name": "chapel slabs (hall)", "pat": Pat.FLAGSTONE, "base": Color(0.74, 0.72, 0.67), "alt": Color(0.50, 0.48, 0.44), "scale": 2.8, "rough": 0.9, "spec": 0.1, "seam": 0.1},
+	36: {"wall": true, "under": true, "ambient": 0.5, "name": "vault stone blocks", "pat": Pat.ASHLAR, "base": Color(0.30, 0.23, 0.17), "alt": Color(0.04, 0.03, 0.025), "scale": 1.0, "rough": 0.35, "spec": 0.55, "seam": 0.2},
+	37: {"wall": true, "under": true, "ambient": 0.9, "name": "whitewashed stone blocks", "pat": Pat.ASHLAR, "base": Color(0.88, 0.86, 0.80), "alt": Color(0.58, 0.56, 0.52), "scale": 1.0, "rough": 0.9, "spec": 0.1, "seam": 0.2},
 }
 
 ## Every room theme names its floor in its row (RoomThemeDefs.THEMES "floor_mat"; tests/test_floor_materials.gd checks
@@ -198,6 +220,16 @@ static func is_wall_id(wall_id: int) -> bool:
 	return (wall_id >= 0 and wall_id < WALLS.size()) or _high_wall(wall_id)
 
 
+## Is a cell with this mat_id underground (its floor or its wall an "under" row: the crypt's)? HexMapView draws it on its
+## UNDER_LAYER.
+static func is_under(mat_id: int) -> bool:
+	if mat_id == 0:
+		return false
+	var f := floor_of(mat_id)
+	var w := wall_of(mat_id)
+	return (_high_floor(f) and bool(HIGH[f].get("under", false))) or (_high_wall(w) and bool(HIGH[WALL_OFFSET + w].get("under", false)))
+
+
 static func _high_floor(floor_id: int) -> bool:
 	return HIGH.has(floor_id) and not bool(HIGH[floor_id]["wall"])
 
@@ -246,7 +278,7 @@ static func assign(map: HexMap, plan: SitePlan, site_type: String) -> void:
 
 
 ## The shader's material tables, in LINEAR colour: base (rgb, a = pattern id), alt (rgb, a = pattern scale),
-## par (x = roughness, y = specular).
+## par (x = roughness, y = specular, z = the share of the ambient an underground row gets: 0 = all of it).
 static func table_arrays() -> Dictionary:
 	if not _tables.is_empty():
 		return _tables
@@ -270,6 +302,6 @@ static func table_arrays() -> Dictionary:
 		var a: Color = (d["alt"] as Color).srgb_to_linear()
 		base[i] = Vector4(b.r, b.g, b.b, float(int(d["pat"])))
 		alt[i] = Vector4(a.r, a.g, a.b, float(d["scale"]))
-		par[i] = Vector4(float(d["rough"]), float(d["spec"]), 0.0, 0.0)
+		par[i] = Vector4(float(d["rough"]), float(d["spec"]), float(d.get("ambient", 0.0)), 0.0)
 	_tables = {"base": base, "alt": alt, "par": par}
 	return _tables

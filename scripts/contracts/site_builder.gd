@@ -64,6 +64,11 @@ extends RefCounted
 ##    floor's first hellgate in a GATE cave's far chamber, its chambers take the "lava" theme (its look: hellfire with a gate in
 ##    it, else magma), DoorPlanner leaves its doorways open, LavaPlanner places its archers on the isles and keeps its packs at
 ##    the bridgeheads, and spawns them last with the cave's look and rules (LavaField). Nothing of it on a floor without one;
+##  - a CRYPT (a haunted site's section: DungeonGen's "crypt" option, HexMap.crypt; haunted-build-plan.md "H2 as built"): its
+##    rooms take the crypt themes, lit and dark by turns from the stair's foot (CryptPlanner.theme), its lit rooms a row of
+##    priced sarcophagi against a wall (CryptPlanner.plan_tombs, own dice), the recipes dress them with the look test's kit
+##    (CryptVignettes), DoorPlanner stands arches and open gates in its doorways, the stair's landing gets candles and its
+##    halls and walls their stone. Its packs are the floor's (the contract's family). Nothing of it on a floor without one;
 ##  - the ELEVATOR (SitePlan.elevator: HexMap.elevator plus the job's look): its car, doorway and landing
 ##    (ElevatorGeo.keep_cells) are avoided and blocked like the exit zone, and it is a body in its room's ThemeCtx.
 ##
@@ -132,6 +137,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	RoomThemes.assign(p, run.site_type, run.story, floor_n, theme_seed)
 	SewerPlanner.theme(map, p)                                          # no dice; the cluster's rooms are sewer rooms
 	LavaPlanner.theme(map, p)                                           # no dice; a cave's chambers are lava rooms, its look
+	CryptPlanner.theme(map, run, p)                                     # no dice; a crypt's rooms are lit or dark crypt rooms
 	# the in-ground pools of the pool / science / moat rooms: terrain, carved before anything is placed in those rooms
 	PoolGeo.carve(map, p, avoid, near_corr, theme_seed * 613 + floor_n * 7 + 1)
 	var ctx := ThemeCtx.make(map, p, avoid, near_corr, theme_seed * 919 + floor_n * 13 + 3)
@@ -141,6 +147,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	t0 = Time.get_ticks_usec()
 	PropPlanner.plan(map, run, p, rng, avoid, near_corr, catalog, ctx)  # dice: the shared rng, then ctx.rng (the poses)
 	PropPlanner.plan_set_pieces(map, run, floor_n, p, catalog, ctx)    # own dice; the landings' set pieces (none without)
+	CryptPlanner.plan_tombs(map, p, avoid, near_corr, ctx)              # the crypt's own dice (lent to ctx): its sarcophagi
 	var t_hz := Time.get_ticks_usec()
 	HazardPlanner.plan(map, run, floor_n, p, avoid, near_corr, ctx)     # own dice (lent to ctx for its poses)
 	HazardPlanner.plan_sewer(map, run, floor_n, p, avoid, near_corr, ctx)   # the cluster's own dice: its panel and pumps
@@ -152,6 +159,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	RoomThemes.plan_decor(ctx)                                          # dice: ctx.rng, after the props' poses
 	last_theme_usec += Time.get_ticks_usec() - t0
 	SewerPlanner.dress(map, run, p)                                     # no dice: the sump grates, channel ends, the sign
+	CryptPlanner.dress(map, p)                                          # no dice: the crypt stair's landing candles
 	PackagePlanner.plan(map, run, floor_n, p, ctx)                      # own dice; after the decor (sees every body)
 	PackPlanner.plan(run, floor_n, p)                                   # no dice (the room budgets)
 	_block_cells(p)                                                     # after everything a monster may not stand on
@@ -162,6 +170,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	FloorMaterials.assign(map, p, run.site_type)
 	SewerPlanner.materials(map, p)                                      # the cluster's halls and walls
 	LavaPlanner.materials(map, p)                                       # a cave's rock, lava and rim: basalt
+	CryptPlanner.materials(map, p)                                      # a crypt's halls, stair and walls: its set's stone
 	# The office doors and their thresholds (after the materials: a threshold writes its cells' floor). Timed on its own.
 	var t_doors := Time.get_ticks_usec()
 	DoorPlanner.plan(map, run, floor_n, p)                              # own dice (DoorPlan, from the floor seed)
@@ -478,6 +487,7 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
 	DoorPlanner.spawn(p, site)
+	CryptPlanner.spawn(map, site)               # (cosmetic: a crypt's pieces out of the key light; no actor)
 	return site
 
 

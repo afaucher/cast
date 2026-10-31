@@ -1,8 +1,10 @@
 # The crypt section: a visual test
 
-Status: **[look-dev only]**, 2026-10-29. Nothing here is in the game. The floor generator never makes a crypt, and no site,
-contract, monster or network message knows one. The test exists in a look lab and, as loose pieces, in the gym. Its job is
-to help the user decide how a crypt should look as a section of a floor.
+Status: **[look test, 2026-10-29; in the game since H2, 2026-10-31]**. Haunted floors now roll crypts built from this
+test's kit, sets and placement (`haunted-build-plan.md`, "H2 as built": `CryptCluster`, `CryptPlanner`, `CryptVignettes`;
+the sets' colours are `FloorMaterials` rows, the sarcophagi priced props). The lab below stays the lab: a hand-made section
+in its own relit scene. Its job was to help the user decide how a crypt should look as a section of a floor; the sections
+below describe the test as it was built, except where marked.
 
 The idea this serves (new-themes.md, "Ghost house: haunted contracts", Sites): a haunted site is a room pool plus a
 section pool, and the crypt is the section that a mansion ("sections: crypt, sewer") or a church ("section: crypt") can
@@ -107,7 +109,11 @@ seeds, and the gym's spawns draw theirs from `GameWorld.fx_rng`.
 | The gym | `GymSpawns` group `crypt` (**Crypt and ectoplasm (look test)**) | "crypt: sarcophagus", "crypt: ossuary", "crypt: gate" and "crypt: candles" (lit) put a vault-set piece down. An ossuary within 3 of a wall backs onto it. There is no live crypt room in the gym: a whole section on the gym's map would be a big build, and the lab shows it. |
 | Test | `tests/test_crypt_section.gd` | Checks that every kind builds in both sets as a cosmetic piece, with a candle light only on the lit kinds, and that an open gate swings toward +Z. Checks that the sets leave `FloorMaterials`' own tables alone, that the gym entries spawn (an ossuary onto a wall), and that the lab builds headless in both sets: the room above 3.0 up in its own materials, two flights of stairs, a path from the room above to the end vault, candle light over the chamber and none over the gallery. |
 
-The floor generator, `FloorMaterials`, `HexMapView`, `DungeonLook` and the contracts are unchanged.
+The floor generator, `FloorMaterials`, `HexMapView`, `DungeonLook` and the contracts were unchanged by the test. **Since H2**
+(`haunted-build-plan.md`, "H2 as built") they build crypts: the sets' rows are `FloorMaterials` slots 32-37 (the lab paints
+with them now, so `CryptLook.restyle` / `tables` are gone; the room above is the game's mansion or church), the wall-run
+placement is `CryptProps.wall_run`, and the kit's ossuary, arch, gate and cross lid moved a hair apart where faces were
+coplanar (`test_zfight`).
 
 ## Running it
 

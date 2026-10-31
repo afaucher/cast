@@ -1,9 +1,9 @@
 extends TestCase
-## The crypt section look test (docs/design/crypt-section.md, LOOK-DEV ONLY): CryptProps builds every piece in both
-## material sets as plain cosmetic nodes (lit pieces carry their candle light); CryptLook's sets restyle only a terrain's
-## own copy of the material tables; the gym's "crypt: <kind>" entries put a piece down (an ossuary onto a wall within
-## reach); and the section lab builds headless in both sets: a room above 6 levels up, stairs down that connect it to the
-## crypt, candle light over the burial chamber and none over the ossuary gallery.
+## The crypt section look test (docs/design/crypt-section.md; the game's crypt since H2 is tests/test_crypt_gen.gd):
+## CryptProps builds every piece in both material sets as plain cosmetic nodes (lit pieces carry their candle light);
+## CryptLook's sets are the game's FloorMaterials rows; the gym's "crypt: <kind>" entries put a piece down (an ossuary onto
+## a wall within reach); and the section lab builds headless in both sets: a room above 6 levels up, stairs down that connect
+## it to the crypt, candle light over the burial chamber and none over the ossuary gallery.
 
 const LAB := "res://scripts/art/lowpoly/crypt/crypt_section_lab.gd"
 
@@ -51,14 +51,18 @@ func _max_z(n: Node3D) -> float:
 
 
 func _check_look() -> void:
-	var before: PackedVector4Array = (FloorMaterials.table_arrays()["base"] as PackedVector4Array).duplicate()
+	# the sets are the game's FloorMaterials rows now (haunted-build-plan.md H2), not a lab restyle of shared rows
+	var base: PackedVector4Array = FloorMaterials.table_arrays()["base"]
 	for set_name: String in CryptLook.SETS:
-		var tb := CryptLook.tables(set_name)
-		var base: PackedVector4Array = tb["base"]
-		var want: Color = (CryptLook.look(set_name)["floor"] as Color).srgb_to_linear()
-		near(base[FloorMaterials.F_FLAGSTONE].x, want.r, 0.0001, "%s: the crypt floor's colour" % set_name)
-		eq(base[FloorMaterials.F_WOOD], before[FloorMaterials.F_WOOD], "%s: the mansion's wood is untouched" % set_name)
-	eq(FloorMaterials.table_arrays()["base"], before, "FloorMaterials' own tables are untouched")
+		var lk := CryptLook.look(set_name)
+		var f := FloorMaterials.floor_of(CryptLook.crypt_room_mat(set_name))
+		var w := FloorMaterials.wall_of(CryptLook.crypt_room_mat(set_name))
+		check(FloorMaterials.is_floor_id(f) and FloorMaterials.is_wall_id(w), "%s: the crypt's floor and wall are real rows" % set_name)
+		eq(f, int(lk["floor"]), "%s: the room floor is the set's" % set_name)
+		eq(FloorMaterials.floor_of(CryptLook.crypt_hall_mat(set_name)), int(lk["hall"]), "%s: the hall floor is the set's" % set_name)
+		near(FloorMaterials.seam_gain(f), float(lk["seam"]), 0.0001, "%s: its seams all but off" % set_name)
+		check(base[f] != base[FloorMaterials.F_FLAGSTONE], "%s: not the lair's flagstone" % set_name)
+	check(base[FloorMaterials.F_VAULT] != base[FloorMaterials.F_CHAPEL], "the vault and the chapel differ")
 	check(CryptLook.above_mat("vault") != CryptLook.above_mat("chapel"), "a mansion above the vault, a church above the chapel")
 
 
@@ -109,7 +113,7 @@ func _check_lab() -> void:
 		var above: Vector2i = keys["above"]
 		eq(m.cells[above].level, 6, "%s: the room above is 3.0 up" % set_name)
 		eq(m.cells[above].mat_id, CryptLook.above_mat(set_name), "%s: in the room above's materials" % set_name)
-		eq(m.cells[keys["entry"]].mat_id, CryptLook.crypt_room_mat(), "%s: the crypt in its own" % set_name)
+		eq(m.cells[keys["entry"]].mat_id, CryptLook.crypt_room_mat(set_name), "%s: the crypt in its own" % set_name)
 		var stairs := 0
 		for c: Vector2i in m.cells:
 			if m.cells[c].type == HexMap.Tile.STAIRS:

@@ -2,7 +2,8 @@ extends MonsterTestBase
 ## Haunted contracts, step H1 (docs/design/haunted-build-plan.md): the two haunted clients (ClientArchetype.HAUNTED_IDS, the
 ## dead pest family, a mansion and a church), their contracts (no hellgates, no gate or origin objective, the pest per floor
 ## pays, skeletons only), the board dealing them on dice of its own (the hellgate offers dealt as before), and their floors
-## built the way the game builds them: no gate, no section, only skeletons, rooms from the haunted pools dressed with the
+## built the way the game builds them: no gate, no sewer or lava section (a crypt may roll since H2: its rooms are crypt
+## rooms, tests/test_crypt_gen.gd), only skeletons, rooms from the haunted pools dressed with the
 ## look test's props, priced antiques from the site's catalog, notes and dispatch lines that never name a gate, and the same
 ## NetFloor checksum on two builds (the crew's load barrier).
 
@@ -168,7 +169,7 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	var plan: SitePlan = a["plan"]
 	var site: SiteBuilder.Site = a["site"]
 	var site_type := run.site_type
-	# no hellgate, no section
+	# no hellgate, no sewer or lava section (a crypt may roll: H2, test_crypt_gen)
 	check(plan.gates.is_empty() and site.gates.is_empty() and site.origin_gate == null and site.beasts.is_empty(), "%s: no hellgate" % tag)
 	check(map.sewer.is_empty() and map.cave.is_empty(), "%s: no sewer cluster or lava cave" % tag)
 	check(site.scouts.is_empty() and site.sharks.is_empty() and site.gators.is_empty(), "%s: no goblin scout, shark or gator" % tag)
@@ -181,10 +182,15 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	check(site.pest_spawned >= PackPlanner.PEST_MIN, "%s: at least %d to exterminate (%d)" % [tag, PackPlanner.PEST_MIN, site.pest_spawned])
 	# the rooms: the haunted pool, the service entrance; the origin room on the last floor
 	var pool := RoomThemeDefs.pool(site_type)
+	var crypt_rooms: Array = map.crypt.get("rooms", [])   # (a crypt, H2: its rooms are crypt rooms, test_crypt_gen's)
+	var crypt_themes: Array = RoomThemeDefs.CRYPT[CryptCluster.set_for(site_type)]
 	var themes := {}
 	for rt: String in plan.room_themes:
 		var t := str(plan.room_themes[rt])
 		themes[t] = true
+		if crypt_rooms.has(rt):
+			check(crypt_themes.has(t), "%s: %s in the crypt is a crypt room" % [tag, t])
+			continue
 		check(t == RoomThemeDefs.SERVICE or pool.has(t), "%s: %s is a %s room" % [tag, t, site_type])
 	if f == ContractRun.FLOOR_COUNT:
 		check(plan.origin_room != "", "%s: the story's origin room" % tag)
@@ -200,6 +206,8 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	check(haunt_decor >= 4, "%s: the rooms are dressed with the look test's props (%d pieces)" % [tag, haunt_decor])
 	var catalog := PricedProp.catalog(site_type)
 	for pr in plan.props + plan.set_pieces:
+		if str(pr["kind"]) == CryptPlanner.tomb_kind(CryptCluster.set_for(site_type)) and crypt_rooms.has(str(pr["room"])):
+			continue   # (the crypt's sarcophagi: H2)
 		check(catalog.has(str(pr["kind"])), "%s: %s is one of the site's antiques" % [tag, pr["kind"]])
 	# employees, notes, the dispatch line
 	check(plan.employees.size() >= 2, "%s: staff to extract" % tag)

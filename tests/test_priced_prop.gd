@@ -106,6 +106,12 @@ func setup() -> void:
 			var hm := PropModels.build(kind)
 			check(hm.get_node_or_null("Body") is MeshInstance3D, "%s's haunt model has a body" % kind)
 			hm.free()
+		elif row.has("crypt"):
+			# a crypt's sarcophagus (haunted-build-plan.md H2): the look test's model (CryptProps) in its set, with a Body
+			check(CryptProps.KINDS.has(str(row["crypt"])) and CryptProps.SETS.has(str(row.get("set", ""))), "%s names a CryptProps kind and set" % kind)
+			var cm := PropModels.build(kind)
+			check(cm.get_node_or_null("Body") is MeshInstance3D, "%s's crypt model has a body" % kind)
+			cm.free()
 		elif row.has("node"):
 			check(PropModels.builder(String(row["node"])).is_valid(), "%s names a PropModels node builder (%s)" % [kind, row["node"]])
 		else:

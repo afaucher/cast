@@ -40,6 +40,13 @@ extends RefCounted
 ## ANY failure (no wing fits, the stair finds no straight run, validation) builds the attempt again without the option, so a
 ## floor without a cluster is byte for byte the floor it always was (tests/test_sewer_gen.gd, test_golden_floor).
 ##
+## THE CRYPT (params "crypt": a seed, CryptCluster.seed_for; haunted-build-plan.md "H2 as built"): the same machinery on a
+## haunted floor, a sewer cluster's twin with CryptCluster's numbers (2-4 rooms, DROP_MIN..DROP_MAX levels down, flights of
+## at most CryptCluster.FLIGHT_MAX), and its record in HexMap.crypt (the stair's route too, for its landing's candles), which
+## CryptPlanner themes and dresses. A floor asks for a sewer cluster or a crypt, never both (the sewer wins); any failure
+## builds the attempt without it, so a haunted floor without a crypt is byte for byte the floor it always was
+## (tests/test_crypt_gen.gd).
+##
 ## THE LAVA CAVE (params "cave": a seed, LavaSite.seed_for; docs/design/lava-playtest.md "As built"): CaveGen turns a wing of
 ## 2-3 rooms into rock chambers over a lava plane joined by two-wide bridges, on dice of its own (`crng`): choose() with the
 ## tree and its levels (the wing's rooms at its root's level, so the hall in is unchanged), carve() once every link is cut
@@ -66,7 +73,8 @@ extends RefCounted
 ##
 ## params (all optional): rooms, size, room_radius_min, room_radius_max, gap, loops, wall_height, elevator ("wall" |
 ## "free"; a contract's floors use for_run(), which passes the job's choice), sewer (a cluster's seed, 0: none),
-## sewer_force (dev: try the cluster on every attempt before building without it), cave (a cave's seed, 0: none), cave_gate
+## sewer_force (dev: try the cluster on every attempt before building without it), crypt / crypt_force (the same for a
+## crypt), cave (a cave's seed, 0: none), cave_gate
 ## (its far chamber holds a hellgate: the record says so for GatePlanner), cave_force (dev: try the cave on every attempt first),
 ## landings (bool: overrides the `landings` switch for this floor; for_run passes true for a crew's floors).
 
@@ -120,11 +128,10 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 		for k in CAVE_KEYS:
 			no_cave.erase(k)
 		var cave_only := params.duplicate()
-		cave_only.erase("sewer")
-		cave_only.erase("sewer_force")
 		var plain_floor := no_cave.duplicate()
-		plain_floor.erase("sewer")
-		plain_floor.erase("sewer_force")
+		for k in CLUSTER_KEYS:
+			cave_only.erase(k)
+			plain_floor.erase(k)
 		if bool(params.get("cave_force", false)):
 			for attempt in MAX_ATTEMPTS:   # (dev, --lava-floor: any attempt with a cave first)
 				var mf := _attempt(_attempt_seed(seed, attempt), cave_only)
@@ -132,7 +139,7 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 					return mf
 		for attempt in MAX_ATTEMPTS:
 			var s := _attempt_seed(seed, attempt)
-			if int(no_cave.get("sewer", 0)) != 0:
+			if int(no_cave.get("sewer", 0)) != 0 or int(no_cave.get("crypt", 0)) != 0:
 				var ms := _attempt(s, no_cave)
 				if ms != null:
 					return ms
@@ -144,16 +151,18 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 				return mp
 		push_warning("DungeonGen: no valid map for seed %d after %d attempts; using fallback" % [seed, MAX_ATTEMPTS])
 		return _fallback()
-	# A sewer cluster asked for: each attempt tries it first and, if anything fails, builds the attempt without it, so a floor
-	# that ends up without one is exactly the floor these params without "sewer" give.
-	var sewer := int(params.get("sewer", 0)) != 0
+	# A sewer cluster (or a crypt) asked for: each attempt tries it first and, if anything fails, builds the attempt without it,
+	# so a floor that ends up without one is exactly the floor these params without "sewer" / "crypt" give.
+	var sewer := int(params.get("sewer", 0)) != 0 or int(params.get("crypt", 0)) != 0
 	var plain := params
-	if params.has("sewer") or params.has("sewer_force"):
-		plain = params.duplicate()
-		plain.erase("sewer")
-		plain.erase("sewer_force")
-	if sewer and bool(params.get("sewer_force", false)):
-		for attempt in MAX_ATTEMPTS:   # (dev, --sewer-floor: any attempt with a cluster first)
+	for k in CLUSTER_KEYS:
+		if params.has(k):
+			plain = params.duplicate()
+			for k2 in CLUSTER_KEYS:
+				plain.erase(k2)
+			break
+	if sewer and (bool(params.get("sewer_force", false)) or bool(params.get("crypt_force", false))):
+		for attempt in MAX_ATTEMPTS:   # (dev, --sewer-floor / --crypt-floor: any attempt with a cluster first)
 			var mf := _attempt(_attempt_seed(seed, attempt), params)
 			if mf != null:
 				return mf
@@ -171,6 +180,7 @@ static func generate(seed: int, params: Dictionary = {}) -> HexMap:
 
 
 const CAVE_KEYS: Array[String] = ["cave", "cave_gate", "cave_force"]
+const CLUSTER_KEYS: Array[String] = ["sewer", "sewer_force", "crypt", "crypt_force"]
 
 
 ## How many landings a hall `length` world units long (door to door along its route) gets: none up to LANDING_MIN_LEN,
@@ -211,11 +221,17 @@ static func for_run(run: ContractRun, floor_n: int, shared: bool = false) -> Hex
 		params["sewer"] = sewer
 		if SewerCluster.force:
 			params["sewer_force"] = true
-	# a lava cave (LavaSite), on a floor that rolled no sewer cluster (one set piece a floor, and a cluster floor stays the floor
-	# it was; so a cave floor costs at most two attempts, the cave's and the plain one); --lava-floor forces one anyway (after
-	# the cluster, generate()), --sewer-floor alone keeps its clusters
+	# a crypt (CryptCluster: a haunted site's section), on a floor that rolled no sewer cluster (one cluster a floor)
+	var crypt := CryptCluster.seed_for(run, floor_n, shared)
+	if crypt != 0 and sewer == 0:
+		params["crypt"] = crypt
+		if CryptCluster.force:
+			params["crypt_force"] = true
+	# a lava cave (LavaSite), on a floor that rolled no sewer cluster or crypt (one set piece a floor, and a cluster floor stays
+	# the floor it was; so a cave floor costs at most two attempts, the cave's and the plain one); --lava-floor forces one
+	# anyway (after the cluster, generate()), --sewer-floor / --crypt-floor alone keep their clusters
 	var cave := LavaSite.seed_for(run, floor_n, shared)
-	if cave != 0 and (LavaSite.force or (not SewerCluster.force and sewer == 0)):
+	if cave != 0 and (LavaSite.force or (not SewerCluster.force and not CryptCluster.force and sewer == 0 and crypt == 0)):
 		params["cave"] = cave
 		params["cave_gate"] = LavaSite.needs_gate(run, floor_n)
 		if LavaSite.force:
@@ -302,8 +318,10 @@ class Builder:
 	var exit_order: Array[int] = []     ## room indices by walking distance from the start, farthest first (start room left out)
 	var elevator: Dictionary = {}       ## the elevator's record (ElevatorGeo)
 	var notched := false                ## the wall notch was cut (a failure afterwards is retried with the free car)
-	# the sewer cluster (see the header): its own dice, its rooms, their level and the stair link into them
+	# the sewer cluster (see the header): its own dice, its rooms, their level and the stair link into them; a crypt is the
+	# same with CryptCluster's numbers (p_crypt, its record in HexMap.crypt)
 	var p_sewer := 0
+	var p_crypt := 0
 	var srng := RandomNumberGenerator.new()
 	var cluster: Dictionary = {}        ## room index -> true
 	var cluster_level := 0
@@ -324,7 +342,8 @@ class Builder:
 		rng.seed = s
 		p_landings = bool(params.get("landings", DungeonGen.landings))
 		p_sewer = int(params.get("sewer", 0))
-		srng.seed = (p_sewer * 31 + s) & 0x7fffffff
+		p_crypt = int(params.get("crypt", 0)) if p_sewer == 0 else 0
+		srng.seed = ((p_sewer if p_sewer != 0 else p_crypt) * 31 + s) & 0x7fffffff
 		p_cave = int(params.get("cave", 0))
 		p_cave_gate = bool(params.get("cave_gate", false))
 		crng.seed = (p_cave * 37 + s * 3 + 1) & 0x7fffffff
@@ -361,7 +380,10 @@ class Builder:
 		if not _validate_and_tag():
 			return null
 		if not cluster.is_empty():
-			_sewer_record()
+			if p_crypt != 0:
+				_crypt_record()
+			else:
+				_sewer_record()
 		if not cave.is_empty():
 			CaveGen.finish(self)
 		map.landings = landing_recs
@@ -527,7 +549,7 @@ class Builder:
 			return false
 		for r in rooms:
 			orig_level.append(r.level)
-		if p_sewer != 0 and not _choose_cluster():
+		if (p_sewer != 0 or p_crypt != 0) and not _choose_cluster():
 			return false   # (no wing fits: generate() builds this attempt without the option)
 		if p_cave != 0 and not CaveGen.choose(self):
 			return false   # (no wing fits a cave: likewise)
@@ -578,20 +600,26 @@ class Builder:
 					seen[nb] = true
 					parent[nb] = c
 					order.append(nb)
+		var crypt := p_crypt != 0
+		var min_rooms := CryptCluster.MIN_ROOMS if crypt else SewerCluster.MIN_ROOMS
+		var max_rooms := CryptCluster.MAX_ROOMS if crypt else SewerCluster.MAX_ROOMS
+		var drop_min := CryptCluster.DROP_MIN if crypt else SewerCluster.DROP_MIN
+		var drop_max := CryptCluster.DROP_MAX if crypt else SewerCluster.DROP_MAX
+		var min_level := CryptCluster.MIN_LEVEL if crypt else SewerCluster.MIN_LEVEL
 		var cands: Array[int] = []
 		for v in range(1, n):
 			var wing := _wing(v, parent)
-			if wing.size() < SewerCluster.MIN_ROOMS or wing.size() > SewerCluster.MAX_ROOMS or n - wing.size() < 3:
+			if wing.size() < min_rooms or wing.size() > max_rooms or n - wing.size() < 3:
 				continue
-			if rooms[parent[v]].level - SewerCluster.DROP_MIN < SewerCluster.MIN_LEVEL:
+			if rooms[parent[v]].level - drop_min < min_level:
 				continue
 			cands.append(v)
 		if cands.is_empty():
 			return false
 		var root: int = cands[srng.randi_range(0, cands.size() - 1)]
 		var up: int = parent[root]
-		var drop := srng.randi_range(SewerCluster.DROP_MIN, SewerCluster.DROP_MAX)
-		cluster_level = maxi(SewerCluster.MIN_LEVEL, rooms[up].level - drop)
+		var drop := srng.randi_range(drop_min, drop_max)
+		cluster_level = maxi(min_level, rooms[up].level - drop)
 		for r in _wing(root, parent):
 			cluster[r] = true
 			rooms[r].level = cluster_level
@@ -638,6 +666,21 @@ class Builder:
 						"door": l.door_a if inside_a else l.door_b, "door_up": l.door_b if inside_a else l.door_a, "cells": cells,
 						"narrow": l.narrow}
 		map.sewer = {"seed": p_sewer, "level": cluster_level, "rooms": tags, "stair": stair, "halls": halls, "all_doors": doors}
+
+	## The crypt for HexMap.crypt: the sewer record's shape (its rooms, level and seed, the stair, its own halls, every doorway
+	## of its rooms), and the stair's route (door_up .. door), where CryptPlanner looks for the landing between its flights.
+	func _crypt_record() -> void:
+		_sewer_record()
+		var rec := map.sewer
+		map.sewer = {}
+		rec["seed"] = p_crypt
+		for l in links:
+			if cluster.has(l.a) != cluster.has(l.b):
+				var route: Array[Vector2i] = l.route.duplicate()
+				if cluster.has(l.a):
+					route.reverse()   # (from the room above down to the crypt)
+				(rec["stair"] as Dictionary)["route"] = route
+		map.crypt = rec
 
 	## Non-tree room pairs sorted so far-apart-in-tree but close-in-space pairs come first.
 	func _loop_candidates() -> Array[Vector2i]:
@@ -1022,12 +1065,12 @@ class Builder:
 			steps.append(st)
 		return steps
 
-	## The service stair from la to lb: only STAIRS, in flights of at most SewerCluster.FLIGHT_MAX levels, spread along the
-	## straight stretches. No dice. [] when they do not fit.
+	## The service stair from la to lb: only STAIRS, in flights of at most SewerCluster.FLIGHT_MAX levels (a crypt's:
+	## CryptCluster.FLIGHT_MAX), spread along the straight stretches. No dice. [] when they do not fit.
 	func _stair_profile(S: Array[Vector2i], la: int, lb: int) -> Array:
 		var diff := lb - la
 		var r := absi(diff)
-		var m := ceili(float(r) / SewerCluster.FLIGHT_MAX)
+		var m := ceili(float(r) / (CryptCluster.FLIGHT_MAX if p_crypt != 0 else SewerCluster.FLIGHT_MAX))
 		var events: Array = []
 		for k in m:
 			var rise: int = r / m + (1 if k < r % m else 0)

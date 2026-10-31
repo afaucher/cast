@@ -11,10 +11,13 @@ extends RefCounted
 const GATE_START_CLEAR := 5
 
 
+## A CRYPT's rooms (haunted-build-plan.md H2: HexMap.crypt) are never the origin room or a gate's: the story's room is a
+## house room, and the crypt is the crypt (CryptPlanner themes its rooms). Nothing changes on a floor without one.
 static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, rng: RandomNumberGenerator, avoid: Dictionary, near_corr: Dictionary) -> void:
 	var cand: Array[String] = []
+	var crypt: Array = map.crypt.get("rooms", [])
 	for tag: String in p.rooms:
-		if tag != p.start_room and tag != p.exit_room:
+		if tag != p.start_room and tag != p.exit_room and not crypt.has(tag):
 			cand.append(tag)
 	if cand.is_empty():
 		for tag: String in p.rooms:

@@ -119,6 +119,14 @@ const TABLE := {
 		"height": 1.3, "haunt": "lectern", "palette": [Color(0.62, 0.43, 0.18), Color(0.38, 0.25, 0.1), Color(0.9, 0.88, 0.8)]},
 	"votive_stand": {"name": "Votive stand", "price": 900, "hp": 25.0, "radius": 0.5, "site": "church", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.1, 0.55),
 		"height": 1.2, "haunt": "candle_rack", "palette": [Color(0.15, 0.15, 0.17), Color(0.95, 0.91, 0.78), Color(1.0, 0.8, 0.38)]},
+	# The crypt's sarcophagi (haunted-build-plan.md H2): the look test's (CryptProps "sarcophagus", "crypt" its kind, "set" its
+	# material set: the vault's effigy lid, the chapel's relief cross). Site "crypt": no site's catalog has them; CryptPlanner
+	# stands them against a burial room's wall in a row (the vigil's candles round them are decor). Stone and tough: a
+	# fireball or two dents one, it takes a fight to break it. Names and prices are PROPOSALS.
+	"vault_sarcophagus": {"name": "Stone sarcophagus", "price": 7500, "hp": 140.0, "radius": 0.6, "site": "crypt", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 1.9),
+		"height": 0.95, "crypt": "sarcophagus", "set": "vault", "palette": [Color(0.32, 0.26, 0.20), Color(0.44, 0.37, 0.29), Color(0.16, 0.12, 0.09)]},
+	"chapel_sarcophagus": {"name": "Stone sarcophagus", "price": 7500, "hp": 140.0, "radius": 0.6, "site": "crypt", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 1.9),
+		"height": 0.95, "crypt": "sarcophagus", "set": "chapel", "palette": [Color(0.86, 0.84, 0.78), Color(0.95, 0.94, 0.90), Color(0.64, 0.62, 0.57)]},
 	# Explosive props (ExplosiveProp: a fuse, then a blast; docs/design/hazards.md). Site "hazard": never in a site's
 	# catalog; the room themes place them (RoomThemeDefs "hazards", HazardPlanner.plan). Each one's row also carries
 	# "blast" (ExplosiveProp: radius in world units, damage and shove at the centre, fuse in seconds; required, a hazard

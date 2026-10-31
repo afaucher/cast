@@ -13,17 +13,20 @@ extends RefCounted
 ## gets a door in the "service" style (OfficeDoorModel.SERVICE: hazard stripes and a SERVICE LEVEL stencil), even in the start
 ## or the elevator room, where DoorPlan puts none: it marks the way down. Only its look differs from any office door.
 ## (The user, 2026-10-21: yes, on every stair head, the start and elevator rooms included.)
+## A CRYPT's doorways (haunted-build-plan.md H2: its rooms' and the head of its stair) get no office door: CryptPlanner.gate
+## stands a stone arch or an open iron gate in each (decor). Nothing changes on a floor without a crypt.
 static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> void:
 	var sp := Doorways.spaces(map)
 	var dws := Doorways.find(map, sp)
 	var sluiced := _sluiced(map, dws)
+	var crypt := CryptPlanner.doorways(map, dws)
 	var head := service_head(map, dws)
 	var ids := DoorPlan.choose(dws, p, run.floor_seed(floor_n))
 	if head >= 0 and not ids.has(head):
 		ids.append(head)
 		ids.sort()
 	for id in ids:
-		if sluiced.has(id):
+		if sluiced.has(id) or crypt.has(id):
 			continue
 		if LavaPlanner.doorway(map, dws[id]):
 			continue   # (a lava cave's doorways are openings: LavaPlanner)
@@ -35,6 +38,8 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan) -> vo
 		DoorFloors.for_doorway(map, sp, dw, true)
 	for id: int in sluiced:
 		SewerPlanner.sluice(map, p, dws[id])
+	for id: int in crypt:
+		CryptPlanner.gate(map, p, dws[id])
 
 
 ## The doorways of a sewer cluster's flooded narrow halls (narrow, water in their door or mouth cells), in doorway order.
