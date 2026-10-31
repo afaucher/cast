@@ -34,6 +34,9 @@ working label for the sheets and the gym, a proposal only; nothing player-facing
 
 The defaults (my picks, see "How they read") are in bold.
 
+**The user's read (2026-10-31):**
+- Which rat: "Sewer brute" (over the runner, the agent's pick). It keeps its dark bead eyes for now.
+
 ## The rats
 
 All three share one build (`RatModel`): a big rump, the back arched over the loins, a long tapering snout, round ears,
