@@ -22,7 +22,9 @@ extends RefCounted
 ##            and "procession": NecroProcession, an acolyte leading zombies round a loop and raising the downed
 ##   crypt    the crypt and ectoplasm look tests (LOOK-DEV ONLY, cosmetic nodes, nothing networked): an ectoplasm puddle per
 ##            EctoplasmLook variant (docs/design/ectoplasm-look.md; plus a drip on a wall within HAUNT_WALL) and the crypt's
-##            pieces, CryptProps.GYM_KINDS (docs/design/crypt-section.md; an ossuary goes against a wall within HAUNT_WALL)
+##            pieces, CryptProps.GYM_KINDS (docs/design/crypt-section.md; an ossuary goes against a wall within HAUNT_WALL),
+##            and the crypt pests (docs/design/crypt-pests-look.md): CryptPest's rats and ecto blobs, each variant in each
+##            pose ("pest:<kind>:<variant>:<pose>")
 ##   rooms    the haunted rooms' key props (docs/design/mansion-rooms.md, church-rooms.md, LOOK-DEV ONLY): HauntProps.GYM_KINDS,
 ##            plain cosmetic nodes (a wall piece backs onto the nearest wall); the panel's Haunt light relights the gym
 ## Entries: {id, group, key (the registry key), label, skip ("" or why it has no button)}. spawn() puts `n` of one round a
@@ -76,6 +78,8 @@ static func entries() -> Array[Dictionary]:
 		out.append(_e("crypt", "ecto_" + v, "ecto: " + v))
 	for kind: String in CryptProps.GYM_KINDS:
 		out.append(_e("crypt", "crypt_" + kind, "crypt: " + kind))
+	for r: Array in CryptPest.entries():
+		out.append(_e("crypt", CryptPest.key_of(r[0], r[1], r[2]), CryptPest.label_of(r[0], r[1], r[2])))
 	for kind: String in HauntProps.GYM_KINDS:
 		out.append(_e("rooms", kind, "%s: %s" % [HauntProps.row(kind)["set"], HauntProps.row(kind)["label"]]))
 	return out
@@ -195,6 +199,15 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				b.rotation_degrees.y = -135.0 if f[0] == "grimoire" else GHOST_YAW
 				out.append(b)
 		"crypt":
+			if key.begins_with("pest:"):
+				var pf := key.split(":")
+				for c in cells_near(map, at, n, 3 if pf[3] == "pack" else 1):
+					var cp := CryptPest.make(pf[1], pf[2], pf[3])
+					GameWorld.root.add_child(cp)
+					cp.global_position = Hex.to_world(c, _level(map, c))
+					cp.rotation_degrees.y = GHOST_YAW
+					out.append(cp)
+				return out
 			for c in cells_near(map, at, n, 1):
 				out.append_array(_haunt(map, key, Hex.to_world(c, _level(map, c))))
 		"rooms":

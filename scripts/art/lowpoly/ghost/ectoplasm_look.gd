@@ -213,6 +213,59 @@ static func drip(variant: String, height: float = 2.2, seed_value: int = 1) -> N
 	return root
 
 
+## A slick left behind something crawling (the ecto blob's trail, docs/design/crypt-pests-look.md): a ribbon of `variant`
+## along the floor `points` (oldest first, in the node's own space), `width` across at its new end, narrowing to a point at
+## its old end, its edges wobbling, droplets off its sides. Origin as the points give it.
+static func trail(variant: String, points: Array[Vector3], width: float = 0.9, seed_value: int = 1) -> Node3D:
+	var root := _root("EctoTrail", variant)
+	if points.size() < 2:
+		return root
+	var spec := spec_of(variant)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 17 + 7
+	var col := color_now()
+	var st := _begin()
+	var n := points.size()
+	var length := 0.0
+	for i in n - 1:
+		length += points[i].distance_to(points[i + 1])
+	var ph := rng.randf_range(0.0, TAU)
+	var rows := []
+	var run := 0.0
+	for i in n:
+		if i > 0:
+			run += points[i - 1].distance_to(points[i])
+		var u := run / maxf(length, 0.001)
+		var along := (points[mini(i + 1, n - 1)] - points[maxi(i - 1, 0)])
+		along.y = 0.0
+		along = along.normalized() if along.length() > 0.0001 else Vector3.FORWARD
+		var side := Vector3.UP.cross(along).normalized()
+		var hw := width * 0.5 * smoothstep(0.0, 0.22, u) * (0.55 + 0.45 * u)
+		var wl := hw * (1.0 + 0.22 * sin(run * 5.1 + ph) + 0.12 * sin(run * 11.3 + ph * 2.0))
+		var wr := hw * (1.0 + 0.22 * sin(run * 4.3 + ph * 1.7) + 0.12 * sin(run * 12.1 + ph * 0.5))
+		var c := points[i] + Vector3(0, LIFT, 0)
+		rows.append([[c - side * wl, Vector3.UP, 1.0], [c + Vector3(0, float(spec["rise"]) * 0.5, 0), Vector3.UP, 0.0], [c + side * wr, Vector3.UP, 1.0]])
+	for i in n - 1:
+		var r0: Array = rows[i]
+		var r1: Array = rows[i + 1]
+		for sd in 2:
+			var o0: Array = r0[0] if sd == 0 else r0[2]
+			var o1: Array = r1[0] if sd == 0 else r1[2]
+			for q: Array in [o0, r0[1], r1[1], o0, r1[1], o1]:
+				_vert(st, q, Vector3.RIGHT, Vector3.FORWARD)
+	# droplets flung off its sides (no pools along it: their rims drew rings across the ribbon)
+	for k in int(spec["drops"]):
+		var i := rng.randi_range(n / 4, n - 1)
+		var a := rng.randf_range(0.0, TAU)
+		var d := width * rng.randf_range(0.45, 0.75)
+		_fan(st, points[i] + Vector3(cos(a) * d, LIFT, sin(a) * d), Vector3.RIGHT, Vector3.FORWARD, Vector3.UP,
+				width * rng.randf_range(0.05, 0.11), Vector2.ONE, float(spec["rise"]) * 0.6, 0.1, rng)
+	_mesh(root, st, _sheet_material(spec, col, rng.randf() * 10.0))
+	for k in int(spec["wisps"]):
+		_wisp(root, points[rng.randi_range(n / 2, n - 1)], float(spec["wisp_a"]), float(spec["wisp_h"]), col, rng)
+	return root
+
+
 ## Damp washing `node` (a puddle or a drip) away: 0 fresh, 1 gone. It breaks up from its thin edge inward, thins to plain
 ## water and stops glowing; its vapour goes. The look only: nothing here slows or stops anything.
 static func set_wash(node: Node3D, k: float) -> void:
