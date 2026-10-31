@@ -1,8 +1,12 @@
 class_name HauntProps
 extends RefCounted
-## The haunted rooms' props (docs/design/mansion-rooms.md, docs/design/church-rooms.md; LOOK-DEV ONLY): code-built LowPoly
-## set dressing for a haunted mansion (MansionProps) and a church (ChurchProps). Cosmetic nodes only: no HP, no collision,
-## no networking, and no room theme, planner or floor uses them. The labs and the gym put them down.
+## The haunted rooms' props (docs/design/mansion-rooms.md, docs/design/church-rooms.md): code-built LowPoly set dressing
+## for a haunted mansion (MansionProps) and a church (ChurchProps). Cosmetic models only: no HP, no collision, no
+## networking of their own. The GAME uses them since haunted-build-plan.md H1: the mansion and church room themes' decor
+## (RoomThemeDefs.DECOR rows with "haunt", built by DecorModels._haunt and placed by HauntVignettes; walk-blocking and
+## breaking are DecorProp's, as for any decor) and the haunted sites' priced antiques (PricedProp.TABLE rows with "haunt":
+## the actor is the PricedProp, this is its look). The labs and the gym put them down too; the vestry's and the bell
+## tower's pieces (dropped rooms) are lab-only.
 ##
 ## Same kit as PropModels / DecorModels: LowPoly soups, MonsterMaterial (ink outline, amber rim, vertex alpha 0.5 = an
 ## emissive face), origin at the base centre, FRONT = +Z; a wall piece has its back at z = -depth / 2. Built to read at the

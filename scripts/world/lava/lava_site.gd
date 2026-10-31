@@ -50,8 +50,8 @@ static func seed_for(run: ContractRun, floor_n: int, shared: bool) -> int:
 	var s := int(rng.randi() & 0x3fffffff) | 1
 	if force:
 		return s
-	if NOT_FOR.has(run.archetype_id):
-		return 0
+	if NOT_FOR.has(run.archetype_id) or not run.has_gates():
+		return 0   # (a haunted site rolls no cave: its sections are the crypt's, haunted-build-plan.md H2)
 	if run.archetype_id == VILLAIN:
 		return s if VILLAIN_FLOORS.has(floor_n) and roll < RATE_VILLAIN else 0
 	return s if GATE_FLOORS.has(floor_n) and roll < RATE_GATE else 0

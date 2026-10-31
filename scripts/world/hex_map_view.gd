@@ -389,6 +389,34 @@ vec3 material_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float 
 		float e = (r.x * r.x) / (0.34 * 0.34) + (r.y * r.y) / (0.1 * 0.1);
 		float bar = 1.0 - smoothstep(0.55, 1.0, e);
 		c = base * (0.78 + 0.2 * vn(p * 1.5)) + alt * bar * 0.4;
+	} else if (pat == 9) {                // herringbone parquet (the haunted mansion): boards sc wide, five long, in a 45-degree staircase
+		vec2 hp = vec2(p.x - p.y, p.x + p.y) * 0.7071 / sc;
+		float n = 5.0;
+		float dd = hp.x - hp.y;
+		float b = floor((dd + n + 1.0) / (2.0 * n));
+		vec2 lc = vec2(0.0);
+		vec2 bid = vec2(0.0);
+		for (int k = 0; k < 2; k++) {
+			float bb = b - float(k);
+			vec2 q = hp - bb * vec2(n, -n);
+			float t = floor(q.y);
+			if (q.x - t >= 0.0 && q.x - t < n) {
+				lc = vec2(q.x - t, q.y - t);
+				bid = vec2(bb, t);
+				break;
+			}
+			t = floor(q.x);
+			if (q.y - t - 1.0 >= 0.0 && q.y - t - 1.0 < n) {
+				lc = vec2(q.y - t - 1.0, q.x - t);
+				bid = vec2(bb + 50.0, t);
+				break;
+			}
+		}
+		float grain = vn(vec2(lc.x * 1.2, lc.y * 9.0) + bid * 3.1);
+		float tone = 0.9 + 0.16 * h21(bid);
+		c = base * tone * (0.84 + 0.3 * grain) * (0.92 + 0.12 * vn(p * 0.4));
+		float edge = min(min(lc.y, 1.0 - lc.y), min(lc.x, n - lc.x));
+		c = mix(c, alt, (1.0 - smoothstep(0.0, 0.06, edge)) * 0.45);   // (a faint joint: the grain turns per board)
 	}
 	return c;
 }
@@ -441,8 +469,63 @@ vec3 wall_color(int pat, vec2 p, vec3 base, vec3 alt, float sc, inout float rgh,
 		float joint = 1.0 - smoothstep(0.004, 0.016, grid_d(p, vec2(sc)));
 		c = mix(c, base * 0.35, joint);
 		rgh = mix(rgh, 0.8, joint);
+	} else if (pat == 24 || pat == 25) {  // wallpaper over a panelled dado (the haunted mansion): 24 damask on walnut, 25 stripe on oak
+		vec3 wood = pat == 24 ? vec3(0.20, 0.09, 0.04) : vec3(0.42, 0.25, 0.11);
+		float dado = 0.55;
+		if (v < dado) {
+			float pw = 0.62;
+			float lx = fract(u / pw) * pw;
+			float ly = v - 0.06;
+			float fr = min(min(lx, pw - lx), min(ly, dado - 0.06 - ly));
+			c = wood * (0.85 + 0.25 * vn(vec2(u * 3.0, v * 0.6)));
+			c = mix(c, wood * 1.45, smoothstep(0.05, 0.07, fr) * 0.7);
+			c = mix(c, wood * 0.5, (1.0 - smoothstep(0.0, 0.02, abs(fr - 0.06))) * 0.8);
+		} else if (v < dado + 0.07) {
+			c = wood * (v < dado + 0.02 ? 0.6 : 1.5);
+		} else if (v > 1.38) {
+			c = wood * (v > 1.44 ? 1.4 : 0.7);
+		} else if (pat == 24) {
+			vec2 q = vec2(u / 0.38, (v - dado) / 0.42);
+			q.x += 0.5 * mod(floor(q.y), 2.0);
+			vec2 l = fract(q) - 0.5;
+			float body = abs(l.x) * 1.5 + abs(l.y) * 0.95 - 0.06 * cos(l.y * 18.0);
+			float motif = 1.0 - smoothstep(0.30, 0.34, body);
+			float ring = 1.0 - smoothstep(0.0, 0.035, abs(body - 0.42));
+			c = base * (0.88 + 0.18 * vn(vec2(u, v) * 2.0));
+			c = mix(c, alt, clamp(motif * 0.75 + ring * 0.4, 0.0, 1.0));
+		} else {
+			float sw = 0.16;
+			float sx = fract(u / (2.0 * sw)) * 2.0 * sw;
+			float band = step(sw, sx);
+			float pin = 1.0 - smoothstep(0.0, 0.012, abs(sx - sw * 0.5));
+			c = mix(base, alt, band * 0.55) * (0.88 + 0.16 * vn(vec2(u * 0.5, v * 4.0)));
+			c = mix(c, base * 0.6, pin * 0.6);
+		}
+	} else if (pat == 26) {               // conservatory glazing: a stone sill, white iron bars, dark glass with a sheen
+		if (v < 0.32) {
+			c = vec3(0.42, 0.40, 0.37) * (0.8 + 0.3 * fbm(vec2(u, v) * 4.0));
+			rgh = 0.9;
+		} else {
+			vec2 pane = vec2(0.42, 0.36);
+			vec2 q = vec2(u, v - 0.32);
+			float bar = 1.0 - smoothstep(0.018, 0.03, grid_d(q, pane));
+			float sheen = smoothstep(0.55, 1.0, fract((u + v * 0.8) * 0.45)) * 0.5;
+			c = base * (1.0 + sheen * 2.2);
+			c = mix(c, alt, bar);
+			rgh = mix(0.12, 0.6, bar);
+		}
 	}
 	return c;
+}
+// The colour a wall CAP is drawn from: its material's base, except the papered walls (24, 25), whose caps are their dado's
+// wood (a red or sage band round every room read wrong in the look test, HauntLook).
+vec3 cap_base(int pat, vec3 base) {
+	if (pat == 24) {
+		return vec3(0.26, 0.12, 0.06);
+	} else if (pat == 25) {
+		return vec3(0.52, 0.32, 0.14);
+	}
+	return base;
 }
 
 // ---- WALL DEPTH (wall_depth = 1; docs/design/wall-depth.md) ----
@@ -717,10 +800,18 @@ void fragment() {
 			} else {
 				alb = wall_color(pat, vec2(dot(wp.xz, along), wp.y), b.rgb, a.rgb, a.a, rgh, false);
 			}
+		} else if (is_wall && pat == 26) {
+			// the conservatory's glazing: its cap is a glass roof seen from above (white bars over dark panes), so the
+			// glasshouse reads from the camera
+			float bar = 1.0 - smoothstep(0.02, 0.035, grid_d(wp.xz + vec2(0.0, 0.3), vec2(0.9, 0.6)));
+			float sheen = smoothstep(0.6, 1.0, fract((wp.x - wp.z) * 0.35)) * 0.6;
+			alb = mix(b.rgb * (1.2 + sheen * 2.0), a.rgb * 0.8, bar);
+			rgh = mix(0.25, 0.7, bar);
+			spc = 0.35;
 		} else if (depth) {
-			alb = depth_cap(b.rgb, a.rgb, wp, wn, fwc, wface.w, ao, edge);
+			alb = depth_cap(cap_base(pat, b.rgb), a.rgb, wp, wn, fwc, wface.w, ao, edge);
 		} else if (is_wall) {
-			alb = b.rgb * 0.5 * (0.8 + 0.4 * fbm(wp.xz * 3.0));  // the cap of a wall: darker than the floor, like the slate cap
+			alb = cap_base(pat, b.rgb) * 0.5 * (0.8 + 0.4 * fbm(wp.xz * 3.0));  // the cap of a wall: darker than the floor, like the slate cap
 		} else {
 			alb = material_color(pat, wp.xz, b.rgb, a.rgb, a.a, rgh);
 		}

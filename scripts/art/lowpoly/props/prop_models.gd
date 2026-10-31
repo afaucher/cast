@@ -11,6 +11,8 @@ extends RefCounted
 ## Each kind's row in PricedProp.TABLE names its look: "height", "model" (the builder below, a static
 ## func(s: LowPoly.Soup)), "palette", the optional "extra" (a static func() -> Node3D added beside the body) and, for an
 ## explosive, "fuse_point". build(), palette(), height() and fuse_point() read the row; a new prop adds its builder here.
+## A haunted site's antique names its look instead: "haunt" (a HauntProps kind, the mansion and church look tests' models)
+## or "node" (a static func() -> Node3D that is the whole model: the suit of armour).
 ##
 ##   var node := PropModels.build("gold_toilet")     # Node3D with a MeshInstance3D "Body"
 ##   PropModels.palette("gold_toilet")                # colours for debris shards
@@ -77,8 +79,15 @@ static func material() -> ShaderMaterial:
 
 
 static func build(kind: String) -> Node3D:
+	var r0 := row(kind)
+	if r0.has("haunt"):
+		# a haunted site's antique: the look test's model (HauntProps), its variation fixed by the kind so every copy matches
+		return HauntProps.build(String(r0["haunt"]), {"seed": int(kind.hash() % 9973)})
 	var root := Node3D.new()
 	root.name = "Model"
+	if r0.has("node"):
+		root.add_child(builder(String(r0["node"])).call())
+		return root
 	var s := LowPoly.Soup.new(7, 0.06)
 	_seed = int(kind.hash() % 9973)
 	var r := row(kind)
@@ -96,9 +105,18 @@ static func build(kind: String) -> Node3D:
 	return root
 
 
-## A builder named in a TABLE row ("model", "extra"): a static func of this script.
+## A builder named in a TABLE row ("model", "extra", "node"): a static func of this script.
 static func builder(method: String) -> Callable:
 	return Callable(PropModels, method)
+
+
+## The haunted mansion's suit of armour (a "node" row: a whole model, not a soup): the ghost look test's ArmourModel,
+## dormant on its stand, turned to face +Z like every prop (it faces -Z). A ghost possessing it is H5's.
+static func _suit_of_armour() -> Node3D:
+	var m := ArmourModel.new()
+	m.name = "Body"
+	m.rotation_degrees.y = 180.0
+	return m
 
 
 ## Colours a broken prop's shards are painted with.

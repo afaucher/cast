@@ -19,6 +19,11 @@ extends RefCounted
 
 const ID_BASE := 100
 const ID_META := "net_id"
+## ContractRun SPAWN fields added after the golden floors were recorded (tests/test_golden_floor.gd), with the value every
+## older contract has: the run part of the checksum leaves such a field out while it holds that value, so every hellgate
+## contract hashes as it always did, and a contract with another value (a haunted one) hashes it in. Every machine
+## derives these fields from (archetype, seed, difficulty) anyway; the archetype is in the run part either way.
+const RUN_DEFAULTS := {"family": "gate"}
 
 
 ## Give the seed-built actors under `root` their ids, in tree order; `heroes` maps a seat (1-3) to its hero.
@@ -122,6 +127,8 @@ static func checksum(map: HexMap, plan: SitePlan, run: ContractRun, root: Node) 
 	var run_fields: Array = run.net_fields().keys()
 	run_fields.sort()
 	for f: String in run_fields:
+		if RUN_DEFAULTS.has(f) and run.get(f) == RUN_DEFAULTS[f]:
+			continue   # (a field added after the recorded floors, at the value every older contract had: see RUN_DEFAULTS)
 		run_lines.append("%s=%s" % [f, canon(run.get(f))])
 	var spawn_text := spawn_text_of(root)
 	var parts := {

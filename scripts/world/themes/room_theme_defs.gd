@@ -18,9 +18,15 @@ const SERVICE := "service_entrance"     ## the start room's theme
 const SEWER := "sewer"                  ## a sewer cluster's rooms (SewerPlanner.theme; never dealt from a site's POOLS)
 const LAVA := "lava"                    ## a lava cave's chambers (LavaPlanner.theme; never dealt from a site's POOLS)
 
+## The haunted sites (haunted-build-plan.md H1; the rooms the user read in the look tests, mansion-rooms.md and
+## church-rooms.md): the mansion's five house rooms and the bunker's wine cellar; the church's nave, and (its vestry and bell
+## tower were dropped) the parish rooms it shares with the mansion: a library, a dining hall (the refectory) and a portrait
+## gallery (a call to revisit: the church needs more rooms of its own, or its crypt, H2).
 const POOLS := {
 	"bunker": ["wine_cellar", "home_cinema", "spa", "gym", "server_room", "panic_room", "pool"],
 	"lair": ["torture_chamber", "throne_room", "lab", "barracks", "moat", "science"],
+	"mansion": ["library", "gallery", "ballroom", "dining_hall", "conservatory", "wine_cellar"],
+	"church": ["nave", "library", "dining_hall", "gallery"],
 }
 
 ## Story origin ("where it started", ClientArchetype events) -> the theme of the floor-3 origin room.
@@ -46,6 +52,13 @@ const ORIGIN_THEMES := {
 	"keynote stage": "throne_room",       ## a stage, a podium and a red carpet
 	"data center": "lab",
 	"ping-pong lounge": "barracks",
+	# estate heir (a mansion site)
+	"library": "library",
+	"ballroom": "ballroom",
+	"dining hall": "dining_hall",
+	# parish council (a church site)
+	"nave": "nave",
+	"refectory": "dining_hall",           ## the parish's dining hall
 }
 
 ## Keyword fallback for an origin text that is not in ORIGIN_THEMES.
@@ -56,6 +69,9 @@ const ORIGIN_KEYWORDS := {
 	"torture": "torture_chamber", "dungeon": "torture_chamber", "throne": "throne_room", "stage": "throne_room",
 	"vat": "lab", "lab": "lab", "barrack": "barracks", "moat": "moat", "shark": "moat",
 	"science": "science", "specimen": "science",
+	"library": "library", "book": "library", "portrait": "gallery", "gallery": "gallery", "ballroom": "ballroom",
+	"dining": "dining_hall", "supper": "dining_hall", "conservatory": "conservatory", "glasshouse": "conservatory",
+	"nave": "nave", "church": "nave", "chapel": "nave",
 }
 
 ## id -> {name, site, min_cells (the smallest room it is dealt), priced (PricedProp kinds it prefers), hazards (the
@@ -224,6 +240,88 @@ const THEMES := {
 		],
 		"light": {"color": Color(0.45, 1.0, 0.4), "energy": 6.8, "range": 9.0, "flicker": 0.35},
 	},
+	# The haunted sites' rooms (haunted-build-plan.md H1), from the look tests the user read (mansion-rooms.md, 2026-10-29:
+	# walnut & damask, candle light in the house rooms, moonlight in the conservatory; church-rooms.md: the nave in
+	# moonlight). Their props are the look test's (HauntProps, DECOR rows with "haunt"; HauntVignettes places them), their
+	# priced antiques PricedProp's mansion / church rows. "moonlit": the room's candles are out (RoomThemes.plan_decor) and
+	# its accent light is the cold moon, not a candle's warmth. Names and note words are PROPOSALS (the build plan lists them).
+	"library": {
+		"name": "Library", "site": "mansion", "min_cells": 60,
+		"note_word": "library", "floor_mat": FloorMaterials.F_PARQUET, "wall_mat": FloorMaterials.W_DAMASK,
+		"priced": ["antique_globe", "marble_bust"],
+		"recipe": [
+			{"op": "bookshelves"},
+			{"op": "reading"},
+			{"op": "candelabra"},
+			{"op": "bookshelves", "min_cells": 110},
+			{"op": "sconce"},
+		],
+		"light": {"color": Color(1.0, 0.72, 0.42), "energy": 5.6, "range": 8.5, "flicker": 0.25},
+	},
+	"gallery": {
+		"name": "Portrait gallery", "site": "mansion", "min_cells": 60,
+		"note_word": "portrait gallery", "floor_mat": FloorMaterials.F_PARQUET, "wall_mat": FloorMaterials.W_DAMASK,
+		"priced": ["suit_of_armour", "marble_bust"],
+		"recipe": [
+			{"op": "portraits"},
+			{"op": "runner"},
+			{"op": "candelabra"},
+			{"op": "portraits", "min_cells": 100},
+			{"op": "sconce"},
+		],
+		"light": {"color": Color(1.0, 0.72, 0.42), "energy": 5.6, "range": 8.5, "flicker": 0.25},
+	},
+	"ballroom": {
+		"name": "Ballroom", "site": "mansion", "min_cells": 90, "needs_center": true,
+		"note_word": "ballroom", "floor_mat": FloorMaterials.F_PARQUET, "wall_mat": FloorMaterials.W_DAMASK,
+		"priced": ["grand_piano", "silver_candelabra"],
+		"recipe": [
+			{"op": "dance_floor"},
+			{"op": "gilt_chairs"},
+			{"op": "mirror"},
+			{"op": "candelabra"},
+			{"op": "gilt_chairs", "min_cells": 120},
+		],
+		"light": {"color": Color(1.0, 0.76, 0.46), "energy": 6.0, "range": 9.0, "flicker": 0.2},
+	},
+	"dining_hall": {
+		"name": "Dining hall", "site": "mansion", "min_cells": 80, "needs_center": true,
+		"note_word": "dining hall", "floor_mat": FloorMaterials.F_PARQUET, "wall_mat": FloorMaterials.W_DAMASK,
+		"priced": ["mahogany_sideboard", "silver_candelabra"],
+		"recipe": [
+			{"op": "banquet"},
+			{"op": "fireplace"},
+			{"op": "portrait"},
+			{"op": "sconce"},
+		],
+		"light": {"color": Color(1.0, 0.7, 0.4), "energy": 5.8, "range": 8.5, "flicker": 0.3},
+	},
+	"conservatory": {
+		"name": "Conservatory", "site": "mansion", "min_cells": 70, "moonlit": true,
+		"note_word": "conservatory", "floor_mat": FloorMaterials.F_TERRACOTTA, "wall_mat": FloorMaterials.W_GLAZING,
+		"priced": ["wardian_case"],
+		"recipe": [
+			{"op": "planters"},
+			{"op": "palms"},
+			{"op": "citrus"},
+			{"op": "garden_bench"},
+			{"op": "ferns"},
+			{"op": "palms", "min_cells": 110},
+		],
+		"light": {"color": Color(0.62, 0.74, 1.0), "energy": 6.0, "range": 9.5, "flicker": 0.0},
+	},
+	"nave": {
+		"name": "Nave", "site": "church", "min_cells": 90, "moonlit": true,
+		"note_word": "nave", "floor_mat": FloorMaterials.F_LIMESTONE, "wall_mat": FloorMaterials.W_LIMESTONE,
+		"priced": ["stained_glass", "baptismal_font", "brass_lectern", "votive_stand"],
+		"recipe": [
+			{"op": "pews"},
+			{"op": "pillars"},
+			{"op": "pillars", "min_cells": 120},
+			{"op": "candelabra"},
+		],
+		"light": {"color": Color(0.62, 0.74, 1.0), "energy": 6.2, "range": 10.0, "flicker": 0.0},
+	},
 	"service_entrance": {
 		"name": "Service entrance", "site": "any", "min_cells": 0,
 		"note_word": "service entrance", "floor_mat": FloorMaterials.F_CONCRETE,
@@ -319,6 +417,33 @@ const DECOR := {
 	"sluice": {"place": "wall", "orient": "away_from_wall", "w": 3.3, "d": 0.3, "h": 2.2, "blocks": false, "weight": 0.5, "model": "_sluice"},
 	"bars": {"place": "wall", "orient": "away_from_wall", "w": 2.8, "d": 0.2, "h": 1.3, "blocks": false, "weight": 0.3, "model": "_bars"},
 	"tool_cart": {"place": "group", "orient": "face_target", "w": 0.85, "d": 0.5, "h": 0.95, "blocks": true, "weight": 0.5, "model": "_tool_cart"},
+	# The haunted rooms' set dressing (haunted-build-plan.md H1): the look test's props. "haunt" = its HauntProps kind
+	# (MansionProps / ChurchProps builds it: an outlined Body, candles with their small warm lights); the footprint is the
+	# kit's row. Seats and pews are walked through, like the cinema's recliners; shelves, tables, planters and pillars block.
+	"bookshelf": {"place": "wall", "orient": "away_from_wall", "w": 1.8, "d": 0.5, "h": 2.45, "blocks": true, "weight": 1.0, "haunt": "bookshelf"},
+	"reading_table": {"place": "group", "orient": "face_target", "w": 1.3, "d": 0.75, "h": 1.1, "blocks": true, "weight": 0.8, "haunt": "reading_table"},
+	"reading_chair": {"place": "group", "orient": "face_target", "w": 0.95, "d": 0.9, "h": 1.25, "blocks": false, "weight": 0.4, "haunt": "reading_chair"},
+	"book_stack": {"place": "group", "orient": "free", "w": 0.5, "d": 0.4, "h": 0.4, "blocks": false, "weight": 0.2, "haunt": "book_stack"},
+	"portrait": {"place": "wall", "orient": "away_from_wall", "w": 0.95, "d": 0.14, "h": 1.45, "blocks": false, "weight": 0.3, "haunt": "portrait"},
+	"runner": {"place": "floor", "orient": "parallel", "w": 6.0, "d": 1.4, "h": 0.03, "blocks": false, "weight": 0.5, "haunt": "runner", "flat": true},
+	"medallion": {"place": "center", "orient": "free", "w": 4.4, "d": 4.4, "h": 0.03, "blocks": false, "weight": 0.8, "haunt": "medallion", "flat": true},
+	"chandelier": {"place": "center", "orient": "free", "w": 2.7, "d": 2.7, "h": 6.5, "blocks": false, "weight": 0.6, "haunt": "chandelier"},
+	"gilt_chair": {"place": "wall", "orient": "away_from_wall", "w": 0.5, "d": 0.5, "h": 0.95, "blocks": false, "weight": 0.2, "haunt": "gilt_chair"},
+	"wall_mirror": {"place": "wall", "orient": "away_from_wall", "w": 0.95, "d": 0.12, "h": 1.45, "blocks": false, "weight": 0.3, "haunt": "wall_mirror"},
+	"candelabra": {"place": "corner", "orient": "face_center", "w": 0.6, "d": 0.6, "h": 1.95, "blocks": false, "weight": 0.3, "haunt": "candelabra"},
+	"sconce": {"place": "wall", "orient": "away_from_wall", "w": 0.45, "d": 0.22, "h": 1.45, "blocks": false, "weight": 0.2, "haunt": "sconce"},
+	"dining_table": {"place": "center", "orient": "face_entrance", "w": 5.0, "d": 1.3, "h": 1.35, "blocks": true, "weight": 1.2, "haunt": "dining_table"},
+	"dining_chair": {"place": "group", "orient": "face_target", "w": 0.55, "d": 0.55, "h": 1.35, "blocks": false, "weight": 0.2, "haunt": "dining_chair"},
+	"fireplace": {"place": "wall", "orient": "away_from_wall", "w": 2.0, "d": 0.75, "h": 1.5, "blocks": true, "weight": 1.0, "haunt": "fireplace"},
+	"planter_bed": {"place": "floor", "orient": "free", "w": 2.6, "d": 1.3, "h": 1.1, "blocks": true, "weight": 1.0, "haunt": "planter_bed"},
+	"potted_palm": {"place": "corner", "orient": "face_center", "w": 1.4, "d": 1.4, "h": 2.4, "blocks": true, "weight": 0.8, "haunt": "potted_palm"},
+	"citrus_tub": {"place": "corner", "orient": "face_center", "w": 0.9, "d": 0.9, "h": 1.9, "blocks": true, "weight": 0.6, "haunt": "citrus_tub"},
+	"fern_stand": {"place": "corner", "orient": "face_center", "w": 0.8, "d": 0.8, "h": 1.4, "blocks": false, "weight": 0.3, "haunt": "fern_stand"},
+	"garden_bench": {"place": "wall", "orient": "away_from_wall", "w": 1.5, "d": 0.6, "h": 0.9, "blocks": false, "weight": 0.4, "haunt": "garden_bench"},
+	"altar": {"place": "wall", "orient": "away_from_wall", "w": 1.9, "d": 0.9, "h": 1.65, "blocks": true, "weight": 1.0, "haunt": "altar"},
+	"altar_dais": {"place": "group", "orient": "face_target", "w": 4.2, "d": 2.6, "h": 0.25, "blocks": false, "weight": 0.5, "haunt": "altar_dais"},
+	"pew": {"place": "group", "orient": "face_target", "w": 2.8, "d": 0.7, "h": 1.0, "blocks": false, "weight": 0.4, "haunt": "pew"},
+	"pillar": {"place": "corner", "orient": "face_center", "w": 0.8, "d": 0.8, "h": 3.6, "blocks": true, "weight": 0.6, "haunt": "pillar"},
 }
 
 

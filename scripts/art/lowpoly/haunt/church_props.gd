@@ -1,5 +1,6 @@
 extends RefCounted
-## The church's props (docs/design/church-rooms.md; LOOK-DEV ONLY). Built through HauntProps.build(kind, params); the kit,
+## The church's props (docs/design/church-rooms.md; the nave's are the game's since haunted-build-plan.md H1, see
+## HauntProps; the vestry's and the bell tower's stay lab-only). Built through HauntProps.build(kind, params); the kit,
 ## the shared pieces and the colours are HauntProps'. No class_name (HauntProps preloads it). Each builder is
 ## `static func _<kind>(k: HauntProps.Kit, p: Dictionary)`.
 ##

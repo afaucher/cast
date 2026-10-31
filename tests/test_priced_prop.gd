@@ -74,11 +74,42 @@ func setup() -> void:
 		check(not names.has(p.display_name), "%s: unique display name" % kind)
 		names[p.display_name] = true
 	check(PricedProp.spawn(Vector2i.ZERO, "no_such_prop") == null, "unknown kind spawns nothing")
+	# --- The haunted sites' antiques (haunted-build-plan.md H1): the mansion's (with the bunker's wine cellar pieces), the
+	# church's (with the parish rooms' pieces it shares), each spawning priced with its look-test model.
+	var mansion := PricedProp.catalog("mansion")
+	var church := PricedProp.catalog("church")
+	check(mansion.has("suit_of_armour") and mansion.has("grand_piano") and mansion.has("wine_rack"), "the mansion's catalog: armour, piano, its wine cellar's racks")
+	check(church.has("baptismal_font") and church.has("stained_glass") and church.has("marble_bust") and not church.has("suit_of_armour"),
+			"the church's catalog: its own pieces and the parish rooms' shared ones")
+	check(not bunker.has("suit_of_armour") and not lair.has("baptismal_font"), "the hellgate sites keep their catalogs")
+	_fresh()
+	var j := 0
+	var seen_kinds := {}
+	for kind: String in mansion + church:
+		if bunker.has(kind) or seen_kinds.has(kind):
+			continue
+		seen_kinds[kind] = true
+		var hp := _prop(kind, Vector3(-9.0 + 2.2 * float(j % 9), 0, -3.0 + 6.0 * floorf(float(j) / 9.0)))
+		j += 1
+		if not check(hp != null, "%s spawns" % kind):
+			continue
+		check(hp.price == PricedProp.price_of(kind) and hp.price > 0, "%s is priced" % kind)
+		check(not hp.find_children("*", "MeshInstance3D", true, false).is_empty(), "%s has a model" % kind)
+	_fresh()
 	# --- Every row carries its look: a height, a builder in PropModels, a palette (and a valid extra, if any).
 	for kind: String in PricedProp.TABLE:
 		var row: Dictionary = PricedProp.TABLE[kind]
 		check(float(row.get("height", 0.0)) > 0.0, "%s has a model height" % kind)
-		check(PropModels.builder(String(row.get("model", ""))).is_valid(), "%s names a PropModels builder (%s)" % [kind, row.get("model", "")])
+		if row.has("haunt"):
+			# a haunted site's antique: the look test's model (HauntProps), with a Body
+			check(not HauntProps.row(str(row["haunt"])).is_empty(), "%s names a HauntProps kind (%s)" % [kind, row["haunt"]])
+			var hm := PropModels.build(kind)
+			check(hm.get_node_or_null("Body") is MeshInstance3D, "%s's haunt model has a body" % kind)
+			hm.free()
+		elif row.has("node"):
+			check(PropModels.builder(String(row["node"])).is_valid(), "%s names a PropModels node builder (%s)" % [kind, row["node"]])
+		else:
+			check(PropModels.builder(String(row.get("model", ""))).is_valid(), "%s names a PropModels builder (%s)" % [kind, row.get("model", "")])
 		var pal: Array = row.get("palette", [])
 		check(not pal.is_empty() and pal.all(func(c: Variant) -> bool: return c is Color), "%s has a palette of colours" % kind)
 		if row.has("extra"):

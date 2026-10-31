@@ -42,9 +42,9 @@ func _check_tables() -> void:
 	for theme: String in RoomThemeDefs.THEMES:
 		check(RoomThemeDefs.theme(theme).has("floor_mat"), "theme %s has a floor material" % theme)
 		var fid := FloorMaterials.floor_for_theme(theme)
-		check(fid > 0 and fid < FloorMaterials.FLOORS.size(), "theme %s: floor id %d is a real material (not the classic slate)" % [theme, fid])
+		check(fid > 0 and FloorMaterials.is_floor_id(fid), "theme %s: floor id %d is a real material (not the classic slate)" % [theme, fid])
 		var wid := FloorMaterials.wall_for_theme(theme, str((RoomThemeDefs.THEMES[theme] as Dictionary)["site"]).replace("any", "bunker"))
-		check(wid > 0 and wid < FloorMaterials.WALLS.size(), "theme %s: wall id %d is a real material" % [theme, wid])
+		check(wid > 0 and FloorMaterials.is_wall_id(wid), "theme %s: wall id %d is a real material" % [theme, wid])
 	eq(FloorMaterials.floor_for_theme(""), FloorMaterials.F_SLATE, "no theme: the classic slate")
 	eq(FloorMaterials.floor_for_theme("no_such_theme"), FloorMaterials.F_SLATE, "an unknown theme: the classic slate")
 	eq(FloorMaterials.wall_for_theme("home_cinema", "bunker"), FloorMaterials.W_PANELLING, "the cinema is panelled")
@@ -72,6 +72,21 @@ func _check_tables() -> void:
 		check(FloorMaterials.seam_gain(fid) > 0.0, "floor material %d keeps some seam glow" % fid)
 	for wid in range(1, FloorMaterials.WALLS.size()):
 		check(int(base[FloorMaterials.WALL_OFFSET + wid].w) >= 20, "wall material %d (%s) has a wall pattern" % [wid, FloorMaterials.wall_name(wid)])
+	# the haunted sites' materials (haunted-build-plan.md H1) in the free slots at the top: a pattern each, the ids round-trip
+	for slot: int in FloorMaterials.HIGH:
+		check(slot >= FloorMaterials.FLOORS.size() and slot < FloorMaterials.TABLE_SIZE and slot >= FloorMaterials.WALL_OFFSET + FloorMaterials.WALLS.size(),
+				"haunted slot %d is a free one" % slot)
+		check(int(base[slot].w) > 0, "haunted slot %d (%s) has a pattern" % [slot, FloorMaterials.HIGH[slot]["name"]])
+	for fid in [FloorMaterials.F_PARQUET, FloorMaterials.F_LIMESTONE, FloorMaterials.F_TERRACOTTA]:
+		check(FloorMaterials.is_floor_id(fid) and FloorMaterials.floor_ids().has(fid) and FloorMaterials.seam_gain(fid) > 0.0, "haunted floor %d is a floor" % fid)
+		for wid in [FloorMaterials.W_DAMASK, FloorMaterials.W_LIMESTONE, FloorMaterials.W_GLAZING]:
+			var hm := FloorMaterials.pack(fid, wid)
+			check(FloorMaterials.floor_of(hm) == fid and FloorMaterials.wall_of(hm) == wid, "pack(%d, %d) round-trips" % [fid, wid])
+	for wid in [FloorMaterials.W_DAMASK, FloorMaterials.W_LIMESTONE, FloorMaterials.W_GLAZING]:
+		check(FloorMaterials.is_wall_id(wid) and FloorMaterials.wall_ids().has(wid) and int(base[FloorMaterials.WALL_OFFSET + wid].w) >= 20,
+				"haunted wall %d (%s) has a wall pattern" % [wid, FloorMaterials.wall_name(wid)])
+	eq(FloorMaterials.corridor_wall("mansion"), FloorMaterials.W_DAMASK, "the mansion's halls are damask")
+	eq(FloorMaterials.corridor_floor("church"), FloorMaterials.F_LIMESTONE, "the church's halls are limestone")
 	check(FloorMaterials.seam_gain(FloorMaterials.F_CARPET) < FloorMaterials.seam_gain(FloorMaterials.F_TILE), "carpet dims the seams, tile keeps them")
 	check(FloorMaterials.seam_gain(FloorMaterials.F_DIAMOND) >= 0.99, "diamond plate keeps the seams bright")
 	check(FloorMaterials.FLOORS[0]["pat"] == FloorMaterials.Pat.NONE, "id 0 is the classic slate (the texture path)")

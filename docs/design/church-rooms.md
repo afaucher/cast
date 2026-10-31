@@ -1,7 +1,8 @@
 # Church rooms: a visual test
 
-Status: **[look-dev only]**, 2026-10-29. Nothing here is in the game. No room theme, site, floor, planner, contract or
-network message uses it. The test lives in a look lab and in the gym.
+Status: **[look-dev, then built]**, 2026-10-29; the nave is the church's room theme since 2026-10-31 (`haunted-build-plan.md`,
+"H1 as built"), its props the decor and antiques, the limestone the game's material. The vestry and the bell tower stay
+look-dev. The test lives in a look lab and in the gym.
 
 The decision this serves (new-themes.md, "Ghost house: haunted contracts", Sites): a church or historic estate site would
 be a room pool of **nave, vestry, bell tower** plus a crypt section. That only matters if hauntings end up tied to sites

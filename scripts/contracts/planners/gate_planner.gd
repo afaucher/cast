@@ -3,6 +3,9 @@ extends RefCounted
 ## The hellgates of a floor: plan() places them (SitePlan.gates and, on the last floor, the origin room), drawing from
 ## SiteBuilder.plan's shared rng; spawn() puts the gates, and the monster under each gate's room, into the world.
 ## SiteBuilder.plan / spawn call them; moved out of SiteBuilder verbatim (refactor plan H8).
+## A haunted contract (ContractRun.has_gates false: the dead family) gets no gate at all: floors 1-2 plan none (its
+## floor_gates are 0) and the last floor picks its origin room the same way (where the story says it started: its theme,
+## its story note) but puts no origin gate in it.
 
 
 const GATE_START_CLEAR := 5
@@ -40,7 +43,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, rng: 
 			if spot != SiteBuilder.NO_SPOT and (radius < 2 or pick == by_size[0]):
 				break
 		p.origin_room = pick
-		if spot != SiteBuilder.NO_SPOT:
+		if spot != SiteBuilder.NO_SPOT and run.has_gates():
 			p.gates.append({"cell": spot, "origin": true, "room": pick})
 		return
 	var count: int = run.floor_gates[floor_n - 1]

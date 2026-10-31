@@ -58,9 +58,9 @@ const GROUP := "priced_props"           ## arrows and bolts find props here (Gam
 ## "extra" (a PropModels static func() -> Node3D added beside the body, e.g. the brazier's embers).
 ## Adding a prop is one row here plus its builder in PropModels (tests/test_priced_prop.gd checks every row).
 const TABLE := {
-	"wine_rack": {"name": "Wine rack", "price": 1200, "hp": 45.0, "radius": 0.7, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.6),
+	"wine_rack": {"name": "Wine rack", "price": 1200, "hp": 45.0, "radius": 0.7, "site": "bunker", "sites": ["mansion"], "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.4, 0.6),
 		"height": 1.7, "model": "_wine_rack", "palette": [PropModels.WOOD, PropModels.WOOD_DK, PropModels.BOTTLE_GREEN, PropModels.BOTTLE_RED]},
-	"wine_barrel": {"name": "Vintage 1787 wine barrel", "price": 4000, "hp": 85.0, "radius": 0.68, "site": "bunker", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.35, 1.25),
+	"wine_barrel": {"name": "Vintage 1787 wine barrel", "price": 4000, "hp": 85.0, "radius": 0.68, "site": "bunker", "sites": ["mansion"], "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.35, 1.25),
 		"height": 1.25, "model": "_wine_barrel", "palette": [PropModels.WOOD, PropModels.WOOD_DK, PropModels.GOLD, PropModels.BOTTLE_RED]},
 	"marble_statue": {"name": "Marble statue", "price": 8000, "hp": 110.0, "radius": 0.58, "site": "bunker", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1),
 		"height": 2.2, "model": "_marble_statue", "palette": [PropModels.MARBLE, PropModels.MARBLE_DK, PropModels.GOLD]},
@@ -92,6 +92,33 @@ const TABLE := {
 		"height": 2.0, "model": "_evil_portrait", "palette": [PropModels.GOLD, PropModels.GOLD_DK, Color(0.45, 0.07, 0.1), PropModels.OBSIDIAN]},
 	"brazier": {"name": "Brazier", "price": 400, "hp": 55.0, "radius": 0.5, "site": "lair", "place": "corner", "orient": "face_center", "foot": Vector2(1.1, 1.1),
 		"height": 1.15, "model": "_brazier", "extra": "_embers", "palette": [PropModels.IRON, PropModels.IRON_LT, Color(1.0, 0.55, 0.12)]},
+	# The haunted sites' antiques (haunted-build-plan.md H1; new-themes.md "Ghost house": a broken antique bills the crew,
+	# possessed or not; bones are free and are no row here). Their look is the look test's: "haunt" names a HauntProps kind
+	# (PropModels.build hands it the build), the suit of armour's "node" is PropModels._suit_of_armour (ArmourModel,
+	# dormant on its stand). "sites": the other site types whose catalog has the row too (the church's parish rooms are the
+	# mansion's, haunted-build-plan.md; the mansion's wine cellar is the bunker's). Names and prices are PROPOSALS.
+	"suit_of_armour": {"name": "Suit of armour", "price": 6000, "hp": 90.0, "radius": 0.55, "site": "mansion", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.0, 0.9),
+		"height": 2.4, "node": "_suit_of_armour", "palette": [Color(0.46, 0.49, 0.54), Color(0.64, 0.68, 0.72), Color(0.5, 0.13, 0.13), Color(0.3, 0.18, 0.1)]},
+	"grand_piano": {"name": "Grand piano", "price": 14000, "hp": 110.0, "radius": 0.8, "site": "mansion", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.5, 2.5),
+		"height": 1.95, "haunt": "grand_piano", "palette": [Color(0.07, 0.065, 0.075), Color(0.9, 0.88, 0.8), PropModels.GOLD]},
+	"antique_globe": {"name": "Antique globe", "price": 2200, "hp": 35.0, "radius": 0.4, "site": "mansion", "sites": ["church"], "place": "corner", "orient": "face_center", "foot": Vector2(0.8, 0.8),
+		"height": 1.15, "haunt": "globe", "palette": [Color(0.55, 0.38, 0.21), Color(0.62, 0.5, 0.3), Color(0.2, 0.35, 0.3), PropModels.GOLD]},
+	"marble_bust": {"name": "Marble bust", "price": 4500, "hp": 60.0, "radius": 0.4, "site": "mansion", "sites": ["church"], "place": "corner", "orient": "face_center", "foot": Vector2(0.75, 0.75),
+		"height": 1.65, "haunt": "bust", "palette": [PropModels.MARBLE, PropModels.MARBLE_DK, Color(0.3, 0.17, 0.09)]},
+	"silver_candelabra": {"name": "Silver candelabra", "price": 1800, "hp": 30.0, "radius": 0.4, "site": "mansion", "sites": ["church"], "place": "corner", "orient": "face_center", "foot": Vector2(0.7, 0.7),
+		"height": 1.95, "haunt": "candelabra", "palette": [Color(0.74, 0.76, 0.8), Color(0.95, 0.91, 0.78), PropModels.GOLD]},
+	"mahogany_sideboard": {"name": "Mahogany sideboard", "price": 5200, "hp": 80.0, "radius": 0.7, "site": "mansion", "sites": ["church"], "place": "wall", "orient": "away_from_wall", "foot": Vector2(2.0, 0.6),
+		"height": 1.25, "haunt": "sideboard", "palette": [Color(0.3, 0.17, 0.09), Color(0.17, 0.09, 0.05), Color(0.74, 0.76, 0.8)]},
+	"wardian_case": {"name": "Wardian case", "price": 3200, "hp": 30.0, "radius": 0.55, "site": "mansion", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.2, 0.75),
+		"height": 1.6, "haunt": "wardian_case", "palette": [Color(0.86, 0.87, 0.83), Color(0.22, 0.46, 0.17), Color(0.72, 0.88, 0.92)]},
+	"stained_glass": {"name": "Stained glass window", "price": 12000, "hp": 40.0, "radius": 0.6, "site": "church", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.8, 0.4),
+		"height": 3.4, "haunt": "stained_window", "palette": [Color(0.85, 0.12, 0.12), Color(0.15, 0.32, 0.9), Color(0.95, 0.72, 0.18), Color(0.56, 0.54, 0.5)]},
+	"baptismal_font": {"name": "Baptismal font", "price": 9000, "hp": 120.0, "radius": 0.5, "site": "church", "place": "corner", "orient": "face_center", "foot": Vector2(1.0, 1.0),
+		"height": 1.0, "haunt": "font", "palette": [Color(0.56, 0.54, 0.5), Color(0.38, 0.36, 0.34), Color(0.3, 0.17, 0.09)]},
+	"brass_lectern": {"name": "Brass lectern", "price": 2600, "hp": 45.0, "radius": 0.4, "site": "church", "place": "corner", "orient": "face_center", "foot": Vector2(0.7, 0.7),
+		"height": 1.3, "haunt": "lectern", "palette": [Color(0.62, 0.43, 0.18), Color(0.38, 0.25, 0.1), Color(0.9, 0.88, 0.8)]},
+	"votive_stand": {"name": "Votive stand", "price": 900, "hp": 25.0, "radius": 0.5, "site": "church", "place": "wall", "orient": "away_from_wall", "foot": Vector2(1.1, 0.55),
+		"height": 1.2, "haunt": "candle_rack", "palette": [Color(0.15, 0.15, 0.17), Color(0.95, 0.91, 0.78), Color(1.0, 0.8, 0.38)]},
 	# Explosive props (ExplosiveProp: a fuse, then a blast; docs/design/hazards.md). Site "hazard": never in a site's
 	# catalog; the room themes place them (RoomThemeDefs "hazards", HazardPlanner.plan). Each one's row also carries
 	# "blast" (ExplosiveProp: radius in world units, damage and shove at the centre, fuse in seconds; required, a hazard
@@ -137,11 +164,13 @@ var _wobble: Tween = null
 
 # --- Catalog / helpers -----------------------------------------------------------------
 
-## Prop kinds for a site type ("bunker" or "lair"), in table order. Empty for anything else.
+## Prop kinds for a site type ("bunker", "lair", "mansion", "church"), in table order: the rows of that site and the rows
+## that list it in "sites". Empty for anything else.
 static func catalog(site_type: String) -> Array[String]:
 	var out: Array[String] = []
 	for k: String in TABLE.keys():
-		if String((TABLE[k] as Dictionary)["site"]) == site_type:
+		var row: Dictionary = TABLE[k]
+		if String(row["site"]) == site_type or (row.get("sites", []) as Array).has(site_type):
 			out.append(k)
 	return out
 

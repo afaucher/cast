@@ -136,7 +136,9 @@ How they fit together, from the top down:
    - a personality for the job card and invoice text.
 
    Archetypes to start: prepper billionaire, supervillain, wellness guru, tech founder,
-   influencer. (Proposed; add or cut freely.)
+   influencer. (Proposed; add or cut freely.) Since haunted-build-plan.md H1 there are two haunted clients too: the estate
+   heir (a haunted mansion) and the parish council (a haunted church). Their pest family is the dead (no hellgates, packs of
+   skeletons until H3), their objectives the pest per floor and the staff; the board deals one on about half its boards.
 3. **Story (2):** generation then rolls **what happened**: an inciting event plus where it
    started. For example, "the closing ceremony opened a gate in the yoga studio", or "the henchmen
    tried to tame an imp".

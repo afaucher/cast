@@ -16,6 +16,9 @@ const SIGNATURE := {
 	"wine_cellar": "tasting", "home_cinema": "cinema", "spa": "circle", "gym": "bench_rack", "server_room": "racks",
 	"panic_room": "desk", "pool": "pool", "torture_chamber": "cage", "throne_room": "carpet", "lab": "shelf",
 	"barracks": "bunks", "moat": "moat", "science": "specimen_pool",
+	# the haunted sites' rooms (haunted-build-plan.md H1)
+	"library": "bookshelves", "gallery": "portraits", "ballroom": "dance_floor", "dining_hall": "banquet",
+	"conservatory": "planters", "nave": "pews",
 }
 
 var _plans := 0
@@ -116,8 +119,12 @@ func _check_tables() -> void:
 		check(places.has(String(m["place"])), "%s has a placement rule" % kind)
 		check(orients.has(String(m["orient"])), "%s has an orientation rule" % kind)
 		check(float(m["w"]) > 0.0 and float(m["d"]) > 0.0 and float(m["weight"]) > 0.0, "%s has a footprint and a weight" % kind)
-		var model := String(m.get("model", m.get("node_model", "")))
-		check(DecorModels.builder(model).is_valid(), "%s names a DecorModels builder (%s)" % [kind, model])
+		if m.has("haunt"):
+			# a haunted room's piece: the look test's HauntProps kind (haunted-build-plan.md H1)
+			check(not HauntProps.row(String(m["haunt"])).is_empty(), "%s names a HauntProps kind (%s)" % [kind, m["haunt"]])
+		else:
+			var model := String(m.get("model", m.get("node_model", "")))
+			check(DecorModels.builder(model).is_valid(), "%s names a DecorModels builder (%s)" % [kind, model])
 		if m.has("after"):
 			check(DecorModels.builder(String(m["after"])).is_valid(), "%s: its post-build hook is a DecorModels function" % kind)
 		var node := DecorModels.build(kind, {"radius": 2.0, "length": 4.0, "text": "OM", "color": Color.RED})

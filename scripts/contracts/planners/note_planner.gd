@@ -56,7 +56,8 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, ctx: 
 		p.notes.append(_note_entry(p, ctx, run, facts, hint, hint_cell, "hint"))
 	# the dispatch banner line
 	var dispatch_lines: Array = []
-	for t: String in NoteCopy.DISPATCH.get(clampi(floor_n, 1, 3), []):
+	var banners: Dictionary = NoteCopy.DISPATCH if run.has_gates() else NoteCopy.DISPATCH_DEAD   # (no gates on a haunted floor)
+	for t: String in banners.get(clampi(floor_n, 1, 3), []):
 		dispatch_lines.append({"f": "dispatch", "t": t})
 	var d := NoteCopy.pick(dispatch_lines, facts, rng)
 	p.dispatch = NoteCopy.fill(str(d.get("t", "")), facts)

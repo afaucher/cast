@@ -380,7 +380,7 @@ func _make_card(run: ContractRun, index: int) -> PaperPanel:
 	two.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var site := _cell()
 	site.add_child(_cap("SITE"))
-	site.add_child(_typed("Survival bunker" if run.site_type == "bunker" else "Villain lair"))
+	site.add_child(_typed(ClientArchetype.site_title(run.site_type)))
 	var site_cell := _boxed_cell(site, 0.0, true)
 	site_cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	two.add_child(site_cell)

@@ -34,6 +34,11 @@ const F_CORR_CONCRETE := 12
 const F_CORR_STONE := 13
 const F_BASALT := 14          ## a lava cave's rock (the "lava" theme; LavaPlanner.materials)
 const F_BASALT_HELL := 15     ## ... where a hellgate leaks into it (the hellfire look)
+# The haunted sites' floors (docs/design/mansion-rooms.md, church-rooms.md; haunted-build-plan.md H1). Slots 0-15 are full,
+# so they take free slots at the top of the table (HIGH, the slots the look test laid out): a floor id is its own slot.
+const F_PARQUET := 27         ## dark walnut herringbone (the mansion's house rooms: "walnut & damask")
+const F_LIMESTONE := 29       ## worn limestone flags (the church)
+const F_TERRACOTTA := 30      ## terracotta tiles (the conservatory)
 
 # Wall ids (bits 8-15 of mat_id).
 const W_CONCRETE := 1
@@ -41,9 +46,20 @@ const W_STONE := 2
 const W_PANELLING := 3
 const W_MARBLE := 4
 const W_BASALT := 5           ## a lava cave's rim
+# The haunted sites' walls (HIGH: wall id + WALL_OFFSET is the slot).
+const W_DAMASK := 8           ## slot 24: oxblood damask over a walnut dado (the mansion)
+const W_LIMESTONE := 10       ## slot 26: pale limestone blocks (the church)
+const W_GLAZING := 15         ## slot 31: white iron glazing bars over dark glass (the conservatory)
 
 const WALL_OFFSET := 16     ## shader table index of wall id 0; floors use their own id
 const TABLE_SIZE := 32
+## The terrain shader's haunted patterns (HexMapView.MATERIAL_SHADER; from the look test, HauntLook): herringbone parquet
+## on a floor; wallpaper over a panelled dado (24 damask on walnut, 25 stripe on oak: the look test's other set) and
+## conservatory glazing on a wall. Their wall caps are wood or a glass roof, not the base colour.
+const PAT_HERRINGBONE := 9
+const PAT_DAMASK := 24
+const PAT_STRIPE := 25
+const PAT_GLAZING := 26
 
 ## id (index) -> {name, pat, base (sRGB), alt (sRGB: grout / joints / veins / highlights), scale (pattern size in world
 ## units), rough, spec, seam}. Floors first, walls from WALL_OFFSET.
@@ -75,12 +91,26 @@ const WALLS: Array[Dictionary] = [
 	{"name": "basalt", "pat": Pat.ASHLAR, "base": Color(0.13, 0.115, 0.11), "alt": Color(0.04, 0.035, 0.035), "scale": 1.3, "rough": 0.92, "spec": 0.08, "seam": 0.2},
 ]
 
+## The haunted materials in the free slots at the top of the table (24-31; the look test's layout, HauntLook): slot ->
+## the same row shape plus "wall" (true: a wall id, slot - WALL_OFFSET; false: a floor id, the slot itself). The look test
+## keeps its other material set (oak & stripe, slots 25 and 28) on a copy of the table.
+const HIGH := {
+	24: {"wall": true, "name": "damask over walnut", "pat": PAT_DAMASK, "base": Color(0.46, 0.12, 0.12), "alt": Color(0.70, 0.32, 0.24), "scale": 1.0, "rough": 0.7, "spec": 0.2, "seam": 0.2},
+	26: {"wall": true, "name": "limestone blocks", "pat": Pat.ASHLAR, "base": Color(0.60, 0.57, 0.52), "alt": Color(0.27, 0.25, 0.23), "scale": 1.0, "rough": 0.9, "spec": 0.1, "seam": 0.2},
+	27: {"wall": false, "name": "walnut herringbone", "pat": PAT_HERRINGBONE, "base": Color(0.40, 0.22, 0.12), "alt": Color(0.12, 0.06, 0.03), "scale": 0.13, "rough": 0.45, "spec": 0.35, "seam": 0.6},
+	29: {"wall": false, "name": "limestone flags", "pat": Pat.FLAGSTONE, "base": Color(0.55, 0.52, 0.47), "alt": Color(0.20, 0.19, 0.17), "scale": 1.5, "rough": 0.88, "spec": 0.12, "seam": 0.8},
+	30: {"wall": false, "name": "terracotta tiles", "pat": Pat.TILE, "base": Color(0.62, 0.31, 0.19), "alt": Color(0.30, 0.15, 0.10), "scale": 0.7, "rough": 0.75, "spec": 0.15, "seam": 0.8},
+	31: {"wall": true, "name": "glazing", "pat": PAT_GLAZING, "base": Color(0.10, 0.17, 0.19), "alt": Color(0.86, 0.87, 0.82), "scale": 1.0, "rough": 0.15, "spec": 0.7, "seam": 0.2},
+}
+
 ## Every room theme names its floor in its row (RoomThemeDefs.THEMES "floor_mat"; tests/test_floor_materials.gd checks
 ## none is missing). The luxury themes dress their own walls ("wall_mat"); every other room has its site's wall.
 
 ## Site type -> its corridor floor (neutral, so the rooms stand out) and its wall.
-const SITE_CORRIDOR := {"bunker": F_CORR_CONCRETE, "lair": F_CORR_STONE}
-const SITE_WALL := {"bunker": W_CONCRETE, "lair": W_STONE}
+## The haunted sites (H1): the mansion's halls are plain wood boards between damask walls, the church's limestone flags
+## between limestone blocks.
+const SITE_CORRIDOR := {"bunker": F_CORR_CONCRETE, "lair": F_CORR_STONE, "mansion": F_WOOD, "church": F_LIMESTONE}
+const SITE_WALL := {"bunker": W_CONCRETE, "lair": W_STONE, "mansion": W_DAMASK, "church": W_LIMESTONE}
 
 ## Microseconds the last assign() took (a probe for tests/test_floor_materials.gd).
 static var last_usec := 0
@@ -120,17 +150,60 @@ static func corridor_wall(site_type: String) -> int:
 
 ## How strongly the seams / bevel glow read on this floor material (1 = classic).
 static func seam_gain(floor_id: int) -> float:
+	if _high_floor(floor_id):
+		return float(HIGH[floor_id]["seam"])
 	if floor_id < 0 or floor_id >= FLOORS.size():
 		return 1.0
 	return float(FLOORS[floor_id]["seam"])
 
 
 static func floor_name(floor_id: int) -> String:
+	if _high_floor(floor_id):
+		return String(HIGH[floor_id]["name"])
 	return String(FLOORS[clampi(floor_id, 0, FLOORS.size() - 1)]["name"])
 
 
 static func wall_name(wall_id: int) -> String:
+	if _high_wall(wall_id):
+		return String(HIGH[WALL_OFFSET + wall_id]["name"])
 	return String(WALLS[clampi(wall_id, 0, WALLS.size() - 1)]["name"])
+
+
+## Every floor id with a row (FLOORS, then the HIGH floors), and every wall id.
+static func floor_ids() -> Array[int]:
+	var out: Array[int] = []
+	for i in FLOORS.size():
+		out.append(i)
+	for slot: int in HIGH:
+		if not bool(HIGH[slot]["wall"]):
+			out.append(slot)
+	return out
+
+
+static func wall_ids() -> Array[int]:
+	var out: Array[int] = []
+	for i in WALLS.size():
+		out.append(i)
+	for slot: int in HIGH:
+		if bool(HIGH[slot]["wall"]):
+			out.append(slot - WALL_OFFSET)
+	return out
+
+
+static func is_floor_id(floor_id: int) -> bool:
+	return (floor_id >= 0 and floor_id < FLOORS.size()) or _high_floor(floor_id)
+
+
+static func is_wall_id(wall_id: int) -> bool:
+	return (wall_id >= 0 and wall_id < WALLS.size()) or _high_wall(wall_id)
+
+
+static func _high_floor(floor_id: int) -> bool:
+	return HIGH.has(floor_id) and not bool(HIGH[floor_id]["wall"])
+
+
+static func _high_wall(wall_id: int) -> bool:
+	return HIGH.has(WALL_OFFSET + wall_id) and bool(HIGH[WALL_OFFSET + wall_id]["wall"])
 
 
 ## Write Cell.mat_id for EVERY cell of the floor: room cells from their room's theme, corridors from the site type,
@@ -189,6 +262,8 @@ static func table_arrays() -> Dictionary:
 			d = FLOORS[i]
 		elif i >= WALL_OFFSET and i - WALL_OFFSET < WALLS.size():
 			d = WALLS[i - WALL_OFFSET]
+		elif HIGH.has(i):
+			d = HIGH[i]
 		if d.is_empty():
 			continue
 		var b: Color = (d["base"] as Color).srgb_to_linear()

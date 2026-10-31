@@ -1,15 +1,35 @@
 class_name ClientArchetype
 extends RefCounted
 ## The client table behind every contract (docs/design/contracts.md, "Contract generation").
-## Each archetype supplies: the site type (bunker / lair), the pest pool, a name generator, the
+## Each archetype supplies: the site type (bunker / lair; mansion / church for the haunted ones), the pest pool, a name generator, the
 ## objective mix, a pay scale, and the flavour text for the job card and the invoice. The notes and the
 ## dispatch floor banners live in NoteCopy.
 ##
 ## Tone: deadpan corporate. The clients never appear in person; they exist as letterhead.
 ##
 ## Pest ids are MonsterFactory kinds ("grunt", "archer", "brute", "swarmer") or "everything".
+##
+## PEST FAMILIES (docs/design/haunted-build-plan.md, H1): every client's row names its site's family. "gate": the hellgate
+## contracts (demons, the five clients of IDS). "dead": the haunted contracts (new-themes.md "Ghost house"): a haunted
+## mansion or church, no hellgates, and packs only from FAMILY_KINDS["dead"] (until H3, today's skeleton). The haunting is
+## tied to the site, so a mansion or church client is always "dead". One family per contract.
 
+## The hellgate clients. Their order is part of every contract seed (ContractRun.make's dice, ContractBoard.run_for_seed's
+## seed % size, the board's shuffle), so a new client never goes in here: the haunted ones are HAUNTED_IDS.
 const IDS: Array[String] = ["prepper", "supervillain", "guru", "founder", "influencer"]
+## The haunted clients (family "dead"): one per haunted site. The board deals one of them on its own dice (ContractBoard).
+const HAUNTED_IDS: Array[String] = ["heir", "parish"]
+## Every client, IDS first (an archetype's index here seeds its contracts, so the hellgate clients keep theirs).
+const ALL_IDS: Array[String] = ["prepper", "supervillain", "guru", "founder", "influencer", "heir", "parish"]
+
+const FAMILY_GATE := "gate"
+const FAMILY_DEAD := "dead"
+## The monster kinds a family's packs and pest come from ([] = any kind, the hellgate family's mix). Until H3 the dead
+## family is today's skeleton (MonsterDefs "grunt", the pest "skeletons").
+const FAMILY_KINDS := {FAMILY_GATE: [], FAMILY_DEAD: ["grunt"]}
+
+## The SITE line of the job card, per site type.
+const SITE_TITLES := {"bunker": "Survival bunker", "lair": "Villain lair", "mansion": "Haunted mansion", "church": "Haunted church"}
 
 ## Display names of the monster kinds as the client would write them (each kind's MonsterDefs "pest"), plus "everything".
 static var PEST_NAMES: Dictionary = _pest_names()
@@ -161,6 +181,67 @@ const DATA := {
 			"incap": "Your crew has been incapacitated on stream. Engagement is up. Thank you.",
 		},
 	},
+	# The haunted clients (HAUNTED_IDS, family "dead"; haunted-build-plan.md H1). Every player-facing string below is a
+	# PROPOSAL awaiting the user's review (listed in the build plan's "H1 as built"). The pest is always the family's
+	# (skeletons until H3), never "everything".
+	"heir": {
+		"title": "Estate Heir",
+		"site": "mansion",
+		"family": "dead",
+		"site_name": "Ancestral manor",
+		"pests": ["grunt"],
+		"first": ["Peregrine", "Cordelia", "Ambrose", "Octavia", "Bartholomew", "Winifred"],
+		"last": ["Ashgrove", "Blackthorne", "Mortlake", "Ravensworth", "Hollowell"],
+		"suffix": ["", "", "the Younger", "Esq."],
+		"company": ["The %s Estate", "%s Heritage Trust", "%s Family Office (Probate)"],
+		"address": "The Hall, up the long drive, ring twice",
+		"tagline": "Old money. Older tenants.",
+		"dept": "Office of the Executor",
+		"pay_scale": 1.1,
+		"employees": [2, 4],
+		"everything_chance": 0.0,
+		"warning": "Property: four centuries of antiques, a suit of armour and the family portraits. Mind the portraits.",
+		"events": [
+			{"text": "The will was read at midnight, as the will insisted.", "dispatch": "They read the will at midnight and something in the house took it personally. Some of the staff are still in there. Bring them out.", "origin": "library"},
+			{"text": "A seance was held in the ballroom to settle who gets the silver.", "dispatch": "Someone held a seance in the ballroom over the silver, and the dead turned up to contest it. Some of the staff are still down here. Bring them out.", "origin": "ballroom"},
+			{"text": "The anniversary dinner set a place for great-grandfather.", "dispatch": "The anniversary dinner set a place for great-grandfather, and he came. Some of the staff are still serving. Bring them out.", "origin": "dining hall"},
+		],
+		"footers": {
+			"good": "The family thanks you. The family is large, and not all of it is living.",
+			"mid": "Adequate. Great-grandmother has been informed. She is not pleased.",
+			"bad": "The estate will be in touch. So, we suspect, will the house.",
+			"incap": "Your crew has been incapacitated. The house has asked whether they may stay.",
+		},
+	},
+	"parish": {
+		"title": "Parish Council",
+		"site": "church",
+		"family": "dead",
+		"site_name": "Parish church",
+		"pests": ["grunt"],
+		"first": ["Reverend", "Canon", "Deacon", "Mother", "Father", "Archdeacon"],
+		"last": ["Whitlow", "Penhallow", "Ashby", "Greaves", "Underhill"],
+		"suffix": ["", "", "(retired)", "OBE"],
+		"company": ["The %s Restoration Fund", "St. Agatha's Parish Council (%s, chair)", "The %s Bequest"],
+		"address": "The vestry door, round the back, past the yews",
+		"tagline": "All are welcome. Most are invoiced.",
+		"dept": "Parochial Church Council (Finance)",
+		"pay_scale": 0.85,
+		"employees": [2, 3],
+		"everything_chance": 0.0,
+		"warning": "Property: a medieval font, the stained glass and the votive stand. The lead on the roof is already gone.",
+		"events": [
+			{"text": "The bell-ringers rang a peal that is not in any book.", "dispatch": "The bell-ringers rang a peal nobody wrote, and the churchyard got up to listen. Some of the staff are still inside. Bring them out.", "origin": "nave"},
+			{"text": "Evensong ran long. Something stayed for the sermon.", "dispatch": "Evensong ran long and something stayed for the sermon. Some of the staff are still in the pews. Bring them out.", "origin": "nave"},
+			{"text": "The harvest supper raised more than the roof fund.", "dispatch": "The harvest supper raised more than the roof fund. Some of the staff are still at the tables. Bring them out.", "origin": "refectory"},
+		],
+		"footers": {
+			"good": "Thank you. A collection will be taken. It will not be for you.",
+			"mid": "We give thanks for what was saved. A list of what was not is enclosed.",
+			"bad": "The council has prayed over your invoice. The answer was no.",
+			"incap": "Your crew has been incapacitated. They are in our prayers, and in the minutes.",
+		},
+	},
 }
 
 ## Letterhead / card accent colour per client.
@@ -170,6 +251,8 @@ const ACCENTS := {
 	"guru": Color(0.52, 0.36, 0.72),
 	"founder": Color(0.14, 0.5, 0.82),
 	"influencer": Color(0.92, 0.3, 0.58),
+	"heir": Color(0.36, 0.2, 0.12),
+	"parish": Color(0.3, 0.24, 0.5),
 }
 
 static func get_data(id: String) -> Dictionary:
@@ -190,6 +273,23 @@ static func title_of(id: String) -> String:
 
 static func site_of(id: String) -> String:
 	return str(get_data(id)["site"])
+
+
+## The client's pest family ("gate" for every hellgate client: their rows carry none).
+static func family_of(id: String) -> String:
+	return str(get_data(id).get("family", FAMILY_GATE))
+
+
+## The monster kinds a family's packs and pest may use ([] = any).
+static func family_kinds(family: String) -> Array[String]:
+	var out: Array[String] = []
+	out.assign(FAMILY_KINDS.get(family, []))
+	return out
+
+
+## The job card's SITE line for a site type.
+static func site_title(site_type: String) -> String:
+	return str(SITE_TITLES.get(site_type, site_type.capitalize()))
 
 
 ## A readable pest name ("imps", "everything").

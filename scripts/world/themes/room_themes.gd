@@ -171,6 +171,12 @@ static func plan_decor(ctx: ThemeCtx) -> void:
 			var skipped := room.cells.size() < int(op.get("min_cells", 0))
 			var ok := false if skipped else ThemeVignettes.run(ctx, room, op)
 			plan.decor_report.append({"room": tag, "theme": room.theme, "op": String(op["op"]), "ok": ok, "skipped": skipped})
+		if bool(def.get("moonlit", false)):
+			# a moonlit room (the conservatory, the nave: the user's read of the look tests): every candle in it is out
+			for it: Dictionary in room.items:
+				var params: Dictionary = (it.get("params", {}) as Dictionary).duplicate()
+				params["unlit"] = true
+				it["params"] = params
 		var light := _light_for(room, def)
 		if not light.is_empty():
 			plan.lights.append(light)

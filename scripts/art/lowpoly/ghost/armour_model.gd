@@ -1,8 +1,9 @@
 class_name ArmourModel
 extends LowPolyModel
-## LOOK-DEV ONLY (docs/design/ghost-look.md): a suit of armour on its stand, the haunted mansion's antique that a ghost
-## possesses (new-themes.md "Ghost house"). A blockout for the ghost look test: it stands still, it is not a monster and
-## nothing in the game spawns it (only GhostBody and HauntPiece, for the gym and the look labs). It holds one of STANCES
+## A suit of armour on its stand (docs/design/ghost-look.md), the haunted mansion's antique that a ghost possesses
+## (new-themes.md "Ghost house"). It stands still and it is not a monster. The game shows it dormant as the mansion's priced
+## "Suit of armour" (PricedProp, PropModels._suit_of_armour; haunted-build-plan.md H1); GhostBody and HauntPiece put it in
+## the gym and the look labs, possessed (H5 makes that the game's). It holds one of STANCES
 ## (pose(): dormant, and the two possessed stances of the haunt look test, docs/design/haunt-look.md).
 ##
 ## The house look: a few big faceted masses (frustum plates, jittered blobs), tarnished steel in three values, one faded

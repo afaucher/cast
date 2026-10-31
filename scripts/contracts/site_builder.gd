@@ -487,8 +487,11 @@ const SCOUT_HARD := 0.6                 ## floor 2 gets a second scout at this d
 
 
 ## How many scouts a floor gets (user, 2026-10-18: one, sometimes two): 1 on floor 1, 1 on floor 2 (2 on jobs at
-## difficulty 0.6 or more), 2 on floor 3. Fewer when the floor has fewer good corridors.
+## difficulty 0.6 or more), 2 on floor 3. Fewer when the floor has fewer good corridors. None on a haunted contract: the
+## goblin is a demon, and its packs come only from its family (ContractRun.family_kinds).
 static func scout_count(run: ContractRun, floor_n: int) -> int:
+	if not run.family_kinds().is_empty() and not run.family_kinds().has("goblin"):
+		return 0
 	if floor_n >= 3:
 		return 2
 	if floor_n == 2 and run.difficulty >= SCOUT_HARD:
@@ -497,9 +500,10 @@ static func scout_count(run: ContractRun, floor_n: int) -> int:
 
 
 ## MonsterFactory.compose with the pest's weight multiplied (a swarmer is still at most one group per pack), for a pack
-## on floor `floor_n` (the kinds dealt from a later floor only: the pavise and the water boy from floor 2).
-static func biased_composition(budget: int, rng: RandomNumberGenerator, pest: String, floor_n: int = 1) -> Array[String]:
-	return MonsterFactory.compose(budget, rng, {pest: PEST_WEIGHT_MULT}, floor_n)
+## on floor `floor_n` (the kinds dealt from a later floor only: the pavise and the water boy from floor 2), of the kinds
+## `only` ([] = any: a hellgate contract; a haunted one passes its family's, ContractRun.family_kinds).
+static func biased_composition(budget: int, rng: RandomNumberGenerator, pest: String, floor_n: int = 1, only: Array[String] = []) -> Array[String]:
+	return MonsterFactory.compose(budget, rng, {pest: PEST_WEIGHT_MULT}, floor_n, only)
 
 
 ## The most monsters one room may hold: one per MonsterFactory.CELLS_PER_MONSTER walkable floor cells (at least 2).

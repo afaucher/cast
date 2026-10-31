@@ -1,5 +1,6 @@
 extends TestCase
-## The haunt look test (docs/design/haunt-look.md, LOOK-DEV ONLY): the suit of armour's three stances (ArmourModel.pose), the
+## The haunt look test (docs/design/haunt-look.md, LOOK-DEV ONLY, but for the dormant suit of armour, which is the mansion's
+## priced antique since haunted-build-plan.md H1: test_priced_prop): the suit of armour's three stances (ArmourModel.pose), the
 ## haunt pieces (HauntPiece: the armour and the crypt skeleton, dormant and possessed), the hero's ghost form (GhostForm)
 ## on and off, the gym's Haunts spawns and its "Ghost form" picker, and the haunt look lab's staging, all headless.
 

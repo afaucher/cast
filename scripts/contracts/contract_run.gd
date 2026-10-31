@@ -1,7 +1,9 @@
 class_name ContractRun
 extends RefCounted
-## One generated contract (a job card): client, site type, story, pest, difficulty, three floors,
+## One generated contract (a job card): client, site type, pest family, story, pest, difficulty, three floors,
 ## the paid objectives and the contract value. Pure data; deterministic per (archetype, seed, difficulty).
+## A haunted contract (family "dead", a mansion or church client) has no hellgates: its objectives are the pest per floor
+## (paid DEAD_PEST_BONUS more) and the staff.
 ##
 ## Pay (docs/design/contracts.md; the base rates are the dispatch standard, the client's pay_scale
 ## multiplies the first three and everything is rounded to $100):
@@ -21,6 +23,10 @@ const ORIGIN_PAY := 10000
 const PEST_PAY := 10000
 const EVERYTHING_MULT := 1.4
 const PEST_SPLIT: Array[float] = [0.3, 0.3, 0.4]   ## share of the pest pay per floor (floor 1, 2, 3)
+## A haunted contract (no hellgates: ClientArchetype.FAMILY_DEAD) adds this to its pest pay before the client's scale, so
+## its one paid objective is worth about what a hellgate contract's origin gate is (H1; the acolytes and the grimoire
+## bring their own pay lines in H4 / H6).
+const DEAD_PEST_BONUS := 10000
 const EMPLOYEE_EXTRACTED := 100
 
 var seed := 0
@@ -28,6 +34,9 @@ var archetype_id := "prepper"
 var client_name := ""
 var company := ""
 var site_type := "bunker"
+## The pest family (ClientArchetype.FAMILY_*, from the client's site): "gate" (hellgates and demons) or "dead" (a haunted
+## site: no hellgates, packs and pest only from the family's kinds). One family per contract.
+var family := ClientArchetype.FAMILY_GATE
 var difficulty := 0.5                 ## 0..1
 var pest := "everything"              ## a MonsterFactory kind or "everything"
 var story: Dictionary = {}
@@ -56,7 +65,7 @@ const ELEVATOR_STYLES := [["service", "wall"], ["fancy", "wall"], ["service", "f
 func net_fields() -> Dictionary:
 	return {
 		"seed": Net.SPAWN, "archetype_id": Net.SPAWN, "client_name": Net.SPAWN, "company": Net.SPAWN,
-		"site_type": Net.SPAWN, "difficulty": Net.SPAWN, "pest": Net.SPAWN, "story": Net.SPAWN,
+		"site_type": Net.SPAWN, "family": Net.SPAWN, "difficulty": Net.SPAWN, "pest": Net.SPAWN, "story": Net.SPAWN,
 		"invoice_number": Net.SPAWN, "floor_gates": Net.SPAWN, "floor_employees": Net.SPAWN,
 		"gate_pay": Net.SPAWN, "origin_pay": Net.SPAWN, "pest_pay": Net.SPAWN,
 		"pest_floor_pay": Net.SPAWN, "objectives": Net.SPAWN, "contract_value": Net.SPAWN,
@@ -70,10 +79,11 @@ static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 		archetype = "prepper"
 	var d := ClientArchetype.get_data(archetype)
 	var rng := RandomNumberGenerator.new()
-	rng.seed = run_seed * 2654435761 + ClientArchetype.IDS.find(archetype) * 97 + 13
+	rng.seed = run_seed * 2654435761 + ClientArchetype.ALL_IDS.find(archetype) * 97 + 13
 	r.seed = run_seed
 	r.archetype_id = archetype
 	r.site_type = str(d["site"])
+	r.family = ClientArchetype.family_of(archetype)
 	r.difficulty = clampf(diff, 0.0, 1.0)
 	var who := ClientArchetype.roll_name(archetype, rng)
 	r.client_name = str(who["name"])
@@ -81,8 +91,11 @@ static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 	r.story = ContractStory.roll(archetype, rng)
 	r.pest = _roll_pest(d, rng)
 	r.invoice_number = "INV-%05d-%s" % [absi(run_seed) % 100000, archetype.substr(0, 2).to_upper()]
-	# Hellgates by difficulty: floor 1 has one (two on a hard job), floor 2 two (three on a very hard one).
+	# Hellgates by difficulty: floor 1 has one (two on a hard job), floor 2 two (three on a very hard one). A haunted
+	# contract (the dead family) has none.
 	r.floor_gates = [2 if r.difficulty >= 0.5 else 1, 3 if r.difficulty >= 0.75 else 2, 0]
+	if not r.has_gates():
+		r.floor_gates = [0, 0, 0]
 	var emp: Array = d["employees"]
 	r.floor_employees = []
 	for _f in FLOOR_COUNT:
@@ -91,6 +104,8 @@ static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 	r.gate_pay = ClientArchetype.round_pay(GATE_PAY * scale)
 	r.origin_pay = ClientArchetype.round_pay(ORIGIN_PAY * scale)
 	var pest_total: float = PEST_PAY * scale * (EVERYTHING_MULT if r.pest == "everything" else 1.0)
+	if not r.has_gates():
+		pest_total += DEAD_PEST_BONUS * scale   # (the haunted contract's only objective carries what the origin gate would)
 	r.pest_pay = ClientArchetype.round_pay(pest_total)
 	r._build_objectives()
 	var style: Array = ELEVATOR_STYLES[elevator_style_index(run_seed)]
@@ -127,7 +142,7 @@ func _build_objectives() -> void:
 	for f in FLOOR_COUNT:
 		for i in floor_gates[f]:
 			objectives.append({"kind": "gate", "floor": f + 1, "pay": gate_pay, "label": "Close hellgate (floor %d)" % (f + 1)})
-		if f == FLOOR_COUNT - 1:
+		if f == FLOOR_COUNT - 1 and has_gates():
 			objectives.append({"kind": "origin", "floor": f + 1, "pay": origin_pay, "label": "Close the ORIGIN gate (floor %d)" % (f + 1)})
 		objectives.append({"kind": "pest", "floor": f + 1, "pay": pest_floor_pay[f], "label": "%s (floor %d)" % [pest_label(), f + 1]})
 	contract_value = 0
@@ -140,6 +155,17 @@ func floor_seed(floor_n: int) -> int:
 	if floor_n <= 1:
 		return seed
 	return (seed * 7919 + floor_n * 104729 + 17) & 0x7fffffff
+
+
+## True for a hellgate contract (the gate family): small gates on floors 1-2 and the origin gate on the last floor. A
+## haunted contract (the dead family) has none, so no gate or origin objective either.
+func has_gates() -> bool:
+	return family == ClientArchetype.FAMILY_GATE
+
+
+## The monster kinds this contract's packs may use ([] = any: the gate family's mix).
+func family_kinds() -> Array[String]:
+	return ClientArchetype.family_kinds(family)
 
 
 func total_gates() -> int:
@@ -174,8 +200,9 @@ func archetype_title() -> String:
 ## The objective summary a job card prints: [{label, pay_text, note}], pay in whole dollars (text).
 func card_lines() -> Array[Dictionary]:
 	var lines: Array[Dictionary] = []
-	lines.append({"label": "Close %d hellgates" % (floor_gates[0] + floor_gates[1]), "pay": gate_pay, "each": true})
-	lines.append({"label": "Close the ORIGIN gate", "pay": origin_pay, "each": false})
+	if has_gates():
+		lines.append({"label": "Close %d hellgates" % (floor_gates[0] + floor_gates[1]), "pay": gate_pay, "each": true})
+		lines.append({"label": "Close the ORIGIN gate", "pay": origin_pay, "each": false})
 	lines.append({"label": pest_label(), "pay": pest_pay, "each": false})
 	lines.append({"label": "Staff: %d to extract" % total_employees(), "pay": EMPLOYEE_EXTRACTED, "each": true})
 	return lines

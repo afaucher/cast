@@ -1,5 +1,6 @@
 extends RefCounted
-## The haunted mansion's props (docs/design/mansion-rooms.md; LOOK-DEV ONLY). Built through HauntProps.build(kind, params);
+## The haunted mansion's props (docs/design/mansion-rooms.md; the game's mansion rooms and antiques since
+## haunted-build-plan.md H1, see HauntProps). Built through HauntProps.build(kind, params);
 ## the kit, the shared pieces (painting, candelabrum, candle, runner, ladder) and the colours are HauntProps'. No class_name
 ## (HauntProps preloads it). Each builder is `static func _<kind>(k: HauntProps.Kit, p: Dictionary)`; any variation (book
 ## colours, leaf angles) comes from p "seed", else GameWorld.fx_rng.

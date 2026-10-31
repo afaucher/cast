@@ -21,7 +21,8 @@ const NETWORKED := true
 const RATE := 0.5
 ## The floors that may have one (floor 1 is the van's: the crew has not gone down yet).
 const FLOORS: Array[int] = [2, 3]
-## The site types that may have one (all five clients build on a bunker or a lair today).
+## The site types that may have one (the five hellgate clients build on a bunker or a lair; the haunted mansion and church
+## roll none in H1: haunted-build-plan.md, their crypt section comes in H2).
 const SITES: Array[String] = ["bunker", "lair"]
 const MIN_ROOMS := 2
 const MAX_ROOMS := 4

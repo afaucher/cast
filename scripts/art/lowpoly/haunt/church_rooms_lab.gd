@@ -1,8 +1,9 @@
 extends HauntRoomLab
-## Church rooms lab (docs/design/church-rooms.md; LOOK-DEV ONLY): the nave (pews either side of a red aisle, the altar on
+## Church rooms lab (docs/design/church-rooms.md; a look-dev lab): the nave (pews either side of a red aisle, the altar on
 ## its step, lancet windows), the vestry and the bell tower's ringing chamber, built the way the game draws a room
 ## (HauntRoomLab) in one material set (HauntLook.CHURCH: limestone flags, limestone block walls) and HauntLook's two lights,
-## at the game camera with Wick, Rebar and a grunt standing in each room for scale. Nothing here is used by the game.
+## at the game camera with Wick, Rebar and a grunt standing in each room for scale. The lab itself is look-dev; the nave,
+## its props and the limestone are the game's church room theme since haunted-build-plan.md H1.
 ##
 ##   godot --path . --resolution 1920x1080 -- --scene res://scenes/church_rooms_lab.tscn --shot <abs dir>/sheet.png [--only <room>]
 ##

@@ -1,5 +1,6 @@
 extends TestCase
-## The church rooms test (docs/design/church-rooms.md, LOOK-DEV ONLY): every church prop (HauntProps / ChurchProps) builds
+## The church rooms test (docs/design/church-rooms.md; the nave's props and the limestone are the game's church room since
+## haunted-build-plan.md H1, test_haunted_contract builds them in floors): every church prop (HauntProps / ChurchProps) builds
 ## headless inside its footprint with no text on it and wall pieces' backs on the wall line; the raised bell frame stands on
 ## its posts; the church's gym spawns put cosmetic props down; and the church lab's builders (the nave, the vestry, the bell
 ## tower in the limestone set, with their casts) run headless. (HauntLook's materials and lights: test_mansion_rooms.)

@@ -1,8 +1,9 @@
 # Haunted mansion rooms: a visual test
 
-Status: **[look-dev only]**, 2026-10-29. Nothing here is in the game. No room theme, site, floor, planner, contract or
-network message uses it. The test lives in a look lab and in the gym, and its job is to help the user decide how a haunted
-mansion's rooms should look.
+Status: **[look-dev, then built]**, 2026-10-29; in the game since 2026-10-31 (`haunted-build-plan.md`, "H1 as built"): the
+five rooms are the mansion's room themes, the props their decor and antiques, walnut & damask (and the conservatory's
+terracotta and glazing) the game's materials. The oak & stripe set and the lab stay look-dev. The test lives in a look lab
+and in the gym, and its job was to help the user decide how a haunted mansion's rooms should look.
 
 The decision this serves (new-themes.md, "Ghost house: haunted contracts", Sites): a haunted mansion is a room pool of
 **library, portrait gallery, ballroom, dining hall**, the existing wine cellar, and perhaps a **conservatory** (which could

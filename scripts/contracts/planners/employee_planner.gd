@@ -5,6 +5,10 @@ extends RefCounted
 ## the world. The names are SiteBuilder.STAFF_NAMES / HENCHMAN_NAMES. SiteBuilder.plan / spawn call them; moved out of
 ## SiteBuilder verbatim (refactor plan H8).
 
+## Who works at each site type (Employee styles): a bunker's staff, a lair's henchmen, and the haunted sites' household and
+## parish staff (the staff names and look; haunted-build-plan.md H1). A site not listed has staff.
+const STYLES := {"bunker": "staff", "lair": "henchman", "mansion": "staff", "church": "staff"}
+
 
 static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, rng: RandomNumberGenerator, avoid: Dictionary) -> void:
 	var gate_cells := p.gate_cells()
@@ -27,7 +31,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, rng: 
 	if p.ranked_rooms.is_empty():
 		return
 	var count: int = run.floor_employees[floor_n - 1]
-	var style := "staff" if run.site_type == "bunker" else "henchman"
+	var style := str(STYLES.get(run.site_type, "staff"))
 	var pool: Array[String] = SiteBuilder.STAFF_NAMES.duplicate() if style == "staff" else SiteBuilder.HENCHMAN_NAMES.duplicate()
 	for i in range(pool.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)

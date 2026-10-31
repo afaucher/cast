@@ -25,6 +25,14 @@ static var OPS := {
 	"dumbbells": _on_wall("dumbbell_rack"), "shelf": _on_wall("specimen_shelf"), "bench": _on_wall("lab_bench"),
 	"console": _on_wall("lab_console"), "pipes": _on_wall("pipe_run", {"params": {"length": 3.2}}),
 	"racks": _in_row("rack_cab", 3, 1.05, 2), "bunks": _in_row("bunk_bed", 3, 2.15, 2),
+	# the haunted rooms (HauntVignettes; haunted-build-plan.md H1)
+	"reading": HauntVignettes.reading, "runner": HauntVignettes.runner, "dance_floor": HauntVignettes.dance_floor,
+	"banquet": HauntVignettes.banquet, "planters": HauntVignettes.planters, "pews": HauntVignettes.pews,
+	"bookshelves": _in_row("bookshelf", 3, 1.9, 2), "portraits": _in_row("portrait", 4, 1.45, 2),
+	"gilt_chairs": _in_row("gilt_chair", 4, 0.85, 3), "portrait": _on_wall("portrait"), "sconce": _on_wall("sconce"),
+	"mirror": _on_wall("wall_mirror"), "fireplace": _on_wall("fireplace"), "garden_bench": _on_wall("garden_bench"),
+	"candelabra": _in_corner("candelabra"), "palms": _in_corner("potted_palm"), "citrus": _in_corner("citrus_tub"),
+	"ferns": _in_corner("fern_stand"), "pillars": _in_corner("pillar"),
 }
 
 

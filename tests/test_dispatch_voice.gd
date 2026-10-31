@@ -54,14 +54,16 @@ func _check_lines() -> void:
 		check(int(kinds.get(kind, 0)) > 0, "lines of kind %s exist" % kind)
 	# every source is covered
 	var incidents := 0
-	for id: String in ClientArchetype.IDS:
+	for id: String in ClientArchetype.ALL_IDS:   # (the haunted clients too: their incidents and NoteCopy.DISPATCH_DEAD)
 		for ev: Dictionary in (ClientArchetype.get_data(id)["events"] as Array):
 			incidents += 1
 			check(texts.has(str(ev["dispatch"])), "floor 1 incident listed: %s" % ev["dispatch"])
-			for t: String in NoteCopy.DISPATCH[3]:
-				check(texts.has(NoteCopy.fill(t, {"origin": ev["origin"]})), "floor 3 line listed for %s" % ev["origin"])
+			for t: String in NoteCopy.DISPATCH[3] + NoteCopy.DISPATCH_DEAD[3]:
+				check(texts.has(NoteCopy.fill(t, {"origin": ev["origin"], "pest": ClientArchetype.pest_name("grunt")})), "floor 3 line listed for %s" % ev["origin"])
 			check(texts.has(NoteCopy.fill(NoteCopy.DISPATCH[2][1], {"origin": ev["origin"]})), "floor 2 origin line listed for %s" % ev["origin"])
 	eq(int(kinds["incident"]), incidents, "one floor-1 line per client event")
+	for t: String in NoteCopy.DISPATCH_DEAD[2]:
+		check(texts.has(NoteCopy.fill(t, {"pest": ClientArchetype.pest_name("grunt")})), "a haunted floor 2 line is listed: %s" % t)
 	for pest: String in ClientArchetype.PEST_NAMES:
 		check(texts.has(NoteCopy.fill(NoteCopy.DISPATCH[2][0], {"pest": ClientArchetype.pest_name(pest)})), "floor 2 pest line listed for %s" % pest)
 	check(texts.has(NoteCopy.ORIGIN_SHUT), "the origin-gate line is listed")

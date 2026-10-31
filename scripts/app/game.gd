@@ -16,6 +16,8 @@ extends Node3D
 ##   --seed N            dungeon seed (default: random). Seeds the job board; with --contract N / --spells it is
 ##                       the contract's seed and floor 1 is exactly DungeonGen.for_run(run, 1) (seed N and the job's elevator)
 ##   --contract K        skip the board: take offer K (0-2) of the board, or, for K >= 3, the contract rolled from seed K
+##   --client ID         skip the board: client ID's contract from --seed (ClientArchetype.ALL_IDS: "heir" a haunted mansion,
+##                       "parish" a haunted church; ContractBoard.run_for_client). Wins over --contract
 ##   --floor N           start on floor N (1-3) of the contract (implies a contract; default offer from --seed)
 ##   --spells a,b        skip the picker (e.g. heal,corn); with no --contract it also skips the board
 ##   --no-mic            don't open the mic / load the model (typed casts only)
@@ -388,6 +390,7 @@ func _parse_args() -> void:
 			"--shot-at": opts["shot_at"] = nxt
 			"--shot-floor": opts["shot_floor"] = int(nxt)
 			"--contract": opts["contract"] = int(nxt)
+			"--client": opts["client"] = nxt
 			"--floor": opts["floor"] = clampi(int(nxt), 1, ContractRun.FLOOR_COUNT)
 			"--spells": opts["spells"] = nxt
 			"--no-mic": opts["no_mic"] = true
@@ -462,7 +465,9 @@ func _resolve_run() -> void:
 	if _session == null and not _dev_released:
 		var board_seed := int(opts.get("seed", randi() % 100000))
 		var run: ContractRun = null
-		if opts.has("contract"):
+		if opts.has("client"):
+			run = ContractBoard.run_for_client(str(opts["client"]), board_seed)
+		elif opts.has("contract"):
 			var k: int = opts["contract"]
 			run = ContractBoard.offers(board_seed)[k] if k >= 0 and k < ContractBoard.OFFER_COUNT else ContractBoard.run_for_seed(k)
 		elif opts.has("spells") or opts.has("floor") or opts.has("move_lab"):

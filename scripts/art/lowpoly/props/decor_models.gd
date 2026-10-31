@@ -10,7 +10,8 @@ extends RefCounted
 ##   DecorModels.build("neon_sign", {"text": "EVIL", "color": Color(1, .2, .15), "dead": [3]})
 ##
 ## Each kind's row in RoomThemeDefs.DECOR names its builder here ("model", or "node_model" for the neon sign) and its
-## post-build hook ("after"); build() reads the row (see builder()). A new decor kind is its row plus its builder.
+## post-build hook ("after"); build() reads the row (see builder()). A new decor kind is its row plus its builder. A
+## haunted room's kind names its HauntProps kind instead ("haunt": the look test's mansion and church props, _haunt()).
 ## Animated pieces (neon sign letters, the cinema screen, the patrolling shark fin) carry a DecorAnim child.
 ## Flat floor decals (chalk circle, carpet, mats: "flat" in the row) have no ink outline. (Pools and the moat are terrain
 ## now: PoolGeo / PoolView; the moat's fins follow its channel, see DecorAnim.)
@@ -61,9 +62,11 @@ static func height(kind: String) -> float:
 
 
 static func build(kind: String, params: Dictionary = {}) -> Node3D:
+	var row := RoomThemeDefs.decor(kind)
+	if row.has("haunt"):
+		return _haunt(String(row["haunt"]), params)
 	var root := Node3D.new()
 	root.name = "Model"
-	var row := RoomThemeDefs.decor(kind)
 	if row.has("node_model"):
 		builder(String(row["node_model"])).call(root, params)
 		return root
@@ -86,6 +89,24 @@ static func build(kind: String, params: Dictionary = {}) -> Node3D:
 	if row.has("after"):
 		builder(String(row["after"])).call(root, params)
 	return root
+
+
+## A haunted room's piece (a DECOR row's "haunt": its HauntProps kind, haunted-build-plan.md H1): the look test's model,
+## its variation (book colours, the portrait's picture) from the placement's `variant` (DecorProp), so every machine
+## dresses the room alike; params "unlit" (a moonlit room, RoomThemes.plan_decor) puts its candles out.
+static func _haunt(haunt_kind: String, params: Dictionary) -> Node3D:
+	var p := params.duplicate()
+	var variant := int(p.get("variant", 0))
+	if not p.has("seed"):
+		p["seed"] = variant
+	if not p.has("v"):
+		p["v"] = variant % 5
+	var m := HauntProps.build(haunt_kind, p)
+	if bool(p.get("unlit", false)):
+		var candles := m.get_node_or_null("Candles") as Node3D
+		if candles != null:
+			candles.visible = false
+	return m
 
 
 ## A builder named in a DECOR row: a static func of this script. "model": func(s: LowPoly.Soup, params: Dictionary)

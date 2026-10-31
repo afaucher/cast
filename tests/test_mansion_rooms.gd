@@ -1,8 +1,9 @@
 extends TestCase
-## The haunted mansion rooms test (docs/design/mansion-rooms.md, LOOK-DEV ONLY): every mansion prop (HauntProps /
-## MansionProps) builds headless inside its footprint, with no text on it, wall pieces with their backs on the wall line,
-## candles that HauntLook's lights snuff and relight; HauntLook's lab-only materials patch a copy of the terrain shader and
-## table (the game's own are untouched) and dress a built HexMapView; the gym's haunt spawns put cosmetic props down and its
+## The haunted mansion rooms test (docs/design/mansion-rooms.md; the props and the decided materials are the game's mansion
+## rooms now, haunted-build-plan.md H1): every mansion prop (HauntProps / MansionProps) builds headless inside its
+## footprint, with no text on it, wall pieces with their backs on the wall line, candles that HauntLook's lights snuff and
+## relight; the decided materials are in the game's terrain shader and table, the lab's oak set on a copy of the table, and
+## they dress a built HexMapView; the gym's haunt spawns put cosmetic props down and its
 ## Haunt light row relights the scene; and the mansion lab's builders (each room, its cast, both material sets) run headless.
 
 const LAB := "res://scripts/art/lowpoly/haunt/mansion_rooms_lab.gd"
@@ -61,17 +62,23 @@ func _has_text(n: Node) -> bool:
 
 
 func _check_materials() -> void:
-	var code := HauntLook.shader_code()
-	check(code.contains("if (pat == 9)") and code.contains("pat == 24 || pat == 25") and code.contains("pat == 26"),
-			"the test's patterns are in its shader copy")
-	check(code.contains("is_wall && pat == 26"), "... and its wall caps")
-	check(not HexMapView.MATERIAL_SHADER.contains("pat == 24"), "the game's terrain shader is untouched")
+	# The decided materials are the game's now (haunted-build-plan.md H1): their patterns in the game's terrain shader,
+	# their rows in FloorMaterials; only the oak & stripe set stays on the lab's table copy.
+	var code := HexMapView.MATERIAL_SHADER
+	check(code.contains("pat == 9") and code.contains("pat == 24 || pat == 25") and code.contains("pat == 26"),
+			"the haunted patterns are in the game's terrain shader")
+	check(code.contains("is_wall && pat == 26") and code.contains("cap_base("), "... and their wall caps")
+	eq(HauntLook.shader_code(), HexMapView.MATERIAL_SHADER, "the lab draws with the game's shader")
 	var t := HauntLook.tables()
 	var game := FloorMaterials.table_arrays()
 	for slot: int in HauntLook.ROWS:
 		check(slot >= 22 and slot < FloorMaterials.TABLE_SIZE, "slot %d is a free one" % slot)
 		eq(int((t["base"] as PackedVector4Array)[slot].w + 0.5), int(HauntLook.ROWS[slot]["pat"]), "slot %d's pattern" % slot)
-		eq((game["base"] as PackedVector4Array)[slot], Vector4.ZERO, "the game's table has nothing in slot %d" % slot)
+		if HauntLook.LAB_ROWS.has(slot):
+			eq((game["base"] as PackedVector4Array)[slot], Vector4.ZERO, "the game's table has nothing in the lab-only slot %d" % slot)
+		else:
+			check(FloorMaterials.HIGH.has(slot), "slot %d is the game's" % slot)
+			eq((t["base"] as PackedVector4Array)[slot], (game["base"] as PackedVector4Array)[slot], "slot %d is the game's row" % slot)
 	eq((t["base"] as PackedVector4Array)[FloorMaterials.F_WOOD], (game["base"] as PackedVector4Array)[FloorMaterials.F_WOOD], "the game's rows are kept")
 	for set_name: String in HauntLook.SET_NAMES:
 		var st: Dictionary = HauntLook.SETS[set_name]

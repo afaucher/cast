@@ -1,9 +1,10 @@
 extends HauntRoomLab
-## Haunted mansion rooms lab (docs/design/mansion-rooms.md; LOOK-DEV ONLY): the library, the portrait gallery, the
+## Haunted mansion rooms lab (docs/design/mansion-rooms.md; a look-dev lab): the library, the portrait gallery, the
 ## ballroom, the dining hall and the conservatory, each built the way the game draws a room (HauntRoomLab) and dressed with
 ## HauntProps' mansion pieces, in two material sets (HauntLook.SETS: walnut & damask, oak & stripe; the conservatory keeps
 ## its terracotta and glazing in both) and two lights (cold moonlight, candle light), at the game camera with Wick, Rebar
-## and a grunt standing in each room for scale. Nothing here is used by the game.
+## and a grunt standing in each room for scale. The lab itself is look-dev; its rooms, props and walnut & damask
+## materials are the game's mansion room themes since haunted-build-plan.md H1 (the oak set stays lab-only).
 ##
 ##   godot --path . --resolution 1920x1080 -- --scene res://scenes/mansion_rooms_lab.tscn --shot <abs dir>/sheet.png [--only <room>]
 ##

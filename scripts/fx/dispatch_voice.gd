@@ -62,7 +62,7 @@ static func clear_overrides() -> void:
 
 # --- the lines -------------------------------------------------------------------------------------
 
-## Every banner line the game can show, from the real constants (NoteCopy.DISPATCH, ClientArchetype events, NoteCopy.
+## Every banner line the game can show, from the real constants (NoteCopy.DISPATCH and DISPATCH_DEAD, every client's events, NoteCopy.
 ## ORIGIN_SHUT, NoteCopy.RESCUE_*; no employee names), deduplicated by text: [{"key", "text", "spoken", "kind"}].
 ## kind: "incident" (floor 1), "floor2", "floor3", "origin_shut", "wipe", "call" (the other one-off calls), "sewer" (the
 ## sewer cluster's calls, NoteCopy.SEWER_CALLS), "rescue_one", "rescue_many".
@@ -71,7 +71,7 @@ static func all_lines() -> Array[Dictionary]:
 	var seen := {}
 	var origins: Array[String] = []
 	var incidents: Array[String] = []
-	for id: String in ClientArchetype.IDS:
+	for id: String in ClientArchetype.ALL_IDS:
 		for ev: Dictionary in (ClientArchetype.get_data(id)["events"] as Array):
 			if not origins.has(str(ev["origin"])):
 				origins.append(str(ev["origin"]))
@@ -82,7 +82,7 @@ static func all_lines() -> Array[Dictionary]:
 	var values := {"origin": origins, "pest": pests, "incident": incidents}
 	for floor_n in range(1, 4):
 		var kind := "incident" if floor_n == 1 else "floor%d" % floor_n
-		for t: String in NoteCopy.DISPATCH[floor_n]:
+		for t: String in NoteCopy.DISPATCH[floor_n] + NoteCopy.DISPATCH_DEAD[floor_n]:
 			for text in _fills(t, values):
 				_add(out, seen, text, kind)
 	_add(out, seen, NoteCopy.ORIGIN_SHUT, "origin_shut")

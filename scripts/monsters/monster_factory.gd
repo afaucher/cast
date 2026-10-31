@@ -46,9 +46,10 @@ static func spawn(kind: String, cell: Vector2i) -> Monster:
 ## Pick a varied composition (list of kinds; a swarm kind appears at most once and means a whole clump). `bias`
 ## multiplies a kind's pick weight ({kind: factor}: SiteBuilder favours the contract's pest). `floor_n`: the floor the pack
 ## is for; a kind whose row says "min_floor" above it is not dealt (so floor 1 rolls exactly as before the pavise and the
-## water boy), "max" caps a kind per pack and "after" deals it only once the pack holds that many others. The one pack
+## water boy), "max" caps a kind per pack and "after" deals it only once the pack holds that many others. `only`: the kinds
+## the pack may hold ([] = every kind; a haunted contract's pest family, ContractRun.family_kinds). The one pack
 ## composer: the floor plan depends on its exact rolls.
-static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = {}, floor_n: int = 1) -> Array[String]:
+static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = {}, floor_n: int = 1, only: Array[String] = []) -> Array[String]:
 	var plan: Array[String] = []
 	var counts := {}
 	var left := budget
@@ -58,6 +59,8 @@ static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = 
 		var total := 0.0
 		for k in KINDS:
 			if COSTS[k] > left or (MonsterDefs.is_swarm(k) and counts.get(k, 0) > 0):
+				continue
+			if not only.is_empty() and not only.has(k):
 				continue
 			if not _dealt(k, floor_n, int(counts.get(k, 0)), plan):
 				continue

@@ -17,13 +17,14 @@ const VERBS := {"voicemail": "Listen"}
 ## Header per format per client (the slip's title line). "" = no header (a sticky note).
 const HEADERS := {
 	"report": {"prepper": "Contingency Log", "supervillain": "Maintenance Ticket", "guru": "Energy Report",
-		"founder": "Ticket", "influencer": "Brand Safety Review"},
+		"founder": "Ticket", "influencer": "Brand Safety Review", "heir": "Household Ledger", "parish": "Verger's Book"},
 	"memo": {"prepper": "From the desk of {client}", "supervillain": "Henchmen Resources", "guru": "Intention Card",
-		"founder": "#general", "influencer": "Brand Brief"},
+		"founder": "#general", "influencer": "Brand Brief", "heir": "From the desk of {client}", "parish": "Parish Notice"},
 	"complaint": {"prepper": "Staff Concern Form", "supervillain": "Grievance Form 7B", "guru": "Guest Feedback Card",
-		"founder": "Anonymous Feedback (Named)", "influencer": "Comment Moderation Log"},
+		"founder": "Anonymous Feedback (Named)", "influencer": "Comment Moderation Log", "heir": "Below Stairs",
+		"parish": "Suggestion Box"},
 	"sign": {"prepper": "Bunker Protocol", "supervillain": "Lair Policy", "guru": "Retreat Etiquette",
-		"founder": "Office Norms", "influencer": "Studio Rules"},
+		"founder": "Office Norms", "influencer": "Studio Rules", "heir": "House Rules", "parish": "Church Notice"},
 	"voicemail": {"*": "1 new voicemail · {client}"},
 	"sticky": {"*": ""},
 }
@@ -136,6 +137,49 @@ const STORY := {
 			{"f": "voicemail", "t": "It's {client}. If the {origin} starts glowing again, just, like, film it? Kidding. Unless?"},
 		],
 	},
+	# The haunted clients (haunted-build-plan.md H1; PROPOSALS, listed there for the user's review). No hellgate: no line
+	# names a gate ({gate_room} never fills on their floors anyway).
+	"heir": {
+		1: [
+			{"f": "sign", "t": "THE HOUSE IS CLOSED TO VISITORS AFTER DARK. (In pen: \"and to the family. and to the staff.\")"},
+			{"f": "memo", "t": "Staff are reminded that the east wing is not haunted. It is draughty. Do not answer the draught."},
+			{"f": "sticky", "t": "Great-grandfather's chair was warm again this morning. Moved it. It moved back. — {staff}"},
+			{"f": "report", "t": "Cellar inventory: wine, 600 bottles. Bones, more than expected. Family members, unclear."},
+		],
+		2: [
+			{"f": "memo", "t": "If the house acts up, {staff} takes everyone to the {staff_room} and locks the door. The door is optional."},
+			{"f": "voicemail", "t": "It's {client}. The {prop} in the {prop_room} stays in the family. So do you."},
+			{"f": "sign", "t": "THE {PROP} IS VALUED AT {prop_price}. THE FAMILY IS PRICELESS. THE FAMILY IS ALSO DEAD."},
+			{"f": "complaint", "t": "Something knocked inside the walls of the {staff_room} during inventory. It knocked twice for yes. — {staff}"},
+		],
+		3: [
+			{"f": "memo", "event": "library", "t": "The will is to be read at midnight in the library, aloud, in full, including the part in Latin."},
+			{"f": "sign", "event": "ballroom", "t": "SEANCE TONIGHT, BALLROOM. TOPIC: THE SILVER. (In pen: \"great-aunt has opinions.\")"},
+			{"f": "memo", "event": "dining hall", "t": "Anniversary dinner: set a place for great-grandfather. He will not come. Set it anyway."},
+			{"f": "voicemail", "t": "It's {client}. Nobody goes into the {origin} until the solicitor has. The solicitor went in on Tuesday."},
+			{"f": "report", "t": "The {origin} rearranges itself at night. Nothing is missing. Something is extra."},
+		],
+	},
+	"parish": {
+		1: [
+			{"f": "sign", "t": "BELL PRACTICE THURSDAYS. PLEASE DO NOT RING THE OLD PEAL. (In pen: \"which one is the old peal?\")"},
+			{"f": "memo", "t": "Roof fund: 12% of target. Lead on the roof: none. The churchyard has been very quiet. Too quiet, says the verger."},
+			{"f": "sticky", "t": "Someone keeps lighting the candles before I get in. I have the only key. — {staff}"},
+			{"f": "report", "t": "Churchyard survey: 212 graves. Occupied: fewer than last year. Recommend a recount."},
+		],
+		2: [
+			{"f": "memo", "t": "In an emergency, {staff} leads the congregation to the {staff_room} and starts a hymn. Any hymn."},
+			{"f": "voicemail", "t": "{client} here. Mind the {prop} in the {prop_room}. It is older than the diocese."},
+			{"f": "sign", "t": "THE {PROP}: {prop_price}, PER THE INSURERS. DONATIONS TOWARD IT WELCOME. BREAKAGES LESS SO."},
+			{"f": "complaint", "t": "The {staff_room} is cold all summer and something hums along with the organ. We have no organ. — {staff}"},
+		],
+		3: [
+			{"f": "sign", "event": "nave", "t": "THE OLD PEAL IS NOT TO BE RUNG. IT IS NOT FOR THE LIVING. (In pen: \"rang it. sounded fine.\")"},
+			{"f": "memo", "event": "nave", "t": "Evensong runs long this week. Do not leave until the last of the congregation does. Count them."},
+			{"f": "memo", "event": "refectory", "t": "Harvest supper: the whole churchyard is invited, as is tradition. Nobody replies. Nobody ever has."},
+			{"f": "voicemail", "t": "It's {client}. The {origin} is closed for repairs. Please do not let anything out of the repairs."},
+		],
+	},
 }
 
 const PEST_HEADER := "Pest Control · Site Visit"
@@ -211,6 +255,22 @@ const DISPATCH := {
 		"The {origin}'s on this floor. Close the big gate and the whole site goes quiet.",
 		"This is where it started, in the {origin}. Close the gate there and every other gate stops with it.",
 		"The big gate is in the {origin}. Closing it stops the site.",
+	],
+}
+
+## The dispatch floor banners of a haunted contract (the dead family, haunted-build-plan.md H1): no gate to close, so
+## each one is the pest and the way out. Floor 1 is the incident, as above. PROPOSALS (listed in the build plan).
+const DISPATCH_DEAD := {
+	1: [
+		"{incident}",
+	],
+	2: [
+		"The {pest} on this floor are still getting up. Put them down and keep going.",
+		"Halfway down and the {pest} are thicker. Some of the staff made it this far. Find them, then find the elevator.",
+	],
+	3: [
+		"This is where it started, in the {origin}. Put the {pest} down and get everyone out.",
+		"The {origin}'s on this floor. Whatever got up down here, put it back down.",
 	],
 }
 

@@ -20,6 +20,8 @@ const MAX_PROPS := 6
 const LANDING_KINDS := {
 	"bunker": ["marble_statue", "crystal_lamp", "zen_fountain"],
 	"lair": ["evil_portrait", "brazier", "henchman_locker"],
+	"mansion": ["suit_of_armour", "marble_bust", "silver_candelabra"],
+	"church": ["marble_bust", "votive_stand", "silver_candelabra"],
 }
 const SET_PIECE_REACH := 3.5   ## the wall pose's march starts this far from the landing's centre toward its back side
 
