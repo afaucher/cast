@@ -40,7 +40,7 @@ client owns the grow room.
 
 ## Ghost house: haunted contracts
 
-Status: **[discussion]**, 2026-10-28. Nothing is built. Decisions are marked with the date and the user's words; the rest is
+Status: **[discussion]**, 2026-10-28; the mission decided 2026-10-31. Nothing but look tests is built. Decisions are marked with the date and the user's words; the rest is
 proposal.
 
 The user (2026-10-28): "I'm thinking about our ghost theme again. I think it actually makes more sense than plants. But
@@ -50,17 +50,23 @@ can have zombies, ghosts, ectoplasm type things. The ghosts could haunt things l
 mix and match existing themes based on the specific locations. Like a haunted Mansion could have a sewer section. Or a
 church or historical mansion could have a crypt."
 
-### The mission [proposal]
-A second **pest family** with its own **source**, in the same contract frame (floors, employees, property damage, invoice):
+### The mission [decided, 2026-10-31]
+A second **pest family** with its own **source**, in the same contract frame (floors, employees, property damage, invoice).
+The user (2026-10-31): "the plan was acolytes on floor one and two, and the grimoire on the last [floor]."
 - Floors 1-2: **necromancer acolytes** raising the dead (mobile host monsters that flee and raise bodies; paid per kill).
-- The origin floor: **the grimoire**, pulsing out the dead until it is slammed shut or burned (a host-arbitrated world
-  object like a hellgate: HP, phases, a pay line). A physical object, never text to read (Cast is not a reading game).
+- The origin (last) floor: **the grimoire**, pulsing out the dead until it is slammed shut or burned (a host-arbitrated
+  world object like a hellgate: HP, phases, a pay line). A physical object, never text to read (Cast is not a reading game).
+- **One pest family per contract.** The user: "We shouldn't be mixing hellgates and these," and "one pest family per
+  contract for now." A haunted contract has no demons or hellgates; a hellgate contract has no ghosts, zombies or acolytes.
+- **The haunting is tied to the site.** The user: "Haunting is tied to the site." Haunted mansions and churches get
+  haunted contracts; the client does not make a site haunted.
 
 ### Sites: a room pool plus sections [proposal]
 Sewer clusters and lava caves already mix sections into a floor; a site type becomes a room pool plus a section pool.
 - Haunted mansion: library, portrait gallery, ballroom, dining hall, the existing wine cellar; sections: crypt, sewer.
   A conservatory room could carry the parked garden's pollen beds.
-- Church / historic estate: nave, vestry, bell tower; section: crypt.
+- Church / historic estate: nave; section: crypt. (The vestry was dropped and the bell tower removed after their look
+  tests: `church-rooms.md`.)
 - A villain lair could roll a crypt too.
 
 ### Ghosts [decided, 2026-10-28]
@@ -79,6 +85,11 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 - **Ghost form (cast Ghost on yourself) makes ghosts easier, not possible:** the user, asked whether it is the only way to
   kill a wisp: "Easier." It is a **whole-body transform** for now (translucent, moving as today's hero; "For now").
   Proposal: in ghost form you see free ghosts clearly and they do not flee from you.
+- **Ghost form passes through regular enemies, so it is for fighting ghosts** [decided, 2026-10-31]. The user: "ghost form
+  makes it so that you can pass through regular enemies, because you can walk through them[.] So it's for fighting
+  ghosts[.]" Still open: whether a ghost-form hero can hit or be hit by regular enemies, and its duration and cooldown.
+- **Evicting a ghost without breaking its host: wanted, deferred** [2026-10-31]. The user: "We will have to add a way to
+  evict ghosts without breaking them. I just haven't thought of one yet. Let's defer."
 - **Later (a big build):** "I like the idea of ghost mode after you normally die though. That is a huge extra build so
   later." A downed hero would roam as a ghost.
 
@@ -113,8 +124,7 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 - The crypt section goes in the floor checksum, like the sewers.
 
 ### Open
-1. Source: acolytes on floors 1-2 plus the grimoire at the origin, or one of them?
-2. Is a haunting tied to the site (mansions, churches) or the client (a haunted lair)?
-3. Possessed antiques: does breaking one bill the crew, and is there a way to evict a ghost without breaking it?
-4. One pest family per contract (no demons and ghosts together) for now?
-5. What ghost form does exactly beyond "easier" (see the proposal above), and its duration and cooldown.
+Answered 2026-10-31: the source (acolytes on floors 1-2, the grimoire on the last), the haunting tied to the site, and one
+pest family per contract (The mission); ghost form passes through regular enemies (Ghosts). Still open:
+1. Possessed antiques: does breaking one bill the crew? (A way to evict a ghost without breaking it is wanted, deferred.)
+2. Ghost form: can a ghost-form hero hit or be hit by regular enemies, and its duration and cooldown.
