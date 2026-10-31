@@ -64,7 +64,7 @@ static func _bookshelf(k: HauntProps.Kit, p: Dictionary) -> void:
 	k.box(Vector3(hw * 2.0 - 0.18, 2.3, 0.04), Vector3(0, 1.15, -0.23), HauntProps.WALNUT_DK)
 	k.box(Vector3(hw * 2.0 + 0.12, 0.1, 0.6), Vector3(0, 2.35, 0.02), HauntProps.WALNUT)
 	k.box(Vector3(hw * 2.0 + 0.04, 0.06, 0.55), Vector3(0, 2.27, 0.01), HauntProps.WALNUT_DK)
-	k.box(Vector3(hw * 2.0 + 0.02, 0.16, 0.54), Vector3(0, 0.08, 0.01), HauntProps.WALNUT_DK)
+	k.box(Vector3(hw * 2.0 + 0.02, 0.15, 0.54), Vector3(0, 0.075, 0.01), HauntProps.WALNUT_DK)
 	var levels: Array[float] = [0.16, 0.6, 1.04, 1.48, 1.92]
 	for y in levels:
 		k.box(Vector3(hw * 2.0 - 0.18, 0.04, 0.46), Vector3(0, y - 0.02, 0), HauntProps.WALNUT)
@@ -106,7 +106,7 @@ static func _reading_chair(k: HauntProps.Kit, p: Dictionary) -> void:
 			k.cyl(0.04, 0.03, 0.14, 5, Vector3(lx, 0.07, lz), HauntProps.WALNUT_DK)
 	k.box(Vector3(0.9, 0.3, 0.8), Vector3(0, 0.29, 0), col)
 	k.box(Vector3(0.62, 0.12, 0.62), Vector3(0, 0.49, 0.07), col.lightened(0.08))
-	k.box(Vector3(0.9, 0.85, 0.18), Vector3(0, 0.82, -0.32), col)
+	k.box(Vector3(0.88, 0.85, 0.18), Vector3(0, 0.82, -0.32), col)
 	k.ball(Vector3(0.45, 0.12, 0.1), Vector3(0, 1.2, -0.32), col, 0, 0.0)
 	for sx in [-1.0, 1.0]:
 		k.box(Vector3(0.14, 0.32, 0.72), Vector3(sx * 0.38, 0.6, 0.02), col)
@@ -312,7 +312,7 @@ static func _grand_piano(k: HauntProps.Kit, _p: Dictionary) -> void:
 	var outline: Array[Vector2] = [Vector2(-0.72, 0.62), Vector2(0.72, 0.62), Vector2(0.72, 0.1), Vector2(0.55, -0.35),
 		Vector2(0.28, -0.85), Vector2(0.05, -1.08), Vector2(-0.72, -1.08)]
 	_prism(k, outline, 0.62, 0.98, HauntProps.PIANO_BLACK)
-	_prism(k, outline, 0.6, 0.64, Color(0.12, 0.11, 0.12))
+	_prism(k, outline, 0.58, 0.62, Color(0.12, 0.11, 0.12))
 	# the lid, propped open on the spine's hinge
 	var lid := Transform3D(Basis(Vector3.FORWARD, deg_to_rad(-38.0)), Vector3(-0.72, 0.99, 0)) * Transform3D(Basis.IDENTITY, Vector3(0.72, 0, 0))
 	var lid_pts: Array[Vector2] = []
@@ -360,12 +360,12 @@ static func _wall_mirror(k: HauntProps.Kit, _p: Dictionary) -> void:
 	var w := 0.9
 	var h := 1.28
 	var y0 := 0.14
-	k.box(Vector3(w - 0.12, h - 0.12, 0.03), Vector3(0, y0 + h * 0.5, -0.045), Color(0.55, 0.62, 0.66))
-	k.glass_box(Vector3(w - 0.14, h - 0.14, 0.01), Vector3(0, y0 + h * 0.5, -0.025))
+	k.box(Vector3(w - 0.12, h - 0.12, 0.02), Vector3(0, y0 + h * 0.5, -0.04), Color(0.55, 0.62, 0.66))
+	k.glass_box(Vector3(w - 0.14, h - 0.14, 0.01), Vector3(0, y0 + h * 0.5, -0.022))
 	k.box(Vector3(w, 0.1, 0.08), Vector3(0, y0 + 0.05, -0.02), HauntProps.GILT)
 	k.box(Vector3(w, 0.1, 0.08), Vector3(0, y0 + h - 0.05, -0.02), HauntProps.GILT)
-	k.box(Vector3(0.1, h, 0.08), Vector3(-w * 0.5 + 0.05, y0 + h * 0.5, -0.02), HauntProps.GILT)
-	k.box(Vector3(0.1, h, 0.08), Vector3(w * 0.5 - 0.05, y0 + h * 0.5, -0.02), HauntProps.GILT)
+	k.box(Vector3(0.1, h - 0.2, 0.08), Vector3(-w * 0.5 + 0.05, y0 + h * 0.5, -0.02), HauntProps.GILT)
+	k.box(Vector3(0.1, h - 0.2, 0.08), Vector3(w * 0.5 - 0.05, y0 + h * 0.5, -0.02), HauntProps.GILT)
 	k.ball(Vector3(0.16, 0.1, 0.05), Vector3(0, y0 + h + 0.04, -0.02), HauntProps.GILT_DK, 0, 0.0)
 
 
@@ -456,7 +456,7 @@ static func _fireplace(k: HauntProps.Kit, _p: Dictionary) -> void:
 	k.box(Vector3(0.95, 0.7, 0.04), Vector3(0, 0.38, back + 0.31), Color(0.05, 0.04, 0.04))
 	for sx in [-0.67, 0.67]:
 		k.box(Vector3(0.38, 1.1, 0.34), Vector3(sx, 0.55, back + 0.18), HauntProps.MARBLE)
-	k.box(Vector3(1.1, 0.34, 0.34), Vector3(0, 0.93, back + 0.18), HauntProps.MARBLE)
+	k.box(Vector3(0.96, 0.34, 0.34), Vector3(0, 0.93, back + 0.18), HauntProps.MARBLE)
 	k.box(Vector3(2.1, 0.08, 0.46), Vector3(0, 1.14, back + 0.21), HauntProps.MARBLE)
 	k.box(Vector3(1.6, 0.12, 0.42), Vector3(0, 1.05, back + 0.2), HauntProps.MARBLE_DK)
 	k.box(Vector3(2.0, 0.05, 0.4), Vector3(0, 0.025, back + 0.55), HauntProps.MARBLE_DK)

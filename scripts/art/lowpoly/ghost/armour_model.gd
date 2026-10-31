@@ -163,7 +163,7 @@ func _body_soup() -> LowPoly.Soup:
 	MonsterModel.slab(s, Vector3(0, 0.02, -0.14), Vector3(0.08, 0.07, 0.03), BRASS, 417)                 # buckle
 	MonsterModel.wedge(s, Vector3(0, 0.27, 0.0), Vector2(0.36, 0.25), Vector2(0.70, 0.38), 0.44, STEEL, 418, Vector3.ZERO, 0.01)  # cuirass
 	MonsterModel.wedge(s, Vector3(0, 0.30, -0.16), Vector2(0.05, 0.06), Vector2(0.03, 0.08), 0.40, STEEL_LIGHT, 419)              # the ridge
-	MonsterModel.slab(s, Vector3(0, 0.47, -0.02), Vector3(0.50, 0.03, 0.36), BRASS, 420)                  # the cuirass's brass rim
+	MonsterModel.slab(s, Vector3(0, 0.49, -0.02), Vector3(0.50, 0.05, 0.36), BRASS, 420)                  # the cuirass's brass rim (clear of its top: test_zfight)
 	s.merge(LowPoly.cylinder(0.15, 0.13, 0.14, 8, STEEL_DARK, 421), LowPoly.at(Vector3(0, 0.55, 0.0)))   # gorget
 	for x: float in [-1.0, 1.0]:
 		MonsterModel.blob(s, Vector3(0.37 * x, 0.46, 0.0), Vector3(0.18, 0.11, 0.19), STEEL, 422 + int(x), 0.08)        # pauldron

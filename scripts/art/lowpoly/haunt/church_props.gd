@@ -60,14 +60,14 @@ static func _altar(k: HauntProps.Kit, _p: Dictionary) -> void:
 	k.box(Vector3(1.94, 0.04, 0.94), Vector3(0, 0.935, 0), HauntProps.LINEN)
 	k.box(Vector3(1.94, 0.2, 0.02), Vector3(0, 0.84, 0.475), HauntProps.LINEN)
 	k.box(Vector3(1.3, 0.62, 0.02), Vector3(0, 0.48, 0.42), ALTAR_RED)
-	k.box(Vector3(1.3, 0.05, 0.025), Vector3(0, 0.76, 0.425), HauntProps.GILT)
+	k.box(Vector3(1.26, 0.05, 0.025), Vector3(0, 0.76, 0.425), HauntProps.GILT)
 	k.box(Vector3(0.06, 0.5, 0.025), Vector3(0, 0.46, 0.43), HauntProps.GILT)
-	k.box(Vector3(0.3, 0.06, 0.025), Vector3(0, 0.56, 0.43), HauntProps.GILT)
+	k.box(Vector3(0.3, 0.06, 0.035), Vector3(0, 0.56, 0.43), HauntProps.GILT)
 	HauntProps.candlestick(k, Vector3(-0.68, 0.955, -0.1))
 	HauntProps.candlestick(k, Vector3(0.68, 0.955, -0.1))
 	k.box(Vector3(0.3, 0.06, 0.2), Vector3(0, 0.985, -0.2), HauntProps.GILT_DK)
 	k.box(Vector3(0.06, 0.62, 0.05), Vector3(0, 1.32, -0.2), HauntProps.GILT)
-	k.box(Vector3(0.36, 0.06, 0.05), Vector3(0, 1.45, -0.2), HauntProps.GILT)
+	k.box(Vector3(0.36, 0.06, 0.06), Vector3(0, 1.45, -0.2), HauntProps.GILT)
 
 
 ## A tall lancet window against the wall: stone tracery round panes of coloured glass (glowing faces), no figures.
@@ -94,14 +94,14 @@ static func _stained_window(k: HauntProps.Kit, _p: Dictionary) -> void:
 				var col: Color = GLASS[1] if i == 1 else (GLASS[0] if j % 2 == 0 else GLASS[2])
 				if j == 1 or j == 2:
 					col = GLASS[3] if i == 0 else GLASS[1]
-				k.box(Vector3(0.24, 0.24, 0.03), Vector3(x, y, back + 0.1), PropModels.glow(col.darkened(0.42)))
+				k.box(Vector3(0.23, 0.23, 0.03), Vector3(x, y, back + 0.1), PropModels.glow(col.darkened(0.42)))
 				k.box(Vector3(0.025, 0.25, 0.04), Vector3(x + 0.135, y, back + 0.11), Color(0.08, 0.08, 0.09))
 				k.box(Vector3(0.26, 0.025, 0.04), Vector3(x, y + 0.13, back + 0.11), Color(0.08, 0.08, 0.09))
 	for j in 4:
 		var t := float(j) / 4.0
 		var hw := (w * 0.5) * (1.0 - t * t) * 0.92
 		var y := y1 + 0.1 + (apex - y1 - 0.2) * t
-		k.box(Vector3(hw * 2.0, 0.17, 0.03), Vector3(0, y, back + 0.1), PropModels.glow((GLASS[1] if j % 2 == 0 else GLASS[4]).darkened(0.42)))
+		k.box(Vector3(hw * 2.0, 0.12, 0.03), Vector3(0, y, back + 0.1), PropModels.glow((GLASS[1] if j % 2 == 0 else GLASS[4]).darkened(0.42)))
 	k.ball(Vector3(0.14, 0.14, 0.04), Vector3(0, y1 + 0.25, back + 0.13), PropModels.glow(GLASS[2].darkened(0.2)), 0, 0.0)
 
 
@@ -109,7 +109,7 @@ static func _lectern(k: HauntProps.Kit, _p: Dictionary) -> void:
 	k.box(Vector3(0.5, 0.08, 0.5), Vector3(0, 0.04, 0), HauntProps.OAK_DK)
 	k.cyl(0.08, 0.06, 0.9, 6, Vector3(0, 0.53, 0), HauntProps.OAK)
 	k.box(Vector3(0.6, 0.05, 0.42), Vector3(0, 1.08, 0), HauntProps.OAK_DK, Vector3(25, 0, 0))
-	k.box(Vector3(0.6, 0.06, 0.05), Vector3(0, 0.98, 0.2), HauntProps.OAK)
+	k.box(Vector3(0.56, 0.06, 0.05), Vector3(0, 0.98, 0.2), HauntProps.OAK)
 	k.box(Vector3(0.46, 0.04, 0.32), Vector3(0, 1.12, 0.0), HauntProps.LINEN, Vector3(25, 0, 0))
 	k.box(Vector3(0.02, 0.05, 0.32), Vector3(0, 1.14, 0.0), ALTAR_RED, Vector3(25, 0, 0))
 
@@ -131,7 +131,7 @@ static func _candle_rack(k: HauntProps.Kit, _p: Dictionary) -> void:
 	for t in 3:
 		var y := 0.62 + 0.16 * t
 		var z := 0.1 - 0.1 * t
-		k.box(Vector3(0.95, 0.03, 0.14), Vector3(0, y, z), HauntProps.IRON_LT)
+		k.box(Vector3(0.9, 0.03, 0.14), Vector3(0, y, z), HauntProps.IRON_LT)
 		for i in 7:
 			if (i + t) % 3 == 2:
 				continue
