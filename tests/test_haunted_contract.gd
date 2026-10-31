@@ -5,7 +5,9 @@ extends MonsterTestBase
 ## built the way the game builds them: no gate, no sewer or lava section (a crypt may roll since H2: its rooms are crypt
 ## rooms, tests/test_crypt_gen.gd), only the dead family (skeletons and zombies since H3), rooms from the haunted pools dressed with the
 ## look test's props, priced antiques from the site's catalog, notes and dispatch lines that never name a gate, and the same
-## NetFloor checksum on two builds (the crew's load barrier).
+## NetFloor checksum on two builds (the crew's load barrier). H6: the last floor has its grimoire (in the story's room, where
+## the origin gate would be; floors 1-2 none), and the invoice reads like a hellgate contract's (acolytes on floors 1-2, the
+## grimoire on floor 3, the pest at the standard rate: no H1 bonus).
 
 const SEEDS: Array[int] = [3, 11, 42]
 const BUILD_SEEDS: Array[int] = [3, 11]
@@ -104,15 +106,25 @@ func _check_runs() -> void:
 			var value := 0
 			var pests := 0
 			var acolytes := [0, 0, 0]
+			var books := [0, 0, 0]
 			for o in run.objectives:
 				value += int(o["pay"])
-				check(str(o["kind"]) in ["pest", "acolyte"], "%s: only pest and acolyte objectives (%s)" % [tag, o["kind"]])
+				check(str(o["kind"]) in ["pest", "acolyte", "grimoire"], "%s: only pest, acolyte and grimoire objectives (%s)" % [tag, o["kind"]])
 				if str(o["kind"]) == "pest":
 					pests += 1
+				elif str(o["kind"]) == "grimoire":
+					books[int(o["floor"]) - 1] += 1
+					eq(int(o["pay"]), run.grimoire_pay, "%s: the grimoire pays the grimoire rate" % tag)
 				else:
 					acolytes[int(o["floor"]) - 1] += 1
 					eq(int(o["pay"]), run.acolyte_pay, "%s: an acolyte pays the acolyte rate" % tag)
 			eq(pests, ContractRun.FLOOR_COUNT, "%s: a pest objective per floor" % tag)
+			# H6: the grimoire on the last floor (where a hellgate contract's origin gate is), paid as the origin gate
+			eq(books, [0, 0, 1], "%s: the grimoire objective on the last floor" % tag)
+			check(run.has_grimoire() and run.grimoire_pay >= ContractRun.GRIMOIRE_PAY * 0.8, "%s: the grimoire pays (%d)" % [tag, run.grimoire_pay])
+			check(run.card_lines().any(func(ln: Dictionary) -> bool: return str(ln["label"]) == "Shut the grimoire" and int(ln["pay"]) == run.grimoire_pay), "%s: the card lists the grimoire" % tag)
+			# ... and the pest at the standard rate (H1's DEAD_PEST_BONUS is retired)
+			eq(run.pest_pay, ClientArchetype.round_pay(ContractRun.PEST_PAY * float(ClientArchetype.get_data(id)["pay_scale"])), "%s: the pest at the standard rate" % tag)
 			# H4: the acolytes of floors 1-2, two a procession (floor 2 two processions on a harder job), none on the last floor
 			eq(acolytes, [2, 4 if run.difficulty >= ContractRun.PROCESSION_HARD else 2, 0], "%s: the acolyte objectives per floor" % tag)
 			check(run.acolyte_pay >= ContractRun.ACOLYTE_PAY * 0.8, "%s: an acolyte pays (%d)" % [tag, run.acolyte_pay])
@@ -128,6 +140,8 @@ func _check_runs() -> void:
 	var gate_run := ContractRun.make("prepper", 3, 0.5)
 	check(gate_run.has_gates() and gate_run.family == ClientArchetype.FAMILY_GATE and gate_run.total_gates() > 0, "a hellgate client keeps its gates")
 	check(gate_run.total_acolytes() == 0 and gate_run.acolyte_pay == 0, "... and has no acolytes (H4)")
+	check(not gate_run.has_grimoire() and gate_run.grimoire_pay == 0, "... nor a grimoire (H6)")
+	check(not gate_run.objectives.any(func(o: Dictionary) -> bool: return str(o["kind"]) == "grimoire"), "... nor its objective")
 	eq(ContractBoard.run_for_client("heir", 9).site_type, "mansion", "the --client flag's contract")
 
 
@@ -251,6 +265,18 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	var site_type := run.site_type
 	# no hellgate, no sewer or lava section (a crypt may roll: H2, test_crypt_gen)
 	check(plan.gates.is_empty() and site.gates.is_empty() and site.origin_gate == null and site.beasts.is_empty(), "%s: no hellgate" % tag)
+	# H6: the grimoire on the last floor only, in the story's room, where the origin gate would stand (its cell kept clear)
+	if f == ContractRun.FLOOR_COUNT:
+		check(not plan.grimoire.is_empty() and site.grimoire != null and not site.grimoire.dead, "%s: the grimoire" % tag)
+		if site.grimoire != null:
+			eq(str(plan.grimoire["room"]), plan.origin_room, "%s: the grimoire in the story's room" % tag)
+			eq(site.grimoire.current_cell(), plan.grimoire["cell"] as Vector2i, "%s: standing on its planned cell" % tag)
+			check(not site.grimoire.is_active() and site.grimoire.book != null and site.grimoire.book.state == "dormant", "%s: the grimoire dormant at the start" % tag)
+			check(plan.blocked.has(plan.grimoire["cell"]) and plan.gate_cells().has(plan.grimoire["cell"]), "%s: its cell kept clear (no monster or prop placed on it)" % tag)
+			for m in site.monsters:
+				check(Hex.distance(m.current_cell(), plan.grimoire["cell"]) > 2, "%s: no pack monster on the altar (%s)" % [tag, m.kind])
+	else:
+		check(plan.grimoire.is_empty() and site.grimoire == null, "%s: no grimoire before the last floor" % tag)
 	check(map.sewer.is_empty() and map.cave.is_empty(), "%s: no sewer cluster or lava cave" % tag)
 	check(site.scouts.is_empty() and site.sharks.is_empty() and site.gators.is_empty(), "%s: no goblin scout, shark or gator" % tag)
 	# only the dead family (skeletons and zombies, H3; crypt rats and ecto blobs, H3b), and enough of the pest to exterminate
@@ -264,7 +290,8 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	# floors 1-2 and 26-35 on floor 3 here, against 17-21 and 34-42 with skeletons only. H3b: a rat pick is 5-6 rats for 6
 	# points at weight 1, so a floor with rats holds more, lighter bodies: measured 12-22 on floors 1-2 and 30-40 on floor 3)
 	# (H4: the processions' zombies are in `monsters` and their acolytes beside it, `acolytes`: the total holds both)
-	check(site.monsters.size() + site.acolytes.size() <= 40, "%s: a sane total (%d and %d acolytes: %s)" % [tag, site.monsters.size(), site.acolytes.size(), str(kinds)])
+	# (H6: the grimoire's cell is kept clear as the origin gate's, which moves floor 3's pack draws: parish 11 floor 3 holds 41)
+	check(site.monsters.size() + site.acolytes.size() <= 42, "%s: a sane total (%d and %d acolytes: %s)" % [tag, site.monsters.size(), site.acolytes.size(), str(kinds)])
 	# H4: the floor's processions, each an acolyte, its four zombies and a rear acolyte, on a route of 2-3 rooms
 	eq(plan.processions.size(), run.floor_processions[f - 1], "%s: the contract's processions" % tag)
 	eq(site.processions.size(), plan.processions.size(), "%s: each spawned" % tag)

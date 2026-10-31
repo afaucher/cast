@@ -128,6 +128,13 @@ const WORLD_CARRIES := {
 		"dead": "world.die (NetWorld): the gate closes on every screen", "pass_through_until": _ACTOR_WORLD["pass_through_until"],
 		"_modifiers": _ACTOR_WORLD["_modifiers"], "facing": _FIXED, "climbing": _FIXED,
 	},
+	# A haunted last floor's grimoire (haunted-build-plan.md H6): a hellgate in shape (its GATE entry and gate events); closed
+	# while on fire it is burned (world.burn after its world.die).
+	"res://scripts/contracts/grimoire.gd": {
+		"dead": "world.die (NetWorld): it is shut on every screen (the shut book stays)", "pass_through_until": _ACTOR_WORLD["pass_through_until"],
+		"_modifiers": _ACTOR_WORLD["_modifiers"], "facing": _FIXED, "climbing": _FIXED,
+		"burnt": "world.burn {id} (NetWorld), after its world.die: it closed on fire (Grimoire.net_burn); a late joiner: `books`",
+	},
 	"res://scripts/contracts/priced_prop.gd": {
 		"hp": "obj.hurt (NetObjects): a dent", "dead": "obj.break (NetObjects)", "broke": "obj.break (NetObjects)",
 		"broke_at": _BREAK_AT, "_break_by": _BREAK_BY,
@@ -197,6 +204,7 @@ const WORLD_CARRIES := {
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
 ##   world.shield (reliable)  host -> clients: a Pavise's shield state {id, st, x, y, z, w} (carried, planted, left, flat)
 ##   world.rise / world.burn (reliable, H3)  host -> clients: a zombie's body stood back up {id, hp, x, y, z} / was burnt {id}
+##                         (H6: world.burn also chars a grimoire that closed on fire, after its world.die)
 ##   world.haunt (reliable, H5)  host -> clients: a ghost got into a host or was thrown out of one {id: the wisp, h: the host or
 ##                         0, x, y, z: where it is}, queued with the deaths (after the host's world.die when it broke)
 ##   world.charge / world.uncharge / world.lock / world.dismount (reliable)  host -> clients: a laser shark's charge (start,
@@ -241,6 +249,7 @@ const LATE_JOIN := {
 	"res://scripts/monsters/zombie.gd": "standing: as monster.gd (keyframe; a runtime one: replay of world.spawn); a body: its seed-built id a gone id shown dead (NetJoin.gone_ids), then `bodies` (NetWorld.body_states: where it lies, which way, burnt; a runtime body is built from its row); a stand-up under way: skipped (under 1.5 s)",
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
+	"res://scripts/contracts/grimoire.gd": "as hellgate.gd: keyframe (HP, awake, phase, flare, the shove's wind-up; the book's state follows); a closed one: gone ids (shown shut: the shut book stays), then `books` (NetWorld.book_states: burned or slammed shut); a fire on it: statuses, replay",
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt; a broken one something runs from (an electrical panel's LiveWire): replay of its break moment and culprit, `breaks` (PricedProp.break_synced: the wire skips the shocks already past)",
 	"res://scripts/contracts/explosive_prop.gd": "gone ids (blown or broken: shown broken); a dent: replay of obj.hurt; a fuse burning now: replay of obj.fuse (its start, end and igniter), so the joiner runs the blast at the same moment",
 	"res://scripts/world/themes/breakable_crate.gd": "gone ids (broken)",

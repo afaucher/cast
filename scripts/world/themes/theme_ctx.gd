@@ -87,6 +87,9 @@ static func make(map_: HexMap, plan_: SitePlan, avoid_: Dictionary, near_corr_: 
 		var r := ORIGIN_GATE_CLEAR if bool(g["origin"]) else GATE_CLEAR
 		for c in Hex.range_cells(g["cell"], r):
 			ctx.gate_zone[c] = true
+	if not plan_.grimoire.is_empty():   # (a haunted last floor's grimoire on its altar: kept clear as the origin gate)
+		for c in Hex.range_cells(plan_.grimoire["cell"], ORIGIN_GATE_CLEAR):
+			ctx.gate_zone[c] = true
 	var tags: Array = plan_.rooms.keys()
 	tags.sort_custom(func(a: String, b: String) -> bool: return int(a.trim_prefix("room:")) < int(b.trim_prefix("room:")))
 	for tag: String in tags:
@@ -97,6 +100,10 @@ static func make(map_: HexMap, plan_: SitePlan, avoid_: Dictionary, near_corr_: 
 			gr.gate = g
 			var rad := 2.9 if bool(g["origin"]) else 1.5
 			ctx.add_body(gr, ThemeGeo.world(g["cell"]), 0.0, rad * 2.0, rad * 2.0, -1, "gate")
+	if not plan_.grimoire.is_empty():
+		var br := ctx.room_of(plan_.grimoire["cell"])
+		if br != null:
+			ctx.add_body(br, ThemeGeo.world(plan_.grimoire["cell"]), 0.0, 5.8, 5.8, -1, "gate")
 	for e in plan_.employees:
 		var er := ctx.room_of(e["cell"])
 		if er != null:

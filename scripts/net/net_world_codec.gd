@@ -24,7 +24,7 @@ extends RefCounted
 ##   u8  head      state (bits 0-2: COWER 0, PANIC 1, FOLLOW 2, EXTRACT 3, WAIT 4, FIGHT 5) | dismissed 8 | climbing 16 |
 ##                 teleport counter (bits 5-7)
 ##   u8  leader    the seat (1-3) of the hero it follows, 0 for nobody
-## GATE (7)
+## GATE (7)       a hellgate's, and a haunted last floor's grimoire's (H6: a Hellgate subclass; active = awake, phase = the book's)
 ##   u16 id | u16 hp (tenths)
 ##   u8  flags     active 1 | telegraphing 2 | phase (bits 2-3)
 ##   u8  burst_in  seconds to the burst in 1/50 s while the flare is up (255 = no flare)

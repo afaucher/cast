@@ -23,10 +23,10 @@ const ID_META := "net_id"
 ## older contract has: the run part of the checksum leaves such a field out while it holds that value, so every hellgate
 ## contract hashes as it always did, and a contract with another value (a haunted one) hashes it in. Every machine
 ## derives these fields from (archetype, seed, difficulty) anyway; the archetype is in the run part either way.
-const RUN_DEFAULTS := {"family": "gate", "floor_processions": [0, 0, 0], "acolyte_pay": 0}
-## The same for SitePlan fields added after the golden floors (a haunted floor's processions, H4; its ghosts' hosts, H5): left
-## out of the plan part while they hold the value every older floor has.
-const PLAN_DEFAULTS := {"processions": [], "haunts": []}
+const RUN_DEFAULTS := {"family": "gate", "floor_processions": [0, 0, 0], "acolyte_pay": 0, "grimoire_pay": 0}
+## The same for SitePlan fields added after the golden floors (a haunted floor's processions, H4; its ghosts' hosts, H5; its
+## grimoire, H6): left out of the plan part while they hold the value every older floor has.
+const PLAN_DEFAULTS := {"processions": [], "haunts": [], "grimoire": {}}
 
 
 ## Give the seed-built actors under `root` their ids, in tree order; `heroes` maps a seat (1-3) to its hero.

@@ -1,10 +1,12 @@
 class_name GrimoireModel
 extends Node3D
-## LOOK-DEV ONLY (docs/design/necro-look.md): the grimoire, the haunted contracts' origin source (new-themes.md "Ghost
-## house": "pulsing out the dead until it is slammed shut or burned", a host-arbitrated world object like a hellgate). This
-## is only its look: no HP, no phases, nothing networked, and nothing in the game spawns it (only NecroBody, for the gym and
-## the look lab). It is a physical object and NEVER text: blank glowing pages, an eye on the cover, rings and spokes on the
-## floor, no letter or glyph anywhere (Cast is not a reading game).
+## The grimoire's look (docs/design/necro-look.md): the haunted contracts' source (new-themes.md "Ghost house": "pulsing out
+## the dead until it is slammed shut or burned"). Since H6 (haunted-build-plan.md, "H6 as built") it is the game's: the
+## `Grimoire` actor (scripts/contracts/grimoire.gd) wears it on its altar, DORMANT (shut, the live eye darting, the candles and
+## a dim circle lit) until the crew comes near, then open, weakened and failing by its phases (set_state), flaring before a
+## burst (set_flare) and surging as one lands (pulse), and at the end shut for good with the eye dead (close_look), or burnt.
+## The gym and the look lab (NecroBody) still build it as before. It is a physical object and NEVER text: blank glowing
+## pages, an eye on the cover, rings and spokes on the floor, no letter or glyph anywhere (Cast is not a reading game).
 ##
 ## To read as the floor's big objective from across a room (the origin gate is about 7 across with horns about 6 up), the
 ## book is oversized (BOOK) and it is the middle of a set piece: a necromancer's circle on the floor round it (rings,
@@ -21,12 +23,20 @@ extends Node3D
 ##           failing   the book still open: the column a flickering thread, one page left, most of the circle and four
 ##                     candles out, the light low, its flicker tending red (FAIL_RED)
 ##           shut      slammed shut: a closed, chained book with the eye on its cover, every light out, pages fallen
+##           dormant   (the game's, not a look-test state) the book shut with the live eye awake and darting, the candles
+##                     lit, the circle dim, a dim light: asleep, and watching
+## The game's closed book is "shut" with the eye dead (`dead_eye`: no iris, the eyeball rolled back) and, burnt, charred
+## (`burnt`: the cover and the fallen pages black, smoke and embers off it).
 ## Faces local -Z (the reader's side), origin on the floor at its middle. freeze_at() holds a moment for the lab.
 
 const STANDS: Array[String] = ["lectern", "altar"]
 const STATES: Array[String] = ["open", "weakened", "failing", "shut"]
 ## How much of the effects each state keeps (1 open, 0 shut).
-const POWER := {"open": 1.0, "weakened": 0.6, "failing": 0.3, "shut": 0.0}
+const POWER := {"open": 1.0, "weakened": 0.6, "failing": 0.3, "shut": 0.0, "dormant": 0.35}
+## The states the game uses (Grimoire): the look test's and, before them, asleep and watching.
+const GAME_STATES: Array[String] = ["dormant", "open", "weakened", "failing", "shut"]
+## A burnt book's char (the cover, the page edges, the fallen pages).
+const CHAR := Color(0.07, 0.06, 0.06)
 ## A failing book's flicker turns red (the user, 2026-10-29: "Failing - maybe we have the flicker tend red?"): its lights
 ## lean toward FAIL_RED, more the weaker it is and most in a stutter's dips.
 const FAIL_RED := Color(1.0, 0.16, 0.12)
@@ -103,19 +113,74 @@ var _beam_mat: ShaderMaterial
 var _light: OmniLight3D
 var _orbit: Array[Dictionary] = []   ## {node, ang, speed, rad, y, spin}
 var _parts: Array[MeshInstance3D] = []
+var dead_eye := false                ## the game's closed book: the eye is dead (no iris)
+var burnt := false                   ## ... and burnt: charred, smoking
+var _flare := 0.0                    ## 0..1: the light swelling before a burst (set_flare)
+var _pulse := 0.0                    ## a burst's or a hit's surge, dying away (pulse)
 
 
 static func make(stand_name: String = "lectern", state_name: String = "open", phase: float = 0.0) -> GrimoireModel:
 	var g := GrimoireModel.new()
 	g.stand = stand_name if STANDS.has(stand_name) else "lectern"
-	g.state = state_name if STATES.has(state_name) else "open"
+	g.state = state_name if GAME_STATES.has(state_name) else "open"
 	g._phase = phase
 	g._build()
 	return g
 
 
+## Lit: the candles and the circle burn (every state but shut). Awake: open, the column up and the pages circling.
 func is_lit() -> bool:
 	return state != "shut"
+
+
+func is_awake() -> bool:
+	return state == "open" or state == "weakened" or state == "failing"
+
+
+## The book shut (asleep, or closed for good): the cover with its eye shows.
+func is_shut() -> bool:
+	return state == "shut" or state == "dormant"
+
+
+## The game (Grimoire): go to another state, rebuilt in place (the clock keeps running).
+func set_state(state_name: String) -> void:
+	if not GAME_STATES.has(state_name) or state_name == state:
+		return
+	state = state_name
+	_rebuild()
+
+
+## The game: closed for good, slammed shut (the eye dead) or burnt (charred and smoking too).
+func close_look(is_burnt: bool) -> void:
+	state = "shut"
+	dead_eye = true
+	burnt = is_burnt
+	_rebuild()
+
+
+## The light swelling before a burst, 0..1.
+func set_flare(k: float) -> void:
+	_flare = clampf(k, 0.0, 1.0)
+
+
+## A surge of the light (a burst landing, a hit), dying away over about half a second.
+func pulse(strength: float = 1.0) -> void:
+	_pulse = maxf(_pulse, strength)
+
+
+func _rebuild() -> void:
+	for c in get_children():
+		remove_child(c)
+		c.queue_free()
+	_parts.clear()
+	_orbit.clear()
+	_iris = null
+	_sigil = null
+	_beam = null
+	_beam_mat = null
+	_light = null
+	_build()
+	_animate()
 
 
 ## How much of the effects this state keeps (POWER).
@@ -162,9 +227,10 @@ func _build() -> void:
 	book.name = "Book"
 	book.transform = book_xf
 	add_child(book)
-	_book = _mesh("Pages", _shut_soup() if state == "shut" else _open_soup(), book)
-	if state == "shut":
+	_book = _mesh("Pages", _shut_soup() if is_shut() else _open_soup(), book)
+	if is_shut():
 		_iris = _mesh("Iris", _iris_soup(), book)
+		_iris.visible = not dead_eye   # (dead: the bare eyeball, rolled back)
 	book_top = book_xf * Vector3(0, 0.2, 0)
 	_mesh("Candles", _candles_soup(), self)
 	if state == "shut":
@@ -173,15 +239,16 @@ func _build() -> void:
 	_sigil = NecroLook.floor_glow(size, true, 1.0, _phase)
 	_sigil.position.y = 0.03
 	(_sigil.material_override as ShaderMaterial).set_shader_parameter("spin", 0.04)
-	(_sigil.material_override as ShaderMaterial).set_shader_parameter("broken", 1.0 - pw)
+	(_sigil.material_override as ShaderMaterial).set_shader_parameter("broken", 1.0 - pw if state != "dormant" else 0.0)   # (asleep: whole, only dim)
 	_sigil.visible = is_lit()
 	add_child(_sigil)
-	if is_lit():
+	if is_awake():
 		_build_beam(pw)
 		_build_orbit()
 		var m := NecroLook.motes(maxi(int(26 * pw), 4), 0.55, 0.9, 0.045)
 		m.position = book_top
 		add_child(m)
+	if is_lit():
 		_light = OmniLight3D.new()
 		_light.name = "BookLight"
 		_light.light_color = NecroLook.glow_colour()
@@ -191,6 +258,11 @@ func _build() -> void:
 		_light.shadow_enabled = false
 		_light.position = book_top + Vector3(0, 0.9, 0)
 		add_child(_light)
+	if burnt:
+		for embers: bool in [false, true]:
+			var sm := NecroLook.smoke(14 if not embers else 10, 0.5, embers)
+			sm.position = book_top + Vector3(0, 0.1, 0)
+			add_child(sm)
 	ui_height = (3.2 if stand == "lectern" else 3.0) * float(SCALE[stand])
 	_animate()
 
@@ -203,6 +275,11 @@ func _mesh(node_name: String, soup: LowPoly.Soup, parent: Node3D) -> MeshInstanc
 	parent.add_child(mi)
 	_parts.append(mi)
 	return mi
+
+
+## A colour of the book, charred when it burnt.
+func _col(c: Color) -> Color:
+	return CHAR.lerp(c, 0.18) if burnt else c
 
 
 ## A quad facing `out` whatever order its corners come in.
@@ -318,10 +395,10 @@ func _shut_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(1221, 0.05)
 	var w := BOOK.x * 0.5 + 0.08
 	var d := BOOK.y + 0.08
-	MonsterModel.slab(s, Vector3(0.0, 0.03, 0), Vector3(w, 0.06, d), LEATHER, 1222)
-	MonsterModel.slab(s, Vector3(0.02, 0.15, 0), Vector3(w - 0.06, 0.20, d - 0.06), PARCHMENT_DARK, 1223)
-	MonsterModel.slab(s, Vector3(0.0, 0.28, 0), Vector3(w, 0.06, d), LEATHER_LIGHT, 1224)
-	MonsterModel.slab(s, Vector3(-w * 0.5, 0.155, 0), Vector3(0.10, 0.31, d + 0.02), LEATHER, 1225)          # the spine
+	MonsterModel.slab(s, Vector3(0.0, 0.03, 0), Vector3(w, 0.06, d), _col(LEATHER), 1222)
+	MonsterModel.slab(s, Vector3(0.02, 0.15, 0), Vector3(w - 0.06, 0.20, d - 0.06), _col(PARCHMENT_DARK), 1223)
+	MonsterModel.slab(s, Vector3(0.0, 0.28, 0), Vector3(w, 0.06, d), _col(LEATHER_LIGHT), 1224)
+	MonsterModel.slab(s, Vector3(-w * 0.5, 0.155, 0), Vector3(0.10, 0.31, d + 0.02), _col(LEATHER), 1225)          # the spine
 	for x: float in [-1.0, 1.0]:
 		for z: float in [-1.0, 1.0]:
 			MonsterModel.wedge(s, Vector3(x * (w * 0.5 - 0.05), 0.315, z * (d * 0.5 - 0.05)), Vector2(0.16, 0.16), Vector2(0.10, 0.10), 0.03, IRON_LIGHT, 1226, Vector3(0, 45, 0))
@@ -329,7 +406,7 @@ func _shut_soup() -> LowPoly.Soup:
 	# the cover, with veins and a lid half closed. It reads as creepy and alive."): puffy lips of flesh round its socket, a
 	# yellowed eyeball with red veins crawling to the iris, a yellow iris with a slit pupil looking out over the front edge
 	# (-Z), and a heavy upper lid drooping half over it
-	_live_eye(s, EYE_AT - Vector3(0, 0.03, 0))
+	_live_eye(s, EYE_AT - Vector3(0, 0.03, 0), burnt)
 	# the clasp across the fore edge, and the chain round the middle
 	MonsterModel.slab(s, Vector3(w * 0.5 + 0.01, 0.155, -0.18), Vector3(0.04, 0.34, 0.12), LEATHER_LIGHT, 1230)
 	MonsterModel.slab(s, Vector3(w * 0.5 + 0.03, 0.20, -0.18), Vector3(0.05, 0.10, 0.10), IRON_LIGHT, 1231)
@@ -343,14 +420,18 @@ func _shut_soup() -> LowPoly.Soup:
 
 ## The live eye on the shut cover, its base at `c` (on the cover's top): flesh lips, the eyeball, veins, the iris and
 ## pupil, the drooping lid. The eyeball is an ellipsoid of radii EYE_R centred a little above the cover.
-static func _live_eye(s: LowPoly.Soup, c: Vector3) -> void:
+static func _live_eye(s: LowPoly.Soup, c: Vector3, charred: bool = false) -> void:
 	var o := c + Vector3(0, 0.03, 0)
+	var flesh := CHAR.lerp(FLESH, 0.25) if charred else FLESH
+	var flesh_dark := CHAR if charred else FLESH_DARK
+	var white := CHAR.lerp(EYE_WHITE, 0.2) if charred else EYE_WHITE
+	var vein := CHAR.lerp(VEIN, 0.3) if charred else VEIN
 	# the lips: a smooth puffy rim of flesh round the socket (separate lumps read as petals)
 	for i in 18:
 		var a := TAU * float(i) / 18.0
 		var at := c + Vector3(cos(a) * (EYE_R.x + 0.015), 0.025, sin(a) * (EYE_R.z + 0.012))
-		MonsterModel.blob(s, at, Vector3(0.06, 0.045, 0.06), FLESH, 1260 + i, 0.04)
-	MonsterModel.blob(s, o, EYE_R, EYE_WHITE, 1275, 0.02, 1)
+		MonsterModel.blob(s, at, Vector3(0.06, 0.045, 0.06), flesh, 1260 + i, 0.04)
+	MonsterModel.blob(s, o, EYE_R, white, 1275, 0.02, 1)
 	# the veins: from round the base up toward the iris, along the eyeball's surface, each forking once
 	var iris_dir := EYE_REST
 	for i in 7:
@@ -361,13 +442,13 @@ static func _live_eye(s: LowPoly.Soup, c: Vector3) -> void:
 			var d := from.slerp(iris_dir, 0.22 * float(k) + 0.05).normalized()
 			pts.append(o + d * EYE_R * 1.03)
 		for k in 3:
-			PropModels.rod(s, pts[k], pts[k + 1], 0.016 - 0.003 * float(k), 0.013 - 0.003 * float(k), 3, VEIN)
+			PropModels.rod(s, pts[k], pts[k + 1], 0.016 - 0.003 * float(k), 0.013 - 0.003 * float(k), 3, vein)
 		var fork := from.rotated(Vector3.UP, 0.5).slerp(iris_dir, 0.4).normalized()
-		PropModels.rod(s, pts[1], o + fork * EYE_R * 1.03, 0.011, 0.007, 3, VEIN)
+		PropModels.rod(s, pts[1], o + fork * EYE_R * 1.03, 0.011, 0.007, 3, vein)
 	# the upper lid: a heavy fold of the cover's hide over the back of the eyeball, its edge above the iris (raised: the
 	# user, "Raise the top lid more"). The iris is its own node (`_iris_soup`), so it can look around.
-	MonsterModel.blob(s, o + Vector3(0, 0.12, 0.15), Vector3(EYE_R.x * 1.1, 0.09, 0.12), FLESH_DARK, 1292, 0.08, 1)
-	MonsterModel.blob(s, o + Vector3(0, 0.15, 0.10), Vector3(EYE_R.x * 0.98, 0.05, 0.05), FLESH, 1293, 0.06)
+	MonsterModel.blob(s, o + Vector3(0, 0.12, 0.15), Vector3(EYE_R.x * 1.1, 0.09, 0.12), flesh_dark, 1292, 0.08, 1)
+	MonsterModel.blob(s, o + Vector3(0, 0.15, 0.10), Vector3(EYE_R.x * 0.98, 0.05, 0.05), flesh, 1293, 0.06)
 
 
 ## The live eye's iris and slit pupil, facing +Z from the origin (`_look` puts it on the eyeball and turns it).
@@ -412,7 +493,7 @@ func _candles_soup() -> LowPoly.Soup:
 		for i in 6:
 			var a := TAU * float(i) / 6.0 + PI / 6.0
 			spots.append(Vector3(cos(a) * r, 0.0, sin(a) * r))
-	var out_n: int = {"open": 0, "weakened": 2, "failing": 4}.get(state, spots.size())
+	var out_n: int = {"open": 0, "weakened": 2, "failing": 4, "dormant": 0}.get(state, spots.size())
 	var out_order: Array[int] = [1, 4, 0, 3, 2, 5, 6]
 	for i in spots.size():
 		var p := spots[i]
@@ -436,7 +517,7 @@ func _floor_soup() -> LowPoly.Soup:
 	for i in n:
 		var a := TAU * float(i) / float(n) + rng.randf_range(-0.3, 0.3)
 		var r := r0 + rng.randf_range(0.0, 0.9)
-		MonsterModel.slab(s, Vector3(cos(a) * r, 0.012 + 0.004 * i, sin(a) * r), Vector3(0.30, 0.012, 0.40), PARCHMENT, 1404 + i, Vector3(rng.randf_range(-6, 6), rng.randf_range(0, 180), rng.randf_range(-6, 6)))
+		MonsterModel.slab(s, Vector3(cos(a) * r, 0.012 + 0.004 * i, sin(a) * r), Vector3(0.30, 0.012, 0.40), _col(PARCHMENT), 1404 + i, Vector3(rng.randf_range(-6, 6), rng.randf_range(0, 180), rng.randf_range(-6, 6)))
 	return s
 
 
@@ -494,39 +575,43 @@ func _process(delta: float) -> void:
 	if _frozen:
 		return
 	_t += delta
+	_pulse = maxf(0.0, _pulse - delta * 2.5)
 	_animate()
 
 
 func _animate() -> void:
 	var t := _t + _phase
 	var lit := is_lit()
+	var awake := is_awake()
 	var pw := power()
-	# the pages' heartbeat (the origin gate's slow pulse); a beaten book stutters, harder the weaker it is
-	var beat := 0.5 + 0.5 * sin(t * 1.7)
+	# the pages' heartbeat (the origin gate's slow pulse); a beaten book stutters, harder the weaker it is. Asleep it
+	# breathes slowly. The game's burst flare and surge swell every light (`swell`).
+	var beat := 0.5 + 0.5 * sin(t * (1.7 if awake or not lit else 0.9))
 	var stutter := 1.0
-	if lit and pw < 1.0:
+	if awake and pw < 1.0:
 		var dip := 1.0 - pw
 		stutter = 1.0 - dip * (1.0 - step_f(0.35 - 0.5 * dip, sin(t * 7.3) * sin(t * 2.9 + 1.0)))
+	var swell := 1.0 + 0.9 * _flare + 0.6 * minf(_pulse, 2.5)
 	# the lights' colour: the ghost colour, leaning red as the book fails (in a dip most)
 	var tint := NecroLook.glow_colour()
-	if lit and pw < 0.5:
+	if awake and pw < 0.5:
 		var red := (0.5 - pw) * 2.0
 		var flash := (1.0 - stutter) / maxf(1.0 - pw, 0.01)   # 1 in a stutter's dip, 0 between
 		tint = tint.lerp(FAIL_RED, clampf(red * 1.1 + flash * 0.5, 0.0, 1.0))
-	_mat.set_shader_parameter("glow_gain", (1.4 + 0.8 * beat) * stutter if lit else 1.8)
+	_mat.set_shader_parameter("glow_gain", (1.4 + 0.8 * beat) * stutter * minf(swell, 1.8) if lit else 1.8)
 	if _iris != null:
 		_look(eye_dir(t))
 	if _sigil != null:
 		var sm := _sigil.material_override as ShaderMaterial
 		sm.set_shader_parameter("clock", t)
 		sm.set_shader_parameter("tint", tint)
-		sm.set_shader_parameter("strength", (0.85 + 0.25 * beat) * lerpf(0.5, 1.0, pw) * stutter)
+		sm.set_shader_parameter("strength", (0.85 + 0.25 * beat) * lerpf(0.5, 1.0, pw) * stutter * swell)
 	if _beam_mat != null:
 		_beam_mat.set_shader_parameter("t", t)
 		_beam_mat.set_shader_parameter("tint", tint)
-		_beam_mat.set_shader_parameter("amount", (0.85 + 0.35 * beat) * lerpf(0.35, 1.0, pw) * stutter)
+		_beam_mat.set_shader_parameter("amount", (0.85 + 0.35 * beat) * lerpf(0.35, 1.0, pw) * stutter * swell)
 	if _light != null and lit:
-		_light.light_energy = (3.2 + 1.6 * beat) * lerpf(0.3, 1.0, pw) * stutter
+		_light.light_energy = (3.2 + 1.6 * beat) * lerpf(0.3, 1.0, pw) * stutter * swell
 		_light.light_color = tint
 	for o in _orbit:
 		var node: Node3D = o["node"]

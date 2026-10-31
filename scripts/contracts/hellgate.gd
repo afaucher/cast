@@ -30,6 +30,11 @@ extends Actor
 ## CLOSING. hp 0 means closed: the actor dies at once (so it leaves the target lists and the objective
 ## counts immediately), `closed(gate)` and HellgateEvents.gate_closed fire exactly once, the collapse
 ## animation plays for CLOSE_TIME and the node frees itself.
+##
+## A GRIMOIRE (a haunted contract's last floor, haunted-build-plan.md H6) extends this class: it keeps the spawner, the
+## phases, the shove and the networking, and overrides the look (_build_look and the _look_* hooks), the numbers
+## (_profile_now, _weights_now), fire (is_flammable, burn_mult) and the closing. For a hellgate the hooks do what the code
+## always did.
 
 signal closed(gate: Actor)
 ## First time the gate woke up (a hero came near or it was hit).
@@ -229,10 +234,7 @@ func _init() -> void:
 func _ready() -> void:
 	super._ready()
 	add_to_group(GROUP)
-	model = HellgateModel.make(origin)
-	add_child(model)
-	_bar_width = 3.0 if origin else 1.6
-	_bar_height = model.ui_height + 0.35
+	_build_look()
 	damaged.connect(_on_damaged)
 	_scan_t = _rng.randf() * SCAN_INTERVAL
 	_update_bar()
@@ -295,9 +297,7 @@ func activate() -> void:
 		return
 	_active = true
 	_next_burst_in = maxf(TELEGRAPH_TIME + 0.4, spawn_interval * FIRST_DELAY_FRAC)
-	if model != null:
-		model.set_active(true)
-		model.pulse(1.0)
+	_look_awake()
 	_update_bar()
 	activated.emit()
 
@@ -347,12 +347,12 @@ func step(delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
-	if model == null or dead:
+	if dead:
 		return
 	var k := 0.0
 	if _telegraphing:
 		k = 1.0 - clampf(_next_burst_in / TELEGRAPH_TIME, 0.0, 1.0)
-	model.set_flare(k)
+	_look_flare(k)
 
 
 func _hero_in_range() -> bool:
@@ -363,7 +363,7 @@ func _hero_in_range() -> bool:
 
 
 func _apply_profile() -> void:
-	var prof := profile(difficulty, depth, origin, phase)
+	var prof := _profile_now()
 	spawn_interval = float(prof["interval"])
 	burst_size = int(prof["burst"])
 	spawn_cap = int(prof["cap"])
@@ -394,8 +394,7 @@ func _do_burst() -> Array[Monster]:
 	if n <= 0:
 		return out
 	var cells := _spawn_cells(n)
-	var p := pressure(difficulty, depth)
-	var weights := kind_weights(p, phase)
+	var weights := _weights_now()
 	for c in cells:
 		var kind := pest if pest != "" and MonsterFactory.SCRIPTS.has(pest) else _pick_kind(weights)
 		var m := MonsterFactory.spawn(kind, c)
@@ -421,8 +420,7 @@ func _burst_fx(spawned: Array) -> void:
 			var m := n as Node3D
 			if m != null and is_instance_valid(m):
 				Fx.burst(m.global_position + Vector3.UP * 0.2, embers, 8, 2.6, 0.07, 0.55, 3.0, Vector3.UP, 60.0)
-	if model != null:
-		model.pulse(1.0)
+	_look_pulse(1.0)
 	if fx_enabled and not spawned.is_empty():
 		Fx.ring(global_position, radius + 0.6, Color(1.0, 0.35, 0.1, 0.8), 0.5, 0.0, true, 0.5)
 
@@ -481,9 +479,7 @@ func _on_damaged(_amount: float, _source: Node) -> void:
 	if not _active:
 		activate()
 	_update_bar()
-	if model != null:
-		model.set_hurt(1.0 - hp / max_hp)
-		model.pulse(0.35)
+	_look_hurt()
 	if hp <= 0.0 or not origin:
 		return
 	var frac := hp / max_hp
@@ -494,8 +490,7 @@ func _on_damaged(_amount: float, _source: Node) -> void:
 	while phase < target_phase:
 		phase += 1
 		_apply_profile()
-		if model != null:
-			model.set_phase(phase)
+		_look_phase()
 		# Summon soon after the shove, whatever the timer said.
 		if not _telegraphing:
 			_next_burst_in = minf(_next_burst_in, SHOVE_WINDUP + TELEGRAPH_TIME)
@@ -505,8 +500,7 @@ func _on_damaged(_amount: float, _source: Node) -> void:
 
 func _begin_shove() -> void:
 	_shove_t = SHOVE_WINDUP
-	if model != null:
-		model.telegraph_shove(SHOVE_WINDUP, SHOVE_RADIUS)
+	_look_shove()
 	shove_telegraphed.emit(SHOVE_RADIUS, SHOVE_WINDUP)
 
 
@@ -521,8 +515,7 @@ func _fire_shove() -> void:
 
 
 func _shove_fx() -> void:
-	if model != null:
-		model.pulse(2.5)
+	_look_pulse(2.5)
 	if fx_enabled:
 		Fx.ring(global_position, SHOVE_RADIUS, Color(1.0, 0.3, 0.08, 0.9), 0.55, 0.0, false, 0.3)
 		var hot: Array[Color] = [Color(1.0, 0.85, 0.4), Color(1.0, 0.35, 0.1), Color(0.6, 0.1, 0.15)]
@@ -538,14 +531,10 @@ func net_show(new_hp: float, active: bool, telegraphing: bool, new_phase: int, b
 	if absf(new_hp - hp) > 0.05:
 		hp = new_hp
 		_update_bar()
-		if model != null:
-			model.set_hurt(1.0 - hp / max_hp)
-			model.pulse(0.35)
+		_look_hurt()
 	if active and not _active:
 		_active = true
-		if model != null:
-			model.set_active(true)
-			model.pulse(1.0)
+		_look_awake()
 		_update_bar()
 		activated.emit()
 	_telegraphing = telegraphing
@@ -553,8 +542,7 @@ func net_show(new_hp: float, active: bool, telegraphing: bool, new_phase: int, b
 	if new_phase != phase:
 		phase = new_phase
 		_apply_profile()
-		if model != null:
-			model.set_phase(phase)
+		_look_phase()
 	_shove_t = shove_t
 
 
@@ -563,12 +551,10 @@ func net_phase(new_phase: int) -> void:
 	if new_phase != phase:
 		phase = new_phase
 		_apply_profile()
-		if model != null:
-			model.set_phase(phase)
+		_look_phase()
 		phase_changed.emit(phase)
 	_shove_t = SHOVE_WINDUP
-	if model != null:
-		model.telegraph_shove(SHOVE_WINDUP, SHOVE_RADIUS)
+	_look_shove()
 	shove_telegraphed.emit(SHOVE_RADIUS, SHOVE_WINDUP)
 
 
@@ -605,14 +591,88 @@ func _on_death() -> void:
 	HellgateEvents.announce_closed(self, origin)
 	if _bar != null:
 		_bar.visible = false
-	if model != null:
-		model.play_close(CLOSE_TIME)
+	_look_close()
 	if fx_enabled:
 		Fx.shake(0.3 if origin else 0.15)
 	var tw := create_tween()
 	tw.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 	tw.tween_interval(CLOSE_TIME + 0.25)
 	tw.tween_callback(queue_free)
+
+
+# --- The look (a Grimoire, the haunted floors' source, overrides these with its book) ---------------------------------
+
+## Build the model and size the HP bar to it (_ready).
+func _build_look() -> void:
+	model = HellgateModel.make(origin)
+	add_child(model)
+	_bar_width = 3.0 if origin else 1.6
+	_bar_height = model.ui_height + 0.35
+
+
+## It woke up (a hero came near, it was hit; on a client: the host's state says so).
+func _look_awake() -> void:
+	if model != null:
+		model.set_active(true)
+		model.pulse(1.0)
+
+
+## The flare before a burst, 0..1 (every frame).
+func _look_flare(k: float) -> void:
+	if model != null:
+		model.set_flare(k)
+
+
+func _look_pulse(strength: float) -> void:
+	if model != null:
+		model.pulse(strength)
+
+
+## It took damage (its HP is already down).
+func _look_hurt() -> void:
+	if model != null:
+		model.set_hurt(1.0 - hp / max_hp)
+		model.pulse(0.35)
+
+
+## Its phase changed (already set).
+func _look_phase() -> void:
+	if model != null:
+		model.set_phase(phase)
+
+
+## The phase change's shove winds up (SHOVE_WINDUP).
+func _look_shove() -> void:
+	if model != null:
+		model.telegraph_shove(SHOVE_WINDUP, SHOVE_RADIUS)
+
+
+## It closed (CLOSE_TIME).
+func _look_close() -> void:
+	if model != null:
+		model.play_close(CLOSE_TIME)
+
+
+# --- Overridable numbers (a Grimoire has a table of its own) ----------------------------------------------------------
+
+## The spawn numbers right now (profile() at this gate's settings and phase).
+func _profile_now() -> Dictionary:
+	return profile(difficulty, depth, origin, phase)
+
+
+## The burst's kind weights right now (kind_weights at this gate's pressure and phase).
+func _weights_now() -> Dictionary:
+	return kind_weights(pressure(difficulty, depth), phase)
+
+
+## Can a fire take hold on it (Burning.can_burn)? A hellgate never burns; a grimoire's pages do.
+func is_flammable() -> bool:
+	return false
+
+
+## A fire's ticks on it are worth this many times a fire's usual (Burning).
+func burn_mult() -> float:
+	return 1.0
 
 
 # --- HP bar (the monster bar style) -----------------------------------------------------------------

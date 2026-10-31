@@ -78,6 +78,7 @@ static func entries() -> Array[Dictionary]:
 		out.append(_e("pickup", id, name, {} if SpellBook.is_available(id) else {"skip": "not available yet (SpellBook)"}))
 	out.append(_e("gate", "hellgate", "Hellgate"))
 	out.append(_e("gate", "origin", "Origin gate"))
+	out.append(_e("gate", "grimoire", "Grimoire"))   # (a haunted last floor's source, H6: dormant until you come near)
 	for kind: String in RoomThemeDefs.DECOR:
 		out.append(_e("decor", kind, kind.capitalize()))
 	for kind: String in GhostBody.KINDS:
@@ -178,8 +179,12 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 					out.append(p)
 		"gate":
 			for c in cells_near(map, at, n, 2):
-				var g := Hellgate.spawn(c, {"difficulty": run.difficulty if run != null else 0.5, "depth": 1,
-						"origin": key == "origin", "pest": ""})
+				var diff := run.difficulty if run != null else 0.5
+				var g: Hellgate = null
+				if key == "grimoire":
+					g = Grimoire.place(c, {"difficulty": diff, "depth": ContractRun.FLOOR_COUNT, "yaw": Grimoire.FACING})
+				else:
+					g = Hellgate.spawn(c, {"difficulty": diff, "depth": 1, "origin": key == "origin", "pest": ""})
 				if g != null:
 					out.append(g)
 		"decor":

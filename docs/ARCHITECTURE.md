@@ -24,7 +24,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Monsters | `scripts/monsters/*`, `tests/test_monster*.gd` | monsters agent |
 | Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` (the game), `scripts/app/dev/game_dev.gd` (GameDev: the dev and screenshot drivers behind the `--` flags, the script the scene runs; new dev drivers go there) | lead |
 | Networking: authority kinds, the net contract test | `scripts/net/*`, `tests/test_net_contract.gd` | lead. Every owner adds `net_fields()` entries for its own vars |
-| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`, a sewer cluster's `SewerPlanner` and `GatorPlanner`, a lava cave's `LavaPlanner`, and a haunted floor's `ProcessionPlanner` and `HauntPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
+| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`, a sewer cluster's `SewerPlanner` and `GatorPlanner`, a lava cave's `LavaPlanner`, and a haunted floor's `ProcessionPlanner` and `HauntPlanner`; `GatePlanner.spawn_grimoire` puts a haunted last floor's grimoire, `Grimoire`, last of the actors), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
 | Design docs | `docs/design/*` | design agent |
 
 ## Boot flow and the main menu
@@ -399,7 +399,10 @@ knight, `KnightModel`: billed like the priced suit, a `"billed"` row) and `bones
 `wisp` (`Wisp`), none of them a pack kind: a haunted floor's `HauntPlanner` puts the hosts against its rooms' walls and a wisp
 inside some of them. A DORMANT host (`Monster.is_dormant`) has no AI and is out of `monsters`; a wisp in a host is hidden and out
 of every query; breaking a possessed host bills it (the armour), throws its wisp out hurt and the wisp flies to the next dormant
-host (`Wisp.possess` / `eject`); online `world.haunt` and the late-join `haunts` ("H5 as built"). Every kind is a
+host (`Wisp.possess` / `eject`); online `world.haunt` and the late-join `haunts` ("H5 as built"). (A haunted last floor's source
+is no monster: the `Grimoire`, `scripts/contracts/grimoire.gd`, a `Hellgate` subclass with its own tuning table and the
+`GrimoireModel` look, whose bursts deal the dead family, whose phase blasts stand the near zombie bodies back up, and which is
+slammed shut or burned; "H6 as built".) Every kind is a
 `MonsterDefs` row (`MonsterFactory.compose` deals a pack kind from its row's `min_floor`, at most `max` a pack, `after` that
 many others). A shield is a target's `blocks_hit(from_point, kind)`, asked through `Combat.shielded` by every hit helper.
 `MonsterFactory.spawn_pack(room_cells: Array[Vector2i], budget: int, rng) -> Array[Monster]`.

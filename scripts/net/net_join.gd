@@ -343,6 +343,7 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		"shields": _session.world.shield_states(),   # (each Pavise's shield: carried, planted, left or flat)
 		"bodies": _session.world.body_states(),   # (H3: every zombie's body where it lies, burnt or not)
 		"haunts": _session.world.haunt_states(),   # (H5: every ghost, in its host or out)
+		"books": _session.world.book_states(),   # (H6: a closed grimoire, slammed shut or burned)
 		"objects": _session.objects.late_join_state(), "status": _session.status.late_join_state(),
 		"orders": _session.orders.late_join_state(),
 		"ledger": {"lines": Ledger.lines.duplicate(true), "value": Ledger.contract_value, "floor": Ledger.floor_number},
@@ -531,6 +532,7 @@ func _apply(d: Dictionary) -> void:
 	_session.world.apply_shields(d.get("shields", []) as Array)   # (the pavises' shields)
 	_session.world.apply_bodies(d.get("bodies", []) as Array)   # (the bodies on the floor: where they lie, burnt or not)
 	_session.world.apply_haunts(d.get("haunts", []) as Array)   # (the ghosts: in their hosts or out)
+	_session.world.apply_books(d.get("books", []) as Array)   # (a closed grimoire: burned ones charred)
 	var waits := d.get("waits", {}) as Dictionary
 	for k: Variant in waits:
 		var emp := NetRegistry.node(int(k)) as Employee

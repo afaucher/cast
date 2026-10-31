@@ -56,6 +56,7 @@ The user (2026-10-31): "the plan was acolytes on floor one and two, and the grim
 - Floors 1-2: **necromancer acolytes** raising the dead (mobile host monsters that flee and raise bodies; paid per kill).
 - The origin (last) floor: **the grimoire**, pulsing out the dead until it is slammed shut or burned (a host-arbitrated
   world object like a hellgate: HP, phases, a pay line). A physical object, never text to read (Cast is not a reading game).
+  (Built 2026-10-31: haunted-build-plan.md, "H6 as built".)
 - **One pest family per contract.** The user: "We shouldn't be mixing hellgates and these," and "one pest family per
   contract for now." A haunted contract has no demons or hellgates; a hellgate contract has no ghosts, zombies or acolytes.
 - **The haunting is tied to the site.** The user: "Haunting is tied to the site." Haunted mansions and churches get

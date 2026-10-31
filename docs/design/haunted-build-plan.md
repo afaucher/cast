@@ -1,7 +1,7 @@
 # Haunted contracts: build plan
 
-Status: **[proposal; H1, H2, H3, H3b, H4 and H5 built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built", "H3b as
-built", "H4 as built" and "H5 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
+Status: **[proposal; H1, H2, H3, H3b, H4, H5 and H6 built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built", "H3b as
+built", "H4 as built", "H5 as built" and "H6 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
 build it in. The user (2026-10-31): "Let's build it as is" (today's roster; more enemy types are worked out in parallel).
 
 Today none of it is game code: the mansion and church rooms, the crypt, the zombies, acolytes, ghosts, hosts and the
@@ -116,7 +116,8 @@ Checked against the code, possession needs **no new shape**: nothing turns from 
 - The last floor's source: a `Grimoire` actor in the hellgate's shape (tuning by difficulty and depth, phases, bursts of
   the dead, `closed`), slammed shut or burned. The `grimoire_model.gd` look (the altar, the live eye) becomes its model.
   Objective kinds and Ledger lines for acolytes and the grimoire; the invoice reads like a hellgate contract's.
-- Networking: the hellgate's (a state codec, world events, a REPLICATED row and a LATE_JOIN entry).
+- Networking: the hellgate's (a state codec, world events, a REPLICATED row and a LATE_JOIN entry). (Built: see "H6 as built";
+  the grimoire is a `Hellgate` subclass, so the codec and events are the gate's own.)
 
 ### H7. Ghost form
 - The Ghost spell cast on yourself: a whole-body transform; you pass through regular enemies but still get hit by their
@@ -198,7 +199,7 @@ on the spot, the simplest sound choice, and is listed here to revisit.
 2. **IDS stays the hellgate clients**; the haunted ones are `HAUNTED_IDS` (else `run_for_seed`'s `seed % IDS` and the board's
    shuffle would move every recorded floor and board).
 3. **How often the board deals one:** half the boards, in one slot (`HAUNTED_CHANCE` 0.5), replacing that slot's client.
-4. **Pay without gates:** the pest objective adds `DEAD_PEST_BONUS` ($10,000, before the client's scale), so a haunted
+4. **Pay without gates:** (retired in H6: the grimoire pays the source's line, the pest the standard rate) the pest objective adds `DEAD_PEST_BONUS` ($10,000, before the client's scale), so a haunted
    contract's one paid objective is worth about what an origin gate adds (H4 / H6 bring the acolyte and grimoire pay
    lines). Its contract value (the damage cap) is still under a hellgate job's.
 5. **The church's rooms:** the nave plus the mansion's library, dining hall (the "refectory" origin) and portrait gallery, as
@@ -931,3 +932,166 @@ it walks, winds up and strikes now; see "Play it" and the screenshots.
 - The AI allies' prop care does not know a dormant suit (a spin beside one can break it, as it can a monster near it).
 - A wisp flies the floor's paths (it does not pass through walls).
 - The knight was judged on stills at the game camera (`haunt_game/`), not in play.
+
+## H6 as built (2026-10-31)
+
+The user (2026-10-31), as for H1-H5: "Just build it now. We can revisit the decisions after it's built." Every open call below
+was made on the spot, the simplest sound choice, and is listed to revisit. The decided frame: "the plan was acolytes on floor one
+and two, and the grimoire on the last [floor]", the grimoire "pulsing out the dead until it is slammed shut or burned", a physical
+object on its altar with the live eye (necro-look.md: the altar, "I like the bigger size"; the live eye, its pupil darting).
+
+### Play it
+
+```
+.\run.ps1 --client heir --seed 3 --floor 3 --spells coffee,fireball --no-mic --to-grimoire --focus grimoire
+         # the crew in sight of the grimoire, just outside its wake range: walk in and it opens
+.\run.ps1 --client heir --seed 3 --floor 3 --spells coffee,fireball --no-mic --to-grimoire --focus grimoire --grimoire-demo burst
+         # it wakes and a burst comes at once (also: hold, wake, phase, shut, burn; --demo-after S, default 1)
+.\run.ps1 --client heir --seed 3 --invoice-demo                                 # a haunted invoice (acolytes, the grimoire burned)
+.\run.ps1 --gym --no-mic                                                         # Spawn > Gate > "Grimoire" (dormant)
+```
+
+- Every haunted contract's last floor has one, in the story's room (where a hellgate contract's origin gate stands). The log says
+  where ("grimoire: in room:N, 600 HP").
+- `--to-grimoire` (solo) starts the crew about 9 cells from it, in its sight and outside its wake range (with the allies round the player); `--focus grimoire`
+  puts the camera on it; `--grimoire-demo hold|wake|burst|phase|shut|burn` stages it after `--demo-after` (the AI allies hold, the
+  floor's monsters stand still). `scripts/app/dev/grimoire_dev.gd`. No keybinding.
+- Screenshots (the game camera at zoom 16, 1920x1080, heir 3 floor 3, the library), `docs/design/grimoire_game/`: `dormant.png`
+  (asleep: the shut green book on its altar, the live eye on its cover, the candles and a dim whole circle), `flare.png` (awake,
+  the book open, the column up and the pages circling, the light swelling a moment before a burst), `burst.png` (the burst: two
+  skeletons and a zombie risen in its ring, a pale ring and motes at each), `failing.png` (hit to 30 %: its last phase, the
+  circle broken and red, the candles out, a crypt rat among the dead), `shut.png` (slammed shut: the eye dead, every light out,
+  the pages fallen; the tracker's "shut", "+$11,000 Grimoire slammed shut" on the ticker and the banner), `burned.png` (burned:
+  the book and the fallen pages charred, smoke; "Grimoire burned"), `invoice.png` (`--invoice-demo --client heir --seed 3`: the
+  acolytes on floors 1-2, "Grimoire burned" on floor 3, the pest per floor), `job_card.png` (board 9: the heir's card, "Stop 4
+  acolytes", "Shut the grimoire", "Exterminate zombies", the staff, beside two hellgate cards).
+- No exit code 255 in this step's fifteen screenshot runs (every one exited 0).
+
+### What was built
+
+| Piece | Where | What |
+|---|---|---|
+| The grimoire | `scripts/contracts/grimoire.gd` (`Grimoire`, **extends `Hellgate`**) | The hellgate's spawner, phases, phase-change shove, HP bar and networking, with its own tuning table, look and closing. Team monsters, immovable, `origin` (the floor's source: the origin gate's phases, spawn ring and bar), radius 2.2 (its altar). `Grimoire.place(cell, {difficulty, depth, yaw})` |
+| Asleep | `Hellgate.step` (unchanged) | DORMANT until a hero comes within `ACTIVATE_RANGE` (12), it is hit, or a monster's alarm reaches it (`MonsterSenses`, the gates' group). The book lies shut on its altar, the live eye on its cover darting about, the candles and a dim, whole circle lit, a dim light, a slow breath |
+| Awake | `Grimoire.book_profile`, `KIND_WEIGHTS` | The book flies open (the column of light, the circling pages) and bursts: every `interval` (12 s at pressure 0 to 5.5 s at 1) the pages flare for a second (`set_flare`), then 2-4 (+1 / +2 by phase) of the dead rise in its ring 3-4 cells out, aggroed on the nearest hero, a pale ring and motes at each, the book surging (`pulse`); up to its cap of living spawns (5-12, +2 / +4 by phase). The mix: skeletons and zombies (3:2, then 3:3), crypt rats in its last phase (2:3:2). HP 450-750 on the hellgate's pressure (difficulty and depth: the last floor's) |
+| Phases | `Hellgate._on_damaged` (the origin gate's thresholds) | Open (> 66 %), weakened (<= 66 %), failing (<= 33 %): the look test's states (the column thins and stutters, the circle breaks, candles go out, the flicker tends red), each faster with bigger bursts and a higher cap. Each change winds up 0.9 s (a pale ring) and blasts the crew back (the origin gate's shove, `Combat.shove_radius`) AND stands every unburnt zombie body within `RAISE_RADIUS` (9) back up at full HP (`Zombie.raise`, the body's owner: `Net.resolves`) |
+| Slammed shut | `Grimoire._on_death`, `GrimoireModel.close_look` | At 0 HP it closes once: the book shut, the eye dead (no iris: the bare eyeball rolled back), every light out, the pages fallen round it. Its spawns stop (`HellgateEvents.stop_spawns`, as the origin gate's). The shut book stays on its altar (no free; a `DecorBlocker` keeps the altar solid). `closed` fires once |
+| Burned | `Grimoire.fire_at` (from `FireballSpell` before its blast lands), `Hellgate.is_flammable` / `burn_mult`, `Burning` | Its pages burn: a fireball over it always lights it (no roll, a full 10 s fire), and a fire on it ticks `BURN_MULT` (6) times as hard (18 HP a second against a fire's usual 3). Damp puts it out, as any fire. If it was on fire when the killing blow landed it closes BURNED: the shut book charred, smoke and embers off it (`burnt`, `burnt_down`). A hellgate still never burns |
+| Its look | `GrimoireModel` (the game's now) | The altar (1.4) facing the game camera (`Grimoire.FACING`). New in the model: the `dormant` state (shut, the live eye, candles lit, the circle dim and whole), `set_state` (rebuilt in place), `set_flare` / `pulse` (every light swells), `close_look(burnt)` (`dead_eye`, `burnt`: charred colours, smoke and embers). The look test's four states build as before (`test_necro_look`) |
+| Where it stands | `GatePlanner.plan` / `spawn_grimoire`, `SitePlan.grimoire` | The spot the origin gate's rule picks on the last floor (the biggest eligible room, which is the story's origin room, no dice), recorded as `{cell, room}`; spawned LAST of the actors (after the ghosts: no earlier net id moves). Kept clear as the origin gate: `SitePlan.gate_cells` (employees, props, hazards, packs keep off), `ThemeCtx` (decor keeps off; a 5.8 body), `SiteBuilder._block_cells`, `RoomThemes`' crowded rooms, `DoorPlan.score` (as the origin gate) |
+| The hellgate | `scripts/contracts/hellgate.gd` | Its model calls moved into overridable look hooks (`_build_look`, `_look_awake`, `_look_flare`, `_look_pulse`, `_look_hurt`, `_look_phase`, `_look_shove`, `_look_close`) and its numbers into `_profile_now` / `_weights_now`, unchanged for a hellgate (same values, same dice); `is_flammable` (false) and `burn_mult` (1) |
+| The invoice | `ContractRun` (`GRIMOIRE_PAY`, `grimoire_pay`, `has_grimoire`), `ContractSession` (`grimoire_closed`, `GRIMOIRE_LINES`, `gates_open`), game.gd | A haunted contract reads like a hellgate contract's: the acolytes where the small gates are (H4: $2,500 each, floors 1-2), the GRIMOIRE where the origin gate is (**$10,000**, the origin gate's pay, x the client's scale; a "grimoire" objective on the last floor), the pest at the standard **$10,000** (30/30/40; H1's `DEAD_PEST_BONUS` is retired), the staff. The floor's state has `grimoire` and `grimoire_closed` ("", "shut" or "burned"); an open grimoire keeps the floor from clean (`gates_open`), so floor 3's pest pays once it is shut, as once the origin gate is. Its Ledger line pays once where the books are kept; a client mirrors it |
+| The forms | `ContractRun.card_lines`, game.gd (`_update_tracker`, `_elevator_lines`, `_on_grimoire_closed`), `NoteCopy`, `DamageTicker` | The job card's line "Shut the grimoire", the tracker's row (OPEN / shut / burned), the exit form's line, the banner when it closes; its pay (and the acolytes', which H4 left off) rides the ticker. Floor 3's dispatch lines name the book |
+| Networking | `NetWorld`, `NetJoin`, `NetEvents`, `test_net_contract` | See the checklist below |
+| Dev | `GrimoireDev`, `GameDev._grimoire_floor_ready`, `GameDev._invoice_demo_haunted` | The flags above; `--invoice-demo` with `--client heir` / `parish` shows a haunted invoice |
+| Gym | `GymSpawns` | "Grimoire" in the existing Gate group (beside Hellgate and Origin gate): it lands dormant, the gym's difficulty, depth 3. No keybinding |
+
+### The networking checklist (networking.md)
+1. **Shape: the hellgate's** (an owned actor of the host's: the host simulates it and streams its state; a client shows a puppet;
+   the design docs' "host-arbitrated object like a hellgate" is this, the shape the hellgate already has). It IS a `Hellgate`, so
+   `NetWorld` tracks it as a gate: its state rides the snapshot's GATE entry (`NetWorldCodec.GateState`: HP, awake, flare, phase,
+   the shove's wind-up), its bursts `world.spawn` (gate: it), its phase `world.phase`, its blast `world.shove`, its closing
+   `world.die`. Not a new shape.
+2. **Vars.** `Grimoire`: `yaw` SPAWN; `burnt` OWNER (carrier `world.burn {id}`, after its `world.die`); `_burn_seen` and
+   `raised_total` PRIVATE; `book` LOCAL. Hellgate's OWNER vars ride the GATE entry (`NetWorldCodec.GATE_FIELDS`). `SitePlan.grimoire`
+   and `ContractRun.grimoire_pay` SPAWN. In `test_net_contract`'s `REPLICATED` (`grimoire.gd`: the GATE fields and its
+   `NetEvents.WORLD_CARRIES` row) and `NetEvents.LATE_JOIN`.
+3. **Verbs.** Hits on it are hits on a host-owned actor (a client's are requests); its blast is `Combat.shove_radius`; its raise is
+   `Zombie.raise` (`Actor.revive`) on each body its owner resolves (`Net.resolves`), whose `world.rise` the zombie already sends;
+   its fire is `Burning.ignite` on its owner (`Grimoire.fire_at` asks `Net.resolves`), the status announced as any fire.
+4. **Randomness.** Its kind picks and spawn cells on its own generator seeded from its cell (as a gate's), only on the host. Its
+   look's phase is a hash of where it stands. Nothing else is rolled.
+5. **Motion.** None: it never moves (`facing`, `climbing` fixed).
+6. **Cosmetic:** the book's states, the eye, the flare and the surge, the rings and motes, the char and smoke. **Gameplay:** HP,
+   awake, phase, the burst timer, `burnt` (which Ledger line and banner), the shut book's blocker.
+7. **A late joiner.** A living one: the keyframe (its GATE entry: awake, phase, HP; the book follows), its living spawns by the
+   `world.spawn` replay (from it). A closed one: a gone id shown shut (`Net.remote_die`: the shut book stays), then the snapshot's
+   `books` rows `[id, burnt]` (`NetWorld.book_states` / `apply_books`) char a burned one. A fire on a living one: statuses, replay.
+8. **The scenario:** `tests/test_net_grimoire.gd` (below).
+- Ordering: the host's `world.die` goes out from `GameWorld.actor_died` before its `_on_death`, which emits `burnt_down`, so
+  `world.burn` follows it; a client applies both through the death queue in order (its `_burn` needs the copy dead).
+- **Hellgate floors are byte-identical:** `test_golden_floor` passes against the recorded floors, not re-recorded. `SitePlan.grimoire`
+  is left out of the plan part at `{}` (`NetFloor.PLAN_DEFAULTS`) and `ContractRun.grimoire_pay` out of the run part at 0
+  (`RUN_DEFAULTS`); a haunted last floor hashes both in.
+
+### The calls made (to revisit)
+1. **A Hellgate subclass**, not a class of its own: the spawner, phases, blast, bar and the whole of its networking are the gate's;
+   what differs (its table, its kinds, its look, its closing, fire) is overridden. The hellgate's model calls became overridable
+   hooks for it (no change for a hellgate).
+2. **Slammed shut = hit to 0 HP**; **burned = closed while on fire.** Both close it and pay the same; only the look, the Ledger line
+   and the banner differ. Fire is the fast way: a fireball always lights its pages (no roll, 10 s) and its fire burns 6 times as
+   hard (18 HP/s, about 90-180 HP a fire on a 450-750 HP book). Damp puts it out.
+3. **Its numbers:** HP 450-750 (the origin gate's 480-780, a little under), a burst every 12-5.5 s of 2-4 (+1 / +2 by phase), a cap
+   of 5-12 (+2 / +4), all on the hellgate's pressure (difficulty and depth; it is always on floor 3). Phases at the origin gate's
+   66 % / 33 %, intervals x0.75 / x0.55.
+4. **Its dead:** skeletons and zombies, crypt rats in its last phase; never ecto blobs (one a pack), acolytes or ghosts. Bursts
+   bring the standing dead; **no bodies are laid** for anyone to raise (floor 3 has no acolytes, H4's call).
+5. **The phase blast raises the near zombie bodies** (within 9, unburnt, full HP), besides the origin gate's shove: the dead family's
+   twist on the phase change, and a reason to burn the bodies round it.
+6. **Its phases show in the book** (the look test's open / weakened / failing, from the user's "do it with the effects surrounding
+   the book"), its flare and surge in every light (column, circle, light, pages' glow).
+7. **Asleep it is the shut book with the live eye** (the user's eye, darting), candles lit and a dim whole circle; it opens when it
+   wakes. **Closed, the eye is dead** (no iris), every light out; burned, the cover and fallen pages are charred and smoke rises.
+8. **It wakes by the hellgate's rule** (a hero within 12, a hit, a monster's alarm), not by entering its room.
+9. **The shut book stays** on its altar (a hellgate collapses and is freed), solid (a `DecorBlocker`).
+10. **The altar faces the game camera** (`FACING`), whatever the room, so the book and its eye read; the lectern is not used.
+11. **Where it stands:** the origin gate's spot rule on the last floor (the story's room, kept clear as the origin gate's).
+12. **Closing it stops the floor's spawns** (`HellgateEvents.stop_spawns`, the origin gate's flag); its risen dead stay and fight on.
+13. **The haunted invoice:** `GRIMOIRE_PAY` $10,000 (= `ORIGIN_PAY`), the pest at the standard `PEST_PAY` (H1's `DEAD_PEST_BONUS`
+    removed: it stood in for the source the contract lacked), the acolytes as H4 built them. A haunted contract's value is now
+    acolytes (4-6 x $2,500) + grimoire + pest + staff, against a hellgate contract's small gates (3-5 x $3,000) + origin + pest +
+    staff, before the client's scale.
+14. **Ghosts and hosts pay nothing:** they are the client's property and a hazard (a broken suit bills, H5), not an objective.
+15. **Floor 3 is clean** only once the grimoire is shut and no pest is left (the origin gate's rule), so its pest share waits for it.
+16. **The ticker** shows the grimoire's and the acolytes' pay (H4 had left the acolytes' off), as the gates'.
+17. **A client's banner** waits one frame after the death (its `world.burn` lands in the same pass) to say shut or burned.
+18. **No sound of its own** (its bursts, blast and close are silent beyond the shake; the slam is a look).
+19. **`test_haunted_contract`'s floor-total sanity bound** went from 40 to 42: keeping the grimoire's cell clear moves floor 3's pack
+    draws (parish 11 floor 3 holds 41 monsters before the grimoire wakes).
+
+### New player-facing strings (proposals for review)
+- Name **Grimoire** (the log's "Grimoire died", as a hellgate's; its HP bar has no label).
+- Objective **Shut the grimoire (floor 3)**; the job card's **Shut the grimoire**; the tracker's **Shut the grimoire** OPEN / shut /
+  burned; the exit form's **Grimoire: still open (the biggest line on the invoice).** / **Grimoire: slammed shut.** / **Grimoire:
+  burned.**
+- Ledger and invoice lines **Grimoire slammed shut** and **Grimoire burned**.
+- Banners (`NoteCopy.GRIMOIRE_SHUT`, `GRIMOIRE_BURNED`): **"The book is shut. The house goes quiet. The invoice does not."** /
+  **"The book is ash. The house goes quiet. The invoice does not."** (silent until `tools/render_dispatch.ps1` runs).
+- Floor 3's dispatch lines (`NoteCopy.DISPATCH_DEAD[3]`, reworked): **"This is where it started, in the {origin}. There's a book on
+  the altar raising them. Slam it shut or burn it."** / **"The {origin}'s on this floor, and so is the book that started it. Shut
+  it, then put the {pest} back down."** (they were H1's "This is where it started, in the {origin}. Put the {pest} down and get
+  everyone out." / "The {origin}'s on this floor. Whatever got up down here, put it back down.")
+- Dev only: the gym's **Grimoire** button; the log's "grimoire: in room:N, ... HP".
+
+### Tests
+- `tests/test_grimoire.gd` (new, solo): only a haunted last floor has one (heir 3 and parish 11, floors 1-3; a hellgate floor 3 has
+  its origin gate instead), in the story's room, HP from its table; dormant (the shut book, the live eye, no column) and no spawns
+  however long with the crew far off; a hero near or a hit wakes it and the book opens; the pages flare before a burst, a burst
+  of its size of the dead family rises in its ring from it, aggroed, and it holds at its cap; phase 1 at 60 % (weakened, faster,
+  the blast throws the crew back, the near body stands up at full HP, the burnt one and a far one stay down), phase 2 at 30 %
+  (failing); hit to 0 it is slammed shut once (the eye dead, every light out), its spawns stop, it stays with its altar solid; a
+  fireball always lights it, it burns hard, Damp puts it out, a fire that finishes it burns it (charred, smoking, `burnt_down`
+  once), `net_burn` chars a copy, the late joiner's `books` rows; a hellgate still never burns; the haunted invoice (the grimoire
+  pays an origin gate's worth, the value is acolytes + grimoire + pest + staff, floor 3's pest waits for the grimoire, it pays once
+  with its line on the ticker, every objective met pays the contract value); the gym's Grimoire.
+- `tests/test_net_grimoire.gd` (new, NetTest, `const PEERS := 3`, `off` and `coast`): board 9's heir contract, its last floor. c1
+  shows the grimoire asleep (the shut book, the eye alive); the host wakes it and a burst lands: c1 shows it open and the dead it
+  brought; the host hits it to 60 %: c1 shows phase 1, the book weakened, at the host's HP; c2 joins late and shows it awake in
+  phase 1, weakened, at the host's HP, with its spawns; the host sets it alight and the fire finishes it: c1 and c2 show it closed,
+  the book shut and charred, the eye dead, the spawns stopped, the Ledger's "Grimoire burned" mirrored and the floor's objective met
+  ("burned"); no OWNER-write guard on any machine.
+- Updated: `test_haunted_contract` (the grimoire objective on the last floor, its pay, the card line, the pest at the standard rate;
+  each last floor's grimoire in the story's room, dormant, its cell kept clear; none on floors 1-2), `test_net_contract`
+  (`grimoire.gd` in `REPLICATED`), `test_dispatch_voice` (the grimoire's banners are listed).
+- Run and passing: `test_grimoire`, `test_net_grimoire` (off and coast), `test_net_contract`, `test_golden_floor` (not re-recorded),
+  `test_haunted_contract`, `test_crypt_gen`, `test_hellgate`, `test_hellgate_flow`, `test_contract_gen`, `test_contract_flow`,
+  `test_contract_flow_game`, `test_contract_ledger`, `test_monster_defs`, `test_zombie`, `test_acolyte`, `test_haunt`,
+  `test_necro_look`, `test_forms`, `test_gym`, `test_zfight`, `test_dispatch_voice`, `test_burning`, `test_net_floor`,
+  `test_room_themes`, `test_net_world_codec`, and the net tests `test_net_m3_world`, `test_net_m5_contract`, `test_net_m6_late_join`,
+  `test_net_zombies`, `test_net_haunt` (each off and coast). The full suite was not run.
+
+### Not done in H6
+- No crew (two-PC) play; the net test covers the stream, the burst, the phase, the burn and the late join.
+- No sounds of its own (a page-flutter for the burst, a slam, a roar of flame); its banners' voice clips are not rendered.
+- It was judged on stills at the game camera (`grimoire_game/`), not in play. Its numbers (HP, rate, the 6x fire) are untried.
+- The H3 decision still open: whether Heal raises zombies. H7 (Ghost form) is next.

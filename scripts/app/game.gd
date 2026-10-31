@@ -925,10 +925,13 @@ func _populate_site() -> void:
 		MoveLab.spawn_monsters(_site)   # (the lab's pen: a grunt and a swarmer)
 	var origin := _site.origin_gate != null
 	var small := _site.gates.size() - (1 if origin else 0)
-	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned, _site.acolytes.size())
+	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned, _site.acolytes.size(), _site.grimoire != null)
 	for g in _site.gates:
 		if g.has_signal("closed"):
 			g.connect("closed", _on_gate_closed)
+	if _site.grimoire != null:
+		_site.grimoire.closed.connect(_on_grimoire_closed)
+		_log("grimoire: in %s, %.0f HP" % [_site.plan.grimoire["room"], _site.grimoire.max_hp], Color(0.75, 0.85, 1.0))
 	for e in _site.employees:
 		e.damaged.connect(func(_amount: float, source: Node) -> void: _emp_cause[e.get_instance_id()] = Ledger.culprit_name(source))
 	# Voice orders: this floor's employees answer to their own names too ("Beatrice go"), not only the decided list.
@@ -1009,6 +1012,8 @@ func _setup_fog() -> void:
 	for n in _site.props + _site.hazards + _site.decor + _site.notes + _site.packages + _site.gates + _dev_hazards + _site.hosts:
 		if n is Node3D and n.name != "ThemeLights":
 			still.append(n)
+	if _site.grimoire != null:
+		still.append(_site.grimoire)   # (a haunted last floor's grimoire: shown once seen, as a gate)
 	fog_view.track_static(still)
 	fog_view.watch_doors(_site.doors)
 	fog_view.refresh_now(true)
@@ -1943,6 +1948,34 @@ func _on_gate_closed(gate: Actor) -> void:
 	_objective_t = 0.0   # re-check cleanliness now
 
 
+## The grimoire closed (haunted-build-plan.md H6): slammed shut or burned. Paid where the books are kept (a client's pay
+## arrives from the host); everyone gets the banner. On a client its world.burn comes right after its world.die (the same
+## pass of the death queue), so the banner waits a frame to know which.
+func _on_grimoire_closed(g: Actor) -> void:
+	var id := g.get_instance_id()
+	if _closed_gates.has(id) or _session == null or _ended:
+		return
+	_closed_gates[id] = true
+	if _joining:
+		return   # (a late joiner sees it shut, with no fanfare)
+	if not _keeps_books():
+		_grimoire_banner.call_deferred(g)
+		return
+	var burnt := bool(g.get("burnt"))
+	var pay := _session.grimoire_closed("burned" if burnt else "shut")
+	_publish_contract()
+	_show_banner(NoteCopy.GRIMOIRE_BURNED if burnt else NoteCopy.GRIMOIRE_SHUT, 6.0)
+	_log("grimoire %s  +%s" % ["burned" if burnt else "slammed shut", ContractRun.money(pay)], Color(0.6, 1.0, 0.7))
+	_objective_t = 0.0   # re-check cleanliness now
+
+
+## A client: the host closed the grimoire (world.die, then world.burn if it burned): its banner.
+func _grimoire_banner(g: Actor) -> void:
+	var burnt := is_instance_valid(g) and bool(g.get("burnt"))
+	_show_banner(NoteCopy.GRIMOIRE_BURNED if burnt else NoteCopy.GRIMOIRE_SHUT, 6.0)
+	_log("grimoire %s" % ("burned" if burnt else "slammed shut"), Color(0.6, 1.0, 0.7))
+
+
 ## An acolyte died (haunted-build-plan.md H4): paid per kill, where the books are kept (a client's pay arrives from the host).
 func _on_acolyte_stopped(_a: Actor) -> void:
 	if _session == null or _ended or _joining or not _keeps_books():
@@ -2012,6 +2045,9 @@ func _update_tracker() -> void:
 			rows.append({"text": "Close hellgates", "detail": "%d / %d" % [closed, total], "state": "done" if closed >= total else ("partial" if closed > 0 else "todo")})
 		if bool(st["origin"]):
 			rows.append({"text": "ORIGIN gate", "detail": "closed" if bool(st["origin_closed"]) else "OPEN", "state": "done" if bool(st["origin_closed"]) else "todo"})
+		if bool(st.get("grimoire", false)):
+			var how := str(st.get("grimoire_closed", ""))
+			rows.append({"text": "Shut the grimoire", "detail": "OPEN" if how == "" else how, "state": "todo" if how == "" else "done"})
 		var acolytes := int(st.get("acolytes_total", 0))
 		if acolytes > 0:
 			var stopped := int(st.get("acolytes_stopped", 0))
@@ -2261,6 +2297,9 @@ func _elevator_lines() -> Array[String]:
 			lines.append("Hellgates closed on this floor: %d of %d." % [int(st["gates_closed"]), total])
 		if bool(st["origin"]):
 			lines.append("Origin gate: %s." % ("closed" if bool(st["origin_closed"]) else "still open (the biggest line on the invoice)"))
+		if bool(st.get("grimoire", false)):
+			var how := str(st.get("grimoire_closed", ""))
+			lines.append("Grimoire: %s." % ("still open (the biggest line on the invoice)" if how == "" else ("slammed shut" if how == "shut" else "burned")))
 		if int(st.get("acolytes_total", 0)) > 0:
 			lines.append("Acolytes stopped on this floor: %d of %d." % [int(st.get("acolytes_stopped", 0)), int(st["acolytes_total"])])
 		lines.append("Floor %s." % ("clean" if bool(st["pest_paid"]) else "not clean: %d %s left" % [_pest_alive(), ClientArchetype.pest_name(_run.pest)]))

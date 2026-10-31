@@ -76,12 +76,14 @@ func _on_line(line: Dictionary) -> void:
 		_add_row(line)
 
 
-## The pay for an objective (a hellgate, the pest, the origin gate) rides the ticker; per-employee and found money do not.
+## The pay for an objective (a hellgate, the pest, the origin gate; a haunted contract's acolytes and grimoire) rides the
+## ticker; per-employee and found money do not.
 static func shows_earning(line: Dictionary) -> bool:
 	if String(line.get("kind", "")) != "earn":
 		return false
 	var lbl := String(line.get("label", ""))
-	return lbl.begins_with("Hellgate") or lbl.begins_with("Pest") or lbl.begins_with("ORIGIN")
+	return lbl.begins_with("Hellgate") or lbl.begins_with("Pest") or lbl.begins_with("ORIGIN") or lbl.begins_with("Acolyte") \
+			or lbl.begins_with("Grimoire")
 
 
 func _add_row(line: Dictionary) -> void:

@@ -406,8 +406,8 @@ static func _corridor_distance(map: HexMap, max_d: int) -> Dictionary:
 # --- blocked cells (no monster is placed on them) ----------------------------------------------
 
 static func _block_cells(p: SitePlan) -> void:
-	for g in p.gates:
-		for n in Hex.range_cells(g["cell"], 2):
+	for c in p.gate_cells():   # (the gates and a haunted floor's grimoire)
+		for n in Hex.range_cells(c, 2):
 			p.blocked[n] = true
 	for e in p.employees:
 		p.blocked[e["cell"]] = true
@@ -471,6 +471,7 @@ class Site:
 	var acolytes: Array[Monster] = []   ## their acolytes (not in `monsters`: no pack's; the contract's acolyte objectives)
 	var hosts: Array[HauntHost] = []    ## a haunted floor's hosts (suits of armour, skeletons: not in `monsters`), in plan order
 	var wisps: Array[Wisp] = []         ## its ghosts, each in its first host (not in `monsters`)
+	var grimoire: Grimoire = null       ## a haunted contract's last floor: its source (H6; not in `gates`)
 
 
 ## Spawn a planned floor. SPAWN ORDER IS NET-ID ORDER: NetFloor numbers the actors in the order they are spawned here, and
@@ -497,7 +498,8 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	LavaPlanner.spawn(map, run, p, site)        # a lava cave's archers, its look and its rules
 	PropPlanner.spawn_set_pieces(run, p, site)  # the landings' set pieces (priced props, into site.props)
 	ProcessionPlanner.spawn(map, run, p, site)  # a haunted floor's processions (acolytes and their zombies)
-	HauntPlanner.spawn(map, p, site)            # its ghosts' hosts, then the ghosts in them (the last actors)
+	HauntPlanner.spawn(map, p, site)            # its ghosts' hosts, then the ghosts in them
+	GatePlanner.spawn_grimoire(run, p, site)    # a haunted last floor's grimoire (the last actor)
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
 	DoorPlanner.spawn(p, site)

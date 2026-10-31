@@ -271,13 +271,16 @@ const DISPATCH_DEAD := {
 		"Halfway down and the {pest} are thicker. Some of the staff made it this far. Find them, then find the elevator.",
 	],
 	3: [
-		"This is where it started, in the {origin}. Put the {pest} down and get everyone out.",
-		"The {origin}'s on this floor. Whatever got up down here, put it back down.",
+		"This is where it started, in the {origin}. There's a book on the altar raising them. Slam it shut or burn it.",
+		"The {origin}'s on this floor, and so is the book that started it. Shut it, then put the {pest} back down.",
 	],
 }
 
 ## The headset line when the origin gate closes (Game).
 const ORIGIN_SHUT := "The origin gate is shut. The site calms down. The invoice does not."
+## A haunted contract's grimoire closed (haunted-build-plan.md H6): slammed shut, or burned.
+const GRIMOIRE_SHUT := "The book is shut. The house goes quiet. The invoice does not."
+const GRIMOIRE_BURNED := "The book is ash. The house goes quiet. The invoice does not."
 ## The whole crew is down: dispatch on the headset, not a line of screen text (user, 2026-10-20).
 const WIPE := "Guys? You okay? I'm calling the medics."
 ## More of what used to be screen text, now dispatch on the headset (user, 2026-10-20: "Fix the screen messages you

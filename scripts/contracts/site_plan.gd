@@ -107,13 +107,18 @@ var processions: Array[Dictionary] = []
 ## when the floor starts)}. Spawned after the processions (the hosts, then a Wisp in each possessed one). [] on every other floor
 ## (and then left out of the checksum's plan part: NetFloor.PLAN_DEFAULTS).
 var haunts: Array[Dictionary] = []
+## A haunted contract's last floor: its grimoire (haunted-build-plan.md, "H6 as built"; GatePlanner), {cell, room}: where the
+## origin gate would stand, in the story's room. Spawned last of the actors (Grimoire). Kept clear like the origin gate
+## (gate_cells, ThemeCtx, SiteBuilder._block_cells). {} on every other floor (and then left out of the checksum's plan part:
+## NetFloor.PLAN_DEFAULTS).
+var grimoire: Dictionary = {}
 
 
 ## Who may write each var (see Net). SiteBuilder.plan() builds all of it from (run, floor) on
 ## every machine, so it is fixed once planned.
 func net_fields() -> Dictionary:
 	return {
-		"doors": Net.SPAWN, "sharks": Net.SPAWN, "processions": Net.SPAWN, "haunts": Net.SPAWN,
+		"doors": Net.SPAWN, "sharks": Net.SPAWN, "processions": Net.SPAWN, "haunts": Net.SPAWN, "grimoire": Net.SPAWN,
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "hazards": Net.SPAWN,
@@ -140,10 +145,13 @@ func has_origin() -> bool:
 	return false
 
 
+## Every gate's cell, and the grimoire's (H6: it is kept clear as a gate is).
 func gate_cells() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for g in gates:
 		out.append(g["cell"])
+	if not grimoire.is_empty():
+		out.append(grimoire["cell"])
 	return out
 
 

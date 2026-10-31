@@ -39,6 +39,8 @@ static func assign(plan: SitePlan, site_type: String, story: Dictionary, floor_n
 	var crowded := {plan.exit_room: true}
 	for g in plan.gates:
 		crowded[str(g["room"])] = true
+	if not plan.grimoire.is_empty():
+		crowded[str(plan.grimoire["room"])] = true
 	var bag: Array[String] = []
 	var cycle := 0
 	while not rest.is_empty():

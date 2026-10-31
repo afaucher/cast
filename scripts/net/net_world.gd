@@ -55,6 +55,11 @@ extends Node
 ## queue on the host's beat, in order with the host's break (world.die); a client puts its wisp in or out (Wisp.net_haunt). A late
 ## joiner gets every living wisp's host in its snapshot (haunt_states / apply_haunts).
 ##
+## THE GRIMOIRE (haunted-build-plan.md H6: a haunted last floor's source, a Hellgate subclass): it is a gate here (the GATE
+## entry, world.phase / world.shove / world.spawn / world.die, as the origin gate). Closed while on fire it is burned:
+## `world.burn {id}` after its world.die (its burnt_down), through the death queue, so a client chars the shut book
+## (Grimoire.net_burn). A late joiner gets a closed one as a gone id shown shut, then `books` rows (book_states / apply_books).
+##
 ## The game calls begin() at the floor's barrier (after NetFloor.assign_ids and freeze_copies) and set_active() with
 ## the hero sync (NetSnapshot.set_active). Nothing here knows about game.gd.
 
@@ -224,6 +229,8 @@ func _track(id: int, n: Actor, kind: int) -> void:
 	elif n is Hellgate:
 		_link((n as Hellgate).phase_changed, _on_gate_phase.bind(id))
 		_link((n as Hellgate).shove_burst, _on_gate_shove.bind(id))
+		if n.has_signal("burnt_down"):
+			_link(Signal(n, "burnt_down"), _on_burn.bind(id))   # (a grimoire closed burning, H6: world.burn after its world.die)
 	elif n is Monster:
 		_link((n as Monster).windup_begun, _on_windup.bind(id))
 		_link((n as Monster).windup_dropped, _on_unwind.bind(id))
@@ -733,6 +740,32 @@ func _on_haunt(to: Node, id: int) -> void:
 	_flush_spawns()
 	_send("world.haunt", {"id": id, "h": NetFloor.id_of(to) if to != null and is_instance_valid(to) else 0, "x": p.x, "y": p.y, "z": p.z})
 	stats["haunts"] = int(stats.get("haunts", 0)) + 1
+
+
+## Host: every closed grimoire (H6), for a late joiner: [[id, burnt]]. Its seed-built id is a gone id shown shut (NetJoin.gone_ids);
+## this row chars a burned one.
+func book_states() -> Array:
+	var out: Array = []
+	for id in NetRegistry.ids():
+		var n := NetRegistry.node(id) as Grimoire
+		if n != null and n.dead:
+			out.append([id, n.burnt])
+	return out
+
+
+## The late joiner: the host's closed grimoires (book_states), burned ones charred here too.
+func apply_books(list: Array) -> void:
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 2:
+			continue
+		var n := NetRegistry.node(int(row[0])) as Grimoire
+		if n == null:
+			continue
+		if not n.dead:
+			Net.remote_die(n)
+		if bool(row[1]):
+			n.net_burn()
 
 
 ## Host: every living ghost and the host it is in (0: free), for a late joiner: [[id, host id, x, y, z]].

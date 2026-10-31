@@ -13,7 +13,9 @@ extends Node3D
 ##
 ## Rules:
 ##   - Anyone near the blast rolls: monsters, heroes (friendly fire: aiming at a teammate is the game) and
-##     employees. Hellgates, priced props and mail packages never burn (immovable / inanimate).
+##     employees. Hellgates, priced props and mail packages never burn (immovable / inanimate). A grimoire's pages do
+##     (Hellgate.is_flammable; haunted-build-plan.md H6): a fireball always lights them (Grimoire.fire_at) and its fire
+##     ticks Hellgate.burn_mult times as hard.
 ##   - It burns 5-10 s and deals TICK_DAMAGE every TICK seconds: about 15-30 HP over a full burn, so it
 ##     never kills a full-HP hero (Wick, the frailest, has 85) but it will finish a swarmer or an archer.
 ##     Armor and other damage modifiers apply (Actor.apply_damage).
@@ -99,7 +101,7 @@ static func ignite_chance(power: float, dist_frac: float) -> float:
 static func can_burn(a: Actor) -> bool:
 	if a == null or not is_instance_valid(a) or a.dead or not a.is_inside_tree():
 		return false
-	if a is Hellgate or a is PricedProp or a.is_in_group("breakables"):   # (Rebar is immovable but flammable)
+	if (a is Hellgate and not (a as Hellgate).is_flammable()) or a is PricedProp or a.is_in_group("breakables"):   # (Rebar is immovable but flammable)
 		return false
 	return not is_fireproof(a)
 
@@ -317,6 +319,8 @@ func _process(_delta: float) -> void:
 func _burn() -> void:
 	var src: Node = _source.get_ref() as Node if _source != null else null
 	var amount := TICK_DAMAGE
+	if target is Hellgate:
+		amount *= (target as Hellgate).burn_mult()   # (a grimoire's pages burn hard: H6)
 	# A hero's fire never downs a hero.
 	var src_actor := src as Actor
 	if target.team == GameWorld.TEAM_HEROES and src_actor != null and src_actor.team == GameWorld.TEAM_HEROES:

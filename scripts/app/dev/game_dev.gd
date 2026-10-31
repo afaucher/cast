@@ -16,7 +16,8 @@ extends "res://scripts/app/game.gd"
 ## and (CryptDev.parse) --crypt-floor --to-crypt head|foot|lit|dark --crypt-perf (a haunted floor's crypt: haunted-build-plan.md H2);
 ## and (ProcessionDev.parse) --to-procession [n] --procession-demo walk|raise|fight, --focus procession (a haunted floor's
 ## processions: haunted-build-plan.md H4); and (HauntDev.parse) --to-haunt [n] --haunt-demo fight|break, --focus haunt (a
-## haunted floor's ghosts in their hosts: H5);
+## haunted floor's ghosts in their hosts: H5); and (GrimoireDev.parse) --to-grimoire --grimoire-demo hold|wake|burst|phase|shut|burn,
+## --focus grimoire (a haunted last floor's grimoire: H6);
 ## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z --walk-path x0,z0,x1,z1 (frame sequences for flicker hunts:
 ## _take_shot_later); and (GymDev.parse) --gym: the test gym (GymMap's floor and GymDev's panel, solo only:
 ## docs/design/test-gym.md), with --gym-tour <dir> and --gym-act <action> (one panel action as it opens, for screenshots).
@@ -39,6 +40,7 @@ func _parse_args() -> void:
 	CryptDev.parse(args, opts)
 	ProcessionDev.parse(args, opts)
 	HauntDev.parse(args, opts)
+	GrimoireDev.parse(args, opts)
 	var i := args.find("--shot-seq")
 	if i >= 0 and i + 1 < args.size():
 		opts["shot_seq"] = maxi(1, int(args[i + 1]))
@@ -211,6 +213,23 @@ func _haunt_floor_ready() -> void:
 		HauntDev.demo(self, h, str(opts["haunt_demo"]))
 
 
+## A haunted last floor's grimoire (GrimoireDev): --to-grimoire puts the crew in sight of it (solo), --focus grimoire follows
+## it, --grimoire-demo stages it.
+func _grimoire_floor_ready() -> void:
+	if _site == null or _site.grimoire == null:
+		return
+	var g := _site.grimoire
+	if opts.has("to_grimoire") and not _shared:
+		var at := GrimoireDev.spot(map, g)
+		if at != HexMap.NO_CELL:
+			_teleport_crew(at)
+	if opts.get("focus", "") == "grimoire":
+		rig.target = g
+		rig.snap()
+	if opts.has("grimoire_demo"):
+		GrimoireDev.demo(self, g, str(opts["grimoire_demo"]))
+
+
 ## A generated floor's lava cave (LavaDev): --to-lava puts the crew there (solo), --lava-perf measures its lights.
 func _lava_floor_ready() -> void:
 	if map == null or map.cave.is_empty() or _lava_cave() > 0:
@@ -267,6 +286,7 @@ func _dev_on_floor_ready() -> void:
 	_crypt_floor_ready()
 	_procession_floor_ready()
 	_haunt_floor_ready()
+	_grimoire_floor_ready()
 	if _sewer() > 0 and opts.has("sewer_demo"):
 		_sewer_demo(str(opts["sewer_demo"]))
 	if opts.has("tour"):
@@ -411,8 +431,12 @@ func _invite_demo() -> void:
 		_on_invite(0, str(opts["invite_demo"]))
 
 
-## --invoice-demo: a sample contract with a believable ledger, straight to the invoice.
+## --invoice-demo: a sample contract with a believable ledger, straight to the invoice. With --client heir | parish, a haunted
+## one (H6): acolytes on floors 1-2, the grimoire burned on floor 3, broken antiques.
 func _invoice_demo() -> void:
+	if opts.has("client") and ClientArchetype.family_of(str(opts["client"])) == ClientArchetype.FAMILY_DEAD:
+		_invoice_demo_haunted()
+		return
 	var run := ContractBoard.run_for_seed(int(opts.get("seed", 12)))
 	var s := ContractSession.begin(run, 1)
 	var wick := _demo_hero("Wick")
@@ -437,6 +461,41 @@ func _invoice_demo() -> void:
 	s.check_clean(0)
 	s.extract(1)
 	Ledger.damage("Gold toilet", 15000, wick)
+	s.finish(ContractSession.END_CASHED_OUT)
+	var inv := ContractInvoice.build(s)
+	for h in [wick, rebar, gasket]:
+		h.free()
+	_session = s
+	_run = run
+	_show_invoice(inv)
+	_invoice.next_contract.disconnect(_on_next_contract)
+
+
+func _invoice_demo_haunted() -> void:
+	var run := ContractBoard.run_for_client(str(opts["client"]), int(opts.get("seed", 3)))
+	var s := ContractSession.begin(run, 1)
+	var wick := _demo_hero("Wick")
+	var rebar := _demo_hero("Rebar")
+	var gasket := _demo_hero("Gasket")
+	s.enter_floor(1, 0, false, run.floor_employees[0], 12, run.acolytes_on(1))
+	for _i in run.acolytes_on(1):
+		s.acolyte_stopped()
+	s.check_clean(0)
+	s.extract(2)
+	Ledger.damage("Suit of armour", 6000, wick)
+	s.enter_floor(2, 0, false, run.floor_employees[1], 14, run.acolytes_on(2))
+	for _i in run.acolytes_on(2) - 1:
+		s.acolyte_stopped()   # (one got away)
+	s.check_clean(0)
+	Ledger.damage("Marble bust", 4500, rebar)
+	Ledger.damage("Silver candelabra", 1800, wick)
+	Ledger.damage("Silver candelabra", 1800, gasket)
+	s.employee_lost("Pearl (valet)", "Wick")
+	s.enter_floor(3, 0, false, run.floor_employees[2], 18, 0, true)
+	s.grimoire_closed("burned")
+	s.check_clean(0)
+	s.extract(1)
+	Ledger.damage("Grand piano", 14000, gasket)
 	s.finish(ContractSession.END_CASHED_OUT)
 	var inv := ContractInvoice.build(s)
 	for h in [wick, rebar, gasket]:

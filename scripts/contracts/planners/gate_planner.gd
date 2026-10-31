@@ -5,7 +5,8 @@ extends RefCounted
 ## SiteBuilder.plan / spawn call them; moved out of SiteBuilder verbatim (refactor plan H8).
 ## A haunted contract (ContractRun.has_gates false: the dead family) gets no gate at all: floors 1-2 plan none (its
 ## floor_gates are 0) and the last floor picks its origin room the same way (where the story says it started: its theme,
-## its story note) but puts no origin gate in it.
+## its story note) and puts its GRIMOIRE where the origin gate would stand (SitePlan.grimoire, haunted-build-plan.md H6;
+## spawn_grimoire puts it in the world, last of the actors).
 
 
 const GATE_START_CLEAR := 5
@@ -48,6 +49,8 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, p: SitePlan, rng: 
 		p.origin_room = pick
 		if spot != SiteBuilder.NO_SPOT and run.has_gates():
 			p.gates.append({"cell": spot, "origin": true, "room": pick})
+		elif spot != SiteBuilder.NO_SPOT:
+			p.grimoire = {"cell": spot, "room": pick}   # (no dice: the spot the origin gate's rule picks)
 		return
 	var count: int = run.floor_gates[floor_n - 1]
 	var chosen: Array[String] = []
@@ -114,6 +117,14 @@ static func _gate_spot(map: HexMap, p: SitePlan, tag: String, radius: int, avoid
 			if ok:
 				return c
 	return SiteBuilder.NO_SPOT
+
+
+## A haunted floor's grimoire (SitePlan.grimoire), facing the game camera: SiteBuilder.spawn calls it after the ghosts, so
+## no earlier actor's net id moves. Nothing on any other floor.
+static func spawn_grimoire(run: ContractRun, p: SitePlan, site: SiteBuilder.Site) -> void:
+	if p.grimoire.is_empty():
+		return
+	site.grimoire = Grimoire.place(p.grimoire["cell"], {"difficulty": run.difficulty, "depth": p.floor_number, "yaw": Grimoire.FACING})
 
 
 ## The planned gates, in plan order, each with the monster under its room.

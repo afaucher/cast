@@ -58,6 +58,8 @@ static func score(room: String, plan: SitePlan) -> float:
 	for g in plan.gates:
 		if g["room"] == room:
 			s += SCORE_ORIGIN if bool(g["origin"]) else SCORE_GATE
+	if not plan.grimoire.is_empty() and plan.grimoire["room"] == room:
+		s += SCORE_ORIGIN   # (a haunted last floor's grimoire: as the origin gate)
 	if int(plan.pack_budgets.get(room, 0)) > 0:
 		s += SCORE_PACK
 	return s

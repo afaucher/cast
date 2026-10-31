@@ -2,14 +2,18 @@ class_name ContractRun
 extends RefCounted
 ## One generated contract (a job card): client, site type, pest family, story, pest, difficulty, three floors,
 ## the paid objectives and the contract value. Pure data; deterministic per (archetype, seed, difficulty).
-## A haunted contract (family "dead", a mansion or church client) has no hellgates: its objectives are the pest per floor
-## (paid DEAD_PEST_BONUS more), the ACOLYTES of floors 1-2 (H4: each procession brings two, each paid when killed, as a
-## hellgate is when closed) and the staff.
+## A haunted contract (family "dead", a mansion or church client) has no hellgates. Its invoice reads like a hellgate
+## contract's (haunted-build-plan.md, "H6 as built"): the ACOLYTES of floors 1-2 where the small gates would be (H4: each
+## procession brings two, each paid when killed), the GRIMOIRE on the last floor where the origin gate would be (H6: paid when
+## it is slammed shut or burned), the pest per floor at the standard rate, and the staff. Ghosts and their hosts pay nothing
+## (a broken antique bills, as any).
 ##
 ## Pay (docs/design/contracts.md; the base rates are the dispatch standard, the client's pay_scale
 ## multiplies the first three and everything is rounded to $100):
 ##   close a small hellgate (floors 1-2) ......... $3,000 each        (GATE_PAY)
 ##   close the ORIGIN gate (floor 3) ............. $10,000             (ORIGIN_PAY)
+##   a haunted contract instead: stop an acolyte (floors 1-2) $2,500 each (ACOLYTE_PAY); shut the GRIMOIRE (floor 3)
+##       $10,000 (GRIMOIRE_PAY); the floor-3 pest pays once the grimoire is shut, as once the origin gate is
 ##   exterminate the pest ........................ $10,000 in total    (PEST_PAY) -- x1.4 for "everything"
 ##       paid per floor as that floor becomes clean: 30% / 30% / 40%
 ##       (clean = every hellgate on the floor closed AND no pest-kind monster left alive on it)
@@ -24,10 +28,10 @@ const ORIGIN_PAY := 10000
 const PEST_PAY := 10000
 const EVERYTHING_MULT := 1.4
 const PEST_SPLIT: Array[float] = [0.3, 0.3, 0.4]   ## share of the pest pay per floor (floor 1, 2, 3)
-## A haunted contract (no hellgates: ClientArchetype.FAMILY_DEAD) adds this to its pest pay before the client's scale, so
-## its one paid objective is worth about what a hellgate contract's origin gate is (H1; the grimoire brings its own pay line
-## in H6). The acolytes (H4) are paid beside it, as a hellgate contract's small gates are.
-const DEAD_PEST_BONUS := 10000
+## A haunted contract's grimoire (haunted-build-plan.md, "H6 as built"): shutting it pays GRIMOIRE_PAY (times the client's
+## scale), as the origin gate's ORIGIN_PAY. (It replaced H1's DEAD_PEST_BONUS, which had put the origin gate's worth on the
+## pest while a haunted contract had no source to close.)
+const GRIMOIRE_PAY := 10000
 ## A haunted contract's acolytes (haunted-build-plan.md, "H4 as built"): each one killed pays ACOLYTE_PAY (times the client's
 ## scale). Floor 1 has one procession of ACOLYTES_EACH acolytes, floor 2 one (two on a job at PROCESSION_HARD or more), the last
 ## floor none (the grimoire's, H6).
@@ -59,7 +63,9 @@ var pest_floor_pay: Array[int] = []
 ## killed pays (0 without any).
 var floor_processions: Array[int] = [0, 0, 0]
 var acolyte_pay := 0
-## {kind: "gate"|"origin"|"acolyte"|"pest", floor: int, pay: int, label: String}
+## What shutting a haunted contract's grimoire pays (0 on a hellgate contract).
+var grimoire_pay := 0
+## {kind: "gate"|"origin"|"acolyte"|"grimoire"|"pest", floor: int, pay: int, label: String}
 var objectives: Array[Dictionary] = []
 var contract_value := 0
 ## The job's elevator (docs/design/elevator-options.md): its look ("service" freight or "fancy" brass) and its placement
@@ -80,7 +86,7 @@ func net_fields() -> Dictionary:
 		"invoice_number": Net.SPAWN, "floor_gates": Net.SPAWN, "floor_employees": Net.SPAWN,
 		"gate_pay": Net.SPAWN, "origin_pay": Net.SPAWN, "pest_pay": Net.SPAWN,
 		"pest_floor_pay": Net.SPAWN, "objectives": Net.SPAWN, "contract_value": Net.SPAWN,
-		"floor_processions": Net.SPAWN, "acolyte_pay": Net.SPAWN,
+		"floor_processions": Net.SPAWN, "acolyte_pay": Net.SPAWN, "grimoire_pay": Net.SPAWN,
 		"elevator_look": Net.SPAWN, "elevator_place": Net.SPAWN,
 	}
 
@@ -119,9 +125,9 @@ static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 	r.origin_pay = ClientArchetype.round_pay(ORIGIN_PAY * scale)
 	if r.total_acolytes() > 0:
 		r.acolyte_pay = ClientArchetype.round_pay(ACOLYTE_PAY * scale)
+	if r.has_grimoire():
+		r.grimoire_pay = ClientArchetype.round_pay(GRIMOIRE_PAY * scale)
 	var pest_total: float = PEST_PAY * scale * (EVERYTHING_MULT if r.pest == "everything" else 1.0)
-	if not r.has_gates():
-		pest_total += DEAD_PEST_BONUS * scale   # (the haunted contract's only objective carries what the origin gate would)
 	r.pest_pay = ClientArchetype.round_pay(pest_total)
 	r._build_objectives()
 	var style: Array = ELEVATOR_STYLES[elevator_style_index(run_seed)]
@@ -160,6 +166,8 @@ func _build_objectives() -> void:
 			objectives.append({"kind": "gate", "floor": f + 1, "pay": gate_pay, "label": "Close hellgate (floor %d)" % (f + 1)})
 		if f == FLOOR_COUNT - 1 and has_gates():
 			objectives.append({"kind": "origin", "floor": f + 1, "pay": origin_pay, "label": "Close the ORIGIN gate (floor %d)" % (f + 1)})
+		if f == FLOOR_COUNT - 1 and has_grimoire():
+			objectives.append({"kind": "grimoire", "floor": f + 1, "pay": grimoire_pay, "label": "Shut the grimoire (floor %d)" % (f + 1)})
 		for _i in acolytes_on(f + 1):
 			objectives.append({"kind": "acolyte", "floor": f + 1, "pay": acolyte_pay, "label": "Stop an acolyte (floor %d)" % (f + 1)})
 		objectives.append({"kind": "pest", "floor": f + 1, "pay": pest_floor_pay[f], "label": "%s (floor %d)" % [pest_label(), f + 1]})
@@ -184,6 +192,11 @@ func has_gates() -> bool:
 ## The monster kinds this contract's packs may use ([] = any: the gate family's mix).
 func family_kinds() -> Array[String]:
 	return ClientArchetype.family_kinds(family)
+
+
+## True for a haunted contract (the dead family): its last floor's source is a grimoire (H6), not an origin gate.
+func has_grimoire() -> bool:
+	return family == ClientArchetype.FAMILY_DEAD
 
 
 func total_gates() -> int:
@@ -235,6 +248,8 @@ func card_lines() -> Array[Dictionary]:
 		lines.append({"label": "Close the ORIGIN gate", "pay": origin_pay, "each": false})
 	if total_acolytes() > 0:
 		lines.append({"label": "Stop %d acolytes" % total_acolytes(), "pay": acolyte_pay, "each": true})
+	if has_grimoire():
+		lines.append({"label": "Shut the grimoire", "pay": grimoire_pay, "each": false})
 	lines.append({"label": pest_label(), "pay": pest_pay, "each": false})
 	lines.append({"label": "Staff: %d to extract" % total_employees(), "pay": EMPLOYEE_EXTRACTED, "each": true})
 	return lines

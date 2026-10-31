@@ -5,8 +5,10 @@ built": the `zombie` monster kind wears `ZombieModel`, mourner or digger, its bo
 `pose_rise(k)` and burns into the charred build); **the cowl acolyte and the procession are the game's since 2026-10-31**
 (haunted-build-plan.md, "H4 as built": the `acolyte` monster kind wears `AcolyteModel` "cowl" with its lantern light, its raise
 is `set_raise` from the wind-up, and `Procession` walks the approved formation, GAP and four zombies and a rear acolyte, on
-`ProcessionPath`, the path this look test's loop now runs on too). The mask acolyte, this lab's `NecroProcession` loop and the
-grimoire are still look-dev only. The test exists in the gym (`--gym`) and in a look lab, and its job is to help the user decide how the
+`ProcessionPath`, the path this look test's loop now runs on too); **the grimoire on its altar is the game's since 2026-10-31**
+(haunted-build-plan.md, "H6 as built": the `Grimoire` actor wears `GrimoireModel` "altar", asleep as the shut book with the live eye,
+open / weakened / failing by its phases, and at the end shut with the eye dead, or burnt). The mask acolyte, the lectern and this
+lab's `NecroProcession` loop are still look-dev only. The test exists in the gym (`--gym`) and in a look lab, and its job is to help the user decide how the
 haunted contracts' necromancer family should look.
 
 The decisions this serves (new-themes.md, "Ghost house: haunted contracts"):

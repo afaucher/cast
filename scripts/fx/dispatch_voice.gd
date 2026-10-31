@@ -86,6 +86,8 @@ static func all_lines() -> Array[Dictionary]:
 			for text in _fills(t, values):
 				_add(out, seen, text, kind)
 	_add(out, seen, NoteCopy.ORIGIN_SHUT, "origin_shut")
+	_add(out, seen, NoteCopy.GRIMOIRE_SHUT, "call")   # (H6: a haunted last floor's grimoire closed)
+	_add(out, seen, NoteCopy.GRIMOIRE_BURNED, "call")
 	_add(out, seen, NoteCopy.WIPE, "wipe")
 	for t: String in [NoteCopy.FLOOR_CLEAN, NoteCopy.STAFF_LOST, NoteCopy.YOU_DOWN, NoteCopy.EXIT_DOWN, NoteCopy.EXIT_OUT]:
 		_add(out, seen, t, "call")

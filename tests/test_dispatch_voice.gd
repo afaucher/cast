@@ -67,6 +67,8 @@ func _check_lines() -> void:
 	for pest: String in ClientArchetype.PEST_NAMES:
 		check(texts.has(NoteCopy.fill(NoteCopy.DISPATCH[2][0], {"pest": ClientArchetype.pest_name(pest)})), "floor 2 pest line listed for %s" % pest)
 	check(texts.has(NoteCopy.ORIGIN_SHUT), "the origin-gate line is listed")
+	for t: String in [NoteCopy.GRIMOIRE_SHUT, NoteCopy.GRIMOIRE_BURNED]:
+		check(texts.has(t), "the grimoire's line is listed (H6): %s" % t)
 	for t: String in [NoteCopy.WIPE, NoteCopy.FLOOR_CLEAN, NoteCopy.STAFF_LOST, NoteCopy.YOU_DOWN, NoteCopy.EXIT_DOWN, NoteCopy.EXIT_OUT]:
 		check(texts.has(t), "the call is listed: %s" % t)
 	# the sewer's calls (sewer polish, 2026-10-21): the service level, the gator, the live wire; no names, short

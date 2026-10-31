@@ -26,7 +26,8 @@ var end_reason := ""
 ## crew seat (1-3) -> {"hp": float, "dead": bool}; a hero without a seat (tests, the arena) is keyed by its display_name
 var carry: Dictionary = {}
 ## floor -> {gates_total, gates_closed, origin, origin_closed, employees, extracted, lost, pest_spawned, pest_paid,
-## acolytes_total, acolytes_stopped}
+## acolytes_total, acolytes_stopped} and, on a haunted last floor (H6), grimoire (true) and grimoire_closed ("" open,
+## "shut" or "burned")
 var floors: Dictionary = {}
 ## [{name, cause, floor}] employees that died
 var lost: Array[Dictionary] = []
@@ -65,8 +66,9 @@ func descend() -> void:
 	floor_number += 1
 
 
-## The crew arrives on floor `f` with what the site builder placed there (`acolytes`: a haunted floor's, H4).
-func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spawned: int, acolytes: int = 0) -> void:
+## The crew arrives on floor `f` with what the site builder placed there (`acolytes`: a haunted floor's, H4; `grimoire`: a
+## haunted last floor has one, H6).
+func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spawned: int, acolytes: int = 0, grimoire: bool = false) -> void:
 	_log_floor_done("elevator")
 	_floor_t0 = GameWorld.time
 	floor_number = f
@@ -78,6 +80,9 @@ func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spaw
 		"pest_spawned": pest_spawned, "pest_paid": false,
 		"acolytes_total": acolytes, "acolytes_stopped": 0,
 	}
+	if grimoire:
+		floors[f]["grimoire"] = true
+		floors[f]["grimoire_closed"] = ""
 
 
 func state(f: int = -1) -> Dictionary:
@@ -155,6 +160,22 @@ func acolyte_stopped(who: Node = null) -> int:
 	return run.acolyte_pay
 
 
+## The grimoire was closed (haunted-build-plan.md H6): `how` "shut" (slammed shut) or "burned". Pays the grimoire rate once.
+## Returns the pay (0 on a floor without one, or once paid).
+func grimoire_closed(how: String, who: Node = null) -> int:
+	var st := state()
+	if st.is_empty() or not bool(st.get("grimoire", false)) or str(st.get("grimoire_closed", "")) != "":
+		return 0
+	st["grimoire_closed"] = how
+	Ledger.earn(GRIMOIRE_LINES.get(how, GRIMOIRE_LINES["shut"]), run.grimoire_pay, who)
+	return run.grimoire_pay
+
+
+## The grimoire's Ledger line by how it closed.
+const GRIMOIRE_LINES := {"shut": "Grimoire slammed shut", "burned": "Grimoire burned"}
+
+
+## The floor's sources still open: its hellgates, its origin gate and (a haunted last floor) its grimoire.
 func gates_open(f: int = -1) -> int:
 	var st := state(f)
 	if st.is_empty():
@@ -162,10 +183,13 @@ func gates_open(f: int = -1) -> int:
 	var open: int = int(st["gates_total"]) - int(st["gates_closed"])
 	if bool(st["origin"]) and not bool(st["origin_closed"]):
 		open += 1
+	if bool(st.get("grimoire", false)) and str(st.get("grimoire_closed", "")) == "":
+		open += 1
 	return open
 
 
-## A floor is CLEAN when its gates are all closed and no pest-kind monster is left alive on it.
+## A floor is CLEAN when its gates (and a haunted last floor's grimoire) are all closed and no pest-kind monster is left
+## alive on it.
 ## Call with the current pest count; pays this floor's share of the pest objective once.
 ## A floor that never had any pest on it pays nothing (nothing to exterminate).
 func check_clean(pest_alive: int, who: Node = null) -> int:
