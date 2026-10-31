@@ -36,6 +36,8 @@ The defaults (my picks, see "How they read") are in bold.
 
 **The user's read (2026-10-31):**
 - Which rat: "Sewer brute" (over the runner, the agent's pick). It keeps its dark bead eyes for now.
+- Which blob: "Mass of faces" (over the jelly, the agent's pick). Its faces show only as dark specks at the game camera,
+  so they need to read bigger or brighter when it is built.
 
 ## The rats
 
