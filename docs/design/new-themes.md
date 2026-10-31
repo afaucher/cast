@@ -87,7 +87,9 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
   Proposal: in ghost form you see free ghosts clearly and they do not flee from you.
 - **Ghost form passes through regular enemies, so it is for fighting ghosts** [decided, 2026-10-31]. The user: "ghost form
   makes it so that you can pass through regular enemies, because you can walk through them[.] So it's for fighting
-  ghosts[.]" Still open: whether a ghost-form hero can hit or be hit by regular enemies, and its duration and cooldown.
+  ghosts[.]" **Regular enemies still hit a ghost-form hero** (2026-10-31): "A hero in ghost form can be hit by regular
+  enemies. You can pass through them but if you wind up in their attack[,] you get hit." Passing through is movement only,
+  not safety. Still open: whether a ghost-form hero can hit regular enemies, and its duration and cooldown.
 - **Evicting a ghost without breaking its host: wanted, deferred** [2026-10-31]. The user: "We will have to add a way to
   evict ghosts without breaking them. I just haven't thought of one yet. Let's defer."
 - **Breaking a possessed antique bills the crew; bones do not** [decided, 2026-10-31]. The user: "Breaking a possessed
@@ -130,5 +132,5 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 Answered 2026-10-31: the source (acolytes on floors 1-2, the grimoire on the last), the haunting tied to the site, and one
 pest family per contract (The mission); ghost form passes through regular enemies, and a broken possessed antique bills
 the crew but bones do not (Ghosts). Still open:
-1. Ghost form: can a ghost-form hero hit or be hit by regular enemies, and its duration and cooldown.
+1. Ghost form: can a ghost-form hero hit regular enemies (they can hit it, decided), and its duration and cooldown.
 2. Evicting a ghost without breaking its host (wanted, deferred).
