@@ -159,6 +159,23 @@ extends RefCounted
 ## their miss budget). The new hotword made no phantoms (idle noise and digital silence as before, none through the gate),
 ## and no order clip cast it.
 ##
+## GHOST (12th spell; measured 2026-10-31 with TTS, David + Zira, rates -3/0/+3, through the real model with the twelve-word
+## vocabulary: tests/test_voice_audio.gd, test_voice_triggers.gd, test_voice_noise.gd, test_voice_orders.gd). Every deliberate
+## clip (13 of 13: clean in both voices, both rates in both voices, "okay / please cast ghost", "cast ghost now", "cast ghosts",
+## "cast ghost on me", a 300 / 500 ms pause) fired ghost and nothing else, 0.96 to 1.00, about 160-330 ms after the voice stops
+## (partial ladder "CAST GHO" / "CAST GHOST"; GHO does nothing); no other spell's clip fired it. "ghosts" is accepted exactly; no
+## measured mishearing to alias. The look-alikes are heard as themselves and do not cast: "host" HOST, "post" POST, "toast" TOAST,
+## "most" MOST, "coast" CO AST; "cast host / post" fizzle ("garbled": spell-ish), "cast coast / toast" fizzle ("unknown_spell").
+## EXCEPT "goes": both voices write a bare "goes" as "GHOST" (the hotword's pull), a true hearing of the spell word like "binds"
+## for vines: bare it casts in chaos only, after the trigger it casts ("cast goes" is no phrase anyone says). Chatter that really
+## says it ("watch out for the ghost", "there's a ghost": a haunted floor's talk) casts in chaos only (0.83 to 0.91, flagged
+## accidental); loose needs the trigger. David's BARE "ghost" (no trigger) is sometimes cut to "GHO" (or "GHO ST"), so chaos
+## cannot count on it, as David's bare "vines"; "gho" is not aliased (it is the partial every "ghost" streams through). Not a
+## mention word. The orders' "go" is untouched: test_voice_orders hears 98% of the
+## order clips right in loose with no cast and no false order (no "<name> ghost"). Triggers: "summon ghost" is heard "SOMEONE
+## GHOST" (summon's known weak spot, as "summon heal"), "abracadabra ghost" mangled as every abracadabra. The new hotword made no
+## phantoms (idle noise and digital silence as before, none through the gate).
+##
 ## VOICE ORDERS (2026-10-19; docs/design/combat-proposals.md 1.0 / 1.8): "<name> <go | attack | follow>" gives an event
 ## {"kind": "order", "who": name key, "order", "heard", "gap", "at_start", "accidental", "t"}. The name is the trigger (no
 ## "cast"); the order word must be the very next token, within `order_window` of recognition time (timed from when each

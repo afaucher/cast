@@ -7,6 +7,8 @@ extends RefCounted
 ##   --haunt-demo fight|break  after --demo-after seconds (1.0); the AI allies hold:
 ##        fight  the host comes at the player (it sees them: aggro)
 ##        break  the player breaks the host (a hit for its HP: the bill is the player's): its ghost pops out and flies off
+##        ghost  (H7, --spells ghost,...) the player casts Ghost and walks at the host, through it as it comes (it still chops)
+##        ghost_wisp  (H7) the player breaks the host and casts Ghost: its ghost out shows clearly and does not run from them
 ## No keybinding.
 
 const NEAR_MIN := 4
@@ -105,3 +107,46 @@ static func demo(game: Node, h: HauntHost, stage: String) -> void:
 				var rig: Variant = game.get("rig")
 				if rig != null:
 					rig.set("target", w)
+		"ghost":
+			# H7: the player casts Ghost (--spells ghost,...) and walks straight at the host, through it as it comes
+			_cast_ghost(game)
+			if player != null:
+				h.aggro(player)
+				_walk(game, h.global_position - player.global_position, WALK_T)
+		"ghost_wisp":
+			# H7: the player breaks the host, then casts Ghost: the ghost out shows clearly and does not run from them
+			var w := h.ghost
+			var at := h.global_position
+			h.apply_damage(h.hp + 1.0, player)
+			_cast_ghost(game)
+			if w != null and is_instance_valid(w) and opts.get("focus", "") == "haunt":
+				var rig: Variant = game.get("rig")
+				if rig != null:
+					rig.set("target", w)
+			if player != null:
+				_walk(game, at - player.global_position, WALK_T * 0.5)   # (after it: it lets the player close in)
+
+
+## The ghost demos' walk (H7): seconds the player walks at the host.
+const WALK_T := 2.4
+
+
+## The player casts Ghost through its own controller, as a voice cast would (it must be slotted: --spells ghost,...).
+static func _cast_ghost(game: Node) -> void:
+	var c := game.get("controller") as PlayerController
+	if c != null and c.hero != null:
+		c.hero.reset_spell_cooldowns()
+		if not c.cast_spell("ghost", 1.0):
+			push_warning("HauntDev: the player could not cast ghost (slot it: --spells ghost,...)")
+
+
+## The player walks along `dir` for `seconds` (the controller's scripted walk), then stops.
+static func _walk(game: Node, dir: Vector3, seconds: float) -> void:
+	var c := game.get("controller") as PlayerController
+	if c == null:
+		return
+	dir.y = 0.0
+	c.move_override = dir.normalized() if dir.length() > 0.01 else Vector3.ZERO
+	await game.get_tree().create_timer(seconds).timeout
+	if is_instance_valid(c):
+		c.move_override = Vector3.INF

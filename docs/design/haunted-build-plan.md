@@ -1,7 +1,7 @@
 # Haunted contracts: build plan
 
-Status: **[proposal; H1, H2, H3, H3b, H4, H5 and H6 built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built", "H3b as
-built", "H4 as built", "H5 as built" and "H6 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
+Status: **[proposal; H1, H2, H3, H3b, H4, H5, H6 and H7 built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built", "H3b
+as built", "H4 as built", "H5 as built", "H6 as built" and "H7 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
 build it in. The user (2026-10-31): "Let's build it as is" (today's roster; more enemy types are worked out in parallel).
 
 Today none of it is game code: the mansion and church rooms, the crypt, the zombies, acolytes, ghosts, hosts and the
@@ -122,11 +122,13 @@ Checked against the code, possession needs **no new shape**: nothing turns from 
 ### H7. Ghost form
 - The Ghost spell cast on yourself: a whole-body transform; you pass through regular enemies but still get hit by their
   attacks; it is for fighting ghosts. Open: whether a ghost-form hero can hit regular enemies, its duration and cooldown.
-- Networking: a status on the hero (its owner resolves and announces it); the pass-through flag already replicates.
+- Networking: a status on the hero (its owner resolves and announces it); the pass-through flag already replicates. (Built: see
+  "H7 as built"; the status is a modifier of its own, `Actor.STAT_GHOST`, not the pass-through flag.)
 
 ### Later
 - Ectoplasm as the infestation layer (slicks the floor, Damp washes it away). The crypt rats and the ecto blob are step H3b now.
-- Evicting a ghost without breaking its host (wanted, deferred). Ghost mode after a hero dies (a big build, later).
+- Evicting a ghost without breaking its host (wanted, deferred). Ghost mode after a hero dies (a big build, later; H7's ghost form
+  and its look are what it would start from).
 
 ## Tests per step
 Each step runs its touched tests plus `test_net_contract`, `test_golden_floor` and the generation tests it touches; the
@@ -1095,3 +1097,142 @@ object on its altar with the live eye (necro-look.md: the altar, "I like the big
 - No sounds of its own (a page-flutter for the burst, a slam, a roar of flame); its banners' voice clips are not rendered.
 - It was judged on stills at the game camera (`grimoire_game/`), not in play. Its numbers (HP, rate, the 6x fire) are untried.
 - The H3 decision still open: whether Heal raises zombies. H7 (Ghost form) is next.
+
+## H7 as built (2026-10-31)
+
+The user (2026-10-31), as for H1-H6: "Just build it now. We can revisit the decisions after it's built." The decided frame: ghost
+form "makes ghosts easier", not possible; a whole-body transform ("For now"); "ghost form makes it so that you can pass through
+regular enemies, because you can walk through them[.] So it's for fighting ghosts"; "A hero in ghost form can be hit by regular
+enemies. You can pass through them but if you wind up in their attack[,] you get hit." The old "make an enemy lose its target"
+use is skipped; ghost mode after death is a later build. Every open call below was made on the spot, the simplest sound choice,
+and is listed to revisit.
+
+### Play it
+
+```
+.\run.ps1 --client heir --seed 3 --floor 1 --spells ghost,coffee --no-mic --to-haunt 0 --haunt-demo ghost --demo-after 0.5 --focus haunt --zoom 9
+         # the player casts Ghost and walks at the possessed knight, straight through it as it comes (its chop still lands)
+.\run.ps1 --client heir --seed 3 --floor 1 --spells ghost,coffee --no-mic --to-haunt 0 --haunt-demo ghost_wisp --demo-after 0.5 --focus haunt --zoom 9
+         # the player breaks the knight and casts Ghost: its ghost out shows clearly and flies on to its next host, not away
+.\run.ps1 --client heir --seed 3 --spells ghost,coffee --no-mic        # a haunted contract with Ghost slotted: say "cast ghost"
+.\run.ps1 --gym --no-mic   # the gym's spell rows have Ghost (slot it); Spawn > Monster "Wisp" or "Armour (possessed)" to try it on
+```
+
+- `--spells ghost,...` starts with it slotted (any contract; the license requisition offers it too, its twelfth line). On a haunted
+  floor its component drops from the ghosts, the ecto blobs and the acolytes.
+- `--haunt-demo ghost|ghost_wisp` (`scripts/app/dev/haunt_dev.gd`) are the two new stages beside H5's `fight` and `break`: the player
+  casts Ghost through its own controller (as a voice cast) and walks by the controller's scripted walk. No keybinding.
+- Screenshots (the game camera at zoom 9, heir 3 floor 1, the wine cellar), `docs/design/ghost_form_game/`: `into_knight.png` (Wick
+  in ghost form, the pale corpse in its warm ghost, walking into the possessed knight), `through_knight.png` (inside it: the two
+  overlap, neither pushed), `past_knight.png` (out the far side, the knight behind; the chop took a bite of the HP bar on the way),
+  `wisp_near.png` (the knight broken, "-$6,000 Suit of armour (Wick)"; Wick in ghost form right beside the ghost out on its plinth,
+  the ghost in the clear look), `wisp_clear.png` (the same ghost flying on to its next host in the clear look, Wick back with
+  Rebar; compare `haunt_game/wisp_free.png`, H5's soft look of the same moment).
+- No exit code 255 in this step's six screenshot runs (every one exited 0).
+
+### What was built
+
+| Piece | Where | What |
+|---|---|---|
+| The spell | `scripts/spells/defs/ghost.gd` (`GhostSpell`), `SpellBook.DEFS` (the twelfth) | "cast ghost". The CASTER, wherever the aim is (a self-buff: no target, no snap onto a teammate): ghost form for `ghost_duration(power)` (6 s + 4 x power: 10 s at full power). Cooldown 20 s. Colour a pale spectral blue |
+| Ghost form | `Actor.STAT_GHOST`, `Actor.is_ghost_form`, `GhostSpell.transform` / `MOD` | A modifier (the verb `set_modifier`, presence only), so it is a status like armor's or coffee's: refreshed by a new cast, never stacked, gone when it runs out. Going down ends it (`Hero._on_death`) |
+| Walking through | `Actor._separate` / `_walks_through` | An actor in ghost form and a regular monster neither push nor are pushed by each other, both ways (the hero's separation skips the monster, the monster's skips the hero). Movement only: every attack still lands, theirs and the hero's. A ghost (a `Wisp`) is no regular enemy: it bumps a ghost-form hero. Teammates, staff, props and gates bump as ever |
+| The look | `Hero._update_ghost_form` (`_ghost_shown`), `GhostForm` (the look test's, now in the game) | While `is_ghost_form()` the hero's model wears GhostForm (the pale corpse in a warm ghost of its own shape, never the enemy ghosts' cold blue; no shadow), on every screen from the status; a warm puff as it comes and goes (`GhostSpell.puff`). A seat handover (`become`) dresses the new model. The gym's own "Ghost form" experiment is unchanged |
+| The edge against ghosts | `Wisp._nearest_to_flee`, `Wisp._process` / `seen_by_ghost`, `WispModel.set_clear` | A free ghost never keeps away from a hero in ghost form (it keeps away from the others as before; with a host in range it flies to it as before). While THIS screen's own hero is in ghost form every free ghost on it shows clearly: GhostLook's "strong" (alpha 0.5 against soft's 0.22, its light 1.4 against 0.5) |
+| The component | `GhostSpell.component_soup`, `MonsterDefs` drops | **Ectoplasm**: a quivering glob of pale blue ectoplasm with a drip and its bead. Drops (rolled after each kind's older entries, so their dice stay put): the ghost (`wisp`) 50 %, the ecto blob 15 %, the acolyte 15 %. Only the dead family has them, so a hellgate floor never drops it (a mail package can hold any spell's component, this one too) |
+| Voice | `GhostSpell.VOICE`, `tools/make_voice_clips.ps1`, Incantation's GHOST note | "ghost" and "ghosts"; the measurements below |
+| Dev | `HauntDev` | `--haunt-demo ghost`, `--haunt-demo ghost_wisp` (above). The gym's spell rows list it (`SpellBook.ids()`) |
+
+### The networking checklist (networking.md)
+1. **Shape: a status of the caster** (the shape of armor's and coffee's modifiers): the cast is an event that lands on every machine at
+   the same moment (`SpellBook.apply`); only the caster's owner applies it (`Net.resolves`) through the verb `set_modifier`, and
+   `NetStatus` announces it (`st` "mods"). No new shape, event or request.
+2. **Vars.** `Hero._ghost_shown` LOCAL (each screen's look). The state itself is Actor's `_modifiers` (OWNER, carried by `st`).
+   `GhostSpell` is a def (consts and static funcs: no state). `WispModel.clear` / `_lit` are cosmetic (art). Nothing else new.
+3. **Verbs.** `set_modifier` / `clear_modifier` on the owner only; nobody writes another actor's state.
+4. **Randomness.** None (the puff is Fx's own).
+5. **Motion.** Each machine moves what it owns: the owner's hero walks through the monsters it has (its copies of the host's), the
+   host's monsters walk through the hero's copy from its announced modifier. A copy is placed by its owner's stream anyway.
+6. **Cosmetic:** the ghost form's look and puff, the clear ghosts (per screen: only a screen whose own hero is a ghost). **Gameplay:**
+   the status (who walks through what; who a ghost keeps away from, decided by the host's ghost AI from the announced status).
+7. **A late joiner** gets it with the statuses (`NetStatus.late_join_state`: the host's copy of the player's hero carries the modifier
+   it was told; `NetEvents.LATE_JOIN`'s "statuses: replay" for heroes); its screen then shows the look from it.
+8. **The scenario:** `tests/test_net_ghost.gd` (below).
+- **Not the pass-through flag.** The plan said "the pass-through flag already replicates" (`Actor.pass_through_until`, NetCodec's
+  FLAG_GHOST). It is the AI allies' squeeze past each other, and through EVERYTHING (teammates, props); ghost form is through regular
+  monsters only and must reach a late joiner and show a look, which a status does already. So the flag stays the squeeze, untouched.
+
+### The calls made (to revisit)
+1. **Self only:** the cast is always on the caster, wherever the aim points (the old design's "nearest actor to the aim, a teammate or
+   an enemy" is skipped with the enemy use). Pointing it at a teammate could come later.
+2. **A ghost-form hero hits regular enemies as ever** (swings, arrows, spells): passing through is movement only, both ways; it is
+   "for fighting ghosts" because of the edge below, not because it is weak elsewhere. It walks through monsters, so it is also a way
+   out of a crowd, whose blows still land.
+3. **Duration 6-10 s** by power (10 at full power), **cooldown 20 s** (17 s held), the Revive/coffee tier; a cast while in ghost form
+   refreshes it.
+4. **What "easier" means against ghosts:** a free ghost never keeps away from a hero in ghost form (it still flies to a dormant host
+   in range: it is not running from you), and a screen whose own hero is in ghost form sees free ghosts clearly (the "strong" look).
+   Your hits do the same damage. Pulling a ghost out of its host is not built (eviction is deferred).
+5. **A ghost bumps a ghost-form hero** (it is no regular enemy); teammates, staff and props bump as ever; hellgates and the grimoire
+   are not monsters, so they block as ever.
+6. **The look is the look test's GhostForm** (the pale corpse inside a warm ghost of the hero's shape), with no changes; the puff is
+   the ghost form's warm colour. Downed, it ends (and the look with it).
+7. **The component is Ectoplasm** (spells.md's "ectoplasm, a future ghost enemy"), a pale blue glob; it drops from the ghosts (50 %),
+   the ecto blobs and the acolytes (15 % each), so a crew meets it on floor 1 of a haunted contract. Not on hellgate floors.
+8. **The requisition keeps its eleven visible lines** (`SpellPicker.MAX_LINES`): the twelfth, Ghost, scrolls, as designed past the
+   line count (chicken and Revive each raised it; it was left alone this time, so the sheet's height is unchanged).
+9. **No sound of its own** (the cast and the puff are silent beyond the cast cue every spell has).
+10. **Voice:** "ghost" and "ghosts" only, no aliases (see below).
+
+### New player-facing strings (proposals for review)
+- Spell name **Ghost**; the spoken word **ghost** ("CAST GHOST" on the card).
+- Component **Ectoplasm** (the card, the pickup's label "Ectoplasm x3", the toasts "+3 Ectoplasm", "You have no Ectoplasm").
+- Description (the requisition's spec sheet): **"You turn into a ghost for ten seconds: you walk through monsters, but their blows
+  still land. Ghosts stop running from you."**
+- No form text, banner or dispatch line. Dev only: `--haunt-demo ghost|ghost_wisp`, the warning "HauntDev: the player could not cast
+  ghost (slot it: --spells ghost,...)".
+
+### Voice
+"ghost" is an ordinary English word, so the model needs no change: it is a hotword like every spell word (`Incantation.vocabulary`;
+`data/pron_dict.txt` only vets custom trigger words). Measured with TTS (David + Zira; the GHOST note in Incantation's header):
+- 13 of 13 deliberate clips (clean, rates -3 / +3 in both voices, "okay / please cast ghost", "cast ghost now", "cast ghosts",
+  "cast ghost on me", 300 / 500 ms pauses) fire ghost and nothing else at 0.96-1.00, about 160-330 ms after the voice stops; no
+  other spell's clip fires it.
+- The look-alikes are heard as themselves and never cast: "host", "post", "toast", "most", "coast" ("cast host / post" fizzle as
+  garbled, "cast coast / toast" as an unknown spell). **"goes" is heard as GHOST** in both voices (the hotword's pull): like "binds"
+  for vines, a bare "goes" casts in chaos only, and "cast goes" would cast (nobody says it). Chatter that says it ("watch out for the
+  ghost", "there's a ghost") casts in chaos only. David's bare "ghost" (no trigger) is sometimes cut to "GHO", so chaos cannot count
+  on it (as his bare "vines"); "gho" is not aliased.
+- The voice orders are untouched (`test_voice_orders`: 98 % of the order clips heard right in loose, no cast, no false order, no
+  "<name> ghost"); no phantoms from idle noise (`test_voice_noise`); "summon ghost" is heard "SOMEONE GHOST" (the summon trigger's
+  known weak spot, as "summon heal"), within the triggers' budget (`test_voice_triggers`).
+
+### Tests
+- `tests/test_spell_ghost.gd` (new, solo): the spell's row, word, component, prop, numbers and drops (the ghost about half the time,
+  never a hellgate kind); the cast transforms the CASTER (aimed at a teammate, who is untouched) for 10 s at full power, the look on
+  its model, a copy shows and drops it from the announced status; walking into a standing monster a plain hero bumps, a ghost-form
+  hero walks through and out the far side with the monster never pushed, a monster's own separation leaves the ghost be (and pushes
+  off a plain hero), a ghost (wisp) bumps it, teammates bump; a monster's strike still hits a ghost-form hero and its swing still hits
+  the monster; it ends after its duration (the look with it), a weak cast lasts about 6 s, going down ends it; the cooldown (20 s, the
+  second cast waits and spends nothing; 17.4 s held); a free ghost drifts beside a hero in ghost form instead of keeping away, shows
+  clearly (the strong look) on a screen whose own hero is the ghost and not for another player's, and keeps away again once it ends.
+- `tests/test_net_ghost.gd` (new, NetTest, `const PEERS := 3`, `off` and `coast`): board 9's heir contract, floor 1. c1 casts Ghost:
+  c1's hero is a ghost on c1 and in the look there; the host shows it in ghost form, in the look, for the cast's time, and its
+  monsters walk through it; c1 in a long ghost form while c2 joins: c2 (late) shows c1's hero in ghost form and in the look, with its
+  time left, and its own hero not; c1's form ends on c1: the host and c2 drop it; no OWNER-write guard on any machine.
+- Updated: `test_license_checkout`, `test_spell_slots` (twelve spells; Ectoplasm; mail can hold all twelve), `test_voice_incantation`
+  (the trigger and twelve spells: thirteen cards, five rows), `test_monster_defs` (the wisp drops components), `test_voice_audio`
+  (the ghost clips: the stems and the measured words).
+- Run and passing: `test_spell_ghost`, `test_net_ghost` (off and coast), `test_net_contract`, `test_golden_floor` (not re-recorded),
+  `test_haunted_contract`, `test_haunt`, `test_net_haunt` (off and coast), `test_spell_coffee`, `test_spell_revive`,
+  `test_spell_tentacles`, `test_spell_basic`, `test_spell_damp`, `test_spell_teeth`, `test_spell_vines`, `test_chicken`,
+  `test_spell_slots`, `test_license_checkout`, `test_ghost_look`, `test_haunt_look`, `test_gym`, `test_forms`, `test_main_menu`,
+  `test_monster_defs`, `test_monster_models`, `test_daze`, `test_net_codec`, `test_voice_incantation`, the real-model voice tests
+  `test_voice_audio`, `test_voice_orders`, `test_voice_triggers`, `test_voice_noise`, and the net tests `test_net_m4_casts`,
+  `test_net_m6_late_join` (each off and coast). The full suite was not run.
+
+### Not done in H7
+- No crew (two-PC) play; the net test covers the cast, the look on every screen, the walk-through on the host and the late join.
+- No sound of its own; the look and the clear ghosts were judged on stills at the game camera (`ghost_form_game/`), not in play.
+- Ghost mode after death (the user's later big build) and evicting a ghost without breaking its host (deferred) are not built.
+- The H3 decision still open: whether Heal raises zombies.

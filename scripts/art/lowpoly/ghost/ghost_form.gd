@@ -1,9 +1,11 @@
 class_name GhostForm
 extends Node
-## LOOK-DEV ONLY (docs/design/haunt-look.md): a hero in ghost form, the whole-body transform you cast on yourself
-## (new-themes.md "Ghost house", Ghosts: "For now"; later perhaps what a downed hero becomes). Cosmetic only: it changes
-## how one hero model is drawn and nothing else (no state on the Hero, nothing networked). The gym's Experiments row
-## "Ghost form" (GymDev "hero_ghost") puts the player's own model in it; the haunt look lab poses Wick and Rebar in it.
+## A hero in ghost form (docs/design/haunt-look.md, the look test), the whole-body transform you cast on yourself
+## (new-themes.md "Ghost house", Ghosts: "For now"; later perhaps what a downed hero becomes). In the game since H7
+## (haunted-build-plan.md "H7 as built"): Hero._update_ghost_form puts the model in it while the hero is in ghost form (the
+## Ghost spell's status, on every screen). Cosmetic only: it changes how one hero model is drawn and nothing else. The gym's
+## Experiments row "Ghost form" (GymDev "hero_ghost") puts the player's own model in it; the haunt look lab poses Wick and
+## Rebar in it.
 ##
 ## The hero's pale corpse inside its ghost (the user, 2026-10-29: "Maybe have the pale corpse inside instead?", after
 ## "make it just the ghost shape"): the hero's own body drained of colour and paled (its toon material, no colour, lit

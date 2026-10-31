@@ -115,14 +115,14 @@ const DEFS := {
 		"script": "res://scripts/monsters/ecto_blob.gd", "model": "res://scripts/art/lowpoly/crypt/ecto_blob_model.gd", "tris": 1900,
 		"pack": {"cost": 3, "weight": 1.5, "max": 1},
 		"family": "dead",
-		## damp washes its slick away
-		"drops": [{"spells": ["damp"], "chance": 0.20}, {"spells": ["heal"], "chance": 0.06}],
+		## damp washes its slick away; its ectoplasm is the Ghost spell's component (H7, rolled last: the older dice stay put)
+		"drops": [{"spells": ["damp"], "chance": 0.20}, {"spells": ["heal"], "chance": 0.06}, {"spells": ["ghost"], "chance": 0.15}],
 	},
 	"acolyte": {   ## the necromancer's acolyte (haunted-build-plan.md H4): flees, raises bodies; seed-built in a procession (ProcessionPlanner), never in a pack
 		"script": "res://scripts/monsters/acolyte.gd", "model": "res://scripts/art/lowpoly/necro/acolyte_model.gd", "tris": 3200,
 		"family": "dead",
-		## a fireball keeps what it raises down
-		"drops": [{"spells": ["fireball"], "chance": 0.25}, {"spells": ["heal"], "chance": 0.10}],
+		## a fireball keeps what it raises down; the ectoplasm of its rites (H7, rolled last)
+		"drops": [{"spells": ["fireball"], "chance": 0.25}, {"spells": ["heal"], "chance": 0.10}, {"spells": ["ghost"], "chance": 0.15}],
 	},
 	"armour": {   ## a suit of armour a ghost can possess (haunted-build-plan.md H5): seed-built by HauntPlanner, never in a pack
 		"script": "res://scripts/monsters/armour_host.gd", "model": "res://scripts/art/lowpoly/ghost/knight_model.gd", "tris": 1300,
@@ -137,6 +137,8 @@ const DEFS := {
 	"wisp": {   ## a ghost (H5): seed-built inside its first host by HauntPlanner; it moves between hosts, never in a pack
 		"script": "res://scripts/monsters/wisp.gd", "model": "res://scripts/art/lowpoly/ghost/wisp_model.gd", "tris": 400,
 		"family": "dead",
+		## a ghost leaves its ectoplasm: the Ghost spell's component (H7)
+		"drops": [{"spells": ["ghost"], "chance": 0.5}],
 	},
 }
 

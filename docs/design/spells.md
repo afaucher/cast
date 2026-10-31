@@ -17,6 +17,7 @@ and the aim snaps onto a teammate near the cursor. **[decided]** marks the user'
 | Coffee | cast coffee | +60% move and attack speed for 6 s, twitchy, then a 2 s crash (−30%); a downed ally gets up as a gray, leaking zombie | **everyone** in a small radius | in game |
 | Chicken | cast chicken | Four chickens scatter from the aim point for 12 s and peck everything for zero; a pecked monster chases its chicken | **everyone** (pecks for 0); monsters turn on them | in game |
 | Revive | cast revive | Stands every downed ally in a small radius back up at half health; lifts a coffee zombie's curse | heroes (the downed, and zombies) | in game |
+| Ghost | cast ghost | Ghost form on yourself for 6–10 s: you and the monsters walk through each other (their blows still land), and ghosts stop running from you | the caster | in game (2026-10-31) |
 
 ## Tentacles [in game; reshaped 2026-10-27]
 **"Cast tentacles":** neon-purple tentacles burst from the floor at the aim point and shove **everyone** out, then stay up
@@ -323,12 +324,23 @@ zombie (above) is the cheap one. Code: `ReviveSpell` (`scripts/spells/defs/reviv
   "survive", "rival" and "revival" never cast; "revive me" / "I need a revive" cast in chaos only. Details: the REVIVE note
   in `scripts/voice/incantation.gd`; clips in `tools/make_voice_clips.ps1`.
 
+## Ghost [in game, 2026-10-31]
+**"Cast ghost": ghost form, on yourself** (the haunted contracts' spell: `docs/design/haunted-build-plan.md`, "H7 as built", has the
+calls, the networking and the tests; `new-themes.md` "Ghosts" the user's decisions). The caster, wherever the aim is, turns into a
+ghost for 6 s + 4 x power (10 s at full power; cooldown 20 s): the look test's whole-body ghost form (`GhostForm`: the pale corpse in
+a warm ghost of its shape). It and the regular monsters walk through each other (`Actor._walks_through`; a ghost, a `Wisp`, still
+bumps it), but every blow lands both ways. A free ghost never keeps away from a hero in ghost form, and a screen whose own hero is
+in ghost form sees free ghosts clearly. The status is a modifier (`Actor.STAT_GHOST`), so it is announced and late-joined like
+armor's. The component is **Ectoplasm** (the ghosts 50 %, the ecto blobs and the acolytes 15 %). The old design below ("the actor
+nearest the aim ... becomes nearly invisible", the enemy use) is skipped (the user: "Skip this one for now as well").
+
 ### Speed modifiers (`Actor.set_modifier`)
 One verb, four stats, built for coffee and ready for goo slows:
 ```gdscript
 actor.set_modifier(id, mult, duration, stat = Actor.STAT_DAMAGE_TAKEN)   # same id refreshes, never stacks
 actor.clear_modifier(id)
-# stats: STAT_DAMAGE_TAKEN (armor 0.4), STAT_MOVE_SPEED, STAT_ATTACK_RATE, STAT_ROOT (presence = rooted)
+# stats: STAT_DAMAGE_TAKEN (armor 0.4), STAT_MOVE_SPEED, STAT_ATTACK_RATE, STAT_ROOT (presence = rooted),
+#        STAT_DAZE (presence = dazed), STAT_GHOST (presence = ghost form: Ghost)
 actor.move_speed_mult()  /  actor.effective_speed()        # move_speed x modifiers, 0 while rooted
 actor.attack_rate_mult()  /  actor.scaled_cooldown(base)   # base / rate
 actor.is_rooted()  /  actor.modifier_left(id)
@@ -350,7 +362,7 @@ and follows the area rule: area spells hit **everyone** inside, except heal and 
 |---|---|---|---|---|
 | **Wind** | A directional gust from the caster toward the aim point: a cone that shoves everything along it 2–3 hexes, with a whoosh and dust streaks | everyone in the cone | Blow monsters off ledges and into pits, or a friend off the crate tower. It differs from tentacles (radial, from the floor) because it's aimed and linear. | medium: "when", "win", "wine" (a wine cellar exists) |
 | **Blind** | A dark cloud. Anyone inside can't see for ~2–3 s. Monsters lose their target and swing at random; a hero gets a brief black-edged, pinhole screen effect. | everyone in the area | Blinding a teammate is the misplay. Blinding the brute mid-windup makes its slam go off in a random direction. | medium: "behind", "blond", "blend" |
-| **Ghost** | **Single target:** the actor nearest the aim point (a teammate, yourself, or an ENEMY; it falls back to the caster) becomes nearly invisible for ~4 s. Its own attack breaks it early. | one actor | On a hero: monsters drop aggro, which makes it a rescue or escape tool, and the ghost passes through actors. **On an enemy it's simply dumb [decided]:** the monster is nearly invisible to your side (a faint shimmer, no HP bar or windup glow), keeps fighting normally, and AI allies lose it. There's no upside; it's the corn of single-target spells. | medium: "goes", "go", "host", "post" |
+| **Ghost** (built 2026-10-31 as ghost form on yourself: see "Ghost" above; this enemy use is skipped) | **Single target:** the actor nearest the aim point (a teammate, yourself, or an ENEMY; it falls back to the caster) becomes nearly invisible for ~4 s. Its own attack breaks it early. | one actor | On a hero: monsters drop aggro, which makes it a rescue or escape tool, and the ghost passes through actors. **On an enemy it's simply dumb [decided]:** the monster is nearly invisible to your side (a faint shimmer, no HP bar or windup glow), keeps fighting normally, and AI allies lose it. There's no upside; it's the corn of single-target spells. | medium: "goes", "go", "host", "post" |
 
 **Combos** (the ones for the built spells are in their sections above):
 - **Damp + ghost:** wet footprints reveal ghosts, enemy-ghost misplays included.
@@ -365,7 +377,7 @@ and follows the area rule: area spells hit **everyone** inside, except heal and 
 |---|---|---|
 | Wind | feather or fan blade | archer |
 | Blind | ink sac or bat wing | a new enemy |
-| Ghost | ectoplasm | a future ghost enemy |
+| Ghost | ectoplasm (built: "Ectoplasm") | the ghosts, the ecto blobs, the acolytes (H7) |
 
 **Suggested build order** (Vines, Coffee and Damp are built):
 1. **Wind** is almost free: an aimed cone on top of the existing shove system. It already slides further on Damp's puddles and ignores rooted actors.

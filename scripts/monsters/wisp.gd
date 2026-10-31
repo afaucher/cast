@@ -10,13 +10,15 @@ extends Monster
 ##           verb, the culprit as the source: a third of its HP) and briefly helpless (EJECT_DAZE) ...
 ##   FREE    ... then it flies (FLY_SPEED: the crew walks faster) to the nearest dormant host within SEEK_RANGE it can reach
 ##           (no other wisp's claim) and possesses it when it gets there (ENTER_REACH: Wisp.possess). With none in range it
-##           roams: it keeps KEEP_AWAY from the heroes (a spot away from them, picked again every FLEE_PICK s) and drifts
+##           roams: it keeps KEEP_AWAY from the heroes (a spot away from them, picked again every FLEE_PICK s; never from a
+##           hero in ghost form, GhostSpell: H7) and drifts
 ##           near where it is otherwise, looking again for a host every SEEK_EVERY s. It never attacks. Anyone can hit it
 ##           (it is a monster: a swing, an arrow, a spell) and it dies to damage (HP). Tentacles pass through it
 ##           (Tentacles.covers: physical only).
 ## Online (an owned actor, the host's): `host` is OWNER, carried by world.haunt {id, h, x, y, z} (NetWorld, from
 ## haunt_changed) on every possession and ejection; a client applies it in net_haunt. Free, it streams as any monster (its
-## state: IDLE drifting, ALERT flying or keeping away). Its look (WispModel: the rim wisp, its light; hidden inside) is LOCAL.
+## state: IDLE drifting, ALERT flying or keeping away). Its look (WispModel: the rim wisp, its light; hidden inside; clear while
+## this screen's hero is in ghost form) is LOCAL.
 
 ## It entered a host (`to`) or left one (null). On the host's machine: NetWorld sends world.haunt.
 signal haunt_changed(to: Node)
@@ -197,6 +199,23 @@ func _show_free(at: Vector3) -> void:
 	_clear_path()
 
 
+# --- Seen by a ghost (GhostSpell): cosmetic, per screen ---------------------------------------------------------------------
+
+## While this screen's own hero is in ghost form, a free ghost shows clearly (WispModel.set_clear: the strong look). On every
+## machine (a copy's physics is off, so this is _process).
+func _process(_delta: float) -> void:
+	if model is WispModel:
+		(model as WispModel).set_clear(seen_by_ghost())
+
+
+## True when a hero this screen plays is in ghost form (GhostSpell.sees_ghosts).
+func seen_by_ghost() -> bool:
+	for h in heroes():
+		if is_instance_valid(h) and GhostSpell.sees_ghosts(h):
+			return true
+	return false
+
+
 # --- The free wisp's AI (the host's) ---------------------------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
@@ -239,7 +258,7 @@ func _tick_free(delta: float) -> void:
 			return
 		_nav_to(_goal.global_position, delta)
 		return
-	var near := _nearest_hero(KEEP_AWAY, false) if not is_frozen() else null
+	var near := _nearest_to_flee(KEEP_AWAY) if not is_frozen() else null
 	if near != null:
 		state = State.ALERT
 		_flee_pick_t -= delta
@@ -251,6 +270,22 @@ func _tick_free(delta: float) -> void:
 	state = State.IDLE
 	_flee_goal = Vector3.INF
 	_drift(delta)
+
+
+## The nearest living hero within `r` it keeps away from: a hero in GHOST FORM is one of its own and it does not run from them
+## (GhostSpell, haunted-build-plan.md "H7 as built": ghost form makes ghosts easier). The host's AI, from each hero's status
+## (a player's hero: the modifier its owner announced).
+func _nearest_to_flee(r: float) -> Actor:
+	var best: Actor = null
+	var best_d := r
+	for h in heroes():
+		if not is_instance_valid(h) or h.dead or h.is_ghost_form():
+			continue
+		var d := GameWorld.flat_distance(global_position, h.global_position)
+		if d <= best_d:
+			best = h
+			best_d = d
+	return best
 
 
 ## The nearest dormant host within SEEK_RANGE that no other wisp is going for and that it can reach (no dice: the host's AI).

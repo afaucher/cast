@@ -128,6 +128,9 @@ var _daze_shown := false             ## this screen is showing the daze (stars, 
 ## (revive, the cure, going down); it rides the hero snapshot (NetCodec), so every screen shows the gray.
 var zombie := false
 var _down_tween: Tween = null        ## the fall when downed (killed when the hero stands back up)
+## GHOST FORM on this screen (GhostSpell): the whole-body look (GhostForm on the model) follows is_ghost_form(), the owner's
+## status (a modifier, announced to the other screens and to a late joiner like any).
+var _ghost_shown := false
 
 ## Opt-in replacement for the capsule/hat/weapon body (e.g. a RebarModel). Set it before the
 ## hero enters the tree (HeroFactory.spawn_hero(..., model)). The model faces local -Z; if it has
@@ -208,6 +211,8 @@ func net_fields() -> Dictionary:
 		"_charge_ring": Net.LOCAL, "_charge_mat": Net.LOCAL,
 		# The daze look: every screen shows it from the daze modifier (_modifiers, announced by the owner).
 		"_ui_top": Net.LOCAL, "_daze_stars": Net.LOCAL, "_daze_shown": Net.LOCAL,
+		# The ghost form's look: every screen shows it from the ghost modifier (_modifiers, announced by the owner).
+		"_ghost_shown": Net.LOCAL,
 		# Movement feel: the owner's walk (its result streams as the position) and this screen's drawing of it.
 		"pace": Net.PRIVATE, "_motion": Net.PRIVATE,
 		"_gait": Net.LOCAL, "_feel": Net.LOCAL, "_sweep": Net.LOCAL, "_ip_prev": Net.LOCAL, "_ip_cur": Net.LOCAL, "_ip_shown": Net.LOCAL, "_ip_hooked": Net.LOCAL,
@@ -814,6 +819,8 @@ func _on_death() -> void:
 		_name_label.visible = false
 	_set_armor_visuals(false)
 	zombie = false   # (down again: the curse ends with it; another coffee makes a new zombie)
+	clear_modifier(GhostSpell.MOD)   # (the owner: down, the ghost form ends; a copy shows it end from dead)
+	_update_ghost_form()
 	if visual_override != null and visual_override.has_method("set_downed"):
 		visual_override.call("set_downed", true)
 	if _visual:
@@ -961,6 +968,7 @@ func become(kit: String, new_name: String, color: Color, model: Node3D, full: bo
 	if full:
 		zombie = false   # (a joiner arrives at 100%, so a coffee zombie's curse is gone with the rest)
 	_down_tween = null
+	_ghost_shown = false   # (the old model went with its ghost form: the next frame dresses the new one if it is still on)
 	dead = false
 	hp = max_hp * fraction
 	if was_dead:
@@ -1118,6 +1126,27 @@ func _process(delta: float) -> void:
 			var pulse := 1.0 + 0.04 * sin(GameWorld.time * 6.0)
 			_shield_bubble.scale = Vector3.ONE * pulse
 	_update_daze_visuals(delta)
+	_update_ghost_form()
+
+
+## The ghost form on this screen (GhostSpell): while is_ghost_form() (the owner's status, or the one its owner announced) the
+## model wears GhostForm (the look test's whole-body transform: the pale corpse in a warm ghost), with a puff as it comes and
+## goes. Cosmetic per screen.
+func _update_ghost_form() -> void:
+	var on := not dead and is_ghost_form()
+	if on == _ghost_shown or _visual == null:
+		return
+	_ghost_shown = on
+	var m := visual_override if visual_override != null else _visual
+	# (off: back to the gym's own pick for the player's model, "off" everywhere else)
+	GhostForm.apply(m, "ghost" if on else (GhostForm.treatment if is_player and visual_override != null else "off"))
+	GhostSpell.puff(self, _ui_top, on)
+
+
+## True while this screen shows the ghost form (tests).
+func is_showing_ghost_form() -> bool:
+	var m := visual_override if visual_override != null else _visual
+	return _ghost_shown and GhostForm.of(m) != null
 
 
 # --- Physics interpolation (MoveFeel.interp; docs/design/movement-research.md "As built", the judder check) -------------

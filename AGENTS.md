@@ -56,7 +56,9 @@ zombies are host monsters on the stream, and an acolyte's raise is its wind-up (
 a late joiner gets each ghost in its host or out (`NetWorld.haunt_states`). A haunted last floor has its grimoire (`Grimoire`,
 "H6 as built"): a `Hellgate` subclass, so it rides the gate's entry and events (`world.phase`, `world.shove`, `world.spawn`,
 `world.die`); closed on fire it is burned (`world.burn` after its `world.die`), and a late joiner gets that from `books`
-(`NetWorld.book_states`). A debug
+(`NetWorld.book_states`). A hero's ghost form (the Ghost spell on yourself, `GhostSpell`, "H7 as built") is a status: the
+`Actor.STAT_GHOST` modifier its owner applies and announces (a late joiner gets it with the statuses); every machine walks its own
+actors through it (`Actor._walks_through`) and shows its look from it, and the host's ghosts read it to stop keeping away. A debug
 guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). M7 (polish) is
 built locally; the two-PC Steam sign-off is `docs/design/steam-playtest-checklist.md`. Steam's overlay invites ask first in a
 job (`Session.invite_received` -> "Leave this job and join?"), "Invite crew" is on the job board and the pause form

@@ -20,10 +20,16 @@ const MODEL_SCALE := 1.0
 const _HOOKS := "uniform vec4 tint_color : source_color = vec4(1.0);\nuniform float tint_k = 0.0;\nuniform float desat = 0.0;\n" \
 		+ "uniform float glow_gain = 1.0;\nvoid fragment() {"
 
+## Seen by a hero in ghost form (GhostSpell, H7): this strength instead of GhostLook's (the look test's "strong").
+const CLEAR_STRENGTH := "strong"
+
 static var _shader: Shader
 
 var phase := 0.0
 var light: OmniLight3D
+## Shown clearly (set_clear): this screen's own hero is in ghost form.
+var clear := false
+var _lit := true                 ## set_light: false while hidden inside a host
 
 
 static func shader() -> Shader:
@@ -78,16 +84,28 @@ func _ready() -> void:
 	add_to_group(GhostLook.GROUP)
 
 
-## Dress for GhostLook's strength and colour now, always in the rim look (the user's pick).
+## Dress for GhostLook's strength and colour now (CLEAR_STRENGTH while `clear`), always in the rim look (the user's pick).
 func refresh() -> void:
 	var was := GhostLook.look
+	var was_s := GhostLook.strength
 	GhostLook.look = "rim"
+	if clear:
+		GhostLook.strength = CLEAR_STRENGTH
 	GhostLook.dress(_mat, true, phase)
-	GhostLook.look = was
 	var s := GhostLook.strength_now()
+	GhostLook.look = was
+	GhostLook.strength = was_s
 	light.light_color = GhostLook.color_now()
 	light.light_energy = float(s["light"])
-	light.visible = float(s["light"]) > 0.0 and not _downed
+	light.visible = float(s["light"]) > 0.0 and not _downed and _lit
+
+
+## Show it clearly (a hero on this screen is in ghost form: GhostSpell) or as GhostLook has it. Cosmetic.
+func set_clear(on: bool) -> void:
+	if on == clear:
+		return
+	clear = on
+	refresh()
 
 
 ## The hover, the bob and the tail behind it (local +Z), stretched by its speed.
@@ -119,4 +137,5 @@ func _slump() -> void:
 
 ## A hidden wisp (inside a host) casts no light.
 func set_light(on: bool) -> void:
-	light.visible = on and not _downed and float(GhostLook.strength_now()["light"]) > 0.0
+	_lit = on
+	light.visible = on and not _downed and light.light_energy > 0.0

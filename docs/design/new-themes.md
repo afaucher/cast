@@ -91,6 +91,10 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
   ghosts[.]" **Regular enemies still hit a ghost-form hero** (2026-10-31): "A hero in ghost form can be hit by regular
   enemies. You can pass through them but if you wind up in their attack[,] you get hit." Passing through is movement only,
   not safety. Still open: whether a ghost-form hero can hit regular enemies, and its duration and cooldown.
+  **Built 2026-10-31** with calls to revisit (haunted-build-plan.md, "H7 as built"): the Ghost spell ("cast ghost", component
+  Ectoplasm) puts the caster in ghost form for 6-10 s (cooldown 20 s): it and the regular monsters walk through each other, every
+  blow still lands both ways (a ghost-form hero hits as ever), a free ghost does not keep away from it, and its own screen sees free
+  ghosts clearly. A status on the hero (a modifier its owner announces).
 - **Evicting a ghost without breaking its host: wanted, deferred** [2026-10-31]. The user: "We will have to add a way to
   evict ghosts without breaking them. I just haven't thought of one yet. Let's defer."
 - **Breaking a possessed antique bills the crew; bones do not** [decided, 2026-10-31]. The user: "Breaking a possessed
@@ -138,12 +142,14 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 - The grimoire: a host-arbitrated world object (the hellgate's shape). Acolytes, ghosts, hosts and zombies: host monsters.
 - A possessed antique is a host monster from spawn, dormant and priced like a prop, with a possessed state (a prop
   turning into a monster fits no shape yet).
-- Ghost visibility (soft outline, ghost form seeing them) is cosmetic per machine; who a ghost avoids is host-side.
+- Ghost visibility (soft outline, ghost form seeing them) is cosmetic per machine; who a ghost avoids is host-side. (Built so in
+  H7: ghost form is a status the hero's owner announces; the host's ghost AI reads it.)
 - The crypt section goes in the floor checksum, like the sewers.
 
 ### Open
 Answered 2026-10-31: the source (acolytes on floors 1-2, the grimoire on the last), the haunting tied to the site, and one
 pest family per contract (The mission); ghost form passes through regular enemies, and a broken possessed antique bills
 the crew but bones do not (Ghosts). Still open:
-1. Ghost form: can a ghost-form hero hit regular enemies (they can hit it, decided), and its duration and cooldown.
+1. Ghost form: can a ghost-form hero hit regular enemies (they can hit it, decided), and its duration and cooldown. (Built with
+   calls to revisit: it hits as ever, 6-10 s, 20 s cooldown; haunted-build-plan.md "H7 as built".)
 2. Evicting a ghost without breaking its host (wanted, deferred).

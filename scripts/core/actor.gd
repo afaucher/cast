@@ -43,6 +43,9 @@ const STAT_MOVE_SPEED := "move_speed"       ## multiplies walking speed (coffee 
 const STAT_ATTACK_RATE := "attack_rate"     ## multiplies attacks per second: cooldowns and the bow draw divide by it
 const STAT_ROOT := "root"                   ## present = rooted: cannot move and cannot be shoved (vines); mult is unused
 const STAT_DAZE := "daze"                   ## present = dazed: cannot move or attack, still casts (the brute's slam); mult is unused
+## present = in ghost form (the Ghost spell on yourself, GhostSpell): walks through monsters (_separate), still hit by them;
+## mult is unused
+const STAT_GHOST := "ghost"
 const MOVE_MULT_MIN := 0.2
 const MOVE_MULT_MAX := 2.5
 const ATTACK_RATE_MIN := 0.25
@@ -253,6 +256,12 @@ func is_rooted() -> bool:
 ## Dazed (a direct hit from the brute's slam): cannot walk or attack (move refuses, is_helpless), but casts still go off.
 func is_dazed() -> bool:
 	return stat_mult_present(STAT_DAZE)
+
+
+## In ghost form (the Ghost spell cast on yourself: GhostSpell): this actor and the monsters walk through each other
+## (_separate); their attacks still land. A status (a modifier) its owner applies and announces, so every screen knows it.
+func is_ghost_form() -> bool:
+	return stat_mult_present(STAT_GHOST)
 
 
 ## Daze this actor for `seconds` (the verb; Combat.slam calls it on the targets this machine resolves, so the target's
@@ -912,12 +921,16 @@ func snap_to_ground(delta: float = -1.0) -> void:
 
 
 ## Push apart from overlapping actors (cheap circle separation). An actor with pass_through_until in the
-## future neither pushes nor is pushed (an ally squeezing past the leader in a one-wide hall).
+## future neither pushes nor is pushed (an ally squeezing past the leader in a one-wide hall). An actor in ghost form and a
+## monster walk through each other (_walks_through).
 func _separate() -> void:
 	var map: HexMap = GameWorld.map
 	var ghost := pass_through_until > GameWorld.time
+	var spirit := is_ghost_form()
 	for other in GameWorld.actors_in_radius(global_position, radius):
 		if other == self or ghost or other.pass_through_until > GameWorld.time:
+			continue
+		if _walks_through(other, spirit):
 			continue
 		var d := global_position - other.global_position
 		d.y = 0.0
@@ -930,6 +943,16 @@ func _separate() -> void:
 			target = map.clip_move(global_position, target, radius)   # never pushed into a wall face
 		if map == null or map.movement_check(global_position, target) == HexMap.Move.OK:
 			global_position = target
+
+
+## GHOST FORM (GhostSpell; the user, 2026-10-31: "ghost form makes it so that you can pass through regular enemies, because you
+## can walk through them"): an actor in ghost form (`spirit`: this one's is_ghost_form) and a regular monster neither push nor
+## are pushed by each other. Movement only: their attacks still land. A ghost (a Wisp) is no regular enemy: it and a ghost-form
+## hero bump as ever. Teammates, staff and props bump as ever too.
+func _walks_through(other: Actor, spirit: bool) -> bool:
+	if spirit:
+		return other is Monster and not (other is Wisp)
+	return self is Monster and not (self is Wisp) and other.is_ghost_form()
 
 
 ## Override: may this actor cross a +2 climb ledge on foot? (Heroes: the kit's can_climb; Rebar can't.)

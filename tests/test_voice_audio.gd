@@ -28,13 +28,13 @@ const STRESS_MISS_BUDGET := 4   # was 2 for six spells; the nine-spell vocabular
 ## tentacles and teeth spell words and their chatter sound-alikes, and the hero names, which must never cast).
 const MEASURE_WORDS := ["gasket", "rebar", "wick", "tentacle", "attack", "ten tickets", "testicles", "tackle", "teeth", "tooth", "these", "tea", "tease", "teach",
 	"vine", "wines", "vibes", "fines", "binds", "damp", "damn", "dump", "camp", "coffee", "copy", "cough",
-	"chicken", "kitchen", "chick", "check in", "thicken"]
+	"chicken", "kitchen", "chick", "check in", "thicken", "ghost", "goes", "host", "post", "coast", "toast", "most"]
 ## The spells whose confusion with every other spell is checked, and the text stems
 ## of their clips ("tentacle" covers tentacles/tentacle, "teeth"/"tooth" the teeth forms).
-const FOCUS_STEMS := {"tentacles": ["tentacle"], "teeth": ["teeth", "tooth"], "vines": ["vine"], "damp": ["damp"], "coffee": ["coffee"], "chicken": ["chicken"]}
+const FOCUS_STEMS := {"tentacles": ["tentacle"], "teeth": ["teeth", "tooth"], "vines": ["vine"], "damp": ["damp"], "coffee": ["coffee"], "chicken": ["chicken"], "ghost": ["ghost"]}
 ## Chatter the recognizer writes as a spell word (measured): "binds" comes out as VINES in both voices (and "fines" now and
-## then), and Zira's "check in" as CHICKEN, so a cast on it is a true hearing, not a confusion between spells.
-const HEARD_AS_SPELL := ["binds", "fines", "check in"]
+## then), Zira's "check in" as CHICKEN, and both voices' bare "goes" as GHOST, so a cast on it is a true hearing, not a confusion between spells.
+const HEARD_AS_SPELL := ["binds", "fines", "check in", "goes"]
 
 var caster: VoiceCaster
 var _casts: Array = []         # {spell, power, heard, accidental, t}

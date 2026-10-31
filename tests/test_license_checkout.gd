@@ -72,9 +72,9 @@ func _real_spells() -> void:
 	var p := _open()
 	await frames(4)
 	var ids := SpellBook.ids()
-	eq(ids.size(), 11, "the real catalog has eleven spells")
+	eq(ids.size(), 12, "the real catalog has twelve spells")
 	eq(p.offered(), ids, "the picker offers exactly SpellBook.ids(), in order")
-	eq(p._lines.size(), 11, "one line item per spell")
+	eq(p._lines.size(), 12, "one line item per spell")
 	for i in ids.size():
 		var line: RequisitionLine = p._lines[i]
 		eq(line.spell_id, ids[i], "line %d is %s" % [i + 1, ids[i]])

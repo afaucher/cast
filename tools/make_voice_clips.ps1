@@ -154,7 +154,7 @@ function Same([string]$group, [string]$text, [string]$expect, [double]$minPower,
     Add-Clip $group $text $expect $expect $expect $minPower $voice $rate
 }
 
-$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth"; vines = "vines"; damp = "damp"; coffee = "coffee"; chicken = "chicken"; revive = "revive" }
+$spells = [ordered]@{ heal = "heal"; fireball = "fireball"; armor = "armor"; corn = "corn"; tentacles = "tentacles"; teeth = "teeth"; vines = "vines"; damp = "damp"; coffee = "coffee"; chicken = "chicken"; revive = "revive"; ghost = "ghost" }
 
 # Clean casts, both voices, normal pace: must fire at >= 0.9 in every mode.
 foreach ($v in @($v1, $v2)) {
@@ -185,6 +185,8 @@ foreach ($r in @(-3, 3)) { foreach ($id in @("vines", "damp", "coffee")) { Same 
 foreach ($r in @(-3, 3)) { Same "rate" "cast chicken" "chicken" 0.7 $v2 $r }
 # revive: the pace extremes in the other voice too.
 foreach ($r in @(-3, 3)) { Same "rate" "cast revive" "revive" 0.7 $v2 $r }
+# ghost: the pace extremes in the other voice too.
+foreach ($r in @(-3, 3)) { Same "rate" "cast ghost" "ghost" 0.7 $v2 $r }
 # Sloppy but intended: preamble, suffix, mispronunciations, spelling variants.
 Same "sloppy" "okay cast heal"            "heal"     0.8 $v1 0
 Same "sloppy" "cast fireball now"         "fireball" 0.8 $v2 0
@@ -234,6 +236,12 @@ Same "sloppy" "okay cast revive"            "revive" 0.8 $v1 0
 Same "sloppy" "please cast revive"          "revive" 0.8 $v2 0
 Same "sloppy" "cast revive now"             "revive" 0.8 $v1 0
 Same "sloppy" "cast revive him"             "revive" 0.8 $v2 0
+# ghost: preamble, suffix, the plural, the other voice, and "cast ghost on me" (the natural ask: it is a self-buff).
+Same "sloppy" "okay cast ghost"             "ghost" 0.8 $v1 0
+Same "sloppy" "please cast ghost"           "ghost" 0.8 $v2 0
+Same "sloppy" "cast ghost now"              "ghost" 0.8 $v1 0
+Same "sloppy" "cast ghosts"                 "ghost" 0.8 $v2 0
+Same "sloppy" "cast ghost on me"            "ghost" 0.7 $v1 0
 # Hesitation between the keyword and the spell word.
 Same "hesitate" "cast <b300> heal"                    "heal"     0.8 $v1 0
 Same "hesitate" "cast <b300> tentacles"               "tentacles" 0.6 $v1 0
@@ -249,6 +257,8 @@ Same "hesitate" "cast <b300> chicken"                 "chicken" 0.6 $v1 0
 Same "hesitate" "cast <b500> chicken"                 "chicken" 0.6 $v2 0
 Same "hesitate" "cast <b300> revive"                  "revive" 0.6 $v1 0
 Same "hesitate" "cast <b500> revive"                  "revive" 0.6 $v2 0
+Same "hesitate" "cast <b300> ghost"                   "ghost" 0.6 $v1 0
+Same "hesitate" "cast <b500> ghost"                   "ghost" 0.6 $v2 0
 Same "hesitate" "cast <b700> fireball"                "any"      0.3 $v1 0
 Same "hesitate" "cast <b400> uh <b400> heal"          "heal"     0.5 $v2 0
 Same "hesitate" "cast <b1200> armor"                  "any"      0.4 $v2 0
@@ -257,8 +267,9 @@ Add-Clip "hesitate" "cast <b3000> heal"               "none" "none" "any" 0.0 $v
 foreach ($v in @($v1, $v2)) {
     foreach ($id in $spells.Keys) {
         $loose = if ($id -eq "corn") { "corn" } else { "none" }
-        # David's bare "vines" is heard as "VI NES" (two tokens), so chaos cannot be held to firing it.
-        $chaos = if ($id -eq "vines") { "any" } else { $id }
+        # David's bare "vines" is heard as "VI NES" (two tokens), and his bare "ghost" as "GHO" (or "GHO ST") now and then
+        # (2026-10-31), so chaos cannot be held to firing them.
+        $chaos = if ($id -eq "vines" -or $id -eq "ghost") { "any" } else { $id }
         Add-Clip "bare" $spells[$id] "none" $loose $chaos 0.9 $v 0
     }
 }
@@ -330,6 +341,21 @@ foreach ($v in @($v1, $v2)) {
     }
     foreach ($t in @("revive me", "I need a revive")) {
         Add-Clip "negative" $t "none" "none" "revive" 0.4 $v 0
+    }
+}
+# Ghost: the words it can be mistaken for ("goes", "host", "post", "coast", "toast", "most"; "go" is the voice orders' word),
+# and chatter that really says it ("watch out for the ghost", "there's a ghost", what a crew says on a haunted floor). Nothing
+# may cast in any mode, except that chaos (any spell word anywhere) fires on the real word. EXCEPT "goes": both voices write a
+# bare "goes" as "GHOST" (measured 2026-10-31, the hotword's pull, like "binds" for vines): bare it casts in chaos only, after the
+# trigger it is a cast.
+foreach ($v in @($v1, $v2)) {
+    foreach ($t in @("host", "post", "coast", "toast", "most", "cast host", "cast post", "cast coast", "cast toast")) {
+        Add-Clip "negative" $t "none" "none" "none" 0.0 $v 0
+    }
+    Add-Clip "negative" "goes" "none" "none" "any" 0.0 $v 0
+    Add-Clip "negative" "cast goes" "any" "any" "any" 0.0 $v 0
+    foreach ($t in @("watch out for the ghost", "there's a ghost")) {
+        Add-Clip "negative" $t "none" "none" "ghost" 0.4 $v 0
     }
 }
 # Hero names (Rebar, Gasket, Wick) may become voice callsigns, so they must never cast by themselves.

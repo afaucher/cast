@@ -21,6 +21,7 @@ const DEFS := [
 	preload("res://scripts/spells/defs/coffee.gd"),
 	preload("res://scripts/spells/defs/chicken.gd"),
 	preload("res://scripts/spells/defs/revive.gd"),
+	preload("res://scripts/spells/defs/ghost.gd"),
 ]
 
 ## spell id -> its def's ROW ({"name", "cooldown", "color", "desc", "word", "component", "available"}), in DEFS order.

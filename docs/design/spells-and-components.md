@@ -82,6 +82,7 @@ covers 10, 24 and 100 spells and both variants.
 | Coffee | Coffee beans | three roasted beans with their grooves |
 | Chicken | Chicken feather | a long white tail feather with a rust-red tip |
 | Revive | Aloe leaf | a fat, fleshy green leaf curling to a point, pale teeth along both edges, pale flecks, the clear gel at the cut |
+| Ghost | Ectoplasm | a quivering glob of pale blue ectoplasm, a smaller lobe on top, a drip with a bead at its end [proposal, H7] |
 
 The **Aloe leaf** (2026-10-27) is the user's call: "The revive spells should be a plant leaf or something", then "Aloe
 leaf". Out of charges, the HUD's toast reads "You have no Aloe leaf" like every other component.
@@ -101,6 +102,8 @@ it dies.
 | brute | Coffee beans | coffee | 10% |
 | swarmer (imp) | Chicken feather | chicken | 4% **per imp** |
 | water boy (the enemy medic, floor 2+) | Aloe leaf | revive | 12% [proposal, 2026-10-27] |
+| ghost (wisp, haunted floors) | Ectoplasm | ghost | 50% [proposal, 2026-10-31, H7] |
+| ecto blob, acolyte (haunted floors) | Ectoplasm | ghost | 15% each, rolled after their older entries [proposal, H7] |
 | any monster | Corn kernel | corn | 2%, in addition (was 5%) |
 
 Drops are rare on purpose: not every creature drops every spell, and the floor should not fill up with
@@ -125,7 +128,7 @@ pickups. Two more tunables in `SpellComponents` keep it that way:
 Vines, damp and coffee (2026-10-17) take their drops from the monsters for now. Their designed environment sources do
 not exist yet: seed pods from spa planters, a sponge or leaky pipe as an environment pickup, and coffee beans from the
 break room or as a reward for protecting employees. A broken mail package can also hold any castable spell's component
-(`MailPackage.roll_component` uses `SpellBook.ids()`, so all eleven are possible). Chicken feathers (2026-10-18) come from imps.
+(`MailPackage.roll_component` uses `SpellBook.ids()`, so all twelve are possible). Chicken feathers (2026-10-18) come from imps.
 Aloe leaves (2026-10-27) come from the Water Boy, the enemy medic (floors 2-3, so on floor 1 the Revive is the license or
 mail); the source and its 12% are a proposal for the user. (The Water Boy's existing heal and damp drops are rolled first,
 so the new entry leaves their dice where they were.)
@@ -170,8 +173,8 @@ small floating label ("Ember horn x3") when a player is within 4 units.
    a deliberate stop-and-press, and the old spell's charges are never lost, so a lock added only friction.
 
 ## Still open
-- How many distinct spells for the vertical slice? There are eleven now (vines, damp and coffee are the seventh to ninth,
-  chicken the tenth, revive the eleventh);
+- How many distinct spells for the vertical slice? There are twelve now (vines, damp and coffee are the seventh to ninth,
+  chicken the tenth, revive the eleventh, ghost the twelfth: haunted-build-plan.md "H7 as built");
   the license requisition (FORM 15) is a scrolling catalog that is meant to grow past 20.
 - Exploration secrets and vantage points holding rarer components (`exploration.md`).
 - Handing a component to a teammate; allies casting and collecting.

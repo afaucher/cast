@@ -19,7 +19,7 @@ func setup() -> void:
 	eq(MonsterDefs.is_swarm("swarmer"), true, "imps come in a swarm")
 	eq(MonsterDefs.is_swarm("grunt"), false, "a grunt doesn't")
 	eq(ClientArchetype.PEST_NAMES, {"grunt": "skeletons", "archer": "archers", "brute": "brutes", "swarmer": "imps", "zombie": "zombies", "everything": "everything"}, "pest names")
-	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte"], "the kinds that drop components")
+	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte", "wisp"], "the kinds that drop components (a ghost: Ectoplasm, H7)")
 	for k: String in SpellComponents.DROPS:
 		for e: Dictionary in SpellComponents.DROPS[k]:
 			for sp: String in e["spells"]:
