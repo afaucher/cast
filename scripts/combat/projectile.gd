@@ -92,6 +92,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _impact(hit: Actor, pos: Vector3) -> void:
+	if not is_instance_valid(source):
+		source = null   # (the shooter was freed while the shot flew: a sourceless hit, as an unknown culprit's)
 	# A shield facing the shot (the Pavise, Combat.shielded): it stops on the planks and does nothing; an arrow or a bolt
 	# sticks. The follow-ups see no hit (a fireball still bursts where it stopped, in front of the shield).
 	var blocked := hit != null and Combat.shielded(hit, pos - direction * 3.0, Combat.HIT_ARROW if hits_props else Combat.HIT_SHOT, source)
