@@ -307,7 +307,18 @@ static func _prism(k: HauntProps.Kit, pts: Array[Vector2], y0: float, y1: float,
 	k.s.merge(s, xf * Transform3D(Basis.IDENTITY, Vector3(c.x, y0 + hy, c.y)))
 
 
-static func _grand_piano(k: HauntProps.Kit, _p: Dictionary) -> void:
+## The piano's build, from the tail (z -1.08) to the bench's front (z 1.38), moves back by this so it is centred on its
+## 2.5 deep footprint: the priced piano (PricedProp "grand_piano") stands with its tail against a wall (test_prop_fit).
+const PIANO_Z := -0.15
+
+
+static func _grand_piano(k: HauntProps.Kit, p: Dictionary) -> void:
+	var t := HauntProps.Kit.new()
+	_grand_piano_at_origin(t, p)
+	k.s.merge(t.s, Transform3D(Basis.IDENTITY, Vector3(0, 0, PIANO_Z)))
+
+
+static func _grand_piano_at_origin(k: HauntProps.Kit, _p: Dictionary) -> void:
 	# the case in plan: the keyboard side at +z, the straight spine at -x, the bentside curving in to the tail at -z
 	var outline: Array[Vector2] = [Vector2(-0.72, 0.62), Vector2(0.72, 0.62), Vector2(0.72, 0.1), Vector2(0.55, -0.35),
 		Vector2(0.28, -0.85), Vector2(0.05, -1.08), Vector2(-0.72, -1.08)]
@@ -319,7 +330,8 @@ static func _grand_piano(k: HauntProps.Kit, _p: Dictionary) -> void:
 	for q in outline:
 		lid_pts.append(Vector2(q.x, q.y))
 	_prism(k, lid_pts, 0.0, 0.03, Color(0.1, 0.095, 0.11), lid)
-	k.rod(Vector3(0.45, 0.98, -0.2), Vector3(0.38, 1.48, -0.2), 0.015, 0.015, 3, HauntProps.GILT_DK)
+	# the prop stick, from the case's rim up to the lid's underside (about square to the lid)
+	k.rod(Vector3(0.5, 0.98, -0.2), lid * Vector3(0.43, 0.0, -0.2), 0.015, 0.015, 3, HauntProps.GILT_DK)
 	# keyboard, keys, music desk
 	k.box(Vector3(1.44, 0.1, 0.3), Vector3(0, 0.8, 0.76), HauntProps.PIANO_BLACK)
 	k.box(Vector3(1.3, 0.04, 0.2), Vector3(0, 0.865, 0.78), Color(0.93, 0.91, 0.84))

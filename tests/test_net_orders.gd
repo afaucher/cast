@@ -15,8 +15,10 @@ extends NetGameTest
 ## - Nothing tripped the OWNER-write guard on either machine.
 
 const PEERS := 2
-const SEED := 1          ## board seed 1, offer 0: a supervillain lair with three henchmen on floor 1
-const OFFER := 0
+## Board seed 16, offer 1: a supervillain lair with three henchmen and one hellgate on floor 1. (It was board seed 1, offer
+## 0 until haunted contracts: that board now deals a haunted church into slot 0, ContractBoard.HAUNTED_CHANCE.)
+const SEED := 16
+const OFFER := 1
 
 
 func _init() -> void:

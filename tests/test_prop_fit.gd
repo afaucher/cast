@@ -28,6 +28,8 @@ const ENDS_ALLOW := {
 	"elevator/service_wall/closed": [2, "the lamp cage's wires end at the bulb"],
 	"elevator/service_wall/open": [2, "the lamp cage's wires end at the bulb"],
 	"note/memo": [4, "the typed lines lie on the tilted memo"],
+	"decor/altar": [1, "the altar cross's head stands free above its arms, as a cross's does"],
+	"prop/suit_of_armour": [2, "the sword's crossguard: its two quillons end free either side of the grip"],
 }
 ## Families the ends check covers (the props, set dressing and set pieces; not the creatures, the water's rings or the fx).
 const ENDS_FAMILIES: Array[String] = ["decor/", "prop/", "pool/", "note/", "van/", "elevator/", "lobby/", "door/"]
