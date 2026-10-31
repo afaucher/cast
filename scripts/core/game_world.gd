@@ -90,16 +90,18 @@ func actors_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Acto
 	return out
 
 
-## DOWNED heroes (dead, still lying on this floor) of `team` (-1 any) within radius: every other query drops the dead, but
-## coffee and Revive stand them back up (Actor.revive). A hero whose body stayed on the floor above (hidden on arrival,
-## game.gd's carry) is not here, nor is one that is not in the tree.
+## The DOWNED (dead, still lying on this floor, able to get up: Actor.is_downed) of `team` (-1 any) within radius: downed
+## heroes and, on a haunted floor, zombies' bodies that are not burnt (Zombie). Every other query drops the dead, but coffee
+## and Revive stand them back up (Actor.revive; Revive's team filter keeps it to allies) and a fire over them burns a body
+## (Burning.on_blast). A hero whose body stayed on the floor above (hidden on arrival, game.gd's carry) is not here, nor is
+## one that is not in the tree.
 func downed_in_radius(pos: Vector3, radius: float, team: int = -1) -> Array[Actor]:
 	var out: Array[Actor] = []
 	if root == null or not root.is_inside_tree():
 		return out
 	for n in root.get_tree().get_nodes_in_group("actors"):
-		var h := n as Hero
-		if h == null or not h.dead or not h.is_visible_in_tree() or h.is_queued_for_deletion():
+		var h := n as Actor
+		if h == null or not h.is_downed() or not h.is_visible_in_tree() or h.is_queued_for_deletion():
 			continue
 		if team != -1 and h.team != team:
 			continue

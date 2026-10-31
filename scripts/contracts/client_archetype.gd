@@ -24,9 +24,10 @@ const ALL_IDS: Array[String] = ["prepper", "supervillain", "guru", "founder", "i
 
 const FAMILY_GATE := "gate"
 const FAMILY_DEAD := "dead"
-## The monster kinds a family's packs and pest come from ([] = any kind, the hellgate family's mix). Until H3 the dead
-## family is today's skeleton (MonsterDefs "grunt", the pest "skeletons").
-const FAMILY_KINDS := {FAMILY_GATE: [], FAMILY_DEAD: ["grunt"]}
+## The monster kinds a family's packs and pest come from ([] = any kind but a family's own, the hellgate family's mix). The
+## dead family (H3) is the skeleton (MonsterDefs "grunt", "skeletons") and the zombie ("zombie", "zombies": a family kind,
+## MonsterDefs "family", which no other pack deals).
+const FAMILY_KINDS := {FAMILY_GATE: [], FAMILY_DEAD: ["grunt", "zombie"]}
 
 ## The SITE line of the job card, per site type.
 const SITE_TITLES := {"bunker": "Survival bunker", "lair": "Villain lair", "mansion": "Haunted mansion", "church": "Haunted church"}
@@ -182,14 +183,14 @@ const DATA := {
 		},
 	},
 	# The haunted clients (HAUNTED_IDS, family "dead"; haunted-build-plan.md H1). Every player-facing string below is a
-	# PROPOSAL awaiting the user's review (listed in the build plan's "H1 as built"). The pest is always the family's
-	# (skeletons until H3), never "everything".
+	# PROPOSAL awaiting the user's review (listed in the build plan's "H1 as built"). The pest is always one of the family's
+	# kinds (skeletons or zombies since H3, rolled per contract), never "everything".
 	"heir": {
 		"title": "Estate Heir",
 		"site": "mansion",
 		"family": "dead",
 		"site_name": "Ancestral manor",
-		"pests": ["grunt"],
+		"pests": ["grunt", "zombie"],
 		"first": ["Peregrine", "Cordelia", "Ambrose", "Octavia", "Bartholomew", "Winifred"],
 		"last": ["Ashgrove", "Blackthorne", "Mortlake", "Ravensworth", "Hollowell"],
 		"suffix": ["", "", "the Younger", "Esq."],
@@ -218,7 +219,7 @@ const DATA := {
 		"site": "church",
 		"family": "dead",
 		"site_name": "Parish church",
-		"pests": ["grunt"],
+		"pests": ["grunt", "zombie"],
 		"first": ["Reverend", "Canon", "Deacon", "Mother", "Father", "Archdeacon"],
 		"last": ["Whitlow", "Penhallow", "Ashby", "Greaves", "Underhill"],
 		"suffix": ["", "", "(retired)", "OBE"],

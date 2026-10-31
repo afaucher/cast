@@ -1085,7 +1085,7 @@ func _dev_centroid() -> Vector3:
 	var sum := Vector3.ZERO
 	var count := 0
 	for m in _dev_monsters:
-		if is_instance_valid(m) and not m.dead:
+		if is_instance_valid(m) and (not m.dead or m.is_downed()):   # (a zombie's body counts: --slay-near, then a coffee or a fireball on the bodies)
 			sum += m.global_position
 			count += 1
 	for h in _dev_hazards:   # (--hazard-near / --to-hazard: the explosives)

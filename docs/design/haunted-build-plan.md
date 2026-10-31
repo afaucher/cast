@@ -1,6 +1,6 @@
 # Haunted contracts: build plan
 
-Status: **[proposal; H1 and H2 built 2026-10-31, see "H1 as built" and "H2 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
+Status: **[proposal; H1, H2 and H3 built 2026-10-31, see "H1 as built", "H2 as built" and "H3 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
 build it in. The user (2026-10-31): "Let's build it as is" (today's roster; more enemy types are worked out in parallel).
 
 Today none of it is game code: the mansion and church rooms, the crypt, the zombies, acolytes, ghosts, hosts and the
@@ -48,7 +48,20 @@ the next.
   it down. Coffee's splash raises a downed zombie (`downed_in_radius` learns monster bodies; the target's owner applies it,
   like a revive). Heal stays allies-only. **To revisit here:** whether Heal raises zombies too.
 - Networking: an owned actor (a host monster); `downed` and `burnt` are OWNER fields with carriers; a late joiner gets the
-  bodies from the keyframe.
+  bodies from the keyframe. (Built: see "H3 as built"; the downed state is `Actor.dead`, the late joiner's bodies ride rows of
+  their own beside the keyframe.)
+
+### H3b. Crypt rats and the ecto blob [decided 2026-10-31, not built]
+The user (2026-10-31, "Yes"): the two crypt pests of the look test (`docs/design/crypt-pests-look.md` on the branch
+`worktree-agent-ac83d600a5bfe9b8a`, "The user's read") become real monsters of the dead family, built after H3:
+- **Crypt rats**, the **"Sewer brute"** variant (the realistic rat scaled up; dark bead eyes for now): a **fast swarm** in
+  packs of **5-6**, like the imps' clump in a pack roll.
+- **The ecto blob**, the **"Mass of faces"** variant (its faces need to read bigger or brighter at the game camera): **slow area
+  denial**, leaving an **ectoplasm slick** behind it that **Damp washes away** (the goo patch's shape: a runtime object the host
+  announces, washed by a soak).
+- Both are `MonsterDefs` rows with `"family": "dead"` (dealt only by the dead family's packs, as the zombie is), so hellgate floors
+  stay byte for byte. Their tuning, pack weights, drops, the slick's effect and the player-facing names are proposals to make
+  when it is built.
 
 ### H4. Acolytes and the procession
 - An `acolyte` monster kind on floors 1-2: it flees heroes, travels the floor in a **procession** (a leader, its zombies
@@ -78,8 +91,7 @@ the next.
 - Networking: a status on the hero (its owner resolves and announces it); the pass-through flag already replicates.
 
 ### Later
-- Ectoplasm as the infestation layer (slicks the floor, Damp washes it away), and the new enemy types from the look tests
-  under way (crypt rats, the ecto blob).
+- Ectoplasm as the infestation layer (slicks the floor, Damp washes it away). The crypt rats and the ecto blob are step H3b now.
 - Evicting a ghost without breaking its host (wanted, deferred). Ghost mode after a hero dies (a big build, later).
 
 ## Tests per step
@@ -329,3 +341,116 @@ was made on the spot, the simplest sound choice, and is listed to revisit.
 - `test_zfight` still fails on ten of H1's pieces (decor bookshelf, reading chair, wall mirror, fireplace, altar; props suit
   of armour, grand piano, stained glass, brass lectern, votive stand), exactly as it does on H1's commit; the crypt's pieces
   pass.
+
+## H3 as built (2026-10-31)
+
+The user (2026-10-31), as for H1 and H2: "Just build it now. We can revisit the decisions after it's built." Every open call
+below was made on the spot, the simplest sound choice, and is listed to revisit. (First, in its own commit: H1's ten
+`test_zfight` failures are fixed by nudging the coplanar faces apart, as H2 did for the crypt kit: the bookshelf's plinth, the
+wingback's back, the wall mirror's backing, glass and frame corners, the fireplace's lintel, the altar's frontal bands and
+crosses, the suit of armour's brass rim, the piano's band, the stained glass panes and head, the lectern's lip and the votive
+stand's tiers. `test_zfight` passes.)
+
+### Play it
+
+```
+.\run.ps1 --client heir --seed 3 --floor 1 --spells coffee,fireball --no-mic                 # a haunted mansion whose pest is zombies
+.\run.ps1 --client heir --seed 3 --floor 1 --spells coffee,fireball --no-mic --spawn-near zombie,5,cluster --slay-near --focus dev
+         # five bodies by the van (1.5 s in); add --autocast fireball --autocast-after 2.2 to burn them, or --autocast coffee to raise them
+.\run.ps1 --gym --no-mic                                                                      # Spawn > Monster > "Zombie" and "Zombie (body)"
+```
+
+Screenshots (the game camera at zoom 12, 1920x1080, heir 3 floor 1): `docs/design/zombie_bodies/standing.png` (four zombies, the
+grey-green digger and three mourners, shambling at the crew), `bodies.png` (five bodies lying where they fell, away from the wall,
+greyed, the motes rising off them), `burnt.png` (a fireball over the middle three: charred and smoking; the two at the ends still
+grey), `rising.png` (a coffee spilt on them: three push up on their arms together; the two outside the splash stay down).
+
+### What was built
+
+| Piece | Where | What |
+|---|---|---|
+| The kind | `scripts/monsters/zombie.gd` (`Zombie`), `MonsterDefs` "zombie" | A `Monster`: HP 70 (a skeleton 40), speed 1.5 (3.2), a 0.7 s wind-up (0.35) into Monster's melee cone (12 damage, reach 1.35, 110 degrees), 1.8 s cooldown, aggro 7. The row: pack cost 3, weight 5, drops fireball 10 % / heal 8 %, pest "zombies", and the new field `"family": "dead"` |
+| Its look | `ZombieModel` (the look test's, now the game's) | The mourner, or the digger for one zombie in three: `Zombie.variant_for(spawn cell)`, a hash, SPAWN, the same on every machine. `ZombieModel.MODEL_SCALE` / `DIGGER_SCALE` |
+| The dead family | `ClientArchetype.FAMILY_KINDS["dead"]` = grunt, zombie; heir and parish `"pests"` = grunt, zombie | A dead contract's packs deal skeletons and zombies; its pest is rolled between them per contract. `MonsterFactory.compose` deals a `family` kind only when the pack asks for its family (`only`), so every hellgate floor rolls exactly as before (`test_golden_floor` unchanged, `test_monster_defs`) |
+| The body | `Zombie._on_death`, `Actor.is_downed`, `GameWorld.downed_in_radius` | Down, a zombie is `dead` (as a downed hero is) but stays: no topple, fade or free. It lies face down (`ZombieModel.pose_rise(0)`: greyed, eyes out, the motes) where it fell, away from a wall within `LIE_LEN` (it falls back or sideways instead). It leaves `monsters` (the pest count drops). `downed_in_radius` now finds every `Actor.is_downed` (dead and `_can_revive`): downed heroes and unburnt bodies. It never gets up by itself. A zombie that dies with no floor under it (a pit, lava) leaves no body: freed like any monster |
+| The raise | `Actor.revive` (the verb), `Zombie._on_revived`, `Zombie.raise` | Coffee's splash (`Combat.revive_radius`, any team) stands a body up at `CoffeeSpell.ZOMBIE_HP` (10), not hasted. It pushes up on its arms over `RISE_TIME` (1.4 s, helpless: a stagger), facing the way it lay, then is an IDLE monster where it rose. `raise()` is H4's hook (full HP). Heal and Revive stay allies-only (their team filter) |
+| The burn | `Actor.burn_body` (a NEW verb), `Zombie._burn_down`, `Burning.on_blast` / `ignite` | A fireball blast burns every body it covers, no roll (`on_blast` asks `Net.resolves` per body); a fire lit on a body (`Burning.ignite`) burns it; a zombie that goes down burning is burnt. Burnt: the charred `ZombieModel` replaces the body's (smoke, embers), `_can_revive` false (out of the downed query: never rises). The verb is in AGENTS.md rule 2 and `test_net_contract`'s area-verb lint |
+| Drops | `Zombie._on_death` | Rolled the first time it goes down only (`_dropped`): coffee and a cleaver cannot farm components |
+| Networking | `NetWorld`, `NetJoin`, `Net.remote_revive`, `NetEvents`, `test_net_contract` | See the checklist below |
+| Gym | `GymSpawns` | "Zombie" (the factory kind, as every kind gets) and "Zombie (body)" (`monster:zombie:body`: one that goes down as it lands), in the existing Monster group; no keybinding. `GameDev._dev_centroid` counts the `--spawn-near` bodies, so `--autocast` and `--focus dev` find them after `--slay-near` |
+
+### The networking checklist (networking.md)
+1. **Shape: an owned actor**, a host monster (the host owns and simulates it; a client shows a puppet). Not a new shape.
+2. **Vars:** `variant` SPAWN; `burnt` OWNER (carrier `world.burn`); `raises` and `_rise_t` LOCAL (the stand-up's look on every
+   machine); `_dropped` PRIVATE. `dead` is Actor's OWNER var; its zombie carrier is `world.die` plus `world.rise`
+   (`NetEvents.WORLD_CARRIES["zombie.gd"]`). No separate `downed` var: the downed state is `dead` on a body that `_can_revive`.
+3. **Verbs:** `revive` (the raise) and the new `burn_body`, each applied by the body's owner (`Net.resolves`); its strike is
+   Monster's `Combat.melee_arc`.
+4. **Randomness:** its drops on the host's `GameWorld.rng` (as every monster); its look is a hash; nothing new is rolled.
+5. **Motion:** standing, a monster entry in the stream as ever; a body does not move; the stand-up's pose is LOCAL from the event.
+6. **Cosmetic:** the lying pose and which way it lies, the motes and smoke, the charred model, the stand-up. **Gameplay:**
+   `dead`, `burnt`, `hp`.
+7. **A late joiner:** a standing zombie is in the keyframe (a runtime one: the `world.spawn` replay); a body's seed-built id is a
+   gone id shown dead (`NetJoin.gone_ids`: "die" for a body, "free" for other monsters), then the snapshot's `bodies` rows
+   (`NetWorld.body_states` / `apply_bodies`: id, kind, where it lies, which way, burnt) lay it where the host has it; a runtime
+   body the joiner never built is built from its row. A stand-up under way is skipped (under 1.5 s). `NetEvents.LATE_JOIN`.
+8. **The scenario:** `tests/test_net_zombies.gd` (below).
+- The events: `world.die` as before; `world.rise {id, hp, x, y, z}` (the host streams the zombie again: a fresh track, its signals
+  still linked) and `world.burn {id}`. A client queues both with the deaths, on the host's beat, one actor's in the order they
+  came (`NetWorld._apply_deaths`), and applies them inside the net layer's scope (`Net.remote_revive`, `Zombie.net_burn`).
+
+### The calls made (to revisit)
+1. **The downed state is `Actor.dead`**, as a downed hero's is, not a separate `downed` var: every query and verb that skips the
+   dead skips a body (no target, no hit, no blocking, no AI ally aims at it), and only the downed query finds it.
+2. **The late joiner's bodies ride rows of their own** (`bodies`) beside the keyframe, not in it: the keyframe holds the living
+   movers, and the monster entry's flag bits are all used (its state needs all 3; `burnt` would need a fourth).
+3. **The pest:** a haunted contract names skeletons or zombies, rolled per contract (heir and parish `"pests"`). On a skeleton
+   contract the zombies are in the way but not the objective, and the other way round.
+4. **The count when a body rises:** a body is not alive, so a downed zombie counts as exterminated; raised, it is alive again and
+   counts as left again ("N left" on the tracker goes back up). Once a floor's pest pay is in, it stays paid
+   (`ContractSession.check_clean` pays once): raising zombies after that costs a fight, not money.
+5. **Stats:** HP 70, speed 1.5, damage 12, wind-up 0.7, cooldown 1.8, aggro 7 (above). Slow and tough; the crew outwalks it.
+6. **The mix:** a zombie costs 3 to a skeleton's 2, at the same weight, so a dead floor holds fewer monsters than H1's
+   skeleton-only one (measured on heir and parish 3 and 11: 12-17 on floors 1-2 and 26-35 on floor 3, against 17-21 and 34-42
+   with skeletons only).
+7. **Both looks, one kind:** the mourner, and the digger for one zombie in three, with the same stats (the digger is a look).
+8. **A raised zombie stands at the HP its raiser gives:** coffee's `ZOMBIE_HP` (10, the coffee zombie's), not hasted; an
+   acolyte's `raise()` (H4) full health. It gets up over 1.4 s, helpless, where it lay, and is then an ordinary IDLE monster
+   there (it finds the crew by its senses, as any monster).
+9. **Burning:** every body a fireball's blast covers burns, with no roll (a living actor rolls to ignite); a fire lit on a body
+   burns it; a zombie that goes down burning is burnt. Other fires (the goo's, lava's) do not seek bodies out.
+10. **The drops roll once** (the first time down).
+11. **No body despawns** on its own: a floor's bodies stay until it ends (a body is one static model; watch the frame rate on a
+    long fight).
+12. **A pit or lava leaves no body** (the zombie is freed as any monster).
+13. **A body falls away from a wall** within 1.3 (the look; it rises facing the way it lies).
+14. **Heal and Revive stay allies-only** (the decision to revisit before the milestone ends: whether Heal raises zombies).
+15. **Its cry** is the shared monster cry (`cry_monster`); no zombie voice yet.
+16. **The late-join test runs three processes, not two:** a late joiner needs a crew already on the floor (a host alone on a job
+    admits nobody, `NetJoin`), so c1 watches live and c2 joins.
+
+### New player-facing strings (proposals for review)
+- Monster name **Zombie** (the combat log's "Zombie died"); pest name **zombies**: the objective **Exterminate zombies**, the
+  Ledger's **Pest cleared (zombies)**, the dispatch banners' `{pest}` ("The zombies on this floor are still getting up. Put them
+  down and keep going.", H1's lines).
+- The floor-1 pest ticket (`NoteCopy.PEST_TICKETS["zombie"]`): **"Slow ones in burial clothes. Knocked down, they lie there until
+  something gets them up. Technician's advice: burn them where they lie."**
+- Dev only: the gym's **Zombie (body)** button.
+
+### Tests
+- `tests/test_zombie.gd` (new, solo): the kind, its look from its cell (both looks turn up), slower and tougher than a skeleton;
+  killed it stays a body (lying, the motes, not an actor or a monster, in the downed query but not an ally's) and never gets up by
+  itself; Heal and Revive leave it; Coffee raises it at `ZOMBIE_HP`, not hasted, helpless while it rises, then standing; down
+  again; a fireball's blast burns the body (charred, out of the downed query) and coffee or `revive` no longer raise it; a zombie
+  that goes down burning is burnt and a fire lit on a body burns it; a copy ignores `revive` and `burn_body`; skeletons, archers
+  and brutes still free; the gym's body button.
+- `tests/test_net_zombies.gd` (new, NetTest, `const PEERS := 3`, `off` and `coast`): board 9's heir contract (pest zombies); the host
+  kills three zombies and c1 shows three bodies where they lie; the host's fireball burns one and c1 shows it charred; c1's coffee
+  raises another ON THE HOST (its owner) and c1 shows it standing again, streamed; the coffee does not raise the burnt one; c2 joins
+  late and shows the standing one where the host has it and the two bodies where they lie, one burnt; then the host downs the
+  standing one again and burns the last, and both clients show it; no OWNER-write guard on any machine.
+- Updated: `test_monster_defs` (the zombie row in every table; a family kind is never in a hellgate pack, dead packs deal both),
+  `test_monster_models` (its parts), `test_monster_integration` (its scale; it stays a body), `test_monster_death` (every kind
+  frees but the zombie), `test_haunted_contract` (the dead family is skeletons and zombies; the pest one of them; a sane total),
+  `test_crypt_gen` (the crypt's packs are the family's), `test_net_contract` (`zombie.gd` in REPLICATED; `burn_body` in the
+  area-verb lint).

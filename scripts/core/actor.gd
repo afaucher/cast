@@ -358,8 +358,9 @@ func _on_death() -> void:
 ## leaking, until healed past CoffeeSpell.ZOMBIE_CURE). On a standing actor it is the actor's own business
 ## (_revive_standing: Revive lifts a zombie's curse). Applied by the TARGET'S OWNER (Net.resolves: a hero's player, the host
 ## for the AI seats), like a heal; a copy ignores it (the cast runs on every machine, so its owner applies it there, and the
-## other screens see it stand from the owner's state: NetCodec). Only an actor that stays down when it dies can get up
-## (_can_revive: a hero); anything else is gone. Returns true when something changed.
+## other screens see it stand from the owner's state: NetCodec; a zombie's from world.rise). Only an actor that stays down
+## when it dies can get up (_can_revive: a hero, a zombie's unburnt body: Zombie); anything else is gone. Returns true when
+## something changed.
 func revive(to_hp: float, cursed: bool = false) -> bool:
 	if Net.is_copy(self) or to_hp <= 0.0 or not is_inside_tree() or not _can_revive():
 		return false
@@ -372,9 +373,38 @@ func revive(to_hp: float, cursed: bool = false) -> bool:
 	return true
 
 
-## Override: can this actor get back up after dying? (Hero: it lies downed; everything else is freed on death.)
+## Override: can this actor get back up after dying? (Hero: it lies downed; a zombie lies as a body until it is burnt,
+## Zombie; everything else is freed on death.)
 func _can_revive() -> bool:
 	return false
+
+
+## DOWNED: dead but lying on the floor, and able to get up (a downed hero; a zombie's body that is not burnt). What the
+## downed query finds (GameWorld.downed_in_radius: coffee, Revive, a fire over the bodies).
+func is_downed() -> bool:
+	return dead and _can_revive()
+
+
+## BURN A BODY: a fire reached this downed body (a fireball's blast over it, Burning.on_blast; a fire lit on it,
+## Burning.ignite; going down while on fire). Only a body that burns down does anything (_burns_down: a zombie's, which then
+## never gets up; haunted-build-plan.md H3); a downed hero and anything standing shrug it off. Applied by the body's OWNER
+## (Net.resolves: the host for a monster), like a fire; a copy ignores it (the owner tells the other screens). Returns true
+## when it burnt.
+func burn_body(source: Node = null) -> bool:
+	if Net.is_copy(self) or not dead or not is_inside_tree() or not _burns_down():
+		return false
+	_burn_down(source)
+	return true
+
+
+## Override: does this downed body burn down (Zombie: until it is burnt)? Default: no.
+func _burns_down() -> bool:
+	return false
+
+
+## Override: char the body (Zombie: burnt, the charred look, and it tells the net layer).
+func _burn_down(_source: Node) -> void:
+	pass
 
 
 ## Override: `revive` on an actor that is standing (Hero: Revive lifts a zombie's curse). Default: nothing.

@@ -47,7 +47,7 @@ static func spawn(kind: String, cell: Vector2i) -> Monster:
 ## multiplies a kind's pick weight ({kind: factor}: SiteBuilder favours the contract's pest). `floor_n`: the floor the pack
 ## is for; a kind whose row says "min_floor" above it is not dealt (so floor 1 rolls exactly as before the pavise and the
 ## water boy), "max" caps a kind per pack and "after" deals it only once the pack holds that many others. `only`: the kinds
-## the pack may hold ([] = every kind; a haunted contract's pest family, ContractRun.family_kinds). The one pack
+## the pack may hold ([] = every kind but a family's own, the zombie; a haunted contract's pest family, ContractRun.family_kinds). The one pack
 ## composer: the floor plan depends on its exact rolls.
 static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = {}, floor_n: int = 1, only: Array[String] = []) -> Array[String]:
 	var plan: Array[String] = []
@@ -62,6 +62,8 @@ static func compose(budget: int, rng: RandomNumberGenerator, bias: Dictionary = 
 				continue
 			if not only.is_empty() and not only.has(k):
 				continue
+			if only.is_empty() and MonsterDefs.family_of(k) != "":
+				continue   # (a family's own kind, the zombie: only its family's packs deal it)
 			if not _dealt(k, floor_n, int(counts.get(k, 0)), plan):
 				continue
 			var w: float = WEIGHTS[k] * pow(0.5, counts.get(k, 0))

@@ -23,6 +23,8 @@ extends Node3D
 ##   - The fire does NOT spread: no contact spread, no aura. Only a fireball blast ignites.
 ##   - It ends when it burns out, when the actor dies or is downed (the "died" signal), or on extinguish.
 ##     Healing does not put it out.
+##   - A BODY (a zombie's, haunted-build-plan.md H3) does not catch fire: a blast over it, or a fire lit on it, burns it down
+##     (Actor.burn_body: the charred look, and it never gets up); a zombie that goes down burning is burnt the same way.
 ##   - Damage is dealt through Actor.apply_damage with the caster as the source (kill credit, ledger).
 ## Every live fire is in the group "burning", so Damp can find them. `ended(reason)` says why a fire
 ## stopped: "burnt_out", "extinguished" or "died".
@@ -157,6 +159,9 @@ static func remaining(a: Actor) -> float:
 ## Set `target` on fire for `duration` seconds, blamed on `source`. A burning actor is refreshed (the longer of
 ## the remaining time and `duration`), never stacked. Returns the fire, or null if the actor cannot burn.
 static func ignite(target: Actor, source: Node, duration: float) -> Burning:
+	if target != null and is_instance_valid(target) and target.dead and duration > 0.0:
+		target.burn_body(source)   # (a fire on a downed body burns it, when it is a body that burns: a zombie's, H3)
+		return null
 	if not can_burn(target) or duration <= 0.0:
 		return null
 	var b := _of(target)
@@ -241,6 +246,10 @@ static func on_blast(pos: Vector3, radius: float, power: float, source: Node) ->
 		if GameWorld.rng.randf() < ignite_chance(power, frac):
 			if ignite(a, source, roll_duration()) != null:
 				out.append(a)
+	# Every body the blast covers burns, no roll (haunted-build-plan.md H3: a burnt zombie never gets up): its owner burns it.
+	for b in GameWorld.downed_in_radius(pos, radius):
+		if Net.resolves(b):
+			b.burn_body(source)
 	return out
 
 

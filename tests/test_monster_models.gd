@@ -35,6 +35,8 @@ func _part_names(kind: String) -> Array[String]:
 			return WaterBoyModel.PART_NAMES
 		"goo_imp":
 			return GooImpModel.PART_NAMES
+		"zombie":
+			return ZombieModel.PART_NAMES
 		_:
 			return SwarmerModel.PART_NAMES
 

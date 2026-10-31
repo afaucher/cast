@@ -44,6 +44,12 @@ extends Node
 ## which ids are runtime actors) and dies with `world.die`. A client builds its puppet from the kind (make_shown) and shows
 ## it (net_write / net_tick). One track (RUNTIME) serves every such class; a new one is a RUNTIME_ACTORS entry.
 ##
+## BODIES (haunted-build-plan.md H3: a zombie that dies stays down, Zombie): its death is world.die as ever, but the node stays
+## on every screen, lying as a body. A body the host stands back up (coffee, an acolyte: Actor.revive) is `world.rise {id, hp,
+## x, y, z}` (the host streams it again; a client stands it up and shows it from the stream: Net.remote_revive), and one it
+## burns is `world.burn {id}` (the charred look). Both go through the death queue on the host's beat, in order with the
+## deaths. A late joiner gets every body where it lies, burnt or not, in its snapshot (body_states / apply_bodies).
+##
 ## The game calls begin() at the floor's barrier (after NetFloor.assign_ids and freeze_copies) and set_active() with
 ## the hero sync (NetSnapshot.set_active). Nothing here knows about game.gd.
 
@@ -228,6 +234,10 @@ func _track(id: int, n: Actor, kind: int) -> void:
 			_link(Signal(n, "dismounted"), _on_dismount.bind(id))
 		if n.has_signal("shield_changed"):
 			_link(Signal(n, "shield_changed"), _on_shield.bind(id))
+		if n.has_signal("burnt_down"):
+			# a body that stays down (a zombie, haunted-build-plan.md H3): it stands back up (world.rise) and burns (world.burn)
+			_link(n.revived, _on_rise.bind(id))
+			_link(Signal(n, "burnt_down"), _on_burn.bind(id))
 
 
 func _show(id: int, n: Actor, kind: int) -> void:
@@ -683,6 +693,69 @@ func _on_shield(st: int, pos: Vector3, yaw: float, id: int) -> void:
 	stats["shields"] = int(stats.get("shields", 0)) + 1
 
 
+## Host: a body stood back up (a zombie: coffee, an acolyte): it streams again from here, and every screen stands it up on
+## the beat the host stamped (world.rise {id, hp, x, y, z}).
+func _on_rise(_cursed: bool, id: int) -> void:
+	var n := NetRegistry.node(id) as Actor
+	if n == null or n.dead:
+		return
+	_flush_spawns()
+	if not _tracks.has(id):
+		var tr := Track.new()   # (its signals are still linked from the first track: only the stream's bookkeeping is new)
+		tr.node = n
+		tr.id = id
+		tr.kind = _kind_of(n)
+		_tracks[id] = tr
+	var p := n.global_position
+	_send("world.rise", {"id": id, "hp": n.hp, "x": p.x, "y": p.y, "z": p.z})
+	stats["rises"] = int(stats.get("rises", 0)) + 1
+
+
+## Host: a body was burnt (it never gets up again): every screen chars it (world.burn {id}).
+func _on_burn(id: int) -> void:
+	_send("world.burn", {"id": id})
+	stats["burns"] = int(stats.get("burns", 0)) + 1
+
+
+## Host: every body lying on the floor (a downed zombie, burnt or not), for a late joiner: [[id, kind, x, y, z, yaw, burnt]].
+## A seed-built one is also a gone id shown dead (NetJoin.gone_ids); a runtime one the joiner builds from its row.
+func body_states() -> Array:
+	var out: Array = []
+	for id in NetRegistry.ids():
+		var n := NetRegistry.node(id) as Monster
+		if n == null or not n.dead or not n.has_method("net_body") or not bool(n.call("is_body")):
+			continue
+		var p := n.global_position
+		out.append([id, n.kind, p.x, p.y, p.z, float(n.call("body_yaw")), bool(n.get("burnt"))])
+	return out
+
+
+## The late joiner: the host's bodies where they lie (body_states), shown dead, burnt or not. A runtime body this machine
+## never built (it came and went down before the join) is built here first, as a puppet.
+func apply_bodies(list: Array) -> void:
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 7:
+			continue
+		var id := int(row[0])
+		var pos := Vector3(float(row[2]), float(row[3]), float(row[4]))
+		var n := NetRegistry.node(id) as Actor
+		if n == null and GameWorld.root != null:
+			var m := MonsterFactory.spawn(str(row[1]), Hex.from_world(pos))
+			if m == null:
+				continue
+			NetRegistry.register(id, m)
+			Net.make_puppet(m)
+			n = m
+		if n == null or not n.has_method("net_body"):
+			continue
+		_shown.erase(id)
+		if not n.dead:
+			Net.remote_die(n)
+		n.call("net_body", pos, float(row[5]), bool(row[6]))
+		n.reset_physics_interpolation()
+
+
 ## Host: every living pavise's shield, for a late joiner: [[id, state, x, y, z, yaw]].
 func shield_states() -> Array:
 	var out: Array = []
@@ -754,8 +827,11 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 		"world.spawn":
 			_receive_spawn(int(data.get("g", 0)), data.get("m", []) as Array)
 		"world.die":
-			_deaths.append([int(data.get("id", 0)), stamp, _now()])
+			_deaths.append([int(data.get("id", 0)), stamp, _now(), "die"])
 			_windups.erase(int(data.get("id", 0)))
+		"world.rise", "world.burn":
+			# a body's (H3): in line with its death, on the beat the host stamped (_apply_deaths keeps one actor's in order)
+			_deaths.append([int(data.get("id", 0)), stamp, _now(), "rise" if kind == "world.rise" else "burn", data])
 		"world.windup":
 			_windups[int(data.get("id", 0))] = [float(data.get("s", stamp)) + float(data.get("l", 0.0)), int(data.get("v", 0))]
 			stats["windups"] = int(stats["windups"]) + 1
@@ -942,15 +1018,45 @@ func _show_world(t_r: float, delta: float) -> void:
 		sh.node.call("net_tick", delta)
 
 
-## Deaths whose moment the render time has reached (or that waited long enough).
+## Deaths (and a body's stand-ups and burns) whose moment the render time has reached (or that waited long enough). One
+## actor's stay in the order they came: one that is not due holds the later ones back.
 func _apply_deaths(t_r: float, now: float) -> void:
 	var keep: Array = []
+	var held := {}
 	for d: Array in _deaths:
-		if t_r >= float(d[1]) or now - float(d[2]) >= DEATH_WAIT_MAX:
-			_die(int(d[0]))
+		var id := int(d[0])
+		if not held.has(id) and (t_r >= float(d[1]) or now - float(d[2]) >= DEATH_WAIT_MAX):
+			match (str(d[3]) if d.size() > 3 else "die"):
+				"rise":
+					_rise(id, d[4] as Dictionary)
+				"burn":
+					_burn(id)
+				_:
+					_die(id)
 		else:
+			held[id] = true
 			keep.append(d)
 	_deaths = keep
+
+
+## A body the host stood back up (world.rise): standing here too, where the host has it, and shown from the stream again.
+func _rise(id: int, data: Dictionary) -> void:
+	var n := NetRegistry.node(id) as Actor
+	if n == null or not n.dead:
+		return
+	n.global_position = Vector3(float(data.get("x", n.global_position.x)), float(data.get("y", n.global_position.y)), float(data.get("z", n.global_position.z)))
+	Net.remote_revive(n, float(data.get("hp", 1.0)))
+	_show(id, n, _kind_of(n))
+	n.reset_physics_interpolation()
+	stats["rises"] = int(stats.get("rises", 0)) + 1
+
+
+## A body the host burnt (world.burn): charred here too.
+func _burn(id: int) -> void:
+	var n := NetRegistry.node(id) as Actor
+	if n != null and n.dead and n.has_method("net_burn"):
+		n.call("net_burn")
+		stats["burns"] = int(stats.get("burns", 0)) + 1
 
 
 func _die(id: int) -> void:

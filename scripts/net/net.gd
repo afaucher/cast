@@ -127,6 +127,17 @@ static func remote_die(a: Actor) -> void:
 	a._on_death()
 
 
+## Show a stand-up the owner decided on a copy's body here (a zombie raised on the host: NetWorld's world.rise): not dead, its
+## HP, the signal and the look, exactly as Actor.revive on the owner would, but deciding nothing.
+static func remote_revive(a: Actor, to_hp: float) -> void:
+	if a == null or not a.dead:
+		return
+	a.dead = false
+	a.hp = clampf(to_hp, 1.0, a.max_hp)
+	a._on_revived(false)
+	a.revived.emit(false)
+
+
 ## What a player's hit is sent to the host for: every host-owned actor (M3c: priced props, crates, mail boxes; M4: monsters,
 ## hellgates and employees too, "the attacker decides"). A hero is never routed a hit: its owner decides (rule 1).
 static func routes_hits(a: Object) -> bool:

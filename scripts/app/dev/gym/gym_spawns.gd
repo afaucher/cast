@@ -5,8 +5,9 @@ extends RefCounted
 ##   monster  every MonsterDefs.DEFS kind: MonsterFactory.spawn for the kinds with a model (pack kinds, the goblin, the goo
 ##            imp, ...); the sharks go into a pool (one entry per billed variant; "jockey", the imp gunner, rides an "imp"
 ##            shark), the gator into the sewer's water (its home region). A kind that none of those can build is listed with
-##            `skip` (the reason) and no button.
-##   dummy    TrainingDummy: a static post and a walker, both with DUMMY_HP
+##            `skip` (the reason) and no button. The zombie also has "Zombie (body)" (id monster:zombie:body): one that goes
+##            down as it lands, a body to raise with coffee or burn with a fireball (haunted-build-plan.md H3)
+##   dummy   TrainingDummy: a static post and a walker, both with DUMMY_HP
 ##   prop     every PricedProp.TABLE kind that is not an explosive (an electrical panel brings its live wire by water)
 ##   hazard   every explosive kind (PricedProp.hazard_kinds())
 ##   staff    every EmployeeModel.STYLES style
@@ -43,6 +44,8 @@ static func entries() -> Array[Dictionary]:
 		var row: Dictionary = MonsterDefs.DEFS[kind]
 		if MonsterFactory.SCRIPTS.has(kind):
 			out.append(_e("monster", kind, kind.capitalize()))
+			if kind == "zombie":
+				out.append(_e("monster", kind, "Zombie (body)", {"id": "monster:zombie:body", "body": true}))
 		elif kind == "shark":
 			for v: String in (row.get("billed", {"regular": {}}) as Dictionary):
 				out.append(_e("monster", kind, "Shark (%s)" % v, {"variant": v, "id": "monster:shark:" + v}))
@@ -117,6 +120,8 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 					var m := MonsterFactory.spawn(key, c)
 					if m != null:
 						out.append(m)
+						if bool(e.get("body", false)):
+							m.die()   # (a zombie's body: down where it stands, H3; coffee or a fireball on it in the gym)
 		"dummy":
 			for c in cells_near(map, at, n, 1):
 				var d := TrainingDummy.new()

@@ -6,7 +6,7 @@ extends MonsterTestBase
 ##     STAIRS cells down into them, every room reachable from the start;
 ##   - its rooms are crypt rooms of the site's set, lit and dark by turns from the stair's foot, in the set's materials; the
 ##     lit rooms hold a row of priced sarcophagi with the vigil's candles; bone walls stand on a wall; its doorways get arches
-##     and open gates, never an office door; its packs are the contract's family (skeletons);
+##     and open gates, never an office door; its packs are the contract's family (skeletons and zombies, H3);
 ##   - it is lit as the look test lit it: its stone and its pieces on HexMapView's UNDER_LAYER, which the key and fill
 ##     lights leave out, and no downlight over its rooms;
 ##   - `crypt=` is in the map checksum text, the same checksum on two builds; a shared run gets the same crypt;
@@ -184,7 +184,7 @@ func _check_crypt(run: ContractRun, f: int, map: HexMap, plan: SitePlan, tag: St
 	check(not NetFloor.map_text_of(map).contains("\nsewer=") and map.cave.is_empty(), "%s: no sewer cluster or lava cave beside it" % tag)
 
 
-## Spawned (as the game builds a floor) and built twice: the same checksum, priced sarcophagi, skeletons only in the crypt.
+## Spawned (as the game builds a floor) and built twice: the same checksum, priced sarcophagi, only the dead family in the crypt.
 func _check_built(id: String, s: int, f: int, tag: String) -> void:
 	var a := _build(id, s, f)
 	var map: HexMap = a["map"]
@@ -201,7 +201,7 @@ func _check_built(id: String, s: int, f: int, tag: String) -> void:
 		var cell := map.get_cell(Hex.from_world(m.global_position))
 		if cell != null and rooms.has(cell.tag):
 			in_crypt += 1
-			eq(m.kind, "grunt", "%s: the crypt's packs are the family's skeletons" % tag)
+			check(m.kind in ["grunt", "zombie"], "%s: the crypt's packs are the family's skeletons and zombies (%s)" % [tag, m.kind])
 	var lights := 0
 	var under_pieces := 0
 	for d in site.decor:
@@ -236,7 +236,7 @@ func _check_built(id: String, s: int, f: int, tag: String) -> void:
 	var b := _build(id, s, f)
 	eq(str(a["sum"]["all"]), str(b["sum"]["all"]), "%s: the same checksum on two builds (%s)" % [tag, ", ".join(NetFloor.differing_parts(a["sum"], b["sum"]))])
 	eq(int(a["ids"]), int(b["ids"]), "%s: the same net ids" % tag)
-	print("[crypt gen] %s: %d sarcophagi, %d skeletons in the crypt, %d candle lights" % [tag, priced, in_crypt, lights])
+	print("[crypt gen] %s: %d sarcophagi, %d of the dead in the crypt, %d candle lights" % [tag, priced, in_crypt, lights])
 
 
 func _build(id: String, s: int, f: int) -> Dictionary:

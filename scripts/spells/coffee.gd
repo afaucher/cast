@@ -67,7 +67,9 @@ func net_fields() -> Dictionary:
 
 ## The spell: everyone (any team) within CoffeeSpell.coffee_radius(power) of `pos` is caffeinated, and a DOWNED hero in it
 ## gets up as a zombie (CoffeeSpell.ZOMBIE_HP, gray and leaking: Hero.zombie) without the haste (the living drink first, so
-## the one it stood up is not caffeinated by the same cup). Each target's owner applies it (Combat). Returns who drank.
+## the one it stood up is not caffeinated by the same cup). A zombie's body in it gets back up too, at the same HP (Zombie; the
+## user, 2026-10-29: "Let's do coffee only for now"): spilling coffee near the bodies is a mistake you can make. Each target's
+## owner applies it (Combat). Returns who drank.
 static func cast(caster: Actor, power: float, pos: Vector3) -> Array[Actor]:
 	var radius := CoffeeSpell.coffee_radius(power)
 	var secs := CoffeeSpell.coffee_duration(power)

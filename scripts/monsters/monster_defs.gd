@@ -22,6 +22,9 @@ extends RefCounted
 ##              "gate": normal floors' packs and the hellgates never deal it (test_monster_defs holds that)
 ##   sewer_pack {min, max, weight}: a sewer pack of this kind is min-max of them, picked at this weight among the sewer kinds
 ##              (MonsterFactory.compose_sewer / spawn_sewer_pack: the sewer's own packs, not the floor's pack roll)
+##   family     the pest family whose packs alone deal it ("dead": the zombie, haunted-build-plan.md H3). A family kind is
+##              dealt only when a pack asks for the family's kinds (MonsterFactory.compose's `only`), so a hellgate floor's
+##              packs roll exactly as before it existed
 ##
 ## Order matters where noted: DEFS' order is the order of MonsterFactory.KINDS (the pack roll), MonsterModels.KINDS,
 ## the drop table and ClientArchetype.PEST_NAMES, which the floor plan and its checksum depend on.
@@ -91,6 +94,14 @@ const DEFS := {
 		## per imp (imps come in packs): its counters, now and then
 		"drops": [{"spells": ["damp"], "chance": 0.05}, {"spells": ["fireball"], "chance": 0.04}],
 	},
+	"zombie": {   ## the haunted contracts' zombie (haunted-build-plan.md H3): the dead family's slow shamble; down, it stays a body
+		"script": "res://scripts/monsters/zombie.gd", "model": "res://scripts/art/lowpoly/necro/zombie_model.gd", "tris": 3000,
+		"pack": {"cost": 3, "weight": 5.0},
+		"family": "dead",
+		## the first time it goes down only; a fireball burns the bodies, a heal for the crew
+		"drops": [{"spells": ["fireball"], "chance": 0.10}, {"spells": ["heal"], "chance": 0.08}],
+		"pest": "zombies",
+	},
 }
 
 ## The hellgate roll walks its kinds in this order (a different order would spawn different kinds for the same roll).
@@ -122,6 +133,11 @@ static func min_floor(kind: String) -> int:
 ## One pick of this kind is a clump (the imps).
 static func is_swarm(kind: String) -> bool:
 	return bool((row(kind).get("pack", {}) as Dictionary).get("swarm", false))
+
+
+## The pest family a kind belongs to alone ("" for the kinds any pack may deal; "dead" for the zombie).
+static func family_of(kind: String) -> String:
+	return str(row(kind).get("family", ""))
 
 
 ## Where the kind lives: "" (everywhere a floor deals it) or its habitat ("sewer").

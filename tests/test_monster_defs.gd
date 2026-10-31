@@ -11,15 +11,15 @@ func setup() -> void:
 		if MonsterDefs.row(k).has("pack"):
 			check(MonsterDefs.model_script(k) != null and int(MonsterDefs.row(k).get("tris", 0)) > 0, "%s: a pack kind has a model and a budget" % k)
 	# The derived tables, in the order the rolls walk them.
-	eq(MonsterFactory.KINDS, ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy"] as Array[String], "the pack kinds, in the pack roll's order")
-	eq(MonsterFactory.COSTS, {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4, "pavise": 4, "water_boy": 3}, "pack costs")
-	eq(MonsterFactory.WEIGHTS, {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5, "pavise": 0.75, "water_boy": 2.0}, "pack weights")
-	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp"], "the factory builds the kinds with a model")
-	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp"] as Array[String], "the modelled kinds")
+	eq(MonsterFactory.KINDS, ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "zombie"] as Array[String], "the pack kinds, in the pack roll's order")
+	eq(MonsterFactory.COSTS, {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4, "pavise": 4, "water_boy": 3, "zombie": 3}, "pack costs")
+	eq(MonsterFactory.WEIGHTS, {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5, "pavise": 0.75, "water_boy": 2.0, "zombie": 5.0}, "pack weights")
+	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie"], "the factory builds the kinds with a model")
+	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie"] as Array[String], "the modelled kinds")
 	eq(MonsterDefs.is_swarm("swarmer"), true, "imps come in a swarm")
 	eq(MonsterDefs.is_swarm("grunt"), false, "a grunt doesn't")
-	eq(ClientArchetype.PEST_NAMES, {"grunt": "skeletons", "archer": "archers", "brute": "brutes", "swarmer": "imps", "everything": "everything"}, "pest names")
-	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp"], "the kinds that drop components")
+	eq(ClientArchetype.PEST_NAMES, {"grunt": "skeletons", "archer": "archers", "brute": "brutes", "swarmer": "imps", "zombie": "zombies", "everything": "everything"}, "pest names")
+	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp", "zombie"], "the kinds that drop components")
 	for k: String in SpellComponents.DROPS:
 		for e: Dictionary in SpellComponents.DROPS[k]:
 			for sp: String in e["spells"]:
@@ -81,6 +81,21 @@ func setup() -> void:
 		sizes[sp.size()] = true
 		check(sp.size() >= GooImp.PACK_MIN and sp.size() <= GooImp.PACK_MAX and sp.count("goo_imp") == sp.size(), "a sewer pack is 3-4 goo imps (seed %d: %s)" % [s, sp])
 	check(sizes.has(3) and sizes.has(4), "sewer packs of 3 and of 4 both happen")
+	# A family's own kind (the zombie, haunted-build-plan.md H3): never in a pack that does not ask for its family, so every
+	# hellgate floor's packs roll exactly as before it existed; a dead family's pack deals it beside the skeleton.
+	eq(MonsterDefs.family_of("zombie"), "dead", "the zombie is the dead family's own")
+	eq(MonsterDefs.family_of("grunt"), "", "the skeleton belongs to no family alone")
+	var dead_kinds := ClientArchetype.family_kinds(ClientArchetype.FAMILY_DEAD)
+	var dealt := {}
+	for s in 200:
+		for fl in [1, 2, 3]:
+			a.seed = s
+			check(not MonsterFactory.compose(18, a, {"zombie": 50.0}, fl).has("zombie"), "no hellgate pack deals a zombie (seed %d, floor %d)" % [s, fl])
+			a.seed = s
+			for k in MonsterFactory.compose(14, a, {}, fl, dead_kinds):
+				check(dead_kinds.has(k), "a dead pack deals only the family (seed %d: %s)" % [s, k])
+				dealt[k] = true
+	check(dealt.has("zombie") and dealt.has("grunt"), "dead packs deal zombies and skeletons")
 	# Floor 1's rolls are the old ones: the same draws as a compose without the new kinds' rows.
 	for s in 20:
 		a.seed = s

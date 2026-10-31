@@ -86,6 +86,15 @@ const WORLD_CARRIES := {
 		"_windup_left": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
 		"mounted": "world.dismount {id, h, x, y, z} (NetWorld): knocked off, or its shark died; never true again",
 	},
+	# The haunted contracts' zombie (haunted-build-plan.md H3): a monster whose death leaves a body that can stand back up.
+	"res://scripts/monsters/zombie.gd": {
+		"dead": "world.die (NetWorld): down as a body on the beat the host stamped it; world.rise {id, hp, x, y, z}: stood back up (coffee, an acolyte), streamed again",
+		"pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
+		"target": "world.windup names its victim (NetWorld, M4: each client resolves the strike against its own hero)",
+		"_windup_total": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
+		"_windup_left": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
+		"burnt": "world.burn {id} (NetWorld): the body charred on every screen, in order with its death; a late joiner: `bodies`",
+	},
 	"res://scripts/contracts/employee.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
 		"_extracted": "world.extract (NetWorld)",
@@ -157,6 +166,7 @@ const WORLD_CARRIES := {
 ##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
 ##   world.shield (reliable)  host -> clients: a Pavise's shield state {id, st, x, y, z, w} (carried, planted, left, flat)
+##   world.rise / world.burn (reliable, H3)  host -> clients: a zombie's body stood back up {id, hp, x, y, z} / was burnt {id}
 ##   world.charge / world.uncharge / world.lock / world.dismount (reliable)  host -> clients: a laser shark's charge (start,
 ##                         length, victim) / dropped / its beam locked (origin, direction, the shared fire time: every machine
 ##                         fires it then and applies what it resolves) / an imp gunner off its shark (how, where)
@@ -196,6 +206,7 @@ const LATE_JOIN := {
 	"res://scripts/monsters/gator.gd": "keyframe (seed-built: position, facing, HP, state), as the shark; a killed one: gone ids (removed); a nip under way: skipped (under a second); its relocation and riling: the host's AI (PRIVATE), the keyframe and the stream show where it goes",
 	"res://scripts/monsters/pavise.gd": "as monster.gd (keyframe, gone ids); its shield: replay of world.shield per pavise in the snapshot (NetWorld.shield_states); an aim or a bolt under way: skipped (under 1.5 s); stuck arrows: cosmetic, skipped",
 	"res://scripts/monsters/water_boy.gd": "as monster.gd (keyframe, gone ids); a pour under way: skipped (a wind-up, under a second)",
+	"res://scripts/monsters/zombie.gd": "standing: as monster.gd (keyframe; a runtime one: replay of world.spawn); a body: its seed-built id a gone id shown dead (NetJoin.gone_ids), then `bodies` (NetWorld.body_states: where it lies, which way, burnt; a runtime body is built from its row); a stand-up under way: skipped (under 1.5 s)",
 	"res://scripts/contracts/employee.gd": "keyframe (state, leader seat, HP, position); the wait spot; gone ids (dead: shown dead; extracted: removed)",
 	"res://scripts/contracts/hellgate.gd": "keyframe (HP, phase, flare); gone ids (closed: shown closed)",
 	"res://scripts/contracts/priced_prop.gd": "gone ids (broken: shown broken); a dent: replay of obj.hurt; a broken one something runs from (an electrical panel's LiveWire): replay of its break moment and culprit, `breaks` (PricedProp.break_synced: the wire skips the shocks already past)",

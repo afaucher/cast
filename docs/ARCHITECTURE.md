@@ -383,7 +383,12 @@ lab shares). `grounded_anim` adds the body lean and squash and the strike-first 
 `water_boy` (packs from floor 2: the shielded crossbowman and the healer, `docs/design/combat-proposals.md` §2.9 / §3.8), and
 `goblin` (the scout: never in a pack, `SiteBuilder` puts one or two in corridors; `docs/design/goblin-scout.md`), and `goo_imp` (the
 sewer's ranged pest: a row with `"habitat": "sewer"` and no `pack`, so only `MonsterFactory.compose_sewer` / `spawn_sewer_pack` deal it;
-its ball and patch are `GooBall` / `GooPatch`, runtime objects the host announces; `docs/design/goo-imp.md`, "As built"). Every kind is a
+its ball and patch are `GooBall` / `GooPatch`, runtime objects the host announces; `docs/design/goo-imp.md`, "As built"), and `zombie`
+(`Zombie`, the haunted contracts' dead family: a row with `"family": "dead"`, so only a dead family's packs deal it; a zombie that
+dies STAYS DOWN AS A BODY: `dead`, lying where it fell, out of `monsters`, found by `GameWorld.downed_in_radius` (`Actor.is_downed`);
+Coffee's splash stands it up through `Actor.revive`, and a fire on it burns it through the verb `Actor.burn_body`, after which it
+never rises; online `world.die` / `world.rise` / `world.burn` and the late-join `bodies`; `docs/design/haunted-build-plan.md`,
+"H3 as built"). Every kind is a
 `MonsterDefs` row (`MonsterFactory.compose` deals a pack kind from its row's `min_floor`, at most `max` a pack, `after` that
 many others). A shield is a target's `blocks_hit(from_point, kind)`, asked through `Combat.shielded` by every hit helper.
 `MonsterFactory.spawn_pack(room_cells: Array[Vector2i], budget: int, rng) -> Array[Monster]`.

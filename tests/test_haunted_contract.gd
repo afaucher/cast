@@ -1,9 +1,9 @@
 extends MonsterTestBase
 ## Haunted contracts, step H1 (docs/design/haunted-build-plan.md): the two haunted clients (ClientArchetype.HAUNTED_IDS, the
 ## dead pest family, a mansion and a church), their contracts (no hellgates, no gate or origin objective, the pest per floor
-## pays, skeletons only), the board dealing them on dice of its own (the hellgate offers dealt as before), and their floors
+## pays, the pest skeletons or zombies: H3), the board dealing them on dice of its own (the hellgate offers dealt as before), and their floors
 ## built the way the game builds them: no gate, no sewer or lava section (a crypt may roll since H2: its rooms are crypt
-## rooms, tests/test_crypt_gen.gd), only skeletons, rooms from the haunted pools dressed with the
+## rooms, tests/test_crypt_gen.gd), only the dead family (skeletons and zombies since H3), rooms from the haunted pools dressed with the
 ## look test's props, priced antiques from the site's catalog, notes and dispatch lines that never name a gate, and the same
 ## NetFloor checksum on two builds (the crew's load barrier).
 
@@ -84,6 +84,7 @@ func _check_tables() -> void:
 
 
 func _check_runs() -> void:
+	var pests_seen := {}
 	for id: String in ClientArchetype.HAUNTED_IDS:
 		for s in SEEDS:
 			var run := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
@@ -91,8 +92,9 @@ func _check_runs() -> void:
 			eq(run.family, ClientArchetype.FAMILY_DEAD, "%s: the dead family" % tag)
 			check(not run.has_gates(), "%s: no hellgates" % tag)
 			eq(run.floor_gates, [0, 0, 0] as Array[int], "%s: no gate on any floor" % tag)
-			eq(run.pest, "grunt", "%s: the pest is the family's skeleton" % tag)
-			eq(run.family_kinds(), ["grunt"] as Array[String], "%s: packs of skeletons only" % tag)
+			check(run.pest in ["grunt", "zombie"], "%s: the pest is one of the family's, skeletons or zombies (%s)" % [tag, run.pest])
+			eq(run.family_kinds(), ["grunt", "zombie"] as Array[String], "%s: packs of the dead family: skeletons and zombies (H3)" % tag)
+			pests_seen[run.pest] = true
 			var value := 0
 			var pests := 0
 			for o in run.objectives:
@@ -107,6 +109,7 @@ func _check_runs() -> void:
 			var again := ContractRun.make(id, s, float(s % 10) / 10.0 + 0.05)
 			eq([again.client_name, again.story, again.floor_employees, again.contract_value], [run.client_name, run.story, run.floor_employees, run.contract_value],
 					"%s: deterministic" % tag)
+	check(pests_seen.has("grunt") and pests_seen.has("zombie"), "haunted contracts name skeletons or zombies as the pest (%s)" % str(pests_seen.keys()))
 	var gate_run := ContractRun.make("prepper", 3, 0.5)
 	check(gate_run.has_gates() and gate_run.family == ClientArchetype.FAMILY_GATE and gate_run.total_gates() > 0, "a hellgate client keeps its gates")
 	eq(ContractBoard.run_for_client("heir", 9).site_type, "mansion", "the --client flag's contract")
@@ -173,12 +176,17 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	check(plan.gates.is_empty() and site.gates.is_empty() and site.origin_gate == null and site.beasts.is_empty(), "%s: no hellgate" % tag)
 	check(map.sewer.is_empty() and map.cave.is_empty(), "%s: no sewer cluster or lava cave" % tag)
 	check(site.scouts.is_empty() and site.sharks.is_empty() and site.gators.is_empty(), "%s: no goblin scout, shark or gator" % tag)
-	# only skeletons, and enough of them to exterminate
+	# only the dead family (skeletons and zombies, H3), and enough of the pest to exterminate
 	check(site.monsters.size() > 0, "%s: monsters spawned (%d)" % [tag, site.monsters.size()])
 	var kinds := {}
 	for m in site.monsters:
-		kinds[m.kind] = true
-	eq(kinds.keys(), ["grunt"], "%s: skeletons only" % tag)
+		kinds[m.kind] = int(kinds.get(m.kind, 0)) + 1
+	for k: String in kinds:
+		check(k in ["grunt", "zombie"], "%s: the dead family only (%s)" % [tag, k])
+	# (H3: a zombie costs 3 to a skeleton's 2, so a mixed floor holds fewer than H1's skeleton-only one: measured 12-17 on
+	# floors 1-2 and 26-35 on floor 3 here, against 17-21 and 34-42 with skeletons only)
+	check(site.monsters.size() <= 40, "%s: a sane total (%d: %s)" % [tag, site.monsters.size(), str(kinds)])
+	print("  %s: %d monsters %s, pest %s" % [tag, site.monsters.size(), str(kinds), run.pest])
 	check(site.pest_spawned >= PackPlanner.PEST_MIN, "%s: at least %d to exterminate (%d)" % [tag, PackPlanner.PEST_MIN, site.pest_spawned])
 	# the rooms: the haunted pool, the service entrance; the origin room on the last floor
 	var pool := RoomThemeDefs.pool(site_type)

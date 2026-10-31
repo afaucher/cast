@@ -24,7 +24,8 @@ extends Node
 ##   the floor clock (start_at, floor_start); the seat table (owner and epoch per seat), each seat's kit and player name and
 ##   every other hero's state (position, facing, HP, downed, slots, charges, held slot); the seed-built ids that are GONE on
 ##   the host (`gone`: id -> "die" to show dead, "free" to remove); every runtime monster (a world.spawn replay); a full world
-##   KEYFRAME (NetWorld.keyframe: every surviving monster, employee and hellgate); the employees' wait spots; the pickups on
+##   KEYFRAME (NetWorld.keyframe: every surviving monster, employee and hellgate); every body on the floor (`bodies`: a
+##   zombie's, where it lies and whether it is burnt, NetWorld.body_states); the employees' wait spots; the pickups on
 ##   the floor and the dents (NetObjects); the statuses (NetStatus); every Ledger line; the joiner's own `take` (seat,
 ##   character, epoch, the hero's state: SeatHandover.hero_state); plus what the game adds (`contract`: the objective
 ##   bookkeeping). Not in it (the plan): scheduled effects in flight and monsters' wind-ups (they last under 2 s), grime decals.
@@ -340,6 +341,7 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 		"scouts": _session.world.scout_states(),
 		"dismounts": _session.world.dismount_states(),   # (imp gunners already off their sharks)
 		"shields": _session.world.shield_states(),   # (each Pavise's shield: carried, planted, left or flat)
+		"bodies": _session.world.body_states(),   # (H3: every zombie's body where it lies, burnt or not)
 		"objects": _session.objects.late_join_state(), "status": _session.status.late_join_state(),
 		"orders": _session.orders.late_join_state(),
 		"ledger": {"lines": Ledger.lines.duplicate(true), "value": Ledger.contract_value, "floor": Ledger.floor_number},
@@ -362,7 +364,8 @@ func admit(peer: int, extra: Dictionary = {}) -> bool:
 
 
 ## Host: the seed-built ids that are gone on this floor: id -> "die" (show it dead or broken: a closed gate, a broken prop or
-## crate, a dead employee) or "free" (remove it: a dead monster, an extracted employee, an opened mail box, a used pickup).
+## crate, a dead employee, a zombie's body) or "free" (remove it: a dead monster, an extracted employee, an opened mail box, a
+## used pickup).
 static func gone_ids() -> Dictionary:
 	var out := {}
 	for id in range(NetFloor.ID_BASE, NetRegistry.seed_top):
@@ -373,7 +376,8 @@ static func gone_ids() -> Dictionary:
 			if (n as ComponentPickup)._used or (n as ComponentPickup).charges <= 0 or n.is_queued_for_deletion():
 				out[id] = "free"
 		elif n is Actor and (n as Actor).dead:
-			out[id] = "free" if n is Monster or n is MailPackage else "die"
+			# (a body that stays down, a zombie's: shown dead, then laid where it lies from `bodies`, NetWorld.apply_bodies)
+			out[id] = "die" if n.has_method("net_body") else ("free" if n is Monster or n is MailPackage else "die")
 		elif n is Employee and (n as Employee).is_extracted():
 			out[id] = "free"
 	return out
@@ -524,6 +528,7 @@ func _apply(d: Dictionary) -> void:
 	_session.world.apply_scouts(d.get("scouts", []) as Array)   # (goblin scouts: their phase and rack)
 	_session.world.apply_dismounts(d.get("dismounts", []) as Array)   # (the sharks' imp gunners knocked off)
 	_session.world.apply_shields(d.get("shields", []) as Array)   # (the pavises' shields)
+	_session.world.apply_bodies(d.get("bodies", []) as Array)   # (the bodies on the floor: where they lie, burnt or not)
 	var waits := d.get("waits", {}) as Dictionary
 	for k: Variant in waits:
 		var emp := NetRegistry.node(int(k)) as Employee

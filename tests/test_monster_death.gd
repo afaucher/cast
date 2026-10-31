@@ -22,10 +22,16 @@ func setup() -> void:
 	await frames(120)
 	check(not is_instance_valid(grunt), "freed after the death animation")
 
-	# Every kind frees on death.
+	# Every kind frees on death, but the zombie: it stays down as a body (haunted-build-plan.md H3; test_zombie has the rest).
 	for k in MonsterFactory.KINDS:
 		var m := MonsterFactory.spawn(k, Vector2i(2, 1))
 		m.apply_damage(9999.0, hero)
 		await frames(120)
+		if k == "zombie":
+			check(is_instance_valid(m) and m.dead and m.is_downed(), "a zombie stays down as a body")
+			check(not GameWorld.actors().has(m) and not m.is_in_group("monsters"), "... not an actor or a monster any more")
+			m.queue_free()
+			await frames(2)
+			continue
 		check(not is_instance_valid(m), k + " freed on death")
 	finish()

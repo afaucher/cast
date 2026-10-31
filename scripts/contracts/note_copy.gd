@@ -191,6 +191,8 @@ const PEST_TICKETS := {
 	"grunt": "Bones in the walls, walking. Each one raises its sword before it swings. Technician's advice: step back.",
 	"archer": "Hooded things on the high shelves. Arrows fly flat, so a ledge is a wall. Technician's advice: close in.",
 	"brute": "Something heavy that can't climb. A red ring fills before it slams. Technician's advice: get on something tall.",
+	# (H3, a proposal for the user's review: haunted-build-plan.md "H3 as built")
+	"zombie": "Slow ones in burial clothes. Knocked down, they lie there until something gets them up. Technician's advice: burn them where they lie.",
 	"everything": "We found one of everything. Quote attached. The quote is also one of everything.",
 }
 

@@ -43,7 +43,10 @@ spawn data goes in the floor checksum (`net_spawn_text`: the gator's home region
 (`docs/design/lava-playtest.md`, "As built"): their terrain changes at run time on every machine alike (the lava leaves the
 map once the floor runs, a damp's crust puts it back for 8 s from the cast's shared start: `LavaField`, `HexMap.remove_cell` /
 `set_cell`), the checksum's map text skips it (`NetFloor`: `HexMap.lava`, the `cave=` record), a body stranded by it gets
-`Actor.lose_ground` from the machine that resolves it, and a late joiner gets the live crusts (`LavaField.late_join_state`). A debug
+`Actor.lose_ground` from the machine that resolves it, and a late joiner gets the live crusts (`LavaField.late_join_state`). Haunted
+floors' zombies leave bodies (`Zombie`, `docs/design/haunted-build-plan.md` "H3 as built"): a body is `dead` but stays on the
+floor; the host stands it up (`Actor.revive`: coffee) or burns it (`Actor.burn_body`) and every screen follows (`world.rise` /
+`world.burn`), and a late joiner gets the bodies where they lie (`NetWorld.body_states`). A debug
 guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). M7 (polish) is
 built locally; the two-PC Steam sign-off is `docs/design/steam-playtest-checklist.md`. Steam's overlay invites ask first in a
 job (`Session.invite_received` -> "Leave this job and join?"), "Invite crew" is on the job board and the pause form
@@ -59,8 +62,9 @@ var of `Hero` or of a host-owned class needs a carrier too (`NetCodec.HERO_FIELD
    var as `Net.SPAWN`, `OWNER`, `PRIVATE` or `LOCAL` (`scripts/net/net.gd`). Adding a var means
    adding it there with the right kind. A new non-actor gameplay class goes in the test's `NET_SCRIPTS`.
 2. **Change other entities only through verbs:** `apply_damage`, `heal`, `shove`, `set_modifier`, `daze`,
-   `lose_ground`, `revive` (a downed hero stands back up: Revive, a coffee zombie; the target's owner applies it, like a
-   heal) and `die`. Never write another actor's `hp`, `dead` or position.
+   `lose_ground`, `revive` (a downed hero stands back up: Revive, a coffee zombie; a zombie's body stands back up: coffee,
+   an acolyte; the target's owner applies it, like a heal), `burn_body` (a fire reaches a downed body: a zombie's burns and
+   never gets up; its owner applies it) and `die`. Never write another actor's `hp`, `dead` or position.
 3. **Resolve hits through `Combat`** (`melee_arc`, `explode`, `slam`, `shove_radius`, `hits_in_radius`, `each_in_radius`,
    `Projectile`) rather than your own loop over actors. A loop of your own that calls a verb must ask
    `Combat.resolves` / `Net.resolves` for each actor (the test checks it): effects run on every machine.

@@ -1,8 +1,9 @@
 class_name ZombieModel
 extends MonsterModel
-## LOOK-DEV ONLY (docs/design/necro-look.md): the haunted contracts' zombie (new-themes.md "Ghost house": "slow and tough,
-## and they get back up unless burned"). Nothing in the game spawns it: only NecroBody (the gym's necro spawns and the look
-## lab). Two models, both in the necro family's look (NecroLook): grey-green dead flesh, dark ragged clothes, the eyes in the
+## The haunted contracts' zombie (docs/design/necro-look.md; new-themes.md "Zombies and acolytes"). THE GAME'S since
+## haunted-build-plan.md H3: the `zombie` monster kind (Zombie, MonsterDefs) wears it, a body lies in pose_rise(0) and
+## stands up through pose_rise(k) to stand_up(), and a burnt body is the charred build; NecroBody (the gym's necro look-test
+## spawns and the look lab) still poses it too. Two models, both in the necro family's look (NecroLook): grey-green dead flesh, dark ragged clothes, the eyes in the
 ## ghost colour (never the hell family's ember) and the ghost rim on the body.
 ##   mourner  a tall, lanky corpse in a rotted black burial coat and a torn shirt, hunched, one arm reaching out in front
 ##            and the other hanging, the head lolled over and the jaw slack. Reads as "the mansion's dead".
@@ -21,6 +22,8 @@ const VARIANTS: Array[String] = ["mourner", "digger"]
 const PART_NAMES: Array[String] = ["body", "head", "jaw", "arm_l", "arm_r", "leg_l", "leg_r"]
 const WALK_SPEED := 0.9             ## a shamble: the world speed the stride is drawn for
 const STRIDE := 3.2                 ## rad / s of the stride
+const MODEL_SCALE := 1.22           ## the mourner's scale (a little over the grunt's)
+const DIGGER_SCALE := 1.30          ## the digger's (bulkier)
 
 # the dead
 const SKIN := Color(0.56, 0.62, 0.48)
@@ -73,7 +76,7 @@ func _init(model_variant: String = "mourner", is_charred: bool = false) -> void:
 	variant = model_variant if VARIANTS.has(model_variant) else "mourner"
 	charred = is_charred
 	var digger := variant == "digger"
-	_setup_model("ZombieModel", 1.30 if digger else 1.22)
+	_setup_model("ZombieModel", DIGGER_SCALE if digger else MODEL_SCALE)
 	monster_kind = "zombie"
 	_mat = NecroLook.body_material(outline_px, 0.0 if charred else NecroLook.RIM)
 	_mat.set_shader_parameter("glow_gain", GLOW_GAIN)

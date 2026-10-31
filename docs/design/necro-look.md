@@ -1,7 +1,8 @@
 # The necro look: zombies, acolytes and the grimoire (a visual test)
 
-Status: **[look-dev only]**, 2026-10-29. Nothing here is in the game. No contract, floor, monster, world object or network
-message uses it. The test exists in the gym (`--gym`) and in a look lab, and its job is to help the user decide how the
+Status: **[look-dev only]**, 2026-10-29; **the zombie is the game's since 2026-10-31** (haunted-build-plan.md, "H3 as
+built": the `zombie` monster kind wears `ZombieModel`, mourner or digger, its body lies in `pose_rise(0)`, stands up through
+`pose_rise(k)` and burns into the charred build). The acolytes, the procession and the grimoire are still look-dev only. The test exists in the gym (`--gym`) and in a look lab, and its job is to help the user decide how the
 haunted contracts' necromancer family should look.
 
 The decisions this serves (new-themes.md, "Ghost house: haunted contracts"):
@@ -170,6 +171,7 @@ each gym loop) comes from `GameWorld.fx_rng`. The models' own variety is seeded 
 | The lab | `scripts/art/lowpoly/necro/necro_look_lab.gd`, `scenes/necro_look_lab.tscn` | Renders the sheets above. |
 | Test | `tests/test_necro_look.gd` | Checks the gym entries and rows; every builder headless (parts, a triangle budget, the glow in the ghost colour, the ink kept, lying and rising, raising and fleeing, every grimoire state's lights, no text nodes); the spawns being cosmetic and looping; the switches and the Ghost colour redressing them live; the real grunt untouched; and the lab's builders. |
 
+(As the test was built. Since H3 `MonsterDefs` has a `zombie` row whose monster wears `ZombieModel`; see the status line.)
 The real monsters, `MonsterMaterial`, `GhostLook`, `MonsterDefs` and the contracts are unchanged. Nothing outside the gym
 and the lab creates a `NecroBody`.
 

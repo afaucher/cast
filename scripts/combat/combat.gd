@@ -199,7 +199,8 @@ static func heal_radius(pos: Vector3, radius: float, amount: float, team: int) -
 	return out
 
 
-## Stand up every downed hero of `team` within `radius` of `pos` (Actor.revive) at `hp_flat` HP or `hp_frac` of its max HP,
+## Stand up every downed actor of `team` (-1: any, Coffee's splash, which raises a zombie's body too: Zombie) within `radius`
+## of `pos` (Actor.revive) at `hp_flat` HP or `hp_frac` of its max HP,
 ## whichever is more (`cursed`: as a coffee zombie), each by the machine that resolves it (Net.resolves: its owner). With
 ## `lift`, a standing zombie in the radius gets it too (Revive: its curse lifts, its HP up to that). Returns the actors it
 ## stood up or lifted.

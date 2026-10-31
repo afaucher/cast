@@ -17,7 +17,7 @@ extends TestCase
 ##    (about 1.2 KB, one datagram); test_net_world_codec fills it with the worst floor it can find.
 ## 6. Area verbs (M4, layer 4): a loop over the actors in an area (GameWorld.actors_in_radius / hittable_in_radius /
 ##    downed_in_radius / team_actors / actors, the "actors" group) that calls a verb on them (apply_damage, shove, set_modifier, heal, daze,
-##    lose_ground, revive) must ask
+##    lose_ground, revive, burn_body) must ask
 ##    who resolves each one (Combat.resolves / Net.resolves / Net.resolves_hit / Net.owns) in that loop: effects run on
 ##    every machine, and a verb applied by every machine lands once per machine. Run against loops that must fail too.
 ## 7. Late-join coverage (M6): every replicated class (REPLICATED, and every class NetEvents.WORLD_CARRIES names) declares in
@@ -306,7 +306,7 @@ static func _area_loop_gaps(lines: PackedStringArray) -> Array:
 			continue
 		var indent := m.get_string(1).length()
 		var v := m.get_string(2)
-		var verb_re := RegEx.create_from_string("\\b%s\\.(apply_damage|shove|set_modifier|heal|daze|lose_ground|revive)\\(" % v)
+		var verb_re := RegEx.create_from_string("\\b%s\\.(apply_damage|shove|set_modifier|heal|daze|lose_ground|revive|burn_body)\\(" % v)
 		var verb := false
 		var asks := false
 		var j := i + 1
@@ -387,6 +387,8 @@ var REPLICATED := {
 	# the Pavise Crossbowman (its shield and bolt: their own events) and the Water Boy (a plain monster: its pour is a wind-up)
 	"res://scripts/monsters/pavise.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/pavise.gd"], 5],
 	"res://scripts/monsters/water_boy.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	# the haunted contracts' zombie (haunted-build-plan.md H3): a monster-format entry; its body's rise and burn are events
+	"res://scripts/monsters/zombie.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/zombie.gd"], 5],
 	"res://scripts/contracts/employee.gd": [NetWorldCodec.EMPLOYEE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/employee.gd"], 5],
 	"res://scripts/contracts/hellgate.gd": [NetWorldCodec.GATE_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/contracts/hellgate.gd"], 5],
 	"res://scripts/contracts/priced_prop.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/contracts/priced_prop.gd"], 0],

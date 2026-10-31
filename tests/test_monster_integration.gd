@@ -5,7 +5,7 @@ extends MonsterTestBase
 ## fighting a dummy hero for 600 frames runs clean.
 
 const SIZES := {"grunt": GruntModel.MODEL_SCALE, "archer": ArcherModel.MODEL_SCALE, "brute": BruteModel.MODEL_SCALE, "swarmer": SwarmerModel.MODEL_SCALE,
-	"pavise": PaviseModel.MODEL_SCALE, "water_boy": 1.1}
+	"pavise": PaviseModel.MODEL_SCALE, "water_boy": 1.1, "zombie": ZombieModel.MODEL_SCALE}
 ## The kinds that wind up as soon as they reach a hero (the pavise winds up only for its bash, a hero right in front of it;
 ## the water boy only for a pour, a hurt pack-mate beside it: _hooks sets those up).
 const CLASSIC: Array[String] = ["grunt", "archer", "brute", "swarmer"]
@@ -26,6 +26,11 @@ func setup() -> void:
 	await _perf()
 	Monster.use_proto_visuals = false
 	finish()
+
+
+## The model scale `m` wears: its kind's, the digger's for a zombie that drew the digger (Zombie.variant_for).
+func _want_scale(m: Monster) -> float:
+	return ZombieModel.DIGGER_SCALE if m is Zombie and (m as Zombie).variant == "digger" else float(SIZES[m.kind])
 
 
 func _param(mod: MonsterModel, key: String) -> float:
@@ -55,7 +60,7 @@ func _defaults() -> void:
 				prims += 1
 		eq(prims, 0, "%s Visual holds only the model" % kind)
 		near(m.bar_height, m.model.ui_height + Monster.MODEL_BAR_GAP, 0.0001, "%s hp bar rides on ui_height" % kind)
-		near(m.model.scale.x, float(SIZES[kind]), 0.0001, "%s model scale is its own" % kind)
+		near(m.model.scale.x, _want_scale(m), 0.0001, "%s model scale is its own" % kind)
 		check(m.windup_scale <= 0.12 + 0.0001, "%s swell is small with a model (%.2f)" % [kind, m.windup_scale])
 		m.apply_damage(1.0)
 		near(m._bar.position.y, m.bar_height, 0.0001, "%s bar placed at bar_height" % kind)
@@ -97,7 +102,7 @@ func _hooks() -> void:
 		check(peak_swing > 0.5, "%s strike calls attack_swing (%.2f)" % [kind, peak_swing])
 		check(peak_tint > 0.2, "%s windup pulse tints the model (%.2f)" % [kind, peak_tint])
 		check(swell > 1.0 and swell <= 1.0 + m.windup_scale + 0.001, "%s Visual swells a little (%.3f)" % [kind, swell])
-		near(mod.scale.x, float(SIZES[kind]), 0.0001, "%s nothing else wrote the model's scale" % kind)
+		near(mod.scale.x, _want_scale(m), 0.0001, "%s nothing else wrote the model's scale" % kind)
 
 		# Hit flash.
 		m.state = Monster.State.IDLE
@@ -116,6 +121,12 @@ func _hooks() -> void:
 		m.apply_damage(9999.0, hero)
 		check(m.dead and mod.is_downed(), "%s model is downed on death" % kind)
 		near(_param(mod, "glow_gain"), 0.0, 0.0001, "%s glow goes out on death" % kind)
+		if kind == "zombie":
+			# (it stays down as a body, lying face down: haunted-build-plan.md H3, test_zombie)
+			await frames(130)
+			check(is_instance_valid(m) and (mod as ZombieModel).is_lying() and mod.scale.x > 1.0, "the zombie lies as a body, never shrinks away or frees")
+			m.queue_free()
+			continue
 		await frames(20)
 		check(absf(m._visual.rotation.x) > 0.5, "%s Visual topples" % kind)
 		var s_mid := mod.scale.x
@@ -180,7 +191,7 @@ func _pit() -> void:
 			if m.is_airborne():
 				fell += 1
 				# The pit fall spins / shrinks the ACTOR; the model keeps its own scale until the death fade.
-				if not m.dead and absf(mod.scale.x - float(SIZES[kind])) > 0.0001:
+				if not m.dead and absf(mod.scale.x - _want_scale(m)) > 0.0001:
 					scale_ok = false
 			if died[0] and not is_instance_valid(m):
 				break
