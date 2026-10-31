@@ -92,6 +92,7 @@ func _check_blobs() -> void:
 		check(b.has_part("body"), "%s has its body" % v)
 		eq(b.has_part("inside"), v == "jelly", "%s: things suspended in it (the bone jelly only)" % v)
 		eq(b.has_part("eyes"), v == "puddle", "%s: the eyes on its hump (the puddle only)" % v)
+		eq(b.has_part("face_eyes"), v == "faces", "%s: glowing eyes in its faces (the mass of faces only: the game's, H3b)" % v)
 		eq(b.has_part("pod"), v != "puddle", "%s: a pseudopod for its lunge" % v)
 		check(b.triangle_count() < 3000, "%s is a cheap model (%d tris)" % [v, b.triangle_count()])
 		var body := b.get_part("body") as MeshInstance3D
@@ -106,6 +107,8 @@ func _check_blobs() -> void:
 		if v == "puddle":
 			check(b.sheet != null and b.sheet.is_in_group(EctoplasmLook.GROUP), "the puddle's sheet is the ectoplasm look's own")
 			check(_glows(b, NecroLook.glow_colour()), "the puddle's eyes glow")
+		if v == "faces":
+			check(_glows(b, NecroLook.glow_colour()), "the mass of faces: its faces' eyes glow (H3b: they read at the game camera)")
 		b.pose_preview("rest")
 		var rest_h := body.scale.y
 		# crawling squashes and stretches it

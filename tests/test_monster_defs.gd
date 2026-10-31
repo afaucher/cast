@@ -11,15 +11,15 @@ func setup() -> void:
 		if MonsterDefs.row(k).has("pack"):
 			check(MonsterDefs.model_script(k) != null and int(MonsterDefs.row(k).get("tris", 0)) > 0, "%s: a pack kind has a model and a budget" % k)
 	# The derived tables, in the order the rolls walk them.
-	eq(MonsterFactory.KINDS, ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "zombie"] as Array[String], "the pack kinds, in the pack roll's order")
-	eq(MonsterFactory.COSTS, {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4, "pavise": 4, "water_boy": 3, "zombie": 3}, "pack costs")
-	eq(MonsterFactory.WEIGHTS, {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5, "pavise": 0.75, "water_boy": 2.0, "zombie": 5.0}, "pack weights")
-	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie"], "the factory builds the kinds with a model")
-	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie"] as Array[String], "the modelled kinds")
+	eq(MonsterFactory.KINDS, ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the pack kinds, in the pack roll's order")
+	eq(MonsterFactory.COSTS, {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4, "pavise": 4, "water_boy": 3, "zombie": 3, "crypt_rat": 6, "ecto_blob": 3}, "pack costs")
+	eq(MonsterFactory.WEIGHTS, {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5, "pavise": 0.75, "water_boy": 2.0, "zombie": 5.0, "crypt_rat": 1.0, "ecto_blob": 1.5}, "pack weights")
+	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob"], "the factory builds the kinds with a model")
+	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the modelled kinds")
 	eq(MonsterDefs.is_swarm("swarmer"), true, "imps come in a swarm")
 	eq(MonsterDefs.is_swarm("grunt"), false, "a grunt doesn't")
 	eq(ClientArchetype.PEST_NAMES, {"grunt": "skeletons", "archer": "archers", "brute": "brutes", "swarmer": "imps", "zombie": "zombies", "everything": "everything"}, "pest names")
-	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp", "zombie"], "the kinds that drop components")
+	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob"], "the kinds that drop components")
 	for k: String in SpellComponents.DROPS:
 		for e: Dictionary in SpellComponents.DROPS[k]:
 			for sp: String in e["spells"]:
@@ -85,17 +85,33 @@ func setup() -> void:
 	# hellgate floor's packs roll exactly as before it existed; a dead family's pack deals it beside the skeleton.
 	eq(MonsterDefs.family_of("zombie"), "dead", "the zombie is the dead family's own")
 	eq(MonsterDefs.family_of("grunt"), "", "the skeleton belongs to no family alone")
+	# ... and H3b's crypt rat (a swarm of 5-6) and ecto blob (one a pack), the dead family's too
+	eq(MonsterDefs.family_of("crypt_rat"), "dead", "the crypt rat is the dead family's own")
+	eq(MonsterDefs.family_of("ecto_blob"), "dead", "the ecto blob is the dead family's own")
+	check(MonsterDefs.is_swarm("crypt_rat"), "the crypt rat is a swarm kind")
+	eq(MonsterFactory.swarm_range("crypt_rat"), Vector2i(5, 6), "a rat pick is 5-6 rats")
+	eq(MonsterFactory.swarm_range("swarmer"), Vector2i(MonsterFactory.SWARM_MIN, MonsterFactory.SWARM_MAX), "an imp pick is still 4-6")
+	check(not MonsterDefs.pest_names().has("crypt_rat") and not MonsterDefs.pest_names().has("ecto_blob"), "neither is a contract pest")
 	var dead_kinds := ClientArchetype.family_kinds(ClientArchetype.FAMILY_DEAD)
+	eq(dead_kinds, ["grunt", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the dead family's kinds")
 	var dealt := {}
+	var blobs_max := 0
 	for s in 200:
 		for fl in [1, 2, 3]:
 			a.seed = s
-			check(not MonsterFactory.compose(18, a, {"zombie": 50.0}, fl).has("zombie"), "no hellgate pack deals a zombie (seed %d, floor %d)" % [s, fl])
+			var bias := {"zombie": 50.0, "crypt_rat": 50.0, "ecto_blob": 50.0}
+			var hell := MonsterFactory.compose(18, a, bias, fl)
+			check(not hell.has("zombie") and not hell.has("crypt_rat") and not hell.has("ecto_blob"), "no hellgate pack deals the dead family's own (seed %d, floor %d)" % [s, fl])
 			a.seed = s
-			for k in MonsterFactory.compose(14, a, {}, fl, dead_kinds):
+			var pack := MonsterFactory.compose(14, a, {}, fl, dead_kinds)
+			for k in pack:
 				check(dead_kinds.has(k), "a dead pack deals only the family (seed %d: %s)" % [s, k])
 				dealt[k] = true
+			check(pack.count("crypt_rat") <= 1, "at most one rat swarm a pack (seed %d)" % s)
+			blobs_max = maxi(blobs_max, pack.count("ecto_blob"))
 	check(dealt.has("zombie") and dealt.has("grunt"), "dead packs deal zombies and skeletons")
+	check(dealt.has("crypt_rat") and dealt.has("ecto_blob"), "... and crypt rats and ecto blobs")
+	eq(blobs_max, 1, "at most one ecto blob a pack")
 	# Floor 1's rolls are the old ones: the same draws as a compose without the new kinds' rows.
 	for s in 20:
 		a.seed = s

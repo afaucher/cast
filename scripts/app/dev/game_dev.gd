@@ -869,6 +869,7 @@ func _shark_demo(stage: String) -> void:
 ##          tracks for 0.8 s, then the solid line locks for 0.4 s and the bolt looses)
 ##   pulse  the pack is roughed up (each other monster 40% down), and the water boy raises its whistle and pours (0.8 s)
 ##   goo    the goo imps (--spawn-near goo_imp,3) wake on the player and throw: tell 0.7 s, then about a second in the air
+##   wake   every --spawn-near monster wakes on the player (a crypt rat pack pounces, an ecto blob crawls and lays its slick)
 func _monster_demo(stage: String) -> void:
 	await get_tree().create_timer(float(opts.get("demo_after", 1.0))).timeout
 	if player == null or not is_inside_tree():
@@ -929,6 +930,11 @@ func _monster_demo(stage: String) -> void:
 		"goo":   # (goo-imp.md: --spawn-near goo_imp,3 --idle-monsters: the goo imps wake on the player and throw)
 			for m in _dev_monsters:
 				if is_instance_valid(m) and not m.dead and m is GooImp:
+					m.aggro(player)
+		"wake":   # (haunted-build-plan.md H3b: --spawn-near crypt_rat,6,cluster or ecto_blob,1 --idle-monsters: every one wakes
+			# on the player; the allies hold, so the rats pounce at the player and a blob crawls at it laying its slick)
+			for m in _dev_monsters:
+				if is_instance_valid(m) and not m.dead:
 					m.aggro(player)
 
 

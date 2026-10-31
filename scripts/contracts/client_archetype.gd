@@ -26,8 +26,9 @@ const FAMILY_GATE := "gate"
 const FAMILY_DEAD := "dead"
 ## The monster kinds a family's packs and pest come from ([] = any kind but a family's own, the hellgate family's mix). The
 ## dead family (H3) is the skeleton (MonsterDefs "grunt", "skeletons") and the zombie ("zombie", "zombies": a family kind,
-## MonsterDefs "family", which no other pack deals).
-const FAMILY_KINDS := {FAMILY_GATE: [], FAMILY_DEAD: ["grunt", "zombie"]}
+## MonsterDefs "family", which no other pack deals); H3b adds the crypt rat (a swarm) and the ecto blob (a slick), family kinds
+## too. The contract's pest stays a skeleton or a zombie (the heir's and parish's "pests"): the rats and blobs are in the way.
+const FAMILY_KINDS := {FAMILY_GATE: [], FAMILY_DEAD: ["grunt", "zombie", "crypt_rat", "ecto_blob"]}
 
 ## The SITE line of the job card, per site type.
 const SITE_TITLES := {"bunker": "Survival bunker", "lair": "Villain lair", "mansion": "Haunted mansion", "church": "Haunted church"}

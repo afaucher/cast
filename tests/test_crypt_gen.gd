@@ -6,7 +6,8 @@ extends MonsterTestBase
 ##     STAIRS cells down into them, every room reachable from the start;
 ##   - its rooms are crypt rooms of the site's set, lit and dark by turns from the stair's foot, in the set's materials; the
 ##     lit rooms hold a row of priced sarcophagi with the vigil's candles; bone walls stand on a wall; its doorways get arches
-##     and open gates, never an office door; its packs are the contract's family (skeletons and zombies, H3);
+##     and open gates, never an office door; its packs are the contract's family (skeletons and zombies, H3; crypt rats,
+##     favoured there, and ecto blobs, H3b);
 ##   - it is lit as the look test lit it: its stone and its pieces on HexMapView's UNDER_LAYER, which the key and fill
 ##     lights leave out, and no downlight over its rooms;
 ##   - `crypt=` is in the map checksum text, the same checksum on two builds; a shared run gets the same crypt;
@@ -18,6 +19,7 @@ const SEEDS := 24                ## contract seeds per haunted client
 const BUILDS := 3                ## crypt floors per client spawned and built twice
 
 var _probe: Node = null
+var rats_in_crypts := 0          ## crypt rats standing in the built crypts' rooms (H3b: a crypt's packs favour them)
 
 
 func setup() -> void:
@@ -66,6 +68,8 @@ func setup() -> void:
 			100.0 * crypts / maxf(1.0, eligible), str(sizes), str(natural)])
 		check(crypts * 6 >= eligible, "%s: some floors get a crypt (%d of %d)" % [id, crypts, eligible])
 		check(built >= 2, "%s: crypt floors built and spawned (%d)" % [id, built])
+	print("[crypt gen] crypt rats in the built crypts: %d" % rats_in_crypts)
+	check(rats_in_crypts > 0, "H3b: crypt rats turn up in the crypts (%d)" % rats_in_crypts)
 	_check_forced()
 	Monster.use_proto_visuals = false
 	_probe.free()
@@ -197,11 +201,15 @@ func _check_built(id: String, s: int, f: int, tag: String) -> void:
 			check(p.price > 0 and p.site == "crypt", "%s: a sarcophagus is priced" % tag)
 	check(priced >= 1, "%s: the sarcophagi spawn as priced props (%d)" % [tag, priced])
 	var in_crypt := 0
+	var crypt_rats := 0
 	for m in site.monsters:
 		var cell := map.get_cell(Hex.from_world(m.global_position))
 		if cell != null and rooms.has(cell.tag):
 			in_crypt += 1
-			check(m.kind in ["grunt", "zombie"], "%s: the crypt's packs are the family's skeletons and zombies (%s)" % [tag, m.kind])
+			check(m.kind in ["grunt", "zombie", "crypt_rat", "ecto_blob"], "%s: the crypt's packs are the family's (%s)" % [tag, m.kind])
+			if m.kind == "crypt_rat":
+				crypt_rats += 1
+	rats_in_crypts += crypt_rats
 	var lights := 0
 	var under_pieces := 0
 	for d in site.decor:

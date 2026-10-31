@@ -87,6 +87,7 @@ A plain dev panel on the right (not a trade form; never shown outside `--gym`), 
     them; "Hallway x12" and "Hallway mix" show a pack's cry and the charging ones.
 - **Spawn count**: x1 / x5 / x10.
 - **Monsters**: every `MonsterDefs` kind. Factory kinds (grunt, archer, brute, swarmer, goblin, pavise, water boy, goo imp,
+  zombie, crypt rat, ecto blob (it lays its slick as it crawls; Damp washes it),
   and any new kind with a model) stand on free cells; **sharks** (regular, laser, imp) go into the pool under the ring (else
   the indoor pool), **the imp gunner** rides an imp shark, **the gator** goes into the sewer's water (its home region: under
   the ring when that is in it, else the first sump). A kind none of those can build gets a disabled button saying why.

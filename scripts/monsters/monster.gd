@@ -826,7 +826,7 @@ func _tick_attack(delta: float) -> void:
 	if _windup_left <= 0.0:
 		var neutral_hp := target.hp if target.team == GameWorld.TEAM_NEUTRAL else -1.0
 		_end_windup()
-		if kind in ["grunt", "swarmer", "pavise"]:
+		if kind in ["grunt", "swarmer", "pavise", "crypt_rat"]:
 			Sfx.play_at("swing_light", global_position)
 		_strike()
 		_strike_neutral(neutral_hp)
@@ -1592,7 +1592,7 @@ func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: 
 	if strike_count != strikes:
 		strikes = strike_count
 		_strike_t = 1.0
-		if kind in ["grunt", "swarmer", "pavise"]:
+		if kind in ["grunt", "swarmer", "pavise", "crypt_rat"]:
 			Sfx.play_at("swing_light", global_position)
 		if model != null:
 			model.attack_swing()

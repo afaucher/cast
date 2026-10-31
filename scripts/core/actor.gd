@@ -229,9 +229,10 @@ func move_speed_mult() -> float:
 
 
 ## Units per second the actor really walks at: move_speed x its modifiers (x Wading.SPEED_MULT in pool water, x GooPatch.SLOW
-## on a goo imp's patch), 0 while rooted. Movement code reads this, never move_speed (which stays the base value kits and AI set).
+## on a goo imp's patch, x EctoSlick.SLOW on an ecto blob's slick), 0 while rooted. Movement code reads this, never move_speed
+## (which stays the base value kits and AI set).
 func effective_speed() -> float:
-	return 0.0 if is_rooted() else move_speed * move_speed_mult() * (Wading.speed_mult(global_position) * GooPatch.speed_mult(self) if is_inside_tree() else 1.0)
+	return 0.0 if is_rooted() else move_speed * move_speed_mult() * (Wading.speed_mult(global_position) * GooPatch.speed_mult(self) * EctoSlick.speed_mult(self) if is_inside_tree() else 1.0)
 
 
 ## Attacks-per-second multiplier from every STAT_ATTACK_RATE modifier, clamped to ATTACK_RATE_MIN..ATTACK_RATE_MAX.

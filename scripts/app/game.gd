@@ -29,8 +29,9 @@ extends Node3D
 ##   --hero wick|gasket|rebar  play this hero (Session.character_id) instead of the one picked on the main menu
 ##   --spawn-near k,n[,cluster]  dev: also spawn n monsters of kind k (grunt/archer/brute/swarmer/pavise/water_boy) near the
 ##                       player; --autocast then aims at them. A mixed pack: groups joined by "+" (pavise,1+grunt,2+water_boy,1)
-##   --monster-demo aim|pulse  dev: with --spawn-near (and --demo-after S, default 1): the pavise plants 9 from the player
-##                       and aims at them, or the water boy pours on its roughed-up pack (screenshots)
+##   --monster-demo aim|pulse|goo|wake  dev: with --spawn-near (and --demo-after S, default 1): the pavise plants 9 from the
+##                       player and aims at them, the water boy pours on its roughed-up pack, the goo imps throw, or every one
+##                       wakes on the player (wake: a crypt rat pack, an ecto blob and its slick; screenshots)
 ##   --idle-monsters     dev: --spawn-near monsters ignore heroes until hurt
 ##   --stage-ledge       dev: raise a 7-cell tower +5 levels near the start; --spawn-near monsters stand on it
 ##   --give heal:9,corn:3  dev: slot these spells (up to 4) with these charges, after the picked two

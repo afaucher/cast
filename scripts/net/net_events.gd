@@ -151,6 +151,11 @@ const WORLD_CARRIES := {
 		"lit_by": "obj.goo {by}: who lit it (the burn's damage source)",
 		"washed": "obj.goo {id, st 2}: the host's Damp washed it away",
 	},
+	# An ecto blob's slick (haunted-build-plan.md H3b): a runtime object the host makes a segment at a time (obj.new); its one
+	# change is its own event.
+	"res://scripts/monsters/ecto_slick.gd": {
+		"washed": "obj.slick {id, st 2} (EctoSlick.net_link / net_event): the host's Damp washed the segment away",
+	},
 }
 
 ## The packet types and event kinds the sync uses (documented here, defined where they are sent).
@@ -161,7 +166,8 @@ const WORLD_CARRIES := {
 ##                         break {id, t, by}, hurt, pickup, pick, gone, grant, deny, ledger, contract, exit, end, loadout, and (M4)
 ##                         shove / mod passed on to the owner of a player's hero (host -> clients); fuse / out (an
 ##                         explosive prop's fuse lit, with its start, end and igniter / put out by a soak); new (a runtime
-##                         object the host made: a goo imp's ball or patch, NetObjects.RUNTIME_OBJECTS) / goo (a patch lit or washed)
+##                         object the host made: a goo imp's ball or patch, an ecto blob's slick segment, NetObjects.RUNTIME_OBJECTS) /
+##                         goo (a patch lit or washed) / slick (a slick segment washed)
 ##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
 ##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
@@ -219,4 +225,7 @@ const LATE_JOIN := {
 	"res://scripts/monsters/goo_imp.gd": "as monster.gd (keyframe, gone ids); a throw's tell under way: skipped (a wind-up, under a second)",
 	"res://scripts/monsters/goo_ball.gd": "no replay: a ball in flight lands within about a second, so a late joiner skips it; the patch it leaves is replayed (goo_patch.gd)",
 	"res://scripts/monsters/goo_patch.gd": "replay of obj.new for every live patch with its state (GooPatch.late_join_state, section `new`: where, its start, lit and by whom)",
+	"res://scripts/monsters/crypt_rat.gd": "as monster.gd (keyframe, gone ids: it is freed when it dies); a pounce's tell under way: skipped (a wind-up, under a second)",
+	"res://scripts/monsters/ecto_blob.gd": "as monster.gd (keyframe, gone ids); a lunge's tell under way: skipped (a wind-up, under a second); its slick: ecto_slick.gd",
+	"res://scripts/monsters/ecto_slick.gd": "replay of obj.new for every live segment (EctoSlick.late_join_state, section `new`: its ends, its start, its chain); a washed or dried one is not sent",
 }

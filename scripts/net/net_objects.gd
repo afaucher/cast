@@ -89,6 +89,7 @@ const LATE_JOIN_SECTIONS := ["pickups", "dents", "fuses", "doors", "breaks"]
 const RUNTIME_OBJECTS := {
 	"goo_ball": "res://scripts/monsters/goo_ball.gd",
 	"goo_patch": "res://scripts/monsters/goo_patch.gd",
+	"ecto_slick": "res://scripts/monsters/ecto_slick.gd",   # (an ecto blob's slick, a segment at a time: haunted-build-plan.md H3b)
 }
 
 var active := false

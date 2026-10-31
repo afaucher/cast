@@ -1,19 +1,22 @@
 class_name EctoBlobModel
 extends MonsterModel
-## LOOK-DEV ONLY (docs/design/crypt-pests-look.md): an ecto blob, one of the two pests proposed for the haunted contracts
-## (new-themes.md "Ghost house", Other enemies; the user, 2026-10-31: "ectoplasm monsters or maybe larger than average
-## rats"). Nothing in the game spawns it: only CryptPest (the gym's crypt spawns) and the look lab (crypt_pests_lab.gd).
-## The role is area denial: a slow crawling mass of ectoplasm that leaves a slick behind it (EctoplasmLook.trail, the film
-## the user picked for ectoplasm, so the blob and its slick read as one family). Damp would wash the slick away; any hit
-## could kill the blob. Its body is the ectoplasm made solid: SEE-THROUGH (what it has swallowed shows through it), glassy,
+## An ecto blob (docs/design/crypt-pests-look.md; the user, 2026-10-31: "ectoplasm monsters or maybe larger than average
+## rats"). THE GAME'S since H3b (haunted-build-plan.md "H3b as built"): the `ecto_blob` monster (EctoBlob) wears the mass of
+## faces, the user's pick ("Mass of faces", 2026-10-31; the default variant), its faces bigger than the look test's and their
+## eyes glowing in the ghost colour (the user: they "show only as dark specks at the game camera"). The other two variants
+## stay look-dev: CryptPest (the gym's crypt look-test spawns) and the look lab (crypt_pests_lab.gd) show them.
+## The role is area denial: a slow crawling mass of ectoplasm that leaves a slick behind it (the game's: EctoSlick, drawn
+## with EctoplasmLook.trail, the film the user picked for ectoplasm, so the blob and its slick read as one family). Damp
+## washes the slick away; any hit kills the blob. Its body is the ectoplasm made solid: SEE-THROUGH (what it has swallowed shows through it), glassy,
 ## no ink outline, glowing faintly in the ghost colour (GhostLook.colour), brightest on its turned-away facets (a fresnel),
 ## a slow swirl inside, and a small cold light of its own so it can be found in the dark.
 ##
 ## Three variants (VARIANTS, their numbers in SPEC):
 ##   jelly   a clear dome of jelly about 1.2 across, bones suspended in it: a skull whose sockets glow, ribs, a thigh bone,
 ##           loose teeth and an old brass key. The skull is its face.
-##   faces   a lumpy heap of milky ectoplasm, denser than the jelly, three faces pressing out of it from inside (dark hollow
-##           eyes and an open mouth on a bump), one hand pushing out of its side.
+##   faces   a lumpy heap of milky ectoplasm, denser than the jelly, three faces pressing out of it from inside (hollow eyes
+##           and an open mouth on a bump), one hand pushing out of its side. FACE_K scales the faces up (1.0 is the look
+##           test's) and each hollow eye holds a glowing point in the ghost colour (`face_eyes`, FACE_GLOW).
 ##   puddle  a low puddle 1.9 across (the ectoplasm look's own film) that humps up in its middle: the hump carries two
 ##           glowing eyes. Mostly slick, a little creature; the hump rears into a wave for its lunge.
 ##
@@ -23,13 +26,20 @@ extends MonsterModel
 ## (the puddle's wave falls forward). pose_preview("windup" / "swing") holds them for the lab.
 ## Faces local -Z, +X is its right, origin at the floor under its middle. Named parts: body (the jelly; the puddle's hump),
 ## inside (what the bone jelly has swallowed, opaque, under body), pod (the pseudopod; not the puddle's), eyes (the puddle's,
-## on its hump). The puddle's flat sheet is `sheet`, EctoplasmLook's own film puddle.
+## on its hump), face_eyes (the mass of faces' glowing eyes, under body). The puddle's flat sheet is `sheet`, EctoplasmLook's own film puddle.
 
 const VARIANTS: Array[String] = ["jelly", "faces", "puddle"]
 const NAMES := {"jelly": "Bone jelly", "faces": "Mass of faces", "puddle": "Rising puddle"}
+## The game's blob's (the mass of faces') named parts.
+const GAME_PARTS: Array[String] = ["body", "face_eyes", "pod"]
 const CRAWL_SPEED := 0.6            ## the world speed the crawl is drawn for (slow: the zombie shambles 0.9)
 const CRAWL_RATE := 4.2             ## rad / s of the crawl's squash and stretch
 const LIGHT := 0.55                 ## its own light's energy (a cold pool round it)
+## The mass of faces' faces: this much bigger than the look test's (H3b: they read as dark specks at the game camera) ...
+const FACE_K := 1.75
+## ... and a glowing point in each hollow eye in the ghost colour (NecroLook.glow; brighter would clamp the hue), so a face
+## reads as a face from across a room.
+const FACE_GLOW := 1.0
 
 ## Per variant: the jelly's alpha (see-through), glow, swirl; the body's size (rx, rz, h) and lobes.
 const SPEC := {
@@ -37,6 +47,8 @@ const SPEC := {
 	"faces": {"alpha": 0.74, "glow": 0.55, "swirl": 0.30, "rx": 0.66, "rz": 0.60, "h": 0.66, "lobes": 0.18},
 	"puddle": {"alpha": 0.34, "glow": 0.62, "swirl": 0.50, "rx": 0.95, "rz": 0.85, "h": 0.10, "lobes": 0.22},
 }
+## The mass of faces' faces: [angle round the heap (0 is +X, -PI/2 the front), height share, size, how far it leans out].
+const FACES := [[-PI * 0.55, 0.55, 1.45, 0.0], [-PI * 0.88, 0.42, 1.25, 0.15], [-PI * 0.20, 0.36, 1.2, -0.1]]
 ## A dome's profile, top to base: (radius share, height share). It bulges a little above the floor and tucks in at it.
 const PROF: Array[Vector2] = [Vector2(0.0, 1.0), Vector2(0.42, 0.95), Vector2(0.72, 0.80), Vector2(0.92, 0.56),
 		Vector2(1.0, 0.30), Vector2(0.97, 0.10), Vector2(0.88, 0.0)]
@@ -111,7 +123,7 @@ void fragment() {
 static var clock := -1.0
 static var _jelly_shader: Shader
 
-var variant := "jelly"
+var variant := "faces"
 var spec: Dictionary
 var jelly: ShaderMaterial            ## the body's (and pod's, hump's) material
 var light: OmniLight3D
@@ -119,8 +131,8 @@ var sheet: Node3D                    ## the puddle's flat sheet (EctoplasmLook's
 var _hump_h := 0.50
 
 
-func _init(model_variant: String = "jelly") -> void:
-	variant = model_variant if VARIANTS.has(model_variant) else "jelly"
+func _init(model_variant: String = "faces") -> void:
+	variant = model_variant if VARIANTS.has(model_variant) else "faces"
 	spec = SPEC[variant]
 	_setup_model("EctoBlobModel", 1.0)
 	monster_kind = "ecto_blob"
@@ -159,7 +171,8 @@ func is_jelly(part: MeshInstance3D) -> bool:
 func _build() -> void:
 	match variant:
 		"faces":
-			_jelly_part("body", _faces_soup(), self, Vector3.ZERO)
+			var heap := _jelly_part("body", _faces_soup(), self, Vector3.ZERO)
+			_add_part("face_eyes", _face_eyes_soup(), heap, Vector3.ZERO)
 		"puddle":
 			# the sheet is the ectoplasm look's own film (the slick it leaves; slime's milky sheet hid the hump), the hump its body
 			sheet = EctoplasmLook.puddle("film", float(spec["rx"]), 1501)
@@ -272,15 +285,8 @@ func _faces_soup() -> LowPoly.Soup:
 	var s := _dome_soup(Vector3.ZERO, 0.66, 0.60, 0.66, 0.18, 1551)
 	s.merge(_dome_soup(Vector3(0.40, 0, 0.22), 0.34, 0.32, 0.46, 0.12, 1552))
 	s.merge(_dome_soup(Vector3(-0.40, 0, -0.08), 0.30, 0.30, 0.42, 0.12, 1553))
-	# [angle round the heap (0 is +X, -PI/2 the front), height share, size, how far it leans out]
-	var faces := [[-PI * 0.55, 0.55, 1.45, 0.0], [-PI * 0.88, 0.42, 1.25, 0.15], [-PI * 0.20, 0.36, 1.2, -0.1]]
-	for i in faces.size():
-		var fc: Array = faces[i]
-		var a := float(fc[0])
-		var hh := 0.66 * float(fc[1])
-		var p := Vector3(cos(a) * 0.62, hh, sin(a) * 0.56)
-		var nrm := (p - Vector3(0, 0.18, 0)).normalized()
-		s.merge(_face_soup(float(fc[2]), 1560 + 10 * i), Transform3D(Basis.looking_at(nrm, Vector3.UP).rotated(nrm, float(fc[3])), p))
+	for i in FACES.size():
+		s.merge(_face_soup(float(FACES[i][2]) * FACE_K, 1560 + 10 * i), _face_xf(i))
 	# a hand pushing out (fingers spread under the surface)
 	var hand := LowPoly.Soup.new(1590, 0.05)
 	blob(hand, Vector3.ZERO, Vector3(0.09, 0.10, 0.05), WHITE, 1591, 0.12)
@@ -289,6 +295,27 @@ func _faces_soup() -> LowPoly.Soup:
 		limb(hand, Vector3(sin(fa) * 0.05, cos(fa) * 0.06, 0), Vector3(sin(fa) * 0.16, cos(fa) * 0.17, -0.02), 0.022, 0.016, 4, WHITE, 1592 + i)
 	var hp := Vector3(-0.62, 0.30, 0.10)
 	s.merge(hand, Transform3D(Basis.looking_at(Vector3(-1, 0.2, 0.2).normalized(), Vector3.UP), hp))
+	return s
+
+
+## Where face `i` sits on the heap (its front -Z out of the surface).
+static func _face_xf(i: int) -> Transform3D:
+	var fc: Array = FACES[i]
+	var a := float(fc[0])
+	var p := Vector3(cos(a) * 0.62, 0.66 * float(fc[1]), sin(a) * 0.56)
+	var nrm := (p - Vector3(0, 0.18, 0)).normalized()
+	return Transform3D(Basis.looking_at(nrm, Vector3.UP).rotated(nrm, float(fc[3])), p)
+
+
+## The glowing points in the faces' hollow eyes (opaque, the monster material's glow), just inside each hollow.
+func _face_eyes_soup() -> LowPoly.Soup:
+	var s := LowPoly.Soup.new(1581, 0.04)
+	for i in FACES.size():
+		var k := float(FACES[i][2]) * FACE_K
+		var f := LowPoly.Soup.new(1582 + i, 0.04)
+		for x: float in [-1.0, 1.0]:
+			blob(f, Vector3(0.056 * x, 0.045, -0.12) * k, Vector3(0.03, 0.032, 0.012) * k, NecroLook.glow(FACE_GLOW), 1584 + 2 * i + int(x), 0.0)
+		s.merge(f, _face_xf(i))
 	return s
 
 

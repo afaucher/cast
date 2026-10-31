@@ -37,6 +37,10 @@ func _part_names(kind: String) -> Array[String]:
 			return GooImpModel.PART_NAMES
 		"zombie":
 			return ZombieModel.PART_NAMES
+		"crypt_rat":
+			return RatModel.PART_NAMES
+		"ecto_blob":
+			return EctoBlobModel.GAME_PARTS
 		_:
 			return SwarmerModel.PART_NAMES
 

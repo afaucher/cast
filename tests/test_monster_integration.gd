@@ -5,7 +5,7 @@ extends MonsterTestBase
 ## fighting a dummy hero for 600 frames runs clean.
 
 const SIZES := {"grunt": GruntModel.MODEL_SCALE, "archer": ArcherModel.MODEL_SCALE, "brute": BruteModel.MODEL_SCALE, "swarmer": SwarmerModel.MODEL_SCALE,
-	"pavise": PaviseModel.MODEL_SCALE, "water_boy": 1.1, "zombie": ZombieModel.MODEL_SCALE}
+	"pavise": PaviseModel.MODEL_SCALE, "water_boy": 1.1, "zombie": ZombieModel.MODEL_SCALE, "crypt_rat": 1.0, "ecto_blob": 1.0}
 ## The kinds that wind up as soon as they reach a hero (the pavise winds up only for its bash, a hero right in front of it;
 ## the water boy only for a pour, a hurt pack-mate beside it: _hooks sets those up).
 const CLASSIC: Array[String] = ["grunt", "archer", "brute", "swarmer"]

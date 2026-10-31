@@ -1,7 +1,9 @@
 # The ectoplasm look: a visual test
 
-Status: **[look-dev only]**, 2026-10-29. Nothing here is in the game. No contract, floor, monster, spell or network message
-uses it: there is no slow, no Damp hook and no gameplay state. The test exists in the gym (`--gym`) and in a look lab, and
+Status: **[look-dev; the film is in the game since H3b]**, 2026-10-29. The ecto blob's slick (`EctoSlick`,
+haunted-build-plan.md "H3b as built") draws with this look's film (`EctoplasmLook.trail`, `set_wash`) and is gameplay (a
+slow, Damp washes it, networked). Everything else here (the puddles, the drips, slime and mist) is still look-dev: no slow,
+no Damp hook and no gameplay state. The test exists in the gym (`--gym`) and in a look lab, and
 its job is to help the user decide how ectoplasm should look.
 
 The idea this serves (new-themes.md, "Ghost house: haunted contracts", Other enemies): **ectoplasm** is "the infestation

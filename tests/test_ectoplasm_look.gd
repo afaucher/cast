@@ -1,5 +1,6 @@
 extends TestCase
-## The ectoplasm look test (docs/design/ectoplasm-look.md, LOOK-DEV ONLY): EctoplasmLook's builders make plain cosmetic
+## The ectoplasm look test (docs/design/ectoplasm-look.md; its film trail is the ecto blob's slick's look since H3b, the
+## gameplay in EctoSlick and test_ecto_blob): EctoplasmLook's builders make plain cosmetic
 ## nodes (a puddle, a wall drip) for every variant, see-through and with no ink outline (so it never reads as today's goo),
 ## in the ghosts' colour; Damp's wash thins them away; the gym's "ecto: <variant>" entries put a puddle down (and a drip on
 ## a wall within reach); and the look lab's builders (its two rooms, their spots, a staged cell) run headless.

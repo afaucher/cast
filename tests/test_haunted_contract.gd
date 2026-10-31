@@ -11,6 +11,7 @@ const SEEDS: Array[int] = [3, 11, 42]
 const BUILD_SEEDS: Array[int] = [3, 11]
 
 var _ops := {}   ## "theme.op" -> Vector2i(placed, tried), over every floor built (printed: how well the rooms dress)
+var totals := {}  ## floor tag -> {kind: count}: the dead family's mix over every floor built (H3b: rats and blobs turn up)
 
 
 func setup() -> void:
@@ -24,6 +25,11 @@ func setup() -> void:
 			for f in range(1, ContractRun.FLOOR_COUNT + 1):
 				_check_floor(id, s, f)
 	Monster.use_proto_visuals = false
+	var seen := {}
+	for t: String in totals:
+		for k: String in (totals[t] as Dictionary):
+			seen[k] = true
+	check(seen.has("crypt_rat") and seen.has("ecto_blob"), "H3b: the haunted floors deal crypt rats and ecto blobs (%s)" % str(seen.keys()))
 	var keys := _ops.keys()
 	keys.sort()
 	var parts: Array[String] = []
@@ -93,7 +99,7 @@ func _check_runs() -> void:
 			check(not run.has_gates(), "%s: no hellgates" % tag)
 			eq(run.floor_gates, [0, 0, 0] as Array[int], "%s: no gate on any floor" % tag)
 			check(run.pest in ["grunt", "zombie"], "%s: the pest is one of the family's, skeletons or zombies (%s)" % [tag, run.pest])
-			eq(run.family_kinds(), ["grunt", "zombie"] as Array[String], "%s: packs of the dead family: skeletons and zombies (H3)" % tag)
+			eq(run.family_kinds(), ["grunt", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "%s: packs of the dead family: skeletons, zombies, crypt rats and ecto blobs (H3, H3b)" % tag)
 			pests_seen[run.pest] = true
 			var value := 0
 			var pests := 0
@@ -163,6 +169,29 @@ func _old_offers(board_seed: int) -> Array:
 	return out
 
 
+## H3b: a floor's crypt rats stand in clumps of 5-6 (a pick), at most one clump a room's pack (fewer when the room's density
+## cap cut it short).
+func _rat_clumps(tag: String, site: SiteBuilder.Site) -> void:
+	var rats: Array[Monster] = []
+	for m in site.monsters:
+		if m.kind == "crypt_rat":
+			rats.append(m)
+	var left := rats.duplicate()
+	while not left.is_empty():
+		var clump: Array[Monster] = [left.pop_back()]
+		var grew := true
+		while grew:
+			grew = false
+			for r in left.duplicate():
+				for c in clump:
+					if GameWorld.flat_distance(r.global_position, c.global_position) < 2.6:
+						clump.append(r)
+						left.erase(r)
+						grew = true
+						break
+		check(clump.size() <= 6, "%s: a rat clump is at most 6 (%d)" % [tag, clump.size()])
+
+
 ## One floor of a haunted contract, built as the game builds it (test_golden_floor's way), twice.
 func _check_floor(id: String, s: int, f: int) -> void:
 	var tag := "%s/%d floor %d" % [id, s, f]
@@ -176,17 +205,20 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	check(plan.gates.is_empty() and site.gates.is_empty() and site.origin_gate == null and site.beasts.is_empty(), "%s: no hellgate" % tag)
 	check(map.sewer.is_empty() and map.cave.is_empty(), "%s: no sewer cluster or lava cave" % tag)
 	check(site.scouts.is_empty() and site.sharks.is_empty() and site.gators.is_empty(), "%s: no goblin scout, shark or gator" % tag)
-	# only the dead family (skeletons and zombies, H3), and enough of the pest to exterminate
+	# only the dead family (skeletons and zombies, H3; crypt rats and ecto blobs, H3b), and enough of the pest to exterminate
 	check(site.monsters.size() > 0, "%s: monsters spawned (%d)" % [tag, site.monsters.size()])
 	var kinds := {}
 	for m in site.monsters:
 		kinds[m.kind] = int(kinds.get(m.kind, 0)) + 1
 	for k: String in kinds:
-		check(k in ["grunt", "zombie"], "%s: the dead family only (%s)" % [tag, k])
+		check(k in ["grunt", "zombie", "crypt_rat", "ecto_blob"], "%s: the dead family only (%s)" % [tag, k])
 	# (H3: a zombie costs 3 to a skeleton's 2, so a mixed floor holds fewer than H1's skeleton-only one: measured 12-17 on
-	# floors 1-2 and 26-35 on floor 3 here, against 17-21 and 34-42 with skeletons only)
+	# floors 1-2 and 26-35 on floor 3 here, against 17-21 and 34-42 with skeletons only. H3b: a rat pick is 5-6 rats for 6
+	# points at weight 1, so a floor with rats holds more, lighter bodies: measured 12-22 on floors 1-2 and 30-40 on floor 3)
 	check(site.monsters.size() <= 40, "%s: a sane total (%d: %s)" % [tag, site.monsters.size(), str(kinds)])
+	_rat_clumps(tag, site)
 	print("  %s: %d monsters %s, pest %s" % [tag, site.monsters.size(), str(kinds), run.pest])
+	totals[tag] = kinds
 	check(site.pest_spawned >= PackPlanner.PEST_MIN, "%s: at least %d to exterminate (%d)" % [tag, PackPlanner.PEST_MIN, site.pest_spawned])
 	# the rooms: the haunted pool, the service entrance; the origin room on the last floor
 	var pool := RoomThemeDefs.pool(site_type)

@@ -10,7 +10,8 @@ extends RefCounted
 ##   model      the MonsterModel class's path (MonsterModels.make); none for a kind that builds its own (the sharks)
 ##   tris       the model's triangle budget (test_monster_models)
 ##   pack       {cost, weight}: the kind is dealt into room packs (MonsterFactory.KINDS / compose) at this point cost and
-##              pick weight; "swarm": true means one pick is a clump of SWARM_MIN-SWARM_MAX of them (and at most one a pack);
+##              pick weight; "swarm": true means one pick is a clump of SWARM_MIN-SWARM_MAX of them (and at most one a pack;
+##              "swarm_min" / "swarm_max" set the clump's size for the kind: the crypt rats' 5-6, MonsterFactory.swarm_range);
 ##              "min_floor": not dealt on a floor below it; "max": at most this many a pack; "after": only once the pack
 ##              already holds this many other monsters (a swarm pick counts SWARM_MIN)
 ##   gate       {w, per_p, per_phase, min}: a hellgate spawns it with weight max(min, w + per_p * pressure + per_phase *
@@ -22,7 +23,8 @@ extends RefCounted
 ##              "gate": normal floors' packs and the hellgates never deal it (test_monster_defs holds that)
 ##   sewer_pack {min, max, weight}: a sewer pack of this kind is min-max of them, picked at this weight among the sewer kinds
 ##              (MonsterFactory.compose_sewer / spawn_sewer_pack: the sewer's own packs, not the floor's pack roll)
-##   family     the pest family whose packs alone deal it ("dead": the zombie, haunted-build-plan.md H3). A family kind is
+##   family     the pest family whose packs alone deal it ("dead": the zombie, haunted-build-plan.md H3; the crypt rat and the
+##              ecto blob, H3b). A family kind is
 ##              dealt only when a pack asks for the family's kinds (MonsterFactory.compose's `only`), so a hellgate floor's
 ##              packs roll exactly as before it existed
 ##
@@ -101,6 +103,20 @@ const DEFS := {
 		## the first time it goes down only; a fireball burns the bodies, a heal for the crew
 		"drops": [{"spells": ["fireball"], "chance": 0.10}, {"spells": ["heal"], "chance": 0.08}],
 		"pest": "zombies",
+	},
+	"crypt_rat": {   ## the crypt rat (haunted-build-plan.md H3b): the dead family's fast swarm, a clump of 5-6 a pick, favoured in a crypt
+		"script": "res://scripts/monsters/crypt_rat.gd", "model": "res://scripts/art/lowpoly/crypt/rat_model.gd", "tris": 1600,
+		"pack": {"cost": 6, "weight": 1.0, "swarm": true, "swarm_min": 5, "swarm_max": 6},
+		"family": "dead",
+		## per rat (rats come in packs)
+		"drops": [{"spells": ["teeth"], "chance": 0.03}, {"spells": ["chicken"], "chance": 0.03}],
+	},
+	"ecto_blob": {   ## the ecto blob (haunted-build-plan.md H3b): the dead family's slow area denial, its slick behind it; one a pack
+		"script": "res://scripts/monsters/ecto_blob.gd", "model": "res://scripts/art/lowpoly/crypt/ecto_blob_model.gd", "tris": 1900,
+		"pack": {"cost": 3, "weight": 1.5, "max": 1},
+		"family": "dead",
+		## damp washes its slick away
+		"drops": [{"spells": ["damp"], "chance": 0.20}, {"spells": ["heal"], "chance": 0.06}],
 	},
 }
 

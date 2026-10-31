@@ -1,9 +1,11 @@
 class_name EctoplasmLook
 extends RefCounted
-## LOOK-DEV ONLY (docs/design/ectoplasm-look.md): what ECTOPLASM could look like, the haunting's infestation layer
-## (new-themes.md "Ghost house", Other enemies: "like goo: it slicks or slows the floor, and Damp washes it away"). Nothing
-## in the game, the contracts or the network uses it: only the gym's "ecto: <variant>" spawns and the look lab
-## (ectoplasm_look_lab.gd). No HP, no slow, no collision: plain cosmetic nodes.
+## What ECTOPLASM looks like, the haunting's infestation layer (docs/design/ectoplasm-look.md; new-themes.md "Ghost house",
+## Other enemies: "like goo: it slicks or slows the floor, and Damp washes it away"). The builders make plain cosmetic nodes
+## (no HP, no slow, no collision). Since H3b (haunted-build-plan.md "H3b as built") the GAME draws with one of them: an ecto
+## blob's slick (EctoSlick, the gameplay: its slow, its washing, its networking) is `trail("film", ...)` and `set_wash`. The
+## rest (the puddles, the drips, the other variants) is still look-dev: the gym's "ecto: <variant>" spawns, the crypt pests'
+## look test and the look labs.
 ##
 ## It is built to read differently from today's goo (GooSoups: an opaque, lumpy, glowing chartreuse sheet with an ink
 ## outline): ectoplasm is SEE-THROUGH (the floor shows through it), SMOOTH and GLASSY (a flat sheet with a bright meniscus

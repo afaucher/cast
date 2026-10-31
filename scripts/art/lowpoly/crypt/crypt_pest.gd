@@ -2,7 +2,9 @@ class_name CryptPest
 extends Node3D
 ## LOOK-DEV ONLY (docs/design/crypt-pests-look.md): one crypt pest for the look test, a plain cosmetic node (not an Actor:
 ## no HP, no AI, no collision, nothing networked). The gym spawns them (GymSpawns "crypt", "pest:<kind>:<variant>:<pose>")
-## and the look lab poses them. Every CryptPest is in GhostLook.GROUP, so the gym's "Ghost colour" (and "Necro rim", for the
+## and the look lab poses them. The GAME's rat and blob are the monsters CryptRat and EctoBlob (haunted-build-plan.md "H3b as
+## built": the gym's Monster group, "Crypt Rat" and "Ecto Blob"); this figure keeps the look test's record (every variant,
+## the rat's rear-up tell). Every CryptPest is in GhostLook.GROUP, so the gym's "Ghost colour" (and "Necro rim", for the
 ## grave rat) redress it live (refresh: a rebuild, since the glow is painted on).
 ##   rat   sewer | runner | grave   run (galloping a line and back), bite (rearing up and biting on a loop), pack (six
 ##                                  rats galloping round a loop, the swarm)

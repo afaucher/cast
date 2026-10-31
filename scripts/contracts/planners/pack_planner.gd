@@ -10,6 +10,9 @@ const PEST_MIN := 6                     ## at least this many pest-kind monsters
 const ROOM_BUDGET_BASE := 5
 const ROOM_BUDGET_PER_ROOM := 1
 const ROOM_BUDGET_PER_FLOOR := 3
+## A crypt room's packs favour the crypt rats (haunted-build-plan.md H3b): their pick weight times this. Only a family pack
+## (a haunted contract's) can deal a rat, so a hellgate floor (no crypt either) rolls as before.
+const CRYPT_BIAS := {"crypt_rat": 2.0}
 
 
 static func plan(run: ContractRun, floor_n: int, p: SitePlan) -> void:
@@ -33,13 +36,15 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan, site: SiteBuilder.
 	tags.sort_custom(func(a: String, b: String) -> bool: return int(a.trim_prefix("room:")) < int(b.trim_prefix("room:")))
 	var rooms_free: Dictionary = {}
 	var room_count: Dictionary = {}
+	var crypt_rooms: Array = CryptPlanner.record(map).get("rooms", [])
 	for tag: String in tags:
 		var free: Array[Vector2i] = []
 		for c in (p.rooms[tag] as Array[Vector2i]):
 			if not p.blocked.has(c):
 				free.append(c)
 		rooms_free[tag] = free
-		var plan_kinds := SiteBuilder.biased_composition(int(p.pack_budgets[tag]), rng, run.pest, p.floor_number, run.family_kinds())
+		var more: Dictionary = CRYPT_BIAS if crypt_rooms.has(tag) else {}
+		var plan_kinds := SiteBuilder.biased_composition(int(p.pack_budgets[tag]), rng, run.pest, p.floor_number, run.family_kinds(), more)
 		room_count[tag] = _place_kinds(map, free, plan_kinds, rng, site, SiteBuilder.room_cap(map, p.rooms[tag]))
 	# Make sure there is something to exterminate: top up the pest if the dice were unkind.
 	if run.pest != "everything":
@@ -78,7 +83,8 @@ static func _place_kinds(map: HexMap, free: Array[Vector2i], kinds: Array[String
 			placed.append(center)
 			usable.erase(center)
 			continue
-		var want := mini(rng.randi_range(MonsterFactory.SWARM_MIN, MonsterFactory.SWARM_MAX), cap - spawned)
+		var sr := MonsterFactory.swarm_range(kind)
+		var want := mini(rng.randi_range(sr.x, sr.y), cap - spawned)
 		var near: Array[Vector2i] = []
 		for c in usable:
 			if Hex.distance(c, center) <= 2:

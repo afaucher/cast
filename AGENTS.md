@@ -46,7 +46,9 @@ map once the floor runs, a damp's crust puts it back for 8 s from the cast's sha
 `Actor.lose_ground` from the machine that resolves it, and a late joiner gets the live crusts (`LavaField.late_join_state`). Haunted
 floors' zombies leave bodies (`Zombie`, `docs/design/haunted-build-plan.md` "H3 as built"): a body is `dead` but stays on the
 floor; the host stands it up (`Actor.revive`: coffee) or burns it (`Actor.burn_body`) and every screen follows (`world.rise` /
-`world.burn`), and a late joiner gets the bodies where they lie (`NetWorld.body_states`). A debug
+`world.burn`), and a late joiner gets the bodies where they lie (`NetWorld.body_states`); an ecto blob's slick is a runtime
+host-arbitrated object a segment at a time (`EctoSlick`: `obj.new`, washed by the host's `obj.slick`; its slow is LOCAL from the
+segments every screen has, like goo), and a late joiner gets the live segments ("H3b as built"). A debug
 guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). M7 (polish) is
 built locally; the two-PC Steam sign-off is `docs/design/steam-playtest-checklist.md`. Steam's overlay invites ask first in a
 job (`Session.invite_received` -> "Leave this job and join?"), "Invite crew" is on the job board and the pause form

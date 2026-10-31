@@ -511,9 +511,13 @@ static func scout_count(run: ContractRun, floor_n: int) -> int:
 
 ## MonsterFactory.compose with the pest's weight multiplied (a swarmer is still at most one group per pack), for a pack
 ## on floor `floor_n` (the kinds dealt from a later floor only: the pavise and the water boy from floor 2), of the kinds
-## `only` ([] = any: a hellgate contract; a haunted one passes its family's, ContractRun.family_kinds).
-static func biased_composition(budget: int, rng: RandomNumberGenerator, pest: String, floor_n: int = 1, only: Array[String] = []) -> Array[String]:
-	return MonsterFactory.compose(budget, rng, {pest: PEST_WEIGHT_MULT}, floor_n, only)
+## `only` ([] = any: a hellgate contract; a haunted one passes its family's, ContractRun.family_kinds). `more` multiplies
+## other kinds' weights on top ({kind: factor}: a crypt room favours the crypt rats, PackPlanner.CRYPT_BIAS).
+static func biased_composition(budget: int, rng: RandomNumberGenerator, pest: String, floor_n: int = 1, only: Array[String] = [], more: Dictionary = {}) -> Array[String]:
+	var bias := {pest: PEST_WEIGHT_MULT}
+	for k: String in more:
+		bias[k] = float(bias.get(k, 1.0)) * float(more[k])
+	return MonsterFactory.compose(budget, rng, bias, floor_n, only)
 
 
 ## The most monsters one room may hold: one per MonsterFactory.CELLS_PER_MONSTER walkable floor cells (at least 2).

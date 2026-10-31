@@ -1,8 +1,9 @@
 class_name RatModel
 extends MonsterModel
-## LOOK-DEV ONLY (docs/design/crypt-pests-look.md): a crypt rat, one of the two pests proposed for the haunted contracts
-## (new-themes.md "Ghost house", Other enemies; the user, 2026-10-31: "ectoplasm monsters or maybe larger than average
-## rats"). Nothing in the game spawns it: only CryptPest (the gym's crypt spawns) and the look lab (crypt_pests_lab.gd).
+## A crypt rat (docs/design/crypt-pests-look.md; the user, 2026-10-31: "ectoplasm monsters or maybe larger than average
+## rats"). THE GAME'S since H3b (haunted-build-plan.md "H3b as built"): the `crypt_rat` monster (CryptRat) wears the sewer
+## brute, the user's pick ("Sewer brute", 2026-10-31), with the POUNCE tell (`tell`). The other two variants and the rear-up
+## tell stay look-dev: CryptPest (the gym's crypt look-test spawns) and the look lab (crypt_pests_lab.gd) show them.
 ## The role is the fast swarm (packs of 5-6, like the swarmer imp), so it is built to read as a low, quick, many-legged
 ## shape at the game camera: a rat the size of a dog (about 0.5 at the shoulder and 1.0 nose to rump, against a hero's
 ## 2.0), pink naked tail, ears and feet, orange incisors.
@@ -15,8 +16,10 @@ extends MonsterModel
 ##           a bare bony tail, one torn ear, ghost-colour eyes and the dead's rim (NecroLook): the haunted one.
 ##
 ## Poses (MonsterModel's hooks): apply_idle(t, speed) crouches and sniffs at rest, or gallops (speed > 0: a bound, the
-## front and hind pairs reaching and gathering, the back flexing, the tail streaming); windup(k) rears up on its hind legs,
-## front paws up, jaw open (the bite's tell); attack_swing() snaps down and forward into the bite. pose_preview("windup")
+## front and hind pairs reaching and gathering, the back flexing, the tail streaming); windup(k) is the bite's tell, by `tell`:
+## "rear" (the look test's) rears up on its hind legs, front paws up, jaw open; "pounce" (the game's: a rearing rat only
+## gets shorter from the game camera) flattens and draws back, the hind legs bunched under it, the head low and the jaw
+## open, the tail up and lashing side to side; attack_swing() snaps down and forward into the bite (the pounce's longer). pose_preview("windup")
 ## and pose_preview("swing") hold them for the lab.
 ## Faces local -Z, +X is its right, origin at the feet. Named rigid parts: body (pivots at the hips), head, jaw, tail,
 ## tail2, leg_fl, leg_fr, leg_hl, leg_hr (the legs hang from the model root and are aimed at their feet every pose).
@@ -29,6 +32,8 @@ const GAIT := 15.0                  ## rad / s of the gallop
 const REST_PITCH := -0.10           ## nose a little down
 const REAR_PITCH := 1.15            ## reared up on its haunches
 const FOOT_Y := 0.025
+const TELLS: Array[String] = ["rear", "pounce"]
+const LASH_RATE := 16.0             ## rad / s of the pounce tell's tail lash
 
 ## Per variant: len (hips to chest), girth, hip height, tail length and thickness, ear size, the eyes ("glint": dark beads;
 ## "ghost": the ghost colour, glowing), mange (0..1: bald patches), bones (ribs and spine through the flank), rim (the
@@ -60,6 +65,8 @@ const BONE := Color(0.86, 0.82, 0.70)
 const SCAB := Color(0.42, 0.16, 0.14)
 
 var variant := "sewer"
+## The bite's tell (TELLS): "rear" (the look test's, the default) or "pounce" (the game's crypt rat sets it).
+var tell := "rear"
 var spec: Dictionary
 var hip_y := 0.47
 var body_len := 0.56
@@ -76,7 +83,7 @@ func _init(model_variant: String = "sewer") -> void:
 	variant = model_variant if VARIANTS.has(model_variant) else "sewer"
 	spec = SPEC[variant]
 	_setup_model("RatModel", float(spec["scale"]))
-	monster_kind = "rat"
+	monster_kind = "crypt_rat"   # (MonsterDefs kind: the game's CryptRat wears it)
 	glow_flare = 1.2 if str(spec["eyes"]) == "ghost" else 0.5   # the eyes flare in the tell
 	if float(spec["rim"]) > 0.0:
 		_mat = NecroLook.body_material(outline_px, float(spec["rim"]))
@@ -181,7 +188,7 @@ func _head_soup() -> LowPoly.Soup:
 		var big := 1.25 if str(spec["eyes"]) == "ghost" else 1.0
 		blob(s, Vector3(0.062 * x, 0.022, -0.155), Vector3(0.028, 0.028, 0.022) * big, eye(), 1206 + x, 0.0)
 		if str(spec["eyes"]) != "ghost":
-			blob(s, Vector3(0.066 * x, 0.034, -0.172), Vector3(0.008, 0.008, 0.006), Color(0.95, 0.92, 0.88), 1208 + x, 0.0)   # the glint
+			blob(s, Vector3(0.066 * x, 0.034, -0.172), Vector3(0.008, 0.008, 0.006), glow(Color(0.95, 0.92, 0.88)), 1208 + x, 0.0)   # the glint (a wet point of light: the dark beads glow nowhere else)
 		var torn := variant == "grave" and x < 0
 		var er := ear * (0.7 if torn else 1.0)
 		var at := Vector3(0.085 * x, 0.085, -0.02)
@@ -266,13 +273,20 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var by := hip_y - 0.03 * (1.0 - walk) + 0.05 * walk * (0.5 - 0.5 * cos(2.0 * ph)) + 0.004 * sin(t * 2.3)
 	var bz := 0.0
 	var stretch := 1.0 + 0.08 * walk * cos(ph)
-	pitch = lerpf(pitch, REAR_PITCH, w)
-	by = lerpf(by, hip_y - 0.08, w)
-	bz = lerpf(bz, 0.08, w)
-	pitch = lerpf(pitch, 0.18, sw)
+	var pounce := tell == "pounce"
+	if pounce:
+		pitch = lerpf(pitch, -0.16, w)        # flat, the hips up over the bunched hind legs
+		by = lerpf(by, hip_y - 0.15, w)
+		bz = lerpf(bz, 0.20, w)               # drawn back
+		stretch = lerpf(stretch, 0.88, w)
+	else:
+		pitch = lerpf(pitch, REAR_PITCH, w)
+		by = lerpf(by, hip_y - 0.08, w)
+		bz = lerpf(bz, 0.08, w)
+	pitch = lerpf(pitch, 0.18 if not pounce else 0.05, sw)
 	by = lerpf(by, hip_y - 0.04, sw)
-	bz = lerpf(bz, -0.36, sw)
-	stretch = lerpf(stretch, 1.1, sw)
+	bz = lerpf(bz, -0.36 if not pounce else -0.55, sw)
+	stretch = lerpf(stretch, 1.1 if not pounce else 1.18, sw)
 	var body := parts["body"] as MeshInstance3D
 	body.position = Vector3(0.0, by, bz)
 	body.rotation = Vector3(pitch, 0.05 * sin(t * 0.6) * (1.0 - walk), 0.06 * walk * sin(ph + 0.5))
@@ -280,10 +294,10 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	# the head: level in the gallop, sniffing at rest, down at the hero when reared, thrust out in the bite
 	var head := parts["head"] as MeshInstance3D
 	var hx := 0.10 + 0.05 * sin(t * 11.0) * sniff - pitch * 0.6 * walk
-	hx = lerpf(hx, -0.55, w)
+	hx = lerpf(hx, -0.55 if not pounce else 0.12, w)
 	hx = lerpf(hx, -0.20, sw)
 	head.rotation = Vector3(hx, 0.3 * sin(t * 0.5) * (1.0 - walk) * (1.0 - w), 0.0)
-	(parts["jaw"] as MeshInstance3D).rotation.x = lerpf(lerpf(-0.04 - 0.05 * sniff, -1.05, w), -0.12, sw)
+	(parts["jaw"] as MeshInstance3D).rotation.x = lerpf(lerpf(-0.04 - 0.05 * sniff, -1.05 if not pounce else -0.85, w), -0.12, sw)
 	# the tail: down to the floor and curled along it at rest (and reared: a prop behind it), streaming in the gallop. The
 	# angles are the world's (below the horizontal), so a long tail and a short one both just reach the floor.
 	var tail := parts["tail"] as MeshInstance3D
@@ -292,14 +306,20 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 	var down := asin(clampf((root.y - 0.04) / (float(spec["tail"]) * 0.5), 0.0, 0.98))
 	var a1 := lerpf(down, minf(0.24, down), walk)
 	var a2 := lerpf(-0.04, 0.06, walk)
-	a1 = lerpf(a1, down, w)
-	a2 = lerpf(a2, -0.04, w)
+	var lash := 0.0
+	if pounce:
+		a1 = lerpf(a1, -0.75, w)              # the tail up off the floor ...
+		a2 = lerpf(a2, 0.35, w)
+		lash = 0.75 * w * sin(t * LASH_RATE)  # ... and lashing
+	else:
+		a1 = lerpf(a1, down, w)
+		a2 = lerpf(a2, -0.04, w)
 	a1 = lerpf(a1, minf(0.30, down), sw)
 	a2 = lerpf(a2, 0.04, sw)
 	var t1y := lerpf(0.25, 0.28 * sin(ph * 0.5), walk)
 	var t2y := lerpf(0.55, 0.35 * sin(ph * 0.5 - 0.9), walk)
-	tail.rotation = Vector3(a1 - pitch, t1y, 0.0)
-	tail2.rotation = Vector3(a2 - a1, t2y, 0.0)
+	tail.rotation = Vector3(a1 - pitch, lerpf(t1y, lash, minf(1.0, w * 1.5)) if pounce else t1y, 0.0)
+	tail2.rotation = Vector3(a2 - a1, lerpf(t2y, lash * 0.8, minf(1.0, w * 1.5)) if pounce else t2y, 0.0)
 	# the legs, aimed at their feet: the gallop's reach and gather, the reared stance, the bite's planted reach
 	var bt := body.transform
 	for s: int in [-1, 1]:
@@ -314,8 +334,12 @@ func apply_idle(t: float, speed: float = 0.0) -> void:
 		var phh := ph + 0.7 + (0.3 if s > 0 else 0.0)
 		var front := Vector3(shoulder.x * s * 1.05, FOOT_Y + maxf(0.0, sin(pf)) * 0.14 * walk, _front_z + bz - 0.24 * walk * cos(pf))
 		var hind := Vector3(hip.x * s * 1.05, FOOT_Y + maxf(0.0, sin(phh)) * 0.12 * walk, _hind_z + bz + 0.24 * walk * cos(phh))
-		front = front.lerp(sh + Vector3(0.13 * s, -0.10, -0.12), w)     # paws up and spread, claws out
-		hind = hind.lerp(Vector3(hip.x * s * 1.3, FOOT_Y, hp.z - 0.10), w)
+		if pounce:
+			front = front.lerp(Vector3(shoulder.x * s * 1.5, FOOT_Y, sh.z - 0.10), w)   # forepaws planted wide
+			hind = hind.lerp(Vector3(hip.x * s * 1.4, FOOT_Y, hp.z - 0.20), w)          # hind legs bunched under it
+		else:
+			front = front.lerp(sh + Vector3(0.13 * s, -0.10, -0.12), w)     # paws up and spread, claws out
+			hind = hind.lerp(Vector3(hip.x * s * 1.3, FOOT_Y, hp.z - 0.10), w)
 		front = front.lerp(Vector3(shoulder.x * s * 1.15, FOOT_Y, sh.z - 0.24), sw)
 		hind = hind.lerp(Vector3(hip.x * s * 1.05, FOOT_Y, _hind_z + 0.10), sw)
 		aim_limb(lf, front, fl_len)

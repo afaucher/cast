@@ -1,8 +1,12 @@
 # Crypt pests: the crypt rats and the ecto blob (a visual test)
 
-Status: **[look-dev only]**, 2026-10-31. Nothing here is in the game. No contract, floor, monster, world object or network
-message uses it: the rats and the blobs have no HP, no AI, no collision and no slick that does anything. The test exists in
-the gym (`--gym`) and in a look lab, and its job is to help the user pick how two new haunted-contract enemies should look.
+Status: **[look-dev; the user's picks are in the game since H3b]**, 2026-10-31. The user picked the **Sewer brute** and the
+**Mass of faces** ("The user's read", below), and both are real monsters now: `CryptRat` and `EctoBlob`, with the blob's slick
+`EctoSlick` (haunted-build-plan.md, "H3b as built"). In the game the rat's tell is a **pounce**, not the rear-up shown here,
+the blob's faces are bigger (`EctoBlobModel.FACE_K`) with glowing eyes (`face_eyes`), and the rat's bead eyes keep a glowing
+glint. The rest of this page is the look test as it was: the other four variants and the rear-up are look-dev only (the gym's
+crypt group and the look lab), cosmetic nodes with no HP, no AI and no collision. Game screenshots:
+`docs/design/crypt_pests_game/`.
 
 ## The brief
 
@@ -188,12 +192,12 @@ $env:CAST_GODOT = "<abs path>\Hero-Reader\third_party\godot\Godot_v4.7-stable_wi
 
 This writes every sheet next to `--shot` (about 15 s). `--set` renders one group only.
 
-## If they are built (not designed yet)
+## Built (H3b, 2026-10-31)
 
-Not part of this look-dev. Both would be host monsters (the swarmer's and the zombie's shape); the rats a pack kind the crypt
-deals (a habitat, as the goo imp's sewer). The slick is the open question: a timed area every machine draws from the
-blob's path, like the goo patch (a host-arbitrated runtime object) or a scheduled effect, with its effect (a slow, a slip,
-a small damage), its life, and Damp washing it to be decided. It needs the networking checklist (`networking.md`) first.
+Both are host monsters of the dead family now (haunted-build-plan.md, "H3b as built", with every call made): the rats a
+swarm kind (5-6 a pick, favoured in a crypt's rooms), the blob one a pack. The slick is a host-arbitrated runtime object a
+segment at a time (`EctoSlick`, the goo patch's shape): it slows the crew and the staff, Damp washes it, it dries after
+14 s, and a late joiner gets the live segments.
 
 ## Choices made for the test (the user may want a say)
 

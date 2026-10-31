@@ -104,6 +104,13 @@ static func _dealt(kind: String, floor_n: int, have: int, plan: Array[String]) -
 	return true
 
 
+## How many of a swarm kind one pick spawns: (min, max), the row's "swarm_min" / "swarm_max" (the crypt rats' 5-6), else
+## SWARM_MIN-SWARM_MAX (the imps' 4-6). One randi_range draw either way, so the imps' rolls are as they were.
+static func swarm_range(kind: String) -> Vector2i:
+	var p: Dictionary = MonsterDefs.row(kind).get("pack", {})
+	return Vector2i(int(p.get("swarm_min", SWARM_MIN)), int(p.get("swarm_max", SWARM_MAX)))
+
+
 ## Point cost of a list of spawned monsters (a swarm counts its cost per SWARM_MAX members).
 static func cost_of(monsters: Array) -> int:
 	var total := 0
@@ -148,7 +155,8 @@ static func spawn_pack(room_cells: Array[Vector2i], budget: int, rng: RandomNumb
 			free.erase(center)
 			continue
 		# A swarm: a tight clump around the chosen cell.
-		var want := rng.randi_range(SWARM_MIN, SWARM_MAX)
+		var sr := swarm_range(kind)
+		var want := rng.randi_range(sr.x, sr.y)
 		if max_count >= 0:
 			want = mini(want, max_count - out.size())
 		var near: Array[Vector2i] = []

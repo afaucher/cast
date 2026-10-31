@@ -1,6 +1,6 @@
 # Haunted contracts: build plan
 
-Status: **[proposal; H1, H2 and H3 built 2026-10-31, see "H1 as built", "H2 as built" and "H3 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
+Status: **[proposal; H1, H2, H3 and H3b built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built" and "H3b as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
 build it in. The user (2026-10-31): "Let's build it as is" (today's roster; more enemy types are worked out in parallel).
 
 Today none of it is game code: the mansion and church rooms, the crypt, the zombies, acolytes, ghosts, hosts and the
@@ -51,7 +51,7 @@ the next.
   bodies from the keyframe. (Built: see "H3 as built"; the downed state is `Actor.dead`, the late joiner's bodies ride rows of
   their own beside the keyframe.)
 
-### H3b. Crypt rats and the ecto blob [decided 2026-10-31, not built]
+### H3b. Crypt rats and the ecto blob [decided 2026-10-31, built: see "H3b as built"]
 The user (2026-10-31, "Yes"): the two crypt pests of the look test (`docs/design/crypt-pests-look.md` on the branch
 `worktree-agent-ac83d600a5bfe9b8a`, "The user's read") become real monsters of the dead family, built after H3:
 - **Crypt rats**, the **"Sewer brute"** variant (the realistic rat scaled up; dark bead eyes for now): a **fast swarm** in
@@ -454,3 +454,138 @@ grey), `rising.png` (a coffee spilt on them: three push up on their arms togethe
   frees but the zombie), `test_haunted_contract` (the dead family is skeletons and zombies; the pest one of them; a sane total),
   `test_crypt_gen` (the crypt's packs are the family's), `test_net_contract` (`zombie.gd` in REPLICATED; `burn_body` in the
   area-verb lint).
+
+## H3b as built (2026-10-31)
+
+The user (2026-10-31): the rat is the **"Sewer brute"** and the blob the **"Mass of faces"** (its faces "show only as dark specks
+at the game camera", so they read bigger or brighter), "Yes" to both as real monsters of the dead family after H3, and as for
+H1-H3: "Just build it now. We can revisit the decisions after it's built." Every open call below was made on the spot, the
+simplest sound choice, and is listed to revisit. (First, the look test's branch was merged in: `crypt-pests-look.md`, the rat
+and blob models, `CryptPest`, the lab, `EctoplasmLook.trail` and `test_crypt_pests`; git merged it with no conflict.)
+
+### Play it
+
+```
+.\run.ps1 --client parish --seed 2 --floor 1 --spells damp,fireball --no-mic --spawn-near crypt_rat,6,cluster --idle-monsters --monster-demo wake
+         # six crypt rats by the van wake on the player 1 s in (the allies hold): the stream, the pounce, the bite
+.\run.ps1 --client parish --seed 2 --floor 2 --spells damp,fireball --no-mic --spawn-near ecto_blob,1 --idle-monsters --monster-demo wake --focus dev
+         # an ecto blob crawls at the crew from beside the elevator, its slick behind it; cast damp on the slick
+.\run.ps1 --client heir --seed 1 --floor 2 --spells damp,fireball --no-mic --to-crypt lit    # a crypt (the rats are favoured there)
+.\run.ps1 --gym --no-mic                                                                       # Spawn > Monster > "Crypt Rat", "Ecto Blob"
+```
+
+`--monster-demo wake` is new (dev only, no keybinding): every `--spawn-near` monster wakes on the player while the AI allies hold.
+
+Screenshots (the game camera, size 24, 1920x1080), `docs/design/crypt_pests_game/`: `rat_pack.png` (parish 2 floor 1: six rats
+stream in along the wall at Rebar, one tinted in its pounce), `rat_pack_pounce_2x.png` (a 2x crop: two rats in the pounce, flat,
+tails up, the wind-up tint on), `blob_slick.png` (parish 2 floor 2: the blob crawling at the crew by the elevator, five metres of
+slick behind it narrowing to its old end), `blob_slick_3x.png` (a 3x crop: the faces' glowing eyes and dark mouths, the film's
+bright edges), `blob_slick_mansion.png` (heir 11 floor 2: the same on the mansion's parquet).
+
+### What was built
+
+| Piece | Where | What |
+|---|---|---|
+| The crypt rat | `scripts/monsters/crypt_rat.gd` (`CryptRat`, extends the swarmer), `MonsterDefs` "crypt_rat" | The swarmer imp's AI (close in, dart in for a bite off cooldown, circle while it recharges; idle, a clump plays round its centre), a little slower and tougher: HP 14 (imp 12), speed 5.0 (5.5), bite 5 (4), wind-up 0.5 s (0.3), cooldown 0.9, aggro 9, reach 0.8, arc 140, radius 0.3. Dies and is freed like any monster (no body). The row: `"family": "dead"`, a swarm pick (`"swarm": true`) of **5-6** (`"swarm_min"` / `"swarm_max"`, new row fields, `MonsterFactory.swarm_range`: the imps' 4-6 draw is unchanged), cost 6, weight 1, drops teeth 3 % / chicken 3 % per rat. No `"pest"`: never a contract's pest |
+| Its look | `RatModel` "sewer" (the user's pick), `RatModel.tell` "pounce" | The bite's tell is a **pounce**: it flattens and draws back, hind legs bunched, the head low and the jaw open, the tail up off the floor and lashing side to side; the bite snaps a long way forward. With the monsters' wind-up tint (orange-red, pulsing) and a small swell (0.12). The look test's rear-up stays the model's default (`tell` "rear") for `CryptPest` and the lab. Its dark bead eyes keep a glowing glint (`MonsterModel.glow`, the monsters' "enemies glow" rule: the beads glow nowhere else). `monster_kind` "crypt_rat" |
+| The ecto blob | `scripts/monsters/ecto_blob.gd` (`EctoBlob`), `MonsterDefs` "ecto_blob" | Slow area denial: HP 10 (under the weakest hero hit, 12: **any hit kills it**, no spell needed), speed 0.85, a lunge of 8 after a 0.9 s gather-up tell (`EctoBlobModel`'s windup: tall, leaning back, flaring), cooldown 2.4, aggro 7, reach 1.25, arc 100, radius 0.55. Idle with the crew within `LIFE_RANGE`, it **wanders its room** (a cell within 3 of home at 0.7 pace, resting 2.5-5 s), so its room fills with slick before anyone arrives. Freed when it dies; its slick stays. The row: `"family": "dead"`, cost 3, weight 1.5, **one a pack** (`"max": 1`), drops damp 20 % / heal 6 % |
+| Its look | `EctoBlobModel` "faces" (the user's pick; now the default variant) | The faces are `FACE_K` (1.75) times the look test's, and each hollow eye holds a glowing point in the ghost colour (`face_eyes`, a part under the body, `FACE_GLOW` 1.0: brighter would clamp the pale blue's hue). At the game camera a face reads as a pair of bright dots over a dark mouth |
+| The slick | `scripts/monsters/ecto_slick.gd` (`EctoSlick`) | The blob's owner lays a **segment** every `SLICK_STEP` (0.6) it crawls, from the last segment's end to where it is (`EctoBlob._trail` -> `EctoSlick.lay`): WIDTH 1.0, LIFE 14 s. A shove, fall or climb farther than a crawl (1.8, or 0.45 up or down) breaks the run instead of bridging it. **Slows** the living whose feet are on it (heroes and the staff, never a monster: the dead's own ooze) to x0.6 (`Actor.effective_speed` x `EctoSlick.speed_mult`, the goo patch's LOCAL rule). **Damp** washes every segment its drizzle reaches (`Damp._burst` -> `EctoSlick.wash_at`, the owner's decision); the rest of the ribbon stays. Fire does nothing to it |
+| Its look | `EctoSlick._flush` / `_draw_run`, `EctoplasmLook.trail("film")` | Every screen draws a blob's live segments as **ribbons of the film** (the user's ectoplasm): each run of consecutive segments (one `chain`, `seq` without a gap) is one ribbon through their points, narrowing to a point at its old end, under its oldest segment; a segment laid, washed or dried redraws its chain once that frame. A washed segment's own piece fades out with `EctoplasmLook.set_wash`, with the goo's wash fizz and sound (`goo_wash`) |
+| Where they come from | `ClientArchetype.FAMILY_KINDS["dead"]` = grunt, zombie, crypt_rat, ecto_blob; `PackPlanner.CRYPT_BIAS` | A dead contract's packs deal all four; a crypt room's packs weigh the rats x2 (`SiteBuilder.biased_composition`'s new `more`). The pest stays a skeleton or a zombie (heir and parish `"pests"` unchanged). Hellgate packs never deal a family kind, so every bunker and lair floor rolls as before (`test_golden_floor` passes against the recorded floors, not re-recorded) |
+| Dev | `GameDev._monster_demo` "wake" | `--monster-demo wake`: every `--spawn-near` monster wakes on the player, the allies hold (screenshots) |
+| Gym | `GymSpawns` (unchanged) | "Crypt Rat" and "Ecto Blob" in the Monster group, as every factory kind gets; the look test's 18 crypt buttons stay |
+
+The totals (`test_haunted_contract`, heir and parish 3 and 11, floors 1-3): **12-22 monsters on floors 1-2 and 30-40 on floor 3**
+(H3: 12-17 and 26-35). A rat pick is 5-6 small bodies (14 HP each, about 80 HP a clump) for 6 points, the brute's cost, where
+three skeletons (120 HP) cost the same; the rats came in at cost 4 and weight 2.5 first, the swarmer's numbers, and floors reached
+56 (32 rats), so they were raised to 6 and 1. The 40 cap of H3's test holds.
+
+### The networking checklist (networking.md)
+1. **Shapes.** The rat and the blob: **owned actors**, host monsters (Monster's shape; no OWNER var of their own; their tells are
+   `world.windup`; a puppet's strike is resolved by each client on its own hero, as every monster's). The slick: a
+   **host-arbitrated world object made during play** (`NetObjects.RUNTIME_OBJECTS` "ecto_slick", the goo patch's shape). Not a new
+   shape.
+2. **Vars.** `CryptRat`: none of its own (the swarmer's). `EctoBlob`: `slick_laid`, `_slick_from`, `_slick_seq`, `_slick_chain`,
+   `_wander_goal`, `_wander_t` PRIVATE (the host's AI and bookkeeping). `EctoSlick`: `a`, `b`, `width`, `start_time`, `look_seed`,
+   `chain`, `seq` SPAWN (the `obj.new` row); `washed` OWNER (carrier `obj.slick {id, st}`, `NetEvents.WORLD_CARRIES`); `_end`,
+   `_gone_at`, `_wash_look` LOCAL. In `test_net_contract`'s `NET_SCRIPTS` and `REPLICATED`.
+3. **Verbs.** The rat's bite and the blob's lunge are Monster's `Combat.melee_arc`. The slick applies no verb: its slow is LOCAL
+   (every screen derives it from the segments it has; each hero's own machine moves it). Washing is the owner's decision
+   (`wash_at` acts only on segments `Net.owns`; Damp's burst runs on every machine).
+4. **Randomness.** The blob's wander on the host's `GameWorld.rng` (AI, as every monster's idle life); the segments' look seed is a
+   hash of (chain, seq); the ribbons are drawn from it. Nothing else is rolled.
+5. **Motion.** The monsters stream as ever. A segment never moves.
+6. **Cosmetic:** the ribbons, the wash's fade and fizz, the pounce and the tail lash, the faces' glow. **Gameplay:** the segments
+   (where, when, washed), the monsters' HP and state.
+7. **A late joiner.** The monsters: the keyframe and gone ids (a dead rat or blob is freed). The slick: every live segment (not
+   washed, not dried) as an `obj.new` row (`EctoSlick.late_join_state`, section `new`), built as a client builds it, drying at the
+   host's moment. `NetEvents.LATE_JOIN` has `crypt_rat.gd`, `ecto_blob.gd` and `ecto_slick.gd`.
+8. **The scenario:** `tests/test_net_ecto_slick.gd` (below).
+- Who disagrees, and how much: nobody decides a slow, so nothing is disagreed over; a client sees a segment about half a round
+  trip after the host laid it (the blob's puppet is as late). A client's Damp is a cast every machine runs; the host's run of it
+  washes, and the client's copies go when `obj.slick` arrives.
+
+### The calls made (to revisit)
+1. **The rat is the swarmer's AI** (`CryptRat` extends `swarmer.gd`): darts, circles, clump play. A little slower and tougher, a
+   longer tell (0.5 s against 0.3), a bite of 5.
+2. **The tell is a pounce**, not the look test's rear-up (from the game camera a rearing rat gets shorter): flat, drawn back, the
+   tail up and lashing, with the wind-up tint and the imp's swell. The rear-up stays in the look test.
+3. **Packs of 5-6 a pick, at most one rat clump a pack** (a swarm kind), **cost 6, weight 1**, x2 in a crypt's rooms. Rats are
+   never a contract pest (no pest name, no objective, no pest ticket).
+4. **No rat voice or squeak:** the bite plays the light swing (`swing_light`, as the imp's); its war cry is the shared monster cry.
+5. **The bead eyes glint** (a glowing white point; the user kept the dark beads "for now").
+6. **The blob: one a pack** (`"max": 1`), cost 3, weight 1.5. HP 10, under every hero's plain hit (Wick's 12).
+7. **The blob wanders its room when the crew is near** (its idle life), laying slick; it fights by crawling at the crew and
+   lunging (Monster's chase). It does not seek to cut the crew off.
+8. **The slick slows heroes and the staff to x0.6**, never a monster; no damage, no slip. LIFE 14 s, WIDTH 1.0, a segment every 0.6.
+9. **Fire does nothing to the slick** (ectoplasm does not burn); only Damp washes it, per segment.
+10. **A shove or fall breaks the ribbon** (no slick bridging a gap the blob did not crawl).
+11. **The slick is segments, not one growing object**: each segment is one `obj.new` (about one a second a crawling blob); the
+    look joins them into ribbons per chain on every screen.
+12. **The faces: 1.75x the look test's, with glowing eyes** in the ghost colour; the jelly and the slick stay the look test's.
+13. **Drops:** a rat: teeth 3 %, chicken 3 % (about the imp's); a blob: damp 20 % (its counter), heal 6 %.
+14. **The wash's fizz and sound are the goo's** (`goo_wash`): no new sound.
+15. **`--monster-demo wake`** is the dev way to stage either (no keybinding).
+
+### New player-facing strings (proposals for review)
+- Monster names **Crypt rat** and **Ecto blob** (the combat log: "Crypt rat died", "Ecto blob died").
+- No pest names, objectives, Ledger lines, notes, tickets or dispatch lines (neither is a contract pest).
+- Dev only: the gym's **Crypt Rat** and **Ecto Blob** buttons (the factory kinds' capitalized names).
+
+### Tests
+- `tests/test_crypt_rat.gd` (new, solo): the kind (a CryptRat in the sewer brute with the pounce tell, a dead family swarm kind,
+  faster than a skeleton or a zombie, less HP than a skeleton); in a fight it winds up and the hero is untouched through the
+  whole tell (the model in its tell, the tint on), then the bite lands for 5; the pounce pose (flat, crouched, drawn back, the
+  jaw open, the tail up; the bite a long snap forward); a pick placed by `PackPlanner` is a clump of 5-6 (both sizes happen);
+  killed, it is freed (no body).
+- `tests/test_ecto_blob.gd` (new, solo): the kind (the mass of faces with its faces' eyes, slower than a zombie, a long tell); its
+  HP is under the weakest hero hit and one plain melee hit kills it (then freed); crawling after a hero it lays segments about
+  SLICK_STEP long, numbered without a gap, the newest under it, drawn as one film ribbon the length of the path; the slick
+  slows a hero and the staff x0.6 and never a monster; the real Damp washes the segments its drizzle reaches, both ends stay and
+  the ribbon splits in two; a segment dries after LIFE; a copy is never washed by its own machine and goes on the owner's
+  `obj.slick`; idle with a hero near it wanders off its spot laying slick, and killed its slick stays.
+- `tests/test_net_ecto_slick.gd` (new, NetTest, `const PEERS := 3`, `off` and `coast`): board 9's heir contract, floor 1. The host
+  lays chain A (eight segments) and a segment B under c1's hero; c1 has every one (same ids, ends, drying moment), draws A as one
+  ribbon, and its own hero walks at x0.6 on B; c1's Damp at A washes A on the host (eight `obj.slick`) and on c1, B stays on
+  both; the host lays chain C as c2 clocks in, and c2 arrives with exactly the host's live segments, the same ends and drying
+  moments, none of A's; no OWNER-write guard on any machine.
+- Updated: `test_monster_defs` (the two rows in every table, the dead family's four kinds, the 5-6 swarm range, neither a pest,
+  no hellgate pack deals any family kind, dead packs deal rats and blobs, at most one rat clump and one blob a pack),
+  `test_monster_models` (their parts: `RatModel.PART_NAMES`, `EctoBlobModel.GAME_PARTS`), `test_monster_integration` (their
+  model scales), `test_haunted_contract` (the family's four kinds, rats and blobs turn up over the floors, rat clumps of at most 6,
+  the sane total), `test_crypt_gen` (a crypt's packs are the family's; crypt rats turn up in the crypts), `test_crypt_pests` (the
+  mass of faces' glowing eyes), `test_ectoplasm_look` (header), `test_net_contract` (`ecto_slick.gd` in `NET_SCRIPTS`; the three
+  scripts in `REPLICATED`).
+- Run and passing: `test_net_contract`, `test_golden_floor`, `test_haunted_contract`, `test_crypt_gen`, `test_monster_defs`,
+  `test_monster_factory`, `test_monster_death`, `test_monster_models`, `test_monster_integration`, `test_spell_damp`, `test_zombie`,
+  `test_crypt_pests`, `test_ectoplasm_look`, `test_net_world_codec`, `test_net_m3_world`, `test_net_m3_objects`,
+  `test_net_m6_late_join`, `test_net_zombies`, `test_gym`, `test_zfight`, `test_shader_hash`, `test_crypt_rat`, `test_ecto_blob`,
+  `test_net_ecto_slick` (off and coast). The full suite was not run.
+
+### Not done in H3b
+- No crew (two-PC) play; the net test covers the slick, and the monsters are the swarmer's and Monster's shapes.
+- No rat or blob sounds of their own (a squeak, a squelch); the wash borrows the goo's.
+- The slick's ribbon is redrawn whole on every change (about once a second a crawling blob, plus each drying segment): cheap at
+  one or two blobs a floor; watch it if a floor ever holds many.
+- The tell and the faces were judged on stills at the game camera only (`crypt_pests_game/`), not in play.

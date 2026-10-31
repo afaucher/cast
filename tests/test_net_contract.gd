@@ -59,6 +59,7 @@ const NET_SCRIPTS := [
 	"res://scripts/world/sewer/live_wire.gd",   # (the sewer's live wire: a scheduled effect from its panel's obj.break, sewer phase 2)
 	"res://scripts/monsters/goo_ball.gd",       # (the goo imp's ball and patch: runtime objects the host announces, NetObjects)
 	"res://scripts/monsters/goo_patch.gd",
+	"res://scripts/monsters/ecto_slick.gd",     # (an ecto blob's slick: a runtime object the host announces a segment at a time)
 ]
 
 const ACTOR := "res://scripts/core/actor.gd"
@@ -403,6 +404,11 @@ var REPLICATED := {
 	"res://scripts/monsters/goo_imp.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/monsters/goo_ball.gd": [{}, {}, 0],
 	"res://scripts/monsters/goo_patch.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/monsters/goo_patch.gd"], 0],
+	# the haunted contracts' crypt rat and ecto blob (haunted-build-plan.md H3b): plain monsters (their tells are wind-ups), and
+	# the blob's slick (a runtime host-arbitrated object: obj.new, obj.slick)
+	"res://scripts/monsters/crypt_rat.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/ecto_blob.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	"res://scripts/monsters/ecto_slick.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/monsters/ecto_slick.gd"], 0],
 }
 
 
