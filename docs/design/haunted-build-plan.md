@@ -1,6 +1,7 @@
 # Haunted contracts: build plan
 
-Status: **[proposal; H1, H2, H3 and H3b built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built" and "H3b as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
+Status: **[proposal; H1, H2, H3, H3b and H4 built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built", "H3b as built"
+and "H4 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
 build it in. The user (2026-10-31): "Let's build it as is" (today's roster; more enemy types are worked out in parallel).
 
 Today none of it is game code: the mansion and church rooms, the crypt, the zombies, acolytes, ghosts, hosts and the
@@ -69,7 +70,7 @@ The user (2026-10-31, "Yes"): the two crypt pests of the look test (`docs/design
   floors 1-2 is the acolytes. **To revisit here:** the procession in the game (the user: "We will try it in the game when
   it is ready").
 - Networking: host monsters; the procession is a host-owned group (its route is PRIVATE to the host, its members
-  replicate as usual). A raise is a world event like a monster wind-up.
+  replicate as usual). A raise is a world event like a monster wind-up. (Built: see "H4 as built".)
 
 ### H5. Ghosts and possession
 - **Hosts:** a suit of armour and a skeleton spawn dormant as host monsters, priced like props. Breaking a possessed
@@ -589,3 +590,150 @@ three skeletons (120 HP) cost the same; the rats came in at cost 4 and weight 2.
 - The slick's ribbon is redrawn whole on every change (about once a second a crawling blob, plus each drying segment): cheap at
   one or two blobs a floor; watch it if a floor ever holds many.
 - The tell and the faces were judged on stills at the game camera only (`crypt_pests_game/`), not in play.
+
+## H4 as built (2026-10-31)
+
+The user (2026-10-31), as for H1-H3b: "Just build it now. We can revisit the decisions after it's built." Every open call below
+was made on the spot, the simplest sound choice, and is listed to revisit. **To revisit (the user): "We will try it in the game
+when it is ready."** See "Play it".
+
+### Play it
+
+```
+.\run.ps1 --client heir --seed 3 --floor 1 --spells coffee,fireball --no-mic --to-procession --focus procession
+         # the crew a few cells ahead of floor 1's procession, the camera on its leader; it walks into the crew and the fight is on
+.\run.ps1 --client heir --seed 3 --floor 1 --spells coffee,fireball --no-mic --to-procession --procession-demo walk --focus procession
+         # every monster's senses off: the procession walks its route past the crew (the allies hold)
+.\run.ps1 --client heir --seed 11 --floor 1 --spells coffee,fireball --no-mic --no-fog --to-procession --procession-demo raise --demo-after 4 --focus procession
+         # as walk, then the file's last two zombies drop: the rear acolyte raises them (arms up, they push up) and they rejoin
+.\run.ps1 --client heir --seed 3 --floor 2 --spells coffee,fireball --no-mic --to-procession 1 --focus procession
+         # floor 2: two processions on a job at difficulty 0.5 or more (1 picks the second; the last when there is one)
+.\run.ps1 --gym --no-mic                                                                   # Spawn > Monster > "Acolyte" and "Procession"
+```
+
+- Every haunted contract has processions: floor 1 one, floor 2 one (two on a job at difficulty 0.5 or more), floor 3 none. The
+  log names each one's rooms ("procession: Procession0, 2 acolytes, 4 zombies, round room:4, room:1, room:3").
+- `--to-procession [n]` (solo) starts the crew 5-8 cells ahead of procession n's leader, on its way; `--focus procession` follows
+  its leader (the rear acolyte with the raise demo); `--procession-demo walk|raise|fight` stages it (`--demo-after`, default 1 s; the
+  AI allies hold; it prints the file every 1.5 s for 15 s: "[procession] ..."). `scripts/app/dev/procession_dev.gd`. No keybinding.
+  Add `--no-fog` when the camera follows it out of what the crew has seen.
+- Screenshots (the game camera at zoom 12, 1920x1080), `docs/design/procession_game/`: `walk.png` / `walk_crop.png` (heir 3 floor 1:
+  the leader stepping out of the ballroom, four zombies in file behind it, the rear acolyte at the back), `raise.png` /
+  `raise_crop.png` (heir 11 floor 1: the rear acolyte arms up, the hands and the staff lit, a zombie pushing up in front of it and
+  the second body beside, the file standing round them), `raise_church.png` (parish 3 floor 1: the same in the nave, among the pews).
+
+### What was built
+
+| Piece | Where | What |
+|---|---|---|
+| The kind | `scripts/monsters/acolyte.gd` (`Acolyte`), `MonsterDefs` "acolyte" | A `Monster` with **no attack**: HP 30 (a skeleton 40), runs at 3.2 (the crew walks 4.5), sees a hero within 9 in line of sight or within 4 at all. The row: `"family": "dead"`, **no `pack`** (no pack deals it), no pest, drops fireball 25 % / heal 10 %. `is_priority_target()` (the AI allies rank it with the Water Boy). In `Monster.CRY_SKIP` (no war cry) |
+| Its states | `Acolyte` | IDLE: marching in its procession (`Monster._march`), or standing without one. ALERT: **fleeing** to a spot 3-6 cells off, as far from the nearest hero as it can reach (picked again every 1.2 s), until no hero is within 12 for 3 s, then back to IDLE (its place in the file). ATTACK: **raising** (below). A hit, a pack-mate's call, a shout, a chicken or a noise within 8 sends it running; any other state goes back to rest |
+| The raise | `Acolyte._find_body` / `_go_raise` / `_tick_attack` | Resting, it notices a zombie's body within 4 (in sight, not burnt: `Actor.is_downed`; no hero within 7 of the body; no other acolyte's claim), walks to 1.5 of it (the file stops) and **raises it in its wind-up**, `RAISE_T` 3.0 s (`Monster._begin_windup`: `world.windup` with the body as the "victim"). 0.9 s in the body is raised (`Zombie.raise`: `Actor.revive` at full HP, `world.rise`; it pushes up over `RISE_TIME` 1.4 s) and joins the back of the file (`Procession.join`); the arms come down over the last 0.6 s. A hero within 4, a shove or a stagger breaks it off (`world.unwind`); a body burnt or raised meanwhile is let go. The strike at the end is nothing (on a client too: `net_strike`) |
+| Its look | `AcolyteModel` "cowl" (the game's now), `Acolyte._pose`, `Acolyte.arms_at` | The cowl with its lantern light (the look test's `LanternLight`, 5.0 over 5 units). The gesture is `set_raise(arms_at(telegraph * RAISE_T))` on every screen (the telegraph rides the stream); `arms_at` is the look test's curve, which `NecroProcession` now uses. The wind-up's orange tint is off (its hands glow instead); `AcolyteModel.windup` does nothing. Fleeing is the model's run (from its speed). A new `_slump` for its death (it is freed like any monster: a living cultist leaves no body) |
+| The procession | `scripts/monsters/procession.gd` (`Procession`, a `Node` under the world) | The **leader** (the first living acolyte) walks to the route's next spot (`Monster.march_to`, 1.0) and leaves a **trail** (`ProcessionPath`); walker i of the file (the zombies, then the rear acolyte) walks to the trail's head arc minus `GAP` (1.8) x (i + 1), hurrying (x1.5) when more than 0.8 behind, and **never back along the trail** (a joiner's place behind it comes to it). The file **stands** while an acolyte is away or raising, or a zombie is not resting or more than 3 from its place; stragglers that are not fighting are left behind after 20 s (ordinary monsters); a fight holds it as long as it lasts. `engage`: an acolyte that sees the crew turns its resting zombies on them. The leader dead, the rear leads (back to the trail's head first); both dead, the zombies are ordinary monsters where they stand. A dead member leaves the file (`Monster.procession` null); an acolyte's raise puts a zombie back (coffee's does not) |
+| `Monster` | `monster.gd` | `procession` (PRIVATE): a resting member asks it for its place (`_march` from `_tick_idle`, also while frozen: a frozen monster only has no senses) and does no look-arounds; `march_to(pos, delta, speed)` (home follows it, so it leashes to and walks back to where it marched) |
+| The route | `scripts/contracts/planners/procession_planner.gd` (`ProcessionPlanner`), `SitePlan.processions` | Own dice (the floor seed), planned after the scouts: rooms but the start, arrival and exit rooms and a crypt's, each at its **spot** (the free full cell nearest its centre). The first procession starts in the room farthest from the crew's arrival, a second farthest from both; each walks to the nearest room it can reach not on its route yet, up to 3 (at least 2), and round. `{rooms, route}` records; `[]` elsewhere |
+| The spawn | `ProcessionPlanner.spawn` / `build` | The **last actors** (after the landings' set pieces: no earlier net id moves): the Procession, then the leader the file's length along its first leg, four zombies `GAP` apart behind it and the rear acolyte, back to the first spot (a first leg shorter than the file starts on the leg before), so it walks on from the start. Zombies in `Site.monsters` (pest-counted), acolytes in `Site.acolytes`, processions in `Site.processions` |
+| The objective | `ContractRun.floor_processions` / `acolyte_pay` / `ACOLYTE_PAY`, `ContractSession.acolyte_stopped`, game.gd | **Beside the pest**: an "acolyte" objective per acolyte (`ACOLYTE_PAY` $2,500 x the client's scale each; floors 1-2), in `objectives`, the contract value and the job card. The game pays on an acolyte's death where the books are kept (`_on_acolyte_stopped`; a client mirrors it), up to the floor's count (`acolytes_total` / `acolytes_stopped` in the floor's state). The tracker's "Stop acolytes  n / m" row and the elevator form's line |
+| The fog | `GameWorld.downed_in_radius(..., hidden_too)` | An acolyte finds bodies out in the fog too (a monster the crew cannot see is hidden on the host's screen, and the downed query skipped hidden actors; found by the net test) |
+| The checksum | `NetFloor.RUN_DEFAULTS` (`floor_processions` [0, 0, 0], `acolyte_pay` 0), `PLAN_DEFAULTS` (`processions` []) | The new fields are left out of the run and plan parts at the value every hellgate floor has (compared through `canon`): `test_golden_floor` passes against the recorded floors, not re-recorded. A haunted floor hashes them in |
+| Look-dev | `NecroProcession`, `ProcessionPath` | The look test's procession now runs on `ProcessionPath` (its oval), takes `GAP` and its four zombies from `Procession` and the arm curve from `Acolyte.arms_at`; its own timing, loop and stand-in for the crew stay. Headers and `necro-look.md` say what is the game's |
+| Gym | `GymSpawns` | "Acolyte" (the factory kind) and "Procession" (`monster:acolyte:procession`: a live one round where it is put, a loop through 4 spots 5 cells out, `ProcessionPlanner.build`), in the Monster group; no keybinding |
+
+The totals (`test_haunted_contract`, heir and parish 3 and 11): **floors 1-2 hold 18-34 with the processions** (16-30 in `monsters`,
+which now has the processions' zombies, plus 2 or 4 acolytes); floor 3 is as in H3b (30-40). The 40 cap holds.
+
+### The networking checklist (networking.md)
+1. **Shapes.** The acolyte: an **owned actor**, a host monster (Monster's shape; no OWNER var of its own). The procession: a
+   **host-owned group of owned actors**, not a new shape: no replicated state of its own (every var SPAWN or PRIVATE), so it is in
+   `test_net_contract`'s `NET_SCRIPTS` and not in `REPLICATED`. Every machine builds it from the seed and only the host walks it
+   (`Procession.drive` is called from a member's own AI, which runs only where the member is simulated; its `_physics_process`
+   only on the host).
+2. **Vars.** `Acolyte`: `raised`, `_body`, `_did_raise`, `_flee_goal`, `_flee_pick_t`, `_calm_t`, `_from`, `_skip` PRIVATE; `_arms`
+   LOCAL (the gesture, from `state` and `_telegraph`). `Monster.procession` PRIVATE. `Procession`: `rooms` SPAWN, the rest PRIVATE.
+   `ContractRun.floor_processions` / `acolyte_pay` and `SitePlan.processions` SPAWN.
+3. **Verbs.** The raise is `Actor.revive` (through `Zombie.raise`), applied by the body's owner (`Net.resolves`: the host). The acolyte
+   applies nothing else; its body search loop calls no verb.
+4. **Randomness.** The route on the planner's own generator from the floor seed; the flee spot and the march are deterministic host
+   AI (no dice). Nothing else is rolled.
+5. **Motion.** The members stream as any monster. The acolyte's state rides the stream's state bits (IDLE marching, ALERT fleeing,
+   ATTACK raising) and the raise's progress the telegraph byte.
+6. **Cosmetic:** the gesture, the lantern light, the run. **Gameplay:** who is where, the raise (the body's `dead`), HP.
+7. **A late joiner.** The members: the keyframe and gone ids (a dead acolyte is freed); a raised zombie is standing (the keyframe);
+   a raise under way shows from its state and telegraph (its `world.windup` is skipped). The procession needs nothing (the host's).
+   `NetEvents.LATE_JOIN` has `acolyte.gd`.
+8. **The scenario:** `tests/test_net_procession.gd` (below).
+- The events: none new. `world.windup {v: the body}` and `world.unwind` for the raise (a client's strike at its end is nothing),
+  `world.rise` for the body, `world.die` for a dead acolyte. Nobody but the host decides anything.
+
+### The calls made (to revisit)
+1. **No attack at all.** The acolyte only runs; cornered it keeps trying to get away. The AI allies rank it first.
+2. **Its numbers:** HP 30, runs 3.2 (the crew 4.5: it can be run down), sight 9 in line of sight / 4 at all, stops running with no
+   hero within 12 for 3 s, flees to a spot 3-6 cells off. A death or a noise within 8 makes it run too.
+3. **The raise:** notices a body within 4 in sight, only with no hero within 7 of it, raises from 1.5; a 3 s wind-up, the body up
+   0.9 s in at **full HP**, standing 1.4 s later. A hero within 4, a shove or a stagger breaks it off. No orange tint.
+4. **Who raises:** either acolyte, whichever comes across the body first (the rear one raises what falls behind the file). Only
+   unburnt zombie bodies; never a hero, never a burnt body.
+5. **The procession:** a leader acolyte, **four zombies** and a **rear acolyte** (the approved look test's), `GAP` 1.8, walking 1.0
+   (a zombie's shamble), hurrying x1.5 to its place.
+6. **How many:** floor 1 one procession, floor 2 one (two at difficulty 0.5 or more), the last floor none (the grimoire's, H6).
+7. **The route:** a loop of up to 3 rooms (at least 2): never the start, arrival or exit room, nor a crypt's; the first starting
+   farthest from the crew's arrival, a second farthest from both; the nearest room next. No pause in a room.
+8. **The spawn:** on its first leg with the file behind it (no turn back through its own file at the start). No bodies are laid for
+   it: the bodies are the fight's (its own zombies, and any pack zombie the crew drops on its route).
+9. **The halt:** the file stands for an acolyte away or raising and a zombie away or not resting; stragglers that are not fighting
+   are dropped after 20 s; a fight holds it.
+10. **Engagement:** an acolyte that sees the crew calls its file on them (the zombies' own senses do too, and their call sends the
+    acolytes running).
+11. **The leader dies:** the rear acolyte leads; both dead: the zombies are ordinary monsters.
+12. **The objective: beside the pest**, $2,500 an acolyte (x the client's scale), floors 1-2; the pest objective and
+    `DEAD_PEST_BONUS` stay until the grimoire (H6). A haunted contract's value grows by 4-6 acolytes' pay (a hellgate contract's
+    small gates pay $3,000 each for 3-5).
+13. **Acolytes are not in `Site.monsters`** (like the scouts) and never a pest; the processions' zombies are (they count toward a
+    zombie pest).
+14. **Drops:** fireball 25 % (it burns what the acolytes raise), heal 10 %.
+15. **No sound of its own** (no war cry, a silent raise).
+16. **Bodies in the fog are raised** (`downed_in_radius`'s `hidden_too`): the procession goes on where the crew is not looking.
+17. **Its lantern light** is the look test's, one per acolyte: it pools in the candle-lit and dark rooms and is lost in a bright one.
+
+### New player-facing strings (proposals for review)
+- Monster name **Acolyte** (the combat log: "Acolyte died").
+- Tracker row **Stop acolytes** "n / m"; objective label **Stop an acolyte (floor N)**; the job card's **Stop N acolytes** (each);
+  the Ledger's **Acolyte stopped**; the elevator form's **Acolytes stopped on this floor: a of b.**
+- Dev only: the gym's **Procession** button (and "Acolyte", the factory kind's name).
+
+### Tests
+- `tests/test_acolyte.gd` (new, solo): the kind (the cowl, its lantern light, the dead family's, no attack, slower than the crew,
+  frailer than a skeleton, a priority target, no war cry); it flees a hero it sees, never strikes, calms down once far, and a hit
+  sends it running; a procession (`ProcessionPlanner.build`) of two acolytes and four zombies starts on its first leg and walks its
+  route (a route spot reached), the file in its places about `GAP` apart; the leader dies and the rear leads on; both dead, the
+  zombies are ordinary monsters; a body by the way: the file stops, an acolyte raises it in its wind-up (arms up), at full HP, and
+  it joins the back of the file and walks on in its place; a burnt body is passed over; a hero in sight: the zombies fight, both
+  acolytes run, the file stands; killing acolytes pays the acolyte rate up to the floor's count (two Ledger lines); the gym's
+  "Acolyte" and "Procession" (it walks its loop).
+- `tests/test_net_procession.gd` (new, NetTest, `const PEERS := 3`, `off` and `coast`): board 9's heir contract, floor 1, the host's
+  procession walking with its senses off. c1 shows every member a living puppet where the host has it, walking; the host drops the
+  file's last zombie, the rear acolyte raises it, and c1 shows the acolyte in its gesture (ATTACK, arms up) mid-raise, then the zombie
+  standing, risen once, with the file; the host kills the leader (paid) and c1 shows it gone and mirrors the Ledger line; c2 joins
+  late and shows the living members where the host has them, the raised zombie standing, the leader gone; no OWNER-write guard on any
+  machine.
+- Updated: `test_haunted_contract` (acolyte objectives per floor and their pay, the card's line; each floor's processions as the
+  contract says, two acolytes and four zombies each, a route of 2-3 rooms never through the start, arrival or exit room, the file in
+  line on its trail; the total with the acolytes under 40), `test_monster_defs` (the acolyte in the factory, model and drop tables,
+  the dead family's, no pack kind, no pest), `test_monster_models` (the acolyte's parts; a kind with no strike poses its raise for
+  the wind-up check and skips the swing), `test_net_contract` (`acolyte.gd` in `REPLICATED`, `procession.gd` in `NET_SCRIPTS`).
+- Run and passing: `test_net_contract`, `test_golden_floor` (not re-recorded), `test_haunted_contract`, `test_crypt_gen`,
+  `test_monster_defs`, `test_monster_factory`, `test_monster_death`, `test_monster_models`, `test_monster_integration`, `test_zombie`,
+  `test_crypt_rat`, `test_ecto_blob`, `test_net_world_codec`, `test_necro_look`, `test_gym`, `test_zfight`, `test_contract_flow`,
+  `test_forms`, `test_net_floor`, `test_play_log`, `test_spell_revive`, `test_explosive_props`, `test_acolyte`, and the net tests
+  `test_net_zombies`, `test_net_m3_world`, `test_net_m6_late_join`, `test_net_procession` (each `off` and `coast`). The full suite was
+  not run.
+
+### Not done in H4
+- No crew (two-PC) play of a procession; the net test covers the stream, the raise and the late join.
+- No acolyte sounds (a chant for the raise would help it read); no pause in a room; no procession through a crypt.
+- The procession was judged on stills at the game camera (`procession_game/`) and the dev trace, not in play. In a bright room
+  the acolytes are small dark figures whose lantern pool is lost (as the look test warned); a raise under a chandelier is hidden.
+- The H3 decision still open: whether Heal raises zombies.
+- Twice in about twenty screenshot runs with `--procession-demo` the game exited with code 255 (once before its screenshot); eight
+  more runs of the same commands exited cleanly, and plain haunted runs never did. Not tracked down: watch for it.

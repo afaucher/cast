@@ -4,6 +4,10 @@ extends Node3D
 ## the downed bodies it passes, for the gym (GymSpawns "necro:procession"). Plain cosmetic nodes like NecroBody: no HP, no
 ## AI, no collision, nothing networked. It shows the decided behaviour (new-themes.md, "Zombies and acolytes"): acolytes
 ## travel the map with monsters and raise the bodies they come across.
+## The game's procession is built on it since H4 (haunted-build-plan.md, "H4 as built": Procession, real monsters on a route
+## between rooms; GymSpawns "monster:acolyte:procession"). They share the formation (Procession.GAP, Procession.FILE), the
+## arc-length path (ProcessionPath: this loop, the game's trail) and the raise's arm curve (Acolyte.arms_at); this lab keeps
+## its own timing, its oval and its stand-in for the crew.
 ##
 ## The loop: the acolyte (the cowl) walks an oval (RX by RZ round the node), its zombies GAP apart behind it and a second
 ## acolyte bringing up the rear (the user, 2026-10-29: the file was "Too cramped" and "Too small": wider apart, four zombies,
@@ -16,8 +20,8 @@ extends Node3D
 const RX := 6.0
 const RZ := 3.8
 const SPEED := 0.8                  ## the file's walk (a zombie's shamble is drawn for ZombieModel.WALK_SPEED 0.9)
-const GAP := 1.8                    ## between walkers along the path
-const BASE := 4                     ## the zombies that always walk with it
+const GAP := Procession.GAP         ## between walkers along the path (1.8)
+const BASE := Procession.FILE       ## the zombies that always walk with it (4)
 const SIDE := 0.8                   ## a downed body lies this far out from the path
 const STOP_BEFORE := 0.2            ## the acolyte stops this far along the path before the body's spot
 const RAISE_T := 3.4                ## arms up 0.8, the body pushes up from 0.4 to 2.4, holds, stands at 2.8, arms down
@@ -33,8 +37,7 @@ var joining: Array[ZombieModel] = []        ## raised zombies walking to the bac
 var s := 0.0                                ## the acolyte's arc length along the loop
 var lap := 0
 var raising: Dictionary = {}                ## {body: {model, s}, t}: the raise under way, or empty
-var _pts: PackedVector3Array = []
-var _cum: PackedFloat32Array = []
+var _path := ProcessionPath.new()           ## the loop (one lap, the start point repeated at its end)
 var length := 0.0
 
 
@@ -133,8 +136,7 @@ func _raise_step(dt: float) -> void:
 	var t: float = raising["t"]
 	var body: Dictionary = raising["body"]
 	var z: ZombieModel = body["model"]
-	var arms := clampf(t / 0.8, 0.0, 1.0) * (1.0 - clampf((t - (RAISE_T - 0.6)) / 0.6, 0.0, 1.0))
-	acolyte.set_raise(arms)
+	acolyte.set_raise(Acolyte.arms_at(t, RAISE_T, 0.8))
 	_face(acolyte, z.position - acolyte.position)
 	if t < 2.8:
 		z.pose_rise(clampf((t - 0.4) / 2.0, 0.0, 1.0))
@@ -201,26 +203,16 @@ static func _face(m: Node3D, dir: Vector3) -> void:
 # ------------------------------------------------------------------ the path
 
 func _build_path() -> void:
-	_pts.clear()
-	_cum.clear()
-	length = 0.0
+	_path = ProcessionPath.new()
 	for i in SAMPLES + 1:
 		var a := TAU * float(i) / float(SAMPLES)
-		_pts.append(Vector3(cos(a) * RX, 0.0, sin(a) * RZ))
-		if i > 0:
-			length += _pts[i].distance_to(_pts[i - 1])
-		_cum.append(length)
+		_path.add(Vector3(cos(a) * RX, 0.0, sin(a) * RZ))
+	length = _path.length()
 
 
 ## The loop at arc length `at` (wrapped): {pos, dir} (dir the way the file walks).
 func point(at: float) -> Dictionary:
-	var u := fposmod(at, length)
-	var i := 1
-	while i < _cum.size() - 1 and _cum[i] < u:
-		i += 1
-	var seg := _cum[i] - _cum[i - 1]
-	var k := (u - _cum[i - 1]) / seg if seg > 0.0 else 0.0
-	return {"pos": _pts[i - 1].lerp(_pts[i], k), "dir": (_pts[i] - _pts[i - 1]).normalized()}
+	return _path.point(fposmod(at, length))
 
 
 ## Away from the loop's middle, at a point of it.

@@ -1,7 +1,10 @@
 class_name AcolyteModel
 extends MonsterModel
-## LOOK-DEV ONLY (docs/design/necro-look.md): the necromancer acolyte (new-themes.md "Ghost house": "mobile host monsters
-## that flee and raise bodies"). Nothing in the game spawns it: only NecroBody (the gym's necro spawns and the look lab).
+## The necromancer acolyte (docs/design/necro-look.md; new-themes.md "Ghost house": "mobile host monsters that flee and raise
+## bodies"). THE GAME'S SINCE H4 (haunted-build-plan.md, "H4 as built"): the `acolyte` monster kind (Acolyte) wears the "cowl"
+## (the user's pick) with its lantern light; the raise is its wind-up (Acolyte._pose drives set_raise from the telegraph, so
+## windup() is not used) and the flee its run (apply_idle from the speed). The "mask" variant stays look-dev (NecroBody: the
+## gym's necro spawns and the look lab).
 ## A living human cultist, so it must read as a person, and not as office staff or a hero: tall and narrow (the staff are
 ## short and pear-shaped, with one bright identifier), in a floor-length robe and hood (no hero wears one), monochrome
 ## (soot, ash, bone, iron), and the only colour on it is the ghost colour it channels.
@@ -269,10 +272,32 @@ func _censer_soup() -> LowPoly.Soup:
 
 # ------------------------------------------------------------------ animation
 
+## The monster's wind-up hook: unused (the acolyte's wind-up is the raise, posed through set_raise by Acolyte), so the robe
+## does not lean into a strike it never makes.
+func windup(_t: float) -> void:
+	pass
+
+
 ## Raising the dead, 0..1: both arms up and out, the hands lit, the head back, the staff (the censer) held high.
 func set_raise(k_raise: float) -> void:
+	if _downed:
+		return   # (a dead acolyte raises nothing)
 	_raise = clampf(k_raise, 0.0, 1.0)
 	_refresh()
+
+
+## Dead (the game's acolyte, before it topples): the hands' glow out, the head drops, the arms and the staff hang.
+func _slump() -> void:
+	_raise = 0.0
+	var body := parts["body"] as MeshInstance3D
+	body.rotation = Vector3(-0.35, 0.0, 0.08)
+	(parts["head"] as MeshInstance3D).rotation = Vector3(0.6, 0.2, 0.0)
+	aim_limb(parts["arm_l"] as MeshInstance3D, Vector3(-0.16, -0.05, -0.08), ARM_LEN)
+	aim_limb(parts["arm_r"] as MeshInstance3D, Vector3(0.18, -0.05, -0.06), ARM_LEN)
+	for side: String in ["l", "r"]:
+		var aura := parts["aura_" + side] as MeshInstance3D
+		aura.scale = Vector3.ONE * 0.001
+		aura.visible = false
 
 
 func raise_k() -> float:

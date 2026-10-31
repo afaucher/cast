@@ -24,7 +24,7 @@ Godot 4.7, GDScript, 3D with an orthographic isometric camera. Terrain is
 | Monsters | `scripts/monsters/*`, `tests/test_monster*.gd` | monsters agent |
 | Game scene integration | `scenes/game.tscn`, `scripts/app/game.gd` (the game), `scripts/app/dev/game_dev.gd` (GameDev: the dev and screenshot drivers behind the `--` flags, the script the scene runs; new dev drivers go there) | lead |
 | Networking: authority kinds, the net contract test | `scripts/net/*`, `tests/test_net_contract.gd` | lead. Every owner adds `net_fields()` entries for its own vars |
-| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`, a sewer cluster's `SewerPlanner` and `GatorPlanner`, and a lava cave's `LavaPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
+| Floor features (the site plan) | `scripts/contracts/site_builder.gd` (`SiteBuilder`: the ORDER of `plan()` and `spawn()`, which is the rng draw order and the net-id order, the van and the elevator body, the shared helpers and clear zones, `Site`), `scripts/contracts/planners/*` (one planner per floor feature, each with `plan(...)` and `spawn(...)`: `GatePlanner`, `EmployeePlanner`, `PropPlanner`, `HazardPlanner`, `NotePlanner`, `PackagePlanner`, `PackPlanner`, `ScoutPlanner`, `SharkPlanner`, `DoorPlanner`, a sewer cluster's `SewerPlanner` and `GatorPlanner`, a lava cave's `LavaPlanner`, and a haunted floor's `ProcessionPlanner`), `tests/test_golden_floor.gd` | lead. A new floor feature or environment adds a planner file and one line in each of `SiteBuilder.plan` / `spawn`, with its own dice; `test_golden_floor` must pass unchanged unless the change is meant to change floors |
 | Design docs | `docs/design/*` | design agent |
 
 ## Boot flow and the main menu
@@ -390,7 +390,11 @@ Coffee's splash stands it up through `Actor.revive`, and a fire on it burns it t
 never rises; online `world.die` / `world.rise` / `world.burn` and the late-join `bodies`; `docs/design/haunted-build-plan.md`,
 "H3 as built"), and the dead family's `crypt_rat` (`CryptRat`: the swarmer's AI, a swarm pick of 5-6, `"swarm_min"` /
 `"swarm_max"`) and `ecto_blob` (`EctoBlob`: it lays an `EctoSlick` behind it, a segment at a time, a runtime object the host
-announces that slows the crew and that Damp washes away; "H3b as built"). Every kind is a
+announces that slows the crew and that Damp washes away; "H3b as built"), and the dead family's `acolyte` (`Acolyte`: no `pack`, it
+comes only in a PROCESSION, `Procession`, a host-owned group a haunted floor's `ProcessionPlanner` spawns: a leader acolyte, its
+zombies in file on the trail it walks between rooms, a rear acolyte; it flees the crew and raises the bodies it comes across, its
+raise a wind-up and the body's `world.rise`; a resting member keeps its place through `Monster.procession` / `march_to`; the
+acolytes are paid per kill, `ContractSession.acolyte_stopped`; "H4 as built"). Every kind is a
 `MonsterDefs` row (`MonsterFactory.compose` deals a pack kind from its row's `min_floor`, at most `max` a pack, `after` that
 many others). A shield is a target's `blocks_hit(from_point, kind)`, asked through `Combat.shielded` by every hit helper.
 `MonsterFactory.spawn_pack(room_cells: Array[Vector2i], budget: int, rng) -> Array[Monster]`.

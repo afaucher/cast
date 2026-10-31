@@ -127,7 +127,7 @@ static var _seq_floor := -1
 #                unless it yelled in CHARGE_SELF_COOLDOWN s or anything yelled within CHARGE_AREA in CHARGE_AREA_COOLDOWN s.
 # The yell: the model's war_cry() pose (weapon or arms up for about half a second) and the kind's cue (war_cry_cue: a pool
 # of the user's own takes, Sfx picks one). Frozen monsters (aggro_range 0) and CRY_SKIP kinds never yell.
-const CRY_SKIP: Array[String] = ["shark", "gator", "jockey", "goblin"]
+const CRY_SKIP: Array[String] = ["shark", "gator", "jockey", "goblin", "acolyte"]
 ## Kinds with their own cry (cue cry_<voice>); every other kind yells the shared cry_monster.
 const CRY_VOICES: Array[String] = ["grunt", "brute", "swarmer"]
 const CRY_GATHER := 0.15          ## sightings this close in time are one pack's (a pack wakes in one host frame)
@@ -202,6 +202,9 @@ var busy_until := -INF            ## step 2: a restless activity holds it in pla
 var edge_until := -INF            ## step 2: on edge after a fireworks alarm (wider cone, quicker "?")
 var _taunt_by: Actor = null       ## the chicken that pecked it (Chicken spell), chased over any hero until _taunt_until
 var _taunt_until := -INF
+## The procession it walks in (Procession, haunted-build-plan.md H4: an acolyte's file), or null. Resting (IDLE) it keeps its
+## place in the file instead of standing (Procession.drive); it still sees, hears and fights as ever. The host's.
+var procession: Node = null
 
 # Navigation
 var _path: Array[Vector2i] = []
@@ -387,6 +390,7 @@ func net_fields() -> Dictionary:
 		"_life_ok": Net.PRIVATE, "_suspect_at": Net.PRIVATE, "_first_hit_at": Net.PRIVATE,
 		"busy_until": Net.PRIVATE, "edge_until": Net.PRIVATE,
 		"_taunt_by": Net.PRIVATE, "_taunt_until": Net.PRIVATE,   # (who it chases rides `target`, in world.windup)
+		"procession": Net.PRIVATE,      # (the host's group: its route and formation; the members stream as ever)
 		"_path": Net.PRIVATE, "_path_i": Net.PRIVATE, "_path_goal": Net.PRIVATE,
 		"_path_age": Net.PRIVATE, "_repath_t": Net.PRIVATE, "_prog_t": Net.PRIVATE,
 		"_prog_pos": Net.PRIVATE, "_nudge_t": Net.PRIVATE, "_nudge_dir": Net.PRIVATE,
@@ -549,6 +553,7 @@ func _physics_process(delta: float) -> void:
 
 func _tick_idle(delta: float) -> void:
 	if is_frozen():
+		_march(delta)   # (a procession still walks: frozen means no senses, and its route is the host's)
 		return   # stays put and silent
 	_scan_t -= delta
 	if _scan_t <= 0.0:
@@ -562,6 +567,8 @@ func _tick_idle(delta: float) -> void:
 			_suspect(h.global_position, true)
 			return
 		_life_ok = _room != "" and _hero_within(LIFE_RANGE)
+	if _march(delta):
+		return   # its place in a procession's file (no look-arounds, no idle life)
 	if GameWorld.time < busy_until:
 		return   # held by a restless activity (a brute's square-off): it stands, no look-arounds
 	if _life_ok and _idle_life(delta):
@@ -576,6 +583,22 @@ func _tick_idle(delta: float) -> void:
 ## True = it is busy (moving), so it skips its look-around. Default: nothing.
 func _idle_life(_delta: float) -> bool:
 	return false
+
+
+## Resting in a procession: it keeps its place in the file (Procession.drive; duck-typed, as the groups are here). True when
+## the procession has it.
+func _march(delta: float) -> bool:
+	return procession != null and is_instance_valid(procession) and bool(procession.call("drive", self, delta))
+
+
+## Walk toward `pos` at `speed` (world units / s, under its own pace) this frame: a procession moves its members with it. It
+## fights and walks home from where it marched (home follows it). True if it moved.
+func march_to(pos: Vector3, delta: float, speed: float) -> bool:
+	_speed_k = speed / maxf(move_speed, 0.01)
+	var moved := _nav_to(pos, delta)
+	_speed_k = 1.0
+	home = global_position
+	return moved
 
 
 ## Turn to a new heading: its spawn facing +/- 70 degrees (`spread`), or toward a recent sound. Never a heading with a

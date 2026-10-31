@@ -925,7 +925,7 @@ func _populate_site() -> void:
 		MoveLab.spawn_monsters(_site)   # (the lab's pen: a grunt and a swarmer)
 	var origin := _site.origin_gate != null
 	var small := _site.gates.size() - (1 if origin else 0)
-	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned)
+	_session.enter_floor(_floor_n(), small, origin, _site.employees.size(), _site.pest_spawned, _site.acolytes.size())
 	for g in _site.gates:
 		if g.has_signal("closed"):
 			g.connect("closed", _on_gate_closed)
@@ -939,6 +939,9 @@ func _populate_site() -> void:
 		voice.set_order_names(names)
 	_log("site: %d gates%s, %d employees, %d props, %d monsters (%d pests: %s)" % [small, " + origin" if origin else "", _site.employees.size(),
 		_site.props.size(), _site.monsters.size(), _site.pest_spawned, _run.pest], Color(0.8, 0.8, 1.0))
+	for pr in _site.processions:
+		_log("procession: %s, %d acolytes, %d zombies, round %s" % [pr.name, pr.acolytes.size(), pr.zombies.size(),
+			", ".join(pr.rooms)], Color(0.75, 0.85, 1.0))
 	_log("themes: %s  decor %d" % [str(_site.plan.room_themes), _site.plan.decor.size()], Color(0.8, 0.8, 1.0))
 	var note_list: Array[String] = []
 	for nt in _site.plan.notes:
@@ -1935,6 +1938,18 @@ func _on_gate_closed(gate: Actor) -> void:
 	_objective_t = 0.0   # re-check cleanliness now
 
 
+## An acolyte died (haunted-build-plan.md H4): paid per kill, where the books are kept (a client's pay arrives from the host).
+func _on_acolyte_stopped(_a: Actor) -> void:
+	if _session == null or _ended or _joining or not _keeps_books():
+		return
+	var pay := _session.acolyte_stopped()
+	if pay <= 0:
+		return
+	_publish_contract()
+	_log("acolyte stopped  +%s" % ContractRun.money(pay), Color(0.6, 1.0, 0.7))
+	_update_tracker()
+
+
 ## True where the contract's books are kept: solo, and the host of a shared run (M3). A client mirrors the host's.
 func _keeps_books() -> bool:
 	return not (_shared and not Net.is_host())
@@ -1992,6 +2007,10 @@ func _update_tracker() -> void:
 			rows.append({"text": "Close hellgates", "detail": "%d / %d" % [closed, total], "state": "done" if closed >= total else ("partial" if closed > 0 else "todo")})
 		if bool(st["origin"]):
 			rows.append({"text": "ORIGIN gate", "detail": "closed" if bool(st["origin_closed"]) else "OPEN", "state": "done" if bool(st["origin_closed"]) else "todo"})
+		var acolytes := int(st.get("acolytes_total", 0))
+		if acolytes > 0:
+			var stopped := int(st.get("acolytes_stopped", 0))
+			rows.append({"text": "Stop acolytes", "detail": "%d / %d" % [stopped, acolytes], "state": "done" if stopped >= acolytes else ("partial" if stopped > 0 else "todo")})
 		var left := _pest_alive()
 		var clean := bool(st["pest_paid"])
 		rows.append({"text": _run.pest_label(), "detail": "clean" if clean else "%d left" % left, "state": "done" if clean else "todo"})
@@ -2018,6 +2037,8 @@ func _on_actor_died(a: Actor) -> void:
 	if a.team == GameWorld.TEAM_MONSTERS:
 		_kills += 1
 		_log("%s died" % a.display_name, Color(0.7, 0.7, 0.7))
+		if a is Acolyte:
+			_on_acolyte_stopped(a)
 	elif a.team == GameWorld.TEAM_HEROES:
 		_log("%s is down!" % a.display_name, Color(1.0, 0.45, 0.45))
 	elif _site != null and _site.employees.has(a) and _joining:
@@ -2235,6 +2256,8 @@ func _elevator_lines() -> Array[String]:
 			lines.append("Hellgates closed on this floor: %d of %d." % [int(st["gates_closed"]), total])
 		if bool(st["origin"]):
 			lines.append("Origin gate: %s." % ("closed" if bool(st["origin_closed"]) else "still open (the biggest line on the invoice)"))
+		if int(st.get("acolytes_total", 0)) > 0:
+			lines.append("Acolytes stopped on this floor: %d of %d." % [int(st.get("acolytes_stopped", 0)), int(st["acolytes_total"])])
 		lines.append("Floor %s." % ("clean" if bool(st["pest_paid"]) else "not clean: %d %s left" % [_pest_alive(), ClientArchetype.pest_name(_run.pest)]))
 	lines.append("Objectives not met do not pay. Damage comes out of what you earned.")
 	return lines

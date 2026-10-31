@@ -3,7 +3,8 @@ extends RefCounted
 ## One generated contract (a job card): client, site type, pest family, story, pest, difficulty, three floors,
 ## the paid objectives and the contract value. Pure data; deterministic per (archetype, seed, difficulty).
 ## A haunted contract (family "dead", a mansion or church client) has no hellgates: its objectives are the pest per floor
-## (paid DEAD_PEST_BONUS more) and the staff.
+## (paid DEAD_PEST_BONUS more), the ACOLYTES of floors 1-2 (H4: each procession brings two, each paid when killed, as a
+## hellgate is when closed) and the staff.
 ##
 ## Pay (docs/design/contracts.md; the base rates are the dispatch standard, the client's pay_scale
 ## multiplies the first three and everything is rounded to $100):
@@ -24,9 +25,15 @@ const PEST_PAY := 10000
 const EVERYTHING_MULT := 1.4
 const PEST_SPLIT: Array[float] = [0.3, 0.3, 0.4]   ## share of the pest pay per floor (floor 1, 2, 3)
 ## A haunted contract (no hellgates: ClientArchetype.FAMILY_DEAD) adds this to its pest pay before the client's scale, so
-## its one paid objective is worth about what a hellgate contract's origin gate is (H1; the acolytes and the grimoire
-## bring their own pay lines in H4 / H6).
+## its one paid objective is worth about what a hellgate contract's origin gate is (H1; the grimoire brings its own pay line
+## in H6). The acolytes (H4) are paid beside it, as a hellgate contract's small gates are.
 const DEAD_PEST_BONUS := 10000
+## A haunted contract's acolytes (haunted-build-plan.md, "H4 as built"): each one killed pays ACOLYTE_PAY (times the client's
+## scale). Floor 1 has one procession of ACOLYTES_EACH acolytes, floor 2 one (two on a job at PROCESSION_HARD or more), the last
+## floor none (the grimoire's, H6).
+const ACOLYTE_PAY := 2500
+const ACOLYTES_EACH := 2
+const PROCESSION_HARD := 0.5
 const EMPLOYEE_EXTRACTED := 100
 
 var seed := 0
@@ -48,7 +55,11 @@ var gate_pay := GATE_PAY
 var origin_pay := ORIGIN_PAY
 var pest_pay := PEST_PAY              ## the total over all floors
 var pest_floor_pay: Array[int] = []
-## {kind: "gate"|"origin"|"pest", floor: int, pay: int, label: String}
+## A haunted contract's processions per floor (index 0 = floor 1; [0, 0, 0] on a hellgate contract), and what each acolyte
+## killed pays (0 without any).
+var floor_processions: Array[int] = [0, 0, 0]
+var acolyte_pay := 0
+## {kind: "gate"|"origin"|"acolyte"|"pest", floor: int, pay: int, label: String}
 var objectives: Array[Dictionary] = []
 var contract_value := 0
 ## The job's elevator (docs/design/elevator-options.md): its look ("service" freight or "fancy" brass) and its placement
@@ -69,6 +80,7 @@ func net_fields() -> Dictionary:
 		"invoice_number": Net.SPAWN, "floor_gates": Net.SPAWN, "floor_employees": Net.SPAWN,
 		"gate_pay": Net.SPAWN, "origin_pay": Net.SPAWN, "pest_pay": Net.SPAWN,
 		"pest_floor_pay": Net.SPAWN, "objectives": Net.SPAWN, "contract_value": Net.SPAWN,
+		"floor_processions": Net.SPAWN, "acolyte_pay": Net.SPAWN,
 		"elevator_look": Net.SPAWN, "elevator_place": Net.SPAWN,
 	}
 
@@ -96,6 +108,8 @@ static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 	r.floor_gates = [2 if r.difficulty >= 0.5 else 1, 3 if r.difficulty >= 0.75 else 2, 0]
 	if not r.has_gates():
 		r.floor_gates = [0, 0, 0]
+		# its acolytes instead (H4): a procession on floor 1, one or two on floor 2 (no dice: the rest of the job rolls as before)
+		r.floor_processions = [1, 2 if r.difficulty >= PROCESSION_HARD else 1, 0]
 	var emp: Array = d["employees"]
 	r.floor_employees = []
 	for _f in FLOOR_COUNT:
@@ -103,6 +117,8 @@ static func make(archetype: String, run_seed: int, diff: float) -> ContractRun:
 	var scale: float = float(d["pay_scale"])
 	r.gate_pay = ClientArchetype.round_pay(GATE_PAY * scale)
 	r.origin_pay = ClientArchetype.round_pay(ORIGIN_PAY * scale)
+	if r.total_acolytes() > 0:
+		r.acolyte_pay = ClientArchetype.round_pay(ACOLYTE_PAY * scale)
 	var pest_total: float = PEST_PAY * scale * (EVERYTHING_MULT if r.pest == "everything" else 1.0)
 	if not r.has_gates():
 		pest_total += DEAD_PEST_BONUS * scale   # (the haunted contract's only objective carries what the origin gate would)
@@ -144,6 +160,8 @@ func _build_objectives() -> void:
 			objectives.append({"kind": "gate", "floor": f + 1, "pay": gate_pay, "label": "Close hellgate (floor %d)" % (f + 1)})
 		if f == FLOOR_COUNT - 1 and has_gates():
 			objectives.append({"kind": "origin", "floor": f + 1, "pay": origin_pay, "label": "Close the ORIGIN gate (floor %d)" % (f + 1)})
+		for _i in acolytes_on(f + 1):
+			objectives.append({"kind": "acolyte", "floor": f + 1, "pay": acolyte_pay, "label": "Stop an acolyte (floor %d)" % (f + 1)})
 		objectives.append({"kind": "pest", "floor": f + 1, "pay": pest_floor_pay[f], "label": "%s (floor %d)" % [pest_label(), f + 1]})
 	contract_value = 0
 	for o in objectives:
@@ -175,6 +193,18 @@ func total_gates() -> int:
 	return n
 
 
+## The acolytes on floor `floor_n` (ACOLYTES_EACH a procession), and over the whole job.
+func acolytes_on(floor_n: int) -> int:
+	return floor_processions[floor_n - 1] * ACOLYTES_EACH if floor_n >= 1 and floor_n <= floor_processions.size() else 0
+
+
+func total_acolytes() -> int:
+	var n := 0
+	for p in floor_processions:
+		n += p * ACOLYTES_EACH
+	return n
+
+
 func total_employees() -> int:
 	var n := 0
 	for e in floor_employees:
@@ -203,6 +233,8 @@ func card_lines() -> Array[Dictionary]:
 	if has_gates():
 		lines.append({"label": "Close %d hellgates" % (floor_gates[0] + floor_gates[1]), "pay": gate_pay, "each": true})
 		lines.append({"label": "Close the ORIGIN gate", "pay": origin_pay, "each": false})
+	if total_acolytes() > 0:
+		lines.append({"label": "Stop %d acolytes" % total_acolytes(), "pay": acolyte_pay, "each": true})
 	lines.append({"label": pest_label(), "pay": pest_pay, "each": false})
 	lines.append({"label": "Staff: %d to extract" % total_employees(), "pay": EMPLOYEE_EXTRACTED, "each": true})
 	return lines

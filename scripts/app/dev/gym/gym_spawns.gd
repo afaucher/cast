@@ -6,7 +6,9 @@ extends RefCounted
 ##            imp, ...); the sharks go into a pool (one entry per billed variant; "jockey", the imp gunner, rides an "imp"
 ##            shark), the gator into the sewer's water (its home region). A kind that none of those can build is listed with
 ##            `skip` (the reason) and no button. The zombie also has "Zombie (body)" (id monster:zombie:body): one that goes
-##            down as it lands, a body to raise with coffee or burn with a fireball (haunted-build-plan.md H3)
+##            down as it lands, a body to raise with coffee or burn with a fireball (haunted-build-plan.md H3); the acolyte has
+##            "Procession" (id monster:acolyte:procession): a live one, an acolyte, its zombies and a rear acolyte walking a loop
+##            round where it is put (ProcessionPlanner.build, haunted-build-plan.md H4)
 ##   dummy   TrainingDummy: a static post and a walker, both with DUMMY_HP
 ##   prop     every PricedProp.TABLE kind that is not an explosive (an electrical panel brings its live wire by water)
 ##   hazard   every explosive kind (PricedProp.hazard_kinds())
@@ -35,6 +37,8 @@ const DUMMY_HP := 5000.0
 const PROP_YAW := 45.0             ## a free-standing prop faces the camera
 const GHOST_YAW := -120.0          ## a ghost's host (its front is -Z) turned three-quarters to the camera
 const HAUNT_WALL := 3.0            ## a crypt spawn this near a wall face also dresses the wall (a drip, an ossuary)
+const PROCESSION_R := 5            ## the gym's procession walks a loop this many cells round where it is put ...
+const PROCESSION_SPOTS := 4        ## ... through this many spots
 const GROUPS: Array[String] = ["monster", "dummy", "prop", "hazard", "staff", "pickup", "gate", "decor", "ghost", "haunt",
 		"necro", "crypt", "rooms"]
 
@@ -48,6 +52,8 @@ static func entries() -> Array[Dictionary]:
 			out.append(_e("monster", kind, kind.capitalize()))
 			if kind == "zombie":
 				out.append(_e("monster", kind, "Zombie (body)", {"id": "monster:zombie:body", "body": true}))
+			elif kind == "acolyte":
+				out.append(_e("monster", kind, "Procession", {"id": "monster:acolyte:procession", "procession": true}))
 		elif kind == "shark":
 			for v: String in (row.get("billed", {"regular": {}}) as Dictionary):
 				out.append(_e("monster", kind, "Shark (%s)" % v, {"variant": v, "id": "monster:shark:" + v}))
@@ -119,6 +125,11 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 					var g := _gator(map, at, i)
 					if g != null:
 						out.append(g)
+			elif bool(e.get("procession", false)):
+				var pr := _procession(map, at)
+				if pr != null:
+					out.append(pr)
+					out.append_array(pr.members())
 			else:
 				for c in cells_near(map, at, n):
 					var m := MonsterFactory.spawn(key, c)
@@ -221,6 +232,21 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 				if hp != null:
 					out.append(hp)
 	return out
+
+
+## A live procession (haunted-build-plan.md H4: ProcessionPlanner.build, real monsters) round `at`: a loop through
+## PROCESSION_SPOTS spots PROCESSION_R cells out (the valid ones it can walk between). Null when fewer than two fit.
+static func _procession(map: HexMap, at: Vector3) -> Procession:
+	var centre := Hex.from_world(at)
+	var ring := Hex.ring(centre, PROCESSION_R)
+	var cells: Array[Vector2i] = []
+	for i in PROCESSION_SPOTS:
+		var c: Vector2i = ring[(i * ring.size()) / PROCESSION_SPOTS]
+		if valid_cell(map, c) and (cells.is_empty() or not map.find_path(cells[cells.size() - 1], c, true, 2000).is_empty()):
+			cells.append(c)
+	if cells.size() < 2:
+		return null
+	return ProcessionPlanner.build(map, cells, [], "GymProcession")
 
 
 ## One haunt look-test piece at floor point `p` (cosmetic, under the world): an ectoplasm puddle (and a drip on the nearest

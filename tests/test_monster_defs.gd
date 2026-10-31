@@ -14,12 +14,12 @@ func setup() -> void:
 	eq(MonsterFactory.KINDS, ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the pack kinds, in the pack roll's order")
 	eq(MonsterFactory.COSTS, {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4, "pavise": 4, "water_boy": 3, "zombie": 3, "crypt_rat": 6, "ecto_blob": 3}, "pack costs")
 	eq(MonsterFactory.WEIGHTS, {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5, "pavise": 0.75, "water_boy": 2.0, "zombie": 5.0, "crypt_rat": 1.0, "ecto_blob": 1.5}, "pack weights")
-	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob"], "the factory builds the kinds with a model")
-	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the modelled kinds")
+	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte"], "the factory builds the kinds with a model")
+	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte"] as Array[String], "the modelled kinds")
 	eq(MonsterDefs.is_swarm("swarmer"), true, "imps come in a swarm")
 	eq(MonsterDefs.is_swarm("grunt"), false, "a grunt doesn't")
 	eq(ClientArchetype.PEST_NAMES, {"grunt": "skeletons", "archer": "archers", "brute": "brutes", "swarmer": "imps", "zombie": "zombies", "everything": "everything"}, "pest names")
-	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob"], "the kinds that drop components")
+	eq(SpellComponents.DROPS.keys(), ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte"], "the kinds that drop components")
 	for k: String in SpellComponents.DROPS:
 		for e: Dictionary in SpellComponents.DROPS[k]:
 			for sp: String in e["spells"]:
@@ -92,6 +92,9 @@ func setup() -> void:
 	eq(MonsterFactory.swarm_range("crypt_rat"), Vector2i(5, 6), "a rat pick is 5-6 rats")
 	eq(MonsterFactory.swarm_range("swarmer"), Vector2i(MonsterFactory.SWARM_MIN, MonsterFactory.SWARM_MAX), "an imp pick is still 4-6")
 	check(not MonsterDefs.pest_names().has("crypt_rat") and not MonsterDefs.pest_names().has("ecto_blob"), "neither is a contract pest")
+	# ... and H4's acolyte: the dead family's, but never dealt into a pack (only a procession brings it), never a pest
+	eq(MonsterDefs.family_of("acolyte"), "dead", "the acolyte is the dead family's own")
+	check(not MonsterDefs.row("acolyte").has("pack") and not MonsterDefs.pest_names().has("acolyte"), "the acolyte is no pack kind and no pest")
 	var dead_kinds := ClientArchetype.family_kinds(ClientArchetype.FAMILY_DEAD)
 	eq(dead_kinds, ["grunt", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the dead family's kinds")
 	var dealt := {}

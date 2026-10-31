@@ -107,7 +107,9 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 - **Acolytes travel the map in a procession with monsters**, raising the bodies they come across. The user: "I think
   [acolytes] should actually be traveling around the map as a procession with monsters. So they would come across bodies
   and raise them." Open: what the procession is made of and how it moves (a route, a leader), and whether it is a
-  networking shape of its own (a host-owned group of host monsters, like a pack).
+  networking shape of its own (a host-owned group of host monsters, like a pack). Built 2026-10-31 with calls to revisit
+  (haunted-build-plan.md, "H4 as built"): a leader acolyte, four zombies and a rear acolyte on a loop of 2-3 rooms, a host-owned
+  group (route and file PRIVATE) of host monsters, no new networking shape.
 - **Coffee raises a downed zombie too.** The user: "the other situations would be when the player uses a heal or coffee.
   Where they get caught in the blast and brought back." Today Coffee touches any team (the haste on everyone in the
   splash, and a downed hero stands up as a coffee zombie), while Heal and Revive touch only the caster's team. Decided:

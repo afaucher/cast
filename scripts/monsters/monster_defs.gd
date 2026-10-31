@@ -24,7 +24,7 @@ extends RefCounted
 ##   sewer_pack {min, max, weight}: a sewer pack of this kind is min-max of them, picked at this weight among the sewer kinds
 ##              (MonsterFactory.compose_sewer / spawn_sewer_pack: the sewer's own packs, not the floor's pack roll)
 ##   family     the pest family whose packs alone deal it ("dead": the zombie, haunted-build-plan.md H3; the crypt rat and the
-##              ecto blob, H3b). A family kind is
+##              ecto blob, H3b; the acolyte, H4, which has no "pack": only its procession brings it). A family kind is
 ##              dealt only when a pack asks for the family's kinds (MonsterFactory.compose's `only`), so a hellgate floor's
 ##              packs roll exactly as before it existed
 ##
@@ -117,6 +117,12 @@ const DEFS := {
 		"family": "dead",
 		## damp washes its slick away
 		"drops": [{"spells": ["damp"], "chance": 0.20}, {"spells": ["heal"], "chance": 0.06}],
+	},
+	"acolyte": {   ## the necromancer's acolyte (haunted-build-plan.md H4): flees, raises bodies; seed-built in a procession (ProcessionPlanner), never in a pack
+		"script": "res://scripts/monsters/acolyte.gd", "model": "res://scripts/art/lowpoly/necro/acolyte_model.gd", "tris": 3200,
+		"family": "dead",
+		## a fireball keeps what it raises down
+		"drops": [{"spells": ["fireball"], "chance": 0.25}, {"spells": ["heal"], "chance": 0.10}],
 	},
 }
 

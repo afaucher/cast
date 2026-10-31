@@ -8,6 +8,8 @@ const MAX_NODES := 20
 ## The share of a model's faces that may glow (default a quarter: eyes, cracks, a jug). The goo imp is the exception the user
 ## picked: Gloop drips with its own glowing goo (goo-imp.md §2, §6.1: "the goo is the beacon"), about 40 % of its faces.
 const GLOW_SHARE := {"goo_imp": 0.45}
+## Kinds with no strike (no swing pose): the acolyte (haunted-build-plan.md H4) never attacks; its wind-up is the raise.
+const NO_STRIKE: Array[String] = ["acolyte"]
 ## kind -> triangle budget
 var BUDGET := _budgets()   # each kind's MonsterDefs "tris"
 
@@ -41,6 +43,8 @@ func _part_names(kind: String) -> Array[String]:
 			return RatModel.PART_NAMES
 		"ecto_blob":
 			return EctoBlobModel.GAME_PARTS
+		"acolyte":
+			return AcolyteModel.PART_NAMES
 		_:
 			return SwarmerModel.PART_NAMES
 
@@ -186,22 +190,29 @@ func _check_poses(kind: String, m: MonsterModel) -> void:
 	check(_pose_distance(rest, _snapshot(m)) > 0.05, "%s walk cycle moves the limbs" % kind)
 	m.apply_idle(0.6)
 
-	m.windup(1.0)
+	# (a kind with no strike winds up something else: the acolyte's wind-up is its raise, AcolyteModel.set_raise)
+	var tell := func(k: float) -> void:
+		if NO_STRIKE.has(kind):
+			m.call("set_raise", k)
+		else:
+			m.windup(k)
+	tell.call(1.0)
 	var wound := _snapshot(m)
 	check(_pose_distance(rest, wound) > 0.3, "%s windup(1) strikes a clearly different pose (%.2f)" % [kind, _pose_distance(rest, wound)])
-	m.windup(0.5)
+	tell.call(0.5)
 	var half := _snapshot(m)
 	check(_pose_distance(rest, half) > 0.05 and _pose_distance(half, wound) > 0.05, "%s windup(0.5) is in between" % kind)
-	m.windup(0.0)
+	tell.call(0.0)
 	check(_pose_distance(rest, _snapshot(m)) < 0.001, "%s windup(0) returns to rest" % kind)
 
-	m.attack_swing()
-	check(_pose_distance(rest, _snapshot(m)) > 0.2, "%s attack_swing snaps into a swing pose" % kind)
-	m.idle_enabled = true
-	await get_tree().create_timer(MonsterModel.SWING_TIME + 0.25).timeout
-	m.idle_enabled = false
-	m.apply_idle(0.6)
-	check(_pose_distance(rest, _snapshot(m)) < 0.001, "%s swing settles back to rest" % kind)
+	if not NO_STRIKE.has(kind):
+		m.attack_swing()
+		check(_pose_distance(rest, _snapshot(m)) > 0.2, "%s attack_swing snaps into a swing pose" % kind)
+		m.idle_enabled = true
+		await get_tree().create_timer(MonsterModel.SWING_TIME + 0.25).timeout
+		m.idle_enabled = false
+		m.apply_idle(0.6)
+		check(_pose_distance(rest, _snapshot(m)) < 0.001, "%s swing settles back to rest" % kind)
 
 	# tint + fade
 	m.set_tint(Color.WHITE, 0.9)
@@ -221,13 +232,13 @@ func _check_poses(kind: String, m: MonsterModel) -> void:
 	var slack := _snapshot(m)
 	check(_pose_distance(rest, slack) > 0.1, "%s goes slack when downed" % kind)
 	m.attack_swing()
-	m.windup(1.0)
+	tell.call(1.0)
 	check(_pose_distance(slack, _snapshot(m)) < 0.001, "%s ignores windup / swing while downed" % kind)
 	m.set_downed(false)
 	check(not m.is_downed(), "%s can be revived" % kind)
 	near(float((m._mat as ShaderMaterial).get_shader_parameter("glow_gain")), MonsterModel.GLOW_GAIN * (1.0 + m.glow_flare * m.wind_e()), 0.01, "%s glow back" % kind)
 	m.idle_enabled = true
-	m.windup(0.0)
+	tell.call(0.0)
 
 
 ## The goblin's own pose hooks (alert, look-around, fuse sparks, rockets fired, cower) each change the pose,

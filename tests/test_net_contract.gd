@@ -60,6 +60,7 @@ const NET_SCRIPTS := [
 	"res://scripts/monsters/goo_ball.gd",       # (the goo imp's ball and patch: runtime objects the host announces, NetObjects)
 	"res://scripts/monsters/goo_patch.gd",
 	"res://scripts/monsters/ecto_slick.gd",     # (an ecto blob's slick: a runtime object the host announces a segment at a time)
+	"res://scripts/monsters/procession.gd",     # (an acolyte's procession, H4: a host-owned group; its route and file are PRIVATE)
 ]
 
 const ACTOR := "res://scripts/core/actor.gd"
@@ -409,6 +410,9 @@ var REPLICATED := {
 	"res://scripts/monsters/crypt_rat.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/monsters/ecto_blob.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 	"res://scripts/monsters/ecto_slick.gd": [{}, NetEvents.WORLD_CARRIES["res://scripts/monsters/ecto_slick.gd"], 0],
+	# the haunted contracts' acolyte (haunted-build-plan.md H4): a plain monster (its raise is a wind-up; the body's rise is the
+	# zombie's world.rise). Its procession is not replicated (no OWNER var: the host's group; NET_SCRIPTS declares it)
+	"res://scripts/monsters/acolyte.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
 }
 
 

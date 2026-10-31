@@ -97,13 +97,18 @@ var doors: Array[Dictionary] = []
 ## "regular" | "laser" | "imp", start: Vector2 (X/Z: the head joint), heading: Vector2}. Their pools' records carry
 ## `shark` (the variant) too, so PoolView builds no decorative fins there.
 var sharks: Array[Dictionary] = []
+## A haunted floor's processions (haunted-build-plan.md, "H4 as built"; ProcessionPlanner): {rooms: Array[String] (the route's
+## rooms, in the order it walks them, round and round), route: Array[Vector2i] (each room's spot, where the leader walks to)}.
+## Spawned last of the actors (an acolyte leading its zombies, a second acolyte at the rear). [] on every other floor (and
+## then left out of the checksum's plan part: NetFloor.PLAN_DEFAULTS).
+var processions: Array[Dictionary] = []
 
 
 ## Who may write each var (see Net). SiteBuilder.plan() builds all of it from (run, floor) on
 ## every machine, so it is fixed once planned.
 func net_fields() -> Dictionary:
 	return {
-		"doors": Net.SPAWN, "sharks": Net.SPAWN,
+		"doors": Net.SPAWN, "sharks": Net.SPAWN, "processions": Net.SPAWN,
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "hazards": Net.SPAWN,

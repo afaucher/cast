@@ -103,11 +103,20 @@ func _check_runs() -> void:
 			pests_seen[run.pest] = true
 			var value := 0
 			var pests := 0
+			var acolytes := [0, 0, 0]
 			for o in run.objectives:
 				value += int(o["pay"])
-				check(str(o["kind"]) == "pest", "%s: only pest objectives (%s)" % [tag, o["kind"]])
-				pests += 1
+				check(str(o["kind"]) in ["pest", "acolyte"], "%s: only pest and acolyte objectives (%s)" % [tag, o["kind"]])
+				if str(o["kind"]) == "pest":
+					pests += 1
+				else:
+					acolytes[int(o["floor"]) - 1] += 1
+					eq(int(o["pay"]), run.acolyte_pay, "%s: an acolyte pays the acolyte rate" % tag)
 			eq(pests, ContractRun.FLOOR_COUNT, "%s: a pest objective per floor" % tag)
+			# H4: the acolytes of floors 1-2, two a procession (floor 2 two processions on a harder job), none on the last floor
+			eq(acolytes, [2, 4 if run.difficulty >= ContractRun.PROCESSION_HARD else 2, 0], "%s: the acolyte objectives per floor" % tag)
+			check(run.acolyte_pay >= ContractRun.ACOLYTE_PAY * 0.8, "%s: an acolyte pays (%d)" % [tag, run.acolyte_pay])
+			check(run.card_lines().any(func(ln: Dictionary) -> bool: return str(ln["label"]).contains("acolyte")), "%s: the card lists the acolytes" % tag)
 			eq(value + run.total_employees() * ContractRun.EMPLOYEE_EXTRACTED, run.contract_value, "%s: the contract value" % tag)
 			check(run.pest_pay > ContractRun.PEST_PAY * 0.8, "%s: the pest pays for the whole job (%d)" % [tag, run.pest_pay])
 			for ln in run.card_lines():
@@ -118,6 +127,7 @@ func _check_runs() -> void:
 	check(pests_seen.has("grunt") and pests_seen.has("zombie"), "haunted contracts name skeletons or zombies as the pest (%s)" % str(pests_seen.keys()))
 	var gate_run := ContractRun.make("prepper", 3, 0.5)
 	check(gate_run.has_gates() and gate_run.family == ClientArchetype.FAMILY_GATE and gate_run.total_gates() > 0, "a hellgate client keeps its gates")
+	check(gate_run.total_acolytes() == 0 and gate_run.acolyte_pay == 0, "... and has no acolytes (H4)")
 	eq(ContractBoard.run_for_client("heir", 9).site_type, "mansion", "the --client flag's contract")
 
 
@@ -215,9 +225,26 @@ func _check_floor(id: String, s: int, f: int) -> void:
 	# (H3: a zombie costs 3 to a skeleton's 2, so a mixed floor holds fewer than H1's skeleton-only one: measured 12-17 on
 	# floors 1-2 and 26-35 on floor 3 here, against 17-21 and 34-42 with skeletons only. H3b: a rat pick is 5-6 rats for 6
 	# points at weight 1, so a floor with rats holds more, lighter bodies: measured 12-22 on floors 1-2 and 30-40 on floor 3)
-	check(site.monsters.size() <= 40, "%s: a sane total (%d: %s)" % [tag, site.monsters.size(), str(kinds)])
+	# (H4: the processions' zombies are in `monsters` and their acolytes beside it, `acolytes`: the total holds both)
+	check(site.monsters.size() + site.acolytes.size() <= 40, "%s: a sane total (%d and %d acolytes: %s)" % [tag, site.monsters.size(), site.acolytes.size(), str(kinds)])
+	# H4: the floor's processions, each an acolyte, its four zombies and a rear acolyte, on a route of 2-3 rooms
+	eq(plan.processions.size(), run.floor_processions[f - 1], "%s: the contract's processions" % tag)
+	eq(site.processions.size(), plan.processions.size(), "%s: each spawned" % tag)
+	eq(site.acolytes.size(), run.acolytes_on(f), "%s: two acolytes a procession" % tag)
+	for pr in site.processions:
+		eq(pr.acolytes.size(), Procession.ACOLYTES, "%s: a leader and a rear acolyte" % tag)
+		eq(pr.zombies.size(), Procession.FILE, "%s: its file of zombies" % tag)
+		check(pr.route.size() >= 2 and pr.route.size() <= ProcessionPlanner.ROUTE_ROOMS, "%s: a route of rooms (%s)" % [tag, ", ".join(pr.rooms)])
+		check(not pr.rooms.has(plan.start_room) and not pr.rooms.has(plan.exit_room) and not pr.rooms.has(SiteBuilder.arrival_room(plan)), "%s: never through the start, arrival or exit room" % tag)
+		check(pr.acolytes[0].is_in_group("monsters") and pr.acolytes[0] is Acolyte, "%s: its acolytes are monsters" % tag)
+		var lead := pr.acolytes[0].global_position
+		for i in pr.zombies.size():
+			var want: Vector3 = pr.trail.point(pr.trail.head_arc() - Procession.GAP * float(i + 1))["pos"]
+			check(GameWorld.flat_distance(pr.zombies[i].global_position, want) < 0.05, "%s: zombie %d stands in file behind the leader" % [tag, i])
+		var back: Vector3 = pr.trail.point(pr.trail.head_arc() - Procession.GAP * float(Procession.FILE + 1))["pos"]
+		check(GameWorld.flat_distance(pr.acolytes[1].global_position, back) < 0.05 and lead.distance_to(back) > Procession.GAP, "%s: the rear acolyte at the back" % tag)
 	_rat_clumps(tag, site)
-	print("  %s: %d monsters %s, pest %s" % [tag, site.monsters.size(), str(kinds), run.pest])
+	print("  %s: %d monsters %s, %d acolytes in %d processions, pest %s" % [tag, site.monsters.size(), str(kinds), site.acolytes.size(), site.processions.size(), run.pest])
 	totals[tag] = kinds
 	check(site.pest_spawned >= PackPlanner.PEST_MIN, "%s: at least %d to exterminate (%d)" % [tag, PackPlanner.PEST_MIN, site.pest_spawned])
 	# the rooms: the haunted pool, the service entrance; the origin room on the last floor

@@ -2,7 +2,11 @@
 
 Status: **[look-dev only]**, 2026-10-29; **the zombie is the game's since 2026-10-31** (haunted-build-plan.md, "H3 as
 built": the `zombie` monster kind wears `ZombieModel`, mourner or digger, its body lies in `pose_rise(0)`, stands up through
-`pose_rise(k)` and burns into the charred build). The acolytes, the procession and the grimoire are still look-dev only. The test exists in the gym (`--gym`) and in a look lab, and its job is to help the user decide how the
+`pose_rise(k)` and burns into the charred build); **the cowl acolyte and the procession are the game's since 2026-10-31**
+(haunted-build-plan.md, "H4 as built": the `acolyte` monster kind wears `AcolyteModel` "cowl" with its lantern light, its raise
+is `set_raise` from the wind-up, and `Procession` walks the approved formation, GAP and four zombies and a rear acolyte, on
+`ProcessionPath`, the path this look test's loop now runs on too). The mask acolyte, this lab's `NecroProcession` loop and the
+grimoire are still look-dev only. The test exists in the gym (`--gym`) and in a look lab, and its job is to help the user decide how the
 haunted contracts' necromancer family should look.
 
 The decisions this serves (new-themes.md, "Ghost house: haunted contracts"):
@@ -61,8 +65,9 @@ procession". Cosmetic like the rest of this test: `NecroProcession` (`scripts/ar
   shortens), and the cowl's lantern now lights the floor round it in the ghost colour (`LanternLight`, 5.0 over 5 units)
   with motes drifting off it: a pool of cold light walking with each acolyte. The sheet is now candle-dark (the haunted
   mansion's light), where the pools show; in a bright room they are lost.
-- Not built: the fight (the acolyte hanging back to raise what falls, fleeing when hurt), being interrupted by a hit, a
-  route through real rooms, other monsters in the file.
+- Not built here: the fight (the acolyte hanging back to raise what falls, fleeing when hurt), being interrupted by a hit, a
+  route through real rooms, other monsters in the file. (The game's procession does the first three since H4:
+  haunted-build-plan.md, "H4 as built", `docs/design/procession_game/`.)
 
 `procession.png` (`--set procession`): six moments of the first raise at the game camera. In the gym: Spawn > Necro (look
 test) > "procession (acolyte and zombies)", or `--gym-act procession`.

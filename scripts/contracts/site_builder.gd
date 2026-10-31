@@ -69,6 +69,9 @@ extends RefCounted
 ##    priced sarcophagi against a wall (CryptPlanner.plan_tombs, own dice), the recipes dress them with the look test's kit
 ##    (CryptVignettes), DoorPlanner stands arches and open gates in its doorways, the stair's landing gets candles and its
 ##    halls and walls their stone. Its packs are the floor's (the contract's family). Nothing of it on a floor without one;
+##  - PROCESSIONS (a haunted contract's floors 1-2, haunted-build-plan.md "H4 as built"; ProcessionPlanner): a route of rooms
+##    each (own dice, after the scouts), spawned last of the actors: an acolyte, its zombies in file, an acolyte at the rear,
+##    and the Procession the host walks them with. Nothing of it on any other floor;
 ##  - the ELEVATOR (SitePlan.elevator: HexMap.elevator plus the job's look): its car, doorway and landing
 ##    (ElevatorGeo.keep_cells) are avoided and blocked like the exit zone, and it is a body in its room's ThemeCtx.
 ##
@@ -164,6 +167,7 @@ static func plan(map: HexMap, run: ContractRun, floor_n: int, catalog: Array[Str
 	PackPlanner.plan(run, floor_n, p)                                   # no dice (the room budgets)
 	_block_cells(p)                                                     # after everything a monster may not stand on
 	ScoutPlanner.plan(map, run, floor_n, p)                             # own dice; after the packs (prefers pack rooms)
+	ProcessionPlanner.plan(map, run, floor_n, p)                        # own dice; a haunted floor's processions (none elsewhere)
 	last_plan_usec = Time.get_ticks_usec() - t_start - SewerPlanner.last_usec
 	# The look of the floor: every cell's floor / wall material from its room's theme (FloorMaterials). Not planning, so
 	# it is timed on its own (FloorMaterials.last_usec) and not counted in last_plan_usec.
@@ -459,6 +463,8 @@ class Site:
 	var lava_archers: Array[Monster] = []   ## a lava cave's archers on its isles (also in `monsters`), in plan order
 	var lava_look: Node3D = null        ## its lava's look (LavaLook.dress_cave)
 	var lava_field: LavaField = null    ## its rules (activated by the game once the fog has read the map)
+	var processions: Array[Procession] = []   ## a haunted floor's processions (the host walks them), in plan order
+	var acolytes: Array[Monster] = []   ## their acolytes (not in `monsters`: no pack's; the contract's acolyte objectives)
 
 
 ## Spawn a planned floor. SPAWN ORDER IS NET-ID ORDER: NetFloor numbers the actors in the order they are spawned here, and
@@ -483,7 +489,8 @@ static func spawn(map: HexMap, run: ContractRun, p: SitePlan) -> Site:
 	GatorPlanner.spawn(map, p, site)            # a sewer cluster's gators
 	SewerPlanner.spawn(map, run, p, site)       # its goo imp pack, its water's look, the live wires
 	LavaPlanner.spawn(map, run, p, site)        # a lava cave's archers, its look and its rules
-	PropPlanner.spawn_set_pieces(run, p, site)  # the landings' set pieces (the last actors: priced props, into site.props)
+	PropPlanner.spawn_set_pieces(run, p, site)  # the landings' set pieces (priced props, into site.props)
+	ProcessionPlanner.spawn(map, run, p, site)  # a haunted floor's processions (the last actors: acolytes and their zombies)
 	# The office doors, shut (user, 2026-10-19), last: they are not actors, so no actor's net id moves (NetFloor numbers
 	# them after the actors).
 	DoorPlanner.spawn(p, site)

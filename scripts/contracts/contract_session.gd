@@ -25,7 +25,8 @@ var finished := false
 var end_reason := ""
 ## crew seat (1-3) -> {"hp": float, "dead": bool}; a hero without a seat (tests, the arena) is keyed by its display_name
 var carry: Dictionary = {}
-## floor -> {gates_total, gates_closed, origin, origin_closed, employees, extracted, lost, pest_spawned, pest_paid}
+## floor -> {gates_total, gates_closed, origin, origin_closed, employees, extracted, lost, pest_spawned, pest_paid,
+## acolytes_total, acolytes_stopped}
 var floors: Dictionary = {}
 ## [{name, cause, floor}] employees that died
 var lost: Array[Dictionary] = []
@@ -64,8 +65,8 @@ func descend() -> void:
 	floor_number += 1
 
 
-## The crew arrives on floor `f` with what the site builder placed there.
-func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spawned: int) -> void:
+## The crew arrives on floor `f` with what the site builder placed there (`acolytes`: a haunted floor's, H4).
+func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spawned: int, acolytes: int = 0) -> void:
 	_log_floor_done("elevator")
 	_floor_t0 = GameWorld.time
 	floor_number = f
@@ -75,6 +76,7 @@ func enter_floor(f: int, gates: int, has_origin: bool, employees: int, pest_spaw
 		"origin": has_origin, "origin_closed": false,
 		"employees": employees, "extracted": 0, "lost": 0,
 		"pest_spawned": pest_spawned, "pest_paid": false,
+		"acolytes_total": acolytes, "acolytes_stopped": 0,
 	}
 
 
@@ -140,6 +142,17 @@ func gate_closed(origin: bool, who: Node = null) -> int:
 	st["gates_closed"] = int(st["gates_closed"]) + 1
 	Ledger.earn("Hellgate closed", run.gate_pay, who)
 	return run.gate_pay
+
+
+## An acolyte was killed (haunted-build-plan.md H4): pays the acolyte rate, as long as the floor has acolytes left to pay for.
+## Returns the pay (0 past the floor's count).
+func acolyte_stopped(who: Node = null) -> int:
+	var st := state()
+	if st.is_empty() or int(st.get("acolytes_stopped", 0)) >= int(st.get("acolytes_total", 0)):
+		return 0
+	st["acolytes_stopped"] = int(st["acolytes_stopped"]) + 1
+	Ledger.earn("Acolyte stopped", run.acolyte_pay, who)
+	return run.acolyte_pay
 
 
 func gates_open(f: int = -1) -> int:

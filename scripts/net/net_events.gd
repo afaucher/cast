@@ -168,7 +168,9 @@ const WORLD_CARRIES := {
 ##                         explosive prop's fuse lit, with its start, end and igniter / put out by a soak); new (a runtime
 ##                         object the host made: a goo imp's ball or patch, an ecto blob's slick segment, NetObjects.RUNTIME_OBJECTS) /
 ##                         goo (a patch lit or washed) / slick (a slick segment washed)
-##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off
+##   world.windup / world.unwind (reliable, M4)  host -> clients: a monster's wind-up (start, length, victim) / called off (an
+##                         acolyte's raise is its wind-up, H4: the victim is the body; the strike is nothing, the body's world.rise
+##                         is the raise)
 ##   world.scout / world.fireworks / world.dud (reliable, step 2)  host -> clients: a goblin scout's phase and rack / his
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
 ##   world.shield (reliable)  host -> clients: a Pavise's shield state {id, st, x, y, z, w} (carried, planted, left, flat)
@@ -228,4 +230,5 @@ const LATE_JOIN := {
 	"res://scripts/monsters/crypt_rat.gd": "as monster.gd (keyframe, gone ids: it is freed when it dies); a pounce's tell under way: skipped (a wind-up, under a second)",
 	"res://scripts/monsters/ecto_blob.gd": "as monster.gd (keyframe, gone ids); a lunge's tell under way: skipped (a wind-up, under a second); its slick: ecto_slick.gd",
 	"res://scripts/monsters/ecto_slick.gd": "replay of obj.new for every live segment (EctoSlick.late_join_state, section `new`: its ends, its start, its chain); a washed or dried one is not sent",
+	"res://scripts/monsters/acolyte.gd": "as monster.gd (keyframe, gone ids: it is freed when it dies); a raise under way: its state and telegraph ride the keyframe and then the stream (the gesture), its world.windup is skipped; the body it raised: zombie.gd (standing: the keyframe). Its procession (Procession) is the host's AI: PRIVATE, never sent",
 }
