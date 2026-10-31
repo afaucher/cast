@@ -110,7 +110,7 @@ const GAIT_SPREAD := 0.1
 const GAIT_CLOCK_SPAN := 4.0      ## seconds a model's idle / walk clock may start ahead (covers its slowest cycle)
 ## The goblin scout's flight is tuned against the heroes' 4.5 (its RUN_SPEED 5.0); the shark and the gator steer themselves.
 const PACE_FIXED: Array[String] = ["goblin", "shark", "gator"]
-const SIZE_FIXED: Array[String] = ["shark", "gator"]
+const SIZE_FIXED: Array[String] = ["shark", "gator", "armour"]   ## (a dormant suit is exactly the priced one: H5)
 static var _spawn_seq := 0
 static var _seq_floor := -1
 
@@ -127,7 +127,7 @@ static var _seq_floor := -1
 #                unless it yelled in CHARGE_SELF_COOLDOWN s or anything yelled within CHARGE_AREA in CHARGE_AREA_COOLDOWN s.
 # The yell: the model's war_cry() pose (weapon or arms up for about half a second) and the kind's cue (war_cry_cue: a pool
 # of the user's own takes, Sfx picks one). Frozen monsters (aggro_range 0) and CRY_SKIP kinds never yell.
-const CRY_SKIP: Array[String] = ["shark", "gator", "jockey", "goblin", "acolyte"]
+const CRY_SKIP: Array[String] = ["shark", "gator", "jockey", "goblin", "acolyte", "wisp"]
 ## Kinds with their own cry (cue cry_<voice>); every other kind yells the shared cry_monster.
 const CRY_VOICES: Array[String] = ["grunt", "brute", "swarmer"]
 const CRY_GATHER := 0.15          ## sightings this close in time are one pack's (a pack wakes in one host frame)
@@ -497,6 +497,12 @@ func is_priority_target() -> bool:
 	return false
 
 
+## A host no ghost is in (HauntHost, haunted-build-plan.md H5): a piece of the room, no fight; the AI allies leave it be.
+## Default: no.
+func is_dormant() -> bool:
+	return false
+
+
 ## True while the monster has a target (chasing or winding up an attack).
 func is_aggro() -> bool:
 	return state == State.CHASE or state == State.ATTACK
@@ -849,7 +855,7 @@ func _tick_attack(delta: float) -> void:
 	if _windup_left <= 0.0:
 		var neutral_hp := target.hp if target.team == GameWorld.TEAM_NEUTRAL else -1.0
 		_end_windup()
-		if kind in ["grunt", "swarmer", "pavise", "crypt_rat"]:
+		if kind in ["grunt", "swarmer", "pavise", "crypt_rat", "bones"]:
 			Sfx.play_at("swing_light", global_position)
 		_strike()
 		_strike_neutral(neutral_hp)
@@ -1615,7 +1621,7 @@ func net_show(new_facing: Vector3, is_climbing: bool, new_hp: float, new_state: 
 	if strike_count != strikes:
 		strikes = strike_count
 		_strike_t = 1.0
-		if kind in ["grunt", "swarmer", "pavise", "crypt_rat"]:
+		if kind in ["grunt", "swarmer", "pavise", "crypt_rat", "bones"]:
 			Sfx.play_at("swing_light", global_position)
 		if model != null:
 			model.attack_swing()

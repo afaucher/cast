@@ -942,6 +942,11 @@ func _populate_site() -> void:
 	for pr in _site.processions:
 		_log("procession: %s, %d acolytes, %d zombies, round %s" % [pr.name, pr.acolytes.size(), pr.zombies.size(),
 			", ".join(pr.rooms)], Color(0.75, 0.85, 1.0))
+	if not _site.hosts.is_empty():
+		var hrows: Array[String] = []
+		for rec in _site.plan.haunts:
+			hrows.append("%s%s in %s" % [rec["kind"], " (ghost)" if bool(rec["ghost"]) else "", rec["room"]])
+		_log("haunts: %d ghosts, %d hosts: %s" % [_site.wisps.size(), _site.hosts.size(), ", ".join(hrows)], Color(0.75, 0.85, 1.0))
 	_log("themes: %s  decor %d" % [str(_site.plan.room_themes), _site.plan.decor.size()], Color(0.8, 0.8, 1.0))
 	var note_list: Array[String] = []
 	for nt in _site.plan.notes:
@@ -1001,7 +1006,7 @@ func _setup_fog() -> void:
 		crew.append(heroes_by_seat[seat])
 	fog_view.heroes = crew
 	var still: Array = []
-	for n in _site.props + _site.hazards + _site.decor + _site.notes + _site.packages + _site.gates + _dev_hazards:
+	for n in _site.props + _site.hazards + _site.decor + _site.notes + _site.packages + _site.gates + _dev_hazards + _site.hosts:
 		if n is Node3D and n.name != "ThemeLights":
 			still.append(n)
 	fog_view.track_static(still)

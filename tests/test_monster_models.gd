@@ -10,6 +10,11 @@ const MAX_NODES := 20
 const GLOW_SHARE := {"goo_imp": 0.45}
 ## Kinds with no strike (no swing pose): the acolyte (haunted-build-plan.md H4) never attacks; its wind-up is the raise.
 const NO_STRIKE: Array[String] = ["acolyte"]
+## Kinds with no tell at all (haunted-build-plan.md H5): the wisp never attacks or raises anything.
+const NO_TELL: Array[String] = ["wisp"]
+## Kinds with no ember faces, and why: the possessed suit of armour (the user turned down a glowing visor, ghost-look.md: it
+## glows only in the ghost's rim), the wisp (its whole body is the ghost's glow shader, no ember paint).
+const NO_GLOW := {"armour": "no glowing visor (the user's call)", "wisp": "all of it is the ghost's glow"}
 ## kind -> triangle budget
 var BUDGET := _budgets()   # each kind's MonsterDefs "tris"
 
@@ -45,6 +50,12 @@ func _part_names(kind: String) -> Array[String]:
 			return EctoBlobModel.GAME_PARTS
 		"acolyte":
 			return AcolyteModel.PART_NAMES
+		"armour":
+			return KnightModel.PART_NAMES
+		"bones":
+			return GruntModel.PART_NAMES
+		"wisp":
+			return WispModel.PART_NAMES
 		_:
 			return SwarmerModel.PART_NAMES
 
@@ -156,6 +167,9 @@ func _check_glow(kind: String, m: MonsterModel) -> void:
 			faces += 1
 			if cols[i].a < 0.75:
 				glow_faces += 1
+	if NO_GLOW.has(kind):
+		eq(glow_faces, 0, "%s: no ember faces (%s)" % [kind, NO_GLOW[kind]])
+		return
 	check(glow_faces >= 4, "%s has emissive faces (eyes) (%d)" % [kind, glow_faces])
 	var share := float(GLOW_SHARE.get(kind, 0.25))
 	check(float(glow_faces) < float(faces) * share, "%s glows only in small places (%d of %d faces, under %d%%)" % [kind, glow_faces, faces, int(share * 100.0)])
@@ -192,20 +206,21 @@ func _check_poses(kind: String, m: MonsterModel) -> void:
 
 	# (a kind with no strike winds up something else: the acolyte's wind-up is its raise, AcolyteModel.set_raise)
 	var tell := func(k: float) -> void:
-		if NO_STRIKE.has(kind):
+		if NO_STRIKE.has(kind) and not NO_TELL.has(kind):
 			m.call("set_raise", k)
 		else:
 			m.windup(k)
-	tell.call(1.0)
-	var wound := _snapshot(m)
-	check(_pose_distance(rest, wound) > 0.3, "%s windup(1) strikes a clearly different pose (%.2f)" % [kind, _pose_distance(rest, wound)])
-	tell.call(0.5)
-	var half := _snapshot(m)
-	check(_pose_distance(rest, half) > 0.05 and _pose_distance(half, wound) > 0.05, "%s windup(0.5) is in between" % kind)
-	tell.call(0.0)
-	check(_pose_distance(rest, _snapshot(m)) < 0.001, "%s windup(0) returns to rest" % kind)
+	if not NO_TELL.has(kind):
+		tell.call(1.0)
+		var wound := _snapshot(m)
+		check(_pose_distance(rest, wound) > 0.3, "%s windup(1) strikes a clearly different pose (%.2f)" % [kind, _pose_distance(rest, wound)])
+		tell.call(0.5)
+		var half := _snapshot(m)
+		check(_pose_distance(rest, half) > 0.05 and _pose_distance(half, wound) > 0.05, "%s windup(0.5) is in between" % kind)
+		tell.call(0.0)
+		check(_pose_distance(rest, _snapshot(m)) < 0.001, "%s windup(0) returns to rest" % kind)
 
-	if not NO_STRIKE.has(kind):
+	if not NO_STRIKE.has(kind) and not NO_TELL.has(kind):
 		m.attack_swing()
 		check(_pose_distance(rest, _snapshot(m)) > 0.2, "%s attack_swing snaps into a swing pose" % kind)
 		m.idle_enabled = true

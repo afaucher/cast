@@ -102,13 +102,18 @@ var sharks: Array[Dictionary] = []
 ## Spawned last of the actors (an acolyte leading its zombies, a second acolyte at the rear). [] on every other floor (and
 ## then left out of the checksum's plan part: NetFloor.PLAN_DEFAULTS).
 var processions: Array[Dictionary] = []
+## A haunted floor's ghosts and their hosts (haunted-build-plan.md, "H5 as built"; HauntPlanner): {kind: "armour" | "bones",
+## cell, pos: Vector2 (X/Z, against its wall), dir: Vector2 (the way it faces, into the room), room, ghost: bool (a ghost is in it
+## when the floor starts)}. Spawned after the processions (the hosts, then a Wisp in each possessed one). [] on every other floor
+## (and then left out of the checksum's plan part: NetFloor.PLAN_DEFAULTS).
+var haunts: Array[Dictionary] = []
 
 
 ## Who may write each var (see Net). SiteBuilder.plan() builds all of it from (run, floor) on
 ## every machine, so it is fixed once planned.
 func net_fields() -> Dictionary:
 	return {
-		"doors": Net.SPAWN, "sharks": Net.SPAWN, "processions": Net.SPAWN,
+		"doors": Net.SPAWN, "sharks": Net.SPAWN, "processions": Net.SPAWN, "haunts": Net.SPAWN,
 		"floor_number": Net.SPAWN, "start": Net.SPAWN, "exit": Net.SPAWN, "start_room": Net.SPAWN,
 		"exit_room": Net.SPAWN, "origin_room": Net.SPAWN, "rooms": Net.SPAWN, "centers": Net.SPAWN,
 		"base_levels": Net.SPAWN, "gates": Net.SPAWN, "employees": Net.SPAWN, "props": Net.SPAWN, "hazards": Net.SPAWN,

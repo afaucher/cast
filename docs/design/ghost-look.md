@@ -1,7 +1,9 @@
 # The ghost look: a visual test
 
-Status: **[look-dev only]**, 2026-10-28. Nothing here is in the game. No contract, floor, monster or network message uses it.
-The test exists in the gym (`--gym`) and in a look lab, and its job is to help the user decide how ghosts should look.
+Status: **[look-dev, 2026-10-28; the pick is the game's since H5]**. The test exists in the gym (`--gym`) and in a look lab, and
+its job was to help the user decide how ghosts should look. Since H5 (`haunted-build-plan.md`, "H5 as built") the game's ghosts
+wear the look the user picked (rim, soft, pale blue): the wisp (`WispModel`) and the possessed hosts (`HauntDress`). The test's
+own nodes (`GhostBody`) stay look-dev.
 
 The decision this serves (new-themes.md, "Ghost house: haunted contracts", Ghosts): ghosts should be **hard to see**, "a
 soft outline on whatever they possess", and **a visual test comes first** ("Lets make sure to do a visual test on this").

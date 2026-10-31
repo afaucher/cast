@@ -1,6 +1,8 @@
 # The haunt look: possessed hosts and ghost form (visual tests)
 
-Status: **[look-dev only]**, 2026-10-29. Nothing here is in the game. No contract, floor, monster or network message uses it.
+Status: **[look-dev, 2026-10-29; the possessed hosts' look is the game's since H5]**. Since H5 (`haunted-build-plan.md`, "H5 as
+built") the game's possessed suit of armour (`KnightModel`, now animated) and skeleton (`BonesModel`) wear the look picked here
+(the rim body, the vapour round it, "shell + seep": `HauntDress`); ghost form is still look-dev (H7).
 The tests exist in the gym (`--gym`) and in a look lab, and their job is to help the user decide how the haunted contract's
 hosts and the hero's ghost form should look.
 

@@ -15,7 +15,8 @@ extends "res://scripts/app/game.gd"
 ## --lava-floor --lava-pattern P --to-lava entry|far|isle --lava-perf (a generated floor's lava cave: docs/design/lava-playtest.md);
 ## and (CryptDev.parse) --crypt-floor --to-crypt head|foot|lit|dark --crypt-perf (a haunted floor's crypt: haunted-build-plan.md H2);
 ## and (ProcessionDev.parse) --to-procession [n] --procession-demo walk|raise|fight, --focus procession (a haunted floor's
-## processions: haunted-build-plan.md H4);
+## processions: haunted-build-plan.md H4); and (HauntDev.parse) --to-haunt [n] --haunt-demo fight|break, --focus haunt (a
+## haunted floor's ghosts in their hosts: H5);
 ## and --shot-seq N --shot-every K --shadow-mask --cam-drift x,z --walk-path x0,z0,x1,z1 (frame sequences for flicker hunts:
 ## _take_shot_later); and (GymDev.parse) --gym: the test gym (GymMap's floor and GymDev's panel, solo only:
 ## docs/design/test-gym.md), with --gym-tour <dir> and --gym-act <action> (one panel action as it opens, for screenshots).
@@ -37,6 +38,7 @@ func _parse_args() -> void:
 	LavaDev.parse(args, opts)
 	CryptDev.parse(args, opts)
 	ProcessionDev.parse(args, opts)
+	HauntDev.parse(args, opts)
 	var i := args.find("--shot-seq")
 	if i >= 0 and i + 1 < args.size():
 		opts["shot_seq"] = maxi(1, int(args[i + 1]))
@@ -190,6 +192,25 @@ func _procession_floor_ready() -> void:
 		ProcessionDev.demo(self, _site, pr, str(opts["procession_demo"]))
 
 
+## A haunted floor's ghosts (HauntDev): --to-haunt puts the crew near a possessed host (solo), --focus haunt follows it,
+## --haunt-demo stages it.
+func _haunt_floor_ready() -> void:
+	if _site == null or _site.hosts.is_empty():
+		return
+	var h := HauntDev.pick(_site, int(opts.get("to_haunt", 0)))
+	if h == null:
+		return
+	if opts.has("to_haunt") and not _shared:
+		var at := HauntDev.spot(map, h)
+		if at != HexMap.NO_CELL:
+			_teleport_crew(at)
+	if opts.get("focus", "") == "haunt":
+		rig.target = h
+		rig.snap()
+	if opts.has("haunt_demo"):
+		HauntDev.demo(self, h, str(opts["haunt_demo"]))
+
+
 ## A generated floor's lava cave (LavaDev): --to-lava puts the crew there (solo), --lava-perf measures its lights.
 func _lava_floor_ready() -> void:
 	if map == null or map.cave.is_empty() or _lava_cave() > 0:
@@ -245,6 +266,7 @@ func _dev_on_floor_ready() -> void:
 	_lava_floor_ready()
 	_crypt_floor_ready()
 	_procession_floor_ready()
+	_haunt_floor_ready()
 	if _sewer() > 0 and opts.has("sewer_demo"):
 		_sewer_demo(str(opts["sewer_demo"]))
 	if opts.has("tour"):

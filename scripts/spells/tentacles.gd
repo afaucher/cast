@@ -95,8 +95,11 @@ func _physics_process(_delta: float) -> void:
 		queue_free()
 
 
-## True when `a` (its body included) is inside the oval, on floor the centre reaches.
+## True when `a` (its body included) is inside the oval, on floor the centre reaches. Never a ghost: the tentacles are physical
+## and pass through a wisp (the user's pick, new-themes.md "Ghosts"); they shove and smash the hosts it possesses.
 func covers(a: Actor) -> bool:
+	if a.is_in_group(Wisp.GROUP):
+		return false
 	return in_oval(a.global_position, global_position, aim, depth(), width(), a.radius) 			and reaches(GameWorld.map, global_position, a.global_position)
 
 

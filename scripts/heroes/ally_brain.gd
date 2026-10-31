@@ -388,8 +388,8 @@ func _pick_eager(anchor: Vector3, reach: float) -> Actor:
 	var best: Actor = null
 	var best_d := INF
 	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
-		if GameWorld.flat_distance(m.global_position, anchor) > reach:
-			continue
+		if GameWorld.flat_distance(m.global_position, anchor) > reach or (m is Monster and (m as Monster).is_dormant()):
+			continue   # (a dormant host, H5: an antique, not a foe)
 		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
 		if d < best_d:
 			best_d = d
@@ -405,8 +405,8 @@ func _pick_free(anchor: Vector3, reach: float) -> Actor:
 	var best: Actor = null
 	var best_d := INF
 	for m in GameWorld.team_actors(GameWorld.TEAM_MONSTERS):
-		if GameWorld.flat_distance(m.global_position, anchor) > reach:
-			continue
+		if GameWorld.flat_distance(m.global_position, anchor) > reach or (m is Monster and (m as Monster).is_dormant()):
+			continue   # (a dormant host, H5: an antique, not a foe)
 		var d := GameWorld.flat_distance(m.global_position, hero.global_position)
 		if m is Monster and (m as Monster).is_priority_target():
 			d -= PRIORITY_BONUS

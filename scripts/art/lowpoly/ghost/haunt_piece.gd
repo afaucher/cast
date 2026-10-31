@@ -2,7 +2,8 @@ class_name HauntPiece
 extends Node3D
 ## LOOK-DEV ONLY (docs/design/haunt-look.md): the hosts a ghost possesses (new-themes.md "Ghost house"), dormant and
 ## possessed, as plain cosmetic nodes: not an Actor, no HP, no AI, no collision, nothing networked. The gym spawns them
-## ("haunt: ...", GymSpawns "haunt") and the haunt look lab poses them. Nothing in the game makes one.
+## ("haunt: ...", GymSpawns "haunt") and the haunt look lab poses them. Nothing in the game makes one; the game's possessed
+## hosts (H5: KnightModel, BonesModel, dressed by HauntDress) take its vapour shader, its puffs and its slumped pose from here.
 ##   armour_dormant    the suit of armour (ArmourModel "dormant") as a priced prop: the props' material and ink outline
 ##   armour_guard      possessed, still on its plinth, the sword raised point-up in both hands (ArmourModel "guard")
 ##   armour_lurch      possessed, stepped off the plinth onto the floor, hunched forward, reaching (ArmourModel "lurch")

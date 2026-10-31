@@ -50,7 +50,10 @@ floor; the host stands it up (`Actor.revive`: coffee) or burns it (`Actor.burn_b
 host-arbitrated object a segment at a time (`EctoSlick`: `obj.new`, washed by the host's `obj.slick`; its slow is LOCAL from the
 segments every screen has, like goo), and a late joiner gets the live segments ("H3b as built"). Haunted floors 1-2 have
 processions (`Procession`, "H4 as built"): a host-owned group whose route and file are PRIVATE to the host; its acolytes and
-zombies are host monsters on the stream, and an acolyte's raise is its wind-up (`world.windup`) plus the body's `world.rise`. A debug
+zombies are host monsters on the stream, and an acolyte's raise is its wind-up (`world.windup`) plus the body's `world.rise`. Haunted floors have ghosts in hosts (`Wisp`,
+`HauntHost`, "H5 as built"): seed-built host monsters; a dormant host has no AI, and who possesses what (`Wisp.host`,
+`HauntHost.ghost`) is written on the host's machine only and carried by `world.haunt`, in order with the host's break (`world.die`);
+a late joiner gets each ghost in its host or out (`NetWorld.haunt_states`). A debug
 guard raises a script error when anything but the net layer writes a copy's `hp`/`dead` (`Net.guard_write`). M7 (polish) is
 built locally; the two-PC Steam sign-off is `docs/design/steam-playtest-checklist.md`. Steam's overlay invites ask first in a
 job (`Session.invite_received` -> "Leave this job and join?"), "Invite crew" is on the job board and the pause form

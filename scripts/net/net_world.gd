@@ -50,6 +50,11 @@ extends Node
 ## burns is `world.burn {id}` (the charred look). Both go through the death queue on the host's beat, in order with the
 ## deaths. A late joiner gets every body where it lies, burnt or not, in its snapshot (body_states / apply_bodies).
 ##
+## GHOSTS (haunted-build-plan.md H5, "H5 networking": a Wisp possesses a HauntHost): who possesses what is `world.haunt {id: the
+## wisp, h: its host or 0, x, y, z}` from the host on every possession and ejection (the wisp's haunt_changed), through the death
+## queue on the host's beat, in order with the host's break (world.die); a client puts its wisp in or out (Wisp.net_haunt). A late
+## joiner gets every living wisp's host in its snapshot (haunt_states / apply_haunts).
+##
 ## The game calls begin() at the floor's barrier (after NetFloor.assign_ids and freeze_copies) and set_active() with
 ## the hero sync (NetSnapshot.set_active). Nothing here knows about game.gd.
 
@@ -238,6 +243,9 @@ func _track(id: int, n: Actor, kind: int) -> void:
 			# a body that stays down (a zombie, haunted-build-plan.md H3): it stands back up (world.rise) and burns (world.burn)
 			_link(n.revived, _on_rise.bind(id))
 			_link(Signal(n, "burnt_down"), _on_burn.bind(id))
+		if n.has_signal("haunt_changed"):
+			# a ghost (H5): it got into a host or was thrown out of one (world.haunt)
+			_link(Signal(n, "haunt_changed"), _on_haunt.bind(id))
 
 
 func _show(id: int, n: Actor, kind: int) -> void:
@@ -717,6 +725,39 @@ func _on_burn(id: int) -> void:
 	stats["burns"] = int(stats.get("burns", 0)) + 1
 
 
+## Host: a ghost got into a host (`to`) or was thrown out of one (null): every screen puts it in or out on the host's beat
+## (world.haunt {id, h, x, y, z}: where it is, so a client shows it popping out where the host broke).
+func _on_haunt(to: Node, id: int) -> void:
+	var n := NetRegistry.node(id) as Node3D
+	var p := n.global_position if n != null else Vector3.ZERO
+	_flush_spawns()
+	_send("world.haunt", {"id": id, "h": NetFloor.id_of(to) if to != null and is_instance_valid(to) else 0, "x": p.x, "y": p.y, "z": p.z})
+	stats["haunts"] = int(stats.get("haunts", 0)) + 1
+
+
+## Host: every living ghost and the host it is in (0: free), for a late joiner: [[id, host id, x, y, z]].
+func haunt_states() -> Array:
+	var out: Array = []
+	for id: int in _tracks:
+		var tr: Track = _tracks[id]
+		if is_instance_valid(tr.node) and not tr.node.dead and tr.node.has_method("net_haunt"):
+			var h: Variant = tr.node.get("host")
+			var p := tr.node.global_position
+			out.append([id, NetFloor.id_of(h) if h != null and is_instance_valid(h) else 0, p.x, p.y, p.z])
+	return out
+
+
+## The late joiner: each ghost in its host or out where the host has it (haunt_states).
+func apply_haunts(list: Array) -> void:
+	for e: Variant in list:
+		var row := e as Array
+		if row == null or row.size() < 5:
+			continue
+		var n := NetRegistry.node(int(row[0]))
+		if n != null and n.has_method("net_haunt") and not (n as Actor).dead:
+			n.call("net_haunt", NetRegistry.node(int(row[1])) if int(row[1]) != 0 else null, Vector3(float(row[2]), float(row[3]), float(row[4])))
+
+
 ## Host: every body lying on the floor (a downed zombie, burnt or not), for a late joiner: [[id, kind, x, y, z, yaw, burnt]].
 ## A seed-built one is also a gone id shown dead (NetJoin.gone_ids); a runtime one the joiner builds from its row.
 func body_states() -> Array:
@@ -832,6 +873,9 @@ func _on_event(from: int, kind: String, data: Dictionary, stamp: float) -> void:
 		"world.rise", "world.burn":
 			# a body's (H3): in line with its death, on the beat the host stamped (_apply_deaths keeps one actor's in order)
 			_deaths.append([int(data.get("id", 0)), stamp, _now(), "rise" if kind == "world.rise" else "burn", data])
+		"world.haunt":
+			# a ghost in or out of a host (H5): in line with the host's break, on the beat the host stamped
+			_deaths.append([int(data.get("id", 0)), stamp, _now(), "haunt", data])
 		"world.windup":
 			_windups[int(data.get("id", 0))] = [float(data.get("s", stamp)) + float(data.get("l", 0.0)), int(data.get("v", 0))]
 			stats["windups"] = int(stats["windups"]) + 1
@@ -1031,6 +1075,8 @@ func _apply_deaths(t_r: float, now: float) -> void:
 					_rise(id, d[4] as Dictionary)
 				"burn":
 					_burn(id)
+				"haunt":
+					_haunt(id, d[4] as Dictionary)
 				_:
 					_die(id)
 		else:
@@ -1049,6 +1095,17 @@ func _rise(id: int, data: Dictionary) -> void:
 	_show(id, n, _kind_of(n))
 	n.reset_physics_interpolation()
 	stats["rises"] = int(stats.get("rises", 0)) + 1
+
+
+## A ghost the host put in a host or threw out of one (world.haunt): the same here (Wisp.net_haunt).
+func _haunt(id: int, data: Dictionary) -> void:
+	var n := NetRegistry.node(id)
+	if n == null or not n.has_method("net_haunt") or (n as Actor).dead:
+		return
+	var h := int(data.get("h", 0))
+	n.call("net_haunt", NetRegistry.node(h) if h != 0 else null, Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0))))
+	(n as Node3D).reset_physics_interpolation()
+	stats["haunts"] = int(stats.get("haunts", 0)) + 1
 
 
 ## A body the host burnt (world.burn): charred here too.

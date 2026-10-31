@@ -95,6 +95,9 @@ Sewer clusters and lava caves already mix sections into a floor; a site type bec
 - **Breaking a possessed antique bills the crew; bones do not** [decided, 2026-10-31]. The user: "Breaking a possessed
   antique[:] it [bills] the crew. But bones don't count." A suit of armour (or any priced antique) goes on the invoice as
   property damage when it breaks, possessed or not; a possessed skeleton is free to smash.
+- **Built 2026-10-31** with calls to revisit (haunted-build-plan.md, "H5 networking" and "H5 as built"): ghosts (`Wisp`) in suits of
+  armour and skeletons (`HauntHost`) on every haunted floor, host monsters from spawn (no new networking shape: possession is one
+  world event); the possessed knight animated; the priced suit stays a plain antique beside the armour hosts, which look the same.
 - **Later (a big build):** "I like the idea of ghost mode after you normally die though. That is a huge extra build so
   later." A downed hero would roam as a ghost.
 

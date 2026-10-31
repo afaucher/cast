@@ -202,6 +202,44 @@ func _rat_clumps(tag: String, site: SiteBuilder.Site) -> void:
 		check(clump.size() <= 6, "%s: a rat clump is at most 6 (%d)" % [tag, clump.size()])
 
 
+## H5: the floor's ghosts in their hosts (HauntPlanner): the floor's ghosts, each in a possessed host from the start; a dormant
+## host or more besides; armour only in the mansion's house rooms (the church's and the crypt's are bones); never in the start,
+## arrival or exit room; against a wall, apart from each other.
+func _haunts(tag: String, run: ContractRun, f: int, map: HexMap, plan: SitePlan, site: SiteBuilder.Site) -> void:
+	var want := HauntPlanner.wisps_on(run, f)
+	check(want > 0, "%s: a haunted floor has ghosts" % tag)
+	eq(site.hosts.size(), plan.haunts.size(), "%s: every planned host spawned" % tag)
+	check(plan.haunts.size() > want, "%s: more hosts than ghosts (%d for %d)" % [tag, plan.haunts.size(), want])
+	eq(site.wisps.size(), mini(want, plan.haunts.size()), "%s: the floor's ghosts (%d)" % [tag, want])
+	var crypt: Array = map.crypt.get("rooms", [])
+	var possessed := 0
+	for i in plan.haunts.size():
+		var rec: Dictionary = plan.haunts[i]
+		var h := site.hosts[i]
+		eq(h.kind, str(rec["kind"]), "%s: host %d is its planned kind" % [tag, i])
+		if str(rec["kind"]) == "armour":
+			check(run.site_type == "mansion" and not crypt.has(str(rec["room"])), "%s: armour only in the mansion's house rooms" % tag)
+		check(str(rec["room"]) != plan.start_room and str(rec["room"]) != plan.exit_room and str(rec["room"]) != SiteBuilder.arrival_room(plan), "%s: no host in the start, arrival or exit room" % tag)
+		var walls := 0
+		for d in Hex.DIRS:
+			var nb := map.get_cell((rec["cell"] as Vector2i) + d)
+			if nb == null or nb.type == HexMap.Tile.WALL or nb.wall_mask != 0:
+				walls += 1
+		var face := map.nearest_wall(h.global_position, 2.0)
+		check(walls >= 2 and not face.is_empty() and float(face["dist"]) < 1.3, "%s: host %d against a wall (%s)" % [tag, i, str(face.get("dist", -1.0))])
+		check(map.is_walkable_cell(h.current_cell()), "%s: host %d on a full floor cell" % [tag, i])
+		for j in range(i + 1, plan.haunts.size()):
+			check(Hex.distance(rec["cell"], plan.haunts[j]["cell"]) >= HauntPlanner.APART, "%s: hosts %d and %d apart" % [tag, i, j])
+		if bool(rec["ghost"]):
+			possessed += 1
+			check(h.is_possessed() and h.ghost != null and (h.ghost as Wisp).host == h, "%s: host %d has its ghost in it" % [tag, i])
+		else:
+			check(h.is_dormant() and not h.is_in_group("monsters"), "%s: host %d is dormant" % [tag, i])
+	eq(possessed, site.wisps.size(), "%s: one possessed host a ghost" % tag)
+	for w in site.wisps:
+		check(not w.visible and not w.is_in_group("actors"), "%s: a ghost in its host is hidden, out of every query" % tag)
+
+
 ## One floor of a haunted contract, built as the game builds it (test_golden_floor's way), twice.
 func _check_floor(id: String, s: int, f: int) -> void:
 	var tag := "%s/%d floor %d" % [id, s, f]
@@ -243,6 +281,7 @@ func _check_floor(id: String, s: int, f: int) -> void:
 			check(GameWorld.flat_distance(pr.zombies[i].global_position, want) < 0.05, "%s: zombie %d stands in file behind the leader" % [tag, i])
 		var back: Vector3 = pr.trail.point(pr.trail.head_arc() - Procession.GAP * float(Procession.FILE + 1))["pos"]
 		check(GameWorld.flat_distance(pr.acolytes[1].global_position, back) < 0.05 and lead.distance_to(back) > Procession.GAP, "%s: the rear acolyte at the back" % tag)
+	_haunts(tag, run, f, map, plan, site)
 	_rat_clumps(tag, site)
 	print("  %s: %d monsters %s, %d acolytes in %d processions, pest %s" % [tag, site.monsters.size(), str(kinds), site.acolytes.size(), site.processions.size(), run.pest])
 	totals[tag] = kinds

@@ -123,7 +123,7 @@ func _build_wisp() -> void:
 
 ## The head: a faceted dome drawn up to a soft point at the back, with two dark eye hollows and a small round mouth on its
 ## front (-Z), tipped up a little so the steep game camera sees the face.
-func _head_soup() -> LowPoly.Soup:
+static func _head_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(601, 0.04)
 	MonsterModel.blob(s, Vector3.ZERO, Vector3(0.27, 0.31, 0.27), WISP_COLOUR, 602, 0.08, 1)
 	s.merge(LowPoly.cylinder(0.18, 0.0, 0.26, 6, WISP_COLOUR, 603, 0.02), LowPoly.at(Vector3(0, 0.26, 0.10), Vector3(35.0, 0, 0)))

@@ -8,7 +8,9 @@ extends RefCounted
 ##            `skip` (the reason) and no button. The zombie also has "Zombie (body)" (id monster:zombie:body): one that goes
 ##            down as it lands, a body to raise with coffee or burn with a fireball (haunted-build-plan.md H3); the acolyte has
 ##            "Procession" (id monster:acolyte:procession): a live one, an acolyte, its zombies and a rear acolyte walking a loop
-##            round where it is put (ProcessionPlanner.build, haunted-build-plan.md H4)
+##            round where it is put (ProcessionPlanner.build, haunted-build-plan.md H4); the ghosts' hosts (H5) are "Armour" and
+##            "Bones" (dormant: a free "Wisp" nearby flies into one) and "Armour (possessed)" / "Bones (possessed)" (id
+##            monster:<kind>:possessed: a wisp gets in as it lands and it wakes)
 ##   dummy   TrainingDummy: a static post and a walker, both with DUMMY_HP
 ##   prop     every PricedProp.TABLE kind that is not an explosive (an electrical panel brings its live wire by water)
 ##   hazard   every explosive kind (PricedProp.hazard_kinds())
@@ -54,6 +56,8 @@ static func entries() -> Array[Dictionary]:
 				out.append(_e("monster", kind, "Zombie (body)", {"id": "monster:zombie:body", "body": true}))
 			elif kind == "acolyte":
 				out.append(_e("monster", kind, "Procession", {"id": "monster:acolyte:procession", "procession": true}))
+			elif kind == "armour" or kind == "bones":
+				out.append(_e("monster", kind, "%s (possessed)" % kind.capitalize(), {"id": "monster:%s:possessed" % kind, "possessed": true}))
 		elif kind == "shark":
 			for v: String in (row.get("billed", {"regular": {}}) as Dictionary):
 				out.append(_e("monster", kind, "Shark (%s)" % v, {"variant": v, "id": "monster:shark:" + v}))
@@ -137,6 +141,10 @@ static func spawn(e: Dictionary, at: Vector3, n: int, site: SiteBuilder.Site, ru
 						out.append(m)
 						if bool(e.get("body", false)):
 							m.die()   # (a zombie's body: down where it stands, H3; coffee or a fireball on it in the gym)
+						elif bool(e.get("possessed", false)) and m is HauntHost:
+							var w := HauntPlanner.build_wisp(m as HauntHost, false)   # (a ghost gets in: it wakes, H5)
+							if w != null:
+								out.append(w)
 		"dummy":
 			for c in cells_near(map, at, n, 1):
 				var d := TrainingDummy.new()

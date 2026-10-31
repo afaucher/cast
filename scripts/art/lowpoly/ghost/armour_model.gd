@@ -3,7 +3,8 @@ extends LowPolyModel
 ## A suit of armour on its stand (docs/design/ghost-look.md), the haunted mansion's antique that a ghost possesses
 ## (new-themes.md "Ghost house"). It stands still and it is not a monster. The game shows it dormant as the mansion's priced
 ## "Suit of armour" (PricedProp, PropModels._suit_of_armour; haunted-build-plan.md H1); GhostBody and HauntPiece put it in
-## the gym and the look labs, possessed (H5 makes that the game's). It holds one of STANCES
+## the gym and the look labs, possessed. The game's possessed suit (H5, ArmourHost) is KnightModel, built from these same
+## soups (static), animated. It holds one of STANCES
 ## (pose(): dormant, and the two possessed stances of the haunt look test, docs/design/haunt-look.md).
 ##
 ## The house look: a few big faceted masses (frustum plates, jittered blobs), tarnished steel in three values, one faded
@@ -144,7 +145,7 @@ func _lay_sword(grip: Vector3, to_point: Vector3) -> void:
 
 
 ## A round wooden plinth.
-func _stand_soup() -> LowPoly.Soup:
+static func _stand_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(401, 0.05)
 	s.merge(LowPoly.cylinder(0.46, 0.43, STAND_H * 0.6, 8, WOOD_DARK, 402, 0.0), LowPoly.at(Vector3(0, STAND_H * 0.3, 0)))
 	s.merge(LowPoly.cylinder(0.40, 0.38, STAND_H * 0.4, 8, WOOD, 403, 0.0), LowPoly.at(Vector3(0, STAND_H * 0.8, 0)))
@@ -153,7 +154,7 @@ func _stand_soup() -> LowPoly.Soup:
 
 ## The torso: faulds (a flared skirt of three lames), a belt at a narrow waist, a broad breastplate with its ridge, a
 ## gorget, big domed pauldrons with two lames each and the faded tabard down the front.
-func _body_soup() -> LowPoly.Soup:
+static func _body_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(411, 0.06)
 	for i in 3:
 		var y := -0.05 - 0.085 * i
@@ -177,7 +178,7 @@ func _body_soup() -> LowPoly.Soup:
 
 ## A great helm: a tall flat-topped barrel, a dark eye slit across the front split by a brass ridge, a brass brow band,
 ## breaths, and a crimson plume arcing back off the flat top.
-func _head_soup() -> LowPoly.Soup:
+static func _head_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(431, 0.06)
 	s.merge(LowPoly.cylinder(0.18, 0.17, 0.40, 8, STEEL, 432, 0.006), LowPoly.at(Vector3(0, 0.20, 0)))
 	s.merge(LowPoly.cylinder(0.17, 0.14, 0.04, 8, STEEL_LIGHT, 433), LowPoly.at(Vector3(0, 0.42, 0)))   # the flat top
@@ -196,7 +197,7 @@ func _head_soup() -> LowPoly.Soup:
 
 
 ## A leg hanging from the hip: cuisse, knee cop with its fan, greave, sabaton.
-func _leg_soup(side: int) -> LowPoly.Soup:
+static func _leg_soup(side: int) -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(451 + side, 0.06)
 	MonsterModel.limb(s, Vector3(0, -0.02, 0), Vector3(0, -0.42, -0.01), 0.10, 0.08, 6, STEEL, 452 + side)
 	MonsterModel.blob(s, Vector3(0, -0.47, -0.03), Vector3(0.095, 0.085, 0.10), STEEL_LIGHT, 454 + side, 0.1)
@@ -208,7 +209,7 @@ func _leg_soup(side: int) -> LowPoly.Soup:
 
 
 ## An arm hanging from the shoulder (local -Y): rerebrace, couter, vambrace, gauntlet.
-func _arm_soup(side: int) -> LowPoly.Soup:
+static func _arm_soup(side: int) -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(471 + side, 0.06)
 	MonsterModel.limb(s, Vector3(0, 0.0, 0), Vector3(0, -0.30, 0), 0.08, 0.07, 6, STEEL, 472 + side)
 	MonsterModel.blob(s, Vector3(0, -0.33, 0.02), Vector3(0.085, 0.08, 0.09), STEEL_LIGHT, 474 + side, 0.12)
@@ -219,7 +220,7 @@ func _arm_soup(side: int) -> LowPoly.Soup:
 
 ## The sword, point-down from the plinth: a broad pale blade with a dark fuller, a wide brass crossguard, a leather grip
 ## for both hands and a brass pommel.
-func _sword_soup() -> LowPoly.Soup:
+static func _sword_soup() -> LowPoly.Soup:
 	var s := LowPoly.Soup.new(491, 0.05)
 	var guard := SWORD_GRIP - STAND_H - 0.12
 	MonsterModel.wedge(s, Vector3(0, 0.0, 0), Vector2(0.02, 0.02), Vector2(0.12, 0.03), 0.12, STEEL_LIGHT, 492)              # the point

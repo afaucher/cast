@@ -276,7 +276,7 @@ func _apply_contents() -> void:
 	if _contents_dirty:
 		_contents_dirty = false
 		for n in _static:
-			if is_instance_valid(n):
+			if is_instance_valid(n) and not n.is_in_group("monsters"):   # (a ghost's host once possessed: a mover, above)
 				_show(n, not enabled or fog.shows_static(n.global_position))
 		for d in _doors:
 			if is_instance_valid(d):

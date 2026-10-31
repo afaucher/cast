@@ -14,8 +14,8 @@ func setup() -> void:
 	eq(MonsterFactory.KINDS, ["grunt", "archer", "brute", "swarmer", "pavise", "water_boy", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the pack kinds, in the pack roll's order")
 	eq(MonsterFactory.COSTS, {"grunt": 2, "archer": 3, "brute": 6, "swarmer": 4, "pavise": 4, "water_boy": 3, "zombie": 3, "crypt_rat": 6, "ecto_blob": 3}, "pack costs")
 	eq(MonsterFactory.WEIGHTS, {"grunt": 5.0, "archer": 3.0, "brute": 1.5, "swarmer": 2.5, "pavise": 0.75, "water_boy": 2.0, "zombie": 5.0, "crypt_rat": 1.0, "ecto_blob": 1.5}, "pack weights")
-	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte"], "the factory builds the kinds with a model")
-	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte"] as Array[String], "the modelled kinds")
+	eq(MonsterFactory.SCRIPTS.keys(), ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte", "armour", "bones", "wisp"], "the factory builds the kinds with a model")
+	eq(MonsterModels.KINDS, ["grunt", "archer", "brute", "swarmer", "goblin", "pavise", "water_boy", "goo_imp", "zombie", "crypt_rat", "ecto_blob", "acolyte", "armour", "bones", "wisp"] as Array[String], "the modelled kinds")
 	eq(MonsterDefs.is_swarm("swarmer"), true, "imps come in a swarm")
 	eq(MonsterDefs.is_swarm("grunt"), false, "a grunt doesn't")
 	eq(ClientArchetype.PEST_NAMES, {"grunt": "skeletons", "archer": "archers", "brute": "brutes", "swarmer": "imps", "zombie": "zombies", "everything": "everything"}, "pest names")
@@ -95,6 +95,14 @@ func setup() -> void:
 	# ... and H4's acolyte: the dead family's, but never dealt into a pack (only a procession brings it), never a pest
 	eq(MonsterDefs.family_of("acolyte"), "dead", "the acolyte is the dead family's own")
 	check(not MonsterDefs.row("acolyte").has("pack") and not MonsterDefs.pest_names().has("acolyte"), "the acolyte is no pack kind and no pest")
+	# ... and H5's ghosts and their hosts: the dead family's, seed-built (HauntPlanner), never a pack kind or a pest; the suit of
+	# armour bills as the priced suit does, the bones bill nothing
+	for k in ["armour", "bones", "wisp"]:
+		eq(MonsterDefs.family_of(k), "dead", "%s is the dead family's own" % k)
+		check(not MonsterDefs.row(k).has("pack") and not MonsterDefs.pest_names().has(k), "%s is no pack kind and no pest" % k)
+	eq(MonsterDefs.prices("armour"), {"regular": PricedProp.price_of("suit_of_armour")}, "a suit of armour bills the priced suit's price")
+	eq(MonsterDefs.bill_names("armour"), {"regular": PricedProp.name_of("suit_of_armour")}, "... under its name")
+	check(MonsterDefs.prices("bones").is_empty(), "bones bill nothing")
 	var dead_kinds := ClientArchetype.family_kinds(ClientArchetype.FAMILY_DEAD)
 	eq(dead_kinds, ["grunt", "zombie", "crypt_rat", "ecto_blob"] as Array[String], "the dead family's kinds")
 	var dealt := {}

@@ -1,8 +1,10 @@
 class_name GhostLook
 extends RefCounted
-## LOOK-DEV ONLY (docs/design/ghost-look.md): the ghost look the user asked to see before anything is built ("hard to see:
-## a soft outline on whatever they possess", new-themes.md "Ghost house"). Nothing in the game, the contracts or the
-## network uses it: only the gym's ghost spawns (GhostBody, GymSpawns "ghost") and the look lab (ghost_look_lab.gd).
+## The ghost look (docs/design/ghost-look.md), the look test the user asked to see before anything was built ("hard to see:
+## a soft outline on whatever they possess", new-themes.md "Ghost house"). The look test's gym spawns (GhostBody, GymSpawns
+## "ghost") and lab (ghost_look_lab.gd) use all three looks; since H5 (haunted-build-plan.md, "H5 as built") the game's ghosts
+## wear the one the user picked, rim, at the default strength and colour: the possessed hosts' body (HauntDress) and the
+## wisp (WispModel). Cosmetic only: nothing here is networked.
 ##
 ## Three switches, live on every GhostBody in the tree (the gym panel's Experiments rows "Ghost look", "Ghost strength",
 ## "Ghost colour"; GymDev.set_experiment -> pick):

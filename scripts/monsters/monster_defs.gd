@@ -124,6 +124,20 @@ const DEFS := {
 		## a fireball keeps what it raises down
 		"drops": [{"spells": ["fireball"], "chance": 0.25}, {"spells": ["heal"], "chance": 0.10}],
 	},
+	"armour": {   ## a suit of armour a ghost can possess (haunted-build-plan.md H5): seed-built by HauntPlanner, never in a pack
+		"script": "res://scripts/monsters/armour_host.gd", "model": "res://scripts/art/lowpoly/ghost/knight_model.gd", "tris": 1300,
+		"family": "dead",
+		## the priced suit's (PricedProp "suit_of_armour"): breaking one bills the crew, possessed or not
+		"billed": {"regular": {"price": 6000, "name": "Suit of armour"}},
+	},
+	"bones": {   ## a skeleton a ghost can possess (H5): seed-built by HauntPlanner; free to smash (no bill)
+		"script": "res://scripts/monsters/bones_host.gd", "model": "res://scripts/art/lowpoly/ghost/bones_model.gd", "tris": 1100,
+		"family": "dead",
+	},
+	"wisp": {   ## a ghost (H5): seed-built inside its first host by HauntPlanner; it moves between hosts, never in a pack
+		"script": "res://scripts/monsters/wisp.gd", "model": "res://scripts/art/lowpoly/ghost/wisp_model.gd", "tris": 400,
+		"family": "dead",
+	},
 }
 
 ## The hellgate roll walks its kinds in this order (a different order would spawn different kinds for the same roll).

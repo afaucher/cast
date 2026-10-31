@@ -413,6 +413,12 @@ var REPLICATED := {
 	# the haunted contracts' acolyte (haunted-build-plan.md H4): a plain monster (its raise is a wind-up; the body's rise is the
 	# zombie's world.rise). Its procession is not replicated (no OWNER var: the host's group; NET_SCRIPTS declares it)
 	"res://scripts/monsters/acolyte.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES[MONSTER_PATH], 5],
+	# the haunted contracts' ghosts and their hosts (haunted-build-plan.md H5, "H5 networking"): monster-format entries; who
+	# possesses what is world.haunt (Wisp.host, HauntHost.ghost)
+	"res://scripts/monsters/haunt_host.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/haunt_host.gd"], 5],
+	"res://scripts/monsters/armour_host.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/armour_host.gd"], 5],
+	"res://scripts/monsters/bones_host.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/bones_host.gd"], 5],
+	"res://scripts/monsters/wisp.gd": [NetWorldCodec.MONSTER_FIELDS, NetEvents.WORLD_CARRIES["res://scripts/monsters/wisp.gd"], 5],
 }
 
 

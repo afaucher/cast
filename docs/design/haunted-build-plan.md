@@ -1,7 +1,7 @@
 # Haunted contracts: build plan
 
-Status: **[proposal; H1, H2, H3, H3b and H4 built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built", "H3b as built"
-and "H4 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
+Status: **[proposal; H1, H2, H3, H3b, H4 and H5 built 2026-10-31, see "H1 as built", "H2 as built", "H3 as built", "H3b as
+built", "H4 as built" and "H5 as built"]**. The design is `new-themes.md` ("Ghost house: haunted contracts"); this is the order to
 build it in. The user (2026-10-31): "Let's build it as is" (today's roster; more enemy types are worked out in parallel).
 
 Today none of it is game code: the mansion and church rooms, the crypt, the zombies, acolytes, ghosts, hosts and the
@@ -78,7 +78,39 @@ The user (2026-10-31, "Yes"): the two crypt pests of the look test (`docs/design
   host hurts it and sends it to the next host. Tentacles pass through ghosts. The soft outline is cosmetic per machine (the
   look the user picks from `ghost-look.md`). **To revisit here:** the possessed knight, animated.
 - Networking: a dormant, priced host monster with a possessed state is a new shape ("a prop turning into a monster fits
-  no shape yet"): designed and written up before it is built.
+  no shape yet"): designed and written up before it is built. Designed: "H5 networking" below.
+
+#### H5 networking (the design, written before the code, 2026-10-31)
+Checked against the code, possession needs **no new shape**: nothing turns from a prop into a monster.
+- **A host is an owned actor from spawn**: a host monster (`HauntHost`, the kinds `armour` and `bones`), seed-built like the
+  procession's members (planned on its own dice by `HauntPlanner`, `SitePlan.haunts`, spawned after the processions so no
+  earlier net id moves). Its team is the monsters' (SPAWN, as every monster's). DORMANT it has no AI, is out of the
+  "monsters" group (no pest count, the staff are not scared of it, no shout or noise wakes it, a chicken leaves it) and the
+  AI allies leave it alone (`Monster.is_dormant`), but the crew can still hit it: it is the client's property.
+- **A ghost is an owned actor too**: a host monster (`Wisp`, kind `wisp`), seed-built inside its first host. Who possesses
+  what is one OWNER link on each side, `Wisp.host` and `HauntHost.ghost`, written on the host's machine only (the wisp's
+  possess and eject; the host's own `take_ghost`), carried by ONE reliable world event, `world.haunt {id: the wisp, h: its
+  host or 0, x, y, z}`, queued with the deaths so a client applies it on the host's beat and in order with the host's break
+  (`world.die`). Inside a host the wisp is hidden on every machine and out of "actors" and "monsters" (no query finds it:
+  nothing hits it), and the host's machine keeps it on its host (its stream entry moves with the host, so it pops out where
+  the host broke).
+- **The break**: on the host's machine a possessed host's death (`world.die`) ejects its wisp (`world.haunt` h 0) and hurts it
+  through the verb (`apply_damage`, the culprit as the source; the wisp's owner is the same machine). The wisp's flight to
+  the next dormant host, its keep-away and its pick are the host's AI (PRIVATE). A possession is `world.haunt` again.
+- **Billing** is the shark's and the gator's (billed monsters): the owner bills on death, `Ledger.damage(name, price,
+  culprit)`, and every client's Ledger mirrors it. The armour's row is `MonsterDefs` "billed" at the priced suit's price; the
+  bones have none.
+- **The priced suit of armour (H1) stays a PricedProp**: a plain antique, a host-arbitrated object, never possessed. The armour
+  hosts are separate actors that look exactly like it while dormant (the same model, material and price tag), so a haunted
+  antique sits among the real ones unnoticed until it moves. Converting the planned priced suits instead was rejected: it
+  would move PropPlanner's spawns into another shape and change H1's plan.
+- **Cosmetic, per machine (LOCAL)**: the possessed look (the rim, the ghost's vapour body and seep, the wisp's light), the
+  wake, the left-behind plinth and the rubble, from the possession state every machine has.
+- **Tentacles pass through a wisp**: physical only (`Tentacles.covers` is false for one); they shove and smash the hosts.
+- **A late joiner**: the keyframe (every living host and wisp: where, HP, state), the gone ids (a broken host and a dead
+  wisp are freed), and `haunts` rows `[wisp id, host id or 0]` (`NetWorld.haunt_states`): each wisp put in its host or out.
+- **The checksum**: `SitePlan.haunts` in the plan part (left out at `[]`, `NetFloor.PLAN_DEFAULTS`), the hosts and wisps in
+  the spawn part; bunker and lair floors plan none, so they hash as before.
 
 ### H6. The grimoire and the haunted invoice
 - The last floor's source: a `Grimoire` actor in the hellgate's shape (tuning by difficulty and depth, phases, bursts of
@@ -737,3 +769,165 @@ which now has the processions' zombies, plus 2 or 4 acolytes); floor 3 is as in 
 - The H3 decision still open: whether Heal raises zombies.
 - Twice in about twenty screenshot runs with `--procession-demo` the game exited with code 255 (once before its screenshot); eight
   more runs of the same commands exited cleanly, and plain haunted runs never did. Not tracked down: watch for it.
+
+## H5 as built (2026-10-31)
+
+The user (2026-10-31), as for H1-H4: "Just build it now. We can revisit the decisions after it's built." Every open call below
+was made on the spot, the simplest sound choice, and is listed to revisit. The networking was designed first ("H5 networking"
+under H5 above) and built as designed. **To revisit (the user): the possessed knight animated** ("I'll want to see it animated"):
+it walks, winds up and strikes now; see "Play it" and the screenshots.
+
+### Play it
+
+```
+.\run.ps1 --client heir --seed 3 --floor 1 --spells coffee,fireball --no-mic --to-haunt 0 --focus haunt --zoom 9
+         # the crew beside a possessed suit of armour (the camera on it); it sees the crew and comes
+.\run.ps1 --client heir --seed 3 --floor 1 --spells coffee,fireball --no-mic --to-haunt 0 --haunt-demo fight --demo-after 0.1 --focus haunt --zoom 9
+         # the knight marches at the player and chops (the allies held back, the monsters round it still)
+.\run.ps1 --client heir --seed 3 --floor 1 --spells coffee,fireball --no-mic --to-haunt 0 --haunt-demo break --demo-after 1 --focus haunt --zoom 9
+         # the player breaks it (billed $6,000 to Wick): its ghost pops out, hurt, and the camera follows it to the next suit
+.\run.ps1 --client parish --seed 3 --floor 1 --spells coffee,fireball --no-mic --to-haunt 0 --focus haunt --zoom 9
+         # a possessed skeleton in the church (the church and the crypts have bones only)
+.\run.ps1 --gym --no-mic   # Spawn > Monster: "Armour", "Bones" (dormant), "Wisp" (free: it flies into a dormant host near it),
+                           # "Armour (possessed)", "Bones (possessed)" (a ghost gets in as it lands: it wakes)
+```
+
+- Every haunted floor has ghosts: floor 1 two, floor 2 two, floor 3 three, each in a host from the start, and more dormant hosts
+  than ghosts. The log names every host ("haunts: 2 ghosts, 4 hosts: armour (ghost) in room:1, armour in room:4, ...").
+- `--to-haunt [n]` (solo) puts the crew beside possessed host n, across the screen from it (neither hides the other);
+  `--focus haunt` follows it (after a break, its ghost); `--haunt-demo fight|break` stages it after `--demo-after` (the AI allies
+  hold a few steps behind the player, the other monsters near it stand still). `scripts/app/dev/haunt_dev.gd`. No keybinding.
+- Screenshots (the game camera at zoom 9, 1920x1080), `docs/design/haunt_game/`: `march.png` / `march_2x.png` (heir 3 floor 1,
+  the wine cellar: the possessed knight on its march, the sword carried low at the hip, a leg forward, the ghost's vapour round
+  it), `chop.png` / `chop_2x.png` (the same: its chop, the lunge onto the left foot, the sword down and forward; the price tag over
+  it near the player; its plinth left behind by the wall), `wisp_free.png` / `wisp_free_2x.png` (the same suit broken: the
+  scatter of plate and its plinth, "-$6,000 Suit of armour (Wick)" and the work order's property damage, the ghost out, its HP
+  bar down a third, flying off to the next suit), `bones_fight.png` (parish 3 floor 1: a possessed skeleton in the crew's fight).
+- No exit code 255 in this step's eleven screenshot runs (every one exited 0).
+
+### What was built
+
+| Piece | Where | What |
+|---|---|---|
+| A host | `scripts/monsters/haunt_host.gd` (`HauntHost`, a `Monster`) | DORMANT (no ghost): no AI (`_physics_process` only its look), out of the "monsters" group, `aggro` / `alert` / `hear` / a peck do nothing, a knock is a dent (no fight, no shout, no HP bar), `is_dormant()` true. POSSESSED (`ghost`, a Wisp): back in the monsters, it wakes (helpless `WAKE_T` 1.2 s, its model standing up) and is a monster of its kind's stats from its spot. BROKEN: the owner bills a priced kind (`Ledger.damage(name, price, culprit)`: the last thing that hurt or shoved it) and throws its wisp out (`Wisp.eject`) |
+| The suit of armour | `scripts/monsters/armour_host.gd` (`ArmourHost`, kind `armour`), `MonsterDefs` "armour" (`"billed"` $6,000, "Suit of armour") | Dormant exactly the priced suit: the same model, look and size (`Monster.SIZE_FIXED`), the same price tag near this screen's own hero, the props' wobble and chips. Possessed: HP 90 (the suit's), speed 2.0, a chop of 16 after a 0.8 s wind-up, cooldown 1.9, reach 1.7, a 120-degree cone, aggro 8. It leaves its plinth where it stood (a cosmetic node in the world) and stands on it until it steps off (`KnightModel.lift`). Broken: the props' break (debris, dust, the red price), a scatter of plate left, the knight folds and goes |
+| The skeleton | `scripts/monsters/bones_host.gd` (`BonesHost`, kind `bones`), `MonsterDefs` "bones" (no bill) | Dormant: slumped against its wall, the eyes out. Possessed: a skeleton's numbers (HP 40, speed 3.2, 10 a cleave). Broken: a skeleton's topple; no bill |
+| The ghost | `scripts/monsters/wisp.gd` (`Wisp`, kind `wisp`, "Ghost"), `MonsterDefs` "wisp" | HP 36, flies at 3.4 (the crew walks 4.5), never attacks or yells. INSIDE a host: hidden, out of "actors" and "monsters" (no query finds it, nothing hits it), riding its host. EJECTED: out where its host fell, hurt `BREAK_HURT` 12 (a third; the verb, the culprit its source), helpless 0.5 s. FREE: flies to the nearest dormant host within 16 it can reach (two wisps never go for one: claims) and gets in (`possess`); with none, keeps 7 from the heroes (a spot away, the acolyte's way) and drifts. Anyone's hit hurts it (a plain swing, an arrow, a spell); at 0 HP it bursts and is freed |
+| The knight, animated | `scripts/art/lowpoly/ghost/knight_model.gd` (`KnightModel`), `ArmourModel`'s soups (now static) | The rest: the guard (a wide stance, leaning in, the sword point-up across the body in both hands, breathing). The march: the legs swing from the hip, the body rolls over each step and leans into it, the sword carried low at the right hip, point leading. The wind-up: the sword hauled over the right shoulder in both hands, leaning back, twisting. The strike: a chop down and forward, a lunge onto the left foot. The war cry: the sword thrust up. Downed: folded forward, the sword flat by it. The wake: every part eased from the dormant pose to the awake one over 1.2 s |
+| The skeleton's model | `scripts/art/lowpoly/ghost/bones_model.gd` (`BonesModel`, a `GruntModel`) | Dormant: `HauntPiece`'s slumped pose, the eyes out; awake: the grunt's walk, wind-up and swing; the wake eased over 1.4 s |
+| The wisp's model | `scripts/art/lowpoly/ghost/wisp_model.gd` (`WispModel`) | The look test's wisp (the head with its eyes and mouth, five tail puffs, its light) in the rim look; the tail trails behind its heading, longer and flatter the faster it goes; the wisp shader with the monsters' hooks (a hit flash, the downed grey); no light while hidden |
+| The possessed look | `scripts/art/lowpoly/ghost/haunt_dress.gd` (`HauntDress`) | The user's picks from the look tests on a game model: the ghost toon body in the rim look (always rim, at soft, pale blue), the vapour body round every part but the plinth, and the toned-down seep off the head and shoulders. Per machine, from `ghost` |
+| Where they stand | `scripts/contracts/planners/haunt_planner.gd` (`HauntPlanner`), `SitePlan.haunts`, `SiteBuilder` | Own dice from the floor seed, planned after the processions, spawned last of the actors (the hosts, then a wisp in each possessed one: no earlier net id moves). Ghosts `WISPS` 2 / 2 / 3; hosts twice that plus one, at most one a room, every room but the start, arrival and exit rooms (a crypt's included); a full floor cell against a wall (two wall sides or more, a midpoint wall's cut cells counted; not in a doorway), clear of the plan, 4 cells from another host, standing toward its wall's face (`HexMap.nearest_wall`, 0.6 off it), facing into the room. A mansion house room's host is armour 65 % of the time, else bones; the church's and the crypt's are bones. The possessed ones: the first in the seeded order, then the farthest from those picked |
+| Networking | `NetWorld` (`world.haunt`, `haunt_states` / `apply_haunts`), `NetJoin` (`haunts`), `NetEvents`, `NetFloor.PLAN_DEFAULTS` | As designed ("H5 networking"); the checklist below |
+| Tentacles | `Tentacles.covers` | False for a wisp: they pass through it; a host is shoved and smashed as any monster |
+| AI allies | `AllyBrain._pick_eager` / `_pick_free`, `Monster.is_dormant` | They never pick a dormant host; a possessed one and a free wisp are foes |
+| The fog | `game.gd` (`_setup_fog`), `FogView._apply_contents` | Hosts follow the props' rule (shown once seen) while dormant, the movers' once possessed (the static pass skips a node in "monsters"); a free wisp is a mover |
+| Gym | `GymSpawns` | "Armour", "Bones" and "Wisp" (the factory kinds) and "Armour (possessed)" / "Bones (possessed)" (`monster:<kind>:possessed`: a wisp gets in as it lands and it wakes), in the existing Monster group; no keybinding |
+
+### The networking checklist (networking.md)
+1. **Shapes.** The hosts and the wisp: **owned actors**, host monsters, seed-built (no new shape: nothing turns from a prop into
+   a monster; the priced suit of armour stays a PricedProp, a plain antique). Possession: one reliable world event.
+2. **Vars.** `HauntHost`: `ghost` OWNER (carrier `world.haunt`), `price` SPAWN, `_last_by` PRIVATE (the bill's culprit),
+   `possessions`, `phase`, `_woke_at` LOCAL. `ArmourHost`: its tag, plinth and wobble LOCAL. `Wisp`: `host` OWNER (carrier
+   `world.haunt`), its AI (`_goal`, `_seek_t`, `_flee_goal`, `_flee_pick_t`, `_drift_goal`, `_drift_t`, `_stuck_at`) PRIVATE,
+   `entered` / `ejected` LOCAL. `SitePlan.haunts` SPAWN. In `test_net_contract`'s `REPLICATED` (`haunt_host.gd`, `armour_host.gd`,
+   `bones_host.gd`, `wisp.gd`, `NetEvents.WORLD_CARRIES` and `LATE_JOIN`).
+3. **Verbs.** The break's hurt on the wisp is `apply_damage` (the wisp's owner, the host, applies it); the hosts' blows are
+   Monster's `Combat.melee_arc`; possession writes only the possessing pair's own links on the owner (`possess`, `take_ghost`).
+4. **Randomness.** The plan on the planner's own generator from the floor seed; the wisp's drift on the host's `GameWorld.rng`
+   (AI); looks (the pulse phase) on `fx_rng`.
+5. **Motion.** Hosts and free wisps stream as any monster; a wisp inside rides its host on the owner, so its entry moves with it.
+6. **Cosmetic:** the ghost look and the wake, the wisp's light, the plinth and the rubble, the price tag, the dent's wobble.
+   **Gameplay:** who possesses what, HP, the break and its bill.
+7. **A late joiner.** The keyframe (every living host and wisp), the gone ids (a broken host, a dead wisp: freed), and `haunts`
+   `[wisp id, host id or 0, x, y, z]` (`NetWorld.haunt_states`): each ghost put in its host (which wakes on the joiner) or out.
+8. **The scenario:** `tests/test_net_haunt.gd` (below).
+- The event: `world.haunt {id: the wisp, h: its host or 0, x, y, z}`, queued with the deaths (`NetWorld._apply_deaths`, kind
+  "haunt"), so a client applies a break's `world.die` and its ghost's ejection on the host's beat, in order. Nobody but the host
+  decides anything.
+
+### The calls made (to revisit)
+1. **No new shape**: a host is a host monster from spawn with a dormant state; possession is a link on each side carried by one
+   world event (above).
+2. **The priced suit of armour stays a plain antique** (a PricedProp, never possessed); the armour hosts are separate actors that
+   look exactly like it while dormant (the same model, material, size and price tag) and bill the same when broken.
+3. **A dormant host is a piece of the room**: no AI, out of the monsters (never a pest, the staff are not scared of it), the AI
+   allies never pick it, a knock is a dent (a flash, the armour's wobble and chips; no HP bar, no fight, no shout). The crew can
+   still break it, and a broken suit is billed, possessed or not.
+4. **How many:** ghosts 2 / 2 / 3 on floors 1 / 2 / 3; hosts twice the ghosts plus one (so each ghost has a dormant host to flee
+   to), at most one a room, never in the start, arrival or exit room. A small floor gets fewer (heir 3 floor 1: four hosts).
+5. **Where:** against a wall, 0.6 off its face, facing into the room, 4 cells apart; the possessed ones spread out (the farthest
+   from those already picked).
+6. **Which kind:** the mansion's house rooms a suit of armour 65 % of the time, else bones; the church's rooms and every crypt
+   room bones (the armour is the mansion's antique).
+7. **The armour's numbers:** HP 90 (the priced suit's), a heavy march 2.0, a slow chop (0.8 s wind-up) of 16, reach 1.7.
+   **The bones':** a skeleton's.
+8. **The wisp's numbers:** HP 36, flies 3.4 (it can be run down), a break costs it 12 (three breaks kill it, or a few hits), it
+   flies only to a dormant host within 16 it can reach, keeps 7 from the heroes when it has none, never attacks.
+9. **Possessed at spawn: awake at once** (no wake), standing at its spot like any resting monster; no ambush or guard state of its
+   own (it wakes on sight, as a monster does).
+10. **The wake:** helpless 1.2 s while its model stands up (the knight eased out of its antique pose, the skeleton up off the
+    floor); a ghost getting in shows a puff of its colour.
+11. **The plinth stays behind** (a cosmetic node where the suit stood); the knight stands on it until it steps off.
+12. **Broken:** the armour breaks like a prop (debris, dust, the red price) and leaves a scatter of plate; the bones topple as a
+    skeleton; both are then freed (a late joiner sees neither the plinth nor the plate of one broken before it joined).
+13. **The bill's culprit** is the last thing that hurt or shoved the host (a tentacle's caster, a hero's swing, a shove into a pit).
+14. **No objective or pay line for ghosts**: a haunted floor's paid work stays the pest and the acolytes (H6 brings the grimoire
+    and reworks the haunted invoice). Hosts and ghosts are not in `Site.monsters` (no pest count).
+15. **The ghost's look is the user's picks** (rim, soft, pale blue; the vapour and the toned-down seep on a host); its light at
+    soft, none while it is inside a host.
+16. **The knight's animation** (the user's "to revisit"): the guard at rest, the march with the sword at the hip, the overhead
+    wind-up, the chop with a lunge; no knees (plate: rigid legs from the hip), as the look test's rig.
+17. **Tentacles** pass through a wisp (it is not covered at all: no damage, no shove) and shove and smash the hosts.
+18. **The fog:** dormant hosts are shown once seen (the props' rule), possessed ones and free wisps only in view (the movers').
+19. **War cries:** none for a wisp; a host yells the shared monster cry. The skeleton's swing plays the light swing.
+20. **Model tests:** the knight and the wisp have no ember faces (no glowing visor, the user's call; the wisp is all glow), and
+    the wisp has no tell (`test_monster_models`' `NO_GLOW`, `NO_TELL`).
+21. **A ghost thrown out over the void** (its host shoved into a pit or the lava) comes out where the host last stood on floor.
+22. **The dev flags** `--to-haunt`, `--haunt-demo fight|break`, `--focus haunt`; the gym's "(possessed)" buttons.
+
+### New player-facing strings (proposals for review)
+- Monster names **Suit of armour**, **Skeleton** (the bones) and **Ghost** (the wisp) (the combat log: "Ghost died").
+- The armour's price tag **Suit of armour – $6,000** and its Ledger line **Suit of armour** $6,000 (the priced suit's name and
+  price, H1's).
+- No objective, tracker row, note, ticket or dispatch line.
+- Dev only: the gym's **Armour**, **Bones**, **Wisp**, **Armour (possessed)**, **Bones (possessed)** buttons; the log's "haunts: ...".
+
+### Tests
+- `tests/test_haunt.gd` (new, solo): the kinds (the knight, the bones, the wisp; the armour's name, price and HP are the priced
+  suit's, bones cost nothing, the crew outruns a wisp, it never attacks or yells); dormant: the antique on its plinth, out of
+  the monsters, the priced suit's tag, a hero in sight and a knock start no fight, no HP bar, no shout or noise wakes it;
+  possessed at spawn: the wisp in its host, hidden and out of every query, the host awake in the ghost look with the vapour, its
+  plinth left, a hit on the host leaves the wisp, the wisp rides it; a possessed armour and skeleton see the hero, wind up and
+  land a blow; the knight's wind-up raises its sword, its legs swing on the march, a wake starts from the dormant pose; breaking
+  a possessed suit bills it once to the culprit, throws the wisp out hurt where it fell, and it flies to the next dormant host and
+  possesses it (it wakes); a dormant suit broken bills too; a skeleton bills nothing and throws its wisp out hurt; a free wisp
+  with no host keeps away from the hero and never strikes, a hit hurts it (no fight back), hits kill it and it is freed, a plain
+  swing hits it; tentacles never cover a wisp (no damage, no shove) but smash the suit beside it.
+- `tests/test_net_haunt.gd` (new, NetTest, `const PEERS := 3`, `off` and `coast`): board 9's heir contract, floor 1. c1 shows the
+  ghost in its suit (hidden, out of the queries) and the suit possessed in the ghost look, the next host dormant; the host's
+  player breaks the suit (billed on the host), c1 shows it gone, the ghost out and hurt where the host has it, and mirrors the
+  bill; the ghost flies to the next host (moved near on the host) and gets in, and c1 shows it inside and that host possessed
+  where the host has it; c2 joins late and shows the broken suit gone, the ghost in its new host, that host possessed where the
+  host has it, the other ghost still in its first host, a dormant host dormant, and the bill; no OWNER-write guard on any machine.
+- Updated: `test_haunted_contract` (every haunted floor's ghosts each in a possessed host, more hosts than ghosts, armour only in
+  the mansion's house rooms, none in the start, arrival or exit room, against a wall on a full cell, apart; a ghost in its host
+  hidden), `test_monster_defs` (the three rows: the dead family's, no pack, no pest; the armour's bill is the priced suit's, bones
+  bill nothing; the factory and model kind lists), `test_monster_models` (the three models' parts; `NO_GLOW`, `NO_TELL`),
+  `test_net_contract` (the four scripts in `REPLICATED`).
+- Run and passing: `test_haunt`, `test_net_haunt` (off and coast), `test_net_contract`, `test_golden_floor` (not re-recorded),
+  `test_haunted_contract`, `test_crypt_gen`, `test_monster_defs`, `test_monster_factory`, `test_monster_death`,
+  `test_monster_models`, `test_monster_integration`, `test_zombie`, `test_acolyte`, `test_priced_prop`, `test_ghost_look`,
+  `test_haunt_look`, `test_net_world_codec`, `test_zfight`, `test_contract_ledger`, `test_spell_tentacles`, `test_gym`, and the net
+  tests `test_net_m3_world`, `test_net_m3_objects`, `test_net_m6_late_join`, `test_net_procession` (each `off` and `coast`). The
+  full suite was not run.
+
+### Not done in H5
+- Evicting a ghost without breaking its host (wanted, deferred by the user).
+- No crew (two-PC) play; the net test covers possession, the break, the move and the late join.
+- No sounds of their own (a ghost's moan, plate clanking on the march): the armour's knock and break are the props' sounds.
+- A client's knock on a dormant suit flashes it but does not wobble it (the wobble is the host's look); a late joiner does not see
+  the plinth or the plate of a suit broken before it joined.
+- The AI allies' prop care does not know a dormant suit (a spin beside one can break it, as it can a monster near it).
+- A wisp flies the floor's paths (it does not pass through walls).
+- The knight was judged on stills at the game camera (`haunt_game/`), not in play.

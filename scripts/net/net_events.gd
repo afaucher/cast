@@ -32,6 +32,16 @@ const _FIXED := "fixed: it never moves, turns or climbs (built from the floor pl
 ## A priced prop's break moment and culprit (sewer phase 2: an electrical panel's LiveWire runs from them on every machine).
 const _BREAK_AT := "obj.break {t} (PricedProp.net_link / net_event): the break's moment on the shared clock; a late joiner: `breaks`"
 const _BREAK_BY := "obj.break {by} (PricedProp.net_link / net_event): who broke it; a late joiner: `breaks`"
+## A ghost's host (H5): a monster-format entry, possessed or dormant; its ghost is the wisp's world.haunt.
+const _HAUNT_HOST := {
+	"dead": "world.die (NetWorld): broken on the beat the host stamped it (the armour's bill: the host's Ledger line); its wisp's world.haunt comes after",
+	"pass_through_until": "never set on host-owned actors (only heroes pass through each other)",
+	"_modifiers": "st {k mods} from the host when they change (NetStatus, M4): vines roots, coffee on monsters",
+	"target": "world.windup names its victim (NetWorld, M4: each client resolves the strike against its own hero)",
+	"_windup_total": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
+	"_windup_left": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
+	"ghost": "world.haunt {id: its wisp, h: it} (NetWorld): the wisp got in (it wakes); h 0 after its world.die: out",
+}
 
 ## Host-owned classes (M3): script -> {OWNER var -> its carrier}. Their snapshot fields are in NetWorldCodec (a runtime
 ## actor's in RUNTIME_ACTORS). A host-arbitrated object's obj.* events are its own (the net-object contract, NetObjects: its
@@ -94,6 +104,18 @@ const WORLD_CARRIES := {
 		"_windup_total": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
 		"_windup_left": "world.windup {s, l}: the start and the length (NetWorld, M4); the look rides _telegraph",
 		"burnt": "world.burn {id} (NetWorld): the body charred on every screen, in order with its death; a late joiner: `bodies`",
+	},
+	# The haunted contracts' ghosts and hosts (haunted-build-plan.md H5, "H5 networking"): who possesses what is one link on each
+	# side, carried by world.haunt; a host's break is world.die (the armour's bill the host's Ledger line).
+	"res://scripts/monsters/haunt_host.gd": _HAUNT_HOST,
+	"res://scripts/monsters/armour_host.gd": _HAUNT_HOST,
+	"res://scripts/monsters/bones_host.gd": _HAUNT_HOST,
+	"res://scripts/monsters/wisp.gd": {
+		"dead": "world.die (NetWorld): killed (free; a ghost in a host cannot be hit)", "pass_through_until": _ACTOR_WORLD["pass_through_until"],
+		"_modifiers": _ACTOR_WORLD["_modifiers"],
+		"target": "never set: a wisp never attacks", "_windup_total": "never set: a wisp never winds up",
+		"_windup_left": "never set: a wisp never winds up",
+		"host": "world.haunt {id, h, x, y, z} (NetWorld): it got into a host or was thrown out of one, in order with the host's world.die",
 	},
 	"res://scripts/contracts/employee.gd": {
 		"dead": _ACTOR_WORLD["dead"], "pass_through_until": _ACTOR_WORLD["pass_through_until"], "_modifiers": _ACTOR_WORLD["_modifiers"],
@@ -175,6 +197,8 @@ const WORLD_CARRIES := {
 ##                         volley (launch point, start, fx seed, drift) / a soaked rack
 ##   world.shield (reliable)  host -> clients: a Pavise's shield state {id, st, x, y, z, w} (carried, planted, left, flat)
 ##   world.rise / world.burn (reliable, H3)  host -> clients: a zombie's body stood back up {id, hp, x, y, z} / was burnt {id}
+##   world.haunt (reliable, H5)  host -> clients: a ghost got into a host or was thrown out of one {id: the wisp, h: the host or
+##                         0, x, y, z: where it is}, queued with the deaths (after the host's world.die when it broke)
 ##   world.charge / world.uncharge / world.lock / world.dismount (reliable)  host -> clients: a laser shark's charge (start,
 ##                         length, victim) / dropped / its beam locked (origin, direction, the shared fire time: every machine
 ##                         fires it then and applies what it resolves) / an imp gunner off its shark (how, where)
@@ -230,5 +254,9 @@ const LATE_JOIN := {
 	"res://scripts/monsters/crypt_rat.gd": "as monster.gd (keyframe, gone ids: it is freed when it dies); a pounce's tell under way: skipped (a wind-up, under a second)",
 	"res://scripts/monsters/ecto_blob.gd": "as monster.gd (keyframe, gone ids); a lunge's tell under way: skipped (a wind-up, under a second); its slick: ecto_slick.gd",
 	"res://scripts/monsters/ecto_slick.gd": "replay of obj.new for every live segment (EctoSlick.late_join_state, section `new`: its ends, its start, its chain); a washed or dried one is not sent",
+	"res://scripts/monsters/haunt_host.gd": "as monster.gd (keyframe: where, HP, state; a broken one: gone ids, it is freed); dormant or possessed: its wisp's `haunts` row (wisp.gd) puts the ghost in it on the joiner (it wakes there); a wind-up under way: skipped (under a second); its left plinth and rubble: cosmetic, skipped",
+	"res://scripts/monsters/armour_host.gd": "as monster.gd (keyframe: where, HP, state; a broken one: gone ids, it is freed); dormant or possessed: its wisp's `haunts` row (wisp.gd) puts the ghost in it on the joiner (it wakes there); a wind-up under way: skipped (under a second); its left plinth and rubble: cosmetic, skipped",
+	"res://scripts/monsters/bones_host.gd": "as monster.gd (keyframe: where, HP, state; a broken one: gone ids, it is freed); dormant or possessed: its wisp's `haunts` row (wisp.gd) puts the ghost in it on the joiner (it wakes there); a wind-up under way: skipped (under a second); its left plinth and rubble: cosmetic, skipped",
+	"res://scripts/monsters/wisp.gd": "as monster.gd (keyframe: where, HP, state; a dead one: gone ids, it is freed); in a host or out: replay of world.haunt per living wisp in the snapshot (NetWorld.haunt_states: its host or 0, where it is)",
 	"res://scripts/monsters/acolyte.gd": "as monster.gd (keyframe, gone ids: it is freed when it dies); a raise under way: its state and telegraph ride the keyframe and then the stream (the gesture), its world.windup is skipped; the body it raised: zombie.gd (standing: the keyframe). Its procession (Procession) is the host's AI: PRIVATE, never sent",
 }
